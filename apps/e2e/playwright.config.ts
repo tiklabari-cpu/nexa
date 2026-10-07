@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
+import { E2E_SHARD, PORTS, USUAL_PORTS } from './tests/stack-ports.js';
 
 /**
  * End-to-end suite.
@@ -17,14 +18,18 @@ import { defineConfig, devices } from '@playwright/test';
  * machine with no hosts-file entry.
  */
 
-const API = 'http://localhost:4000';
-const WEB = 'http://localhost:5173';
-const WIDGET = 'http://localhost:5174';
+/** What the browser sees — on a private stack too, where its resolver maps it (below). */
+const WEB = `http://localhost:${USUAL_PORTS.web}`;
+/** Where the servers listen: the usual ports, or a shard's private ones (`tests/stack-ports.ts`). */
+const API = `http://localhost:${PORTS.api}`;
+const RTM = `http://localhost:${PORTS.rtm}`;
+const WEB_SERVER = `http://localhost:${PORTS.web}`;
+const WIDGET = `http://localhost:${PORTS.widget}`;
 /** The stand-in identity provider a federated sign-in is redirected to (S11-i). */
-const MOCK_IDP = 'http://127.0.0.1:4599';
+const MOCK_IDP = `http://127.0.0.1:${PORTS.idp}`;
 /** The mail server the API sends to, and the mailbox the tests read (tm 255.4 · `tests/mailbox.ts`). */
-const MOCK_SMTP_PORT = 4625;
-const MOCK_SMTP_MAILBOX = 'http://127.0.0.1:4626';
+const MOCK_SMTP_PORT = PORTS.smtp;
+const MOCK_SMTP_MAILBOX = `http://127.0.0.1:${PORTS.mailbox}`;
 /**
  * The test CA that signed the stand-in's certificate. Handed to the API process
  * the only way a trust anchor can be without relaxing verification — which the
@@ -35,6 +40,56 @@ const SMTP_TEST_CA = fileURLToPath(
 );
 /** Same server as WIDGET, different origin — this is the "customer's website". */
 export const HOST_PAGE = 'http://acme-bikes.localhost:5174';
+
+/**
+ * A private stack (tm 260.1): `SIYAHTUS_E2E_SHARD` set, as `pnpm test:e2e:private`
+ * and the sharded runner (`scripts/run-e2e-sharded.mjs`) set it. Built exactly
+ * like the pilot's (`playwright.pilot.config.ts` explains each part):
+ *
+ *   - every server is started by this run (`reuseExistingServer: false`) on the
+ *     shard's own ports, so a developer's dev stack is neither adopted nor
+ *     disturbed, and several shards run beside each other;
+ *   - Chromium's resolver maps the usual origins onto those ports, so the page
+ *     still runs on `http://localhost:5173` and the widget's host pages on
+ *     `*.localhost:5174`; Node-side calls read the ports from `stack-ports.ts`;
+ *   - the database and Redis index are the run's own, from
+ *     `apps/api/scripts/with-test-datastores.ts`; the global setup resets and
+ *     seeds `DATABASE_URL`, so a private stack refuses any other database.
+ *
+ * Unset, nothing below changes: the usual ports, the shared seeded database,
+ * and locally whatever dev servers already hold the ports.
+ */
+const PRIVATE = E2E_SHARD !== undefined;
+if (PRIVATE && !/\/siyahtus_test_[0-9a-f]{12}(\?|$)/.test(process.env['DATABASE_URL'] ?? '')) {
+  throw new Error(
+    'SIYAHTUS_E2E_SHARD runs a private stack that resets and seeds DATABASE_URL, so it only ' +
+      'runs against a private test database. Start it with `pnpm test:e2e:private`.',
+  );
+}
+const REUSE = !PRIVATE && !process.env['CI'];
+/** A private stack's results and Vite cache, apart from the usual ones and every other shard's. */
+const SHARD_DIR = `shard-${E2E_SHARD ?? 'usual'}`;
+const SHARD_ENV: Record<string, string> = PRIVATE
+  ? { SIYAHTUS_VITE_CACHE_DIR: `node_modules/.vite-e2e-${SHARD_DIR}` }
+  : {};
+
+/**
+ * How a server starts: its pnpm script on the usual stack, the same program
+ * straight from `node` on a private one (tm 260.5).
+ *
+ * Memory is what limits how many private stacks a machine runs at once, and
+ * the pnpm in front of each server was the largest single item: one ~110 MB
+ * `pnpm` process per server, six per stack — measured with two stacks up, 16
+ * of them held 1.8 GB while the host paged. A private stack also has no use
+ * for `tsx watch`, whose watcher is a second process per server: nothing edits
+ * the code under a running suite. The program and its working directory are
+ * what the script would have run; only the wrappers go.
+ */
+function server(pkg: string, script: string, direct: string): { command: string; cwd: string } {
+  return PRIVATE
+    ? { command: `node ${direct}`, cwd: `../${pkg}` }
+    : { command: `pnpm --filter @siyahtus/${pkg} ${script}`, cwd: '../..' };
+}
 
 export default defineConfig({
   testDir: './tests',
@@ -53,9 +108,17 @@ export default defineConfig({
   retries: process.env['CI'] ? 1 : 0,
   timeout: 45_000,
   expect: { timeout: 10_000 },
-  reporter: process.env['CI']
-    ? [['github'], ['html', { open: 'never' }]]
-    : [['list'], ['html', { open: 'never' }]],
+  reporter: PRIVATE
+    ? [
+        [process.env['CI'] ? 'github' : 'list'],
+        ['html', { open: 'never', outputFolder: `./playwright-report/${SHARD_DIR}` }],
+        // Per-file durations, for the sharded runner's balancing (tm 260.2).
+        ['json', { outputFile: `./test-results/${SHARD_DIR}.json` }],
+      ]
+    : process.env['CI']
+      ? [['github'], ['html', { open: 'never' }]]
+      : [['list'], ['html', { open: 'never' }]],
+  ...(PRIVATE ? { outputDir: `./test-results/${SHARD_DIR}` } : {}),
 
   use: {
     baseURL: WEB,
@@ -78,24 +141,50 @@ export default defineConfig({
     actionTimeout: 10_000,
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(PRIVATE
+          ? {
+              launchOptions: {
+                args: [
+                  '--host-resolver-rules=' +
+                    [
+                      `MAP localhost:${USUAL_PORTS.api} localhost:${PORTS.api}`,
+                      `MAP localhost:${USUAL_PORTS.rtm} localhost:${PORTS.rtm}`,
+                      `MAP localhost:${USUAL_PORTS.web} localhost:${PORTS.web}`,
+                      `MAP localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
+                      `MAP *.localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
+                    ].join(', '),
+                ],
+              },
+            }
+          : {}),
+      },
+    },
+  ],
 
   webServer: [
     {
       // Before the API, so the first mail it sends has somewhere to go. See
       // `apps/api/scripts/mock-smtp-server.ts`.
-      command: 'pnpm --filter @siyahtus/api mock-smtp',
+      ...server('api', 'mock-smtp', 'node_modules/tsx/dist/cli.mjs scripts/mock-smtp-server.ts'),
       url: `${MOCK_SMTP_MAILBOX}/health`,
-      reuseExistingServer: !process.env['CI'],
+      reuseExistingServer: REUSE,
       timeout: 60_000,
-      cwd: '../..',
+      env: {
+        ...process.env,
+        MOCK_SMTP_PORT: String(PORTS.smtp),
+        MOCK_SMTP_HTTP_PORT: String(PORTS.mailbox),
+      },
     },
     {
-      command: 'pnpm --filter @siyahtus/api dev',
+      ...server('api', 'dev', 'node_modules/tsx/dist/cli.mjs src/index.ts'),
       url: `${API}/api/v1/health`,
-      reuseExistingServer: !process.env['CI'],
+      reuseExistingServer: REUSE,
       timeout: 60_000,
-      cwd: '../..',
       // The whole suite shares one IP, so every widget-token mint, sign-in and
       // signup lands in a single anonymous bucket. The production default (30/min)
       // is deliberately tight; the signup-driven onboarding flow pushed a
@@ -162,39 +251,49 @@ export default defineConfig({
         SMTP_PASSWORD: 'fake-smtp-password-not-a-secret',
         SMTP_FROM: 'info@nolnk.test',
         NODE_EXTRA_CA_CERTS: SMTP_TEST_CA,
+        API_PORT: String(PORTS.api),
       },
     },
     {
-      command: 'pnpm --filter @siyahtus/rtm dev',
-      url: 'http://localhost:4001/health',
-      reuseExistingServer: !process.env['CI'],
+      ...server('rtm', 'dev', 'node_modules/tsx/dist/cli.mjs src/index.ts'),
+      url: `${RTM}/health`,
+      reuseExistingServer: REUSE,
       timeout: 60_000,
-      cwd: '../..',
+      env: { ...process.env, RTM_PORT: String(PORTS.rtm) },
     },
     {
-      command: 'pnpm --filter @siyahtus/web dev',
-      url: WEB,
-      reuseExistingServer: !process.env['CI'],
+      // On a private stack the panel's relative `/api/v1` goes through Vite's
+      // proxy, which runs in Node and so would reach the usual api without
+      // `API_BASE_URL`. `--strictPort`, so a taken port fails the start instead
+      // of drifting onto the next shard's.
+      ...server('web', 'dev', 'node_modules/vite/bin/vite.js --strictPort'),
+      url: WEB_SERVER,
+      reuseExistingServer: REUSE,
       timeout: 60_000,
-      cwd: '../..',
+      env: {
+        ...process.env,
+        ...SHARD_ENV,
+        WEB_PORT: String(PORTS.web),
+        ...(PRIVATE ? { API_BASE_URL: API } : ({} as Record<string, string>)),
+      },
     },
     {
-      command: 'pnpm --filter @siyahtus/widget dev',
+      ...server('widget', 'dev', 'node_modules/vite/bin/vite.js --strictPort'),
       url: `${WIDGET}/demo.html`,
-      reuseExistingServer: !process.env['CI'],
+      reuseExistingServer: REUSE,
       timeout: 60_000,
-      cwd: '../..',
+      env: { ...process.env, ...SHARD_ENV, WIDGET_PORT: String(PORTS.widget) },
     },
     {
       // A SAML identity provider the browser can actually be redirected to
       // (NFR-S11 · S11-i). Loopback only, and the one address the SSO URL
       // validation lets a connection use without TLS — see
       // `apps/api/scripts/mock-idp-server.ts`.
-      command: 'pnpm --filter @siyahtus/api mock-idp',
+      ...server('api', 'mock-idp', 'node_modules/tsx/dist/cli.mjs scripts/mock-idp-server.ts'),
       url: `${MOCK_IDP}/health`,
-      reuseExistingServer: !process.env['CI'],
+      reuseExistingServer: REUSE,
       timeout: 60_000,
-      cwd: '../..',
+      env: { ...process.env, MOCK_IDP_PORT: String(PORTS.idp) },
     },
   ],
 });

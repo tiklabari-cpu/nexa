@@ -52,9 +52,10 @@ import {
   type TenantOwner,
 } from './fixtures.js';
 import type { APIRequestContext, Page } from '@playwright/test';
+import { STACK_RTM_WS } from './stack-ports.js';
 
 const PASSWORD = 'compliance-e2e-password';
-const RTM_WS = 'ws://localhost:4001/v1/agent/rtm/ws';
+const RTM_WS = `${STACK_RTM_WS}/v1/agent/rtm/ws`;
 
 /**
  * Create a workspace through the signup form, choosing where its data lives.

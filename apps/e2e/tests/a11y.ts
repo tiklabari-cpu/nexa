@@ -146,7 +146,26 @@ export interface ScanOptions {
   include?: SerialFrameSelector;
   /** Subtrees to skip, same shape as `include`. */
   exclude?: SerialFrameSelector;
+  /**
+   * Run only these axe rules instead of the whole WCAG 2.1 AA set — for a
+   * second theme, where only `THEME_DEPENDENT_RULES` can answer differently.
+   */
+  rules?: readonly string[];
 }
+
+/**
+ * The AA rules whose answer depends on the colours a theme paints (tm 260.3).
+ *
+ * The panel's two themes are one DOM under two sets of colour tokens
+ * (`data-theme` on `<html>`, `apps/web/src/styles/tokens.css`): names, labels,
+ * roles, landmarks, ARIA and order are identical in both, so every other rule
+ * gives the same answer twice. The full set runs in the default theme (dark);
+ * the other theme runs these two — text contrast (1.4.3), and a link told apart
+ * from the text around it by colour alone (1.4.1). That halves the axe work on
+ * the second theme without measuring one colour fewer. The focus ring is
+ * measured in both themes by `measureFocusRing`, which is ours, not axe's.
+ */
+export const THEME_DEPENDENT_RULES: readonly string[] = ['color-contrast', 'link-in-text-block'];
 
 /**
  * Jump every running CSS transition to its end before axe reads colours.
@@ -184,12 +203,17 @@ export async function scanScreen(
   testInfo: TestInfo,
   options: ScanOptions = {},
 ): Promise<ScreenScan> {
-  let builder = new AxeBuilder({ page }).withTags([...WCAG_21_AA_TAGS]);
+  let builder = new AxeBuilder({ page });
+  builder = options.rules
+    ? builder.withRules([...options.rules])
+    : builder.withTags([...WCAG_21_AA_TAGS]);
   if (options.include) builder = builder.include(options.include);
   if (options.exclude) builder = builder.exclude(options.exclude);
 
   await settleTransitions(page);
+  const analyzeStarted = performance.now();
   const results = await builder.analyze();
+  const analyzeMs = Math.round(performance.now() - analyzeStarted);
   const scan = partitionViolations(screen, results.violations);
 
   await testInfo.attach(`axe-${screen.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`, {
@@ -223,7 +247,7 @@ export async function scanScreen(
 
   // The per-screen measurement is the deliverable, not a debug aid — it has to
   // reach the run log so the numbers can be read off a plain `test:e2e`.
-  console.log(summariseScan(scan));
+  console.log(`${summariseScan(scan)} · ${analyzeMs} ms`);
   return scan;
 }
 

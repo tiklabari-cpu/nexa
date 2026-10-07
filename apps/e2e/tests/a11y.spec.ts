@@ -74,6 +74,8 @@ import {
   NON_TEXT_CONTRAST_MIN,
   partitionViolations,
   scanScreen,
+  THEME_DEPENDENT_RULES,
+  type ScanOptions,
 } from './a11y.js';
 import {
   ACME_OWNER,
@@ -319,14 +321,22 @@ async function scanReadyScreen(
   screen: string,
   testInfo: TestInfo,
   ready: () => Promise<void>,
+  options: ScanOptions = {},
 ): Promise<void> {
   await ready();
-  assertNoBlockingViolations(await scanScreen(page, screen, testInfo));
+  assertNoBlockingViolations(await scanScreen(page, screen, testInfo, options));
 }
 
 /** The panel themes an agent can choose between (`apps/web/src/lib/theme.ts`). */
 const PANEL_THEMES = ['dark', 'light'] as const;
 type PanelTheme = (typeof PANEL_THEMES)[number];
+
+/**
+ * What axe runs in a theme: the whole AA set in the first (dark, the default),
+ * only the colour-dependent rules in the second — see `THEME_DEPENDENT_RULES`.
+ */
+const scanOptionsFor = (theme: PanelTheme): ScanOptions =>
+  theme === PANEL_THEMES[0] ? {} : { rules: THEME_DEPENDENT_RULES };
 
 /**
  * Pin the panel theme for every navigation this page makes from here on.
@@ -355,10 +365,16 @@ async function scanPanel(
   testInfo: TestInfo,
   ready: () => Promise<void>,
 ): Promise<void> {
-  await scanReadyScreen(page, `${screen} (${theme})`, testInfo, async () => {
-    await ready();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-  });
+  await scanReadyScreen(
+    page,
+    `${screen} (${theme})`,
+    testInfo,
+    async () => {
+      await ready();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    },
+    scanOptionsFor(theme),
+  );
 }
 
 /** A control to put into an interaction state, named for the failure message. */
@@ -440,7 +456,9 @@ async function scanInteractionStates(
   const stillFocused = targets.focus[targets.focus.length - 1]!.find(page);
   await expect(stillFocused).toBeFocused();
 
-  assertNoBlockingViolations(await scanScreen(page, `${screen} focus+hover (${theme})`, testInfo));
+  assertNoBlockingViolations(
+    await scanScreen(page, `${screen} focus+hover (${theme})`, testInfo, scanOptionsFor(theme)),
+  );
 }
 
 /**
@@ -746,11 +764,25 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         // One scan per section address — see `SETTINGS_SECTION_SLUGS`. Thirty
         // navigations in one test rather than thirty tests: one sign-in, not
         // thirty against the login throttle.
+        //
+        // One page load, then the router (tm 260.3). A `goto` per section
+        // reloaded the whole panel thirty times — boot, session restore, every
+        // query again — which was a minute per theme of the suite's longest
+        // file. `pushState` + `popstate` is how the router itself moves between
+        // sections, and unlike a click on the section's link it leaves no hover
+        // and no focus behind on the navigation, so each scan sees the section
+        // exactly as a fresh load did. Ready means the *new* section is the
+        // current one — the link for this slug, not whichever was current.
         test.setTimeout(300_000);
         expect(SETTINGS_SECTION_SLUGS.length).toBeGreaterThanOrEqual(29);
         await pinTheme(agentPage, theme);
+        await agentPage.goto(`/app/settings/${SETTINGS_SECTION_SLUGS[0]}`);
         for (const slug of SETTINGS_SECTION_SLUGS) {
-          await agentPage.goto(`/app/settings/${slug}`);
+          await agentPage.evaluate((path) => {
+            if (window.location.pathname === path) return;
+            window.history.pushState({}, '', path);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }, `/app/settings/${slug}`);
           await scanPanel(agentPage, `Settings › ${slug}`, theme, testInfo, async () => {
             await expect(agentPage).toHaveURL(new RegExp(`/app/settings/${slug}$`));
             await expect(
@@ -759,7 +791,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
             await expect(
               agentPage
                 .getByRole('navigation', { name: 'Settings navigation' })
-                .locator('a[aria-current="page"]'),
+                .locator(`a[aria-current="page"][href$="/app/settings/${slug}"]`),
             ).toBeVisible();
             await expect(agentPage.locator('section h2').first()).toBeVisible();
           });

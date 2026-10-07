@@ -21,9 +21,10 @@ import {
   test,
   visitorSends,
 } from './fixtures.js';
+import { STACK_RTM } from './stack-ports.js';
 
 /** The RTM gateway's admin `/health`, where open connections are counted. */
-const RTM_BASE = 'http://localhost:4001';
+const RTM_BASE = STACK_RTM;
 
 const PREFERENCES_PATH = '/agents/me/notification-preferences';
 

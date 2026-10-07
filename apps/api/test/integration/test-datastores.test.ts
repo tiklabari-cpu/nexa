@@ -98,6 +98,12 @@ describe('isolated test datastores', () => {
       expect(licenseIdOffsetFor(2) - licenseIdOffsetFor(1)).toBeGreaterThan(100_000);
     });
 
+    it("keeps every leased range clear of an unoffset database's licences (from 1000001)", () => {
+      for (let index = 1; index <= 15; index += 1) {
+        expect(licenseIdOffsetFor(index)).toBeGreaterThanOrEqual(2_000_000);
+      }
+    });
+
     it('bounds the connection pool so two runs do not starve one server', () => {
       const url = new URL(
         withTestConnectionBudget('postgresql://u:p@h:5433/siyahtus_test_0123456789ab'),

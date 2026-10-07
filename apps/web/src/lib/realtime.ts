@@ -31,7 +31,15 @@ export type PushHandler = (action: string, payload: Record<string, unknown>) => 
 export interface RtmClientOptions {
   url: string;
   organizationId: string;
+  /** Read at every (re)connect, never captured — the session renews it underneath. */
   getToken: () => string | null;
+  /**
+   * A fresh token after `stale` was refused at `login`, or null when the
+   * session is over (tm 259.1). The gateway checks the token at `login` only,
+   * so this is reached by a *re*connect: a page that slept past its renewal
+   * comes back to a dropped socket holding the token it had.
+   */
+  renewToken?: (stale: string) => Promise<string | null>;
   pushes: RtmPushAction[];
   onPush: PushHandler;
   onStatusChange?: (status: RtmStatus) => void;
@@ -45,6 +53,8 @@ export class RtmClient {
   #retryTimer: ReturnType<typeof setTimeout> | null = null;
   #attempt = 0;
   #closedByUs = false;
+  /** A refused login has been answered with a renewal since the last good one — once is the limit. */
+  #renewed = false;
   #requestId = 0;
   #pending = new Map<string, (message: RtmMessage) => void>();
 
@@ -103,7 +113,7 @@ export class RtmClient {
     this.#ws = ws;
 
     ws.addEventListener('open', () => {
-      void this.#login(token);
+      void this.#login(ws, token);
     });
 
     ws.addEventListener('message', (event) => {
@@ -126,6 +136,10 @@ export class RtmClient {
     });
 
     ws.addEventListener('close', () => {
+      // A socket this client has already replaced — closed on purpose after a
+      // renewal — must not tear down its successor's timers or schedule a
+      // reconnect on top of a live connection.
+      if (ws !== this.#ws) return;
       this.#clearTimers();
       if (this.#closedByUs) return;
       this.#setStatus('reconnecting');
@@ -137,13 +151,16 @@ export class RtmClient {
     });
   }
 
-  async #login(token: string): Promise<void> {
+  async #login(ws: WebSocket, token: string): Promise<void> {
     const response = await this.#send('login', {
       token: `Bearer ${token}`,
       pushes: { '3.6': this.options.pushes },
     });
+    // Replaced while the answer was on its way: the newer socket decides.
+    if (ws !== this.#ws) return;
 
     if (!response.success) {
+      if (await this.#reopenWithRenewedToken(response, token)) return;
       // Credentials are wrong or revoked; retrying would loop forever.
       this.#closedByUs = true;
       this.#setStatus('offline');
@@ -152,6 +169,7 @@ export class RtmClient {
     }
 
     this.#attempt = 0;
+    this.#renewed = false;
     this.#setStatus('live');
     this.#startPing();
 
@@ -162,6 +180,58 @@ export class RtmClient {
       });
       if (sync.success) this.#applySync(sync.payload);
     }
+  }
+
+  /**
+   * Answer a login refused for its token with one renewal and a fresh socket
+   * (tm 259.1). True when the refusal has been dealt with — a new connection is
+   * on its way, or somebody else's decision stands — and false when the client
+   * should go offline as before.
+   *
+   * Only an `authentication` refusal: a wrong region or a malformed frame is
+   * not something a new token changes. And once until a login succeeds — a
+   * token minted a moment ago and refused anyway means the session is over,
+   * not stale, and asking again would loop.
+   */
+  async #reopenWithRenewedToken(response: RtmMessage, stale: string): Promise<boolean> {
+    const error = response.payload['error'] as { type?: unknown } | undefined;
+    if (error?.type !== 'authentication' || !this.options.renewToken || this.#renewed) {
+      return false;
+    }
+    this.#renewed = true;
+    const refused = this.#ws;
+
+    let renewed: string | null;
+    try {
+      renewed = await this.options.renewToken(stale);
+    } catch {
+      // The renewal itself failed — the network, the server — which says
+      // nothing about the session. Back off and try it all again, as for any
+      // dropped connection.
+      if (this.#closedByUs || refused !== this.#ws) return true;
+      this.#renewed = false;
+      this.#replace(refused);
+      this.#setStatus('reconnecting');
+      this.#scheduleRetry();
+      return true;
+    }
+    // Disconnected meanwhile, or already replaced: not this call's to act on.
+    if (this.#closedByUs || refused !== this.#ws) return true;
+    // The session is over; the shell is on its way to the sign-in page.
+    if (renewed === null) return false;
+
+    // At once rather than after a backoff: nothing is wrong with the gateway,
+    // only with the token it was shown.
+    this.#replace(refused);
+    this.#open();
+    return true;
+  }
+
+  /** Drop `socket` without its `close` scheduling a reconnect — the caller does that. */
+  #replace(socket: WebSocket | null): void {
+    this.#clearTimers();
+    this.#ws = null;
+    socket?.close();
   }
 
   #applySync(payload: Record<string, unknown>): void {

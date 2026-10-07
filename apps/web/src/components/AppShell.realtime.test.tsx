@@ -130,6 +130,22 @@ describe('the shell owns the connection', () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
+  it('keeps it open across an access-token renewal (tm 259.1)', async () => {
+    renderShell();
+    await connected();
+
+    // What a renewal does to the store, every ~48 minutes of an open panel.
+    act(() => useAuth.setState({ accessToken: 'renewed-token' }));
+    await screen.findByText('socket: live');
+
+    // The gateway checks the token at login only, so the open socket stays
+    // valid. Tearing it down for a new one would open a window in which a
+    // customer's message reaches neither connection — and the new client
+    // starts with no cursor to replay it from.
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.last.closedByClient).toBe(false);
+  });
+
   it("subscribes to the traffic board's visitor signal and lands it in its store (FR-MOD-03.1.1)", async () => {
     // Two links in one chain, and both are invisible from the board itself: the
     // gateway only ever sends what the socket asked for at `login`, and the

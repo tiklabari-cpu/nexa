@@ -265,6 +265,18 @@ so it neither reuses a dev server nor resets the dev database. Chromium is mappe
 ports from the usual ones, so the page still runs on `http://localhost:5173`. The spec is
 `apps/e2e/tests/pilot-mode.spec.ts`; the config `apps/e2e/playwright.pilot.config.ts`.
 
+An open panel outliving its access token has a run of the same shape:
+
+```bash
+pnpm test:e2e:session
+```
+
+Its api mints access tokens that live a minute (`ACCESS_TOKEN_TTL=60`) instead of an hour, so
+the spec can wait one out: the panel must renew ahead of time, and a page that slept through
+that moment must recover on the first refused request (api 4200, rtm 4201, web 5373,
+mock-smtp 4825/4826; no widget). The spec is `apps/e2e/tests/session-refresh.spec.ts`; the
+config `apps/e2e/playwright.session.config.ts`; the design `docs/adr/agent-session-refresh.md`.
+
 ### Environment
 
 Environment lives in `.env` (created from `.env.example` by `make env`). `make` targets

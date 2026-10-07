@@ -220,7 +220,9 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       // minute, rather than the flood costing whatever it cares to send.
       if (costsTokenResolution(credential)) await recordAuthFailure(request);
       if (config.public) return; // a bad token on a public route is simply ignored
-      throw ApiError.authentication();
+      // Marked as the token's refusal (RFC 6750 `invalid_token`), so a client
+      // renews on this 401 and on no handler's (tm 259.1).
+      throw ApiError.invalidToken();
     }
 
     const { principal } = resolved;

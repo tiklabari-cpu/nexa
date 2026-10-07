@@ -572,6 +572,49 @@ describe('SignInPage enrollment from the refusal (S11-2FA-k)', () => {
   });
 });
 
+/**
+ * A session the server ended while the panel was open (tm 259.1): the agent
+ * lands here from a working screen, and without a word they would read it as
+ * having been signed out by mistake — or not notice why their reply vanished.
+ */
+describe('SignInPage after a session ended', () => {
+  afterEach(() => {
+    useAuth.setState({ sessionEnded: false });
+    resetLocale();
+  });
+
+  it('says the session ended when the server refused to renew it', () => {
+    useAuth.setState({ sessionEnded: true });
+    renderSignIn();
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your session has ended. Sign in again to continue.',
+    );
+    // Still the ordinary form underneath — the line explains, it does not block.
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('says it in Turkish too', () => {
+    useAuth.setState({ sessionEnded: true });
+    renderWithLocale(
+      <MemoryRouter initialEntries={['/']}>
+        <SignInPage />
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Oturumunuz sona erdi. Devam etmek için yeniden oturum açın.',
+    );
+  });
+
+  it('says nothing on an ordinary visit', () => {
+    renderSignIn();
+
+    expect(screen.queryByText(/session has ended/)).toBeNull();
+  });
+});
+
 describe('SignInPage localisation (NFR-I18N2)', () => {
   afterEach(() => resetLocale());
 

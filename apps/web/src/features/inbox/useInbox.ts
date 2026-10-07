@@ -858,7 +858,12 @@ let realtimeOwners = 0;
  */
 export function useRealtime(onPush?: PushHandler): void {
   const queryClient = useQueryClient();
-  const accessToken = useAuth((s) => s.accessToken);
+  // Whether there is a session, not which token it holds (tm 259.1). The
+  // gateway checks the token at `login` only, so a renewal leaves the open
+  // socket valid; rebuilding it on every renewal would drop whatever arrived
+  // in between, and the new client has no cursor to replay it from. A
+  // reconnect reads the current token itself (`getToken` below).
+  const signedIn = useAuth((s) => s.accessToken !== null);
   const organizationId = useAuth((s) => s.agent?.organization_id);
   const clientRef = useRef<RtmClient | null>(null);
 
@@ -868,7 +873,7 @@ export function useRealtime(onPush?: PushHandler): void {
   onPushRef.current = onPush;
 
   useEffect(() => {
-    if (!accessToken || !organizationId) return;
+    if (!signedIn || !organizationId) return;
 
     realtimeOwners += 1;
     if (realtimeOwners > 1) {
@@ -881,7 +886,10 @@ export function useRealtime(onPush?: PushHandler): void {
     const client = new RtmClient({
       url: RTM_URL,
       organizationId,
-      getToken: () => accessToken,
+      getToken: () => useAuth.getState().accessToken,
+      // A page that slept through its renewal reconnects with the token it had,
+      // and the gateway refuses it. One renewal, then one more try.
+      renewToken: (stale) => useAuth.getState().refreshSession(stale),
       pushes: [
         'incoming_chat',
         'incoming_event',
@@ -920,7 +928,7 @@ export function useRealtime(onPush?: PushHandler): void {
       useTypingStore.getState().setEmitter(() => {});
       client.disconnect();
     };
-  }, [accessToken, organizationId, queryClient]);
+  }, [signedIn, organizationId, queryClient]);
 }
 
 /** Exported for `useInbox.test.ts` — a push handler has no other way in. */

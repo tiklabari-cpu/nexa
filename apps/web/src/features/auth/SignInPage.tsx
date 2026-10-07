@@ -133,6 +133,9 @@ export function SignInPage(): ReactElement {
   const listWorkspaces = useAuth((s) => s.listWorkspaces);
   const signIn = useAuth((s) => s.signIn);
   const startSsoLogin = useAuth((s) => s.startSsoLogin);
+  // The server ended the session this tab was working in (tm 259.1). Without a
+  // word, landing here from a working screen reads as a glitch.
+  const sessionEnded = useAuth((s) => s.sessionEnded);
   // The seed's demo owner exists only where the seed ran; the public pilot
   // has no seed, so the line would hand strangers a login that does not work.
   const { pilot_mode: pilotMode, signup_enabled: signupEnabled } = useDeployment();
@@ -388,6 +391,15 @@ export function SignInPage(): ReactElement {
             <p className="text-xs text-content-secondary">{t('auth.signin.subtitle')}</p>
           </div>
         </header>
+
+        {sessionEnded && (
+          <p
+            role="status"
+            className="mb-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-content-secondary"
+          >
+            {t('auth.signin.sessionEnded')}
+          </p>
+        )}
 
         {ssoError && (
           <p role="alert" className="mb-3 text-xs text-danger">

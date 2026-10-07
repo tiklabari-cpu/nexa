@@ -52,6 +52,23 @@ export class ApiError extends Error {
     return new ApiError('authentication', message);
   }
 
+  /**
+   * The bearer credential itself was refused — expired, revoked, never issued,
+   * or its workspace or membership gone — as opposed to a 401 a handler raises
+   * about something inside an authenticated request (a wrong password or code).
+   *
+   * RFC 6750 §3.1 names this `invalid_token`, and it travels in
+   * `details.oauth_error` like the token endpoint's RFC 6749 codes. It is what
+   * tells a client that renewing its token can help (tm 259.1). It says nothing
+   * about *which* refusal it was: every one of them gets this same body, and
+   * the reason goes to the log only.
+   */
+  static invalidToken(): ApiError {
+    return new ApiError('authentication', 'Invalid or expired credentials.', {
+      details: { oauth_error: 'invalid_token' },
+    });
+  }
+
   static authorization(message = 'Insufficient permissions for this operation.'): ApiError {
     return new ApiError('authorization', message);
   }

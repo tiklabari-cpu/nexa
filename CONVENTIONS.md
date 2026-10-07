@@ -80,8 +80,10 @@ Pencere için iki sonuç:
   senin değişikliğindendir ya da HANDOFF/Task Master'da kayıtlı bilinen bir kusurdur; ikisi de
   değilse gerçek bir regresyondur.
 
-İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `siyahtus` veritabanını sürer;
-iki pencere aynı anda e2e koşamaz. Paylaşılan veritabanına karşı koşmak (bir testin bıraktığı
+e2e de izoledir (tm 260): `pnpm -w test:e2e` her parçayı kendi portlarında, kendi veritabanı ve
+Redis indeksiyle ayrı bir yığında koşar; çalışan dev yığınına ve `siyahtus` veritabanına dokunmaz
+(ayrıntı §1.3). Eski tek yığın (`--legacy`) sabit portlarda paylaşılan veritabanını sıfırlar —
+onunla iki pencere aynı anda koşamaz. Paylaşılan veritabanına karşı koşmak (bir testin bıraktığı
 veriyi elle incelemek) için: `SIYAHTUS_TEST_ISOLATION=off`.
 
 ### 1.3 Kapıyı KOŞMAK da objektif olmalı: `--force` ve parçalama (tm 129)
@@ -118,8 +120,20 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   `.env` yüklenir). Yalnız bazı başlıklar: `pnpm test:gate birim entegrasyon`; önbelleksiz:
   `--force`. Ölçüldü (`--force`): build 1:08, statik ∥ birim 2:39, entegrasyon 6:56 — toplam
   10:43. Pencerenin 10 dk tavanını aşabilir; arka planda koş, logların yolu ilk satırda.
-  **e2e paralelleşmez:** sabit portlar + tek tohumlu `siyahtus` veritabanı + `zz-suite-state`
-  sıraya bağlı; `workers: 1` bilinçli kalır.
+  **e2e parçalı koşar (tm 260, sahip kararı 2026-10-07):** `pnpm -w test:e2e` =
+  `apps/e2e/scripts/run-e2e-sharded.mjs`. Dosyalar N parçaya süre dengeli dağıtılır (bir dosya
+  asla bölünmez; `zz-suite-state` her parçanın sonunda koşar); her parça kendi yığınında
+  (portlar olağan + 1000 × (parça + 1), `with-test-datastores` veritabanı + Redis indeksi) ve
+  kendi içinde yine `workers: 1` ile sırayla koşar. N varsayılanı başlangıçtaki boş bellekten
+  türer (parça başına ~1,25 GB, en çok 3); `--shards=N` / `SIYAHTUS_E2E_SHARDS` ile verilir.
+  Ölçüldü (20 çekirdek, 15,6 GB): taban tek yığın 23,5 dk → 1 parça 25 dk, 2 parça 12 dk,
+  3 parça 10 dk. Kapı için **son satırlar** okunur: parça başına bir satır, toplam için
+  `Tests: …` satırı ve `verdict: GREEN|RED`; exit code 1 = bir parça kırmızı ya da eksik koştu.
+  **Yalnız parçalıyken düşen kırmızı bir sıra bağımlılığıdır** — "paralel yüzünden" denip
+  geçilmez. O parçada kendinden önce koşan dosyayla birlikte iki dosyayla yeniden üret
+  (`pnpm test:e2e --shards=1 <önceki> <düşen>`) ve testin başka bir dosyanın bıraktığı duruma
+  yaslandığı yeri düzelt (tm 260'ta `tickets.spec` "listedeki ilk sohbet"e yaslanıyordu).
+  CI'da bayraksız `--legacy` koşar (tek yığın, olağan portlar).
 - **(Tarihçe — paralel parçalardan önce)** **Tek komut olarak kapı, bir pencerenin komut tavanını aşar.** `@siyahtus/api`'nin `test` script'i unit
   **ve** integration'ı birlikte koşar, `fileParallelism: false` ile sırayla: tek başına ~858 s, yani
   `pnpm -w test` ~15 dk. Pencerenin komut tavanı 10 dk. `pnpm -w test:integration` için zaten
@@ -167,10 +181,11 @@ sanılır. Ölçüldü, kaybedilen tur sayısıyla birlikte.
   container'a komut geçerken `MSYS_NO_PATHCONV=1` gerekir. Volume'lar restart'ta korunur, yani
   e2e'nin beklediği tohumlu `siyahtus` veritabanı yerinde kalır.
 
-- **`pnpm -w test:e2e` kök `.env`'i kendiliğinden ALMAZ.** Playwright'ın kaldırdığı RTM sunucusu
-  60 saniyede `DATABASE_URL: Required` ile düşer ve bütün süit "webServer timeout" verir. Doğrusu:
-  `set -a && . ./.env && set +a && pnpm -w test:e2e`. Aynı tuzak `pnpm db:migrate` için de geçerli.
-  Bir e2e turu ~84 `apps/e2e/kanit/*.png` yeniden yazar — beklenen churn, geri alma.
+- **`pnpm -w test:e2e --legacy` kök `.env`'i kendiliğinden ALMAZ.** Playwright'ın kaldırdığı RTM
+  sunucusu 60 saniyede `DATABASE_URL: Required` ile düşer ve bütün süit "webServer timeout" verir.
+  Doğrusu: `set -a && . ./.env && set +a && pnpm -w test:e2e --legacy`. Parçalı varsayılan
+  `.env`'i `with-test-datastores` üzerinden kendisi yükler. Aynı tuzak `pnpm db:migrate` için de
+  geçerli. Bir e2e turu ~84 `apps/e2e/kanit/*.png` yeniden yazar — beklenen churn, geri alma.
 
 ### 1.5 Gereksinim kapsama kapısı CI'a bağlı — kademeli tasarım, borç değil tutarsızlık kırmızı yapar (tm 184.3)
 

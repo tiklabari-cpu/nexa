@@ -133,17 +133,17 @@ all, so the two never collide.
 
 ### Workspace layout
 
-| Package             | Role                                                                                    |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| `packages/contract` | OpenAPI 3.1 document — the contract every other package derives from                    |
-| `packages/types`    | `@siyahtus/types`: domain vocabulary, error taxonomy, scopes, ID strategy, RTM protocol |
-| `apps/api`          | REST API (Fastify + Prisma), migrations, seed                                           |
-| `apps/rtm`          | WebSocket gateway: presence, push fan-out, missed-event sync                            |
-| `apps/web`          | Agent SPA (React + Vite + Tailwind)                                                     |
-| `apps/widget`       | Customer chat widget — loader + sandboxed iframe app                                    |
-| `apps/mobile`       | Agent phone app (Expo / React Native) — Inbox, AI, CRM, Reports + push                  |
-| `apps/e2e`          | Playwright suite: drives the real servers on fixed ports against the seeded database    |
-| `packages/ai-mock`  | Deterministic LLM stand-in — no external model is ever called                           |
+| Package             | Role                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| `packages/contract` | OpenAPI 3.1 document — the contract every other package derives from                     |
+| `packages/types`    | `@siyahtus/types`: domain vocabulary, error taxonomy, scopes, ID strategy, RTM protocol  |
+| `apps/api`          | REST API (Fastify + Prisma), migrations, seed                                            |
+| `apps/rtm`          | WebSocket gateway: presence, push fan-out, missed-event sync                             |
+| `apps/web`          | Agent SPA (React + Vite + Tailwind)                                                      |
+| `apps/widget`       | Customer chat widget — loader + sandboxed iframe app                                     |
+| `apps/mobile`       | Agent phone app (Expo / React Native) — Inbox, AI, CRM, Reports + push                   |
+| `apps/e2e`          | Playwright suite: drives the real servers, as parallel private stacks with own databases |
+| `packages/ai-mock`  | Deterministic LLM stand-in — no external model is ever called                            |
 
 ### Contract-first
 
@@ -228,29 +228,40 @@ Nothing in a test needs to know: the harness only rewrites `DATABASE_URL`,
 against the shared development database instead, for picking through the wreckage of a
 failing test by hand.
 
-The e2e suite is the exception — it drives the real servers on fixed ports against the
-seeded development database, so two of those still cannot run at once.
+The e2e suite gets the same isolation a level up: whole private stacks (below).
 
 ### End-to-end tests
 
 ```bash
 pnpm --filter @siyahtus/e2e exec playwright install chromium   # one-time browser download
-pnpm test:e2e
+pnpm test:e2e                 # N private stacks in parallel, N from free memory (max 3)
+pnpm test:e2e --shards=2      # or SIYAHTUS_E2E_SHARDS=2; 1-6
+pnpm test:e2e:private         # one private stack (= --shards=1)
+pnpm test:e2e widget tickets  # only spec files whose name contains a word
+pnpm test:e2e --plan          # print the split and stop
+pnpm test:e2e --legacy        # the old single stack on the usual ports (CI's default)
 ```
 
-Playwright starts six real servers for you (mock-smtp, api, rtm, web, widget, mock-idp) on
-their usual ports, then a global setup step reseeds the demo tenant with `SIYAHTUS_SEED_RESET=1`.
-The api it starts sends mail for real (`MAIL_PROVIDER=smtp`, TLS verified) to the mock-smtp
-stand-in on 127.0.0.1:4625, and the tests read what arrived from its mailbox at
-`http://127.0.0.1:4626/messages`. An api server that is already running is reused as it is
-— with its own `.env` mailer and rate limits — so stop a `make dev` stack before a full run.
+`apps/e2e/scripts/run-e2e-sharded.mjs` splits the spec files over N shards (longest first,
+by each file's duration in the last green run — `apps/e2e/node_modules/.cache/run-e2e-sharded/`)
+and runs each shard on a stack of its own: six real servers (mock-smtp, api, rtm, web,
+widget, mock-idp) started by that shard on the usual ports + 1000 × (shard + 1), and a
+private database and Redis index from `apps/api/scripts/with-test-datastores.ts`, which the
+global setup seeds with `SIYAHTUS_SEED_RESET=1`. Chromium is mapped onto those ports from the
+usual ones, so the page still runs on `http://localhost:5173`. A file is never split, and
+`zz-suite-state.spec.ts` runs last in every shard, so the total is the listed count plus one
+sentinel per extra shard. The last lines are one row per shard and a total; each shard has
+its own HTML report (`apps/e2e/playwright-report/shard-<i>`). The root `.env` is loaded for
+you. Measured on a 20-core, 15.6 GB machine (tm 260): one stack 25 min, two 12, three 10.
 
-**This resets your local dev database** — the reset truncates the tenant tables (it
-neither drops the database nor touches the schema) so every run starts from the same
-fixture instead of piling more fixtures onto the last one. If you have local data in
-`make dev`'s database you care about, back it up first (`make psql` → `pg_dump`, or just
-re-seed afterwards with `make seed`). Because it drives fixed ports against that one
-database, two `test:e2e` runs — or windows — cannot execute at the same time.
+Nothing of yours is touched: a running `make dev` stack keeps its ports and its database.
+The api each shard starts sends mail for real (`MAIL_PROVIDER=smtp`, TLS verified) to its own
+mock-smtp stand-in, and the tests read what arrived from that stand-in's mailbox.
+
+`--legacy` is the old run, unchanged: one stack on the usual ports, reusing whatever dev
+servers already hold them, against the development database — which **it resets** (the
+tenant tables are truncated, the schema is left alone) — and only one at a time. It needs
+the root `.env` in the shell (see Environment).
 
 The public pilot's flag-on behaviour has its own run, outside that suite:
 
@@ -283,7 +294,7 @@ Environment lives in `.env` (created from `.env.example` by `make env`). `make` 
 export it automatically (`Makefile` does `include .env` + `export`), but a bare `pnpm`
 command run from your shell does not load it — nothing in this repo calls `dotenv`, so
 `apps/api`/`apps/rtm`/Prisma read `process.env` directly. `pnpm db:migrate` and
-`pnpm test:e2e` both need `DATABASE_URL` (and friends) in the shell's environment first:
+`pnpm test:e2e --legacy` both need `DATABASE_URL` (and friends) in the shell's environment first:
 
 ```bash
 set -a; source .env; set +a

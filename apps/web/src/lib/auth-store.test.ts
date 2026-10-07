@@ -80,6 +80,38 @@ function invalidToken(): Response {
   );
 }
 
+/**
+ * One `/auth/token` answer that is not a grant (tm 259.2): a status with the
+ * API's envelope — a `Retry-After` on a 429, an `oauth_error` on a refusal — or
+ * no answer at all, the way `fetch` fails on a dead network.
+ */
+type TokenFailure = { status: number; retryAfter?: string; oauthError?: string } | 'network';
+
+const FAILURE_TYPES: Record<number, string> = {
+  400: 'validation',
+  401: 'authentication',
+  429: 'too_many_requests',
+  500: 'internal',
+  502: 'internal',
+  503: 'service_unavailable',
+};
+
+function failureResponse(failure: { status: number; retryAfter?: string; oauthError?: string }) {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (failure.retryAfter !== undefined) headers['Retry-After'] = failure.retryAfter;
+  return new Response(
+    JSON.stringify({
+      error: {
+        type: FAILURE_TYPES[failure.status] ?? 'internal',
+        message: `Failed with ${failure.status}.`,
+        request_id: `rq-${failure.status}`,
+        ...(failure.oauthError ? { details: { oauth_error: failure.oauthError } } : {}),
+      },
+    }),
+    { status: failure.status, headers },
+  );
+}
+
 interface Family {
   prefix: string;
   account: string;
@@ -102,6 +134,14 @@ interface FakeServer {
   refuseEveryToken: boolean;
   /** Answer `/auth/token` with this status instead of rotating — a deploy, an outage. */
   tokenOutage: number | null;
+  /**
+   * The next `/auth/token` calls' answers, one each, before the server behaves
+   * again. None of them spends the token presented: a 429 is turned away before
+   * the handler runs, and a 5xx rolls the rotation back (tm 259.2).
+   */
+  tokenFailures: TokenFailure[];
+  /** The next `/auth/me` calls' statuses, one each — the profile load after a renewal. */
+  meFailures: number[];
   expiresIn: number;
 }
 
@@ -135,6 +175,9 @@ function fakeAuthServer(): FakeServer {
         const body = JSON.parse(String(init?.body ?? '{}')) as { refresh_token?: string };
         const presented = body.refresh_token ?? '';
         server.presented.push(presented);
+        const failure = server.tokenFailures.shift();
+        if (failure === 'network') throw new TypeError('Failed to fetch');
+        if (failure) return failureResponse(failure);
         if (server.tokenOutage !== null) {
           return jsonResponse(
             {
@@ -190,6 +233,8 @@ function fakeAuthServer(): FakeServer {
       }
 
       if (path === '/auth/me') {
+        const status = server.meFailures.shift();
+        if (status !== undefined) return failureResponse({ status });
         return jsonResponse({
           account_id: family.account,
           email: `${family.account}@acme.localhost`,
@@ -216,6 +261,8 @@ function fakeAuthServer(): FakeServer {
     },
     refuseEveryToken: false,
     tokenOutage: null,
+    tokenFailures: [],
+    meFailures: [],
     expiresIn: HOUR_S,
   };
   return server;
@@ -446,26 +493,371 @@ describe('a request refused for an expired token is renewed and repeated (tm 259
     expect(useAuth.getState().sessionEnded).toBe(true);
   });
 
-  it('keeps the session when the renewal fails for a reason that says nothing about it', async () => {
+  it('keeps the session through an outage, and the refused request goes through once it ends (tm 259.2)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     const server = stubServer();
     const { useAuth, sessionClient } = await openTab();
     await useAuth.getState().restore();
     server.expireAccessTokens();
     server.tokenOutage = 503;
 
-    const error = (await sessionClient()
+    let answer: unknown;
+    const request = sessionClient()
       .get('/chats')
-      .catch((e: unknown) => e)) as ApiClientError;
+      .then((value) => (answer = value));
+    await vi.advanceTimersByTimeAsync(0);
 
-    // The outage is the honest answer to the request, and nothing more: the
-    // stored token was never spent, so the session is still there to renew
-    // once the server is back (tm 259.2 decides how to wait for that).
-    expect(error.status).toBe(503);
+    // The token in hand was refused and no new one can be had yet: the panel
+    // cannot act, and says so — but the stored token was never spent, so the
+    // session is there to resume, and the request waits for it.
+    expect(useAuth.getState().status).toBe('reconnecting');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
+    expect(answer).toBeUndefined();
+
+    server.tokenOutage = null;
+    await vi.advanceTimersByTimeAsync(1_000);
+    await request;
+
+    expect(answer).toEqual({ items: [] });
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(useAuth.getState().accessToken).toBe('access-2');
+  });
+});
+
+/**
+ * A passing failure keeps the session (tm 259.2).
+ *
+ * A deploy restarts the API, a proxy answers 502 for a few seconds, the shared
+ * office address meets the rate limit, the Wi-Fi drops. None of those says
+ * anything about the refresh token: a 429 is turned away before the token
+ * endpoint runs, and a 5xx rolls its rotation back. Until 259.2 the restore a
+ * page load does forgot the token on any of them — measured in the 2026-10-07
+ * audit as a 429 that put the agent on the sign-in form for the rest of the run.
+ *
+ * The rule pinned here: only the server refusing the token (401, or a 400
+ * `invalid_grant`) ends the session. Everything else keeps the token, says
+ * "reconnecting" when the panel cannot act, and tries again — after the
+ * `Retry-After` a 429 names (60 s at most), otherwise after 1, 2, 4, 8, 16, 30,
+ * 30 and 30 seconds: nine attempts over about two minutes, then it waits for
+ * "Try now".
+ */
+describe('a page load rides out a passing failure (tm 259.2 · NFR-S2)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  });
+
+  it('waits out a 429 for as long as Retry-After says, keeping the token, then signs in', async () => {
+    const server = stubServer();
+    server.tokenFailures = [{ status: 429, retryAfter: '2' }];
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+
+    expect(useAuth.getState().status).toBe('reconnecting');
+    expect(useAuth.getState().reconnect).toBe('waiting');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-0');
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(server.tokenCalls()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(server.tokenCalls()).toBe(2);
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(useAuth.getState().reconnect).toBeNull();
+    expect(useAuth.getState().agent?.account_id).toBe('acct-1');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
+  });
+
+  it('honours Retry-After up to a minute, not an hour', async () => {
+    const server = stubServer();
+    server.tokenFailures = [{ status: 429, retryAfter: '3600' }];
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(server.tokenCalls()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(server.tokenCalls()).toBe(2);
+    expect(useAuth.getState().status).toBe('signed-in');
+  });
+
+  it('backs off 1, 2 and 4 seconds through three 503s, then signs in', async () => {
+    const server = stubServer();
+    server.tokenFailures = [{ status: 503 }, { status: 503 }, { status: 503 }];
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+    expect(useAuth.getState().status).toBe('reconnecting');
+
+    for (const [wait, calls] of [
+      [999, 1],
+      [1, 2],
+      [1_999, 2],
+      [1, 3],
+      [3_999, 3],
+    ] as const) {
+      await vi.advanceTimersByTimeAsync(wait);
+      expect(server.tokenCalls()).toBe(calls);
+      expect(useAuth.getState().status).toBe('reconnecting');
+      expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-0');
+    }
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(server.tokenCalls()).toBe(4);
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
+  });
+
+  it('keeps the token when the network is down, and signs in once it is back', async () => {
+    const server = stubServer();
+    server.tokenFailures = ['network'];
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+
+    expect(useAuth.getState().status).toBe('reconnecting');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-0');
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(useAuth.getState().status).toBe('signed-in');
+  });
+
+  it('keeps the renewed token when the profile fails to load, and loads it again', async () => {
+    const server = stubServer();
+    server.meFailures = [503];
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+
+    // The rotation went through: the server has already spent `refresh-0`, so
+    // its successor is the only way back in. Forgetting it here is a sign-out.
+    expect(useAuth.getState().status).toBe('reconnecting');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(useAuth.getState().agent?.account_id).toBe('acct-1');
+    expect(server.familyRevoked()).toBe(false);
+  });
+
+  it('signs out and forgets the token on a 400 invalid_grant, without trying again', async () => {
+    const server = stubServer();
+    server.tokenFailures = [{ status: 400, oauthError: 'invalid_grant' }];
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(useAuth.getState().status).toBe('signed-out');
+    expect(localStorage.getItem(REFRESH_KEY)).toBeNull();
+    expect(useAuth.getState().sessionEnded).toBe(false);
+    expect(server.tokenCalls()).toBe(1);
+  });
+
+  it('signs out and forgets the token on a 401, without trying again', async () => {
+    const server = stubServer();
+    server.tokenFailures = [{ status: 401, oauthError: 'invalid_client' }];
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(useAuth.getState().status).toBe('signed-out');
+    expect(localStorage.getItem(REFRESH_KEY)).toBeNull();
+    expect(server.tokenCalls()).toBe(1);
+  });
+
+  it('stops after nine attempts over two minutes, still holding the token, and "Try now" goes on', async () => {
+    const server = stubServer();
+    server.tokenOutage = 503;
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+    await vi.advanceTimersByTimeAsync(120_999);
+    expect(server.tokenCalls()).toBe(8);
+    expect(useAuth.getState().reconnect).toBe('waiting');
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(server.tokenCalls()).toBe(9);
+    expect(useAuth.getState().reconnect).toBe('paused');
+
+    // Nothing more on its own, however long the tab stays open — and the token
+    // is still there for whoever presses the button.
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(server.tokenCalls()).toBe(9);
+    expect(useAuth.getState().status).toBe('reconnecting');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-0');
+
+    server.tokenOutage = null;
+    useAuth.getState().retryNow();
+    expect(useAuth.getState().reconnect).toBe('trying');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(server.tokenCalls()).toBe(10);
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
+  });
+
+  it('"Try now" that fails again starts a fresh round of attempts', async () => {
+    const server = stubServer();
+    server.tokenOutage = 503;
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+    await vi.advanceTimersByTimeAsync(121_000);
+    expect(useAuth.getState().reconnect).toBe('paused');
+
+    useAuth.getState().retryNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(server.tokenCalls()).toBe(10);
+    expect(useAuth.getState().reconnect).toBe('waiting');
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(server.tokenCalls()).toBe(11);
+  });
+
+  it('signing out while reconnecting ends it: no more attempts, no token left', async () => {
+    const server = stubServer();
+    server.tokenOutage = 503;
+    const { useAuth } = await openTab();
+
+    await useAuth.getState().restore();
+    expect(useAuth.getState().status).toBe('reconnecting');
+
+    await useAuth.getState().signOut();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(useAuth.getState().status).toBe('signed-out');
+    expect(useAuth.getState().reconnect).toBeNull();
+    expect(localStorage.getItem(REFRESH_KEY)).toBeNull();
+    expect(server.tokenCalls()).toBe(1);
+  });
+});
+
+describe('a renewal due mid-session rides out a passing failure (tm 259.2 · NFR-S2)', () => {
+  /** Signed in, the renewal due at exactly 80% of the hour (`Math.random` pinned). */
+  async function signedInTab() {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const server = stubServer();
+    const tab = await openTab();
+    await tab.useAuth.getState().restore();
+    expect(tab.useAuth.getState().status).toBe('signed-in');
+    return { server, ...tab };
+  }
+
+  const DUE_MS = 0.8 * HOUR_S * 1000;
+
+  it('goes on with the token in hand through a 429, and renews after Retry-After', async () => {
+    const { server, useAuth } = await signedInTab();
+    server.tokenFailures = [{ status: 429, retryAfter: '2' }];
+
+    await vi.advanceTimersByTimeAsync(DUE_MS);
+    expect(server.tokenCalls()).toBe(2);
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(useAuth.getState().accessToken).toBe('access-1');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(server.tokenCalls()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(server.tokenCalls()).toBe(3);
+    expect(useAuth.getState().accessToken).toBe('access-2');
+  });
+
+  it('goes on through three 503s and renews on the fourth try', async () => {
+    const { server, useAuth } = await signedInTab();
+    server.tokenFailures = [{ status: 503 }, { status: 503 }, { status: 503 }];
+
+    await vi.advanceTimersByTimeAsync(DUE_MS);
+    await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000);
+
+    expect(server.tokenCalls()).toBe(5);
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(useAuth.getState().accessToken).toBe('access-2');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-2');
+  });
+
+  it('goes on through a dead network and renews once it is back', async () => {
+    const { server, useAuth } = await signedInTab();
+    server.tokenFailures = ['network'];
+
+    await vi.advanceTimersByTimeAsync(DUE_MS);
     expect(useAuth.getState().status).toBe('signed-in');
     expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
 
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(useAuth.getState().accessToken).toBe('access-2');
+  });
+
+  it('ends the session and says so when the renewal is refused with a 400 invalid_grant', async () => {
+    const { server, useAuth } = await signedInTab();
+    server.tokenFailures = [{ status: 400, oauthError: 'invalid_grant' }];
+
+    await vi.advanceTimersByTimeAsync(DUE_MS);
+
+    expect(useAuth.getState().status).toBe('signed-out');
+    expect(useAuth.getState().sessionEnded).toBe(true);
+    expect(localStorage.getItem(REFRESH_KEY)).toBeNull();
+  });
+
+  it('says reconnecting once the token in hand runs out, and the panel picks up when the server is back', async () => {
+    const { server, useAuth, sessionClient } = await signedInTab();
+    server.tokenOutage = 503;
+
+    // Twelve minutes of a server that is away: the panel works on with the
+    // token it holds and tries again behind the scenes.
+    await vi.advanceTimersByTimeAsync(DUE_MS);
+    await vi.advanceTimersByTimeAsync(HOUR_S * 1000 - DUE_MS - 1);
+    expect(useAuth.getState().status).toBe('signed-in');
+
+    // The token's last moment: one more try, and then there is no token to act with.
+    await vi.advanceTimersByTimeAsync(1);
+    server.expireAccessTokens();
+    expect(useAuth.getState().status).toBe('reconnecting');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('refresh-1');
+
+    let answer: unknown;
+    void sessionClient()
+      .get('/chats')
+      .then((value) => (answer = value));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answer).toBeUndefined();
+
     server.tokenOutage = null;
-    await expect(sessionClient().get('/chats')).resolves.toEqual({ items: [] });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(useAuth.getState().status).toBe('signed-in');
+    expect(useAuth.getState().reconnect).toBeNull();
+    expect(answer).toEqual({ items: [] });
+  });
+
+  it('takes the token a sibling tab renewed while this one was reconnecting', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    installLocks();
+    const server = stubServer();
+    const a = await openTab();
+    await a.useAuth.getState().restore();
+
+    server.expireAccessTokens();
+    server.tokenOutage = 503;
+    void a
+      .sessionClient()
+      .get('/chats')
+      .catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.useAuth.getState().status).toBe('reconnecting');
+
+    // The server is back and a second tab's page load gets there first.
+    server.tokenOutage = null;
+    const b = await openTab();
+    await b.useAuth.getState().restore();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(a.useAuth.getState().status).toBe('signed-in');
+    expect(a.useAuth.getState().accessToken).toBe(b.useAuth.getState().accessToken);
+    expect(server.familyRevoked()).toBe(false);
   });
 });
 

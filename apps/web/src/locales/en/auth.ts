@@ -165,6 +165,17 @@ export const auth: Messages = {
   'auth.callback.unverified':
     'Confirm your email address before signing in. Open the link we sent you, or ask for a new one from the sign-in page.',
 
+  // A session that cannot reach the server (tm 259.2): the token is kept, so
+  // the agent is still signed in — say so, or the screen reads as a sign-out.
+  'auth.reconnecting.title': 'Reconnecting…',
+  'auth.reconnecting.waiting':
+    'The server cannot be reached right now. You are still signed in, and we keep trying.',
+  'auth.reconnecting.trying': 'Trying to reconnect…',
+  'auth.reconnecting.paused':
+    'The server still cannot be reached. You are still signed in — try again when your connection is back.',
+  'auth.reconnecting.retry': 'Try now',
+  'auth.reconnecting.signOut': 'Sign out',
+
   // Email confirmation (tm 257.16): the "check your inbox" state after sign-up,
   // the page the mailed link opens, and the resend control both share.
   'auth.verify.checkTitle': 'Check your inbox',

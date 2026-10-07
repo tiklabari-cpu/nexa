@@ -1,8 +1,9 @@
-import { useEffect, type ReactElement } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { PilotHidden } from './components/PilotHidden.js';
 import { AuthCallbackPage } from './features/auth/AuthCallbackPage.js';
+import { ReconnectingPage } from './features/auth/ReconnectingPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import {
   ForgotPasswordPage,
@@ -44,12 +45,21 @@ export function App(): ReactElement {
    * fragment and is never touched here; the page reads it.
    */
   const sharedReport = useLocation().pathname === SHARED_REPORT_PATH;
+  const reconnecting = status === 'reconnecting';
+  const shell = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Not merely unnecessary on the shared page — a restore attempt would put a
     // refresh request in a log line belonging to a caller who is not a user.
     if (status === 'unknown' && !sharedReport) void restore();
   }, [status, restore, sharedReport]);
+
+  // Out of reach while the session reconnects (tm 259.2): nothing typed or
+  // clicked under the overlay could be sent. An attribute rather than a prop —
+  // React 18 does not know `inert`.
+  useEffect(() => {
+    shell.current?.toggleAttribute('inert', reconnecting);
+  }, [reconnecting]);
 
   if (sharedReport) return <SharedReportPage />;
 
@@ -63,6 +73,10 @@ export function App(): ReactElement {
     );
   }
 
+  // A page load that cannot reach the server (tm 259.2): still signed in — the
+  // token is kept — but with no profile yet there is no shell to show.
+  if (reconnecting && agent === null) return <ReconnectingPage />;
+
   // Signing out mid-session must not leave a module route rendering against a
   // dead token, so the whole tree collapses to the signed-out routes rather
   // than redirecting.
@@ -72,7 +86,7 @@ export function App(): ReactElement {
   // away: `/join`, `/reset-password` and `/verify-email` a token from an email, and
   // `/auth/callback` the authorization code a federated sign-in just earned
   // (NFR-S11 · S11-i).
-  if (status !== 'signed-in') {
+  if (status !== 'signed-in' && !reconnecting) {
     return (
       <Routes>
         <Route path="/signup" element={<SignUpPage />} />
@@ -86,12 +100,27 @@ export function App(): ReactElement {
     );
   }
 
+  // A session that runs out mid-outage keeps the shell mounted under the
+  // reconnecting screen (tm 259.2): a half-typed reply lives in component state,
+  // and unmounting for a two-minute outage would throw it away. The wrapper is
+  // there in both states, so toggling it does not remount what is inside.
+  return (
+    <>
+      <div ref={shell} className="contents">
+        <SignedInRoutes onboarding={agent?.onboarding_completed === false} />
+      </div>
+      {reconnecting && <ReconnectingPage overShell />}
+    </>
+  );
+}
+
+function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
   // A workspace created through signup opens empty, so a brand-new owner is sent
   // through the first-run wizard before the shell. The flag is explicitly `false`
   // only for such a workspace; older sessions without the field are treated as
   // already set up, so this never traps an existing user. While it holds, every
   // path leads to the wizard — deep-linking to a module cannot slip past setup.
-  if (agent?.onboarding_completed === false) {
+  if (onboarding) {
     return (
       <Routes>
         <Route path="/app/onboarding" element={<OnboardingWizard />} />

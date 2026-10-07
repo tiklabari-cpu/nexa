@@ -162,6 +162,16 @@ export const auth: Messages = {
   'auth.callback.unverified':
     'Oturum açmadan önce e-posta adresinizi doğrulayın. Size gönderdiğimiz bağlantıyı açın ya da oturum açma sayfasından yenisini isteyin.',
 
+  // Sunucuya ulaşılamayan oturum (tm 259.2)
+  'auth.reconnecting.title': 'Bağlantı yeniden kuruluyor…',
+  'auth.reconnecting.waiting':
+    'Sunucuya şu anda ulaşılamıyor. Oturumunuz açık; yeniden denemeye devam ediyoruz.',
+  'auth.reconnecting.trying': 'Yeniden bağlanmaya çalışılıyor…',
+  'auth.reconnecting.paused':
+    'Sunucuya hâlâ ulaşılamıyor. Oturumunuz açık; bağlantınız geri geldiğinde yeniden deneyin.',
+  'auth.reconnecting.retry': 'Şimdi dene',
+  'auth.reconnecting.signOut': 'Çıkış yap',
+
   // E-posta doğrulama (tm 257.16): kayıttan sonra "gelen kutunuzu kontrol edin"
   // durumu, gönderilen bağlantının açtığı sayfa ve ikisinin paylaştığı yeniden
   // gönderme düğmesi.

@@ -208,3 +208,151 @@ test.describe('two tabs, one refresh token (tm 259.1)', () => {
     await agentPage.screenshot({ path: 'kanit/259-1-session-ended-notice.png' });
   });
 });
+
+/** The token endpoint's answer while the API restarts: what a deploy looks like from the panel. */
+const SERVICE_UNAVAILABLE = {
+  status: 503,
+  contentType: 'application/json',
+  body: JSON.stringify({
+    error: { type: 'service_unavailable', message: 'Restarting.', request_id: 'e2e-503' },
+  }),
+};
+
+/**
+ * Answer every refresh-token grant with a 503 until the returned `restore()` is
+ * called; the authorization-code grant of a sign-in passes untouched.
+ */
+async function tokenOutage(page: Page): Promise<{ refused: () => number; restore: () => void }> {
+  let down = true;
+  let refused = 0;
+  await page.route('**/api/v1/auth/token', async (route) => {
+    const grant = route.request().postDataJSON() as { grant_type?: string } | null;
+    if (!down || grant?.grant_type !== 'refresh_token') return route.continue();
+    refused += 1;
+    return route.fulfill(SERVICE_UNAVAILABLE);
+  });
+  return {
+    refused: () => refused,
+    restore: () => {
+      down = false;
+    },
+  };
+}
+
+/** Record, from the first byte of every page load, whether the sign-in form ever rendered. */
+async function watchForSignInForm(page: Page): Promise<() => Promise<boolean>> {
+  await page.addInitScript(() => {
+    const look = () => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      if (buttons.some((button) => button.textContent?.trim() === 'Sign in')) {
+        (window as unknown as { __sawSignIn?: boolean }).__sawSignIn = true;
+      }
+    };
+    new MutationObserver(look).observe(document, { childList: true, subtree: true });
+  });
+  return () =>
+    page.evaluate(() => (window as unknown as { __sawSignIn?: boolean }).__sawSignIn === true);
+}
+
+/**
+ * A passing failure keeps the session (tm 259.2).
+ *
+ * The 2026-10-07 audit watched a 429 on `POST /auth/token` put the panel on the
+ * sign-in form for the rest of the run: a page load forgot the stored refresh
+ * token on any failure. In production that is every reloading agent of every
+ * deploy. Now only the server refusing the token ends the session; a 503 keeps
+ * it, says "Reconnecting…", and tries again.
+ */
+test.describe('a passing failure keeps the session (tm 259.2)', () => {
+  test('a reload whose refresh meets a 503 comes back to the inbox without ever showing the sign-in form (NFR-S2)', async ({
+    agentPage,
+  }) => {
+    const sawSignIn = await watchForSignInForm(agentPage);
+    const outage = await tokenOutage(agentPage);
+
+    await agentPage.reload();
+
+    await expect(agentPage.getByRole('heading', { name: 'Reconnecting…' })).toBeVisible();
+    await expect(agentPage.getByRole('status')).toHaveText(
+      'The server cannot be reached right now. You are still signed in, and we keep trying.',
+    );
+    await expect(agentPage.getByRole('button', { name: 'Try now' })).toBeVisible();
+    await expect(agentPage.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    // Kept, not forgotten: this is the line the old restore got wrong.
+    expect(
+      await agentPage.evaluate(() => localStorage.getItem('siyahtus.refresh_token')),
+    ).toBeTruthy();
+    await expect.poll(outage.refused).toBeGreaterThan(1);
+    await agentPage.screenshot({ path: 'kanit/259-2-reconnecting.png' });
+
+    outage.restore();
+
+    await expect(agentPage.getByRole('link', { name: 'Inbox' })).toBeVisible({ timeout: 40_000 });
+    await expect(agentPage.getByRole('heading', { name: 'Reconnecting…' })).toHaveCount(0);
+    expect(await sawSignIn()).toBe(false);
+    await stillSignedIn(agentPage);
+  });
+
+  test('a reload whose refresh is refused lands on the sign-in form, and the token is gone (NFR-S2)', async ({
+    agentPage,
+  }) => {
+    await agentPage.route('**/api/v1/auth/token', (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            type: 'authentication',
+            message: 'Refresh token is invalid.',
+            request_id: 'e2e-401',
+            details: { oauth_error: 'invalid_grant' },
+          },
+        }),
+      }),
+    );
+
+    await agentPage.reload();
+
+    await expect(agentPage.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await expect(agentPage.getByRole('heading', { name: 'Reconnecting…' })).toHaveCount(0);
+    expect(
+      await agentPage.evaluate(() => localStorage.getItem('siyahtus.refresh_token')),
+    ).toBeNull();
+  });
+
+  test('a token that runs out mid-outage covers the shell, which is still there when the server is back (NFR-S2)', async ({
+    page,
+    context,
+  }) => {
+    // Before anything loads, so the renewal timers run on this clock.
+    await context.clock.install();
+    await signIn(page);
+    // A mark the shell keeps only for as long as it stays mounted: React leaves
+    // an attribute it never set alone, and a remount starts from scratch.
+    const rail = page.getByRole('link', { name: 'Inbox' });
+    await rail.evaluate((link) => link.setAttribute('data-e2e-kept', 'yes'));
+
+    const outage = await tokenOutage(page);
+    // Past the renewal, due between 70% and 80% of the hour: it fails, and the
+    // panel works on with the token in hand, trying again behind the scenes.
+    await page.clock.fastForward('50:00');
+    await expect.poll(outage.refused, { timeout: 15_000 }).toBeGreaterThan(0);
+    await expect(page.getByRole('heading', { name: 'Reconnecting…' })).toHaveCount(0);
+
+    // Past the token's last minute: nothing left to act with.
+    await page.clock.fastForward('11:00');
+    await expect(page.getByRole('heading', { name: 'Reconnecting…' })).toBeVisible({
+      timeout: 40_000,
+    });
+    await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+    await page.screenshot({ path: 'kanit/259-2-reconnecting-over-shell.png' });
+
+    outage.restore();
+
+    await expect(page.getByRole('heading', { name: 'Reconnecting…' })).toHaveCount(0, {
+      timeout: 40_000,
+    });
+    await expect(rail).toHaveAttribute('data-e2e-kept', 'yes');
+    await stillSignedIn(page);
+  });
+});

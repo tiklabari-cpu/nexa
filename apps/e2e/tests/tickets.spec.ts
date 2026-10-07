@@ -16,6 +16,27 @@
 import type { APIRequestContext } from '@playwright/test';
 import { API_BASE, chatOfAReachableCustomer, expect, ownerAccessToken, test } from './fixtures.js';
 import { mailbox, type Mail } from './mailbox.js';
+import type { Page } from '@playwright/test';
+
+/**
+ * Open a conversation a ticket can be created from (tm 260.2).
+ *
+ * These three tests used to click the first row of the conversation list, the
+ * pattern tm 247 retired from the mail test below: which row is first is a
+ * statement about every spec that ran before this one, not about the fixture.
+ * Running the suite as parallel shards changed which files run before this one,
+ * and the first row became `team.spec.ts`'s conversation routed to a team the
+ * owner had just created — one the ticket service reports as not found
+ * (`ticket-service.ts`, `canSeeChat`), so "Create" answered "Could not create
+ * that ticket" and all three tests timed out. In the single ordered run
+ * `telegram.spec.ts` had always filed a fresh conversation on top in between.
+ * Resolved through the API as the mail test does, the conversation is the same
+ * whatever ran first.
+ */
+async function openTicketableChat(page: Page, request: APIRequestContext): Promise<void> {
+  const chatId = await chatOfAReachableCustomer(request);
+  await page.goto(`/app/inbox?chat=${chatId}`);
+}
 
 test.describe('ticket HelpDesk surface', () => {
   // The transcript header is deliberately tight; at the default width its
@@ -23,15 +44,13 @@ test.describe('ticket HelpDesk surface', () => {
   // keeps "Create ticket" clickable without collapsing the panel.
   test.use({ viewport: { width: 1680, height: 1050 } });
 
-  test('sets a ticket priority and adds a follower against the live API', async ({ agentPage }) => {
-    await agentPage.goto('/app/inbox');
-
-    // Open the first seeded conversation, then create a ticket from it.
-    await agentPage
-      .getByRole('region', { name: 'Conversations' })
-      .getByRole('button')
-      .first()
-      .click();
+  test('sets a ticket priority and adds a follower against the live API', async ({
+    agentPage,
+    request,
+  }) => {
+    // A conversation that can carry a ticket, resolved through the API — see
+    // `openTicketableChat`.
+    await openTicketableChat(agentPage, request);
     await agentPage.getByRole('button', { name: 'Create ticket', exact: true }).click();
     await agentPage.getByRole('button', { name: 'Create', exact: true }).click();
 
@@ -73,17 +92,12 @@ test.describe('ticket HelpDesk surface', () => {
    */
   test('sorts the tickets grid from the URL and opens a ticket from a row', async ({
     agentPage,
+    request,
   }) => {
-    await agentPage.goto('/app/inbox');
-
     // Ensure at least one ticket exists. The create resolves to the ticket pane
     // (a fresh chat) or an "Open it" prompt (a chat that already carries one, on
     // a re-run) — either way a ticket now exists, which is all the grid needs.
-    await agentPage
-      .getByRole('region', { name: 'Conversations' })
-      .getByRole('button')
-      .first()
-      .click();
+    await openTicketableChat(agentPage, request);
     await agentPage.getByRole('button', { name: 'Create ticket', exact: true }).click();
     await agentPage.getByRole('button', { name: 'Create', exact: true }).click();
     await agentPage
@@ -129,15 +143,10 @@ test.describe('ticket HelpDesk surface', () => {
    */
   test('deep-links the tickets view filter and follows the browser back button', async ({
     agentPage,
+    request,
   }) => {
-    await agentPage.goto('/app/inbox');
-
     // Ensure at least one ticket exists, same setup as the other tests.
-    await agentPage
-      .getByRole('region', { name: 'Conversations' })
-      .getByRole('button')
-      .first()
-      .click();
+    await openTicketableChat(agentPage, request);
     await agentPage.getByRole('button', { name: 'Create ticket', exact: true }).click();
     await agentPage.getByRole('button', { name: 'Create', exact: true }).click();
     await agentPage

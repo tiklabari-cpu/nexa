@@ -32,6 +32,7 @@ import {
   test,
   widgetFrame,
 } from './fixtures.js';
+import { fromNode } from './stack-ports.js';
 
 interface Definition {
   id: string;
@@ -121,7 +122,7 @@ test.describe('offline form — ticket + prospect (FR-MOD-08.7.7)', () => {
         await visitor.route(
           (url) => url.pathname === '/api/v1/customer/chat',
           async (route) => {
-            const response = await route.fetch();
+            const response = await route.fetch({ url: fromNode(route.request().url()) });
             const body = (await response.json()) as Record<string, unknown>;
             await route.fulfill({ response, json: { ...body, online: false } });
           },

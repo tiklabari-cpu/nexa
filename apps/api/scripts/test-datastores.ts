@@ -168,8 +168,15 @@ export function assertDroppableDatabaseName(name: string): void {
   }
 }
 
+/**
+ * One stride past the index, never the index itself (tm 260.1). The schema
+ * starts licence ids at 1000001 (`20260722151255_auth_and_tenancy`), so a
+ * development database and every unoffset run publish on licences from
+ * 1000001 up; `index * stride` gave the run that leased index 1 exactly that
+ * range, and its gateway would have pushed a dev stack's events to its agents.
+ */
 export function licenseIdOffsetFor(redisIndex: number): number {
-  return redisIndex * LICENSE_ID_STRIDE;
+  return (redisIndex + 1) * LICENSE_ID_STRIDE;
 }
 
 // ---------------------------------------------------------------------------

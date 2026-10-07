@@ -39,6 +39,7 @@ import {
   ownerAccessTokenFor,
   test,
 } from './fixtures.js';
+import { fromNode } from './stack-ports.js';
 
 /** Where the public KB is served — `${API_BASE_URL}${API_PREFIX}` (server.ts). */
 const PUBLIC_BASE = 'http://localhost:4000/api/v1';
@@ -65,7 +66,8 @@ const locCount = (xml: string): number => (xml.match(/<loc>/g) ?? []).length;
  * under test are unaffected.
  */
 let cacheBust = 0;
-const fresh = (url: string): string => `${url}${url.includes('?') ? '&' : '?'}_cb=${cacheBust++}`;
+const fresh = (url: string): string =>
+  `${fromNode(url)}${url.includes('?') ? '&' : '?'}_cb=${cacheBust++}`;
 
 const auth = (token: string) => ({ headers: { authorization: `Bearer ${token}` } });
 

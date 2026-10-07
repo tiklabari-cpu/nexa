@@ -15,8 +15,9 @@
  *   birim        turbo run test:unit        (every package's unit suite; api/rtm on isolated stores)
  *   entegrasyon  turbo run test:integration --concurrency=1
  *                (the api suite runs as parallel shards — `apps/api/scripts/run-sharded.ts`)
- *   e2e          playwright, root `.env` loaded (§1.4); opt-in, it owns fixed ports and the
- *                seeded `siyahtus` database, so it never runs beside anything else
+ *   e2e          `pnpm -w test:e2e` — parallel private stacks, each with its own ports and
+ *                database (`apps/e2e/scripts/run-e2e-sharded.mjs`, tm 260); opt-in, and
+ *                alone, because those stacks fill the machine's memory
  *
  * Order. `build` runs first and alone: everything else depends on built
  * packages, and two turbo processes building the same package at once race on

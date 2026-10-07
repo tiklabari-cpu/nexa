@@ -22,6 +22,7 @@
  */
 import type { BrowserContext, Page } from '@playwright/test';
 import { API_BASE, expect, signIn, test } from './fixtures.js';
+import { fromNode } from './stack-ports.js';
 
 /** Count the refreshes a block of work causes, and hand back the total. */
 async function refreshesDuring(page: Page, run: () => Promise<void>): Promise<number> {
@@ -106,7 +107,7 @@ async function sequenceRenewals(context: BrowserContext): Promise<Renewals> {
 
     const turn = queue.then(async () => {
       renewals.presented.push(grant.refresh_token ?? '');
-      const response = await route.fetch();
+      const response = await route.fetch({ url: fromNode(route.request().url()) });
       renewals.statuses.push(response.status());
       await route.fulfill({ response });
     });
@@ -196,7 +197,18 @@ test.describe('two tabs, one refresh token (tm 259.1)', () => {
     expect(revoked.ok()).toBe(true);
 
     // The next screen's first request is refused, its renewal too.
-    await agentPage.getByRole('link', { name: 'Customers' }).click();
+    //
+    // Through the router rather than a click on the rail's link (tm 260.2):
+    // the panel does not always wait for this navigation to find out. A request
+    // of its own that meets the revoked token first ends the session just the
+    // same, and then the rail is gone before the click lands. Measured under three parallel shards: the page
+    // already showed the sign-in form with this exact notice, and the click
+    // timed out on a detached link. Either way the claim below is the same, and
+    // a navigation does not depend on which of the two gets there first.
+    await agentPage.evaluate(() => {
+      window.history.pushState({}, '', '/app/customers');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
 
     await expect(agentPage.getByRole('button', { name: 'Sign in' })).toBeVisible();
     await expect(

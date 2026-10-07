@@ -1497,6 +1497,30 @@ async function resetDemoData(): Promise<void> {
   const quoted = tables.map((t) => `"${t.tablename}"`).join(', ');
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`);
   console.log(`  truncated ${tables.length} tables`);
+  await applyTestLicenseIdOffset();
+}
+
+/**
+ * Starts licence ids past the offset a private test database was leased with
+ * (tm 260.1), exactly as `test/helpers/fixtures.ts` does for the integration
+ * suite.
+ *
+ * Redis pub/sub is not scoped by logical database, and the realtime channel is
+ * keyed by licence id, so two seeded stacks — the e2e shards running side by
+ * side, or the pilot stack beside one — would otherwise both publish on
+ * `siyahtus:rtm:license:1000001`, and each gateway would push the other's events to
+ * its agents. `apps/api/scripts/with-test-datastores.ts` sets the variable;
+ * on any other database it is unset and this does nothing.
+ */
+async function applyTestLicenseIdOffset(): Promise<void> {
+  const raw = process.env['SIYAHTUS_TEST_LICENSE_ID_OFFSET'];
+  if (!raw) return;
+  const offset = Number(raw);
+  if (!Number.isSafeInteger(offset) || offset <= 0) {
+    throw new Error(`SIYAHTUS_TEST_LICENSE_ID_OFFSET must be a positive integer, got "${raw}"`);
+  }
+  await prisma.$executeRawUnsafe(`ALTER SEQUENCE licenses_id_seq RESTART WITH ${offset + 1}`);
+  console.log(`  licence ids start at ${offset + 1}`);
 }
 
 /**

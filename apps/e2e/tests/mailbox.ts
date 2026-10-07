@@ -9,8 +9,9 @@
  * TLS and AUTH, rather than a file the `file` mailer wrote beside the API.
  */
 import { expect, type APIRequestContext } from '@playwright/test';
+import { STACK_MAILBOX } from './stack-ports.js';
 
-export const MAILBOX = 'http://127.0.0.1:4626';
+export const MAILBOX = STACK_MAILBOX;
 
 export interface Mail {
   to: string;

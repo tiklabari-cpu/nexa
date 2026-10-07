@@ -25,8 +25,9 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, test } from './fixtures.js';
 import { API_BASE, ownerAccessToken } from './fixtures.js';
+import { STACK_IDP } from './stack-ports.js';
 
-const MOCK_IDP = 'http://127.0.0.1:4599';
+const MOCK_IDP = STACK_IDP;
 
 /** A seeded Acme agent (Priya Nair) — already on the roster, so nothing is added. */
 const SSO_MEMBER = 'agent2@acme.localhost';

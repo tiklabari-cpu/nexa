@@ -7,10 +7,13 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { expect, request, test as base, type APIRequestContext, type Page } from '@playwright/test';
+import { STACK_API } from './stack-ports.js';
 
-export const API_BASE = 'http://localhost:4000/api/v1';
+export const API_BASE = `${STACK_API}/api/v1`;
 export const HOST_PAGE = 'http://acme-bikes.localhost:5174';
 export const WIDGET_ORIGIN = 'http://localhost:5174';
+/** The panel's origin as the browser sees it — the one OAuth redirect every workspace registers. */
+const PANEL_ORIGIN = 'http://localhost:5173';
 /**
  * A third site the visitor can arrive *from*, for `visits.came_from`
  * (FR-MOD-13.2). Same Vite server, a third origin — a referrer only exists when
@@ -125,8 +128,8 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     { scope: 'worker', auto: true },
   ],
 
-  agentPage: async ({ page }, use) => {
-    await signIn(page);
+  agentPage: async ({ page, request }, use) => {
+    await signInThroughApi(page, request, ACME_OWNER);
     await use(page);
   },
 });
@@ -252,6 +255,18 @@ export async function ownerAccessTokenFor(
   context: APIRequestContext,
   owner: TenantOwner,
 ): Promise<string> {
+  return (await ownerGrantFor(context, owner)).access_token;
+}
+
+/** What `/auth/token` grants, plus the client it was granted to. */
+interface OwnerGrant {
+  access_token: string;
+  refresh_token: string;
+  client_id: string;
+}
+
+/** The whole chain behind `ownerAccessTokenFor`: login → PKCE authorize → token. */
+async function ownerGrantFor(context: APIRequestContext, owner: TenantOwner): Promise<OwnerGrant> {
   const login = await context.post(`${API_BASE}/auth/login`, {
     data: { email: owner.email, password: owner.password },
   });
@@ -265,7 +280,7 @@ export async function ownerAccessTokenFor(
   // A fresh PKCE pair; the challenge is base64url(sha256(verifier)), S256.
   const verifier = randomBytes(32).toString('base64url');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
-  const redirectUri = 'http://localhost:5173/auth/callback';
+  const redirectUri = `${PANEL_ORIGIN}/auth/callback`;
 
   const authorized = await context.post(`${API_BASE}/auth/authorize`, {
     data: {
@@ -294,7 +309,8 @@ export async function ownerAccessTokenFor(
     },
   });
   expect(granted.ok(), `token failed: ${granted.status()} ${await granted.text()}`).toBe(true);
-  return ((await granted.json()) as { access_token: string }).access_token;
+  const grant = (await granted.json()) as { access_token: string; refresh_token: string };
+  return { ...grant, client_id: tenant!.client_id! };
 }
 
 /** An owner Bearer token for the primary Acme tenant (the common case). */
@@ -343,6 +359,47 @@ export async function signInAs(page: Page, email: string, password: string): Pro
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   // The inbox rail only exists once the session is real.
+  await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
+}
+
+/**
+ * A signed-in panel without the sign-in form (tm 260.4): what `agentPage` does
+ * for the ~230 tests that need an agent and are not about signing in.
+ *
+ * The form costs ~1.55 s a test; this ~1.08 s (measured, 15 each, private
+ * stack) — about two minutes of a full run. Nothing is skipped on the server:
+ * the same login → PKCE authorize → token chain the form drives runs here from
+ * Node, so every test still mints its own session, and the panel then boots the
+ * way a returning agent's does — from the refresh token in `localStorage`
+ * (`auth-store.ts`), which it spends on its first request and rotates. The form
+ * itself stays covered where it is the subject: `signIn` below, the auth and
+ * session specs, and the sign-in page's axe scans.
+ *
+ * Planted once per tab. The refresh token is single-use, so an init script that
+ * re-planted it on every navigation would hand the panel a spent token on its
+ * second `goto` and sign it out; `sessionStorage` survives navigations within
+ * the tab and marks it done. Top frame on the panel's origin only — the widget
+ * iframe on `:5174` is another origin with nothing to restore.
+ */
+export async function signInThroughApi(
+  page: Page,
+  context: APIRequestContext,
+  owner: TenantOwner,
+): Promise<void> {
+  const grant = await ownerGrantFor(context, owner);
+  await page.addInitScript(
+    ({ origin, refreshToken, clientId }) => {
+      if (window.top !== window || window.location.origin !== origin) return;
+      if (window.sessionStorage.getItem('siyahtus.e2e.session-planted')) return;
+      window.sessionStorage.setItem('siyahtus.e2e.session-planted', '1');
+      window.localStorage.setItem('siyahtus.refresh_token', refreshToken);
+      window.localStorage.setItem('siyahtus.client_id', clientId);
+    },
+    { origin: PANEL_ORIGIN, refreshToken: grant.refresh_token, clientId: grant.client_id },
+  );
+  await page.goto('/app/inbox');
+
+  // The same proof `signInAs` waits for: the inbox rail only exists once the session is real.
   await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
 }
 

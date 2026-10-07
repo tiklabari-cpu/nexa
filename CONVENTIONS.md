@@ -99,10 +99,13 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
 - **Paralel parçalar ve başlıklı kapı (2026-10-02) — aşağıdaki elle parçalamanın yerini alır.**
   `@siyahtus/api`'nin `test` ve `test:integration` script'leri artık
   `apps/api/scripts/run-sharded.ts` üzerinden koşar: süiti parçalara bölebilir (tavan 6;
-  `SIYAHTUS_TEST_JOBS=<n>` ya da `--jobs=<n>` ile açılır). **Sahip kararı 2026-10-03: varsayılan
-  1 = seri, tek süreç** (paralel parçalar makineyi tüketiyordu); paralel yalnız sahip isterse
-  açıkça `--jobs` verilerek koşturulur, görev notlarında "paralel koş" denmişse bile seri kal.
-  Aşağıdaki 5 parça / 5 dk ölçümü eski varsayılana aittir; seri koşu ~25 dk sürer. Parçalar **aynı anda** koşar. Her
+  `SIYAHTUS_TEST_JOBS=<n>` ya da `--jobs=<n>` ile değişir). **Sahip kararı 2026-10-07: varsayılan
+  PARALEL — CPU/4 parça, tavan 6 (20 çekirdekli dev makinesinde 5); hız önemli, makinenin kaynağı
+  sonuna kadar kullanılabilir.** Bu karar 2026-10-03'ün "varsayılan 1 = seri" kararının yerini
+  alır; görev notlarında hâlâ "testler SERİ, paralel açma" yazıyorsa bu satır geçerlidir. Bayrak
+  vermeden koş; `--jobs=1` yalnız tek bir dosyanın kırmızısını yalıtırken. Zaman aşımı kırmızısında
+  önce bir kez daha aynı varsayılanla koş, sonra `--jobs=3` ile — kırmızı yine de çıkarsa gerçek.
+  Ölçüm: 5 parça 269 dosya ~5 dk; seri ~20–25 dk. Parçalar **aynı anda** koşar. Her
   parça kendi izole veritabanını alır (§1.1), yani iki pencerenin aynı anda test koşmasından farkı
   yoktur. Dosyalar bir önceki koşunun dosya sürelerine göre dağıtılır
   (`apps/api/node_modules/.cache/run-sharded/timings.json`; yoksa vitest `--shard`). Ölçüldü:

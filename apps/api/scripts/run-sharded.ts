@@ -38,17 +38,18 @@
  * five processes is unreadable — and is summarised when the shard ends; a red
  * shard's log is printed in full. The exit code is non-zero if any shard failed.
  *
- * Concurrency: `--jobs`, else `SIYAHTUS_TEST_JOBS`, else 1 — serial, by owner
- * decision (a shard is a vitest process plus Postgres work plus, in some files,
- * spawned servers; parallel shards eat the machine). Capped at 6. Where that is
- * 1 — the default — or when the command already carries its own
+ * Concurrency: `--jobs`, else `SIYAHTUS_TEST_JOBS`, else a quarter of the CPUs
+ * (owner decision 2026-10-07: speed over machine load; 5 on the 20-core dev
+ * box). Capped at 6 — a shard is a vitest process plus Postgres work plus, in
+ * some files, spawned servers. Where that comes out as 1 — a small CI runner —
+ * or when the command already carries its own
  * `--shard`, the command runs exactly as it did before this script: one process,
  * output straight through.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -58,8 +59,11 @@ const timingsFile = resolve('node_modules/.cache/run-sharded/timings.json');
 /** Every shard holds one of the fifteen Redis test slots; leave room for other windows. */
 const MAX_JOBS = 6;
 
-/** Owner decision 2026-10-03: serial by default (parallel shards starved the machine); opt in with --jobs / SIYAHTUS_TEST_JOBS. */
-const DEFAULT_JOBS = 1;
+/**
+ * Owner decision 2026-10-07: parallel by default, the machine may be used in
+ * full (supersedes the 2026-10-03 serial default). `--jobs=1` still runs serial.
+ */
+const DEFAULT_JOBS = Math.max(1, Math.floor(availableParallelism() / 4));
 
 /** Windows caps the whole environment block at 32767 characters; one variable stays well below. */
 const MAX_FILE_LIST = 16_000;

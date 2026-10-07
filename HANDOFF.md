@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 259 açılışı — PILOT-UX-HARDENING: canlı öncesi UX taramasının doğrulanmış bulguları, 26 alt görev — planlama turu — 2026-10-07 UTC
+
+- **Yapıldı:** Ürün kodu yok. İki turlu UX taraması (ikincisi `PILOT_MODE=true`) → `docs/ux-audit-2026-10-07.md` (bulgu kodları K1, Y1–Y5, O1–O17, D1–D21; yanlış alarmlar ve test edilmeyenler ayrı). Epic tm 259 + 259.1–259.26 `tasks.json`'a elle eklendi; her başlıkta etiket + açık model/efor ("Opus 5.5 · efor max · gerekçe: …"), her alt görevde bootstrap kutusu (testler SERİ). PLAN §D207; §7.2 A11Y1–6 ve I18N1/2 `✅` → `◐` (gerekçe `#### KA11Y` / `#### KI18N1-2` son maddeleri).
+- **Doğrulama:** `tasks.json` bayt bayt round-trip, id'ler string; `task-master validate-dependencies` geçerli (259 görev, 613 alt görev, 834 bağımlılık); `task-master next` → 259. K1 ölçüldü: API `ACCESS_TOKEN_TTL=60` + 75 sn → gelen kutusu ve Customers 401, "Could not load customers…" ekranı.
+- **Varsayımlar:** 259.25 (dar ekran) sahip kararı gelene kadar "masaüstü için tasarlandı" bilgilendirmesiyle yazıldı. A11Y ve i18n dışındaki bulgular Ek A kabul kriteri değil → damga değişmedi.
+- **Sonraki pencereye not:** İlk iş 259.1 (en ağır kusur). Dev veritabanında tarama artıkları olabilir: "Acme Bikes (Sandbox)" çalışma alanı (giriş çalışma alanı seçtirir), +1 koltuk, boş taslak skill, iki "UX Ziyaretçi" sohbeti — ürün hatası değil. Taramayı yapan pencerenin dev yığını `PILOT_MODE=true` ile çalışıyor olabilir; bayrak kapalı e2e'den önce yığının bayrağını `GET /api/v1/deployment` ile kontrol et.
+
 ## tm 258 — CI-GREEN: GitHub Actions `main` yeniden yeşil — birim adımı `pnpm turbo`, eksik `UPLOAD_SIGNING_KEY`, entegrasyon üç runner'a bölündü, e2e 45 dk, pilot imajları CI'de derleniyor — done — 2026-10-04 UTC
 
 - **Yapıldı:** Yalnız `.github/workflows/ci.yml`. (1) "Unit tests" çıplak `turbo` çağırıyordu → runner PATH'inde yok, exit 127; `main`'in son 100 koşusunun hiçbiri geçmemişti (en eskisi 8 Eylül). Artık `pnpm turbo run test:unit --filter=!@siyahtus/mobile`. (2) Birim testleri açılınca `scheduler/jobs.test.ts` kırmızı: CI env'inde beş zorunlu sırdan `UPLOAD_SIGNING_KEY` hiç yoktu (`testEnv()` parse edemiyordu) → üç test işine eklendi. (3) Seri entegrasyon (~22 dk) `verify`'ın 20 dk'sına sığmıyordu → yeni `integration` işi, `needs: verify`, 3 parçalı matris, `with-test-datastores.ts vitest run --dir test/integration --shard=i/3` (her parça kendi DB'si), RTM yalnız 1. parçada, 30 dk. Sahibin yerel "seri" kararı (`run-sharded.ts` DEFAULT_JOBS=1) değişmedi. (4) e2e sınırı 25 → 45 dk. (5) Yeni `pilot-images` işi: `.env.production.example` kopyası ile `docker compose -f docker-compose.pilot.yml build` (257.12 OOM boşluğu).

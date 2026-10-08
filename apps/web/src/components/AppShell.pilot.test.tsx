@@ -16,7 +16,9 @@ import type { DeploymentConfig } from '@siyahtus/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { defaultScopesForRole } from '@siyahtus/types';
+import type { ReactElement } from 'react';
 import { AppShell } from './AppShell.js';
+import { useLeaveGuard } from '../lib/dirty-guard.js';
 import { useAuth } from '../lib/auth-store.js';
 import { installFakeWebSocket } from '../test/fake-socket.js';
 
@@ -256,6 +258,52 @@ describe('the shell in the public pilot (tm 257.2)', () => {
         'href',
         '/app/billing',
       );
+    });
+
+    it('makes Subscribe a target of at least 24 px (WCAG 2.5.8)', async () => {
+      deployment.current = ORDINARY;
+      renderShell();
+      const link = within(await screen.findByTestId('trial-badge')).getByRole('link', {
+        name: 'Subscribe',
+      });
+      // jsdom has no layout: the measured 24×24 box is `trial-banner.spec.ts`'s;
+      // here the classes that give it one.
+      expect(link).toHaveClass('min-h-6', 'min-w-6', 'inline-flex');
+    });
+
+    it('asks before leaving unsaved work, like every other way out of the module', async () => {
+      deployment.current = ORDINARY;
+      const user = userEvent.setup();
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      function Guarded(): ReactElement {
+        useLeaveGuard(true, 'Discard your half-typed skill?');
+        return <p>Inbox module</p>;
+      }
+      render(
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <MemoryRouter initialEntries={['/app/inbox']}>
+            <Routes>
+              <Route path="/app" element={<AppShell />}>
+                <Route path="inbox" element={<Guarded />} />
+                <Route path="billing" element={<p>Billing module</p>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const banner = await screen.findByTestId('trial-badge');
+      await user.click(within(banner).getByRole('link', { name: 'Subscribe' }));
+      expect(confirm).toHaveBeenCalledWith('Discard your half-typed skill?');
+      expect(screen.getByText('Inbox module')).toBeInTheDocument();
+      expect(screen.queryByText('Billing module')).not.toBeInTheDocument();
+
+      confirm.mockReturnValue(true);
+      await user.click(within(banner).getByRole('link', { name: 'Subscribe' }));
+      expect(await screen.findByText('Billing module')).toBeInTheDocument();
+      confirm.mockRestore();
     });
 
     it('keeps the bar billing-fed: an agent, refused the billing read, sees none', async () => {

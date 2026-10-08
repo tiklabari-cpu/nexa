@@ -8,9 +8,9 @@
  * over Twilio.") and collided with the real reply input. These tests fail if the
  * two ids are ever allowed to coincide again.
  */
-import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import { Section } from './Page.js';
+import { act, render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Page, Section } from './Page.js';
 
 describe('Section', () => {
   it('gives the heading a different id than the caller-supplied anchor id', () => {
@@ -59,5 +59,81 @@ describe('Section', () => {
     expect(section.hasAttribute('id')).toBe(false);
     expect(heading.id).toBe('section-right-now-heading');
     expect(section.getAttribute('aria-labelledby')).toBe(heading.id);
+  });
+});
+
+/**
+ * The page's own scroller (tm 259.21 · O16). On a phone the content outgrows
+ * the viewport and `overflow-y-auto` makes the page a scroll container; when
+ * nothing inside it takes focus (Compliance, once the BAA is signed) a keyboard
+ * user cannot scroll it — axe `scrollable-region-focusable`. So it becomes a tab
+ * stop, but only while it really scrolls: a page that fits gets no extra stop.
+ */
+describe('Page scroller', () => {
+  let scrollHeight = 0;
+  let clientHeight = 0;
+  let notify: (() => void) | null = null;
+
+  beforeEach(() => {
+    scrollHeight = 0;
+    clientHeight = 0;
+    notify = null;
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => clientHeight,
+    });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          notify = callback;
+        }
+        observe(): void {}
+        disconnect(): void {}
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+  });
+
+  const scroller = (container: HTMLElement): HTMLElement =>
+    container.firstElementChild as HTMLElement;
+
+  it('is no tab stop while the content fits', () => {
+    scrollHeight = 600;
+    clientHeight = 600;
+    const { container } = render(<Page title="Compliance">body</Page>);
+    expect(scroller(container)).not.toHaveAttribute('tabindex');
+  });
+
+  it('becomes a tab stop, with its ring drawn inside, once the content overflows', () => {
+    scrollHeight = 1200;
+    clientHeight = 600;
+    const { container } = render(<Page title="Compliance">body</Page>);
+    expect(scroller(container)).toHaveAttribute('tabindex', '0');
+    expect(scroller(container)).toHaveClass('focus-visible:-outline-offset-2');
+  });
+
+  it('follows the content as it grows and shrinks', () => {
+    scrollHeight = 600;
+    clientHeight = 600;
+    const { container } = render(<Page title="Compliance">body</Page>);
+    expect(scroller(container)).not.toHaveAttribute('tabindex');
+
+    scrollHeight = 900;
+    act(() => notify?.());
+    expect(scroller(container)).toHaveAttribute('tabindex', '0');
+
+    scrollHeight = 600;
+    act(() => notify?.());
+    expect(scroller(container)).not.toHaveAttribute('tabindex');
   });
 });

@@ -198,7 +198,12 @@ function BillingTrialBanner(): ReactElement | null {
       <span>{readOnly ? t('shell.trial.ended') : t('shell.trial.remaining', { count: days })}</span>
       <NavLink
         to="/app/billing"
-        className="font-semibold text-content-brand underline-offset-2 hover:underline"
+        // A 24 px target (WCAG 2.5.8) and the same unsaved-work question every
+        // other way out of the module asks (FR-MOD-06.2.1) — tm 259.21 · D2.
+        onClick={(event) => {
+          if (!confirmLeave()) event.preventDefault();
+        }}
+        className="-my-1 inline-flex min-h-6 min-w-6 items-center justify-center font-semibold text-content-brand underline-offset-2 hover:underline"
       >
         {t('shell.subscribe')}
       </NavLink>

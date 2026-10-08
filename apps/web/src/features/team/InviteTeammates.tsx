@@ -186,130 +186,137 @@ export function InviteTeammates({
     },
   });
 
-  if (!open) {
-    if (trigger) return trigger(() => setOpen(true));
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
-      >
-        {t('team.invite.title')}
-      </button>
-    );
-  }
+  // The trigger stays mounted behind the dialog: it is the element the Modal
+  // hands focus back to when it closes (tm 259.21 · O16), and a button that was
+  // unmounted and rebuilt is a different element by then.
+  const opener = trigger ? (
+    trigger(() => setOpen(true))
+  ) : (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
+    >
+      {t('team.invite.title')}
+    </button>
+  );
+
+  if (!open) return opener;
 
   return (
-    <Modal
-      onClose={close}
-      title={t('team.invite.title')}
-      description={t('team.invite.description')}
-    >
-      <form onSubmit={form.handleSubmit} noValidate>
-        {form.submitError && (
-          <p role="alert" className="mb-3 text-sm text-danger">
-            {form.submitError}
-          </p>
-        )}
-
-        <label htmlFor="invite-emails" className="mb-1.5 block text-sm font-medium">
-          {t('team.invite.emailsLabel')}
-        </label>
-        <textarea
-          id="invite-emails"
-          rows={4}
-          value={form.values.emails}
-          autoFocus
-          onChange={(event) => form.setValue('emails', event.target.value)}
-          onBlur={() => form.blur('emails')}
-          aria-invalid={emailsError ? true : undefined}
-          aria-describedby={emailsError ? 'invite-emails-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="invite-emails-error" message={emailsError} />
-
-        <label htmlFor="invite-role" className="mb-1.5 mt-3 block text-sm font-medium">
-          {t('team.invite.roleLabel')}
-        </label>
-        <select
-          id="invite-role"
-          value={role}
-          onChange={(event) => setRole(event.target.value as 'admin')}
-          className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
-        >
-          <option value="admin">{t('team.role.admin')}</option>
-          <option value="agent">{t('team.role.agent')}</option>
-        </select>
-
-        {pending.data && !copied && undelivered.length === 0 && (
-          <SeatNotice
-            seats={pending.data.seats}
-            outstanding={pending.data.items.length}
-            adding={emailCount}
-          />
-        )}
-
-        {copied && undelivered.length === 0 && (
-          <div className="mb-4 rounded-md border border-border bg-inset p-3">
-            <p role="status" className="mb-2 text-xs text-content-secondary">
-              {t('team.invite.linkSentNotice')}
+    <>
+      {opener}
+      <Modal
+        onClose={close}
+        title={t('team.invite.title')}
+        description={t('team.invite.description')}
+      >
+        <form onSubmit={form.handleSubmit} noValidate>
+          {form.submitError && (
+            <p role="alert" className="mb-3 text-sm text-danger">
+              {form.submitError}
             </p>
+          )}
+
+          <label htmlFor="invite-emails" className="mb-1.5 block text-sm font-medium">
+            {t('team.invite.emailsLabel')}
+          </label>
+          <textarea
+            id="invite-emails"
+            rows={4}
+            value={form.values.emails}
+            autoFocus
+            onChange={(event) => form.setValue('emails', event.target.value)}
+            onBlur={() => form.blur('emails')}
+            aria-invalid={emailsError ? true : undefined}
+            aria-describedby={emailsError ? 'invite-emails-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="invite-emails-error" message={emailsError} />
+
+          <label htmlFor="invite-role" className="mb-1.5 mt-3 block text-sm font-medium">
+            {t('team.invite.roleLabel')}
+          </label>
+          <select
+            id="invite-role"
+            value={role}
+            onChange={(event) => setRole(event.target.value as 'admin')}
+            className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
+          >
+            <option value="admin">{t('team.role.admin')}</option>
+            <option value="agent">{t('team.role.agent')}</option>
+          </select>
+
+          {pending.data && !copied && undelivered.length === 0 && (
+            <SeatNotice
+              seats={pending.data.seats}
+              outstanding={pending.data.items.length}
+              adding={emailCount}
+            />
+          )}
+
+          {copied && undelivered.length === 0 && (
+            <div className="mb-4 rounded-md border border-border bg-inset p-3">
+              <p role="status" className="mb-2 text-xs text-content-secondary">
+                {t('team.invite.linkSentNotice')}
+              </p>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(copied)}
+                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+              >
+                {t('team.invite.copyLink')}
+              </button>
+            </div>
+          )}
+
+          {undelivered.length > 0 && (
+            <div role="status" className="mb-4 rounded-md border border-border bg-inset p-3">
+              <p className="mb-2 text-xs text-content-secondary">
+                {t('team.invite.undelivered.summary')}
+              </p>
+              <ul className="flex flex-col gap-2">
+                {undelivered.map((miss) => (
+                  <li key={miss.id} className="text-xs">
+                    <p className="mb-1 text-content-secondary">
+                      {t(UNDELIVERED_KEY[miss.reason], { email: miss.email })}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void navigator.clipboard?.writeText(miss.link)}
+                      className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                    >
+                      {t('team.invite.undelivered.copy', { email: miss.email })}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => void navigator.clipboard?.writeText(copied)}
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+              onClick={close}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
             >
-              {t('team.invite.copyLink')}
+              {copied ? t('team.invite.done') : t('team.invite.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!form.canSubmit}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {form.isSubmitting
+                ? t('team.invite.sending')
+                : emailCount > 0
+                  ? t('team.invite.submitCount', { count: emailCount })
+                  : t('team.invite.submit')}
             </button>
           </div>
-        )}
-
-        {undelivered.length > 0 && (
-          <div role="status" className="mb-4 rounded-md border border-border bg-inset p-3">
-            <p className="mb-2 text-xs text-content-secondary">
-              {t('team.invite.undelivered.summary')}
-            </p>
-            <ul className="flex flex-col gap-2">
-              {undelivered.map((miss) => (
-                <li key={miss.id} className="text-xs">
-                  <p className="mb-1 text-content-secondary">
-                    {t(UNDELIVERED_KEY[miss.reason], { email: miss.email })}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void navigator.clipboard?.writeText(miss.link)}
-                    className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
-                  >
-                    {t('team.invite.undelivered.copy', { email: miss.email })}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            {copied ? t('team.invite.done') : t('team.invite.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={!form.canSubmit}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {form.isSubmitting
-              ? t('team.invite.sending')
-              : emailCount > 0
-                ? t('team.invite.submitCount', { count: emailCount })
-                : t('team.invite.submit')}
-          </button>
-        </div>
-      </form>
-    </Modal>
+        </form>
+      </Modal>
+    </>
   );
 }
 

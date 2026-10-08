@@ -160,6 +160,27 @@ describe('Saved replies — re-scoping an existing one', () => {
     });
   });
 
+  it('moves focus into the editor on open and back to its button on Cancel and on Save', async () => {
+    renderReplies();
+    await screen.findByText(REPLY.text);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit team for #shipping' }));
+    expect(screen.getByLabelText('Team for #shipping')).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Edit team for #shipping' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit team for #shipping' }));
+    api.patch.mockResolvedValue({ ...REPLY, group_id: SUPPORT_TEAM.id, visibility: 'group' });
+    fireEvent.change(screen.getByLabelText('Team for #shipping'), {
+      target: { value: String(SUPPORT_TEAM.id) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit team for #shipping' })).toHaveFocus(),
+    );
+  });
+
   it('sends nothing when the editor is cancelled', async () => {
     renderReplies();
     await screen.findByText(REPLY.text);

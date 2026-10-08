@@ -319,12 +319,18 @@ export function VirtualTable<T>({
     // plain text cells, not buttons — no descendant is focusable, so without
     // this a keyboard user has no way to reach the rows scrolled out of view
     // (axe `scrollable-region-focusable`, caught scanning the Audit log table,
-    // tm 137.3).
+    // tm 137.3). A focusable stop needs a name and a ring that can be seen:
+    // the region is named by the table's caption, and the ring is drawn
+    // *inside* the box (`-outline-offset-2`) because every caller sits in a
+    // `Card`, whose `overflow-hidden` cuts off the global 2px-outside ring
+    // (tm 259.21 · O16).
     <div
       ref={containerRef}
       onScroll={onScroll}
       tabIndex={0}
-      className="overflow-y-auto"
+      role="region"
+      aria-label={caption}
+      className="overflow-y-auto focus-visible:-outline-offset-2"
       style={{ maxHeight }}
     >
       <table className={tableClassName}>

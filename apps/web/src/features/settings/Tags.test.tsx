@@ -126,6 +126,25 @@ describe("Tags — editing an existing tag's team scope", () => {
     );
   });
 
+  it('moves focus into the editor on open and back to its button on Cancel and on Save', async () => {
+    renderTags();
+    await screen.findByText('vip');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit teams for tag vip' }));
+    const group = screen.getByRole('group', { name: 'Edit teams for tag vip' });
+    expect(within(group).getByLabelText('Support', { exact: true })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Edit teams for tag vip' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit teams for tag vip' }));
+    api.patch.mockResolvedValue({ ...TAG });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit teams for tag vip' })).toHaveFocus(),
+    );
+  });
+
   it('closes without saving on Cancel', async () => {
     renderTags();
     await screen.findByText('vip');

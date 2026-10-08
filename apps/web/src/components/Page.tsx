@@ -5,9 +5,49 @@
  * pieces keep that second shape consistent so Reports, Team and Billing do not
  * each invent their own spacing (design-brief §4).
  */
-import type { ReactElement, ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { usePageTitle } from '../lib/document-title.js';
 import { Skeleton } from './Skeleton.js';
+
+/**
+ * Is this element scrolling right now? (tm 259.21 · O16)
+ *
+ * `Page` is the module's scroll container. When its content outgrows the
+ * viewport — a phone, a long settings card — a keyboard user can only scroll it
+ * if something inside takes focus; a page of plain text has nothing to Tab to
+ * (axe `scrollable-region-focusable`, Compliance on mobile). The page becomes a
+ * tab stop exactly while it overflows, so a page that fits adds no stop. The
+ * content's own size is observed too: the container's box is fixed by the
+ * layout and does not change when its children grow.
+ */
+function useIsScrolling(): {
+  ref: RefObject<HTMLDivElement>;
+  scrolling: boolean;
+} {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrolling, setScrolling] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = (): void => setScrolling(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    for (const child of Array.from(el.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, scrolling };
+}
 
 export function Page({
   title,
@@ -21,8 +61,14 @@ export function Page({
   children: ReactNode;
 }): ReactElement {
   usePageTitle(title);
+  const { ref, scrolling } = useIsScrolling();
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas">
+    <div
+      ref={ref}
+      // The ring is drawn inside: the shell around the page clips an outer one.
+      tabIndex={scrolling ? 0 : undefined}
+      className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas focus-visible:-outline-offset-2"
+    >
       <header className="flex min-h-topbar shrink-0 items-center gap-4 border-b border-border bg-surface px-6 py-3">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-semibold">{title}</h1>

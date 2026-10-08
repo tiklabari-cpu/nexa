@@ -27,6 +27,7 @@ import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useInlineEditorFocus } from '../../lib/inline-editor-focus.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 
@@ -96,6 +97,7 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTeamIds, setEditTeamIds] = useState<number[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
+  const focus = useInlineEditorFocus(editingId);
 
   function startEditingTeams(tag: Tag): void {
     setEditingId(tag.id);
@@ -236,6 +238,7 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
                     {canEdit && teams.length > 0 && editingId !== tag.id && (
                       <button
                         type="button"
+                        ref={focus.opener(tag.id)}
                         onClick={() => startEditingTeams(tag)}
                         aria-label={t('settings.tags.editTeamsAriaLabel', { name: tag.name })}
                         className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
@@ -264,7 +267,10 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
                   </div>
 
                   {editingId === tag.id && (
-                    <fieldset className="flex flex-col gap-2 rounded-md border border-border bg-inset p-3">
+                    <fieldset
+                      ref={focus.editor}
+                      className="flex flex-col gap-2 rounded-md border border-border bg-inset p-3"
+                    >
                       <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                         {t('settings.tags.editTeamsAriaLabel', { name: tag.name })}
                       </legend>

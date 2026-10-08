@@ -129,6 +129,22 @@ describe('useConfirm', () => {
     expect(action).not.toHaveBeenCalled();
   });
 
+  it('hands focus back to the button that asked, on Cancel and on Escape', async () => {
+    const user = userEvent.setup();
+    render(<Harness action={vi.fn()} />);
+    const trigger = screen.getByRole('button', { name: 'Trigger' });
+
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(trigger).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it('keeps the dialog up, pending, until the action settles — and runs it once', async () => {
     let finish: () => void = () => {};
     const action = vi.fn(

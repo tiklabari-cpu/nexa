@@ -8,7 +8,7 @@
  * the notice absent and the assertions below quietly meaningless.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InviteTeammates } from './InviteTeammates.js';
@@ -75,11 +75,16 @@ async function openModal() {
   await userEvent.click(screen.getByRole('button', { name: 'Invite teammates' }));
 }
 
+// The trigger stays mounted behind the dialog (tm 259.21), so "the button that
+// starts with Invite" is two buttons; the submit is the one inside the dialog.
+const submitButton = (): HTMLElement =>
+  within(screen.getByRole('dialog')).getByRole('button', { name: /^Invite/ });
+
 describe('InviteTeammates validation', () => {
   it('disables Submit until an address is entered', async () => {
     renderInvite();
     await openModal();
-    expect(screen.getByRole('button', { name: /^Invite/ })).toBeDisabled();
+    expect(submitButton()).toBeDisabled();
   });
 
   it('shows a field-under error for a bad address and keeps Submit disabled', async () => {
@@ -89,7 +94,7 @@ describe('InviteTeammates validation', () => {
     const field = screen.getByLabelText('Email addresses');
     await userEvent.type(field, 'not-an-email');
     // Disabled the moment it is invalid, before the field is even blurred.
-    expect(screen.getByRole('button', { name: /^Invite/ })).toBeDisabled();
+    expect(submitButton()).toBeDisabled();
 
     await userEvent.tab(); // blur reveals the message
     expect(screen.getByRole('alert')).toHaveTextContent('Not a valid address: not-an-email');
@@ -100,8 +105,24 @@ describe('InviteTeammates validation', () => {
     await openModal();
 
     await userEvent.type(screen.getByLabelText('Email addresses'), 'robin@example.com');
-    expect(screen.getByRole('button', { name: /^Invite/ })).toBeEnabled();
+    expect(submitButton()).toBeEnabled();
     expect(screen.queryByText(/Not a valid address/)).not.toBeInTheDocument();
+  });
+});
+
+describe('InviteTeammates focus (tm 259.21 · O16)', () => {
+  it('hands focus back to the trigger when Escape closes the dialog', async () => {
+    const user = userEvent.setup();
+    renderInvite();
+    const trigger = screen.getByRole('button', { name: 'Invite teammates' });
+    await user.tab();
+    expect(trigger).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByLabelText('Email addresses')).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });
 

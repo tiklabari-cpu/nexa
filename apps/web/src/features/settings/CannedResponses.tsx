@@ -26,6 +26,7 @@ import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useInlineEditorFocus } from '../../lib/inline-editor-focus.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 
@@ -112,6 +113,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTeamId, setEditTeamId] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
+  const focus = useInlineEditorFocus(editingId);
 
   function startEditingTeam(item: CannedResponse): void {
     setEditingId(item.id);
@@ -289,6 +291,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                     {canEdit && teams.length > 0 && editingId !== item.id && (
                       <button
                         type="button"
+                        ref={focus.opener(item.id)}
                         onClick={() => startEditingTeam(item)}
                         aria-label={t('settings.cannedResponses.editTeamAriaLabel', {
                           shortcut: item.shortcut,
@@ -323,7 +326,10 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                   </div>
 
                   {editingId === item.id && (
-                    <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-inset p-3">
+                    <div
+                      ref={focus.editor}
+                      className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-inset p-3"
+                    >
                       {/* Not the button's wording: a field whose label is
                           identical to a button's accessible name leaves neither
                           addressable by name, and the two are on screen at

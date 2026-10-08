@@ -173,6 +173,36 @@ describe('VirtualTable', () => {
     expect(screen.queryByText('Row 9000')).not.toBeInTheDocument();
   });
 
+  it('makes the scroller a named, keyboard-reachable region whose focus ring stays inside it', () => {
+    render(
+      <VirtualTable
+        items={makeRows(10_000)}
+        rowHeight={ROW}
+        viewportHeight={VIEWPORT}
+        overscan={OVERSCAN}
+        caption="People"
+        colSpan={1}
+        head={
+          <thead>
+            <tr>
+              <th scope="col">Label</th>
+            </tr>
+          </thead>
+        }
+        renderRow={(row) => (
+          <tr key={row.id}>
+            <td>{row.label}</td>
+          </tr>
+        )}
+      />,
+    );
+
+    const scroller = screen.getByRole('region', { name: 'People' });
+    expect(scroller).toHaveAttribute('tabindex', '0');
+    // The card around it clips (`overflow-hidden`), so an outer ring is cut off.
+    expect(scroller).toHaveClass('focus-visible:-outline-offset-2');
+  });
+
   it('reveals deep rows on scroll without leaking earlier ones', () => {
     render(
       <VirtualTable

@@ -20,7 +20,7 @@
  *   topmost one answers Escape and Tab — Escape on "Delete this team?" closes
  *   the question, not the editor under it.
  */
-import { useEffect, useId, useRef, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { cn } from './cn.js';
 
 // Elements a Tab press can land on. `[tabindex]:not([tabindex="-1"])` picks up
@@ -74,7 +74,14 @@ export function Modal({
   dock = 'center',
 }: ModalProps): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
+  // The trigger, read while rendering. By the first effect the content's
+  // `autoFocus` has already moved focus into the dialog, so reading it there
+  // would "restore" a field that is gone once the dialog closes.
+  const [returnFocus] = useState<HTMLElement | null>(() => {
+    const active = document.activeElement;
+    return active instanceof HTMLElement && active !== document.body ? active : null;
+  });
+  const claimedFocusRef = useRef<HTMLElement | null>(null);
   const headingId = useId();
   const stackToken = useRef(Symbol('modal'));
 
@@ -128,13 +135,24 @@ export function Modal({
   // Move focus into the dialog on open, but never steal it from content that
   // already asked for it (an `autoFocus`ed input). Hand it back on close.
   useEffect(() => {
-    returnFocusRef.current = (document.activeElement as HTMLElement | null) ?? null;
     const panel = panelRef.current;
-    if (panel && !panel.contains(document.activeElement)) {
-      panel.focus();
+    if (panel) {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && panel.contains(active)) {
+        claimedFocusRef.current = active;
+      } else {
+        // Effects run twice under StrictMode: the simulated unmount has already
+        // sent focus back to the trigger, so put it back where the content
+        // had it rather than on the panel.
+        const claimed = claimedFocusRef.current;
+        (claimed?.isConnected ? claimed : panel).focus();
+      }
     }
-    return () => returnFocusRef.current?.focus?.();
-  }, []);
+    return () => {
+      // Gone from the page (the trigger was the row just deleted): nowhere to go.
+      if (returnFocus?.isConnected) returnFocus.focus();
+    };
+  }, [returnFocus]);
 
   return (
     <div

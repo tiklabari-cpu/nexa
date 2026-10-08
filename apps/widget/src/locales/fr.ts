@@ -9,6 +9,7 @@ export const fr: Record<string, string> = {
   'status.queue': "Vous êtes en position {n} dans la file d'attente",
   'status.offline':
     "Personne n'est disponible pour le moment — laissez un message, nous vous répondrons.",
+  'connection.lost': 'Connexion perdue. Reconnexion en cours…',
   'error.connect': 'Le chat est actuellement indisponible. Merci de réessayer sous peu.',
   'error.upload': "Ce fichier n'a pas pu être joint.",
   'error.send': 'Message non envoyé. Vérifiez votre connexion et réessayez.',

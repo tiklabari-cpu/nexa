@@ -65,6 +65,24 @@ const CLOSED_POLL_INTERVAL_MS = 30_000;
  * a message arriving on both paths is rendered once.
  */
 const SOCKET_POLL_INTERVAL_MS = 30_000;
+/**
+ * Failed polls in a row before the visitor is told the connection dropped
+ * (tm 259.11 · UX audit O2). One is a blip — a request lost to a train tunnel
+ * or a server restart — and saying so would make the line flicker; two is
+ * eight seconds of nothing with the panel open, which is long enough that a
+ * visitor waiting on a reply deserves to know why it is not coming.
+ */
+const LOST_AFTER_FAILED_POLLS = 2;
+/**
+ * The ceiling on the poll's back-off while the server cannot be reached.
+ *
+ * Each failure doubles the wait from the panel's own cadence (4 → 8 → 16 →
+ * 30 s), so a widget left open on every tab of a site whose API is down does
+ * not hammer it at four seconds — and stops doubling here, so recovery is never
+ * more than half a minute behind. Coming back online does not wait for it at
+ * all: the `online` event polls at once.
+ */
+const MAX_BACKOFF_MS = 30_000;
 /** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
 const GREETING_DISMISSED_KEY = 'siyahtus.greeting_dismissed';
 /**
@@ -583,7 +601,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   function renderClosed(): void {
     ui.closedBanner.hidden = !state.closed;
     ui.input.disabled = state.closed;
-    ui.send.disabled = state.closed || state.sending || sendPaused;
+    renderSendButton();
     ui.attach.disabled = state.closed || state.uploading;
     // Hidden rather than merely disabled when the licence has attachments
     // switched off entirely (FR-MOD-08.9.4) — showing it only to refuse a
@@ -1186,7 +1204,8 @@ export function mount(doc: Document = document, win: Window = window): void {
   async function send(): Promise<void> {
     const text = ui.input.value.trim();
     const attachment = state.pendingAttachment;
-    if ((!text && !attachment) || state.sending || sendPaused) return;
+    // `connectionLost` too: Enter reaches here without the disabled button.
+    if ((!text && !attachment) || state.sending || sendPaused || connectionLost) return;
 
     state.sending = true;
     ui.send.disabled = true;
@@ -1264,7 +1283,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       console.warn('siyahtus widget: send failed', error);
     } finally {
       state.sending = false;
-      ui.send.disabled = sendPaused;
+      renderSendButton();
       ui.input.focus();
     }
   }
@@ -1280,7 +1299,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     sendPauseTimer = setTimeout(
       () => {
         sendPaused = false;
-        ui.send.disabled = state.closed || state.sending;
+        renderSendButton();
         if (state.error === t('error.rateLimited')) {
           state.error = null;
           renderStatus();
@@ -1292,8 +1311,18 @@ export function mount(doc: Document = document, win: Window = window): void {
 
   async function refresh(): Promise<void> {
     if (!state.connected) return;
+    // The request alone, so that only *it* failing counts against the
+    // connection — a rendering fault below is ours, not the network's.
+    let snapshot: Awaited<ReturnType<typeof api.state>>;
     try {
-      const snapshot = await api.state();
+      snapshot = await api.state();
+    } catch (error) {
+      notePollFailed(error);
+      console.warn('siyahtus widget: refresh failed', error);
+      return;
+    }
+    notePollAnswered();
+    try {
       const previousChatId = state.chatId;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
@@ -1322,7 +1351,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       }
 
       // Replace wholesale: the server's view is authoritative and includes the
-      // real ids for anything sent optimistically.
+      // real ids for anything sent optimistically. This is also the whole of
+      // catching up after a dropped connection (tm 259.11): the snapshot is the
+      // transcript, not a page after a cursor, so whatever arrived while the
+      // visitor was cut off is in it — and nothing already on screen can be
+      // drawn a second time, because nothing is appended. (The transcript as
+      // `GET /customer/chat` serves it: the thread's first 100 events.)
       state.events = snapshot.events;
       pendingBubbleIds = [];
       // Where the socket resumes from if it has to reconnect (FR-MOD-11.6). Set
@@ -1354,6 +1388,66 @@ export function mount(doc: Document = document, win: Window = window): void {
     } catch (error) {
       console.warn('siyahtus widget: refresh failed', error);
     }
+  }
+
+  // --- Connection state (tm 259.11 · UX audit O2) ---------------------------
+
+  /**
+   * Whether the visitor is told the connection dropped.
+   *
+   * Before this, a failed poll went to `console.warn` and nowhere else: the
+   * agent's replies stopped arriving, Send stayed live, and the visitor had no
+   * way to tell a dead line from an agent who had gone quiet. Two signals now
+   * raise the line under the header — the browser's own `offline` event, which
+   * is immediate, and `LOST_AFTER_FAILED_POLLS` polls failing in a row, which is
+   * what a server outage or a captive portal looks like (the browser still
+   * thinks it is online). A poll the server answers clears both.
+   *
+   * Send is held while the line shows, rather than queued. A queue would have
+   * to replay the message after the connection returns, and `api.send` mints a
+   * fresh idempotency key per call — a message whose request reached the server
+   * before the response was lost would then post twice. Holding Send leaves the
+   * text in the box and the decision with the visitor, who may well want to
+   * reword it after reading what arrived in the meantime.
+   */
+  let failedPolls = 0;
+  let browserOffline = false;
+  let connectionLost = false;
+
+  function notePollFailed(error: unknown): void {
+    // A 4xx is the server answering. A refusal is not a dropped line, and
+    // "reconnecting" would promise a recovery that is never coming.
+    if (error instanceof WidgetApiError && error.status !== undefined && error.status < 500) {
+      notePollAnswered();
+      return;
+    }
+    failedPolls += 1;
+    renderConnection();
+    // The next poll was armed before this one failed, so without a re-arm the
+    // back-off (`pollDelay`) would run one step behind.
+    repollAtOpenState();
+  }
+
+  function notePollAnswered(): void {
+    // An answer beats `navigator.onLine` — the request got through.
+    if (failedPolls === 0 && !browserOffline) return;
+    failedPolls = 0;
+    browserOffline = false;
+    renderConnection();
+    repollAtOpenState();
+  }
+
+  function renderConnection(): void {
+    connectionLost = browserOffline || failedPolls >= LOST_AFTER_FAILED_POLLS;
+    ui.connection.hidden = !connectionLost;
+    // Written and cleared rather than only shown and hidden, so a screen reader
+    // announces the change through the live region.
+    ui.connection.textContent = connectionLost ? t('connection.lost') : '';
+    renderSendButton();
+  }
+
+  function renderSendButton(): void {
+    ui.send.disabled = state.closed || state.sending || sendPaused || connectionLost;
   }
 
   // --- Realtime (FR-MOD-11.6) ----------------------------------------------
@@ -1559,10 +1653,18 @@ export function mount(doc: Document = document, win: Window = window): void {
    * an open conversation. A live socket does that in milliseconds, so with one
    * up the poll falls back to the same heartbeat a closed panel uses, and the
    * requests it saves are the overwhelming majority of them.
+   *
+   * Failed polls stretch it (tm 259.11): the first failure retries at the
+   * usual cadence, each one after doubles it, up to `MAX_BACKOFF_MS`.
    */
   function pollDelay(): number {
-    if (!state.open) return CLOSED_POLL_INTERVAL_MS;
-    return socketLive ? SOCKET_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
+    const cadence = !state.open
+      ? CLOSED_POLL_INTERVAL_MS
+      : socketLive
+        ? SOCKET_POLL_INTERVAL_MS
+        : POLL_INTERVAL_MS;
+    if (failedPolls === 0) return cadence;
+    return Math.min(cadence * 2 ** (failedPolls - 1), MAX_BACKOFF_MS);
   }
 
   /**
@@ -1583,6 +1685,26 @@ export function mount(doc: Document = document, win: Window = window): void {
   }
 
   // --- Wiring --------------------------------------------------------------
+
+  // The browser knows a connection dropped before any poll can (tm 259.11).
+  win.addEventListener('offline', () => {
+    browserOffline = true;
+    renderConnection();
+  });
+  // …and when it is back. Catch up now rather than at the end of a back-off
+  // that may have grown to half a minute; the line under the header clears
+  // with the first answer (`notePollAnswered`), or here already if only the
+  // event had raised it. A hidden tab still waits, as it does for every poll.
+  win.addEventListener('online', () => {
+    browserOffline = false;
+    renderConnection();
+    if (state.connected) {
+      if (!doc.hidden) void refresh();
+    } else if (state.open) {
+      // The mint itself failed while offline (`error.connect`): retry it.
+      void connect();
+    }
+  });
 
   ui.launcher.addEventListener('click', () => setOpen(!state.open));
   ui.close.addEventListener('click', () => {
@@ -1842,6 +1964,8 @@ interface Ui {
   transcript: HTMLElement;
   typing: HTMLElement;
   status: HTMLElement;
+  /** "Connection lost, reconnecting…" under the header (tm 259.11); hidden while connected. */
+  connection: HTMLElement;
   chip: HTMLElement;
   form: HTMLFormElement;
   input: HTMLTextAreaElement;
@@ -2035,6 +2159,15 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   const status = doc.createElement('p');
   status.className = 'nx-status';
   status.setAttribute('role', 'status');
+
+  // "Connection lost, reconnecting…" (tm 259.11) — under the header rather than
+  // beside `status`, because it explains everything below it: why no reply is
+  // arriving and why Send is held. Its own element, since `status` already
+  // speaks for the queue, the offline team and a refused message.
+  const connection = doc.createElement('p');
+  connection.className = 'nx-connection';
+  connection.hidden = true;
+  connection.setAttribute('role', 'status');
 
   // Post-chat form (FR-MOD-08.7.7): the workspace's questions, asked once the
   // conversation ends. Hidden until `renderPostChat` has something to show —
@@ -2322,6 +2455,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
 
   panel.append(
     header,
+    connection,
     endConfirm,
     transcript,
     typing,
@@ -2371,6 +2505,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     transcript,
     typing,
     status,
+    connection,
     chip,
     form,
     input,
@@ -3115,6 +3250,12 @@ body {
 .nx-edited { font-size: 11px; font-style: italic; color: var(--nx-muted); }
 .nx-status { margin: 0; padding: 0 14px 8px; font-size: 12px; color: var(--nx-muted); }
 .nx-status[data-tone="error"] { color: #c42a2a; }
+/* A fixed light band in both colour schemes: it has to read as a warning
+   whatever the host's theme, and dark text on it keeps AA contrast. */
+.nx-connection {
+  margin: 0; padding: 6px 14px; font-size: 12px; text-align: center;
+  background: #fff4e5; color: #6b3a00; border-bottom: 1px solid #f0c27b;
+}
 .nx-typing { margin: 0; padding: 0 14px 6px; font-size: 12px; font-style: italic; color: var(--nx-muted); }
 .nx-rating {
   margin: 0 12px 10px; padding: 10px 12px;

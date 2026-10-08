@@ -517,6 +517,84 @@ test.describe('realtime connection', () => {
       await visitorContext.close();
     }
   });
+
+  /**
+   * tm 259.11 · UX audit O2: the connection drops, the agent answers in the
+   * gap, the connection comes back.
+   *
+   * Measured before the change with this same walk: thirteen seconds offline
+   * and the panel showed exactly what it showed before — no line, Send enabled,
+   * the reply absent — so the visitor could not tell a dead line from an agent
+   * who had gone quiet. Now the line says so while it lasts, and the reply
+   * arrives once on the way back: missing it or drawing it twice are the two
+   * ways a reconnect can be worse than the silence it replaces.
+   */
+  test('a dropped connection is said, and the reply written during it arrives exactly once (tm 259.11)', async ({
+    page,
+    context,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const question = `is my parcel still coming? ${stamp}`;
+    const reply = `Yes — it is out for delivery ${stamp}`;
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    await openWidget(page, organizationId);
+    await visitorSends(page, question);
+    const frame = widgetFrame(page);
+    const transcript = frame.getByRole('log', { name: 'Conversation' });
+    const lost = frame.getByRole('status').filter({ hasText: 'Connection lost. Reconnecting…' });
+    const send = frame.getByRole('button', { name: 'Send' });
+
+    let chatId: string | undefined;
+    await expect
+      .poll(
+        async () => {
+          const chats = await request.get(`${API_BASE}/chats?view=all&limit=50`, { headers: auth });
+          if (!chats.ok()) return undefined;
+          const { items } = (await chats.json()) as {
+            items: Array<{ id: string; last_event?: { text?: string | null } | null }>;
+          };
+          chatId = items.find((c) => c.last_event?.text?.includes(stamp))?.id;
+          return chatId;
+        },
+        { timeout: 20_000, message: `no chat carrying "${stamp}"` },
+      )
+      .toBeTruthy();
+    await expect(lost).toHaveCount(0);
+
+    await context.setOffline(true);
+    // The browser's `offline` event raises it at once; failed polls would
+    // within eight seconds even without it.
+    await expect(lost).toBeVisible({ timeout: 10_000 });
+    await expect(send).toBeDisabled();
+    // One line inside the panel, not text spilling past its edge.
+    expect(
+      await frame.locator('.nx-connection').evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+
+    const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
+      headers: auth,
+      data: { type: 'message', text: reply },
+    });
+    expect(sent.ok(), `agent reply failed: ${sent.status()} ${await sent.text()}`).toBe(true);
+    // Really cut off: neither the socket nor the poll brings it while offline.
+    await page.waitForTimeout(3_000);
+    await expect(transcript.getByText(reply)).toHaveCount(0);
+    await page.screenshot({ path: 'kanit/259.11-connection-lost.png', fullPage: true });
+
+    await context.setOffline(false);
+    await expect(transcript.getByText(reply)).toHaveCount(1, { timeout: 10_000 });
+    await expect(lost).toHaveCount(0);
+    await expect(send).toBeEnabled();
+    // Past the next four-second poll and a socket's reconnect replay: both
+    // carry the same event, and neither may draw it a second time.
+    await page.waitForTimeout(6_000);
+    await expect(transcript.getByText(reply)).toHaveCount(1);
+    await expect(transcript.getByText(question)).toHaveCount(1);
+    await page.screenshot({ path: 'kanit/259.11-reconnected.png', fullPage: true });
+  });
 });
 
 test.describe('rich text', () => {

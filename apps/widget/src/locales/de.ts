@@ -9,6 +9,7 @@ export const de: Record<string, string> = {
   'status.queue': 'Sie sind Nummer {n} in der Warteschlange',
   'status.offline':
     'Gerade ist niemand verfügbar — hinterlassen Sie eine Nachricht, wir antworten.',
+  'connection.lost': 'Verbindung unterbrochen. Verbindung wird wiederhergestellt…',
   'error.connect': 'Der Chat ist momentan nicht verfügbar. Bitte versuchen Sie es in Kürze erneut.',
   'error.upload': 'Diese Datei konnte nicht angehängt werden.',
   'error.send': 'Nachricht nicht gesendet. Bitte Verbindung prüfen und erneut versuchen.',

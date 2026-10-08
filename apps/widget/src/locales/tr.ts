@@ -8,6 +8,7 @@ export const tr: Record<string, string> = {
   'transcript.label': 'Konuşma',
   'status.queue': 'Sırada {n}. sıradasınız',
   'status.offline': 'Şu anda kimse müsait değil — mesaj bırakın, size döneceğiz.',
+  'connection.lost': 'Bağlantı koptu, yeniden deneniyor…',
   'error.connect': 'Sohbet şu anda kullanılamıyor. Lütfen birazdan tekrar deneyin.',
   'error.upload': 'Bu dosya eklenemedi.',
   'error.send': 'Mesaj gönderilemedi. Bağlantınızı kontrol edip tekrar deneyin.',

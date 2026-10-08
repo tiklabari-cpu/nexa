@@ -8,6 +8,7 @@ export const es: Record<string, string> = {
   'transcript.label': 'Conversación',
   'status.queue': 'Eres el número {n} en la cola',
   'status.offline': 'Ahora mismo no hay nadie disponible — deja un mensaje y te responderemos.',
+  'connection.lost': 'Se perdió la conexión. Reconectando…',
   'error.connect': 'El chat no está disponible en este momento. Inténtalo de nuevo en breve.',
   'error.upload': 'No se pudo adjuntar ese archivo.',
   'error.send': 'Mensaje no enviado. Comprueba tu conexión e inténtalo de nuevo.',

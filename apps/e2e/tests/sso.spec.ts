@@ -119,7 +119,7 @@ test.describe('single sign-on', () => {
       // The session is the member the assertion named, not the owner whose
       // browser configured the connection.
       await page.goto('/app/settings');
-      await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Notifications', level: 1 })).toBeVisible();
       await page.goto('/app/inbox');
       // Wait for the seeded conversations rather than the shell: a shot of the
       // loading skeleton proves the route rendered, not that the session can

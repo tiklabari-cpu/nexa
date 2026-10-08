@@ -785,14 +785,14 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           }, `/app/settings/${slug}`);
           await scanPanel(agentPage, `Settings › ${slug}`, theme, testInfo, async () => {
             await expect(agentPage).toHaveURL(new RegExp(`/app/settings/${slug}$`));
-            await expect(
-              agentPage.getByRole('heading', { name: 'Settings', level: 1 }),
-            ).toBeVisible();
-            await expect(
-              agentPage
-                .getByRole('navigation', { name: 'Settings navigation' })
-                .locator(`a[aria-current="page"][href$="/app/settings/${slug}"]`),
-            ).toBeVisible();
+            const currentLink = agentPage
+              .getByRole('navigation', { name: 'Settings navigation' })
+              .locator(`a[aria-current="page"][href$="/app/settings/${slug}"]`);
+            await expect(currentLink).toBeVisible();
+            // The header carries the section's own name (tm 259.15).
+            const label = ((await currentLink.textContent()) ?? '').trim();
+            expect(label).not.toBe('');
+            await expect(agentPage.getByRole('heading', { level: 1 })).toHaveText(label);
             await expect(agentPage.locator('section h2').first()).toBeVisible();
           });
         }

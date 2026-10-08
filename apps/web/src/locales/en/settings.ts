@@ -32,8 +32,9 @@ export const settings: Messages = {
   'settings.enable': 'Enable',
   'settings.disable': 'Disable',
   'settings.andJoiner': ' and ',
-  'settings.pageTitle': 'Settings',
-  'settings.pageDescription': 'Widget installation, saved replies and routing.',
+  // The header's second line over a section: the product area, then the group
+  // the section sits in (tm 259.15) — the first line is the section's own name.
+  'settings.pageBreadcrumb': 'Settings · {group}',
 
   // Side navigation — SettingsNav.tsx (FR-MOD-08.1). A section's label repeats
   // its heading, except where it would repeat its own group's name or another

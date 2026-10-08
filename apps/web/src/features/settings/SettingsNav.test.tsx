@@ -396,7 +396,12 @@ describe('Settings addresses (FR-MOD-08.1)', () => {
   it('opens a section directly at its own address', async () => {
     currentScopes = ADMIN;
     renderAt('/app/settings/trusted-domains');
-    expect(await screen.findByRole('heading', { name: 'Trusted domains' })).toBeInTheDocument();
+    // The section's own heading (level 2); the page header over it (level 1)
+    // carries the same name since tm 259.15.
+    expect(
+      await screen.findByRole('heading', { name: 'Trusted domains', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Trusted domains', level: 1 })).toBeInTheDocument();
     // One section per address — the neighbours are not on the page.
     expect(screen.queryByRole('heading', { name: 'IP allowlist' })).not.toBeInTheDocument();
     expect(screen.getByTestId('where')).toHaveTextContent('/app/settings/trusted-domains');

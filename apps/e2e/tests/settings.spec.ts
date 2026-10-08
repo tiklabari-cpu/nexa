@@ -327,7 +327,8 @@ test.describe('channels', () => {
 test.describe('settings', () => {
   test('shows the trusted domain the widget actually depends on', async ({ agentPage }) => {
     await agentPage.getByRole('link', { name: 'Settings' }).click();
-    await expect(agentPage.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+    // The header names the section it landed on (Notifications), not the page (tm 259.15).
+    await expect(agentPage.getByRole('heading', { name: 'Notifications', level: 1 })).toBeVisible();
     // Each section has its own address since FR-MOD-08.1: the allowlist is one
     // click into the Settings navigation's Security group.
     await agentPage

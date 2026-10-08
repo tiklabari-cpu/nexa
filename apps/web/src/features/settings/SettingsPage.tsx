@@ -56,7 +56,7 @@ import { Skills } from './Skills.js';
 import { RoutingRules } from './RoutingRules.js';
 import { TicketRules } from './TicketRules.js';
 import { SettingsNav } from './SettingsNav.js';
-import { defaultSectionSlug, findSection } from './settings-sections.js';
+import { defaultSectionSlug, findSection, groupLabelKey } from './settings-sections.js';
 
 export { NotificationSettings } from './NotificationSettings.js';
 export { Integrations } from './Integrations.js';
@@ -181,7 +181,10 @@ export function SettingsPage(): ReactElement {
   }
 
   return (
-    <Page title={t('settings.pageTitle')} description={t('settings.pageDescription')}>
+    <Page
+      title={t(entry.labelKey)}
+      description={t('settings.pageBreadcrumb', { group: t(groupLabelKey(entry)) })}
+    >
       {render(permissionsFrom(scopes))}
     </Page>
   );

@@ -476,3 +476,12 @@ const LEGACY_ANCHORS: Record<string, string> = {
 export function findSection(slug: string | undefined): SettingsSectionEntry | undefined {
   return SETTINGS_SECTIONS.find((s) => s.slug === slug && !s.to);
 }
+
+/**
+ * The i18n key of the group a section sits in. The page header (tm 259.15) and
+ * the browser tab title read a section's name from `labelKey` and its group
+ * from here, so neither keeps a copy of the navigation's wording.
+ */
+export function groupLabelKey(entry: SettingsSectionEntry): string {
+  return SETTINGS_GROUPS.find((g) => g.key === entry.group)?.labelKey ?? '';
+}

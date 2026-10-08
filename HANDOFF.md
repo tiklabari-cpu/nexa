@@ -13,6 +13,12 @@
 
 ## Task log (newest-first)
 
+## tm 259.15 — SETTINGS-SECTION-HEADER: Ayarlar sayfasının başlığı bölümün adı, alt satırı "Ayarlar · <grup>" — done — 2026-10-08 UTC
+
+- **Yapıldı:** O9 koddan doğrulandı (HEAD'de `SettingsPage.tsx` sabit `settings.pageTitle`/`pageDescription`). Başlık = `t(entry.labelKey)` (gezinmenin etiketi), alt satır = `settings.pageBreadcrumb` "Settings · {group}" / "Ayarlar · {group}" (karar: kart içi açıklama tekrarlanmadı, alternatif seçilmedi). `groupLabelKey(entry)` `settings-sections.ts`'e eklendi — 259.20 sekme başlığını aynı iki anahtardan türetebilir. Eski iki anahtar silindi.
+- **Doğrulama:** Kırmızı-önce: yeni `SettingsPage.header.test.tsx` (35 test) eski kodda 34 kırmızı; 35/35 yeşil. `SettingsNav.test.tsx` bir testi aynı adlı iki başlık (h1 + bölümün h2'si) yüzünden `level` ister hale geldi. e2e: `settings.spec.ts`/`sso.spec.ts` h1 "Notifications" (`/app/settings` ilk bölüme iner), `i18n.spec.ts` "Bildirimler" + "Ayarlar · Genel", `a11y.spec.ts` h1'i geçerli gezinme bağlantısının metniyle karşılaştırıyor. `pnpm test:e2e:private settings i18n sso` 40/40 ve `... a11y` 98/98 GREEN. `test:gate build statik birim --force` yeşil (0 cached). Entegrasyon koşulmadı: yalnız web + locale. `kanit/` PNG'leri geri alındı.
+- **Sonraki pencereye not:** Bölüm adı artık h1 ve çoğu bölümde h2 olarak iki kez görünüyor (Tags, SSO…); e2e'de başlık adıyla `level` verilmeden aranan yer kalmadı (grep'lendi) ama yeni testler `level` versin. Denetim günlüğü ve Faturalandırma kendi sayfaları, bu başlığı kullanmaz.
+
 ## tm 259.14 — COPY-INTERNAL-REFS: müşteriye görünen metinlerde iç gereksinim/karar kodu yok, geri gelmesini nöbetçi engelliyor — done — 2026-10-08 UTC
 
 - **Yapıldı:** O7 koddan doğrulandı: panel locale DEĞERLERİNDE en ve tr'de 14'er metin `(FR-MOD-…)`, `(PRD §…)`, `(ADR-…)` taşıyordu (görevin saydığı 7 anahtar + Reports'un 9 bölüm açıklaması; ekip/billing dahil). Parantez silindi, cümle korundu (`reports.ts`, `team.ts`, `billing.ts`, en + tr). Widget'ın 8 kataloğunda hiç yoktu — yalnız nöbet eklendi.

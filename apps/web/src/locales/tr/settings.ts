@@ -22,8 +22,9 @@ export const settings: Messages = {
   'settings.enable': 'Etkinleştir',
   'settings.disable': 'Devre dışı bırak',
   'settings.andJoiner': ' ve ',
-  'settings.pageTitle': 'Ayarlar',
-  'settings.pageDescription': 'Widget kurulumu, kayıtlı yanıtlar ve yönlendirme.',
+  // Bölüm başlığının altındaki ikinci satır: ürün alanı ve bölümün grubu
+  // (tm 259.15) — ilk satır bölümün kendi adıdır.
+  'settings.pageBreadcrumb': 'Ayarlar · {group}',
 
   // Yan gezinme — SettingsNav.tsx (FR-MOD-08.1)
   'settings.nav.label': 'Ayarlar gezinmesi',

@@ -141,9 +141,11 @@ const APP_SURFACES: readonly Surface[] = [
   {
     name: 'settings',
     path: '/app/settings',
-    heading: 'Ayarlar',
-    tr: 'Widget kurulumu, kayıtlı yanıtlar ve yönlendirme.',
-    en: 'Widget installation, saved replies and routing.',
+    // /app/settings lands on Notifications; the header names the section and
+    // the group it sits in (tm 259.15).
+    heading: 'Bildirimler',
+    tr: 'Ayarlar · Genel',
+    en: 'Settings · General',
   },
   {
     name: 'audit-log',

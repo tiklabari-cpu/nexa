@@ -172,6 +172,13 @@ export const auth: Messages = {
   'auth.reconnecting.retry': 'Şimdi dene',
   'auth.reconnecting.signOut': 'Çıkış yap',
 
+  // Hiçbir ekrandan önce (tm 259.4): kurulum ayarları beklenir
+  'auth.startup.loading': 'Yükleniyor…',
+  'auth.startup.unreachable.title': 'Sunucuya ulaşılamıyor',
+  'auth.startup.unreachable.body':
+    'Uygulama ayarlarını sunucudan yükleyemedi. Bağlantınızı kontrol edip yeniden deneyin.',
+  'auth.startup.unreachable.retry': 'Yeniden dene',
+
   // E-posta doğrulama (tm 257.16): kayıttan sonra "gelen kutunuzu kontrol edin"
   // durumu, gönderilen bağlantının açtığı sayfa ve ikisinin paylaştığı yeniden
   // gönderme düğmesi.

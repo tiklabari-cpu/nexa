@@ -176,6 +176,14 @@ export const auth: Messages = {
   'auth.reconnecting.retry': 'Try now',
   'auth.reconnecting.signOut': 'Sign out',
 
+  // Before any screen (tm 259.4): the app waits for this deployment's settings,
+  // and stops here if the server will not give them.
+  'auth.startup.loading': 'Loading…',
+  'auth.startup.unreachable.title': 'Cannot reach the server',
+  'auth.startup.unreachable.body':
+    'The app could not load its settings from the server. Check your connection and try again.',
+  'auth.startup.unreachable.retry': 'Try again',
+
   // Email confirmation (tm 257.16): the "check your inbox" state after sign-up,
   // the page the mailed link opens, and the resend control both share.
   'auth.verify.checkTitle': 'Check your inbox',

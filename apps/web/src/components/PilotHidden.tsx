@@ -8,9 +8,8 @@
  * `Navigate` `App.tsx` uses for `/app` itself — rather than on a page whose
  * every action the API would refuse.
  *
- * Until `GET /deployment` has answered, `useDeployment` says "not the pilot",
- * so the page renders and then leaves. That only ever shows something, never
- * opens anything: the API refuses the module's writes on its own.
+ * Nothing renders before `GET /deployment` has answered (`DeploymentGate`,
+ * tm 259.4), so the page is never drawn first and left a moment later.
  */
 import type { ReactElement, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';

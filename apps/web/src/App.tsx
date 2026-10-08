@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
+import { LoadingPage } from './components/LoadingPage.js';
 import { PilotHidden } from './components/PilotHidden.js';
 import { AuthCallbackPage } from './features/auth/AuthCallbackPage.js';
 import { ReconnectingPage } from './features/auth/ReconnectingPage.js';
@@ -63,15 +64,7 @@ export function App(): ReactElement {
 
   if (sharedReport) return <SharedReportPage />;
 
-  if (status === 'unknown') {
-    return (
-      <div className="flex min-h-full items-center justify-center bg-canvas">
-        <p role="status" className="text-sm text-content-secondary">
-          Loading…
-        </p>
-      </div>
-    );
-  }
+  if (status === 'unknown') return <LoadingPage />;
 
   // A page load that cannot reach the server (tm 259.2): still signed in — the
   // token is kept — but with no profile yet there is no shell to show.

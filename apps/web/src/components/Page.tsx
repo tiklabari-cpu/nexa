@@ -6,6 +6,7 @@
  * each invent their own spacing (design-brief §4).
  */
 import type { ReactElement, ReactNode } from 'react';
+import { usePageTitle } from '../lib/document-title.js';
 import { Skeleton } from './Skeleton.js';
 
 export function Page({
@@ -19,6 +20,7 @@ export function Page({
   actions?: ReactNode;
   children: ReactNode;
 }): ReactElement {
+  usePageTitle(title);
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas">
       <header className="flex min-h-topbar shrink-0 items-center gap-4 border-b border-border bg-surface px-6 py-3">

@@ -45,6 +45,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { emailList, FieldError, required, splitList, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { usePageTitle } from '../../lib/document-title.js';
 import { useStepper } from '../../lib/stepper.js';
 
 type StepId = 'welcome' | 'website' | 'channels' | 'company' | 'team';
@@ -123,13 +124,15 @@ export function OnboardingWizard(): ReactElement {
     },
   });
 
+  usePageTitle(t('auth.onboarding.title'));
+
   const goNext = (): void => {
     if (steps.isLast) finish.mutate();
     else steps.next();
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-canvas px-4 py-10 text-content">
+    <main className="flex min-h-full items-center justify-center bg-canvas px-4 py-10 text-content">
       <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-sm">
         <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div>
@@ -198,7 +201,7 @@ export function OnboardingWizard(): ReactElement {
           </div>
         </footer>
       </div>
-    </div>
+    </main>
   );
 }
 

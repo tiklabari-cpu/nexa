@@ -67,7 +67,7 @@ export function GoalsPage(): ReactElement {
 
   return (
     <Page
-      title={t('customers.page.title')}
+      title={t('goals.page.title')}
       description={t('goals.page.description')}
       actions={<CustomersTabs />}
     >
@@ -195,7 +195,7 @@ function GoalCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="truncate font-medium">{goal.name}</h3>
+            <h2 className="truncate font-medium">{goal.name}</h2>
             <StatusDot
               tone={goal.active ? 'success' : 'neutral'}
               label={goal.active ? t('goals.page.active') : t('goals.page.inactive')}

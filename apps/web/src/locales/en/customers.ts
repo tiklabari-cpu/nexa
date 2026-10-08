@@ -19,6 +19,11 @@ export const customers: Messages = {
   'customers.tabs.campaigns': 'Campaigns',
   'customers.tabs.goals': 'Goals',
   'customers.page.title': 'Customers',
+  // The three sub-screens name themselves; sharing the Contacts title gave four
+  // pages one h1 and one tab title (tm 259.20).
+  'traffic.page.title': 'Real-time traffic',
+  'campaigns.page.title': 'Campaigns',
+  'goals.page.title': 'Goals',
 
   // Contacts — CustomersPage.tsx
   'customers.page.subtitle': 'People who have contacted this workspace.',

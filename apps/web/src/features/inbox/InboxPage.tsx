@@ -10,6 +10,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { usePageTitle } from '../../lib/document-title.js';
 import { useSetRoutingStatus } from '../../lib/routing-status.js';
 import { useRealtimeStatus } from '../../lib/realtime-status.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -151,6 +152,7 @@ const END_OF_LIST_PX = 240;
 
 export function InboxPage(): ReactElement {
   const t = useTranslate();
+  usePageTitle(t('inbox.rail.title'));
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [selection, setSelection] = useState<Selection>({ kind: 'chat', view: 'all' });
@@ -547,7 +549,7 @@ export function InboxPage(): ReactElement {
               onBack={() => setSelectedTicketId(null)}
             />
           ) : (
-            <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+            <div className="flex min-w-0 flex-1 flex-col bg-canvas">
               <header className="flex h-topbar shrink-0 items-center justify-between border-b border-border bg-surface px-4">
                 <h2 className="text-sm font-semibold">{t(TICKET_VIEW_LABEL_KEY[ticketView])}</h2>
                 {/* The view's size, from the server's `total` — not the number of
@@ -616,7 +618,7 @@ export function InboxPage(): ReactElement {
                   }}
                 />
               </div>
-            </main>
+            </div>
           )
         ) : (
           <>
@@ -812,7 +814,7 @@ export function InboxPage(): ReactElement {
             </section>
 
             {/* Transcript */}
-            <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+            <div className="flex min-w-0 flex-1 flex-col bg-canvas">
               {selectedId && chat.data ? (
                 <>
                   <ThreadHeader
@@ -897,7 +899,7 @@ export function InboxPage(): ReactElement {
                   description={t('inbox.thread.empty.description')}
                 />
               )}
-            </main>
+            </div>
 
             {/* Right panel — Details or Copilot. Hidden in Expand mode so the
               transcript takes the full width (FR-MOD-01.3 / 12.1). */}

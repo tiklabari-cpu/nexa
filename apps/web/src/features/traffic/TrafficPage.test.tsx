@@ -95,6 +95,17 @@ beforeEach(() => {
 });
 
 describe('TrafficPage status tabs', () => {
+  it('names itself, not the Contacts screen, in its h1 and the tab title (tm 259.20)', async () => {
+    api.get.mockResolvedValue({ items: [], total: 0 });
+    renderPage();
+
+    await screen.findByRole('tablist', { name: 'Traffic status' });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Real-time traffic' }),
+    ).toBeInTheDocument();
+    expect(document.title).toBe('Real-time traffic · SiyahTuş');
+  });
+
   it('renders all seven tabs, All selected by default, and requests the whole board', async () => {
     api.get.mockResolvedValue({ items: [], total: 0 });
     renderPage();

@@ -985,3 +985,41 @@ describe('leaving a module with unsaved changes (FR-MOD-06.2.1)', () => {
     confirm.mockRestore();
   });
 });
+
+describe('landmarks and the skip link (tm 259.20 · O15)', () => {
+  it('wraps the module in the one main landmark', () => {
+    renderShell('/app/reports');
+
+    const main = screen.getByRole('main');
+    expect(main).toHaveAttribute('id', 'main');
+    expect(within(main).getByText('Reports module')).toBeInTheDocument();
+    // The rail is navigation, not content.
+    expect(within(main).queryByRole('link', { name: 'Reports' })).toBeNull();
+  });
+
+  it('makes "Skip to content" the first stop of the Tab order', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.tab();
+
+    expect(screen.getByRole('link', { name: 'Skip to content' })).toHaveFocus();
+  });
+
+  it('moves focus to the main region on Enter, without touching the address', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.tab();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('main')).toHaveFocus();
+  });
+
+  it('names the link in the console language', () => {
+    setLocale('tr');
+    renderShell();
+    expect(screen.getByRole('link', { name: 'İçeriğe atla' })).toHaveAttribute('href', '#main');
+    resetLocale();
+  });
+});

@@ -17,6 +17,7 @@ import { DEFAULT_REGION, REGIONS, type Region } from '@siyahtus/types';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { usePageTitle } from '../../lib/document-title.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { Banner } from '../../components/ui/index.js';
 import { LegalLink, LegalLinks } from './LegalLinks.js';
@@ -42,6 +43,7 @@ function AuthCard({
   children: ReactNode;
   footer?: ReactNode;
 }): ReactElement {
+  usePageTitle(title);
   return (
     <main className="flex min-h-full items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-sm">

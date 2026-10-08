@@ -310,7 +310,10 @@ describe('GoalsPage localisation (NFR-I18N2)', () => {
     );
 
     expect(await screen.findByText('Signed up')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Müşteriler', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Hedefler', level: 1 })).toBeInTheDocument();
+    expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0);
+    expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0);
+    expect(document.title).toBe('Hedefler · SiyahTuş');
     expect(screen.getByRole('button', { name: 'Yeni hedef' })).toBeInTheDocument();
   });
 });

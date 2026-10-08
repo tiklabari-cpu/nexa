@@ -566,7 +566,7 @@ export function TrafficPage(): ReactElement {
 
   return (
     <Page
-      title={t('customers.page.title')}
+      title={t('traffic.page.title')}
       description={
         list.pages.length > 0
           ? t('traffic.page.count', { count: total, formatted: formatCount(total) ?? '0' })

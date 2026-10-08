@@ -76,7 +76,7 @@ const APP_SURFACES: readonly Surface[] = [
   {
     name: 'traffic',
     path: '/app/customers/real-time',
-    heading: 'Müşteriler',
+    heading: 'Gerçek zamanlı trafik',
     // Same as Contacts: the subtitle becomes a visitor count. The status tabs stay.
     tr: 'Yanıt bekliyor',
     en: 'Waiting for reply',
@@ -84,14 +84,14 @@ const APP_SURFACES: readonly Surface[] = [
   {
     name: 'campaigns',
     path: '/app/customers/campaigns',
-    heading: 'Müşteriler',
+    heading: 'Kampanyalar',
     tr: 'Ziyaretçilere proaktif, hedefli mesajlarla ulaşın.',
     en: 'Reach visitors with proactive, targeted messages.',
   },
   {
     name: 'goals',
     path: '/app/customers/goals',
-    heading: 'Müşteriler',
+    heading: 'Hedefler',
     tr: 'Bir ziyaretçinin ulaşmasının dönüşüm sayılacağı sayfaları tanımlayın.',
     en: 'Define the pages a visitor reaching them counts as a conversion.',
   },

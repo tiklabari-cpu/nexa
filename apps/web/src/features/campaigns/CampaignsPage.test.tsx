@@ -210,7 +210,12 @@ describe('CampaignsPage localisation (NFR-I18N2)', () => {
     );
 
     expect(await screen.findByText('Running')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Müşteriler', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Kampanyalar', level: 1 })).toBeInTheDocument();
+    // The campaign cards sit directly under the h1 — a skipped level reads as a gap
+    // to a screen reader's heading list (tm 259.20 · O15).
+    expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0);
+    expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0);
+    expect(document.title).toBe('Kampanyalar · SiyahTuş');
     expect(screen.getByRole('button', { name: 'Yeni kampanya' })).toBeInTheDocument();
   });
 

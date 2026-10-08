@@ -103,7 +103,7 @@ export function CampaignsPage(): ReactElement {
 
   return (
     <Page
-      title={t('customers.page.title')}
+      title={t('campaigns.page.title')}
       description={t('campaigns.page.description')}
       actions={<CustomersTabs />}
     >
@@ -258,7 +258,7 @@ function CampaignCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="truncate font-medium">{campaign.name}</h3>
+            <h2 className="truncate font-medium">{campaign.name}</h2>
             <StatusDot
               tone={STATUS_TONE[campaign.status]}
               label={t(STATUS_LABEL_KEY[campaign.status])}

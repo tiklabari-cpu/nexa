@@ -451,7 +451,7 @@ export function TicketDetailPane({
 
   if (!ticketId || !ticket.data) {
     return (
-      <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+      <div className="flex min-w-0 flex-1 flex-col bg-canvas">
         {onBack && (
           <header className="flex h-topbar shrink-0 items-center border-b border-border bg-surface px-4">
             <BackToTickets onBack={onBack} />
@@ -461,7 +461,7 @@ export function TicketDetailPane({
           title={t('inbox.ticket.detail.empty.title')}
           description={t('inbox.ticket.detail.empty.description')}
         />
-      </main>
+      </div>
     );
   }
 
@@ -480,7 +480,7 @@ export function TicketDetailPane({
   const enabledTemplates = (templates.data?.items ?? []).filter((template) => template.enabled);
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+    <div className="flex min-w-0 flex-1 flex-col bg-canvas">
       <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
         {onBack && <BackToTickets onBack={onBack} />}
         <h2 className="flex-1 truncate text-sm font-semibold">{data.subject}</h2>
@@ -664,6 +664,6 @@ export function TicketDetailPane({
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }

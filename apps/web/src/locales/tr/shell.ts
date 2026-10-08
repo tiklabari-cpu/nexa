@@ -4,6 +4,7 @@ import type { Messages } from '../merge.js';
 export const shell: Messages = {
   // Shell chrome
   'shell.modules': 'Modüller',
+  'shell.skipToContent': 'İçeriğe atla',
   'shell.subscribe': 'Abone Ol',
   'shell.trial.ended': 'Deneme süreniz sona erdi — yeni sohbetler başlatmak için abone olun.',
   'shell.pilotTrial.remaining.one':

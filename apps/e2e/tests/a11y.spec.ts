@@ -74,6 +74,7 @@ import {
   NON_TEXT_CONTRAST_MIN,
   partitionViolations,
   scanScreen,
+  STRUCTURE_RULES,
   THEME_DEPENDENT_RULES,
   type ScanOptions,
 } from './a11y.js';
@@ -1532,6 +1533,62 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       'an unnamed button is axe rule `button-name`, impact critical',
     ).toContain('button-name');
     expect(() => assertNoBlockingViolations(scan)).toThrow(/button-name/);
+  });
+
+  /**
+   * The structure gate's own test (tm 259.20 · O15).
+   *
+   * `landmark-one-main`, `region` and `heading-order` are graded `moderate` by
+   * axe and sit outside the WCAG tag set, so before this change neither the
+   * grade nor the tags would have stopped them. The pure half proves the
+   * classification; the browser half proves the rules are really switched on —
+   * a page is given content outside any landmark and a skipped heading level,
+   * and the real scan has to name both.
+   */
+  test('the gate fails on missing page structure', async ({ page }, testInfo) => {
+    const moderate = (id: string): AxeViolation =>
+      ({
+        id,
+        impact: 'moderate' as const,
+        help: 'hand-built, for this test only',
+        helpUrl: 'https://dequeuniversity.com/rules/axe/4.12/' + id,
+        description: 'hand-built, for this test only',
+        tags: ['best-practice'],
+        nodes: [{ target: ['.pretend'], html: '<p class="pretend">x</p>' }],
+      }) as unknown as AxeViolation;
+
+    for (const id of STRUCTURE_RULES) {
+      expect(
+        partitionViolations('Reports', [moderate(id)]).blocking.map((violation) => violation.id),
+        `${id} is gated although axe grades it moderate`,
+      ).toEqual([id]);
+    }
+    // Any other moderate finding stays advisory — the gate widened by three rules, not by a grade.
+    expect(partitionViolations('Reports', [moderate('some-other-rule')]).blocking).toEqual([]);
+
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await page.evaluate(() => {
+      const stray = document.createElement('p');
+      stray.textContent = 'content no landmark contains';
+      document.body.append(stray);
+      const skipped = document.createElement('h4');
+      skipped.textContent = 'a level that skips';
+      document.querySelector('main')?.append(skipped);
+    });
+
+    const scan = await scanScreen(page, 'Structure probe', testInfo);
+    const blocking = scan.blocking.map((violation) => violation.id);
+    expect(blocking, 'content outside every landmark is axe rule `region`').toContain('region');
+    expect(blocking, 'h1 straight to h4 is axe rule `heading-order`').toContain('heading-order');
+    expect(() => assertNoBlockingViolations(scan)).toThrow(/region/);
+
+    // And a page with no <main> at all.
+    await page.evaluate(() => {
+      document.querySelector('main')?.setAttribute('role', 'presentation');
+    });
+    const mainless = await scanScreen(page, 'Structure probe (no main)', testInfo);
+    expect(mainless.blocking.map((violation) => violation.id)).toContain('landmark-one-main');
   });
 
   /**

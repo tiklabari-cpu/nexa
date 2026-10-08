@@ -9,6 +9,9 @@ export const customers: Messages = {
   'customers.tabs.campaigns': 'Kampanyalar',
   'customers.tabs.goals': 'Hedefler',
   'customers.page.title': 'Müşteriler',
+  'traffic.page.title': 'Gerçek zamanlı trafik',
+  'campaigns.page.title': 'Kampanyalar',
+  'goals.page.title': 'Hedefler',
 
   // Contacts — CustomersPage.tsx
   'customers.page.subtitle': 'Bu çalışma alanıyla iletişime geçen kişiler.',

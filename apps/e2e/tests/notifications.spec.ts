@@ -201,13 +201,15 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
       await agentPage.evaluate(() => {
         Object.defineProperty(document, 'hasFocus', { value: () => false, configurable: true });
       });
-      expect(await agentPage.title()).toBe('SiyahTuş');
+      expect(await agentPage.title()).toBe('Reports · SiyahTuş');
 
       await visitorSends(visitor, `Still there? ${stamp}`);
 
       // A page with no inbox on it, on a socket opened before the agent ever
       // came here, raising the unread badge.
-      await expect.poll(() => agentPage.title(), { timeout: 20_000 }).toBe('(1) SiyahTuş');
+      await expect
+        .poll(() => agentPage.title(), { timeout: 20_000 })
+        .toBe('(1) Reports · SiyahTuş');
     } finally {
       await visitorContext.close();
     }

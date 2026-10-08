@@ -39,6 +39,18 @@ export const WCAG_21_AA_TAGS: readonly string[] = ['wcag2a', 'wcag2aa', 'wcag21a
 /** The impact grades that fail the run. Everything else is advisory. */
 export const BLOCKING_IMPACTS: readonly ImpactValue[] = ['serious', 'critical'];
 
+/**
+ * Page structure, gated by rule rather than by impact (tm 259.20 · O15).
+ *
+ * axe grades all three `moderate` and files them under `best-practice`, so the
+ * tag set above never even ran them: the panel shipped 45 pages with no `<main>`
+ * (`landmark-one-main`), 10 with content outside every landmark (`region`) and a
+ * Campaigns page that went h1 → h3 (`heading-order`), all with a green gate. They
+ * are what a screen-reader user navigates by — "jump to main", the heading list —
+ * so they fail the run regardless of the grade axe gave them.
+ */
+export const STRUCTURE_RULES: readonly string[] = ['landmark-one-main', 'region', 'heading-order'];
+
 export interface A11yException {
   /** An axe rule id, exact — `color-contrast`, never a pattern. */
   rule: string;
@@ -67,8 +79,8 @@ export interface ScreenScan {
   advisory: AxeViolation[];
 }
 
-const isBlockingImpact = (impact: ImpactValue | undefined): boolean =>
-  BLOCKING_IMPACTS.includes(impact ?? null);
+const isBlocking = (violation: AxeViolation): boolean =>
+  BLOCKING_IMPACTS.includes(violation.impact ?? null) || STRUCTURE_RULES.includes(violation.id);
 
 /**
  * Split one screen's violations into the three buckets the gate acts on.
@@ -88,7 +100,7 @@ export function partitionViolations(
 
   const scan: ScreenScan = { screen, blocking: [], excused: [], advisory: [] };
   for (const violation of violations) {
-    if (!isBlockingImpact(violation.impact)) scan.advisory.push(violation);
+    if (!isBlocking(violation)) scan.advisory.push(violation);
     else if (excusedHere.has(violation.id)) scan.excused.push(violation);
     else scan.blocking.push(violation);
   }
@@ -206,7 +218,12 @@ export async function scanScreen(
   let builder = new AxeBuilder({ page });
   builder = options.rules
     ? builder.withRules([...options.rules])
-    : builder.withTags([...WCAG_21_AA_TAGS]);
+    : builder
+        .withTags([...WCAG_21_AA_TAGS])
+        // Outside the tag set (best-practice), so switched on by id.
+        .options({
+          rules: Object.fromEntries(STRUCTURE_RULES.map((id) => [id, { enabled: true }])),
+        });
   if (options.include) builder = builder.include(options.include);
   if (options.exclude) builder = builder.exclude(options.exclude);
 

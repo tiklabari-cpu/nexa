@@ -7,17 +7,14 @@
  * owns the browser state the decision needs — focus and the unread count.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { setUnreadCount } from '../../lib/document-title.js';
 import { getLocale, translate } from '../../lib/i18n.js';
 import {
   decideNotification,
   loadPrefs,
-  notificationTitle,
   type NotifiableEvent,
   type Permission,
 } from './notifications.js';
-
-/** The clean title the badge is layered on top of. */
-const BASE_TITLE = 'SiyahTuş';
 
 export interface Notifier {
   /** Feed every realtime push through this; it decides and acts. */
@@ -28,9 +25,10 @@ export function useNotifications(): Notifier {
   const [unread, setUnread] = useState(0);
 
   // The title is imperative and shared with the whole document, so it is driven
-  // from an effect rather than rendered — React does not own <title> here.
+  // from an effect rather than rendered — React does not own <title> here. The
+  // page's own name is the other half of it (`lib/document-title.ts`).
   useEffect(() => {
-    document.title = notificationTitle(BASE_TITLE, unread);
+    setUnreadCount(unread);
     setFaviconBadge(unread > 0);
   }, [unread]);
 

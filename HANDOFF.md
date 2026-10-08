@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 259.23 — SKILL-NEW-DRAFT: "New skill" form göstermeden kayıt oluşturmuyor; taslak ilk "Create skill"de oluşur — done — 2026-10-08 UTC
+
+- **Yapıldı:** O12 koddan doğrulandı. Karar (a) (§D211): sunucu `POST /skills` yalnız `name` istiyor, `active: false` doğar → taslak modeli engel değil. `PlaybookPage` "New skill"de `drafting` açar, boş bir `Skill` ile `SkillEditor isNew` gösterir; `SkillEditor` `isNew`'de run log / açık-kapalı / Delete göstermez, "Cancel" ekler, Save yerine "Create skill" `POST /skills` (name, instruction, steps, ai_agent_id) atar ve `onCreated` listeyi tohumlayıp kayıtlı editöre geçer. Dokunulmamış boş formda "ad gerekli" uyarısı görünmez. `createSkill` mutasyonu ve `playbook.actions.creating` anahtarı kaldırıldı; yeni anahtarlar `playbook.editor.{create,creating,cancelNew}` + `playbook.skills.newEditorTitle` (en + tr). API/kontrat değişmedi.
+- **Doğrulama:** Kırmızı-önce: yeni `PlaybookPage.newSkill.test.tsx` 5/5 bugünkü kodla kırmızı → yeşil. `test:gate build statik birim --force` yeşil (0 cached). e2e özel yığın: `playbook` 5/5 (step-authoring artık "tıklama → istek yok, Create → tek POST" iddiası taşıyor) ve `a11y` 99/99 (skill editörü taraması Create'ten sonra). Entegrasyon koşulmadı (API değişmedi). Yalnız `06.2.4-step-authoring.png` commit'te; öbür üç `kanit` PNG'si geri alındı.
+- **Varsayımlar:** Taslak sekme değiştirince (Skills → Knowledge → Skills) kaybolur, kayıtlı bir skill'in kirli düzenlemesi de aynı şekilde kaybolur (önceki davranış). PLAN damgası zaten ✅; kanıt `#### K06.2.1` sonuna, karar §D211.
+- **Sonraki pencereye not:** Test ortamında dev DB'de eski tıklamalardan kalan boş "New skill N" taslakları olabilir (sahip temizlemediyse) — ürün hatası değil.
+
 ## tm 259.22 — DEV-PORTAL-FIRST-PARTY: Developers sayfası panelin kendi giriş uygulamasını "Yerleşik" işaretliyor, işe yaramaz butonları göstermiyor — done — 2026-10-08 UTC
 
 - **Yapıldı:** O13 koddan doğrulandı. Kontrat önce: `PartnerApp.first_party: boolean` (zorunlu; `GET /partner/apps` ve `GET /partner/apps/{id}`; kayıt ve rotasyon cevabında hep `false`), `pnpm contract:generate` farksız ve commit'te (mobil parity sayısı değişmedi: yeni yol yok). `PartnerAppService.list` ilk satırı işaretler (sıralama `firstPartyClientId` ile aynı), `get` onu çağırır. Sunucu reddi (PATCH/DELETE/rotate 400) ve yetki kuralı DEĞİŞMEDİ. UI: `AppRow` yerleşik istemcide "Yerleşik / Built in" rozeti + "Panelin giriş uygulaması; değiştirilemez." satırı, Düzenle/Sil ve (gizli istemcide) Sırrı yenile yok (üçüne de sunucu 400 veriyordu).

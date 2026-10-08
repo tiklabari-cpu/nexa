@@ -116,7 +116,6 @@ export const playbook: Messages = {
   'playbook.page.loadError': 'Could not load the playbook. Check that the API is reachable.',
   'playbook.actions.browseTemplates': 'Browse templates',
   'playbook.actions.newSkill': 'New skill',
-  'playbook.actions.creating': 'Creating…',
   'playbook.tabs.performance': 'Performance',
   'playbook.tabs.profile': 'Profile',
   'playbook.tabs.skills': 'Skills',
@@ -185,6 +184,7 @@ export const playbook: Messages = {
   'playbook.skills.disable': 'Disable',
   'playbook.skills.needsStep': 'Needs at least one step before it can be turned on.',
   'playbook.skills.editorTitle': 'Editor',
+  'playbook.skills.newEditorTitle': 'New skill',
   'playbook.skills.noSelectionTitle': 'No skill selected',
   'playbook.skills.noSelectionDescription':
     'Pick a skill to write its instruction and preview what it does.',
@@ -275,6 +275,9 @@ export const playbook: Messages = {
   'playbook.editor.compiling': 'Compiling…',
   'playbook.editor.save': 'Save changes',
   'playbook.editor.saving': 'Saving…',
+  'playbook.editor.create': 'Create skill',
+  'playbook.editor.creating': 'Creating…',
+  'playbook.editor.cancelNew': 'Cancel',
   'playbook.editor.delete': 'Delete skill',
   'playbook.editor.deleteTitle': 'Delete "{name}"?',
   'playbook.editor.deleteDescription':

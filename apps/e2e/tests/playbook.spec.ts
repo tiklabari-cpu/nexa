@@ -162,16 +162,19 @@ test.describe('playbook — step authoring', () => {
   }) => {
     await agentPage.goto('/app/playbook');
 
-    // Catch the id on the way past, so teardown can remove the row again.
-    const [created] = await Promise.all([
-      agentPage.waitForResponse(
-        (response) => response.request().method() === 'POST' && response.url().endsWith('/skills'),
-      ),
-      agentPage.getByRole('button', { name: 'New skill', exact: true }).click(),
-    ]);
-    skillId = ((await created.json()) as { id: string }).id;
+    // "New skill" opens a blank form and stores nothing (O12): a click nobody
+    // follows up must not leave a draft in the workspace.
+    const posts: string[] = [];
+    agentPage.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/skills')) {
+        posts.push(request.url());
+      }
+    });
+    await agentPage.getByRole('button', { name: 'New skill', exact: true }).click();
+    await expect(agentPage.getByRole('region', { name: 'New skill' })).toBeVisible();
+    await expect(agentPage.getByLabel('Name')).toHaveValue('');
 
-    // Born with nothing to run — the state this whole test exists to get out of.
+    // Nothing to run yet — the state this whole test exists to get out of.
     await expect(agentPage.getByText(/No steps yet/)).toBeVisible();
 
     const name = agentPage.getByLabel('Name');
@@ -196,14 +199,19 @@ test.describe('playbook — step authoring', () => {
 
     await agentPage.screenshot({ path: 'kanit/06.2.4-step-authoring.png', fullPage: true });
 
+    expect(posts, 'authoring a draft must not store it').toHaveLength(0);
+
+    // The first Save is what stores it; catch the id on the way past so
+    // teardown can remove the row again.
     const [saved] = await Promise.all([
       agentPage.waitForResponse(
-        (response) =>
-          response.request().method() === 'PATCH' && response.url().includes('/skills/'),
+        (response) => response.request().method() === 'POST' && response.url().endsWith('/skills'),
       ),
-      agentPage.getByRole('button', { name: 'Save changes' }).click(),
+      agentPage.getByRole('button', { name: 'Create skill' }).click(),
     ]);
     expect(saved.ok(), `save failed: ${saved.status()} ${await saved.text()}`).toBe(true);
+    skillId = ((await saved.json()) as { id: string }).id;
+    expect(posts).toHaveLength(1);
 
     // Reload, find it again by name, and read the steps back out of the API's
     // answer rather than out of the editor's memory.

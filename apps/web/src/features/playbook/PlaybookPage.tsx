@@ -132,6 +132,9 @@ export function PlaybookPage(): ReactElement {
   // landing tab — the thing an admin opens the Playbook to do.
   const [view, setView] = useState<PlaybookView>('skills');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // "New skill" opens a blank editor; the skill exists on the server only once
+  // its first Save posts it (O12), so a click nobody follows up leaves nothing behind.
+  const [drafting, setDrafting] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [tab, setTab] = useState<SkillTab>('all');
 
@@ -175,30 +178,19 @@ export function PlaybookPage(): ReactElement {
     onSuccess: invalidate,
   });
 
-  const createSkill = useMutation({
-    mutationFn: (name: string) =>
-      api.post<Skill>('/skills', {
-        name,
-        ...(agents.data?.items.find((a) => a.kind === 'ai_agent')?.id
-          ? { ai_agent_id: agents.data.items.find((a) => a.kind === 'ai_agent')!.id }
-          : {}),
-      }),
-    onSuccess: (skill) => {
-      // Seed the list cache synchronously *before* selecting — same reason
-      // `createFromTemplate` below does: an invalidate alone leaves a render
-      // where the refetch is still in flight, `items` does not contain the new
-      // id yet, and the guard effect clears the selection right back out from
-      // under it before the refetch ever lands. Without this, "New skill"
-      // silently never opened its own editor.
-      queryClient.setQueryData<{ items: Skill[] }>(['playbook', 'skills'], (old) =>
-        old
-          ? { items: [skill, ...old.items.filter((s) => s.id !== skill.id)] }
-          : { items: [skill] },
-      );
-      setSelectedId(skill.id);
-      invalidate();
-    },
-  });
+  // Seed the list cache synchronously *before* selecting: an invalidate alone
+  // leaves a render where the refetch is still in flight, `items` does not
+  // contain the new id yet, and the guard effect below clears the selection
+  // right back out from under it before the refetch ever lands. The invalidate
+  // then reconciles ordering with the server.
+  const adopt = (skill: Skill) => {
+    queryClient.setQueryData<{ items: Skill[] }>(['playbook', 'skills'], (old) =>
+      old ? { items: [skill, ...old.items.filter((s) => s.id !== skill.id)] } : { items: [skill] },
+    );
+    setSelectedId(skill.id);
+    setDrafting(false);
+    invalidate();
+  };
 
   // Minting a skill from a template posts the whole draft — name, instruction
   // and the already-valid compiled steps — so the editor it selects into opens
@@ -214,20 +206,8 @@ export function PlaybookPage(): ReactElement {
       });
     },
     onSuccess: (skill) => {
-      // Seed the list cache synchronously *before* selecting: an invalidate
-      // alone leaves a render where the refetch is still in flight, and the
-      // guard effect below would see the new id missing from `items` and clear
-      // the selection out from under us — the editor would never open. With the
-      // skill already in the cache, the selection sticks; the invalidate then
-      // reconciles ordering with the server.
-      queryClient.setQueryData<{ items: Skill[] }>(['playbook', 'skills'], (old) =>
-        old
-          ? { items: [skill, ...old.items.filter((s) => s.id !== skill.id)] }
-          : { items: [skill] },
-      );
-      setSelectedId(skill.id);
+      adopt(skill);
       setGalleryOpen(false);
-      invalidate();
     },
   });
 
@@ -282,6 +262,30 @@ export function PlaybookPage(): ReactElement {
 
   const aiAgent = agents.data?.items.find((a) => a.kind === 'ai_agent') ?? null;
 
+  // The blank form the editor opens on. Not a stored row: it has no id the
+  // server knows, and the editor treats it as such (`isNew`).
+  const blankSkill: Skill = {
+    id: '',
+    ai_agent_id: aiAgent?.id ?? null,
+    name: '',
+    kind: 'ai_agent',
+    instruction: null,
+    steps: [],
+    active: false,
+    runs_count: 0,
+    updated_at: '',
+    created_by_name: null,
+    created_by_id: null,
+  };
+
+  // Replacing whatever is open with the blank form is a way of leaving unsaved
+  // work, so it asks first; a second click while already drafting changes nothing.
+  function startDraft(): void {
+    if (drafting || !confirmLeave()) return;
+    setSelectedId(null);
+    setDrafting(true);
+  }
+
   // The knowledge list is read here too (React Query dedupes it with the
   // Knowledge tab's own query) so readiness can be judged from the whole agent —
   // knowledge and skills together — wherever the admin currently is.
@@ -308,13 +312,10 @@ export function PlaybookPage(): ReactElement {
             </button>
             <button
               type="button"
-              disabled={createSkill.isPending}
-              onClick={() => createSkill.mutate(`New skill ${items.length + 1}`)}
-              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              onClick={startDraft}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
             >
-              {createSkill.isPending
-                ? t('playbook.actions.creating')
-                : t('playbook.actions.newSkill')}
+              {t('playbook.actions.newSkill')}
             </button>
           </div>
         ) : undefined
@@ -611,7 +612,9 @@ export function PlaybookPage(): ReactElement {
                                     // behind just as final as walking to another
                                     // module — so it asks the same question.
                                     onClick={() => {
-                                      if (confirmLeave()) setSelectedId(skill.id);
+                                      if (!confirmLeave()) return;
+                                      setDrafting(false);
+                                      setSelectedId(skill.id);
                                     }}
                                     className="min-w-0 flex-1 text-left"
                                   >
@@ -683,8 +686,29 @@ export function PlaybookPage(): ReactElement {
                     )}
                   </Section>
 
-                  <Section title={selected ? selected.name : t('playbook.skills.editorTitle')}>
-                    {selected ? (
+                  <Section
+                    title={
+                      drafting
+                        ? t('playbook.skills.newEditorTitle')
+                        : selected
+                          ? selected.name
+                          : t('playbook.skills.editorTitle')
+                    }
+                  >
+                    {drafting ? (
+                      <SkillEditor
+                        key="new"
+                        skill={blankSkill}
+                        canEdit={canEdit}
+                        isNew
+                        onSaved={invalidate}
+                        onDeleted={() => undefined}
+                        onCreated={adopt}
+                        onCancel={() => {
+                          if (confirmLeave()) setDrafting(false);
+                        }}
+                      />
+                    ) : selected ? (
                       <SkillEditor
                         key={selected.id}
                         skill={selected}

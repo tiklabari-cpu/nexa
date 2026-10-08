@@ -109,7 +109,6 @@ export const playbook: Messages = {
   'playbook.page.loadError': 'Playbook yüklenemedi. API’ye erişilebildiğini kontrol edin.',
   'playbook.actions.browseTemplates': 'Şablonlara göz at',
   'playbook.actions.newSkill': 'Yeni beceri',
-  'playbook.actions.creating': 'Oluşturuluyor…',
   'playbook.tabs.performance': 'Performans',
   'playbook.tabs.profile': 'Profil',
   'playbook.tabs.skills': 'Beceriler',
@@ -181,6 +180,7 @@ export const playbook: Messages = {
   'playbook.skills.disable': 'Kapat',
   'playbook.skills.needsStep': 'Açılabilmesi için en az bir adıma ihtiyacı var.',
   'playbook.skills.editorTitle': 'Düzenleyici',
+  'playbook.skills.newEditorTitle': 'Yeni beceri',
   'playbook.skills.noSelectionTitle': 'Beceri seçilmedi',
   'playbook.skills.noSelectionDescription':
     'Talimatını yazmak ve ne yaptığını önizlemek için bir beceri seçin.',
@@ -272,6 +272,9 @@ export const playbook: Messages = {
   'playbook.editor.compiling': 'Derleniyor…',
   'playbook.editor.save': 'Değişiklikleri kaydet',
   'playbook.editor.saving': 'Kaydediliyor…',
+  'playbook.editor.create': 'Beceri oluştur',
+  'playbook.editor.creating': 'Oluşturuluyor…',
+  'playbook.editor.cancelNew': 'Vazgeç',
   'playbook.editor.delete': 'Beceriyi sil',
   'playbook.editor.deleteTitle': '"{name}" silinsin mi?',
   'playbook.editor.deleteDescription':

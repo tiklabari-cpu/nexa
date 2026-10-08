@@ -1044,11 +1044,15 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         let skillId = '';
         try {
           await scanPanel(agentPage, 'Skill editor', theme, testInfo, async () => {
+            // "New skill" opens a blank form; the skill exists once Create posts it.
+            await agentPage.getByRole('button', { name: 'New skill', exact: true }).click();
+            await expect(agentPage.getByRole('region', { name: 'New skill' })).toBeVisible();
+            await agentPage.getByLabel('Name').fill(`A11y scan skill ${Date.now()}`);
             const created = agentPage.waitForResponse(
               (response) =>
                 response.url().endsWith('/skills') && response.request().method() === 'POST',
             );
-            await agentPage.getByRole('button', { name: 'New skill', exact: true }).click();
+            await agentPage.getByRole('button', { name: 'Create skill' }).click();
             const skill = (await (await created).json()) as { id: string; name: string };
             skillId = skill.id;
             owedSkillIds.push(skill.id);

@@ -151,11 +151,21 @@ export function SkillEditor({
   canEdit,
   onSaved,
   onDeleted,
+  isNew = false,
+  onCreated,
+  onCancel,
 }: {
   skill: Skill;
   canEdit: boolean;
   onSaved: () => void;
   onDeleted: () => void;
+  /**
+   * `skill` is a blank form, not a stored row (O12): the first Save posts it,
+   * and until then there is no run log, switch or delete to offer.
+   */
+  isNew?: boolean;
+  onCreated?: (created: Skill) => void;
+  onCancel?: () => void;
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -221,14 +231,23 @@ export function SkillEditor({
   const [savedDraft, setSavedDraft] = useState<string | null>(null);
 
   const save = useMutation({
-    mutationFn: () => api.patch<Skill>(`/skills/${skill.id}`, { name, instruction, steps }),
-    onSuccess: () => {
+    mutationFn: () =>
+      isNew
+        ? api.post<Skill>('/skills', {
+            name,
+            instruction,
+            steps,
+            ...(skill.ai_agent_id ? { ai_agent_id: skill.ai_agent_id } : {}),
+          })
+        : api.patch<Skill>(`/skills/${skill.id}`, { name, instruction, steps }),
+    onSuccess: (saved) => {
       // Remember what we just sent. `onSaved` only *starts* the parent's
       // refetch; until it lands the `skill` prop still describes the old row,
       // and without this the editor would count itself dirty — and warn about
       // discarding — for a skill that was saved a moment ago.
       setSavedDraft(draft);
-      onSaved();
+      if (isNew) onCreated?.(saved);
+      else onSaved();
     },
   });
 
@@ -261,6 +280,8 @@ export function SkillEditor({
   // The server rejects a blank name (`z.string().trim().min(1)`) — the client
   // gate must match that threshold exactly, not be stricter (FR-MOD-06.2.2).
   const nameMissing = isBlank(name);
+  // A blank form that nobody has touched is not an error yet.
+  const showNameMissing = nameMissing && !(isNew && !dirty);
 
   // A step with a missing required parameter (most often a hand-over with no
   // team) would be stored and then skipped in silence in front of a customer —
@@ -315,23 +336,27 @@ export function SkillEditor({
         {/* Top bar (FR-MOD-06.2.1): run log · on/off · Save. */}
         <div className="border-b border-border">
           <div className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-            <button
-              type="button"
-              aria-expanded={runLogOpen}
-              aria-controls={RUN_LOG_ID}
-              onClick={() => setRunLogOpen((open) => !open)}
-              className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-            >
-              {t('playbook.skills.runsCount', { count: skill.runs_count })}{' '}
-              <span aria-hidden="true">{runLogOpen ? '▴' : '▾'}</span>
-            </button>
+            {!isNew && (
+              <button
+                type="button"
+                aria-expanded={runLogOpen}
+                aria-controls={RUN_LOG_ID}
+                onClick={() => setRunLogOpen((open) => !open)}
+                className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+              >
+                {t('playbook.skills.runsCount', { count: skill.runs_count })}{' '}
+                <span aria-hidden="true">{runLogOpen ? '▴' : '▾'}</span>
+              </button>
+            )}
 
-            <StatusDot
-              tone={skill.active ? 'success' : 'neutral'}
-              label={skill.active ? t('playbook.skills.on') : t('playbook.skills.off')}
-            />
+            {!isNew && (
+              <StatusDot
+                tone={skill.active ? 'success' : 'neutral'}
+                label={skill.active ? t('playbook.skills.on') : t('playbook.skills.off')}
+              />
+            )}
 
-            {canEdit && (
+            {canEdit && !isNew && (
               <button
                 type="button"
                 disabled={toggleActive.isPending}
@@ -342,7 +367,7 @@ export function SkillEditor({
               </button>
             )}
 
-            {canEdit && (
+            {canEdit && !isNew && (
               <button
                 type="button"
                 onClick={() => setDeleteOpen(true)}
@@ -367,22 +392,34 @@ export function SkillEditor({
                     : t('playbook.editor.compile')}
                 </button>
 
+                {isNew && (
+                  <button
+                    type="button"
+                    onClick={() => onCancel?.()}
+                    className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2"
+                  >
+                    {t('playbook.editor.cancelNew')}
+                  </button>
+                )}
+
                 <button
                   type="button"
                   disabled={!canSave}
                   onClick={() => save.mutate()}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {save.isPending ? t('playbook.editor.saving') : t('playbook.editor.save')}
+                  {save.isPending
+                    ? t(isNew ? 'playbook.editor.creating' : 'playbook.editor.saving')
+                    : t(isNew ? 'playbook.editor.create' : 'playbook.editor.save')}
                 </button>
               </>
             )}
           </div>
 
           {canEdit &&
-            (nameMissing || issues.length > 0 || save.isError || toggleActive.isError) && (
+            (showNameMissing || issues.length > 0 || save.isError || toggleActive.isError) && (
               <div className="flex flex-wrap items-center gap-3 px-4 pb-2.5">
-                {nameMissing && (
+                {showNameMissing && (
                   <span role="alert" className="text-2xs text-warning">
                     {t('playbook.editor.nameRequired')}
                   </span>

@@ -230,6 +230,7 @@ export const inbox: Messages = {
   'inbox.details.tags.addButton': 'Add',
   'inbox.details.section.teams': 'Teams',
   'inbox.details.teams.empty': 'Not routed to a team.',
+  'inbox.details.teams.unknown': 'Team #{id}',
   'inbox.details.section.apps': 'Apps',
   'inbox.details.apps.empty': 'No connected apps.',
   'inbox.details.section.visitedPages': 'Visited pages',

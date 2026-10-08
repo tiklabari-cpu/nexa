@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 259.13 — DETAILS-TEAM-NAMES: sohbet detayındaki Teams bölümü ekip adını gösteriyor, numarasını değil — done — 2026-10-08 UTC
+
+- **Yapıldı:** O5 koddan doğrulandı (HEAD'de `group_ids.join(', ')`). `DetailsPanel.tsx` Teams bölümü `['team','groups']` sorgusunu (Teams/Tags/RoutingRules ile aynı anahtar, yeni istek yok) okuyor: ad, adla sıralı (`localeCompare` panel diliyle); liste yüklenirken her ekip "…"; listede olmayan ya da liste okunamadığında "Team #id" / "Ekip #id" (`inbox.details.teams.unknown`, en + tr). Boş durum aynı.
+- **Doğrulama:** Kırmızı-önce: `DetailsPanel.test.tsx` +6 test, 5'i eski kodda kırmızı (kalan 1 = boş durum koruması); sonra 19/19, inbox DetailsPanel 30/30. `test:gate build statik --force` ve `birim --force` yeşil ("0 cached"; web 2586, api 2200). Entegrasyon/e2e koşulmadı: yalnız web bileşeni + iki locale dosyası değişti, hiçbir e2e Details "Teams" metnine bakmıyor (grep).
+- **Karar notu:** Görev gövdesindeki test cümlesi `[1,2]` → "Support, Sales" diyor, KARARLAR ise "adla sırala" diyor; karar kazandı (Support=1, Sales=2 ise sonuç "Sales, Support").
+- **Sonraki pencereye not:** Sorgu gerçek bir hatada react-query'nin varsayılan yeniden denemesi bitene kadar "…" gösterir (birkaç sn); hata sonrası "Ekip #id" olur.
+
 ## tm 259.12 — INBOX-HEADER-LAYOUT: sohbet başlığında ziyaretçi adı okunuyor, "Create ticket" başlığı büyütmüyor, Ayrıntılar paneli 1280/1440'ta en ve tr'de ekranda kalıyor — done — 2026-10-08 UTC
 
 - **Yapıldı:** O3 + O4 tarayıcıda ölçüldü, kök neden bulgudaki tahminden farklı çıktı: sabit sütunlar değil, `InboxPage`'in iki kök `flex` sarmalayıcısında `min-w-0` yokluğu — sayfa "kapalı" durumda bile 1440 px'te 1559, "Create ticket" açıkken 1872 px genişliyor, Ayrıntılar ekran dışına çıkıyordu (tr'deki "Et", "Ekl" kesikleri bu taşmadan; panelin kendi içinde kesilme yok). `min-w-0` iki yere. Başlık yeni `ThreadHeader.tsx`: ad `truncate` + `title`; başlığın KENDİ genişliği 680 px altındaysa (`useNarrow`, ResizeObserver; ölçülemezse = geniş) düğmeler `aria-label`+`title`'lı kare ikon, durum yalnız glif (sözcük `sr-only`), sohbet kimliği düşer; Ayrıntılar kapatılınca sözcükler döner. Konu alanı başlıktan çıktı: `CreateTicketButton` artık başlığa `absolute` asılı bir kart (düğme yerinde, `aria-expanded`, Escape kapatır). Yan bulgu aynı ölçümde: 1280'de `Composer` araç çubuğu Ayrıntılar'ın üstüne biniyordu → `flex-wrap` (testte Gönder sütunun içinde).

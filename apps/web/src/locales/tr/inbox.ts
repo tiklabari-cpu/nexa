@@ -212,6 +212,7 @@ export const inbox: Messages = {
   'inbox.details.tags.addButton': 'Ekle',
   'inbox.details.section.teams': 'Ekipler',
   'inbox.details.teams.empty': 'Bir ekibe yönlendirilmedi.',
+  'inbox.details.teams.unknown': 'Ekip #{id}',
   'inbox.details.section.apps': 'Uygulamalar',
   'inbox.details.apps.empty': 'Bağlı uygulama yok.',
   'inbox.details.section.visitedPages': 'Ziyaret edilen sayfalar',

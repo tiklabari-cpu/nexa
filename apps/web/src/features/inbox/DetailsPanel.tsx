@@ -102,6 +102,26 @@ export function DetailsPanel({
       t('inbox.details.assignee.assigned'))
     : t('inbox.details.assignee.unassigned');
 
+  // The teams the chat is routed to, by name: `access.group_ids` carries bare
+  // numbers, and "1" says nothing to the agent reading it. Same query key
+  // `['team', 'groups']` the Teams page and the settings lists use, so this
+  // opens no second request. While the list is in flight each team reads "…"
+  // rather than its number; a team the list does not hold (deleted, or the
+  // read failed) reads "Team #id". Sorted by name, not by the order or
+  // priority the ids arrive in.
+  const teamsQuery = useQuery({
+    queryKey: ['team', 'groups'],
+    queryFn: () => api.get<{ items: Array<{ id: number; name: string }> }>('/groups'),
+    staleTime: 60_000,
+  });
+  const teamNames = (() => {
+    if (teamsQuery.isPending) return chat.access.group_ids.map(() => '…');
+    const known = new Map((teamsQuery.data?.items ?? []).map((team) => [team.id, team.name]));
+    return chat.access.group_ids
+      .map((id) => known.get(id) ?? t('inbox.details.teams.unknown', { id }))
+      .sort((a, b) => a.localeCompare(b, getLocale()));
+  })();
+
   // Suggest the curated library (FR-MOD-08.7.1) so a team applies agreed labels
   // rather than re-inventing a spelling per conversation. A free-typed tag still
   // works — the datalist is a hint, not a constraint — and the query failing
@@ -269,7 +289,7 @@ export function DetailsPanel({
           {chat.access.group_ids.length === 0 ? (
             <p className="text-xs text-content-tertiary">{t('inbox.details.teams.empty')}</p>
           ) : (
-            <p className="text-xs">{chat.access.group_ids.join(', ')}</p>
+            <p className="text-xs">{teamNames.join(', ')}</p>
           )}
         </PanelSection>
 

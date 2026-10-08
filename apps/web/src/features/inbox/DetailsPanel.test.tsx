@@ -267,3 +267,82 @@ describe('DetailsPanel localisation (NFR-I18N2)', () => {
     expect(screen.getByText('Henüz etiket yok.')).toBeInTheDocument();
   });
 });
+
+describe('DetailsPanel Teams section names the teams', () => {
+  afterEach(() => resetLocale());
+
+  function withTeams(groups: Array<{ id: number; name: string }> | 'fail' | 'pending') {
+    api.get.mockImplementation((path: string) => {
+      if (path !== '/groups') return Promise.resolve({ items: [] });
+      if (groups === 'fail')
+        return Promise.reject(
+          new ApiClientError({
+            type: 'internal',
+            status: 500,
+            message: 'boom',
+            requestId: 'req-2',
+          }),
+        );
+      if (groups === 'pending') return new Promise(() => undefined);
+      return Promise.resolve({ items: groups });
+    });
+  }
+
+  function chatInTeams(...ids: number[]): ChatDetail {
+    return { ...baseChat(), access: { group_ids: ids } };
+  }
+
+  it('shows each team by name, sorted by name, not by number', async () => {
+    withTeams([
+      { id: 1, name: 'Support' },
+      { id: 2, name: 'Sales' },
+    ]);
+    renderPanel(chatInTeams(1, 2));
+
+    expect(await screen.findByText('Sales, Support')).toBeInTheDocument();
+    expect(screen.queryByText('1, 2')).not.toBeInTheDocument();
+  });
+
+  it('says "Team #id" for a team the list does not know', async () => {
+    withTeams([{ id: 1, name: 'Support' }]);
+    renderPanel(chatInTeams(1, 7));
+
+    expect(await screen.findByText('Support, Team #7')).toBeInTheDocument();
+  });
+
+  it('shows an ellipsis, not the number, while the team list loads', () => {
+    withTeams('pending');
+    renderPanel(chatInTeams(1, 2));
+
+    expect(screen.getByText('…, …')).toBeInTheDocument();
+    expect(screen.queryByText('1, 2')).not.toBeInTheDocument();
+  });
+
+  it('falls back to "Team #id" when the team list cannot be read', async () => {
+    withTeams('fail');
+    renderPanel(chatInTeams(3));
+
+    expect(await screen.findByText('Team #3')).toBeInTheDocument();
+  });
+
+  it('writes the fallback in Turkish', async () => {
+    withTeams([{ id: 1, name: 'Destek' }]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const chat = chatInTeams(1, 4);
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <DetailsPanel chat={chat} chatId={chat.id} />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Destek, Ekip #4')).toBeInTheDocument();
+  });
+
+  it('keeps the empty state for a chat in no team', () => {
+    withTeams([{ id: 1, name: 'Support' }]);
+    renderPanel(chatInTeams());
+
+    expect(screen.getByText('Not routed to a team.')).toBeInTheDocument();
+  });
+});

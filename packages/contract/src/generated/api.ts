@@ -234,6 +234,13 @@ export interface paths {
      * @description Refresh tokens rotate on every use. Presenting one that has already been
      *     rotated revokes the entire token family — the standard response to a
      *     captured refresh token (OAuth 2.1 §4.3.1).
+     *
+     *     Metered on its own per-address bucket rather than the one sign-in and
+     *     the widget's token mint share, because a client spends a refresh on
+     *     every page load. A refused code, refresh token or client also counts
+     *     against the address's failure budget — the one refused bearer tokens
+     *     spend — and while that budget is gone every token request from the
+     *     address is a 429 until `Retry-After`, a good one included.
      */
     post: operations['exchangeToken'];
     delete?: never;

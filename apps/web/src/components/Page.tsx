@@ -67,10 +67,16 @@ export function Page({
       ref={ref}
       // The ring is drawn inside: the shell around the page clips an outer one.
       tabIndex={scrolling ? 0 : undefined}
-      className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas focus-visible:-outline-offset-2"
+      // Below the desktop breakpoint the page is the containing block of its
+      // `sr-only` labels too, so one sitting past a wide table's edge scrolls
+      // with the page instead of widening the document (tm 259.25 · O6).
+      className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas focus-visible:-outline-offset-2 max-lg:relative"
     >
-      <header className="flex min-h-topbar shrink-0 items-center gap-4 border-b border-border bg-surface px-6 py-3">
-        <div className="min-w-0 flex-1">
+      {/* Wraps rather than overflows: on a narrow window the actions (tabs, a
+          search box) drop under the title instead of pushing the page sideways
+          (tm 259.25 · O6). The title keeps a readable basis before they do. */}
+      <header className="flex min-h-topbar shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-6 py-3">
+        <div className="min-w-0 flex-1 basis-48">
           <h1 className="truncate text-lg font-semibold">{title}</h1>
           {description && <p className="truncate text-xs text-content-secondary">{description}</p>}
         </div>

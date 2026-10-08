@@ -423,7 +423,10 @@ export function InboxPage(): ReactElement {
   }, [ticketItems, selectedTicketId, onTickets, ticketsLoaded, tickets.hasNext]);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    // Below the desktop breakpoint the three panes keep their desktop width and
+    // the shell's <main> scrolls sideways: squeezed, the transcript would get
+    // what the fixed rail and list leave over — nothing at 390 px (tm 259.25 · O6).
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:min-w-[calc(1024px-theme(spacing.rail))]">
       {/* Take tour (FR-MOD-01.4, 02.2.3): above both the ticket grid and the
           chat panes, since it is a whole-module offer, not a chat-view one. */}
       <TakeTourBanner />

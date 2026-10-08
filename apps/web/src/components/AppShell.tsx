@@ -11,7 +11,7 @@
  * so that branch is gone rather than kept as untested code.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { useDeployment } from '../lib/deployment.js';
@@ -26,6 +26,7 @@ import { roleAtLeast } from '../features/team/RoleMenu.js';
 import { useRealtime } from '../features/inbox/useInbox.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
 import { CommandPalette } from './CommandPalette.js';
+import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
 import { Dropdown } from './ui/index.js';
@@ -38,36 +39,64 @@ const MAIN_ID = 'main';
 
 export function AppShell(): ReactElement {
   const t = useTranslate();
+  const narrow = useNarrowScreenNotice();
+  // Mounted the first time it is shown, then kept: a window that narrows later
+  // hides the console behind the notice rather than unmounting it, so a draft,
+  // an open chat or a scroll position survive a turned tablet (tm 259.25 · O6).
+  const [mounted, setMounted] = useState(!narrow.show);
+  if (!narrow.show && !mounted) setMounted(true);
+
+  // Past the notice, focus lands where the skip link would put it.
+  const noticeWasShown = useRef(narrow.show);
+  useEffect(() => {
+    if (noticeWasShown.current && !narrow.show) document.getElementById(MAIN_ID)?.focus();
+    noticeWasShown.current = narrow.show;
+  }, [narrow.show]);
+
   return (
-    <div className="flex h-full flex-col bg-canvas text-content">
-      {/* First stop of the Tab order: a keyboard user would otherwise walk the whole
+    <>
+      {narrow.show && <NarrowScreenNotice onContinue={narrow.continueAnyway} />}
+      {mounted && (
+        <div className={narrow.show ? 'hidden' : 'flex h-full flex-col bg-canvas text-content'}>
+          {/* First stop of the Tab order: a keyboard user would otherwise walk the whole
           rail before reaching the page. Focus is moved by hand rather than left to
           the `#main` fragment, which would also rewrite the address bar. */}
-      <a
-        href={`#${MAIN_ID}`}
-        onClick={(event) => {
-          event.preventDefault();
-          document.getElementById(MAIN_ID)?.focus();
-        }}
-        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-content focus:shadow-lg"
-      >
-        {t('shell.skipToContent')}
-      </a>
-      <SandboxBadge />
-      <TrialBanner />
-      <div className="flex min-h-0 flex-1">
-        <IconRail />
-        {/* The page is a flex child of this region exactly as it was of the row
-            above, so every module keeps its box. */}
-        <main id={MAIN_ID} tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 outline-none">
-          <Outlet />
-        </main>
-      </div>
-      {/* Reachable from every module: ⌘K opens it, and it lives outside the
+          <a
+            href={`#${MAIN_ID}`}
+            onClick={(event) => {
+              event.preventDefault();
+              document.getElementById(MAIN_ID)?.focus();
+            }}
+            className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-content focus:shadow-lg"
+          >
+            {t('shell.skipToContent')}
+          </a>
+          <SandboxBadge />
+          <TrialBanner />
+          <div className="flex min-h-0 flex-1">
+            <IconRail />
+            {/* The page is a flex child of this region exactly as it was of the row
+            above, so every module keeps its box. Below the desktop breakpoint a
+            module wider than the window (the inbox's fixed columns) scrolls
+            sideways in here rather than sliding the whole page (tm 259.25 · O6).
+            `relative` makes it the containing block of the absolutely placed
+            things inside (every `sr-only` label): with `<body>` as theirs they
+            sat at their scrolled-away x and widened the document by up to 331 px. */}
+            <main
+              id={MAIN_ID}
+              tabIndex={-1}
+              className="flex min-h-0 min-w-0 flex-1 outline-none max-lg:relative max-lg:overflow-x-auto"
+            >
+              <Outlet />
+            </main>
+          </div>
+          {/* Reachable from every module: ⌘K opens it, and it lives outside the
           scrolling area so it overlays whatever is on screen. */}
-      <CommandPalette />
-      <RealtimeOwner />
-    </div>
+          <CommandPalette />
+          <RealtimeOwner />
+        </div>
+      )}
+    </>
   );
 }
 

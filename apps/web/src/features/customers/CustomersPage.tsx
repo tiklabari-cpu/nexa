@@ -205,16 +205,18 @@ export function CustomersPage(): ReactElement {
           : t('customers.page.subtitle')
       }
       actions={
-        <div className="flex items-center gap-3">
+        // Wraps on a narrow window: the search drops under the tabs instead of
+        // running off the page's edge (tm 259.25 · O6).
+        <div className="flex flex-wrap items-center gap-3">
           <CustomersTabs />
-          <label className="flex items-center gap-2">
+          <label className="flex max-w-full items-center gap-2">
             <span className="sr-only">{t('customers.page.searchLabel')}</span>
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t('customers.page.searchPlaceholder')}
-              className="w-64 rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+              className="w-64 max-w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
             />
           </label>
         </div>

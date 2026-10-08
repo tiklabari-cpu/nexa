@@ -10,7 +10,14 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { assertNoBlockingViolations, measureFocusRing, scanScreen } from './a11y.js';
-import { API_BASE, confirmDialog, expect, ownerAccessToken, test } from './fixtures.js';
+import {
+  API_BASE,
+  confirmDialog,
+  continuePastNarrowNotice,
+  expect,
+  ownerAccessToken,
+  test,
+} from './fixtures.js';
 
 /** Open `trigger` with the keyboard, as the people this is about do. */
 async function openWithKeyboard(page: Page, trigger: Locator): Promise<void> {
@@ -194,6 +201,7 @@ test.describe('scrolling regions are reachable and their focus ring is visible',
   }, testInfo) => {
     await agentPage.setViewportSize({ width: 390, height: 844 });
     await agentPage.goto('/app/settings/compliance');
+    await continuePastNarrowNotice(agentPage);
     await expect(
       agentPage.getByRole('heading', { name: 'Data region and compliance', level: 2 }),
     ).toBeVisible();

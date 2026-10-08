@@ -5,6 +5,13 @@ export const shell: Messages = {
   // Shell chrome
   'shell.modules': 'Modules',
   'shell.skipToContent': 'Skip to content',
+  // A window under 1024 px (tm 259.25): the console asks before it opens.
+  'shell.narrow.title': 'The console is designed for desktop',
+  'shell.narrow.body':
+    'This screen is narrower than the console’s layout, so some columns will not fit and parts of a page may need sideways scrolling.',
+  'shell.narrow.mobileApp':
+    'On a phone, the SiyahTuş mobile app is the better way to answer chats.',
+  'shell.narrow.continue': 'Continue anyway',
   'shell.subscribe': 'Subscribe',
   'shell.trial.ended': 'Your trial has ended — subscribe to start new conversations.',
   // The public pilot's strip (tm 257.15): nothing is on sale there, so the way on

@@ -403,6 +403,16 @@ export async function signInThroughApi(
   await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
 }
 
+/**
+ * Past the console's narrow-screen notice (tm 259.25 · O6): below 1024 px the
+ * panel asks first, and a test that is about something else at a phone width
+ * answers the way an agent would — "Continue anyway".
+ */
+export async function continuePastNarrowNotice(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Continue anyway' }).click();
+  await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
+}
+
 const ONBOARDING_PASSWORD = 'onboarding-e2e-password';
 
 /**

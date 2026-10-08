@@ -5,6 +5,12 @@ export const shell: Messages = {
   // Shell chrome
   'shell.modules': 'Modüller',
   'shell.skipToContent': 'İçeriğe atla',
+  'shell.narrow.title': 'Panel masaüstü için tasarlandı',
+  'shell.narrow.body':
+    'Bu ekran panelin düzeninden dar; bazı sütunlar sığmayacak ve sayfanın bir kısmı yana kaydırma gerektirebilir.',
+  'shell.narrow.mobileApp':
+    'Telefonda sohbetleri yanıtlamak için SiyahTuş mobil uygulaması daha uygundur.',
+  'shell.narrow.continue': 'Yine de devam et',
   'shell.subscribe': 'Abone Ol',
   'shell.trial.ended': 'Deneme süreniz sona erdi — yeni sohbetler başlatmak için abone olun.',
   'shell.pilotTrial.remaining.one':

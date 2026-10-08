@@ -140,7 +140,10 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
 /** `/app/settings/*` — the navigation beside whichever section is open. */
 export function SettingsLayout({ children }: { children: ReactNode }): ReactElement {
   return (
-    <div className="flex min-w-0 flex-1">
+    // Below the desktop breakpoint the menu and the section keep their desktop
+    // width and the shell's <main> scrolls sideways: squeezed beside the fixed
+    // menu, a section was ~90 px wide at 390 px (tm 259.25 · O6).
+    <div className="flex min-w-0 flex-1 max-lg:min-w-[calc(1024px-theme(spacing.rail))]">
       <SettingsNav />
       {children}
     </div>

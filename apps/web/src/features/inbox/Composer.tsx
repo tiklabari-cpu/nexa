@@ -72,10 +72,17 @@ const COPILOT_SUGGESTION_TIMEOUT_MS = 3_000;
 export function Composer({
   chatId,
   disabled,
+  disabledNotice,
   tags = [],
 }: {
   chatId: string;
   disabled: boolean;
+  /**
+   * Why the composer is off, when it is not because the chat is archived — the
+   * default sentence says "reopen it", which is wrong advice for a thread that
+   * simply failed to load (tm 259.5).
+   */
+  disabledNotice?: string;
   /**
    * The chat's current tags (FR-MOD-02.3.5's fifth composer tool) — the same
    * array `DetailsPanel` reads off `chat.thread.tags`, so a tag added here
@@ -485,7 +492,7 @@ export function Composer({
   if (disabled) {
     return (
       <div className="shrink-0 border-t border-border bg-surface px-4 py-4 text-center text-sm text-content-secondary">
-        {t('inbox.composer.disabledNotice')}
+        {disabledNotice ?? t('inbox.composer.disabledNotice')}
       </div>
     );
   }

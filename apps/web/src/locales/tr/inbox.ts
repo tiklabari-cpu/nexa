@@ -76,6 +76,9 @@ export const inbox: Messages = {
   'inbox.list.item.queuePosition': '#{position}. sırada',
   'inbox.list.item.unreadAria': '{count} okunmamış',
   'inbox.list.item.noMessages': 'Henüz mesaj yok',
+  'inbox.list.error.title': 'Sohbetler yüklenemedi',
+  'inbox.list.error.retry': 'Yeniden dene',
+  'inbox.list.countUnavailable': 'Sayı alınamadı',
   'inbox.list.loadMore': 'Daha fazla yükle',
   'inbox.list.loading': 'Yükleniyor…',
   'inbox.list.sort.ariaLabel': 'Sohbetleri sırala',
@@ -91,11 +94,20 @@ export const inbox: Messages = {
   'inbox.thread.showDetails': 'Ayrıntılar panelini göster',
   'inbox.thread.detailsLabel': 'Ayrıntılar',
   'inbox.thread.copilotLabel': 'Copilot',
+  'inbox.thread.error.title': 'Bu sohbet yüklenemedi',
+  'inbox.thread.error.retry': 'Yeniden dene',
+  'inbox.thread.gone.title': 'Bu sohbet artık yok',
+  'inbox.thread.gone.description':
+    'Kaldırılmış ya da taşınmış olabilir. Listeden başka bir sohbet seçin.',
+  'inbox.thread.transcriptError.title': 'Mesajlar yüklenemedi',
+  'inbox.thread.transcriptError.retry': 'Yeniden dene',
   'inbox.thread.empty.title': 'Sohbet seçilmedi',
   'inbox.thread.empty.description': 'Burada görmek için listeden bir sohbet seçin.',
 
   // Composer
   'inbox.composer.disabledNotice': 'Bu sohbet arşivlendi. Yanıtlamak için yeniden açın.',
+  'inbox.composer.unavailableNotice':
+    'Mesajlar yüklenemediği için yanıtlama durduruldu. Mesajları yeniden yüklemeyi deneyin.',
   'inbox.composer.modeAriaLabel': 'Mesaj türü',
   'inbox.composer.mode.reply': 'Yanıt',
   'inbox.composer.mode.note': 'Dahili not',

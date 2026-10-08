@@ -15,6 +15,7 @@ import { useState, type ReactElement } from 'react';
 import { Card, CardSkeleton } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/Modal.js';
+import { useConfirm } from '../../components/ui/ConfirmDialog.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
@@ -30,8 +31,12 @@ interface Props {
   /** `customers.erase:rw` — narrower than `canEdit`, and never implied by it. */
   canErase: boolean;
   onChanged: () => void;
-  onBanToggle: (id: string, banned: boolean) => void;
+  /** Returns the request's promise when there is one, so a confirmation can wait on it. */
+  onBanToggle: (id: string, banned: boolean) => unknown;
   banPending: boolean;
+  /** The last ban / lift refusal, and which of the two it was; both null when none. */
+  banError?: unknown;
+  banAttempt?: { id: string; banned: boolean };
   /** Clears the selection once the person this panel is showing no longer exists. */
   onErased: (id: string) => void;
 }
@@ -44,10 +49,13 @@ export function CustomerDetailPanel({
   onChanged,
   onBanToggle,
   banPending,
+  banError = null,
+  banAttempt,
   onErased,
 }: Props): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
+  const { confirm, dialog } = useConfirm();
 
   const detail = useQuery({
     queryKey: ['customers', 'detail', customerId],
@@ -145,7 +153,21 @@ export function CustomerDetailPanel({
             <button
               type="button"
               disabled={banPending}
-              onClick={() => onBanToggle(customer.id, !customer.banned)}
+              onClick={() => {
+                // Lifting a ban is the safe direction and goes straight through;
+                // banning asks first and says what it does.
+                if (customer.banned) {
+                  void onBanToggle(customer.id, false);
+                  return;
+                }
+                const who = customer.name ?? t('customers.detail.thisCustomer');
+                confirm({
+                  title: t('customers.detail.banConfirm.title', { name: who }),
+                  description: t('customers.detail.banConfirm.description', { name: who }),
+                  confirmLabel: t('customers.detail.banConfirm.confirm'),
+                  onConfirm: () => onBanToggle(customer.id, true),
+                });
+              }}
               className={`w-full rounded-md border px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
                 customer.banned
                   ? 'border-border hover:bg-surface-2'
@@ -154,6 +176,14 @@ export function CustomerDetailPanel({
             >
               {customer.banned ? t('customers.detail.liftBan') : t('customers.detail.banCustomer')}
             </button>
+            {banError !== null && banAttempt?.id === customer.id && (
+              <p role="alert" className="mt-1.5 text-2xs text-danger">
+                {t(
+                  banAttempt.banned ? 'customers.detail.banError' : 'customers.detail.liftBanError',
+                )}{' '}
+                {t(errorMessageKey(banError))}
+              </p>
+            )}
             <p className="mt-1.5 text-2xs text-content-tertiary">
               {customer.banned
                 ? t('customers.detail.bannedHint')
@@ -273,6 +303,7 @@ export function CustomerDetailPanel({
           </ul>
         )}
       </Card>
+      {dialog}
     </div>
   );
 }

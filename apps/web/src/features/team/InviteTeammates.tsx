@@ -18,14 +18,15 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { FieldError, emailList, splitList, useForm } from '../../lib/form.js';
 import { formatMoney } from '../../lib/format.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { useTranslate } from '../../lib/i18n.js';
-import { Modal } from '../../components/ui/index.js';
+import { ErrorNotice } from '../../components/Page.js';
+import { Modal, useConfirm } from '../../components/ui/index.js';
 
 interface Invitation {
   id: string;
@@ -386,46 +387,75 @@ export function PendingInvitations(): ReactElement | null {
   const t = useTranslate();
   const invitations = usePendingInvitations();
   const revoke = useRevokeInvitation();
+  const { confirm, dialog } = useConfirm();
   const items = invitations.data?.items ?? [];
 
   if (items.length === 0) return null;
 
+  // A refused revoke leaves the invitation live, so it says so where the row is.
+  const failedEmail = revoke.isError
+    ? items.find((invite) => invite.id === revoke.variables)?.email
+    : undefined;
+
   return (
-    <table className="w-full text-sm">
-      <caption className="sr-only">{t('team.invite.pending.caption')}</caption>
-      <thead>
-        <tr className="border-b border-border text-left">
-          <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            {t('team.invite.pending.email')}
-          </th>
-          <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            {t('team.invite.pending.role')}
-          </th>
-          <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            {t('team.invite.pending.invitedBy')}
-          </th>
-          <th className="px-4 py-2" />
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((invite) => (
-          <tr key={invite.id} className="border-b border-border last:border-0">
-            <td className="px-4 py-2.5">{invite.email}</td>
-            <td className="px-4 py-2.5 text-content-secondary">{t(`team.role.${invite.role}`)}</td>
-            <td className="px-4 py-2.5 text-content-secondary">{invite.invited_by_name ?? '—'}</td>
-            <td className="px-4 py-2.5 text-right">
-              <button
-                type="button"
-                onClick={() => revoke.mutate(invite.id)}
-                disabled={revoke.isPending}
-                className="text-xs text-danger underline"
-              >
-                {t('team.invite.pending.revoke')}
-              </button>
-            </td>
+    <>
+      {revoke.isError && (
+        <ErrorNotice
+          message={`${t('team.invite.pending.revokeError', {
+            email: failedEmail ?? String(revoke.variables),
+          })} ${t(errorMessageKey(revoke.error))}`}
+        />
+      )}
+      <table className="w-full text-sm">
+        <caption className="sr-only">{t('team.invite.pending.caption')}</caption>
+        <thead>
+          <tr className="border-b border-border text-left">
+            <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('team.invite.pending.email')}
+            </th>
+            <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('team.invite.pending.role')}
+            </th>
+            <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('team.invite.pending.invitedBy')}
+            </th>
+            <th className="px-4 py-2" />
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((invite) => (
+            <tr key={invite.id} className="border-b border-border last:border-0">
+              <td className="px-4 py-2.5">{invite.email}</td>
+              <td className="px-4 py-2.5 text-content-secondary">
+                {t(`team.role.${invite.role}`)}
+              </td>
+              <td className="px-4 py-2.5 text-content-secondary">
+                {invite.invited_by_name ?? '—'}
+              </td>
+              <td className="px-4 py-2.5 text-right">
+                <button
+                  type="button"
+                  onClick={() =>
+                    confirm({
+                      title: t('team.invite.pending.revokeConfirm.title', { email: invite.email }),
+                      description: t('team.invite.pending.revokeConfirm.description', {
+                        email: invite.email,
+                      }),
+                      confirmLabel: t('team.invite.pending.revoke'),
+                      onConfirm: () => revoke.mutateAsync(invite.id),
+                    })
+                  }
+                  disabled={revoke.isPending}
+                  className="text-xs text-danger underline"
+                >
+                  {t('team.invite.pending.revoke')}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {dialog}
+    </>
   );
 }

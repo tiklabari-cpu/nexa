@@ -528,3 +528,99 @@ test.describe('Team — the console screen (FR-MOD-04.5)', () => {
     }
   });
 });
+
+test.describe('Team — suspending a teammate asks first (tm 259.8)', () => {
+  /**
+   * Suspension used to fire on one click: the teammate lost their sign-in, their
+   * seat and their chats with nothing in between, and a refused write left the
+   * roster looking as if it had worked. The click now opens a question that says
+   * what suspension does; Cancel changes nothing; the confirmed click moves the
+   * person to Suspended, where Reinstate brings them back. Priya Nair is put back
+   * on the roster whatever happens, because other files route chats to her.
+   */
+  test('Cancel changes nothing, confirming moves Priya to Suspended, reinstating returns her', async ({
+    agentPage,
+    request,
+  }) => {
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const roster = await request.get(`${API_BASE}/agents`, { headers: auth });
+    const { items } = (await roster.json()) as { items: Array<{ id: string; name: string }> };
+    const priya = items.find((agent) => agent.name === 'Priya Nair');
+    expect(priya, 'seeded agent Priya Nair not found').toBeTruthy();
+
+    try {
+      await agentPage.goto('/app/team');
+      const teammates = agentPage.getByRole('table', { name: 'Agents on this licence' });
+      const suspended = agentPage.getByRole('table', { name: 'Suspended agents' });
+      const priyaRow = teammates.locator('tr').filter({ hasText: 'Priya Nair' });
+
+      let writes = 0;
+      agentPage.on('request', (req) => {
+        if (req.method() === 'PUT' && req.url().endsWith(`/agents/${priya!.id}/suspension`)) {
+          writes += 1;
+        }
+      });
+
+      await priyaRow.getByRole('button', { name: 'Suspend' }).click();
+      const dialog = agentPage.getByRole('dialog', { name: 'Suspend Priya Nair?' });
+      await expect(dialog).toContainText('cannot sign in, take chats or use a seat');
+      await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      await agentPage.screenshot({ path: 'kanit/259.8-suspend-confirm.png', fullPage: true });
+
+      // Cancel and Escape: no request, she is still a teammate.
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).toBeHidden();
+      await priyaRow.getByRole('button', { name: 'Suspend' }).click();
+      await agentPage.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(priyaRow).toBeVisible();
+      expect(writes).toBe(0);
+
+      // Confirm: exactly one write, and she moves lists.
+      await priyaRow.getByRole('button', { name: 'Suspend' }).click();
+      await dialog.getByRole('button', { name: 'Suspend', exact: true }).click();
+      await expect(suspended.getByText('Priya Nair')).toBeVisible();
+      await expect(priyaRow).toHaveCount(0);
+      expect(writes).toBe(1);
+
+      // And back.
+      await suspended.getByRole('button', { name: 'Reinstate' }).click();
+      await expect(priyaRow).toBeVisible();
+      await expect(suspended.getByText('Priya Nair')).toHaveCount(0);
+    } finally {
+      await request
+        .put(`${API_BASE}/agents/${priya!.id}/suspension`, {
+          headers: auth,
+          data: { suspended: false },
+        })
+        .catch(() => {});
+    }
+  });
+
+  test('a refused suspension says so, and she stays on the roster', async ({ agentPage }) => {
+    await agentPage.goto('/app/team');
+    await agentPage.route('**/agents/*/suspension', (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { type: 'internal', message: 'boom', request_id: 'r-1' } }),
+      }),
+    );
+    const priyaRow = agentPage
+      .getByRole('table', { name: 'Agents on this licence' })
+      .locator('tr')
+      .filter({ hasText: 'Priya Nair' });
+
+    await priyaRow.getByRole('button', { name: 'Suspend' }).click();
+    await agentPage
+      .getByRole('dialog', { name: 'Suspend Priya Nair?' })
+      .getByRole('button', { name: 'Suspend', exact: true })
+      .click();
+
+    const alert = agentPage.getByRole('alert').filter({ hasText: 'could not be suspended' });
+    await expect(alert).toBeVisible();
+    await expect(alert).toContainText('Priya Nair');
+    await expect(priyaRow).toBeVisible();
+    await agentPage.screenshot({ path: 'kanit/259.8-suspend-refused.png', fullPage: true });
+  });
+});

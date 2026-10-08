@@ -5,7 +5,7 @@
  * no bot scope is told plainly and nothing is fetched.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
@@ -96,6 +96,12 @@ describe('CopilotKnowledge', () => {
     await screen.findByText('Refund policy');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(api.delete).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Delete “Refund policy”?' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/copilot/knowledge/s1'));
   });
 

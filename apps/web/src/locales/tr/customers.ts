@@ -69,6 +69,13 @@ export const customers: Messages = {
   'customers.detail.never': 'Hiç',
   'customers.detail.liftBan': 'Engeli kaldır',
   'customers.detail.banCustomer': 'Müşteriyi engelle',
+  'customers.detail.banConfirm.title': '{name} engellensin mi?',
+  'customers.detail.banConfirm.description':
+    '{name} yeni sohbet başlatamaz. Geçmişi saklanır; engeli istediğiniz zaman kaldırabilirsiniz.',
+  'customers.detail.banConfirm.confirm': 'Engelle',
+  'customers.detail.banError': 'Müşteri engellenemedi.',
+  'customers.detail.liftBanError': 'Engel kaldırılamadı.',
+  'customers.detail.thisCustomer': 'bu müşteri',
   'customers.detail.bannedHint': 'Yeniden sohbet başlatabilecekler.',
   'customers.detail.notBannedHint': 'Yeni sohbetleri engeller. Geçmiş saklanır.',
   'customers.detail.eraseCustomer': 'Bu kişiyi sil',

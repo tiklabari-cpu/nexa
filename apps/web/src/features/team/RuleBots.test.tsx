@@ -233,11 +233,25 @@ describe('RuleBots (FR-MOD-06.6)', () => {
     await screen.findByText('FAQ bot');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete rule Opening hours' }));
+    expect(api.delete).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Delete rule “Opening hours”?' })).getByRole(
+        'button',
+        { name: 'Delete' },
+      ),
+    );
     await waitFor(() =>
       expect(api.delete).toHaveBeenCalledWith('/settings/bots/bot-1/rules/rule-1'),
     );
 
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
     fireEvent.click(screen.getByRole('button', { name: 'Delete bot FAQ bot' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Delete bot “FAQ bot”?' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/settings/bots/bot-1'));
   });
 

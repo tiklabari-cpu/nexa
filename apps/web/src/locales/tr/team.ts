@@ -53,6 +53,32 @@ export const team: Messages = {
   'team.page.table.manage': 'Yönet',
   'team.page.you': 'siz',
   'team.page.suspendButton': 'Askıya al',
+  // Geri alınamaz işlemler önce sorar (tm 259.8); reddedilen yazma bunu söyler.
+  'team.page.suspendConfirm.title': '{name} askıya alınsın mı?',
+  'team.page.suspendConfirm.description':
+    'Askıya alınan {name} oturum açamaz, sohbet alamaz ve koltuk kullanamaz. Ekipleri ve geçmişi korunur; istediğiniz zaman yeniden atayabilirsiniz.',
+  'team.page.suspendConfirm.confirm': 'Askıya al',
+  'team.page.suspendError': '{name} askıya alınamadı.',
+  'team.page.reinstateError': '{name} yeniden atanamadı.',
+  'team.teams.editor.deleteConfirm.title': '“{name}” ekibi silinsin mi?',
+  'team.teams.editor.deleteConfirm.description':
+    'Ekip tüm çalışma alanı için silinir ve geri getirilemez. Üyeler hesaplarını korur. Bir yönlendirme kuralının hedef aldığı ya da açık sohbeti olan ekip silinemez.',
+  'team.teams.members.removeConfirm.title': '{name}, {team} ekibinden çıkarılsın mı?',
+  'team.teams.members.removeConfirm.description':
+    '{name} artık bu ekibe yönlendirilen sohbetleri almaz. Hesabı ve diğer ekipleri korunur.',
+  'team.invite.pending.revokeConfirm.title': '{email} adresine gönderilen davet iptal edilsin mi?',
+  'team.invite.pending.revokeConfirm.description':
+    'Davet bağlantısı çalışmaz olur. {email} katılmak için yeni bir davet almalı.',
+  'team.invite.pending.revokeError': '{email} adresine gönderilen davet iptal edilemedi.',
+  'team.ruleBots.deleteBotConfirm.title': '“{name}” botu silinsin mi?',
+  'team.ruleBots.deleteBotConfirm.description':
+    'Bot ve kuralları silinir, ziyaretçilere yanıt vermeyi bırakır. Bu geri alınamaz.',
+  'team.ruleBots.deleteRuleConfirm.title': '“{name}” kuralı silinsin mi?',
+  'team.ruleBots.deleteRuleConfirm.description':
+    'Bot bu kuralı uygulamayı bırakır. Bu geri alınamaz.',
+  'team.copilot.deleteConfirm.title': '“{name}” silinsin mi?',
+  'team.copilot.deleteConfirm.description':
+    'Copilot, bir temsilciye yardım ederken bu kaynaktan artık alıntı yapamaz. Bu geri alınamaz.',
   'team.page.chatbots.title': 'Sohbet botları',
   'team.page.chatbots.description':
     'Bot hesapları kendi başlarına yanıt verir. Ücretsizdirler — bir bot asla koltuk kullanmaz (FR-MOD-04.6).',

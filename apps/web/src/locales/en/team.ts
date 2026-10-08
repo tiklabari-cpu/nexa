@@ -60,6 +60,32 @@ export const team: Messages = {
   'team.page.table.manage': 'Manage',
   'team.page.you': 'you',
   'team.page.suspendButton': 'Suspend',
+  // Destructive actions ask first (tm 259.8); a refused write says so.
+  'team.page.suspendConfirm.title': 'Suspend {name}?',
+  'team.page.suspendConfirm.description':
+    '{name} cannot sign in, take chats or use a seat while suspended. Their teams and history are kept, and you can reinstate them at any time.',
+  'team.page.suspendConfirm.confirm': 'Suspend',
+  'team.page.suspendError': '{name} could not be suspended.',
+  'team.page.reinstateError': '{name} could not be reinstated.',
+  'team.teams.editor.deleteConfirm.title': 'Delete team “{name}”?',
+  'team.teams.editor.deleteConfirm.description':
+    'The team is deleted for the whole workspace and cannot be restored. Its members keep their accounts. A team that a routing rule targets, or that has an open conversation, cannot be deleted.',
+  'team.teams.members.removeConfirm.title': 'Remove {name} from {team}?',
+  'team.teams.members.removeConfirm.description':
+    '{name} stops receiving chats routed to this team. The person keeps their account and their other teams.',
+  'team.invite.pending.revokeConfirm.title': 'Revoke the invitation to {email}?',
+  'team.invite.pending.revokeConfirm.description':
+    'The invitation link stops working. {email} will need a new invitation to join.',
+  'team.invite.pending.revokeError': 'The invitation to {email} could not be revoked.',
+  'team.ruleBots.deleteBotConfirm.title': 'Delete bot “{name}”?',
+  'team.ruleBots.deleteBotConfirm.description':
+    'The bot and its rules are deleted, and it stops answering visitors. This cannot be undone.',
+  'team.ruleBots.deleteRuleConfirm.title': 'Delete rule “{name}”?',
+  'team.ruleBots.deleteRuleConfirm.description':
+    'The bot stops applying this rule. This cannot be undone.',
+  'team.copilot.deleteConfirm.title': 'Delete “{name}”?',
+  'team.copilot.deleteConfirm.description':
+    'Copilot can no longer quote this source when it assists an agent. This cannot be undone.',
   'team.page.chatbots.title': 'Chatbots',
   'team.page.chatbots.description':
     'Bot accounts answer on their own. They are free — a bot never uses a seat (FR-MOD-04.6).',

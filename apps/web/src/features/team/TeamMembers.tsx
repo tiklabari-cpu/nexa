@@ -12,7 +12,7 @@
 import { useMemo, useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GROUP_PRIORITIES, type GroupPriority } from '@siyahtus/types';
-import { Modal } from '../../components/ui/index.js';
+import { Modal, useConfirm } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -55,6 +55,7 @@ export function TeamMembers({
   const [pickedAgentId, setPickedAgentId] = useState('');
   const [pickedPriority, setPickedPriority] = useState<GroupPriority>('normal');
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   const invalidate = (): Promise<void> =>
     queryClient.invalidateQueries({ queryKey: ['team', 'groups'] });
@@ -87,122 +88,135 @@ export function TeamMembers({
   }
 
   return (
-    <Modal
-      onClose={onClose}
-      title={t('team.teams.members.title', { name: current.name })}
-      description={t('team.teams.members.description')}
-      align="top"
-    >
-      {error && (
-        <p role="alert" className="mb-3 text-sm text-danger">
-          {error}
-        </p>
-      )}
+    <>
+      <Modal
+        onClose={onClose}
+        title={t('team.teams.members.title', { name: current.name })}
+        description={t('team.teams.members.description')}
+        align="top"
+      >
+        {error && (
+          <p role="alert" className="mb-3 text-sm text-danger">
+            {error}
+          </p>
+        )}
 
-      {current.agents.length === 0 ? (
-        <p className="text-sm text-content-secondary">{t('team.teams.members.empty')}</p>
-      ) : (
-        <ul className="mb-4 divide-y divide-border">
-          {current.agents.map((member) => {
-            const name = byId.get(member.agent_id)?.name ?? t('team.page.formerTeammate');
-            return (
-              <li key={member.agent_id} className="flex items-center gap-2 py-2 text-sm">
-                <span className="min-w-0 flex-1 truncate">{name}</span>
-                <label className="flex items-center gap-1.5">
-                  <select
-                    aria-label={t('team.teams.members.priorityAriaLabel', { name })}
-                    value={member.priority}
-                    disabled={setMember.isPending}
-                    onChange={(event) =>
-                      setMember.mutate({
-                        agentId: member.agent_id,
-                        priority: event.target.value as GroupPriority,
+        {current.agents.length === 0 ? (
+          <p className="text-sm text-content-secondary">{t('team.teams.members.empty')}</p>
+        ) : (
+          <ul className="mb-4 divide-y divide-border">
+            {current.agents.map((member) => {
+              const name = byId.get(member.agent_id)?.name ?? t('team.page.formerTeammate');
+              return (
+                <li key={member.agent_id} className="flex items-center gap-2 py-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate">{name}</span>
+                  <label className="flex items-center gap-1.5">
+                    <select
+                      aria-label={t('team.teams.members.priorityAriaLabel', { name })}
+                      value={member.priority}
+                      disabled={setMember.isPending}
+                      onChange={(event) =>
+                        setMember.mutate({
+                          agentId: member.agent_id,
+                          priority: event.target.value as GroupPriority,
+                        })
+                      }
+                      className="rounded-md border border-border bg-inset px-2 py-1 text-xs"
+                    >
+                      {GROUP_PRIORITIES.map((priority) => (
+                        <option key={priority} value={priority}>
+                          {t(`team.priority.${priority}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirm({
+                        title: t('team.teams.members.removeConfirm.title', {
+                          name,
+                          team: current.name,
+                        }),
+                        description: t('team.teams.members.removeConfirm.description', { name }),
+                        confirmLabel: t('team.teams.members.removeButton'),
+                        onConfirm: () => removeMember.mutateAsync(member.agent_id),
                       })
                     }
-                    className="rounded-md border border-border bg-inset px-2 py-1 text-xs"
+                    disabled={removeMember.isPending}
+                    aria-label={t('team.teams.members.removeAriaLabel', { name })}
+                    className="text-xs text-danger underline disabled:opacity-40"
                   >
-                    {GROUP_PRIORITIES.map((priority) => (
-                      <option key={priority} value={priority}>
-                        {t(`team.priority.${priority}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeMember.mutate(member.agent_id)}
-                  disabled={removeMember.isPending}
-                  aria-label={t('team.teams.members.removeAriaLabel', { name })}
-                  className="text-xs text-danger underline disabled:opacity-40"
-                >
-                  {t('team.teams.members.removeButton')}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                    {t('team.teams.members.removeButton')}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-      {available.length > 0 ? (
-        <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-          <label className="flex min-w-40 flex-1 flex-col gap-1">
-            <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-              {t('team.teams.members.addLabel')}
-            </span>
+        {available.length > 0 ? (
+          <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
+            <label className="flex min-w-40 flex-1 flex-col gap-1">
+              <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                {t('team.teams.members.addLabel')}
+              </span>
+              <select
+                aria-label={t('team.teams.members.addAgentAriaLabel')}
+                value={pickedAgentId}
+                onChange={(event) => setPickedAgentId(event.target.value)}
+                className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
+              >
+                <option value="" disabled>
+                  {t('team.teams.members.addLabel')}
+                </option>
+                {available.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <select
-              aria-label={t('team.teams.members.addAgentAriaLabel')}
-              value={pickedAgentId}
-              onChange={(event) => setPickedAgentId(event.target.value)}
+              aria-label={t('team.teams.members.addPriorityAriaLabel')}
+              value={pickedPriority}
+              onChange={(event) => setPickedPriority(event.target.value as GroupPriority)}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
             >
-              <option value="" disabled>
-                {t('team.teams.members.addLabel')}
-              </option>
-              {available.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
+              {GROUP_PRIORITIES.map((priority) => (
+                <option key={priority} value={priority}>
+                  {t(`team.priority.${priority}`)}
                 </option>
               ))}
             </select>
-          </label>
-          <select
-            aria-label={t('team.teams.members.addPriorityAriaLabel')}
-            value={pickedPriority}
-            onChange={(event) => setPickedPriority(event.target.value as GroupPriority)}
-            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
-          >
-            {GROUP_PRIORITIES.map((priority) => (
-              <option key={priority} value={priority}>
-                {t(`team.priority.${priority}`)}
-              </option>
-            ))}
-          </select>
+            <button
+              type="button"
+              onClick={addMember}
+              disabled={!pickedAgentId || setMember.isPending}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {setMember.isPending
+                ? t('team.teams.members.adding')
+                : t('team.teams.members.addButton')}
+            </button>
+          </div>
+        ) : (
+          <p className="border-t border-border pt-3 text-2xs text-content-tertiary">
+            {t('team.teams.members.noneToAdd')}
+          </p>
+        )}
+
+        <div className="mt-4 flex justify-end">
           <button
             type="button"
-            onClick={addMember}
-            disabled={!pickedAgentId || setMember.isPending}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            onClick={onClose}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            {setMember.isPending
-              ? t('team.teams.members.adding')
-              : t('team.teams.members.addButton')}
+            {t('team.teams.members.close')}
           </button>
         </div>
-      ) : (
-        <p className="border-t border-border pt-3 text-2xs text-content-tertiary">
-          {t('team.teams.members.noneToAdd')}
-        </p>
-      )}
-
-      <div className="mt-4 flex justify-end">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-border px-3 py-1.5 text-sm"
-        >
-          {t('team.teams.members.close')}
-        </button>
-      </div>
-    </Modal>
+      </Modal>
+      {dialog}
+    </>
   );
 }

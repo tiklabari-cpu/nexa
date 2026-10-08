@@ -12,6 +12,7 @@ import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -55,6 +56,7 @@ export function CopilotKnowledge(): ReactElement {
   const canEdit = scopes.includes('agents-bot--all:rw');
 
   const [type, setType] = useState<string>('article');
+  const { confirm, dialog } = useConfirm();
 
   const sources = useQuery({
     queryKey: ['team', 'copilot-knowledge'],
@@ -159,7 +161,13 @@ export function CopilotKnowledge(): ReactElement {
                     <td className="px-4 py-2.5 text-right">
                       <button
                         type="button"
-                        onClick={() => remove.mutate(source.id)}
+                        onClick={() =>
+                          confirm({
+                            title: t('team.copilot.deleteConfirm.title', { name: source.name }),
+                            description: t('team.copilot.deleteConfirm.description'),
+                            onConfirm: () => remove.mutateAsync(source.id),
+                          })
+                        }
                         disabled={remove.isPending}
                         className="text-xs text-danger underline disabled:opacity-40"
                       >
@@ -255,6 +263,7 @@ export function CopilotKnowledge(): ReactElement {
           </form>
         )}
       </Card>
+      {dialog}
     </Section>
   );
 }

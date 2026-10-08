@@ -69,7 +69,18 @@ test.describe('customers', () => {
     await agentPage.goto('/app/customers');
     await agentPage.getByRole('button', { name: /Mira Haddad/ }).click();
 
+    // Banning asks first (tm 259.8): Cancel leaves her unbanned, the confirmed
+    // click bans. Lifting the ban, further down, asks nothing.
     await agentPage.getByRole('button', { name: 'Ban customer' }).click();
+    const dialog = agentPage.getByRole('dialog', { name: 'Ban Mira Haddad?' });
+    await expect(dialog).toContainText('will not be able to start new conversations');
+    await agentPage.screenshot({ path: 'kanit/259.8-ban-confirm.png', fullPage: true });
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(agentPage.getByRole('button', { name: 'Lift ban' })).toHaveCount(0);
+
+    await agentPage.getByRole('button', { name: 'Ban customer' }).click();
+    await dialog.getByRole('button', { name: 'Ban', exact: true }).click();
     await expect(agentPage.getByRole('button', { name: 'Lift ban' })).toBeVisible();
 
     const table = agentPage.getByRole('table', { name: 'Customers' });

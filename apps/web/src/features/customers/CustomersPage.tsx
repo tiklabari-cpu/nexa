@@ -388,8 +388,14 @@ export function CustomersPage(): ReactElement {
             canBan={canBan}
             canErase={canErase}
             onChanged={invalidate}
-            onBanToggle={(id, banned) => banMutation.mutate({ id, banned })}
+            // The promise keeps the ban confirmation pending until the answer; a
+            // refusal is held by the mutation and shown in the panel (`banError`).
+            onBanToggle={(id, banned) =>
+              banMutation.mutateAsync({ id, banned }).catch(() => undefined)
+            }
             banPending={banMutation.isPending}
+            banError={banMutation.isError ? banMutation.error : null}
+            banAttempt={banMutation.variables}
             onErased={() => {
               // Drop the selection before refetching: the panel is showing a
               // record that no longer exists, and leaving it selected would send

@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GROUP_PRIORITIES, type GroupPriority } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -86,6 +87,7 @@ export function RuleBots(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const canRead = scopes.includes('agents-bot--all:ro') || scopes.includes('agents-bot--all:rw');
   const canEdit = scopes.includes('agents-bot--all:rw');
+  const { confirm, dialog } = useConfirm();
 
   const bots = useQuery({
     queryKey: ['team', 'rule-bots'],
@@ -232,19 +234,32 @@ export function RuleBots(): ReactElement {
                   teams={teams.data?.items ?? []}
                   canEdit={canEdit}
                   onToggle={() => patchBot.mutate({ id: bot.id, enabled: !bot.enabled })}
-                  onDelete={() => removeBot.mutate(bot.id)}
+                  onDelete={() =>
+                    confirm({
+                      title: t('team.ruleBots.deleteBotConfirm.title', { name: bot.name }),
+                      description: t('team.ruleBots.deleteBotConfirm.description'),
+                      onConfirm: () => removeBot.mutateAsync(bot.id),
+                    })
+                  }
                   onSetGroups={(groups) => patchBot.mutateAsync({ id: bot.id, groups })}
                   onAddRule={(body) => createRule.mutateAsync({ botId: bot.id, ...body })}
                   onToggleRule={(rule) =>
                     patchRule.mutate({ botId: bot.id, ruleId: rule.id, enabled: !rule.enabled })
                   }
-                  onDeleteRule={(rule) => removeRule.mutate({ botId: bot.id, ruleId: rule.id })}
+                  onDeleteRule={(rule) =>
+                    confirm({
+                      title: t('team.ruleBots.deleteRuleConfirm.title', { name: rule.name }),
+                      description: t('team.ruleBots.deleteRuleConfirm.description'),
+                      onConfirm: () => removeRule.mutateAsync({ botId: bot.id, ruleId: rule.id }),
+                    })
+                  }
                 />
               ))}
             </ul>
           )}
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

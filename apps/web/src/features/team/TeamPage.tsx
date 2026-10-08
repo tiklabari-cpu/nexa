@@ -16,6 +16,8 @@ import { LoadError } from '../../components/LoadError.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
+import { useConfirm } from '../../components/ui/index.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -99,6 +101,7 @@ export function TeamPage(): ReactElement {
   const currentAgentId = useAuth((s) => s.agent?.account_id ?? null);
   const currentRole = useAuth((s) => s.agent?.role ?? null);
   const suspension = useSuspension();
+  const { confirm, dialog } = useConfirm();
 
   const agents = useQuery({
     queryKey: ['team', 'agents'],
@@ -180,6 +183,23 @@ export function TeamPage(): ReactElement {
     agent.id !== currentAgentId &&
     agent.role !== 'owner' &&
     roleAtLeast(currentRole, agent.role);
+
+  // A refused suspend or reinstate: said where the person was looking (the
+  // roster the button sits in, or the Suspended list), not swallowed. The next
+  // attempt resets the mutation, which clears it.
+  const suspensionFailure = (suspending: boolean): ReactElement | null => {
+    const attempt = suspension.variables;
+    if (!suspension.isError || attempt?.suspended !== suspending) return null;
+    const target = [...items, ...suspendedItems].find((a) => a.id === attempt.id);
+    const name = target?.name ?? t('team.page.formerTeammate');
+    return (
+      <div className="mb-3">
+        <ErrorNotice
+          message={`${t(suspending ? 'team.page.suspendError' : 'team.page.reinstateError', { name })} ${t(errorMessageKey(suspension.error))}`}
+        />
+      </div>
+    );
+  };
 
   return (
     <Page
@@ -306,6 +326,7 @@ export function TeamPage(): ReactElement {
                 </label>
               </div>
             )}
+            {suspensionFailure(true)}
             <Card>
               {agents.isPending ? (
                 <ListSkeleton rows={4} />
@@ -403,7 +424,21 @@ export function TeamPage(): ReactElement {
                             {canSuspend(agent) && (
                               <button
                                 type="button"
-                                onClick={() => suspension.mutate({ id: agent.id, suspended: true })}
+                                onClick={() =>
+                                  confirm({
+                                    title: t('team.page.suspendConfirm.title', {
+                                      name: agent.name,
+                                    }),
+                                    description: t('team.page.suspendConfirm.description', {
+                                      name: agent.name,
+                                    }),
+                                    confirmLabel: t('team.page.suspendConfirm.confirm'),
+                                    // mutateAsync keeps the dialog pending until the answer;
+                                    // the refusal is shown by `suspensionFailure` below.
+                                    onConfirm: () =>
+                                      suspension.mutateAsync({ id: agent.id, suspended: true }),
+                                  })
+                                }
                                 disabled={suspension.isPending}
                                 className="text-xs text-danger underline disabled:opacity-40"
                               >
@@ -431,6 +466,7 @@ export function TeamPage(): ReactElement {
             title={t('team.page.suspended.title')}
             description={t('team.page.suspended.description')}
           >
+            {suspensionFailure(false)}
             <Card>
               {suspended.isPending ? (
                 <ListSkeleton rows={2} />
@@ -497,6 +533,7 @@ export function TeamPage(): ReactElement {
           </Section>
         </>
       )}
+      {dialog}
     </Page>
   );
 }

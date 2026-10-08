@@ -139,6 +139,13 @@ describe('Teams — delete', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit team — Support' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete team' }));
+    // Asks first (tm 259.8): nothing is sent until the confirmation is answered.
+    expect(api.delete).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Delete team “Support”?' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/groups/1'));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -159,6 +166,11 @@ describe('Teams — delete', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit team — Support' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete team' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Delete team “Support”?' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This team is still in use — a routing rule points at it, or conversations are open with it.',
@@ -221,6 +233,13 @@ describe('Teams — membership', () => {
     const dialog = screen.getByRole('dialog', { name: 'Members — Support' });
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Remove Sam Rivera from this team' }),
+    );
+    expect(api.delete).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Remove Sam Rivera from Support?' })).getByRole(
+        'button',
+        { name: 'Remove' },
+      ),
     );
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/groups/1/agents/agent-1'));

@@ -13,7 +13,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Modal } from '../../components/ui/index.js';
+import { Modal, useConfirm } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm, type Validator } from '../../lib/form.js';
@@ -52,6 +52,7 @@ export function TeamEditor({
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   const invalidate = (): Promise<void> =>
     queryClient.invalidateQueries({ queryKey: ['team', 'groups'] });
@@ -103,110 +104,118 @@ export function TeamEditor({
   const languageError = form.errorFor('language_code');
 
   return (
-    <Modal
-      onClose={close}
-      title={
-        group
-          ? t('team.teams.editor.editTitle', { name: group.name })
-          : t('team.teams.editor.createTitle')
-      }
-      description={t('team.teams.editor.description')}
-    >
-      <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
-        {form.submitError && (
-          <p role="alert" className="text-sm text-danger">
-            {form.submitError}
-          </p>
-        )}
-
-        <div>
-          <label htmlFor="team-name" className="mb-1 block text-sm font-medium">
-            {t('team.teams.editor.nameLabel')}
-          </label>
-          <input
-            id="team-name"
-            autoFocus
-            value={form.values.name}
-            onChange={(event) => form.setValue('name', event.target.value)}
-            onBlur={() => form.blur('name')}
-            aria-invalid={nameError ? true : undefined}
-            aria-describedby={nameError ? 'team-name-error' : undefined}
-            maxLength={120}
-            className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-          />
-          <FieldError id="team-name-error" message={nameError} />
-        </div>
-
-        <div>
-          <label htmlFor="team-language" className="mb-1 block text-sm font-medium">
-            {t('team.teams.editor.languageLabel')}
-          </label>
-          <input
-            id="team-language"
-            value={form.values.language_code}
-            onChange={(event) => form.setValue('language_code', event.target.value)}
-            onBlur={() => form.blur('language_code')}
-            aria-invalid={languageError ? true : undefined}
-            aria-describedby={languageError ? 'team-language-error' : undefined}
-            placeholder="en"
-            maxLength={10}
-            className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-          />
-          {!languageError && (
-            <p className="mt-1 text-2xs text-content-tertiary">
-              {t('team.teams.editor.languageHint')}
+    <>
+      <Modal
+        onClose={close}
+        title={
+          group
+            ? t('team.teams.editor.editTitle', { name: group.name })
+            : t('team.teams.editor.createTitle')
+        }
+        description={t('team.teams.editor.description')}
+      >
+        <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
+          {form.submitError && (
+            <p role="alert" className="text-sm text-danger">
+              {form.submitError}
             </p>
           )}
-          <FieldError id="team-language-error" message={languageError} />
-        </div>
 
-        {deleteError && (
-          <p role="alert" className="text-sm text-danger">
-            {deleteError}
-          </p>
-        )}
+          <div>
+            <label htmlFor="team-name" className="mb-1 block text-sm font-medium">
+              {t('team.teams.editor.nameLabel')}
+            </label>
+            <input
+              id="team-name"
+              autoFocus
+              value={form.values.name}
+              onChange={(event) => form.setValue('name', event.target.value)}
+              onBlur={() => form.blur('name')}
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? 'team-name-error' : undefined}
+              maxLength={120}
+              className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+            />
+            <FieldError id="team-name-error" message={nameError} />
+          </div>
 
-        <div className="mt-2 flex items-center justify-between gap-2">
-          {group ? (
-            <button
-              type="button"
-              onClick={() => {
-                setDeleteError(null);
-                remove.mutate();
-              }}
-              disabled={remove.isPending}
-              className="text-xs text-danger underline disabled:opacity-40"
-            >
-              {remove.isPending
-                ? t('team.teams.editor.deleting')
-                : t('team.teams.editor.deleteButton')}
-            </button>
-          ) : (
-            <span />
+          <div>
+            <label htmlFor="team-language" className="mb-1 block text-sm font-medium">
+              {t('team.teams.editor.languageLabel')}
+            </label>
+            <input
+              id="team-language"
+              value={form.values.language_code}
+              onChange={(event) => form.setValue('language_code', event.target.value)}
+              onBlur={() => form.blur('language_code')}
+              aria-invalid={languageError ? true : undefined}
+              aria-describedby={languageError ? 'team-language-error' : undefined}
+              placeholder="en"
+              maxLength={10}
+              className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+            />
+            {!languageError && (
+              <p className="mt-1 text-2xs text-content-tertiary">
+                {t('team.teams.editor.languageHint')}
+              </p>
+            )}
+            <FieldError id="team-language-error" message={languageError} />
+          </div>
+
+          {deleteError && (
+            <p role="alert" className="text-sm text-danger">
+              {deleteError}
+            </p>
           )}
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={close}
-              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary hover:bg-surface-2"
-            >
-              {t('team.teams.editor.cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={!form.canSubmit}
-              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {form.isSubmitting
-                ? t('team.teams.editor.saving')
-                : group
-                  ? t('team.teams.editor.saveChanges')
-                  : t('team.teams.editor.create')}
-            </button>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            {group ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  confirm({
+                    title: t('team.teams.editor.deleteConfirm.title', { name: group.name }),
+                    description: t('team.teams.editor.deleteConfirm.description'),
+                    // The refusal (a team still in use) lands in `deleteError` via onError.
+                    onConfirm: () => remove.mutateAsync(),
+                  });
+                }}
+                disabled={remove.isPending}
+                className="text-xs text-danger underline disabled:opacity-40"
+              >
+                {remove.isPending
+                  ? t('team.teams.editor.deleting')
+                  : t('team.teams.editor.deleteButton')}
+              </button>
+            ) : (
+              <span />
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={close}
+                className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary hover:bg-surface-2"
+              >
+                {t('team.teams.editor.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={!form.canSubmit}
+                className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {form.isSubmitting
+                  ? t('team.teams.editor.saving')
+                  : group
+                    ? t('team.teams.editor.saveChanges')
+                    : t('team.teams.editor.create')}
+              </button>
+            </div>
           </div>
-        </div>
-      </form>
-    </Modal>
+        </form>
+      </Modal>
+      {dialog}
+    </>
   );
 }

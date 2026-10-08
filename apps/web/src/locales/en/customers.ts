@@ -78,6 +78,13 @@ export const customers: Messages = {
   'customers.detail.never': 'Never',
   'customers.detail.liftBan': 'Lift ban',
   'customers.detail.banCustomer': 'Ban customer',
+  'customers.detail.banConfirm.title': 'Ban {name}?',
+  'customers.detail.banConfirm.description':
+    '{name} will not be able to start new conversations. Their history is kept, and you can lift the ban at any time.',
+  'customers.detail.banConfirm.confirm': 'Ban',
+  'customers.detail.banError': 'The customer could not be banned.',
+  'customers.detail.liftBanError': 'The ban could not be lifted.',
+  'customers.detail.thisCustomer': 'this customer',
   'customers.detail.bannedHint': 'They will be able to start conversations again.',
   'customers.detail.notBannedHint': 'Blocks new conversations. History is kept.',
   'customers.detail.eraseCustomer': 'Erase this person',

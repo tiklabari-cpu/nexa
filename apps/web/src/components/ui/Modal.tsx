@@ -16,6 +16,9 @@
  *   (an `autoFocus`ed field keeps it), and returns to the trigger on close.
  * - Tab is trapped inside the panel: it cycles through the panel's own
  *   focusable elements rather than escaping to the page behind the backdrop.
+ * - Modals stack: with a confirmation open over an editor (tm 259.8), only the
+ *   topmost one answers Escape and Tab — Escape on "Delete this team?" closes
+ *   the question, not the editor under it.
  */
 import { useEffect, useId, useRef, type ReactElement, type ReactNode } from 'react';
 import { cn } from './cn.js';
@@ -32,6 +35,9 @@ const FOCUSABLE_SELECTOR = [
   'select:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
+
+/** Open modals, oldest first. Only the last one handles the keyboard. */
+const openModals: symbol[] = [];
 
 interface ModalProps {
   onClose: () => void;
@@ -70,6 +76,15 @@ export function Modal({
   const panelRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const headingId = useId();
+  const stackToken = useRef(Symbol('modal'));
+
+  useEffect(() => {
+    const token = stackToken.current;
+    openModals.push(token);
+    return () => {
+      openModals.splice(openModals.indexOf(token), 1);
+    };
+  }, []);
 
   // Escape is a dismissal path like any other — routed through the same
   // `onClose` so a dirty guard covers it too. Tab is trapped in the same
@@ -77,6 +92,7 @@ export function Modal({
   // back around instead of reaching the page behind the backdrop.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (openModals[openModals.length - 1] !== stackToken.current) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();

@@ -54,6 +54,12 @@ export interface PartnerApp {
   redirect_uris: string[];
   scopes: string[];
   created_at: string;
+  /**
+   * True for the workspace's own sign-in client (see `firstPartyClientId`) —
+   * the one row the routes refuse to edit, delete or re-key. Lets a client show
+   * it as built in instead of offering buttons the server will answer with 400.
+   */
+  first_party: boolean;
 }
 
 /** The register response — an app plus its secret, returned once, if confidential. */
@@ -226,14 +232,17 @@ export class PartnerAppService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: SAFE_SELECT,
     });
-    return rows.map((row) => this.serialise(row));
+    // The list is already ordered the way `firstPartyClientId` picks, so the
+    // first row is the sign-in client — no second query.
+    return rows.map((row, index) => this.serialise(row, index === 0));
   }
 
   async get(tx: TenantClient, clientId: string): Promise<PartnerApp | null> {
     // `findFirst`, not `findUnique`: under RLS both are scoped, but `findFirst`
     // keeps the shape identical to the update/delete paths below.
     const row = await tx.oauthClient.findFirst({ where: { id: clientId }, select: SAFE_SELECT });
-    return row ? this.serialise(row) : null;
+    if (!row) return null;
+    return this.serialise(row, (await this.firstPartyClientId(tx)) === row.id);
   }
 
   /**
@@ -270,7 +279,9 @@ export class PartnerAppService {
       select: SAFE_SELECT,
     });
 
-    return { ...this.serialise(row), ...(secret ? { client_secret: secret } : {}) };
+    // A client registered here is never the sign-in client: signup made that
+    // one first, and it is the oldest by definition.
+    return { ...this.serialise(row, false), ...(secret ? { client_secret: secret } : {}) };
   }
 
   /**
@@ -327,7 +338,8 @@ export class PartnerAppService {
     });
     if (count === 0) return null;
 
-    return { ...this.serialise(existing), client_secret: secret };
+    // The route refuses the sign-in client before it gets here.
+    return { ...this.serialise(existing, false), client_secret: secret };
   }
 
   /**
@@ -361,7 +373,7 @@ export class PartnerAppService {
     return row?.id ?? null;
   }
 
-  serialise(row: PartnerAppRow): PartnerApp {
+  serialise(row: PartnerAppRow, firstParty: boolean): PartnerApp {
     return {
       client_id: row.id,
       display_name: row.displayName,
@@ -369,6 +381,7 @@ export class PartnerAppService {
       redirect_uris: row.redirectUris,
       scopes: row.scopes,
       created_at: row.createdAt.toISOString(),
+      first_party: firstParty,
     };
   }
 }

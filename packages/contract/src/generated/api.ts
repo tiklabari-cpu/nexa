@@ -9091,6 +9091,14 @@ export interface components {
       scopes: string[];
       /** Format: date-time */
       created_at: string;
+      /**
+       * @description `true` for the workspace's own sign-in client (the oldest client of
+       *     the organization, which the agent app signs in through). The server
+       *     refuses to edit, delete or re-key it, so a UI should show it as
+       *     built in rather than offer those actions. Always `false` on a
+       *     register or rotate response.
+       */
+      first_party: boolean;
     };
     PartnerAppRegistrationRequest: {
       display_name: string;

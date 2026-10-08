@@ -126,6 +126,8 @@ export const apps: Messages = {
   // AppRow
   'apps.developers.clientType.confidential': 'Confidential',
   'apps.developers.clientType.public': 'Public',
+  'apps.developers.builtIn': 'Built in',
+  'apps.developers.builtInHint': "The panel's own sign-in app; it can't be changed.",
   'apps.developers.edit': 'Edit',
   'apps.developers.editFor': 'Edit {name}',
   'apps.developers.rotateSecretFor': 'Rotate secret for {name}',

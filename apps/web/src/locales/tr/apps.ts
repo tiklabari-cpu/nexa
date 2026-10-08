@@ -103,6 +103,8 @@ export const apps: Messages = {
 
   'apps.developers.clientType.confidential': 'Gizli',
   'apps.developers.clientType.public': 'Genel',
+  'apps.developers.builtIn': 'Yerleşik',
+  'apps.developers.builtInHint': 'Panelin giriş uygulaması; değiştirilemez.',
   'apps.developers.edit': 'Düzenle',
   'apps.developers.editFor': '{name} düzenle',
   'apps.developers.rotateSecretFor': '{name} için sırrı yenile',

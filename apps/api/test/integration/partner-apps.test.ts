@@ -43,6 +43,7 @@ interface PartnerApp {
   redirect_uris: string[];
   scopes: string[];
   created_at: string;
+  first_party: boolean;
 }
 interface PartnerAppRegistration extends PartnerApp {
   client_secret?: string;
@@ -425,6 +426,22 @@ describe('partner apps (FR-MOD-09.4)', () => {
       // Sign-in still works through it.
       const row = await owner.oauthClient.findUnique({ where: { id: fx.a.clientId } });
       expect(row?.redirectUris).toContain(fx.a.redirectUri);
+    });
+
+    it('is flagged first_party in the list and on a read; a registered app is not', async () => {
+      const app = await registered();
+
+      const list = await server.get('/partner/apps', auth(readToken));
+      const items = (list.json() as { items: PartnerApp[] }).items;
+      expect(items.find((i) => i.client_id === fx.a.clientId)?.first_party).toBe(true);
+      expect(items.find((i) => i.client_id === app.client_id)?.first_party).toBe(false);
+      expect(items.filter((i) => i.first_party)).toHaveLength(1);
+
+      const own = await server.get(`/partner/apps/${fx.a.clientId}`, auth(readToken));
+      expect((own.json() as PartnerApp).first_party).toBe(true);
+      const other = await server.get(`/partner/apps/${app.client_id}`, auth(readToken));
+      expect((other.json() as PartnerApp).first_party).toBe(false);
+      expect(app.first_party).toBe(false);
     });
   });
 

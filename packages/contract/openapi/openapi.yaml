@@ -2218,7 +2218,8 @@ components:
         A registered OAuth 2.1 client owned by the caller's organization
         (FR-MOD-09.4). The client secret is deliberately absent — it is returned
         only once, by the register call (see `PartnerAppRegistration`).
-      required: [client_id, display_name, client_type, redirect_uris, scopes, created_at]
+      required:
+        [client_id, display_name, client_type, redirect_uris, scopes, created_at, first_party]
       properties:
         client_id:
           type: string
@@ -2241,6 +2242,14 @@ components:
             empty: an empty list means "no ceiling" to the authorization
             endpoint, so registration requires at least one scope.
         created_at: { type: string, format: date-time }
+        first_party:
+          type: boolean
+          description: |
+            `true` for the workspace's own sign-in client (the oldest client of
+            the organization, which the agent app signs in through). The server
+            refuses to edit, delete or re-key it, so a UI should show it as
+            built in rather than offer those actions. Always `false` on a
+            register or rotate response.
 
     PartnerAppRegistrationRequest:
       type: object

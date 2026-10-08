@@ -50,6 +50,17 @@ const registeredApp = {
   redirect_uris: ['https://example.com/cb'],
   scopes: ['chats--all:ro'],
   created_at: '2026-08-01T00:00:00.000Z',
+  first_party: false,
+};
+
+const signInClient = {
+  client_id: '00112233445566778899aabbccddeeff',
+  display_name: 'SiyahTuş Agent App',
+  client_type: 'confidential' as const,
+  redirect_uris: ['https://app.example.com/callback'],
+  scopes: ['chats--all:rw'],
+  created_at: '2026-07-01T00:00:00.000Z',
+  first_party: true,
 };
 
 /** Fills the register form with a valid name, URI and one scope. */
@@ -102,6 +113,31 @@ describe('DeveloperPortal', () => {
 
     await userEvent.type(nameField, 'Acme Zap Connector');
     expect(within(dialog).queryByText('Enter a name for this app.')).not.toBeInTheDocument();
+  });
+
+  it("marks the workspace's own sign-in client as built in and offers no actions on it", async () => {
+    api.get.mockResolvedValue({ items: [signInClient, registeredApp] });
+    renderPortal();
+
+    const own = await screen.findByTestId(`partner-app-${signInClient.client_id}`);
+    expect(within(own).getByText('Built in')).toBeInTheDocument();
+    expect(
+      within(own).getByText("The panel's own sign-in app; it can't be changed."),
+    ).toBeInTheDocument();
+    expect(within(own).queryByRole('button')).not.toBeInTheDocument();
+
+    // A registered app keeps every action and gets no badge.
+    const other = screen.getByTestId(`partner-app-${registeredApp.client_id}`);
+    expect(within(other).queryByText('Built in')).not.toBeInTheDocument();
+    expect(
+      within(other).getByRole('button', { name: 'Edit Acme Zap Connector' }),
+    ).toBeInTheDocument();
+    expect(
+      within(other).getByRole('button', { name: 'Delete Acme Zap Connector' }),
+    ).toBeInTheDocument();
+    expect(
+      within(other).getByRole('button', { name: 'Rotate secret for Acme Zap Connector' }),
+    ).toBeInTheDocument();
   });
 
   it('shows the secret once, then discards it from state and never lists it', async () => {

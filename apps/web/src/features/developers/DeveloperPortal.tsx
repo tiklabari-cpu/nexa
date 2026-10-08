@@ -51,6 +51,8 @@ interface PartnerApp {
   redirect_uris: string[];
   scopes: string[];
   created_at: string;
+  /** The workspace's own sign-in client — the server refuses to change it. */
+  first_party: boolean;
 }
 
 /** The register response — a `PartnerApp` plus its secret, present once and
@@ -270,18 +272,24 @@ function AppRow({
             ? t('apps.developers.clientType.confidential')
             : t('apps.developers.clientType.public')}
         </span>
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={t('apps.developers.editFor', { name: app.display_name })}
-          className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-        >
-          {t('apps.developers.edit')}
-        </button>
+        {app.first_party ? (
+          <span className="shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-medium text-content-secondary">
+            {t('apps.developers.builtIn')}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label={t('apps.developers.editFor', { name: app.display_name })}
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+          >
+            {t('apps.developers.edit')}
+          </button>
+        )}
         {/* A public client authenticates with PKCE alone and has no secret to
             reissue (server 400s it) — hiding the button here is a known,
             client-side-only fact, not a second guess of a workspace decision. */}
-        {app.client_type === 'confidential' && (
+        {app.client_type === 'confidential' && !app.first_party && (
           <button
             type="button"
             onClick={onRotate}
@@ -291,15 +299,20 @@ function AppRow({
             {t('apps.developers.rotateSecret')}
           </button>
         )}
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label={t('apps.developers.deleteFor', { name: app.display_name })}
-          className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-        >
-          {t('apps.developers.delete')}
-        </button>
+        {!app.first_party && (
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={t('apps.developers.deleteFor', { name: app.display_name })}
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+          >
+            {t('apps.developers.delete')}
+          </button>
+        )}
       </div>
+      {app.first_party && (
+        <p className="text-2xs text-content-tertiary">{t('apps.developers.builtInHint')}</p>
+      )}
 
       <code className="truncate text-2xs text-content-tertiary" title={app.client_id}>
         {app.client_id}

@@ -229,6 +229,7 @@ export const playbook: Messages = {
   'playbook.knowledge.loading': 'Loading…',
   'playbook.knowledge.chunkCount.one': '{count} chunk',
   'playbook.knowledge.chunkCount.other': '{count} chunks',
+  'playbook.knowledge.loadError.title': "Knowledge sources couldn't be loaded",
   'playbook.knowledge.emptyTitle': 'Nothing indexed',
   'playbook.knowledge.emptyDescription': 'Without knowledge, a skill can only send fixed replies.',
   'playbook.knowledge.noneInTab': 'No {type} sources yet.',

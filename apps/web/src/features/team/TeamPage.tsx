@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import { Card, ErrorNotice, Kpi, KpiGrid, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { LoadError } from '../../components/LoadError.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
@@ -433,6 +434,12 @@ export function TeamPage(): ReactElement {
             <Card>
               {suspended.isPending ? (
                 <ListSkeleton rows={2} />
+              ) : suspended.isError && !suspended.data ? (
+                <LoadError
+                  title={t('team.page.suspended.loadError.title')}
+                  error={suspended.error}
+                  onRetry={() => void suspended.refetch()}
+                />
               ) : suspendedItems.length === 0 ? (
                 <EmptyState
                   title={t('team.page.empty.nobodySuspendedTitle')}

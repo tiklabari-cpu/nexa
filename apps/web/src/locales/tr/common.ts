@@ -47,6 +47,8 @@ export const common: Messages = {
   'common.errors.wrong_product_version': 'Bu sayfa güncel değil — yenileyip tekrar deneyin.',
   // The design-system primitives' own defaults (Banner.tsx, Panel.tsx).
   'common.actions.dismiss': 'Kapat',
+  // LoadError.tsx (tm 259.6).
+  'common.loadError.retry': 'Yeniden dene',
   'common.actions.collapsePanel': 'Paneli daralt',
   // Tour.tsx's own chrome (FR-MOD-02.2.3).
   'common.actions.tourNext': 'İleri',

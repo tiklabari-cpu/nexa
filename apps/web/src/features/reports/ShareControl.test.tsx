@@ -184,4 +184,26 @@ describe('report share control (FR-MOD-07.3.1)', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.queryByTestId('report-share-url')).not.toBeInTheDocument();
   });
+
+  it('says the list failed to load, instead of showing no links, and Try again refetches (tm 259.6)', async () => {
+    api.get.mockRejectedValue(
+      new ApiClientError({ type: 'internal', status: 500, message: 'x', requestId: 'req_2' }),
+    );
+    const user = userEvent.setup();
+    renderControl();
+
+    await user.click(screen.getByRole('button', { name: 'Share this report' }));
+    const title = await screen.findByText("Share links couldn't be loaded");
+    expect(title.closest('[role="alert"]')).not.toBeNull();
+
+    api.get.mockResolvedValue({ items: [LINK] });
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(
+      await screen.findByRole('button', {
+        name: `Revoke the link ending ${LINK.token_last_four}`,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Share links couldn't be loaded")).not.toBeInTheDocument();
+  });
 });

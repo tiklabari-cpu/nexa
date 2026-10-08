@@ -87,6 +87,7 @@ export const reports: Messages = {
   // Share link (FR-MOD-07.3.1) — the "link" half of "Share export/link"
   'reports.share.trigger': 'Share',
   'reports.share.ariaLabel': 'Share this report',
+  'reports.share.loadError.title': "Share links couldn't be loaded",
   'reports.share.description':
     'A link to this report, over the window you have selected. Anyone with the link can read it until it expires.',
   'reports.share.expiresLabel': 'Expires',

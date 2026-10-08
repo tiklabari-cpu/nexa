@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } fro
 import { KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { LoadError } from '../../components/LoadError.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -1072,6 +1073,12 @@ function KnowledgePanel({
 
         {sources.isPending ? (
           <p className="p-4 text-sm text-content-secondary">{t('playbook.knowledge.loading')}</p>
+        ) : sources.isError && !sources.data ? (
+          <LoadError
+            title={t('playbook.knowledge.loadError.title')}
+            error={sources.error}
+            onRetry={() => void sources.refetch()}
+          />
         ) : allItems.length === 0 ? (
           <EmptyState
             title={t('playbook.knowledge.emptyTitle')}

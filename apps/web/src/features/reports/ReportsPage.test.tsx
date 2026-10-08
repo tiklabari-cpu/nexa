@@ -99,6 +99,7 @@ function mockReports(aiAgent: AiAgent): void {
       });
     }
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -198,6 +199,7 @@ function mockOverviewRich(overrides: Partial<typeof RICH_OVERVIEW> = {}): void {
   const payload = { ...RICH_OVERVIEW, ...overrides };
   api.get.mockImplementation((path: string) => {
     if (path.startsWith('/reports/overview')) return Promise.resolve(payload);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -363,6 +365,7 @@ describe('ReportsPage — Overview "Achieved goals" KPI card (13.3-h)', () => {
           previous_period: { ...OVERVIEW.previous_period, achieved_goals: 4 },
         });
       }
+      if (path === '/reports/share-links') return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     renderReports(<ReportsPage />);
@@ -396,6 +399,7 @@ describe('ReportsPage — Overview "SLA breaches" KPI card (FR-MOD-11.5 · 11.5-
           sla,
         });
       }
+      if (path === '/reports/share-links') return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
   }
@@ -532,6 +536,7 @@ function mockReviews(overrides: Partial<typeof REVIEWS_BASE>): void {
   api.get.mockImplementation((path: string) => {
     if (path.startsWith('/reports/reviews')) return Promise.resolve(payload);
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -797,6 +802,7 @@ function mockBreakdown(overrides: Partial<typeof BREAKDOWN_BASE>): void {
   api.get.mockImplementation((path: string) => {
     if (path.startsWith('/reports/breakdown')) return Promise.resolve(payload);
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -1026,6 +1032,7 @@ function mockStaffing(overrides: Partial<typeof STAFFING_BASE>): void {
   api.get.mockImplementation((path: string) => {
     if (path.startsWith('/reports/staffing-forecast')) return Promise.resolve(payload);
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -1126,6 +1133,7 @@ describe('ReportsPage — Staffing report (WORKSCHED-i)', () => {
     api.get.mockImplementation((path: string) => {
       if (path.startsWith('/reports/staffing-forecast')) return Promise.reject(new Error('boom'));
       if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      if (path === '/reports/share-links') return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     renderReports(<ReportsPage />);
@@ -1231,6 +1239,7 @@ function mockTopics(overrides: Partial<typeof TOPICS_BASE>): void {
   api.get.mockImplementation((path: string) => {
     if (path.startsWith('/reports/topics')) return Promise.resolve(payload);
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -1503,6 +1512,7 @@ function mockGroupsCasesLeads({
     if (path.startsWith('/reports/cases')) return Promise.resolve(casesPayload);
     if (path.startsWith('/reports/leads')) return Promise.resolve(leadsPayload);
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -1653,6 +1663,7 @@ describe('ReportsPage — Cases + Leads tabs, permission-gated visibility (07.7-
       }
       if (path.startsWith('/reports/cases')) return Promise.reject(new Error('boom'));
       if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      if (path === '/reports/share-links') return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     renderReports(<ReportsPage />);
@@ -1725,6 +1736,7 @@ function mockGroupsSalesTeam({
     if (path.startsWith('/reports/sales')) return Promise.resolve(salesPayload);
     if (path.startsWith('/reports/team-performance')) return Promise.resolve(teamPayload);
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -1945,6 +1957,7 @@ describe('ReportsPage — Sales + Team performance tabs, permission-gated visibi
       }
       if (path.startsWith('/reports/sales')) return Promise.reject(new Error('boom'));
       if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      if (path === '/reports/share-links') return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     renderReports(<ReportsPage />);
@@ -1960,6 +1973,7 @@ describe('ReportsPage — Sales + Team performance tabs, permission-gated visibi
       }
       if (path.startsWith('/reports/team-performance')) return Promise.reject(new Error('boom'));
       if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      if (path === '/reports/share-links') return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     renderReports(<ReportsPage />);
@@ -1989,6 +2003,7 @@ function mockGroupsExport({
     if (path.startsWith('/reports/breakdown')) {
       return Promise.resolve({ range: OVERVIEW.range, by_day: [], by_agent: [] });
     }
+    if (path === '/reports/share-links') return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }

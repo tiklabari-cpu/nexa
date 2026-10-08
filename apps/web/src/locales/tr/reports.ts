@@ -74,6 +74,7 @@ export const reports: Messages = {
   // Paylaşım bağlantısı (FR-MOD-07.3.1)
   'reports.share.trigger': 'Paylaş',
   'reports.share.ariaLabel': 'Bu raporu paylaş',
+  'reports.share.loadError.title': 'Paylaşım bağlantıları yüklenemedi',
   'reports.share.description':
     'Seçtiğiniz aralıkla bu rapora bir bağlantı. Bağlantıya sahip herkes, süresi dolana kadar raporu okuyabilir.',
   'reports.share.expiresLabel': 'Süre',

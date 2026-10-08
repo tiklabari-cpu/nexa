@@ -84,6 +84,9 @@ export const team: Messages = {
   'team.page.formerTeammate': 'Eski ekip arkadaşı',
 
   // Ekipler — oluştur/düzenle/sil + üyelik. Teams.tsx, TeamEditor.tsx, TeamMembers.tsx
+  'team.teams.loadError.title': 'Ekipler yüklenemedi',
+  'team.aiAgentsPage.loadError.title': 'AI ajanları yüklenemedi',
+  'team.page.suspended.loadError.title': 'Askıya alınan temsilciler yüklenemedi',
   'team.teams.newButton': 'Yeni ekip',
   'team.teams.card.edit': 'Düzenle',
   'team.teams.card.editAriaLabel': 'Ekibi düzenle — {name}',

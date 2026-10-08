@@ -13,6 +13,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { formatDate } from '../../lib/format.js';
 import type { KnowledgeSource, Skill } from './types.js';
 
@@ -263,5 +264,42 @@ describe('Playbook knowledge — Added by (FR-MOD-06.3.3)', () => {
     expect(row!.textContent).not.toMatch(
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
     );
+  });
+});
+
+/**
+ * A failed `GET /knowledge-sources` is not "Nothing indexed" (tm 259.6): the
+ * empty state tells an admin their AI agent knows nothing, when the read simply
+ * did not come back.
+ */
+describe('Playbook knowledge — load error (tm 259.6)', () => {
+  it('shows an alert with Try again instead of the empty state, and a retry refetches', async () => {
+    let healed = false;
+    api.get.mockImplementation((path: string) => {
+      if (path === '/skills') return Promise.resolve({ items: [] });
+      if (path === '/ai-agents') return Promise.resolve({ items: [] });
+      if (path === '/knowledge-sources') {
+        return healed
+          ? Promise.resolve({ items: [] })
+          : Promise.reject(
+              new ApiClientError({ type: 'internal', status: 500, message: 'x', requestId: '-' }),
+            );
+      }
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: 'Knowledge' }));
+
+    const title = await screen.findByText("Knowledge sources couldn't be loaded");
+    expect(title.closest('[role="alert"]')).not.toBeNull();
+    expect(screen.queryByText('Nothing indexed')).not.toBeInTheDocument();
+
+    healed = true;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Nothing indexed')).toBeInTheDocument();
+    expect(screen.queryByText("Knowledge sources couldn't be loaded")).not.toBeInTheDocument();
   });
 });

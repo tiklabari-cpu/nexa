@@ -129,6 +129,10 @@ export const customers: Messages = {
   'traffic.page.count.other': '{formatted} visitors on your site now',
   'traffic.page.loadError':
     'Could not load live traffic. Check that the API is reachable and try again.',
+  'traffic.page.actionError.start_chat': "Couldn't start the chat.",
+  'traffic.page.actionError.assign_to_me': "Couldn't assign the chat to you.",
+  'traffic.page.actionError.supervise': "Couldn't start supervising the chat.",
+  'traffic.page.actionError.unsupervise': "Couldn't stop supervising the chat.",
   'traffic.page.statusTablistAriaLabel': 'Traffic status',
   'traffic.page.table.caption': 'Live visitors',
   'traffic.page.table.visitor': 'Visitor',
@@ -212,6 +216,8 @@ export const customers: Messages = {
   'campaigns.page.new': 'New campaign',
   'campaigns.page.loadError':
     'Could not load campaigns. Check that the API is reachable and try again.',
+  'campaigns.page.toggleOnError': "“{name}” couldn't be turned on.",
+  'campaigns.page.toggleOffError': "“{name}” couldn't be turned off.",
   'campaigns.page.empty.allTitle': 'No campaigns yet',
   'campaigns.page.empty.filteredTitle': 'No {status} campaigns',
   'campaigns.page.empty.writeDescription':
@@ -267,6 +273,8 @@ export const customers: Messages = {
   'goals.page.statusAriaLabel': 'Goal status',
   'goals.page.new': 'New goal',
   'goals.page.loadError': 'Could not load goals. Check that the API is reachable and try again.',
+  'goals.page.toggleOnError': "“{name}” couldn't be turned on.",
+  'goals.page.toggleOffError': "“{name}” couldn't be turned off.",
   'goals.page.empty.allTitle': 'No goals yet',
   'goals.page.empty.filteredTitle': 'No {status} goals',
   'goals.page.empty.writeDescription':

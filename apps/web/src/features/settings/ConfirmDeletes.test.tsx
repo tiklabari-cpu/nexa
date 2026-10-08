@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
+import { ApiClientError } from '../../lib/api-client.js';
 import type * as AuthStore from '../../lib/auth-store.js';
 
 const { api } = vi.hoisted(() => ({
@@ -52,6 +53,8 @@ interface Site {
   /** The danger button's label in the dialog. */
   confirm: 'Delete' | 'Remove';
   deletePath: string;
+  /** What a refused delete says in the dialog; absent where the row reads its own error. */
+  refused?: string;
 }
 
 const SITES: Site[] = [
@@ -78,6 +81,7 @@ const SITES: Site[] = [
     title: 'Remove shop.example.com?',
     confirm: 'Remove',
     deletePath: '/websites/site-1',
+    refused: "“shop.example.com” couldn't be removed.",
   },
   {
     name: 'a tag',
@@ -101,6 +105,7 @@ const SITES: Site[] = [
     title: 'Delete tag “vip”?',
     confirm: 'Delete',
     deletePath: '/settings/tags/tag-1',
+    refused: "“vip” couldn't be deleted.",
   },
   {
     name: 'a canned response',
@@ -124,6 +129,7 @@ const SITES: Site[] = [
     title: 'Delete #shipping?',
     confirm: 'Delete',
     deletePath: '/settings/canned-responses/canned-1',
+    refused: "“shipping” couldn't be deleted.",
   },
   {
     name: 'a routing rule',
@@ -151,6 +157,7 @@ const SITES: Site[] = [
     title: 'Delete rule Checkout page?',
     confirm: 'Delete',
     deletePath: '/settings/routing-rules/rule-1',
+    refused: "“Checkout page” couldn't be deleted.",
   },
   {
     name: 'a ticket rule',
@@ -173,6 +180,7 @@ const SITES: Site[] = [
     title: 'Delete rule Urgent mail?',
     confirm: 'Delete',
     deletePath: '/settings/ticket-rules/tr-1',
+    refused: "“Urgent mail” couldn't be deleted.",
   },
   {
     name: 'a ticket e-mail template',
@@ -196,6 +204,7 @@ const SITES: Site[] = [
     title: 'Delete template Received?',
     confirm: 'Delete',
     deletePath: '/settings/ticket-email-templates/tpl-1',
+    refused: "“Received” couldn't be deleted.",
   },
   {
     name: 'a chat form field',
@@ -221,6 +230,7 @@ const SITES: Site[] = [
     title: 'Delete field Order number?',
     confirm: 'Delete',
     deletePath: '/settings/custom-fields/cf-form',
+    refused: "“Order number” couldn't be deleted.",
   },
   {
     name: 'a custom field',
@@ -296,6 +306,7 @@ const SITES: Site[] = [
     title: 'Remove example.com?',
     confirm: 'Remove',
     deletePath: '/settings/trusted-domains/td-1',
+    refused: "“example.com” couldn't be removed.",
   },
   {
     name: 'a skill',
@@ -305,6 +316,7 @@ const SITES: Site[] = [
     title: 'Delete skill Billing?',
     confirm: 'Delete',
     deletePath: '/settings/expertise/7',
+    refused: "“Billing” couldn't be deleted.",
   },
 ];
 
@@ -384,5 +396,105 @@ describe('removing a website', () => {
     finish();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(api.delete).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a refused deletion is said out loud (tm 259.9, UX audit Y3/O10)', () => {
+  const REFUSING = SITES.filter((site) => site.refused);
+
+  function refuse(): void {
+    api.delete.mockRejectedValue(
+      new ApiClientError({
+        type: 'internal',
+        status: 500,
+        message: 'boom',
+        requestId: 'req-1',
+      }),
+    );
+  }
+
+  it('covers every site that does not already read its own error', () => {
+    // Brands and custom fields show `remove.error` beside the row since before
+    // 259.9; the other nine were silent and are the ones this block pins.
+    expect(REFUSING.map((site) => site.name)).toHaveLength(9);
+    expect(SITES.filter((site) => !site.refused).map((site) => site.name)).toEqual([
+      'a custom field',
+      'a brand',
+    ]);
+  });
+
+  it.each(REFUSING)('$name: a 500 keeps the dialog open with the reason', async (site) => {
+    refuse();
+    const user = userEvent.setup();
+    renderSite(site);
+
+    await user.click(await screen.findByRole('button', { name: site.trigger }));
+    const dialog = screen.getByRole('dialog', { name: site.title });
+    await user.click(within(dialog).getByRole('button', { name: site.confirm }));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent(
+      `${site.refused} Something went wrong on our side — try again.`,
+    );
+    // Still there, and live again: the person can retry or give up.
+    expect(screen.getByRole('dialog', { name: site.title })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: site.confirm })).toBeEnabled();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  });
+
+  it.each(REFUSING)(
+    '$name: a retry that works closes the dialog and clears the alert',
+    async (site) => {
+      refuse();
+      const user = userEvent.setup();
+      renderSite(site);
+
+      await user.click(await screen.findByRole('button', { name: site.trigger }));
+      const dialog = screen.getByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: site.confirm }));
+      await within(dialog).findByRole('alert');
+
+      api.delete.mockResolvedValue(undefined);
+      await user.click(within(dialog).getByRole('button', { name: site.confirm }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(api.delete).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('Cancel after a refusal closes it, and reopening starts without the old alert', async () => {
+    refuse();
+    const user = userEvent.setup();
+    const site = SITES[1]!;
+    renderSite(site);
+
+    await user.click(await screen.findByRole('button', { name: site.trigger }));
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: site.confirm }),
+    );
+    await within(screen.getByRole('dialog')).findByRole('alert');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: site.trigger }));
+    expect(within(screen.getByRole('dialog')).queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('a network failure reads as a network failure, not as a server one', async () => {
+    api.delete.mockRejectedValue(
+      new ApiClientError({ type: 'network', status: 0, message: 'offline', requestId: '' }),
+    );
+    const user = userEvent.setup();
+    const site = SITES[1]!;
+    renderSite(site);
+
+    await user.click(await screen.findByRole('button', { name: site.trigger }));
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: site.confirm }),
+    );
+
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(
+      'Could not reach the server — check your connection.',
+    );
   });
 });

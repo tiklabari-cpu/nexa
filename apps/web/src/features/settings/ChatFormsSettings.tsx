@@ -241,6 +241,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                           title: t('settings.chatForms.deleteConfirmTitle', { label: field.label }),
                           description: t('settings.chatForms.deleteConfirmDescription'),
                           confirmLabel: t('settings.delete'),
+                          failureTitle: t('ui.writeError.delete', { name: field.label }),
                           onConfirm: () => remove.mutateAsync(field.id),
                         })
                       }

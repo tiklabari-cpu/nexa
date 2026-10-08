@@ -8,8 +8,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
+import { ApiClientError } from '../../lib/api-client.js';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { noteTrafficVisitorUpdated, useTrafficLiveStore } from '../../lib/traffic-live.js';
 import { useSupervisingStore } from './supervising-store.js';
@@ -847,5 +849,130 @@ describe('mergeTrafficHead', () => {
 
   it('leaves an unloaded board alone — its own first fetch is the refresh', () => {
     expect(mergeTrafficHead(undefined, trafficPage([c1()]))).toBeUndefined();
+  });
+});
+
+describe('a refused row action says so (tm 259.9, UX audit O10)', () => {
+  function Where(): ReactElement {
+    const location = useLocation();
+    return <output data-testid="where">{`${location.pathname}${location.search}`}</output>;
+  }
+
+  function renderWithLocation(): void {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <QueryClientProvider client={queryClient}>
+          <TrafficPage />
+          <Where />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  const refusal = (type: 'internal' | 'takeover_conflict'): ApiClientError =>
+    new ApiClientError({
+      type,
+      status: type === 'internal' ? 500 : 409,
+      message: 'x',
+      requestId: 'req-1',
+    });
+
+  const BROWSING = { items: [visitor({ customer_id: 'a', name: 'Ada' })], total: 1 };
+  const CHATTING = {
+    items: [visitor({ customer_id: 'a', activity: 'chatting', chat_id: 'chat-1' })],
+    total: 1,
+  };
+
+  it('Start chat: a 500 shows an alert, stays on the board, and the button is live again', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue(BROWSING);
+    api.post.mockRejectedValue(refusal('internal'));
+    renderWithLocation();
+
+    await user.click(await screen.findByRole('button', { name: 'Start chat' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't start the chat. Something went wrong on our side — try again.",
+    );
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/);
+    expect(screen.getByRole('button', { name: 'Start chat' })).toBeEnabled();
+  });
+
+  it('Assign chat to me: a 409 names the reason and re-reads the board', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue(CHATTING);
+    api.post.mockRejectedValue(refusal('takeover_conflict'));
+    renderWithLocation();
+
+    await user.click(await screen.findByRole('button', { name: 'Assign chat to me' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't assign the chat to you. Someone else took this conversation first.",
+    );
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/);
+    // Initial read + the re-read after the refusal.
+    await waitFor(() => expect(api.get.mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('Supervise chat: a refusal stays on the board with the reason and no Stop button', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue(CHATTING);
+    api.post.mockRejectedValue(refusal('internal'));
+    renderWithLocation();
+
+    await user.click(await screen.findByRole('button', { name: 'Supervise chat' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't start supervising the chat.",
+    );
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/);
+    expect(screen.queryByRole('button', { name: 'Stop supervising' })).not.toBeInTheDocument();
+  });
+
+  it('Supervise chat: a registration that lands opens the transcript', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue(CHATTING);
+    api.post.mockResolvedValue({});
+    renderWithLocation();
+
+    await user.click(await screen.findByRole('button', { name: 'Supervise chat' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent('/app/inbox?chat=chat-1'),
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('Stop supervising: a refusal keeps the button and shows the reason', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue(CHATTING);
+    api.post.mockResolvedValue({});
+    api.delete.mockRejectedValue(refusal('internal'));
+    renderWithLocation();
+
+    await user.click(await screen.findByRole('button', { name: 'Supervise chat' }));
+    await user.click(await screen.findByRole('button', { name: 'Stop supervising' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't stop supervising the chat.",
+    );
+    expect(screen.getByRole('button', { name: 'Stop supervising' })).toBeInTheDocument();
+  });
+
+  it('the next action clears the previous refusal', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue(BROWSING);
+    api.post.mockRejectedValueOnce(refusal('internal')).mockResolvedValueOnce({ id: 'chat-9' });
+    renderWithLocation();
+
+    await user.click(await screen.findByRole('button', { name: 'Start chat' }));
+    await screen.findByRole('alert');
+    await user.click(screen.getByRole('button', { name: 'Start chat' }));
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent('/app/inbox?chat=chat-9'),
+    );
   });
 });

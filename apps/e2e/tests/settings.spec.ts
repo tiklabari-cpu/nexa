@@ -170,6 +170,60 @@ test.describe('website widgets', () => {
         .catch(() => {});
     }
   });
+
+  // tm 259.9 (UX audit Y3/O10): a refused removal used to close the dialog and
+  // say nothing, so the person believed the site was gone. Now the dialog stays,
+  // names the site and the reason, and the button is live again.
+  test('a refused website removal is said in the dialog, and the site stays', async ({
+    agentPage,
+    request,
+  }) => {
+    const domain = `refused-check-${Date.now()}.localhost`;
+    const token = await ownerAccessToken(request);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    await agentPage.goto('/app/settings/website-widgets');
+    const section = agentPage.getByRole('region', { name: 'Website widgets' });
+    await section.getByLabel('Website domain').fill(domain);
+    await section.getByRole('button', { name: 'Add website' }).click();
+    const row = section.locator('li').filter({ hasText: domain });
+    await expect(row).toBeVisible();
+
+    // Only the DELETE is refused; the list read and the add still reach the API.
+    await agentPage.route('**/websites/*', async (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallback();
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { type: 'internal', message: 'x', request_id: '-' } }),
+      });
+    });
+
+    try {
+      await row.getByRole('button', { name: `Remove ${domain}` }).click();
+      const dialog = agentPage.getByRole('dialog', { name: `Remove ${domain}?` });
+      await dialog.getByRole('button', { name: 'Remove' }).click();
+
+      const alert = dialog.getByRole('alert');
+      await expect(alert).toContainText(`“${domain}” couldn't be removed.`);
+      await expect(alert).toContainText('Something went wrong on our side');
+      await expect(dialog.getByRole('button', { name: 'Remove' })).toBeEnabled();
+      await agentPage.screenshot({ path: 'kanit/259.9-remove-refused.png' });
+
+      // Giving up leaves the site where it was — on screen and on the server.
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(row).toBeVisible();
+      const list = await request.get(`${API_BASE}/websites`, { headers });
+      const body = (await list.json()) as { items: { domain: string }[] };
+      expect(body.items.some((site) => site.domain === domain)).toBe(true);
+    } finally {
+      await agentPage.unroute('**/websites/*');
+      await row.getByRole('button', { name: `Remove ${domain}` }).click();
+      await confirmDialog(agentPage, 'Remove');
+      await expect(row).toHaveCount(0);
+    }
+  });
 });
 
 test.describe('channels', () => {
@@ -683,6 +737,42 @@ test.describe('settings', () => {
       .click();
     expect((await removed).status()).toBe(204);
     await expect(section().getByText('No allowlist entries')).toBeVisible();
+  });
+
+  // tm 259.9 (UX audit O11): the session-policy Save PATCHed and nothing on
+  // screen moved. It now answers with a "Saved." status, and drops it on the
+  // next edit. The test puts the value back so later specs see the seed.
+  test('saving the session policy says it saved', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings/ip-allowlist');
+    const section = agentPage.getByRole('region', { name: 'Session policy' });
+    const idle = section.getByLabel('Idle timeout (minutes)');
+    const saveButton = section.getByRole('button', { name: 'Save' });
+    await expect(idle).toBeVisible();
+
+    const save = (): Promise<unknown> =>
+      Promise.all([
+        agentPage.waitForResponse(
+          (response) =>
+            response.url().endsWith('/settings/security') &&
+            response.request().method() === 'PATCH',
+        ),
+        saveButton.click(),
+      ]);
+
+    try {
+      await idle.fill('45');
+      await expect(section.getByRole('status')).toHaveCount(0);
+      await save();
+      await expect(section.getByRole('status')).toHaveText('Saved.');
+      await section.screenshot({ path: 'kanit/259.9-session-policy-saved.png' });
+
+      await idle.fill('46');
+      await expect(section.getByRole('status')).toHaveCount(0);
+    } finally {
+      await idle.fill('');
+      await save();
+      await expect(section.getByRole('status')).toHaveText('Saved.');
+    }
   });
 
   /**

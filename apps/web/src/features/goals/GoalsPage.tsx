@@ -16,6 +16,7 @@ import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot } from '../../components/StatusDot.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -105,6 +106,17 @@ export function GoalsPage(): ReactElement {
           </button>
         )}
       </div>
+
+      {toggle.isError && (
+        <div className="mb-3">
+          <ErrorNotice
+            message={`${t(
+              toggle.variables?.active ? 'goals.page.toggleOnError' : 'goals.page.toggleOffError',
+              { name: goals.find((g) => g.id === toggle.variables?.id)?.name ?? '' },
+            )} ${t(errorMessageKey(toggle.error))}`}
+          />
+        </div>
+      )}
 
       {query.error ? (
         <ErrorNotice message={t('goals.page.loadError')} />

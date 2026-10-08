@@ -187,6 +187,7 @@ export const billing: Messages = {
   'billing.invoices.loadingDescription': 'Your billing statements.',
   'billing.invoices.description': 'Your billing statements, newest first.',
   'billing.invoices.loadError': 'Could not load invoices.',
+  'billing.invoices.downloadError': "Couldn't download invoice {number}.",
   'billing.invoices.table.invoice': 'Invoice',
   'billing.invoices.table.issued': 'Issued',
   'billing.invoices.table.status': 'Status',

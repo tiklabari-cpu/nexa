@@ -160,6 +160,7 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
                           }),
                           description: t('settings.trustedDomains.removeConfirmDescription'),
                           confirmLabel: t('settings.remove'),
+                          failureTitle: t('ui.writeError.remove', { name: item.domain }),
                           onConfirm: () => remove.mutateAsync(item.id),
                         })
                       }

@@ -308,6 +308,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                             }),
                             description: t('settings.cannedResponses.deleteConfirmDescription'),
                             confirmLabel: t('settings.delete'),
+                            failureTitle: t('ui.writeError.delete', { name: item.shortcut }),
                             onConfirm: () => remove.mutateAsync(item.id),
                           })
                         }

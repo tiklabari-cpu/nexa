@@ -156,6 +156,35 @@ describe('IpAllowlist', () => {
     );
   });
 
+  // Tm 259.9 (UX audit O11): Save PATCHed and nothing on screen changed.
+  it('says "Saved." as a status once the session policy lands, and drops it on the next edit', async () => {
+    renderComponent(<IpAllowlist canEdit />);
+    await screen.findByText('10.0.0.0/24');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Idle timeout (minutes)'), '30');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved.');
+
+    await userEvent.type(screen.getByLabelText('Max concurrent sessions'), '5');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('does not say "Saved." when the server refuses the session policy', async () => {
+    api.patch.mockRejectedValue(
+      new ApiClientError({ type: 'internal', status: 500, message: 'x', requestId: 'r' }),
+    );
+    renderComponent(<IpAllowlist canEdit />);
+    await screen.findByText('10.0.0.0/24');
+
+    await userEvent.type(screen.getByLabelText('Idle timeout (minutes)'), '30');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong on our side');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('toggles enforcement by PATCHing ip_allowlist_enforced', async () => {
     renderComponent(<IpAllowlist canEdit />);
     await screen.findByText('10.0.0.0/24');

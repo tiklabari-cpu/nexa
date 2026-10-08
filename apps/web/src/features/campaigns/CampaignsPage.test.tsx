@@ -5,11 +5,12 @@
  * write controls hidden from a read-only agent.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Campaign, CampaignStatus } from '@siyahtus/types';
+import { ApiClientError } from '../../lib/api-client.js';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
@@ -109,6 +110,40 @@ describe('CampaignsPage', () => {
 
     await userEvent.click(within(card).getByRole('button', { name: 'Turn off' }));
     expect(api.patch).toHaveBeenCalledWith('/campaigns/c-Running', { active: false });
+  });
+
+  // Tm 259.9: a refused toggle used to change nothing and say nothing.
+  it('a refused toggle shows why, and the card keeps its state', async () => {
+    api.patch.mockRejectedValue(
+      new ApiClientError({ type: 'internal', status: 500, message: 'x', requestId: 'r' }),
+    );
+    renderPage();
+    const card = (await screen.findByText('Running')).closest('div.rounded-lg') as HTMLElement;
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Turn off' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "“Running” couldn't be turned off. Something went wrong on our side — try again.",
+    );
+    // Still on: the card is read from the server, which never said otherwise.
+    expect(within(card).getByRole('button', { name: 'Turn off' })).toBeEnabled();
+  });
+
+  it('a refused turn-on says "turned on", and a retry that works clears it', async () => {
+    api.patch.mockRejectedValueOnce(
+      new ApiClientError({ type: 'network', status: 0, message: 'x', requestId: '' }),
+    );
+    api.patch.mockResolvedValueOnce({ ...campaign('ongoing', 'Off'), matched: 0 });
+    renderPage();
+    const card = (await screen.findByText('Off')).closest('div.rounded-lg') as HTMLElement;
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Turn on' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "“Off” couldn't be turned on. Could not reach the server",
+    );
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Turn on' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
   // `matched` — not `performance.displayed` — is what the "reached" notice

@@ -120,6 +120,10 @@ export const customers: Messages = {
   'traffic.page.count.other': '{formatted} ziyaretçi şu anda sitenizde',
   'traffic.page.loadError':
     'Canlı trafik yüklenemedi. API’nin erişilebilir olduğunu kontrol edip tekrar deneyin.',
+  'traffic.page.actionError.start_chat': 'Sohbet başlatılamadı.',
+  'traffic.page.actionError.assign_to_me': 'Sohbet size atanamadı.',
+  'traffic.page.actionError.supervise': 'Sohbet izlemeye alınamadı.',
+  'traffic.page.actionError.unsupervise': 'Sohbetin izlenmesi bırakılamadı.',
   'traffic.page.statusTablistAriaLabel': 'Trafik durumu',
   'traffic.page.table.caption': 'Canlı ziyaretçiler',
   'traffic.page.table.visitor': 'Ziyaretçi',
@@ -200,6 +204,8 @@ export const customers: Messages = {
   'campaigns.page.new': 'Yeni kampanya',
   'campaigns.page.loadError':
     'Kampanyalar yüklenemedi. API’nin erişilebilir olduğunu kontrol edip tekrar deneyin.',
+  'campaigns.page.toggleOnError': '“{name}” açılamadı.',
+  'campaigns.page.toggleOffError': '“{name}” kapatılamadı.',
   'campaigns.page.empty.allTitle': 'Henüz kampanya yok',
   'campaigns.page.empty.filteredTitle': '{status} kampanya yok',
   'campaigns.page.empty.writeDescription':
@@ -258,6 +264,8 @@ export const customers: Messages = {
   'goals.page.new': 'Yeni hedef',
   'goals.page.loadError':
     'Hedefler yüklenemedi. API’nin erişilebilir olduğunu kontrol edip tekrar deneyin.',
+  'goals.page.toggleOnError': '“{name}” açılamadı.',
+  'goals.page.toggleOffError': '“{name}” kapatılamadı.',
   'goals.page.empty.allTitle': 'Henüz hedef yok',
   'goals.page.empty.filteredTitle': '{status} hedef yok',
   'goals.page.empty.writeDescription':

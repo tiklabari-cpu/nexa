@@ -238,6 +238,7 @@ export function RuleBots(): ReactElement {
                     confirm({
                       title: t('team.ruleBots.deleteBotConfirm.title', { name: bot.name }),
                       description: t('team.ruleBots.deleteBotConfirm.description'),
+                      failureTitle: t('ui.writeError.delete', { name: bot.name }),
                       onConfirm: () => removeBot.mutateAsync(bot.id),
                     })
                   }
@@ -250,6 +251,7 @@ export function RuleBots(): ReactElement {
                     confirm({
                       title: t('team.ruleBots.deleteRuleConfirm.title', { name: rule.name }),
                       description: t('team.ruleBots.deleteRuleConfirm.description'),
+                      failureTitle: t('ui.writeError.delete', { name: rule.name }),
                       onConfirm: () => removeRule.mutateAsync({ botId: bot.id, ruleId: rule.id }),
                     })
                   }

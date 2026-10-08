@@ -536,6 +536,7 @@ export const settings: Messages = {
   'settings.ipAllowlist.description':
     'Sources allowed to reach the agent/admin panel once enforcement is on below. A saved list can never exclude the address you are connecting from — the server refuses a change that would lock you out.',
   'settings.ipAllowlist.loadError': 'Could not load the IP allowlist.',
+  'settings.ipAllowlist.savedNote': 'Saved.',
   'settings.ipAllowlist.entryLabel': 'Address or CIDR range',
   'settings.ipAllowlist.entryRequiredError': 'Enter an address or CIDR range.',
   'settings.ipAllowlist.labelLabel': 'Label (optional)',

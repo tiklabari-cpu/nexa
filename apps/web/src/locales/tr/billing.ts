@@ -183,6 +183,7 @@ export const billing: Messages = {
   'billing.invoices.loadingDescription': 'Faturalandırma dökümleriniz.',
   'billing.invoices.description': 'Faturalandırma dökümleriniz, en yeniden eskiye.',
   'billing.invoices.loadError': 'Faturalar yüklenemedi.',
+  'billing.invoices.downloadError': '{number} numaralı fatura indirilemedi.',
   'billing.invoices.table.invoice': 'Fatura',
   'billing.invoices.table.issued': 'Kesildi',
   'billing.invoices.table.status': 'Durum',

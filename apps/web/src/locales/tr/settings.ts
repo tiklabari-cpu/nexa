@@ -533,6 +533,7 @@ export const settings: Messages = {
   'settings.ipAllowlist.description':
     'Aşağıda zorunlu kılma açıldığında temsilci/yönetici paneline erişebilecek kaynaklar. Kaydedilen bir liste, bağlandığınız adresi asla dışlayamaz — sunucu sizi kilitleyecek bir değişikliği reddeder.',
   'settings.ipAllowlist.loadError': 'IP izin listesi yüklenemedi.',
+  'settings.ipAllowlist.savedNote': 'Kaydedildi.',
   'settings.ipAllowlist.entryLabel': 'Adres veya CIDR aralığı',
   'settings.ipAllowlist.entryRequiredError': 'Bir adres veya CIDR aralığı girin.',
   'settings.ipAllowlist.labelLabel': 'Etiket (opsiyonel)',

@@ -53,6 +53,8 @@ export const common: Messages = {
   'ui.confirm.cancel': 'Vazgeç',
   'ui.confirm.delete': 'Sil',
   'ui.confirm.pending': 'Bekleyin…',
+  'ui.writeError.delete': '“{name}” silinemedi.',
+  'ui.writeError.remove': '“{name}” kaldırılamadı.',
   'common.actions.collapsePanel': 'Paneli daralt',
   // Tour.tsx's own chrome (FR-MOD-02.2.3).
   'common.actions.tourNext': 'İleri',

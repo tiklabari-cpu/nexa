@@ -69,6 +69,8 @@ export const common: Messages = {
   'ui.confirm.cancel': 'Cancel',
   'ui.confirm.delete': 'Delete',
   'ui.confirm.pending': 'Working…',
+  'ui.writeError.delete': "“{name}” couldn't be deleted.",
+  'ui.writeError.remove': "“{name}” couldn't be removed.",
   'common.actions.collapsePanel': 'Collapse panel',
   // Tour.tsx's own chrome (FR-MOD-02.2.3) — step content is the caller's, but
   // Back/Next/Skip/Done and the counter are generic across every tour.

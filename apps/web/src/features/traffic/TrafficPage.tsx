@@ -48,6 +48,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
@@ -457,6 +458,19 @@ export function TrafficPage(): ReactElement {
     void queryClient.invalidateQueries({ queryKey: ['traffic'] });
   };
 
+  // The row action that was refused, and why (tm 259.9). A row action used to
+  // fail silently: the button re-enabled and nothing said it had not happened.
+  // One slot is enough — `busy` lets a single action run at a time — and it is
+  // cleared when the next one starts. The board is re-read on a refusal too:
+  // a 409 usually means someone else got there first.
+  const [actionError, setActionError] = useState<{ id: RowActionId; error: unknown } | null>(null);
+  const refused =
+    (id: RowActionId) =>
+    (error: unknown): void => {
+      setActionError({ id, error });
+      invalidate();
+    };
+
   // Proactive start: open a conversation assigned to me, then jump into it.
   const startChat = useMutation({
     mutationFn: (customerId: string) =>
@@ -465,6 +479,7 @@ export function TrafficPage(): ReactElement {
       invalidate();
       navigate(`/app/inbox?chat=${chat.id}`);
     },
+    onError: refused('start_chat'),
   });
 
   // Take an existing conversation over by transferring it to myself.
@@ -475,6 +490,7 @@ export function TrafficPage(): ReactElement {
       invalidate();
       navigate(`/app/inbox?chat=${chatId}`);
     },
+    onError: refused('assign_to_me'),
   });
 
   // Chats *this agent* has registered as a watcher on (`supervising-store.ts`,
@@ -490,14 +506,18 @@ export function TrafficPage(): ReactElement {
   } = useSupervising(agent?.account_id);
 
   // Registers the caller as a watcher (13.2-d) so the board can show
-  // `supervised` for this chat; opening the transcript is what actually lets
-  // them watch, so it navigates regardless of how the registration lands.
+  // `supervised` for this chat, then opens the transcript. It navigates only
+  // once the registration lands (tm 259.9): leaving on a refusal would take the
+  // person to a transcript they are not watching with the reason left behind on
+  // a board that is no longer on screen.
   const registerSupervision = useMutation({
     mutationFn: (chatId: string) => api.post(`/chats/${chatId}/supervise`),
     onSuccess: (_result, chatId) => {
       addSupervising(chatId);
       invalidate();
+      navigate(`/app/inbox?chat=${chatId}`);
     },
+    onError: refused('supervise'),
   });
 
   // Drops the caller's own watch (`DELETE /chats/{id}/supervise`, tm 213). The
@@ -509,6 +529,7 @@ export function TrafficPage(): ReactElement {
       removeSupervising(chatId);
       invalidate();
     },
+    onError: refused('unsupervise'),
   });
 
   const busy =
@@ -518,6 +539,7 @@ export function TrafficPage(): ReactElement {
     releaseSupervision.isPending;
 
   const run = (id: RowActionId, visitor: TrafficVisitor): void => {
+    setActionError(null);
     switch (id) {
       case 'start_chat':
         startChat.mutate(visitor.customer_id);
@@ -528,7 +550,6 @@ export function TrafficPage(): ReactElement {
       case 'supervise':
         if (visitor.chat_id) {
           registerSupervision.mutate(visitor.chat_id);
-          navigate(`/app/inbox?chat=${visitor.chat_id}`);
         }
         break;
       case 'unsupervise':
@@ -599,6 +620,14 @@ export function TrafficPage(): ReactElement {
       </div>
 
       <TrafficFilters initialConditions={conditions} onChange={handleFiltersChange} />
+
+      {actionError && (
+        <ErrorNotice
+          message={`${t(`traffic.page.actionError.${actionError.id}`)} ${t(
+            errorMessageKey(actionError.error),
+          )}`}
+        />
+      )}
 
       {list.isError ? (
         <ErrorNotice message={t('traffic.page.loadError')} />

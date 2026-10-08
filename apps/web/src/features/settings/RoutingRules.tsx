@@ -352,6 +352,7 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
                             }),
                             description: t('settings.routing.deleteConfirmDescription'),
                             confirmLabel: t('settings.delete'),
+                            failureTitle: t('ui.writeError.delete', { name: ruleLabel(t, rule) }),
                             onConfirm: () => remove.mutateAsync(rule.id),
                           })
                         }

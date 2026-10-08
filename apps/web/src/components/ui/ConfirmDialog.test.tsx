@@ -8,6 +8,7 @@
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ApiClientError } from '../../lib/api-client.js';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfirmDialog, useConfirm } from './index.js';
 
@@ -81,14 +82,19 @@ describe('ConfirmDialog', () => {
   });
 });
 
-function Harness({ action }: { action: () => unknown }) {
+function Harness({ action, failureTitle }: { action: () => unknown; failureTitle?: string }) {
   const { confirm, dialog } = useConfirm();
   return (
     <div>
       <button
         type="button"
         onClick={() =>
-          confirm({ title: 'Delete it?', description: 'Gone for good.', onConfirm: action })
+          confirm({
+            title: 'Delete it?',
+            description: 'Gone for good.',
+            failureTitle,
+            onConfirm: action,
+          })
         }
       >
         Trigger
@@ -155,6 +161,65 @@ describe('useConfirm', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  // Tm 259.9: with a `failureTitle` a rejection is said, in the dialog.
+  const refusal = (): Promise<never> =>
+    Promise.reject(
+      new ApiClientError({ type: 'internal', status: 500, message: 'x', requestId: 'r' }),
+    );
+
+  it('with a failureTitle, a rejection keeps the dialog open and says why', async () => {
+    const action = vi.fn(refusal);
+    render(<Harness action={action} failureTitle="It could not be deleted." />);
+    await userEvent.click(screen.getByRole('button', { name: 'Trigger' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'It could not be deleted. Something went wrong on our side — try again.',
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // Live again, not stuck on "Working…".
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  });
+
+  it('a retry clears the alert while it runs, and closes on success', async () => {
+    let attempt = 0;
+    let finish: () => void = () => {};
+    const action = vi.fn(() => {
+      attempt += 1;
+      if (attempt === 1) return refusal();
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    render(<Harness action={action} failureTitle="It could not be deleted." />);
+    await userEvent.click(screen.getByRole('button', { name: 'Trigger' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await screen.findByRole('alert');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Working…' })).toBeDisabled();
+
+    finish();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(action).toHaveBeenCalledTimes(2);
+  });
+
+  it('Escape after a refusal closes the dialog and the next opening is clean', async () => {
+    const action = vi.fn(refusal);
+    render(<Harness action={action} failureTitle="It could not be deleted." />);
+    await userEvent.click(screen.getByRole('button', { name: 'Trigger' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await screen.findByRole('alert');
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Trigger' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('closes at once for an action that returns nothing', async () => {

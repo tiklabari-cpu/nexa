@@ -251,6 +251,7 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
                             title: t('settings.tags.deleteConfirmTitle', { name: tag.name }),
                             description: t('settings.tags.deleteConfirmDescription'),
                             confirmLabel: t('settings.delete'),
+                            failureTitle: t('ui.writeError.delete', { name: tag.name }),
                             onConfirm: () => remove.mutateAsync(tag.id),
                           })
                         }

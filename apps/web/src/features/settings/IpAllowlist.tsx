@@ -380,6 +380,10 @@ function SessionPolicyForm({
   onRequireTwoFactorChange: (checked: boolean) => void;
 }): ReactElement {
   const t = useTranslate();
+  // The session-policy Save changes nothing on screen (the inputs already hold
+  // what was typed), so success has to say so (tm 259.9). Cleared on the next
+  // edit or save: "Saved." must never sit beside a value that was not.
+  const [saved, setSaved] = useState(false);
 
   const form = useForm({
     initial: {
@@ -395,6 +399,7 @@ function SessionPolicyForm({
       maxSessions: optional(positiveSessionCount(t('settings.ipAllowlist.maxSessionsError'))),
     },
     onSubmit: async (values) => {
+      setSaved(false);
       try {
         await save.mutateAsync({
           session_idle_timeout_seconds:
@@ -402,6 +407,7 @@ function SessionPolicyForm({
           max_concurrent_sessions:
             values.maxSessions.trim() === '' ? null : Number(values.maxSessions),
         });
+        setSaved(true);
       } catch {
         // Surfaced below via the shared `save.isError` banner — the same
         // mutation the two checkboxes and the confirmation modal use.
@@ -453,7 +459,10 @@ function SessionPolicyForm({
             type="number"
             min={1}
             value={form.values.idleMinutes}
-            onChange={(event) => form.setValue('idleMinutes', event.target.value)}
+            onChange={(event) => {
+              setSaved(false);
+              form.setValue('idleMinutes', event.target.value);
+            }}
             onBlur={() => form.blur('idleMinutes')}
             aria-invalid={idleError ? true : undefined}
             aria-describedby={idleError ? 'idle-timeout-error' : undefined}
@@ -472,7 +481,10 @@ function SessionPolicyForm({
             type="number"
             min={1}
             value={form.values.maxSessions}
-            onChange={(event) => form.setValue('maxSessions', event.target.value)}
+            onChange={(event) => {
+              setSaved(false);
+              form.setValue('maxSessions', event.target.value);
+            }}
             onBlur={() => form.blur('maxSessions')}
             aria-invalid={maxSessionsError ? true : undefined}
             aria-describedby={maxSessionsError ? 'max-sessions-error' : undefined}
@@ -494,6 +506,11 @@ function SessionPolicyForm({
       {save.isError && !confirmTwoFactor && (
         <p role="alert" className="text-2xs text-danger">
           {t(errorMessageKey(save.error))}
+        </p>
+      )}
+      {saved && !save.isError && (
+        <p role="status" className="text-2xs text-content-secondary">
+          {t('settings.ipAllowlist.savedNote')}
         </p>
       )}
     </form>

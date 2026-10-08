@@ -968,6 +968,38 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
     click.mockRestore();
     vi.unstubAllGlobals();
   });
+
+  // Tm 259.9: the download had try/finally and no catch — a refused request
+  // was an unhandled rejection and the button just came back. (An unhandled
+  // rejection fails the vitest run on its own, so this test also pins that.)
+  it('a refused download shows an alert with the reason, and the button comes back', async () => {
+    const user = userEvent.setup();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    api.getBlob.mockRejectedValue(
+      new ApiClientError({ type: 'internal', status: 500, message: 'x', requestId: 'r' }),
+    );
+
+    mockBilling({});
+    renderBilling(<BillingPage />);
+
+    const row = await screen.findByTestId('invoice-row');
+    await user.click(within(row).getByRole('button', { name: /download invoice/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't download invoice SIYAHTUS-202607. Something went wrong on our side — try again.",
+    );
+    expect(click).not.toHaveBeenCalled();
+    expect(within(row).getByRole('button', { name: /download invoice/i })).toBeEnabled();
+
+    // A second attempt that works clears the alert.
+    const createObjectURL = vi.fn(() => 'blob:invoice');
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL: vi.fn() });
+    api.getBlob.mockResolvedValue(new Blob(['x'], { type: 'text/csv' }));
+    await user.click(within(row).getByRole('button', { name: /download invoice/i }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    click.mockRestore();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('BillingPage — payment method (FR-MOD-10.3)', () => {

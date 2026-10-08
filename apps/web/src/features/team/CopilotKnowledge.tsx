@@ -165,6 +165,7 @@ export function CopilotKnowledge(): ReactElement {
                           confirm({
                             title: t('team.copilot.deleteConfirm.title', { name: source.name }),
                             description: t('team.copilot.deleteConfirm.description'),
+                            failureTitle: t('ui.writeError.delete', { name: source.name }),
                             onConfirm: () => remove.mutateAsync(source.id),
                           })
                         }

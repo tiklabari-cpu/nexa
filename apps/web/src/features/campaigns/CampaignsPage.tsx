@@ -17,6 +17,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/index.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -147,6 +148,19 @@ export function CampaignsPage(): ReactElement {
           </button>
         )}
       </div>
+
+      {toggle.isError && (
+        <div className="mb-3">
+          <ErrorNotice
+            message={`${t(
+              toggle.variables?.active
+                ? 'campaigns.page.toggleOnError'
+                : 'campaigns.page.toggleOffError',
+              { name: campaigns.find((c) => c.id === toggle.variables?.id)?.name ?? '' },
+            )} ${t(errorMessageKey(toggle.error))}`}
+          />
+        </div>
+      )}
 
       {query.error ? (
         <ErrorNotice message={t('campaigns.page.loadError')} />

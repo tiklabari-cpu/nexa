@@ -268,6 +268,7 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
                             }),
                             description: t('settings.ticketRules.deleteConfirmDescription'),
                             confirmLabel: t('settings.delete'),
+                            failureTitle: t('ui.writeError.delete', { name: rule.name }),
                             onConfirm: () => remove.mutateAsync(rule.id),
                           })
                         }

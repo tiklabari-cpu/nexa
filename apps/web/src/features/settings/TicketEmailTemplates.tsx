@@ -263,6 +263,7 @@ export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactEl
                               'settings.ticketEmailTemplates.deleteConfirmDescription',
                             ),
                             confirmLabel: t('settings.delete'),
+                            failureTitle: t('ui.writeError.delete', { name: template.name }),
                             onConfirm: () => remove.mutateAsync(template.id),
                           })
                         }

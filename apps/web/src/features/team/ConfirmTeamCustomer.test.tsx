@@ -469,6 +469,69 @@ describe('deleting a rule bot, a rule, or a Copilot source', () => {
 
     await waitFor(() => expect(writes).toEqual(['DELETE /copilot/knowledge/s1']));
   });
+
+  // 259.9: these three used to close the dialog on a refusal and say nothing.
+  it('a refused rule delete stays in the dialog with the reason (tm 259.9)', async () => {
+    stubBots();
+    refused = { 'DELETE /settings/bots/bot-1/rules/rule-1': SERVER_ERROR };
+    const user = userEvent.setup();
+    renderIn(<RuleBots />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete rule Opening hours' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      "“Opening hours” couldn't be deleted. Something went wrong on our side — try again.",
+    );
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeEnabled();
+  });
+
+  it('a refused bot delete stays in the dialog with the reason (tm 259.9)', async () => {
+    stubBots();
+    refused = { 'DELETE /settings/bots/bot-1': SERVER_ERROR };
+    const user = userEvent.setup();
+    renderIn(<RuleBots />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete bot FAQ bot' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      "“FAQ bot” couldn't be deleted. Something went wrong on our side — try again.",
+    );
+  });
+
+  it('a refused Copilot source delete stays in the dialog with the reason (tm 259.9)', async () => {
+    refused = { 'DELETE /copilot/knowledge/s1': SERVER_ERROR };
+    stubApi((path) =>
+      path.startsWith('/copilot/knowledge')
+        ? {
+            items: [
+              {
+                id: 's1',
+                name: 'Refund policy',
+                type: 'article',
+                status: 'ready',
+                source_url: null,
+                chunk_count: 4,
+                updated_at: '2026-07-20T00:00:00.000Z',
+              },
+            ],
+          }
+        : undefined,
+    );
+    const user = userEvent.setup();
+    renderIn(<CopilotKnowledge />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      "“Refund policy” couldn't be deleted.",
+    );
+  });
 });
 
 // --- Customer ban (Y3) ------------------------------------------------------------------

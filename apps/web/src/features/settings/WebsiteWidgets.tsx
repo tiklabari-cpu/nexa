@@ -235,6 +235,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                             }),
                             description: t('settings.websiteWidgets.removeConfirmDescription'),
                             confirmLabel: t('settings.remove'),
+                            failureTitle: t('ui.writeError.remove', { name: site.domain }),
                             onConfirm: () => remove.mutateAsync(site.id),
                           })
                         }

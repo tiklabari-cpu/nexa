@@ -20,7 +20,7 @@ import {
   Section,
 } from '../../components/Page.js';
 import { Banner } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
@@ -1630,6 +1630,11 @@ function InvoicesSection(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const [downloading, setDownloading] = useState<string | null>(null);
+  // A refused download (tm 259.9): the click used to end in an unhandled
+  // rejection and a button that simply re-enabled.
+  const [downloadError, setDownloadError] = useState<{ number: string; error: unknown } | null>(
+    null,
+  );
 
   const query = useQuery({
     queryKey: ['billing', 'invoices'],
@@ -1638,6 +1643,7 @@ function InvoicesSection(): ReactElement {
 
   const download = async (invoice: Invoice): Promise<void> => {
     setDownloading(invoice.period);
+    setDownloadError(null);
     try {
       const blob = await api.getBlob(`/billing/invoices/${invoice.period}/download`);
       const url = URL.createObjectURL(blob);
@@ -1648,6 +1654,8 @@ function InvoicesSection(): ReactElement {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+    } catch (error) {
+      setDownloadError({ number: invoice.number, error });
     } finally {
       setDownloading(null);
     }
@@ -1678,6 +1686,15 @@ function InvoicesSection(): ReactElement {
 
   return (
     <Section title={t('billing.invoices.title')} description={t('billing.invoices.description')}>
+      {downloadError && (
+        <div className="mb-3">
+          <ErrorNotice
+            message={`${t('billing.invoices.downloadError', { number: downloadError.number })} ${t(
+              errorMessageKey(downloadError.error),
+            )}`}
+          />
+        </div>
+      )}
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="invoices-table">

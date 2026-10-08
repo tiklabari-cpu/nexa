@@ -149,6 +149,7 @@ export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
                           title: t('settings.skills.deleteConfirmTitle', { name: skill.name }),
                           description: t('settings.skills.deleteConfirmDescription'),
                           confirmLabel: t('settings.delete'),
+                          failureTitle: t('ui.writeError.delete', { name: skill.name }),
                           onConfirm: () => remove.mutateAsync(skill.id),
                         })
                       }

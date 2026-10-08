@@ -138,7 +138,11 @@ export function PresenceAvatars({ pinned }: { pinned: boolean }): ReactElement |
     <ul
       aria-label={t('shell.presence.label')}
       data-testid="presence-avatars"
-      className={`mb-2 flex ${pinned ? '-space-x-1.5 px-1' : '-space-y-1.5 flex-col items-center'}`}
+      // Spaced, never overlapped: stacked faces made the status
+      // rings run into each other and the glyph badge of one sat on the next
+      // (UX audit D1). The bottom margin keeps the last glyph clear of the
+      // leads pill's count badge below.
+      className={`mb-3 flex gap-2 ${pinned ? 'flex-wrap px-1' : 'flex-col items-center'}`}
     >
       {shown.map(({ member, status }) => {
         const label = memberLabel(t, member, status);

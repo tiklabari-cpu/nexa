@@ -83,6 +83,8 @@ export const settings: Messages = {
   'settings.company.title': 'Şirket bilgileri',
   'settings.company.description':
     'Bu çalışma alanının kim olduğu: faturalardaki ve widget üzerindeki ad, raporların altında grupladığı sektör, posta adresi ve ekibin çalıştığı saat.',
+  'settings.company.descriptionPilot':
+    'Bu çalışma alanının kim olduğu: widget üzerindeki ad, raporların altında grupladığı sektör, posta adresi ve ekibin çalıştığı saat.',
   'settings.company.loadError': 'Şirket bilgileri yüklenemedi.',
   'settings.company.nameLabel': 'Şirket adı',
   'settings.company.nameRequiredError': 'Şirket adını girin.',
@@ -163,7 +165,7 @@ export const settings: Messages = {
   'settings.cannedResponses.deleteAriaLabel': '#{shortcut} kısayolunu sil',
   'settings.cannedResponses.deleteConfirmTitle': '#{shortcut} kısayolu silinsin mi?',
   'settings.cannedResponses.deleteConfirmDescription':
-    'Hazır yanıt, onu kullanabilen herkes için silinir. Bu işlem geri alınamaz.',
+    'Kayıtlı yanıt, onu kullanabilen herkes için silinir. Bu işlem geri alınamaz.',
   'settings.cannedResponses.teamLabel': 'İlgili ekip',
   'settings.cannedResponses.allTeams': 'Tüm ekipler',
   'settings.cannedResponses.teamOnly': 'yalnız {name}',

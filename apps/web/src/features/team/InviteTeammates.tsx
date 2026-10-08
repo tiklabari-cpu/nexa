@@ -397,7 +397,13 @@ export function PendingInvitations(): ReactElement | null {
   const { confirm, dialog } = useConfirm();
   const items = invitations.data?.items ?? [];
 
-  if (items.length === 0) return null;
+  // A loaded, empty list says so: the section's heading with a blank card under
+  // it read as a failed load (UX audit D9). A pending or refused read stays blank.
+  if (items.length === 0) {
+    return invitations.isSuccess ? (
+      <p className="p-4 text-sm text-content-secondary">{t('team.invite.pending.empty')}</p>
+    ) : null;
+  }
 
   // A refused revoke leaves the invitation live, so it says so where the row is.
   const failedEmail = revoke.isError

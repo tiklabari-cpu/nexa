@@ -26,7 +26,7 @@ import {
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
-import { formatCount, formatDuration, formatRate } from '../../lib/format.js';
+import { formatCount, formatDuration, formatRate, formatSigned } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import {
   ACTIVATION_STEP_ROUTE,
@@ -237,7 +237,7 @@ function PerformanceOverview({
             <DeltaNote
               direction={chats.direction}
               text={t('home.weekly.vsLastWeek', {
-                count: formatCount(Math.abs(chats.change)) ?? 0,
+                count: formatSigned(chats.change) ?? 0,
               })}
               t={t}
             />
@@ -250,7 +250,9 @@ function PerformanceOverview({
             satisfaction ? (
               <DeltaNote
                 direction={satisfaction.direction}
-                text={t('home.weekly.ptsVsLastWeek', { points: Math.abs(satisfaction.points) })}
+                text={t('home.weekly.ptsVsLastWeek', {
+                  points: formatSigned(satisfaction.points) ?? 0,
+                })}
                 t={t}
               />
             ) : undefined
@@ -264,7 +266,7 @@ function PerformanceOverview({
               <DeltaNote
                 direction={responseTime.direction}
                 text={t('home.performance.secondsVsLastWeek', {
-                  seconds: Math.abs(responseTime.change),
+                  seconds: formatSigned(responseTime.change) ?? 0,
                 })}
                 t={t}
               />
@@ -327,7 +329,7 @@ function WeeklyPerformance({
             <DeltaNote
               direction={chats.direction}
               text={t('home.weekly.vsLastWeek', {
-                count: formatCount(Math.abs(chats.change)) ?? 0,
+                count: formatSigned(chats.change) ?? 0,
               })}
               t={t}
             />
@@ -340,7 +342,7 @@ function WeeklyPerformance({
             <DeltaNote
               direction={resolved.direction}
               text={t('home.weekly.vsLastWeek', {
-                count: formatCount(Math.abs(resolved.change)) ?? 0,
+                count: formatSigned(resolved.change) ?? 0,
               })}
               t={t}
             />
@@ -356,7 +358,7 @@ function WeeklyPerformance({
             csat ? (
               <DeltaNote
                 direction={csat.direction}
-                text={t('home.weekly.ptsVsLastWeek', { points: Math.abs(csat.points) })}
+                text={t('home.weekly.ptsVsLastWeek', { points: formatSigned(csat.points) ?? 0 })}
                 t={t}
               />
             ) : undefined

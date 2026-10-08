@@ -24,9 +24,22 @@ import {
   COMPANY_SIZES,
   type CompanyDetails as CompanyDetailsValue,
 } from '@siyahtus/types';
+import type { DeploymentConfig } from '@siyahtus/types';
 import { CompanyDetails } from './CompanyDetails.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
+
+const ORDINARY: DeploymentConfig = {
+  pilot_mode: false,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+  privacy_policy_url: null,
+  terms_url: null,
+  terms_version: null,
+};
+const deployment = vi.hoisted(() => ({ current: null as unknown as DeploymentConfig }));
+vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
 
 const SAVED: CompanyDetailsValue = {
   name: 'Acme Support',
@@ -96,6 +109,7 @@ function renderCompany(): ReturnType<typeof render> {
 }
 
 beforeEach(() => {
+  deployment.current = ORDINARY;
   signedInAs('admin');
   stubFetch(SAVED);
 });
@@ -221,6 +235,19 @@ describe('CompanyDetails', () => {
 
     await waitFor(() => expect(patchBodies).toHaveLength(1));
     expect(screen.queryByText(/keep the zone they were saved with/)).not.toBeInTheDocument();
+  });
+
+  it('names invoices only where there are invoices (UX audit D12)', async () => {
+    renderCompany();
+    expect(await screen.findByText(/the name on invoices and on the widget/)).toBeInTheDocument();
+  });
+
+  it('leaves invoices out of the description in the public pilot, which bills nobody (UX audit D12)', async () => {
+    deployment.current = { ...ORDINARY, pilot_mode: true };
+    renderCompany();
+
+    expect(await screen.findByText(/the name on the widget/)).toBeInTheDocument();
+    expect(screen.queryByText(/invoice/i)).toBeNull();
   });
 
   it('hides the section from a caller without the scope', () => {

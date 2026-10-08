@@ -5,6 +5,10 @@ export const shell: Messages = {
   // Shell chrome
   'shell.modules': 'Modüller',
   'shell.skipToContent': 'İçeriğe atla',
+  'shell.notFound.title': 'Sayfa bulunamadı',
+  'shell.notFound.description':
+    'Bu adreste bir sayfa yok. Taşınmış olabilir ya da bağlantı yanlış yazılmış olabilir.',
+  'shell.notFound.back': 'Gelen kutusuna git',
   'shell.narrow.title': 'Panel masaüstü için tasarlandı',
   'shell.narrow.body':
     'Bu ekran panelin düzeninden dar; bazı sütunlar sığmayacak ve sayfanın bir kısmı yana kaydırma gerektirebilir.',

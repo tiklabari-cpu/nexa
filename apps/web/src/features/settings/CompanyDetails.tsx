@@ -66,6 +66,7 @@ import {
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { FieldError, compose, maxLength, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { IANA_TIMEZONES } from '../../lib/timezones.js';
@@ -97,6 +98,8 @@ function CompanyDetailsSection(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
+  // The pilot sells nothing, so there is no invoice for the name to appear on.
+  const { pilot_mode: pilotMode } = useDeployment();
 
   const company = useQuery({
     queryKey: ['settings', 'company'],
@@ -109,7 +112,9 @@ function CompanyDetailsSection(): ReactElement {
     <Section
       id="section-company"
       title={t('settings.company.title')}
-      description={t('settings.company.description')}
+      description={t(
+        pilotMode ? 'settings.company.descriptionPilot' : 'settings.company.description',
+      )}
     >
       <Card>
         {company.isPending ? (

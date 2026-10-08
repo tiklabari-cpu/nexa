@@ -1119,6 +1119,18 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      test('the not-found page has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/no-such-page');
+        await scanPanel(agentPage, 'Not found', theme, testInfo, async () => {
+          await expect(
+            agentPage.getByRole('heading', { name: 'Page not found', level: 1 }),
+          ).toBeVisible();
+        });
+      });
+
       // Not reachable from the scan above — the dialog only renders once
       // opened, the same reason the campaign/goal builders each needed their
       // own scan. Nothing is persisted: the form is never submitted.
@@ -1482,6 +1494,9 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       '/app/settings/:section',
       '/app/apps',
       '/app/developers',
+      // The catch-all: an unknown address says so (tm 259.24 · D11) — scanned
+      // as the 'not found page' test above, through a path that cannot exist.
+      '/app/*',
     ].sort();
 
     expect(definedRoutes).toEqual(SCANNED_APP_ROUTES);

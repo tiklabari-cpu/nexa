@@ -36,7 +36,7 @@ export const home: Messages = {
   'home.activation.customize_widget.label': 'Customize your widget',
   'home.activation.customize_widget.description':
     'Match the widget’s colour, theme and position to your brand.',
-  'home.activation.add_canned_response.label': 'Create a canned response',
+  'home.activation.add_canned_response.label': 'Create a saved reply',
   'home.activation.add_canned_response.description': 'Save a reply your team can drop in with #.',
   'home.activation.set_up_ai_agent.label': 'Set up an AI Agent',
   'home.activation.set_up_ai_agent.description':

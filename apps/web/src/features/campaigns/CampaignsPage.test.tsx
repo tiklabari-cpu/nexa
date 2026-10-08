@@ -219,6 +219,13 @@ describe('CampaignsPage localisation (NFR-I18N2)', () => {
     expect(screen.getByRole('button', { name: 'Yeni kampanya' })).toBeInTheDocument();
   });
 
+  it('shows 0% for a campaign nothing has been displayed on yet (UX audit D6)', async () => {
+    api.get.mockResolvedValue({ items: [campaign('ongoing', 'Fresh')], total: 1 });
+    renderPage();
+
+    expect((await screen.findByText('Conversion')).parentElement).toHaveTextContent(/0%/);
+  });
+
   it('writes the conversion rate with the percent sign in front (O17)', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithLocale(

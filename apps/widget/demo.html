@@ -58,7 +58,8 @@
     </main>
 
     <script>
-      // Test hook: `?organization_id=…` targets a specific tenant. Falls back to
+      // Test hooks: `?language=ar` opens the widget in another language, and
+      // `?organization_id=…` targets a specific tenant. Falls back to
       // nothing so a misconfigured page fails visibly rather than silently
       // talking to whichever tenant happens to be first.
       const params = new URLSearchParams(location.search);
@@ -71,7 +72,7 @@
         // http://localhost:5174; one Vite server answers both.
         widgetOrigin: params.get('widget_origin') ?? 'http://localhost:5174',
         position: 'bottom-right',
-        language: 'en',
+        language: params.get('language') ?? 'en',
       };
     </script>
     <script type="module" src="/src/loader.ts"></script>

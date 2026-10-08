@@ -5,6 +5,11 @@ export const shell: Messages = {
   // Shell chrome
   'shell.modules': 'Modules',
   'shell.skipToContent': 'Skip to content',
+  // An address under /app that is not a page (UX audit D11).
+  'shell.notFound.title': 'Page not found',
+  'shell.notFound.description':
+    'There is no page at this address. It may have moved, or the link may be mistyped.',
+  'shell.notFound.back': 'Go to the inbox',
   // A window under 1024 px (tm 259.25): the console asks before it opens.
   'shell.narrow.title': 'The console is designed for desktop',
   'shell.narrow.body':

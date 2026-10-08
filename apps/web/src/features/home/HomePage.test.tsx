@@ -171,7 +171,7 @@ describe('HomePage', () => {
     const chats = (await screen.findByText('New chats')).closest('div');
     expect(within(chats as HTMLElement).getByText('40')).toBeInTheDocument();
     // 40 vs 30 last week → up 10.
-    expect(within(chats as HTMLElement).getByText(/↑ 10 vs last week/)).toBeInTheDocument();
+    expect(within(chats as HTMLElement).getByText(/↑ \+10 vs last week/)).toBeInTheDocument();
 
     // Resolved unchanged (34 vs 34) → neutral note, not a false arrow.
     const resolved = (await screen.findByText('Resolved')).closest('div');
@@ -186,7 +186,52 @@ describe('HomePage', () => {
       .getByText('Satisfaction')
       .closest('div');
     // Satisfaction 75% vs 60% → up 15 points.
-    expect(within(csat as HTMLElement).getByText(/↑ 15 pts vs last week/)).toBeInTheDocument();
+    expect(within(csat as HTMLElement).getByText(/↑ \+15 pts vs last week/)).toBeInTheDocument();
+  });
+
+  it('says the change is a change when last week was zero (UX audit D5)', async () => {
+    api.get.mockResolvedValue({
+      ...DASHBOARD,
+      weekly: {
+        ...DASHBOARD.weekly,
+        chats: 27,
+        previous: { ...DASHBOARD.weekly.previous, chats: 0 },
+      },
+    });
+    renderHome();
+
+    const chats = (await screen.findByText('New chats')).closest('div');
+    // "↑ 27 vs last week" could be last week's figure; the sign says it is the difference.
+    expect(within(chats as HTMLElement).getByText('↑ +27 vs last week')).toBeInTheDocument();
+  });
+
+  it('signs a drop as well, in Turkish too (UX audit D5)', async () => {
+    api.get.mockResolvedValue({
+      ...DASHBOARD,
+      weekly: {
+        ...DASHBOARD.weekly,
+        chats: 5,
+        previous: { ...DASHBOARD.weekly.previous, chats: 12 },
+      },
+    });
+    const { restore } = renderWithLocale(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MemoryRouter>
+          <HomePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+    try {
+      const chats = (await screen.findByText('Yeni sohbetler')).closest('div');
+      expect(
+        within(chats as HTMLElement).getByText(/↓ geçen haftaya göre [-−]7/),
+      ).toBeInTheDocument();
+    } finally {
+      restore();
+    }
   });
 
   it('shows the Performance overview quartet with week-over-week deltas', async () => {
@@ -201,18 +246,20 @@ describe('HomePage', () => {
     const totalChats = within_.getByText('Total chats').closest('div');
     expect(within(totalChats as HTMLElement).getByText('40')).toBeInTheDocument();
     // 40 vs 30 last week → up 10.
-    expect(within(totalChats as HTMLElement).getByText(/↑ 10 vs last week/)).toBeInTheDocument();
+    expect(within(totalChats as HTMLElement).getByText(/↑ \+10 vs last week/)).toBeInTheDocument();
 
     const satisfaction = within_.getByText('Satisfaction').closest('div');
     expect(within(satisfaction as HTMLElement).getByText('75%')).toBeInTheDocument();
     expect(
-      within(satisfaction as HTMLElement).getByText(/↑ 15 pts vs last week/),
+      within(satisfaction as HTMLElement).getByText(/↑ \+15 pts vs last week/),
     ).toBeInTheDocument();
 
     const responseTime = within_.getByText('Response time').closest('div');
     // 62s vs 60s previous → up 2s.
     expect(within(responseTime as HTMLElement).getByText('1m 2s')).toBeInTheDocument();
-    expect(within(responseTime as HTMLElement).getByText(/↑ 2s vs last week/)).toBeInTheDocument();
+    expect(
+      within(responseTime as HTMLElement).getByText(/↑ \+2s vs last week/),
+    ).toBeInTheDocument();
 
     const efficiency = within_.getByText('Efficiency').closest('div');
     expect(within(efficiency as HTMLElement).getByText('9.6')).toBeInTheDocument();

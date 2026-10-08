@@ -344,6 +344,16 @@ describe('revoking an invitation', () => {
     seats: { headcount: 3, purchased: null, unit_price_cents: null, ceiling: 200 },
   };
 
+  it('says so when nobody is waiting, instead of an empty card (UX audit D9)', async () => {
+    stubApi((path) =>
+      path.startsWith('/invitations') ? { items: [], seats: INVITES.seats } : undefined,
+    );
+    renderIn(<PendingInvitations />);
+
+    expect(await screen.findByText('No pending invitations.')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
   it('asks first, and the confirmed click revokes once', async () => {
     stubApi((path) => (path.startsWith('/invitations') ? INVITES : undefined));
     const user = userEvent.setup();

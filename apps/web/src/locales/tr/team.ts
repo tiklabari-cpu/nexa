@@ -222,6 +222,7 @@ export const team: Messages = {
   'team.invite.error.aboveRole': 'Kendi rolünüzün üstünde birini davet edemezsiniz.',
   'team.invite.error.generic': 'Bu davetler gönderilemedi.',
   'team.invite.pending.caption': 'Henüz kabul edilmemiş davetler',
+  'team.invite.pending.empty': 'Bekleyen davet yok.',
   'team.invite.pending.email': 'E-posta',
   'team.invite.pending.role': 'Rol',
   'team.invite.pending.invitedBy': 'Davet eden',

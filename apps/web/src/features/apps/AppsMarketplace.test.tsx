@@ -327,6 +327,23 @@ describe('AppsMarketplace', () => {
     });
   });
 
+  it('names each chip row on screen, so four rows starting with "All" are told apart (UX audit D20)', async () => {
+    api.get.mockResolvedValue({ items: [notConnected], total: 1 });
+    renderComponent(<AppsMarketplace />);
+    await screen.findByText('HubSpot');
+
+    const rows: Array<[string, string]> = [
+      ['Filter by category', 'Category'],
+      ['Filter by collection', 'Collection'],
+      ['Filter by pricing', 'Pricing'],
+      ['Filter by placement', 'Placement'],
+    ];
+    for (const [group, visible] of rows) {
+      const label = screen.getByRole('group', { name: group }).previousElementSibling;
+      expect(label, group).toHaveTextContent(visible);
+    }
+  });
+
   // FR-MOD-09.1: the taxonomy beyond category/search — collections + pricing/placement.
   it('filters by collection, pricing and placement, each composing with the others', async () => {
     const user = userEvent.setup();

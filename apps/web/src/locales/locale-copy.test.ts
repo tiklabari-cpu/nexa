@@ -48,3 +48,24 @@ describe('panel locale values carry no internal requirement or decision codes', 
     }
   });
 });
+
+/**
+ * One name for a saved reply (UX audit D8): the menu says "Saved replies" /
+ * "Kayıtlı yanıtlar", and the Home checklist and the audit log said "canned
+ * response" / "hazır yanıt" for the same thing.
+ */
+describe('a saved reply is called a saved reply everywhere', () => {
+  const OLD_NAME: Record<string, RegExp> = { en: /canned/i, tr: /hazır yanıt/i };
+
+  for (const [locale, catalogue] of Object.entries(CATALOGUES)) {
+    const old = OLD_NAME[locale];
+    if (!old) continue;
+    it(`${locale}: 0 values use the old name`, () => {
+      const hits = Object.entries(catalogue)
+        // `{cannedResponses}` is a placeholder name, not copy anyone reads.
+        .filter(([, value]) => old.test(value.replace(/\{[^}]*\}/g, '')))
+        .map(([key, value]) => `${key}: ${value}`);
+      expect(hits).toEqual([]);
+    });
+  }
+});

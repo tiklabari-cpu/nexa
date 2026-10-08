@@ -84,6 +84,15 @@ describe('NotificationSettings', () => {
     expect(checkbox(/Email notifications/)).toBeChecked();
   });
 
+  it('labels the sound row On or Off like its siblings (UX audit D7)', async () => {
+    render(<NotificationSettings />);
+    const row = (): HTMLElement => checkbox(/Play a sound/).closest('label') as HTMLElement;
+    expect(row()).toHaveTextContent('On');
+
+    await userEvent.click(checkbox(/Play a sound/));
+    await waitFor(() => expect(row()).toHaveTextContent('Off'));
+  });
+
   it('reflects a channel the account has switched off', () => {
     signIn({ ...DEFAULT_NOTIFICATION_PREFERENCES, push: false, email: false });
     render(<NotificationSettings />);

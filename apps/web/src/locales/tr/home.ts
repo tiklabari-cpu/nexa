@@ -30,7 +30,7 @@ export const home: Messages = {
   'home.activation.customize_widget.label': 'Widget’ınızı özelleştirin',
   'home.activation.customize_widget.description':
     'Widget’ın rengini, temasını ve konumunu markanıza uyarlayın.',
-  'home.activation.add_canned_response.label': 'Bir hazır yanıt oluşturun',
+  'home.activation.add_canned_response.label': 'Bir kayıtlı yanıt oluşturun',
   'home.activation.add_canned_response.description':
     'Ekibinizin # ile ekleyebileceği bir yanıt kaydedin.',
   'home.activation.set_up_ai_agent.label': 'Bir AI Ajanı kurun',

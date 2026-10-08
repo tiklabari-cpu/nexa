@@ -289,11 +289,11 @@ export const auth: Messages = {
     'Davet edildi, ancak e-postanın gönderildiği doğrulanamadı: {emails}. Kopyalanabilir bir bağlantı için onları Ekip sayfasından yeniden davet edin.',
   'auth.onboarding.sample.addLabel': 'Örnek veri ekle',
   'auth.onboarding.sample.body':
-    'Çalışma alanınıza hemen keşfedebileceğiniz birkaç hazır yanıt, etiket ve bir örnek konuşma ekleyin. Dilediğiniz zaman arşivleyebilir veya silebilirsiniz.',
+    'Çalışma alanınıza hemen keşfedebileceğiniz birkaç kayıtlı yanıt, etiket ve bir örnek konuşma ekleyin. Dilediğiniz zaman arşivleyebilir veya silebilirsiniz.',
   'auth.onboarding.sample.submitting': 'Ekleniyor…',
   'auth.onboarding.sample.added': 'Örnek veri eklendi',
   'auth.onboarding.sample.seeded':
-    '{cannedResponses} hazır yanıt, {tags} etiket ve {chats} örnek konuşma eklendi.',
+    '{cannedResponses} kayıtlı yanıt, {tags} etiket ve {chats} örnek konuşma eklendi.',
   'auth.onboarding.sample.alreadySeeded': 'Örnek veri çalışma alanınızda zaten mevcut.',
   'auth.onboarding.sample.footerBefore': 'Gelen kutunuzu açmak için',
   'auth.onboarding.sample.footerAfter': "'i seçin.",

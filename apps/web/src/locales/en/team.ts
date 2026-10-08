@@ -230,6 +230,7 @@ export const team: Messages = {
   'team.invite.error.aboveRole': 'You cannot invite someone above your own role.',
   'team.invite.error.generic': 'Could not send those invitations.',
   'team.invite.pending.caption': 'Invitations not yet accepted',
+  'team.invite.pending.empty': 'No pending invitations.',
   'team.invite.pending.email': 'Email',
   'team.invite.pending.role': 'Role',
   'team.invite.pending.invitedBy': 'Invited by',

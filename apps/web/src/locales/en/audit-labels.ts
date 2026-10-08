@@ -118,7 +118,7 @@ export const auditLabels: Messages = {
   'audit.target.app_installation': 'App installation',
   'audit.target.bot': 'Bot',
   'audit.target.brand': 'Brand',
-  'audit.target.canned_response': 'Canned response',
+  'audit.target.canned_response': 'Saved reply',
   'audit.target.channel': 'Channel',
   'audit.target.chat': 'Chat',
   'audit.target.client': 'App',

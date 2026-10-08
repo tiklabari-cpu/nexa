@@ -109,7 +109,7 @@ export const auditLabels: Messages = {
   'audit.target.app_installation': 'Uygulama kurulumu',
   'audit.target.bot': 'Bot',
   'audit.target.brand': 'Marka',
-  'audit.target.canned_response': 'Hazır yanıt',
+  'audit.target.canned_response': 'Kayıtlı yanıt',
   'audit.target.channel': 'Kanal',
   'audit.target.chat': 'Sohbet',
   'audit.target.client': 'Uygulama',

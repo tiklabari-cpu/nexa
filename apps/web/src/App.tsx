@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { LoadingPage } from './components/LoadingPage.js';
+import { NotFoundPage } from './components/NotFoundPage.js';
 import { PilotHidden } from './components/PilotHidden.js';
 import { AuthCallbackPage } from './features/auth/AuthCallbackPage.js';
 import { ReconnectingPage } from './features/auth/ReconnectingPage.js';
@@ -185,8 +186,10 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
           }
         />
         <Route path="developers" element={<DeveloperPortalPage />} />
+        {/* An address under /app that is not a page says so (UX audit D11). */}
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
-      {/* Anything else, including the OAuth callback path, lands in the inbox. */}
+      {/* Anything outside /app, including the OAuth callback path, lands in the inbox. */}
       <Route path="*" element={<Navigate to="/app/inbox" replace />} />
     </Routes>
   );

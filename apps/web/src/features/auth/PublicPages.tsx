@@ -664,6 +664,10 @@ export function ResetPasswordPage(): ReactElement {
   );
 }
 
+/** The bounds `POST /auth/verify-email` puts on a token. */
+const VERIFY_TOKEN_MIN = 20;
+const VERIFY_TOKEN_MAX = 200;
+
 /**
  * FR-MOD-00.2 — spend the confirmation link (tm 257.16).
  *
@@ -680,7 +684,15 @@ export function ResetPasswordPage(): ReactElement {
 export function VerifyEmailPage(): ReactElement {
   const t = useTranslate();
   const [params] = useSearchParams();
-  const token = params.get('token') ?? '';
+  // A token outside the API's own length bounds (`verifyBody`: 20–200) can
+  // never be a real link — a truncated or hand-typed address. It is treated as
+  // no link at all, so the person is not asked for a password only to be told
+  // the link was bad (UX audit D10). A well-formed but unknown or spent token
+  // cannot be told apart without a new unauthenticated endpoint that would say
+  // which links are real, so that case still asks first.
+  const rawToken = params.get('token') ?? '';
+  const token =
+    rawToken.length >= VERIFY_TOKEN_MIN && rawToken.length <= VERIFY_TOKEN_MAX ? rawToken : '';
   const signIn = useAuth((s) => s.signIn);
   const [refused, setRefused] = useState(false);
 

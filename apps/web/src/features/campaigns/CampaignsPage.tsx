@@ -314,11 +314,9 @@ function CampaignCard({
         <Stat
           label={t('campaigns.page.stat.conversion')}
           value={formatCount(conversion) ?? '0'}
-          hint={
-            displayed > 0
-              ? (formatRate(conversionRate(campaign.performance) / 100) ?? undefined)
-              : undefined
-          }
+          // Always the rate, 0% included: "Conversion 0" with no unit read as a
+          // count of nothing rather than a rate (UX audit D6).
+          hint={formatRate(conversionRate(campaign.performance) / 100) ?? undefined}
         />
       </dl>
     </div>

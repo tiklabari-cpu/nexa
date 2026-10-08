@@ -95,6 +95,8 @@ export const settings: Messages = {
   'settings.company.title': 'Company details',
   'settings.company.description':
     'Who this workspace is: the name on invoices and on the widget, the sector reports group it under, the postal address, and the clock the team works to.',
+  'settings.company.descriptionPilot':
+    'Who this workspace is: the name on the widget, the sector reports group it under, the postal address, and the clock the team works to.',
   'settings.company.loadError': 'Could not load the company details.',
   'settings.company.nameLabel': 'Company name',
   'settings.company.nameRequiredError': 'Enter the company name.',

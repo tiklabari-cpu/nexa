@@ -112,6 +112,10 @@ export function NotificationSettings(): ReactElement {
                 {t('team.notifications.sound.hint')}
               </span>
             </span>
+            <StatusDot
+              tone={prefs.enabled && prefs.sound ? 'success' : 'neutral'}
+              label={prefs.enabled && prefs.sound ? t('team.status.on') : t('team.status.off')}
+            />
           </label>
 
           <div className="flex flex-wrap items-center gap-3 p-4">

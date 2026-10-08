@@ -26,6 +26,19 @@ export function setFormatLocale(locale: string | undefined): void {
   activeLocale = locale;
 }
 
+/**
+ * A change, signed: `27` → `"+27"`, `-3` → `"-3"`, `0` → `"0"`. A bare "↑ 27" next
+ * to "vs last week" reads as either last week's value or the difference; the sign
+ * says it is the difference.
+ */
+export function formatSigned(
+  value: number | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return new Intl.NumberFormat(locale, { signDisplay: 'exceptZero' }).format(value);
+}
+
 /** `142` → `"142"`, with thousands separators. */
 export function formatCount(
   value: number | null | undefined,

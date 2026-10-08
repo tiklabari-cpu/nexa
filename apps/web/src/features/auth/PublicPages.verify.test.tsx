@@ -192,6 +192,20 @@ describe('VerifyEmailPage (FR-MOD-00.2)', () => {
     expect(screen.getByText('Need a new link?')).toBeInTheDocument();
   });
 
+  it('does not ask for a password on a link that cannot be real (UX audit D10)', async () => {
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockResolvedValue({ message: 'ok' });
+    renderAt(<VerifyEmailPage />, '/verify-email?token=garbage');
+
+    // Shorter than any token the API issues: the error comes first, with the
+    // way out, and no password field to fill in for nothing.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This link is incomplete. Ask for a new one below.',
+    );
+    expect(screen.queryByLabelText('Password')).toBeNull();
+    expect(screen.getByText('Need a new link?')).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it('asks for a new link by address and says the same thing whatever the address', async () => {
     const post = vi.spyOn(ApiClient.prototype, 'post').mockResolvedValue({ message: 'ok' });
     renderAt(<VerifyEmailPage />, '/verify-email');

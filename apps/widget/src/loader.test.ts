@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { boot, type SiyahTusWidgetConfig } from './loader.js';
+import { boot, RTL_LANGUAGES, type SiyahTusWidgetConfig } from './loader.js';
+import { RTL_LOCALES } from './locales/index.js';
 
 type TestWindow = Window & {
   __siyahtus?: SiyahTusWidgetConfig & { open?: () => void; destroy?: () => void };
@@ -341,5 +342,31 @@ describe('siyahtus command queue (FR-MOD-13.5)', () => {
 
   it('does not throw when called before the widget has ever booted', () => {
     expect(() => siyahtusGlobal()('trackSale', payload)).not.toThrow();
+  });
+});
+
+describe('the frame follows the widget document’s corner (UX audit D17)', () => {
+  beforeEach(() => setup());
+
+  it('keeps the configured corner for a left-to-right language', () => {
+    boot(setup({ language: 'en' }));
+    expect(frame()!.style.right).toBe('16px');
+    expect(frame()!.style.left).toBe('');
+  });
+
+  it('mirrors it for Arabic, because the document lays the launcher out with logical CSS', () => {
+    boot(setup({ language: 'ar' }));
+    expect(frame()!.style.left).toBe('16px');
+    expect(frame()!.style.right).toBe('');
+  });
+
+  it('mirrors an explicit bottom-left back to the right for Arabic, and reads region tags', () => {
+    boot(setup({ language: 'ar-SA', position: 'bottom-left' }));
+    expect(frame()!.style.right).toBe('16px');
+    expect(frame()!.style.left).toBe('');
+  });
+
+  it('agrees with the widget’s own list of right-to-left locales', () => {
+    expect([...RTL_LANGUAGES]).toEqual([...RTL_LOCALES]);
   });
 });

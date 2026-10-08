@@ -57,6 +57,35 @@ const ALLOWED_INBOUND = new Set([
 
 const IFRAME_ID = 'siyahtus-widget-frame';
 
+/**
+ * Languages that read right-to-left — `RTL_LOCALES` in `locales/index.ts`, which
+ * this script cannot import without pulling every catalogue into the one file a
+ * host page loads (`loader.test.ts` pins the two lists together).
+ */
+export const RTL_LANGUAGES: ReadonlySet<string> = new Set(['ar']);
+
+/**
+ * The physical edge the frame is pinned to (tm 259.24 · UX audit D17).
+ *
+ * The widget document places its launcher and greeting card with logical CSS
+ * (`inset-inline-*`, NFR-I18N1), so under `dir="rtl"` they sit at the frame's
+ * *left* for a bottom-right install. A frame pinned to the physical right then
+ * held a launcher that was only in the right place while the frame was as wide
+ * as the launcher: the greeting card widens it to 340 px and the launcher
+ * jumped ~250 px to the left. The frame follows the same rule the document
+ * does — the configured corner, mirrored for a right-to-left language — so the
+ * launcher stays in the corner of the screen it started in at every frame size.
+ */
+export function frameEdge(
+  position: string | undefined,
+  language: string | undefined,
+): 'left' | 'right' {
+  const configuredLeft = position === 'bottom-left';
+  const primary = (language ?? '').toLowerCase().split(/[-_]/)[0] ?? '';
+  const mirrored = RTL_LANGUAGES.has(primary);
+  return configuredLeft !== mirrored ? 'left' : 'right';
+}
+
 /** Opaque here — the widget document (not this script) validates the shape. */
 type SiyahTusCommandPayload = Record<string, unknown> | undefined;
 
@@ -123,7 +152,7 @@ export function boot(
   frame.setAttribute('allowtransparency', 'true');
   frame.src = buildFrameUrl(widgetOrigin, config, hostPageUrl(win));
 
-  const corner = config.position === 'bottom-left' ? 'left' : 'right';
+  const corner = frameEdge(config.position, config.language);
 
   Object.assign(frame.style, {
     position: 'fixed',

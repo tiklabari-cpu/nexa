@@ -30,6 +30,11 @@ export const apps: Messages = {
     'Connect the tools your team already uses. Connected apps show their data right inside a conversation.',
   'apps.marketplace.searchLabel': 'Search apps',
   'apps.marketplace.searchPlaceholder': 'Search apps…',
+  // Visible names of the four chip rows (UX audit D20).
+  'apps.marketplace.filterLabel.category': 'Category',
+  'apps.marketplace.filterLabel.collection': 'Collection',
+  'apps.marketplace.filterLabel.pricing': 'Pricing',
+  'apps.marketplace.filterLabel.placement': 'Placement',
   'apps.marketplace.filterByCategory': 'Filter by category',
   'apps.marketplace.category.all': 'All',
   'apps.marketplace.category.crm': 'CRM',

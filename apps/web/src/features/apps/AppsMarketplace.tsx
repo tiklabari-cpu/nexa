@@ -41,6 +41,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type ReactNode,
   type RefObject,
 } from 'react';
 import { Link } from 'react-router-dom';
@@ -188,6 +189,35 @@ function useGridColumns(): { containerRef: RefObject<HTMLDivElement>; columns: n
   return { containerRef, columns: columnsForWidth(width) };
 }
 
+/**
+ * One row of filter chips with a name you can see (UX audit D20). Four rows of
+ * chips each starting with "All" gave no hint which dimension a chip filtered;
+ * the group keeps its spoken name, and the visible one is the shorter noun.
+ */
+function FilterRow({
+  label,
+  groupLabel,
+  children,
+}: {
+  label: string;
+  groupLabel: string;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span
+        aria-hidden="true"
+        className="w-24 shrink-0 text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+      >
+        {label}
+      </span>
+      <div role="group" aria-label={groupLabel} className="flex flex-wrap gap-1">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function AppsMarketplace(): ReactElement {
   const api = useApiClient();
   const t = useTranslate();
@@ -250,10 +280,9 @@ export function AppsMarketplace(): ReactElement {
         />
       </label>
 
-      <div
-        role="group"
-        aria-label={t('apps.marketplace.filterByCategory')}
-        className="flex flex-wrap gap-1"
+      <FilterRow
+        label={t('apps.marketplace.filterLabel.category')}
+        groupLabel={t('apps.marketplace.filterByCategory')}
       >
         {CATEGORY_FILTERS.map((filter) => {
           const active = category === filter;
@@ -273,12 +302,11 @@ export function AppsMarketplace(): ReactElement {
             </button>
           );
         })}
-      </div>
+      </FilterRow>
 
-      <div
-        role="group"
-        aria-label={t('apps.marketplace.filterByCollection')}
-        className="flex flex-wrap gap-1"
+      <FilterRow
+        label={t('apps.marketplace.filterLabel.collection')}
+        groupLabel={t('apps.marketplace.filterByCollection')}
       >
         {COLLECTION_FILTERS.map((filter) => {
           const active = collection === filter;
@@ -298,12 +326,11 @@ export function AppsMarketplace(): ReactElement {
             </button>
           );
         })}
-      </div>
+      </FilterRow>
 
-      <div
-        role="group"
-        aria-label={t('apps.marketplace.filterByPricing')}
-        className="flex flex-wrap gap-1"
+      <FilterRow
+        label={t('apps.marketplace.filterLabel.pricing')}
+        groupLabel={t('apps.marketplace.filterByPricing')}
       >
         {PRICING_FILTERS.map((filter) => {
           const active = pricing === filter;
@@ -323,12 +350,11 @@ export function AppsMarketplace(): ReactElement {
             </button>
           );
         })}
-      </div>
+      </FilterRow>
 
-      <div
-        role="group"
-        aria-label={t('apps.marketplace.filterByPlacement')}
-        className="flex flex-wrap gap-1"
+      <FilterRow
+        label={t('apps.marketplace.filterLabel.placement')}
+        groupLabel={t('apps.marketplace.filterByPlacement')}
       >
         {PLACEMENT_FILTERS.map((filter) => {
           const active = placement === filter;
@@ -348,7 +374,7 @@ export function AppsMarketplace(): ReactElement {
             </button>
           );
         })}
-      </div>
+      </FilterRow>
 
       {/* The measured element is mounted for every state, not just the loaded
           list: the measurement runs once on mount, so a ref that only appears

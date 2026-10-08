@@ -25,11 +25,20 @@ const COLOUR: Record<StatusTone, string> = {
  * on a washed-out screen or at a glance — which is exactly when an agent checks
  * whether their inbox is still live.
  */
-export function StatusDot({ tone, label }: { tone: StatusTone; label: string }): ReactElement {
+export function StatusDot({
+  tone,
+  label,
+  compact = false,
+}: {
+  tone: StatusTone;
+  label: string;
+  /** Glyph only on screen, the word kept for a screen reader — for a header with no room. */
+  compact?: boolean;
+}): ReactElement {
   return (
     <span className={`inline-flex items-center gap-1.5 text-2xs font-medium ${COLOUR[tone]}`}>
       <span aria-hidden="true">{GLYPH[tone]}</span>
-      {label}
+      {compact ? <span className="sr-only">{label}</span> : label}
     </span>
   );
 }

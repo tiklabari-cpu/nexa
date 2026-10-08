@@ -56,7 +56,7 @@ import {
   toggleAllTickets,
   toggleTicketSelection,
 } from './ticket-selection.js';
-import { CreateTicketButton } from './CreateTicketButton.js';
+import { ThreadHeader } from './ThreadHeader.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import {
   clearTicketSort,
@@ -421,11 +421,11 @@ export function InboxPage(): ReactElement {
   }, [ticketItems, selectedTicketId, onTickets, ticketsLoaded, tickets.hasNext]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Take tour (FR-MOD-01.4, 02.2.3): above both the ticket grid and the
           chat panes, since it is a whole-module offer, not a chat-view one. */}
       <TakeTourBanner />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         {/* Views */}
         <nav
           aria-label={t('inbox.rail.ariaLabel')}
@@ -814,49 +814,30 @@ export function InboxPage(): ReactElement {
             <main className="flex min-w-0 flex-1 flex-col bg-canvas">
               {selectedId && chat.data ? (
                 <>
-                  <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-                    <h2 className="flex-1 truncate text-sm font-semibold">
-                      {chats.find((c) => c.id === selectedId)?.customer_name ??
-                        t('inbox.thread.visitorFallback')}
-                    </h2>
-                    <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
-                    <StatusDot
-                      tone={chat.data.active ? 'success' : 'neutral'}
-                      label={
-                        chat.data.active
-                          ? t('inbox.thread.statusActive')
-                          : t('inbox.thread.statusArchived')
+                  <ThreadHeader
+                    chatId={selectedId}
+                    customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                    active={chat.data.active}
+                    onOpenTicket={(ticketId) => {
+                      setSelection({ kind: 'ticket' });
+                      setSelectedTicketId(ticketId);
+                      // A stale filter (e.g. `solved`) could hide the ticket
+                      // just created once the agent backs out of its pane.
+                      if (hasTicketViewParam(searchParams)) {
+                        setSearchParams(clearTicketView(searchParams), { replace: true });
                       }
-                    />
-                    <CopyLinkButton chatId={selectedId} />
-                    <CreateTicketButton
-                      chatId={selectedId}
-                      customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-                      onOpenTicket={(ticketId) => {
-                        setSelection({ kind: 'ticket' });
-                        setSelectedTicketId(ticketId);
-                        // A stale filter (e.g. `solved`) could hide the ticket
-                        // just created once the agent backs out of its pane.
-                        if (hasTicketViewParam(searchParams)) {
-                          setSearchParams(clearTicketView(searchParams), { replace: true });
-                        }
-                      }}
-                    />
-                    {/* Copilot (FR-MOD-12.1): opens the assist panel for this chat,
-                      bringing the right panel back if it was collapsed. */}
-                    <CopilotButton
-                      onOpen={() => {
-                        panelTab.showCopilot();
-                        rightPanel.setExpanded(false);
-                      }}
-                    />
-                    {/* When the panel is open it is collapsed from its own header
-                      (the transcript header is tight at this width); when it is
-                      hidden, this is the way back to it. */}
-                    {rightPanel.expanded && (
-                      <ShowDetailsButton onShow={() => rightPanel.setExpanded(false)} />
-                    )}
-                  </header>
+                    }}
+                    // Copilot (FR-MOD-12.1): opens the assist panel for this chat,
+                    // bringing the right panel back if it was collapsed.
+                    onOpenCopilot={() => {
+                      panelTab.showCopilot();
+                      rightPanel.setExpanded(false);
+                    }}
+                    // When the panel is open it is collapsed from its own header
+                    // (the transcript header is tight at this width); when it is
+                    // hidden, this is the way back to it.
+                    onShowDetails={rightPanel.expanded ? () => rightPanel.setExpanded(false) : null}
+                  />
 
                   {/* An empty thread with a live reply box is how a failed read used
                       to look (tm 259.5); say it failed, and hold the composer. */}
@@ -940,46 +921,6 @@ export function InboxPage(): ReactElement {
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * Brings the Details panel back after it has been collapsed (FR-MOD-01.3). It
- * only renders in Expand mode, where the transcript is wide and the header has
- * room; collapsing happens from the panel's own header, which stays reachable
- * while the transcript here is narrow.
- */
-function ShowDetailsButton({ onShow }: { onShow: () => void }): ReactElement {
-  const t = useTranslate();
-  return (
-    <button
-      type="button"
-      onClick={onShow}
-      aria-label={t('inbox.thread.showDetails')}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
-    >
-      <span aria-hidden="true">◧</span>
-      {t('inbox.thread.detailsLabel')}
-    </button>
-  );
-}
-
-/**
- * Opens the Copilot assist panel for the open conversation (FR-MOD-12.1). Sits
- * in the transcript header next to Copy link and Create ticket, so agent-assist
- * is one click from any chat.
- */
-function CopilotButton({ onOpen }: { onOpen: () => void }): ReactElement {
-  const t = useTranslate();
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
-    >
-      <span aria-hidden="true">✧</span>
-      {t('inbox.thread.copilotLabel')}
-    </button>
   );
 }
 
@@ -1316,34 +1257,4 @@ function ConnectionBadge({ status }: { status: string }): ReactElement {
         ? t('inbox.rail.connection.offline')
         : t('inbox.rail.connection.reconnecting');
   return <StatusDot tone={tone} label={label} />;
-}
-
-/**
- * Copies a deep link to this conversation (FR-MOD-02.6). It reuses the `?chat=`
- * parameter the inbox already consumes on load, made absolute, so a pasted link
- * reopens the exact conversation from a ticket, a chat message, or another
- * machine.
- */
-function CopyLinkButton({ chatId }: { chatId: string }): ReactElement {
-  const [copied, setCopied] = useState(false);
-  const t = useTranslate();
-  const copy = (): void => {
-    const url = `${window.location.origin}/app/inbox?chat=${chatId}`;
-    void navigator.clipboard?.writeText(url).then(
-      () => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1_500);
-      },
-      () => setCopied(false),
-    );
-  };
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
-    >
-      {copied ? t('inbox.thread.copied') : t('inbox.thread.copyLink')}
-    </button>
-  );
 }

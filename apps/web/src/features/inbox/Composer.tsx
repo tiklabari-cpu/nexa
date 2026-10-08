@@ -720,8 +720,10 @@ export function Composer({
         />
       )}
 
-      <div className="mt-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      {/* Wraps: the column is 284 px at 1280 with both side panels open, and a
+          toolbar that cannot wrap ran on under the Details panel (tm 259.12). */}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <button
             type="button"
             aria-label={t('inbox.composer.richText.bold')}
@@ -814,7 +816,7 @@ export function Composer({
             {uploading ? t('inbox.composer.uploading') : t('inbox.composer.hint')}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {uploadError && (
             <span role="alert" className="text-2xs text-danger">
               {uploadError}

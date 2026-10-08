@@ -18,6 +18,8 @@
  */
 import { useEffect, useState } from 'react';
 
+import { formatDuration as formatDurationIn } from '../../lib/format.js';
+
 /**
  * The server's figure plus the time since it was taken.
  *
@@ -66,15 +68,7 @@ export function useLiveDurationSeconds(base: number | null, ongoing: boolean): n
   return liveDurationSeconds(anchor.base, anchor.at, now);
 }
 
-/** "45s" · "3m 20s" · "1h 4m". A dash when the length is unknown. */
+/** "45s" · "3m 20s" · "1h 4m" ("3 dk 20 sn" in Turkish). A dash when the length is unknown. */
 export function formatDuration(seconds: number | null): string {
-  if (seconds === null || seconds < 0) return '—';
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    const rest = seconds % 60;
-    return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
+  return formatDurationIn(seconds, undefined, 'hour') ?? '—';
 }

@@ -32,6 +32,7 @@ import { errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import {
   formatCount,
   formatDay,
+  formatDecimal,
   formatDuration,
   formatMoney,
   formatRate,
@@ -1876,16 +1877,20 @@ function StaffingCellView({ cell }: { cell: StaffingCell | undefined }): ReactEl
   );
 }
 
-/** `2.5` → `"2.5"`, `2` → `"2"` — whole numbers stay whole. */
+/** `2.5` → `"2.5"` (`"2,5"` in Turkish), `2` → `"2"` — whole numbers stay whole. */
 function formatScheduled(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return formatDecimal(value, 1) ?? '';
 }
 
-/** The required-scheduled gap, signed: `1` → `"+1"`, `-1.5` → `"-1.5"`, `0` → `"0"`. */
+/**
+ * The required-scheduled gap, signed: `1` → `"+1"`, `-1.5` → `"-1.5"` (`"-1,5"`
+ * in Turkish), `0` → `"0"`.
+ */
 function formatGap(gap: number): string {
   const rounded = Math.round(gap * 10) / 10;
   if (rounded === 0) return '0';
-  return rounded > 0 ? `+${rounded}` : `${rounded}`;
+  const magnitude = formatDecimal(Math.abs(rounded), 1) ?? '';
+  return rounded > 0 ? `+${magnitude}` : `-${magnitude}`;
 }
 
 /**

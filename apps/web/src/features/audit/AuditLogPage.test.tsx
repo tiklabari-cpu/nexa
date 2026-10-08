@@ -21,7 +21,11 @@ import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
-const { api, roster } = vi.hoisted(() => ({ api: { get: vi.fn() }, roster: { get: vi.fn() } }));
+const { api, roster, company } = vi.hoisted(() => ({
+  api: { get: vi.fn() },
+  roster: { get: vi.fn() },
+  company: { get: vi.fn() },
+}));
 
 const ADMIN_SCOPES = ['audit_log--all:ro'];
 
@@ -35,8 +39,15 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
     // The roster read (`GET /agents`, who an actor id is) is a second request the
     // page makes beside the trail; it gets its own mock so the `api.get` call
     // order the trail tests pin (`mockResolvedValueOnce`) stays the trail's alone.
+    // The company read (the workspace time zone the date filter is cut in) is
+    // the third such request.
     useApiClient: () => ({
-      get: (path: string) => (path.startsWith('/agents') ? roster.get(path) : api.get(path)),
+      get: (path: string) =>
+        path.startsWith('/agents')
+          ? roster.get(path)
+          : path.startsWith('/settings/company')
+            ? company.get(path)
+            : api.get(path),
     }),
     useAuth: (selector: (state: { agent: { scopes: string[]; role: string } }) => unknown) =>
       selector({ agent: { scopes: currentScopes, role: currentRole } }),
@@ -44,6 +55,7 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 });
 
 const { AuditLogPage } = await import('./AuditLogPage.js');
+const { zonedDayBoundary } = await import('../../lib/format.js');
 
 const LOGIN_ENTRY = {
   id: 'entry-1',
@@ -78,6 +90,8 @@ beforeEach(() => {
   api.get.mockReset();
   roster.get.mockReset();
   roster.get.mockResolvedValue({ items: [] });
+  company.get.mockReset();
+  company.get.mockResolvedValue({ timezone: 'UTC' });
 });
 
 describe('AuditLogPage', () => {
@@ -219,6 +233,55 @@ describe('AuditLogPage', () => {
         '/audit-log?date_from=2026-07-01T00%3A00%3A00.000Z&date_to=2026-07-15T23%3A59%3A59.999Z',
       ),
     );
+  });
+
+  it('cuts the picked days on the workspace clock, not at UTC midnight (O17)', async () => {
+    company.get.mockResolvedValue({ timezone: 'Europe/Istanbul' });
+    api.get.mockResolvedValue(ENTRIES);
+    renderPage(<AuditLogPage />);
+
+    await screen.findByRole('table');
+    api.get.mockClear();
+    api.get.mockResolvedValue(ENTRIES);
+
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-10-07' } });
+    fireEvent.change(screen.getByLabelText('To date'), { target: { value: '2026-10-07' } });
+
+    // Istanbul is UTC+3: its 7 October runs 06 Oct 21:00Z - 07 Oct 20:59:59.999Z, so
+    // an entry at local 00:30 (21:30Z the evening before) is inside the day.
+    await waitFor(() =>
+      expect(api.get).toHaveBeenLastCalledWith(
+        '/audit-log?date_from=2026-10-06T21%3A00%3A00.000Z&date_to=2026-10-07T20%3A59%3A59.999Z',
+      ),
+    );
+    expect(company.get).toHaveBeenCalledWith('/settings/company');
+  });
+
+  it('reads days on the browser clock when the workspace zone cannot be read', async () => {
+    company.get.mockRejectedValue(new Error('forbidden'));
+    api.get.mockResolvedValue(ENTRIES);
+    renderPage(<AuditLogPage />);
+
+    await screen.findByRole('table');
+    api.get.mockClear();
+    api.get.mockResolvedValue(ENTRIES);
+
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-10-07' } });
+
+    const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const expected = zonedDayBoundary('2026-10-07', 'start', browserZone);
+    await waitFor(() =>
+      expect(api.get).toHaveBeenLastCalledWith(
+        `/audit-log?date_from=${encodeURIComponent(expected)}`,
+      ),
+    );
+  });
+
+  it('does not read the company details until a date is picked', async () => {
+    api.get.mockResolvedValue(ENTRIES);
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+    expect(company.get).not.toHaveBeenCalled();
   });
 
   it('writes the filter selection to the URL and restores it on reload', async () => {

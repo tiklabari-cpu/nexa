@@ -213,4 +213,20 @@ describe('CampaignsPage localisation (NFR-I18N2)', () => {
     expect(screen.getByRole('heading', { name: 'Müşteriler', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Yeni kampanya' })).toBeInTheDocument();
   });
+
+  it('writes the conversion rate with the percent sign in front (O17)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <CampaignsPage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+      'tr',
+    );
+
+    // 12 conversions of 200 displayed.
+    expect(await screen.findByText('%6')).toBeInTheDocument();
+    expect(screen.queryByText('6%')).not.toBeInTheDocument();
+  });
 });

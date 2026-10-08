@@ -35,39 +35,92 @@ export function formatCount(
   return new Intl.NumberFormat(locale).format(value);
 }
 
-/** `0.873` → `"87%"`. Rates arrive as fractions, never as percentages. */
-export function formatRate(value: number | null | undefined): string | null {
+/**
+ * `0.873` → `"87%"` (English) / `"%87"` (Turkish). Rates arrive as fractions,
+ * never as percentages; the sign's side and spacing are the locale's to say.
+ */
+export function formatRate(
+  value: number | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
   if (value == null || !Number.isFinite(value)) return null;
-  return `${Math.round(value * 100)}%`;
+  return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
+    value,
+  );
+}
+
+/**
+ * `0.25` → `"0.3"` (English) / `"0,3"` (Turkish): at most `fractionDigits`
+ * decimals, none when the value is whole. For figures that are not money and
+ * not counts — a staffing level of 2.5 agents.
+ */
+export function formatDecimal(
+  value: number | null | undefined,
+  fractionDigits = 1,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: fractionDigits }).format(value);
+}
+
+/** The four duration units, as each language abbreviates them. */
+interface DurationUnits {
+  day: string;
+  hour: string;
+  minute: string;
+  second: string;
+  /** Between the number and its unit: `"5m"` in English, `"5 dk"` in Turkish. */
+  gap: string;
+}
+
+/**
+ * Unit table rather than `Intl.DurationFormat`. The built-in is engine- and
+ * ICU-dependent, and for Turkish its narrow style prints minutes as `"d"`
+ * (`"5d 3sn"`), which reads as five days. A table keyed by language says the
+ * same thing in every browser. A language with no entry reads in English.
+ */
+const DURATION_UNITS: Record<string, DurationUnits> = {
+  en: { day: 'd', hour: 'h', minute: 'm', second: 's', gap: '' },
+  tr: { day: 'g', hour: 'sa', minute: 'dk', second: 'sn', gap: ' ' },
+};
+
+function durationUnits(locale: string | undefined): DurationUnits {
+  const language = locale?.split('-')[0]?.toLowerCase() ?? 'en';
+  return DURATION_UNITS[language] ?? DURATION_UNITS['en']!;
 }
 
 /**
  * Seconds → the coarsest unit that still reads precisely.
  *
  * "2m 14s" rather than "134s": an agent comparing response times reasons in
- * minutes, and a raw second count makes them do the division.
+ * minutes, and a raw second count makes them do the division. In Turkish the
+ * same figure reads "2 dk 14 sn".
+ *
+ * `largestUnit: 'hour'` keeps counting hours past a day (`"25h 4m"`), for a
+ * visit length where "1d 1h" would read as a different kind of number.
  */
-export function formatDuration(seconds: number | null | undefined): string | null {
+export function formatDuration(
+  seconds: number | null | undefined,
+  locale: string | undefined = activeLocale,
+  largestUnit: 'day' | 'hour' = 'day',
+): string | null {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
 
+  const u = durationUnits(locale);
+  const part = (n: number, unit: string): string => `${n}${u.gap}${unit}`;
+  const pair = (n: number, unit: string, rest: number, restUnit: string): string =>
+    rest === 0 ? part(n, unit) : `${part(n, unit)} ${part(rest, restUnit)}`;
+
   const whole = Math.round(seconds);
-  if (whole < 60) return `${whole}s`;
+  if (whole < 60) return part(whole, u.second);
 
   const minutes = Math.floor(whole / 60);
-  if (minutes < 60) {
-    const remainder = whole % 60;
-    return remainder === 0 ? `${minutes}m` : `${minutes}m ${remainder}s`;
-  }
+  if (minutes < 60) return pair(minutes, u.minute, whole % 60, u.second);
 
   const hours = Math.floor(minutes / 60);
-  const remainderMinutes = minutes % 60;
-  if (hours < 24) {
-    return remainderMinutes === 0 ? `${hours}h` : `${hours}h ${remainderMinutes}m`;
-  }
+  if (hours < 24 || largestUnit === 'hour') return pair(hours, u.hour, minutes % 60, u.minute);
 
-  const days = Math.floor(hours / 24);
-  const remainderHours = hours % 24;
-  return remainderHours === 0 ? `${days}d` : `${days}d ${remainderHours}h`;
+  return pair(Math.floor(hours / 24), u.day, hours % 24, u.hour);
 }
 
 /** Cents → `"$99.00"`. Money is stored in cents; never format a float. */
@@ -205,4 +258,79 @@ export function formatDay(
   const date = new Date(`${day}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return day;
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+}
+
+/** The viewer's own IANA zone — what a day means when the workspace names none. */
+export function browserTimeZone(): string {
+  try {
+    return new Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/**
+ * How far a zone's wall clock is ahead of UTC at `instant`, in milliseconds
+ * (Istanbul: `+3h`). Read back from `Intl` rather than from a table, so the
+ * zone's own daylight-saving history decides.
+ */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  }).formatToParts(new Date(instant));
+  const field = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+  const wallAsUtc = Date.UTC(
+    field('year'),
+    field('month') - 1,
+    field('day'),
+    field('hour'),
+    field('minute'),
+    field('second'),
+  );
+  return wallAsUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/** The instant a `YYYY-MM-DD` wall-clock day begins in `timeZone`. */
+function zonedDayStart(year: number, month: number, day: number, timeZone: string): number {
+  const wall = Date.UTC(year, month - 1, day);
+  // The offset is a property of the instant, and the instant is what we are
+  // solving for: guess with the offset at the wall time read as UTC, then
+  // correct once with the offset at the guess. That lands on the right side of
+  // a daylight-saving jump for every real zone.
+  const first = wall - zoneOffsetMs(wall, timeZone);
+  return wall - zoneOffsetMs(first, timeZone);
+}
+
+/**
+ * A date input's `YYYY-MM-DD` → the first or last millisecond of that day on
+ * the wall clock of `timeZone`, as an ISO instant. The audit log's date filter
+ * is a day the person picked on their own calendar: cutting it at UTC midnight
+ * puts Istanbul's 00:00–03:00 into the day before. The end is one millisecond
+ * short of the next day's start, so a 23- or 25-hour day is still whole.
+ * Anything that is not a date comes back as written.
+ */
+export function zonedDayBoundary(
+  day: string,
+  edge: 'start' | 'end',
+  timeZone: string = browserTimeZone(),
+): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) return day;
+  const [year, month, date] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  try {
+    const instant =
+      edge === 'start'
+        ? zonedDayStart(year, month, date, timeZone)
+        : zonedDayStart(year, month, date + 1, timeZone) - 1;
+    return new Date(instant).toISOString();
+  } catch {
+    return day;
+  }
 }

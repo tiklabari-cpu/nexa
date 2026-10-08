@@ -19,7 +19,7 @@ import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
-import { formatCount, formatDate } from '../../lib/format.js';
+import { formatCount, formatDate, formatRate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { CampaignBuilder } from './CampaignBuilder.js';
@@ -314,7 +314,11 @@ function CampaignCard({
         <Stat
           label={t('campaigns.page.stat.conversion')}
           value={formatCount(conversion) ?? '0'}
-          hint={displayed > 0 ? `${conversionRate(campaign.performance)}%` : undefined}
+          hint={
+            displayed > 0
+              ? (formatRate(conversionRate(campaign.performance) / 100) ?? undefined)
+              : undefined
+          }
         />
       </dl>
     </div>

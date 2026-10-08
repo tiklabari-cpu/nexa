@@ -13,12 +13,15 @@ import {
   formatDate,
   formatDateTime,
   formatDay,
+  formatDecimal,
+  formatDuration,
   formatLanguage,
   formatMoney,
   formatPeriod,
   formatRate,
   formatWeekday,
   setFormatLocale,
+  zonedDayBoundary,
 } from './format.js';
 
 afterEach(() => {
@@ -79,10 +82,108 @@ describe('active locale binding', () => {
   });
 });
 
-describe('locale-agnostic helpers are unaffected', () => {
-  it('formatRate stays a plain percentage', () => {
-    expect(formatRate(0.873)).toBe('87%');
+describe('formatRate — the percent sign follows the language (O17)', () => {
+  it('writes English "45%" and Turkish "%45"', () => {
+    expect(formatRate(0.45, 'en')).toBe('45%');
+    expect(formatRate(0.45, 'tr')).toBe('%45');
+    expect(formatRate(0.873, 'tr')).toBe('%87');
+  });
+
+  it('follows the active locale, and is null for "no data"', () => {
+    setFormatLocale('tr');
+    expect(formatRate(0.5)).toBe('%50');
+    setFormatLocale('en');
+    expect(formatRate(0.5)).toBe('50%');
     expect(formatRate(null)).toBeNull();
+    expect(formatRate(Number.NaN)).toBeNull();
+  });
+
+  it('keeps 0 as a figure and rounds to whole percent', () => {
+    expect(formatRate(0, 'tr')).toBe('%0');
+    expect(formatRate(0.004, 'en')).toBe('0%');
+    expect(formatRate(1, 'en')).toBe('100%');
+  });
+});
+
+describe('formatDecimal — the decimal mark follows the language (O17)', () => {
+  it('writes "0.2" in English and "0,2" in Turkish', () => {
+    expect(formatDecimal(0.2, 1, 'en')).toBe('0.2');
+    expect(formatDecimal(0.2, 1, 'tr')).toBe('0,2');
+    expect(formatDecimal(2.5, 1, 'tr')).toBe('2,5');
+  });
+
+  it('keeps whole numbers whole and caps the fraction', () => {
+    expect(formatDecimal(2, 1, 'tr')).toBe('2');
+    expect(formatDecimal(2.46, 1, 'en')).toBe('2.5');
+    expect(formatDecimal(null)).toBeNull();
+  });
+});
+
+describe("formatDuration — units are the language's (O17)", () => {
+  it('keeps the English shape', () => {
+    expect(formatDuration(45, 'en')).toBe('45s');
+    expect(formatDuration(303, 'en')).toBe('5m 3s');
+    expect(formatDuration(300, 'en')).toBe('5m');
+    expect(formatDuration(3840, 'en')).toBe('1h 4m');
+    expect(formatDuration(90_000, 'en')).toBe('1d 1h');
+  });
+
+  it('writes Turkish units with a space: "5 dk 3 sn"', () => {
+    expect(formatDuration(45, 'tr')).toBe('45 sn');
+    expect(formatDuration(303, 'tr')).toBe('5 dk 3 sn');
+    expect(formatDuration(300, 'tr')).toBe('5 dk');
+    expect(formatDuration(3840, 'tr')).toBe('1 sa 4 dk');
+    expect(formatDuration(90_000, 'tr')).toBe('1 g 1 sa');
+  });
+
+  it('follows the active locale and reads an unknown language in English', () => {
+    setFormatLocale('tr-TR');
+    expect(formatDuration(303)).toBe('5 dk 3 sn');
+    setFormatLocale('de');
+    expect(formatDuration(303)).toBe('5m 3s');
+  });
+
+  it('can keep counting hours past a day, and is null for "no data"', () => {
+    expect(formatDuration(90_240, 'en', 'hour')).toBe('25h 4m');
+    expect(formatDuration(null)).toBeNull();
+    expect(formatDuration(-1)).toBeNull();
+  });
+});
+
+describe('zonedDayBoundary — a picked day is a day on the workspace clock (O17)', () => {
+  it('cuts Istanbul days at local midnight (UTC+3), not at UTC midnight', () => {
+    expect(zonedDayBoundary('2026-10-07', 'start', 'Europe/Istanbul')).toBe(
+      '2026-10-06T21:00:00.000Z',
+    );
+    expect(zonedDayBoundary('2026-10-07', 'end', 'Europe/Istanbul')).toBe(
+      '2026-10-07T20:59:59.999Z',
+    );
+  });
+
+  it('puts local 00:30 inside its own day', () => {
+    const entry = Date.parse('2026-10-06T21:30:00.000Z'); // 2026-10-07 00:30 in Istanbul
+    const from = Date.parse(zonedDayBoundary('2026-10-07', 'start', 'Europe/Istanbul'));
+    const to = Date.parse(zonedDayBoundary('2026-10-07', 'end', 'Europe/Istanbul'));
+    expect(entry >= from && entry <= to).toBe(true);
+  });
+
+  it('leaves UTC alone and handles zones behind UTC', () => {
+    expect(zonedDayBoundary('2026-07-01', 'start', 'UTC')).toBe('2026-07-01T00:00:00.000Z');
+    expect(zonedDayBoundary('2026-07-15', 'end', 'UTC')).toBe('2026-07-15T23:59:59.999Z');
+    expect(zonedDayBoundary('2026-01-10', 'start', 'America/New_York')).toBe(
+      '2026-01-10T05:00:00.000Z',
+    );
+  });
+
+  it('keeps a daylight-saving day whole (23 hours in New York on 2026-03-08)', () => {
+    const from = Date.parse(zonedDayBoundary('2026-03-08', 'start', 'America/New_York'));
+    const to = Date.parse(zonedDayBoundary('2026-03-08', 'end', 'America/New_York'));
+    expect(from).toBe(Date.parse('2026-03-08T05:00:00.000Z'));
+    expect(to).toBe(Date.parse('2026-03-09T03:59:59.999Z'));
+  });
+
+  it('returns what is not a date as written', () => {
+    expect(zonedDayBoundary('soon', 'start', 'UTC')).toBe('soon');
   });
 });
 

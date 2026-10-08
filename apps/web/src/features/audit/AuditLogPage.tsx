@@ -67,7 +67,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
-import { formatDateTime } from '../../lib/format.js';
+import { browserTimeZone, formatDateTime, zonedDayBoundary } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { AccessReviewExport } from './AccessReviewExport.js';
 import {
@@ -315,12 +315,30 @@ function formatMetadataValue(value: unknown): string {
   return String(value);
 }
 
-/** A date input's `YYYY-MM-DD` value to the start/end instant of that UTC day. */
-function startOfDay(value: string): string {
-  return `${value}T00:00:00.000Z`;
-}
-function endOfDay(value: string): string {
-  return `${value}T23:59:59.999Z`;
+/**
+ * The zone the date filter's days are read in: the workspace's (Settings →
+ * Company details → Time zone), else the browser's.
+ *
+ * Only asked once a date is picked — a trail with no date filter sends no
+ * instants and has no use for a zone — and the trail waits for the answer
+ * (`ready`), so one pick is one request, cut on the right midnight, not a
+ * request on the browser's day followed by a corrected one. The company read is
+ * admin-only; a caller it refuses, or any failure, reads days on the browser's
+ * clock rather than losing the filter.
+ */
+function useFilterZone(wanted: boolean): { zone: string; ready: boolean } {
+  const api = useApiClient();
+  const query = useQuery({
+    queryKey: ['settings', 'company'],
+    queryFn: () => api.get<{ timezone?: string }>('/settings/company'),
+    enabled: wanted,
+    retry: false,
+    staleTime: 60_000,
+  });
+  return {
+    zone: query.data?.timezone || browserTimeZone(),
+    ready: !wanted || !query.isPending,
+  };
 }
 
 /**
@@ -333,12 +351,13 @@ function buildQuery(
   action: string,
   dateFrom: string,
   dateTo: string,
+  zone: string,
   pageId: string | undefined,
 ): string {
   const params = new URLSearchParams();
   if (action) params.set('action', action);
-  if (dateFrom) params.set('date_from', startOfDay(dateFrom));
-  if (dateTo) params.set('date_to', endOfDay(dateTo));
+  if (dateFrom) params.set('date_from', zonedDayBoundary(dateFrom, 'start', zone));
+  if (dateTo) params.set('date_to', zonedDayBoundary(dateTo, 'end', zone));
   if (pageId) params.set('page_id', pageId);
   const query = params.toString();
   return query ? `/audit-log?${query}` : '/audit-log';
@@ -366,13 +385,17 @@ export function AuditLogPage(): ReactElement {
     setSearchParams(next, { replace: true });
   }
 
+  const filterZone = useFilterZone(canView && Boolean(dateFrom || dateTo));
+
   const query = useInfiniteQuery({
-    queryKey: ['audit-log', action, dateFrom, dateTo],
+    queryKey: ['audit-log', action, dateFrom, dateTo, dateFrom || dateTo ? filterZone.zone : ''],
     queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
-      api.get<AuditLogPageResponse>(buildQuery(action, dateFrom, dateTo, pageParam)),
+      api.get<AuditLogPageResponse>(
+        buildQuery(action, dateFrom, dateTo, filterZone.zone, pageParam),
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_page_id,
-    enabled: canView,
+    enabled: canView && filterZone.ready,
   });
 
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];

@@ -9,6 +9,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setFormatLocale } from '../../lib/format.js';
 import { formatDuration, liveDurationSeconds, useLiveDurationSeconds } from './visitDuration.js';
 
 describe('liveDurationSeconds — the server figure plus the time since (FR-MOD-02.4.1–.6)', () => {
@@ -71,5 +72,16 @@ describe('formatDuration', () => {
     expect(formatDuration(200)).toBe('3m 20s');
     expect(formatDuration(180)).toBe('3m');
     expect(formatDuration(3_840)).toBe('1h 4m');
+  });
+
+  it('reads in the active language, and keeps counting hours past a day (O17)', () => {
+    setFormatLocale('tr');
+    try {
+      expect(formatDuration(200)).toBe('3 dk 20 sn');
+      expect(formatDuration(3_840)).toBe('1 sa 4 dk');
+    } finally {
+      setFormatLocale('en');
+    }
+    expect(formatDuration(90_240)).toBe('25h 4m');
   });
 });

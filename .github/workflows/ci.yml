@@ -290,8 +290,10 @@ jobs:
       # The suite signs in, exchanges tokens and mints widget tokens from one
       # IP in quick succession. At the production default of 30/min that trips
       # the anonymous limiter, and the run fails with 429s that look like
-      # product bugs. Raised here only.
+      # product bugs. Raised here only — and the token exchange's own bucket
+      # with it (tm 259.3), which until then was part of this one.
       RATE_LIMIT_ANON_PER_MIN: '500'
+      RATE_LIMIT_TOKEN_PER_MIN: '500'
       # And the hourly per-network sign-up limit (tm 257.14, default 10): the
       # suites sign up from this one address many times an hour.
       RATE_LIMIT_SIGNUP_PER_HOUR: '10000'

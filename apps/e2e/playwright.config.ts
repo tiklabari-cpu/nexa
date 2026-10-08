@@ -192,6 +192,11 @@ export default defineConfig({
       // ample headroom so a 429 never masquerades as a product failure — the
       // limiter itself is covered by the integration suite, not here.
       //
+      // The token endpoint's own bucket (`RATE_LIMIT_TOKEN_PER_MIN`, tm 259.3)
+      // is raised with it: every sign-in and every page load spends a token
+      // request, and until that bucket existed they all ran under the
+      // anonymous raise — so this keeps the suite's headroom where it was.
+      //
       // And no background sweeps. Every test in this suite asserts against one
       // shared, seeded workspace, so a sweep is a second writer nobody in the
       // test declared: the SLA pass marks *every* overdue thread the moment a
@@ -237,6 +242,7 @@ export default defineConfig({
         LLM_PROVIDER: 'mock',
         EMBEDDING_PROVIDER: 'mock',
         RATE_LIMIT_ANON_PER_MIN: '2000',
+        RATE_LIMIT_TOKEN_PER_MIN: '2000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
         RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
         MAIL_DAILY_PER_WORKSPACE: '1000000',

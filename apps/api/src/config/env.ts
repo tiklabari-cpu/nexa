@@ -322,8 +322,21 @@ export const envSchema = z.object({
   RATE_LIMIT_AGENT_PER_MIN: z.coerce.number().int().positive().default(180),
   RATE_LIMIT_AGENT_BURST: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_CUSTOMER_PER_MIN: z.coerce.number().int().positive().default(60),
-  /** Unauthenticated callers, per IP: sign-in, token exchange, widget tokens. */
+  /** Unauthenticated callers, per IP: sign-in, widget tokens, anything else without a credential. */
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
+  /**
+   * `POST /auth/token`, per IP (tm 259.3): the sign-in's code exchange and
+   * every refresh. Its own bucket rather than the anon one: each panel page
+   * load spends a refresh, so a team behind one office address went through
+   * 30/min with reloads alone, and the 429 signed people out.
+   *
+   * 300 is headroom for a mass reconnect — an office's panels and phones all
+   * coming back in the same minute after a deploy — not a pace a person sets.
+   * Guessing is not what this ceiling bounds: a refused credential also spends
+   * a slot of `RATE_LIMIT_AUTH_FAILURES_PER_MIN`, reserved before the lookup,
+   * so raising this buys more successful exchanges and not one more attempt.
+   */
+  RATE_LIMIT_TOKEN_PER_MIN: z.coerce.number().int().positive().default(300),
   /**
    * `GET /deployment`, per IP (tm 257.13). Its own bucket rather than the anon
    * one: the panel reads it on every page load, signed in or not, and in the
@@ -349,10 +362,18 @@ export const envSchema = z.object({
    * died, so this is one refusal a second for an address that is producing
    * nothing but refusals — while leaving an order of magnitude of headroom for
    * a shared office address where a deploy expired everyone's session at once.
-   * An address that does trip it recovers on its own within the 60s window, is
-   * told when by `Retry-After`, and can re-authenticate meanwhile: sign-in and
-   * token exchange are public routes that carry no `Authorization` header, so
-   * this budget never touches them.
+   * An address that does trip it recovers on its own within the 60s window and
+   * is told when by `Retry-After`.
+   *
+   * `POST /auth/token` answers to it too (tm 259.3): a refresh token, an
+   * authorization code and a client secret are credentials it looks up, so a
+   * refused one is a failure here like a refused bearer token, reserved before
+   * the lookup and handed back when the exchange succeeds. One ceiling per
+   * address for every credential it presents — the exchange leaving the anon
+   * bucket did not open a budget of its own for guessing. The flip side: while
+   * an address has none left, its token exchanges wait for the window as well.
+   * The password doors (`/auth/login`, `/auth/authorize`) carry no lookup of
+   * this kind and stay on the anon bucket alone.
    */
   RATE_LIMIT_AUTH_FAILURES_PER_MIN: z.coerce.number().int().positive().default(60),
   /**

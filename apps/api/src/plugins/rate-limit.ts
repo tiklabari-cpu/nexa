@@ -4,6 +4,7 @@
  *   agent token (PAT or OAuth) : 180 req/min, burst 30
  *   customer token             : 60 req/min
  *   unauthenticated            : 30 req/min per IP
+ *   token exchange             : 300 req/min per IP (`POST /auth/token`, below)
  *
  * Sliding window over a Redis sorted set: each request is a member scored by
  * timestamp, older entries are trimmed, and the remaining count is the usage.
@@ -56,6 +57,25 @@
  * authorization across two lifecycle phases, which touches every route; the
  * credential there is real, attributable and revocable, so it is a different
  * problem from an anonymous flood and gets its own task, not this one.
+ *
+ * ## The token endpoint (tm 259.3)
+ *
+ * `POST /auth/token` used to share the anonymous bucket with sign-in and the
+ * widget's token mint. Every panel page load spends a refresh, so a team behind
+ * one office address used up 30 a minute with reloads alone, and the 429 took
+ * the session with it. The exchange has its own per-IP bucket now
+ * (`tokenRateLimit`).
+ *
+ * That bucket must not become a budget for guessing. A refresh token, an
+ * authorization code and a client secret are credentials too, only carried in
+ * the body, so the endpoint answers to the same per-IP failure budget as a
+ * bearer token — with one difference, because the outcome is only known after
+ * the lookup: the slot is *reserved* on the way in and handed back once the
+ * answer is anything but a refusal (the `onSend` hook below). Reading the budget
+ * on the way in and charging it on the way out, as the bearer path does, would
+ * let every request already in flight past the read before the first refusal is
+ * charged; a reservation is counted the moment it is made, so the ceiling holds
+ * for simultaneous requests too.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
@@ -113,6 +133,11 @@ export interface RateLimitDecision {
   resetMs: number;
 }
 
+/** What `reserve` answers: the decision, and the window entry `release` takes back. */
+export interface RateLimitReservation extends RateLimitDecision {
+  member: string;
+}
+
 export class RateLimiter {
   #scriptSha: string | null = null;
 
@@ -121,6 +146,29 @@ export class RateLimiter {
   /** Spend one slot of `key`'s budget, or report that there was none to spend. */
   async consume(key: string, limit: number, windowMs: number): Promise<RateLimitDecision> {
     return this.#evaluate(key, limit, windowMs, true);
+  }
+
+  /**
+   * Spend one slot provisionally, for a request whose outcome decides whether
+   * it should have cost one — the token endpoint's credential check (tm 259.3).
+   *
+   * Counted the moment it is made, exactly like `consume`, which is the point:
+   * charging only after the outcome is known lets every request already in
+   * flight past the check first. `release` hands the slot back once the
+   * request turns out not to be what the budget meters.
+   *
+   * The entry is a fresh random id, never the request id: that one can come
+   * from the caller's `X-Request-Id`, and attempts sharing an entry would
+   * count as one.
+   */
+  async reserve(key: string, limit: number, windowMs: number): Promise<RateLimitReservation> {
+    const member = randomUUID();
+    return { ...(await this.#evaluate(key, limit, windowMs, true, member)), member };
+  }
+
+  /** Hand back a slot `reserve` spent. A slot already out of the window is a no-op. */
+  async release(key: string, member: string): Promise<void> {
+    await this.redis.zrem(key, member);
   }
 
   /**
@@ -140,9 +188,10 @@ export class RateLimiter {
     limit: number,
     windowMs: number,
     record: boolean,
+    member: string = randomUUID(),
   ): Promise<RateLimitDecision> {
     const now = Date.now();
-    const args = [String(now), String(windowMs), String(limit), randomUUID(), record ? '1' : '0'];
+    const args = [String(now), String(windowMs), String(limit), member, record ? '1' : '0'];
 
     let raw: unknown;
     try {
@@ -179,7 +228,9 @@ interface Bucket {
  * Charged by `plugins/auth.ts` on each failed resolution and checked here
  * before authentication runs, so the two halves have to name the same key and
  * the same ceiling — hence one exported function rather than a string spelled
- * in two files.
+ * in two files. The token endpoint reserves from the same budget for the
+ * credential in its body (tm 259.3): one ceiling per address, whichever door
+ * the credential was tried at.
  *
  * Keyed by IP because that is the only thing known about the caller at the
  * point the decision has to be made: the credential is precisely what could not
@@ -227,14 +278,28 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
 
   // `GET /deployment` (tm 257.13): the panel reads it on every page load,
   // signed in or not, so in the anon bucket below it would spend the 30/min
-  // that sign-in, the token exchange and the widget's token mint share — a
-  // few reloads of the sign-in screen would lock out the sign-in itself. Its
-  // own per-IP bucket, ahead of the principal buckets like the two above, so
-  // a caller that also sends a token is still metered by the route.
+  // that sign-in and the widget's token mint share — a few reloads of the
+  // sign-in screen would lock out the sign-in itself. Its own per-IP bucket,
+  // ahead of the principal buckets like the two above, so a caller that also
+  // sends a token is still metered by the route.
   if (request.routeOptions.config.publicConfigRateLimit) {
     return {
       key: `rl:pubcfg:${request.ip}`,
       limit: env.RATE_LIMIT_PUBLIC_CONFIG_PER_MIN,
+      windowMs: 60_000,
+    };
+  }
+
+  // `POST /auth/token` (tm 259.3): every panel page load spends a refresh, so
+  // in the anon bucket an office's reloads locked out its own sessions. Instead
+  // of the anon bucket, not as well as it: one request, one traffic bucket.
+  // Ahead of the principal buckets for the same reason as `/deployment`. What
+  // keeps a higher ceiling from buying guesses is the failure budget the
+  // pre-auth hook reserves from for this route, not this bucket.
+  if (request.routeOptions.config.tokenRateLimit) {
+    return {
+      key: `rl:token:${request.ip}`,
+      limit: env.RATE_LIMIT_TOKEN_PER_MIN,
       windowMs: 60_000,
     };
   }
@@ -273,8 +338,8 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
     };
   }
 
-  // Unauthenticated callers share one bucket per IP. This covers sign-in,
-  // token exchange and widget token minting, so it is the limit an end-to-end
+  // Unauthenticated callers share one bucket per IP. This covers sign-in (both
+  // password doors) and widget token minting, so it is the limit an end-to-end
   // suite runs into first — hence configurable like the others (ADR-07), rather
   // than the only hard-coded one.
   return {
@@ -290,15 +355,43 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
 
   app.decorate('rateLimiter', limiter);
   app.decorateRequest('rateLimitChargedKey', undefined);
+  app.decorateRequest('credentialAttempt', undefined);
+
+  /**
+   * Answer the request from one decision, or let it through.
+   *
+   * `announce` is false for a budget the caller does not spend from in the
+   * ordinary way — the failure budget, read or reserved — and then the headers
+   * are written only when it refuses: a request that got past it has a real
+   * bucket waiting for it, and announcing the failure budget's numbers first
+   * would just be overwritten a moment later by the ones the caller actually
+   * spends from.
+   */
+  function enforce(reply: FastifyReply, decision: RateLimitDecision, announce: boolean): void {
+    if (announce || !decision.allowed) {
+      const resetAt = Math.ceil((Date.now() + decision.resetMs) / 1000);
+      reply.headers({
+        'X-RateLimit-Limit': String(decision.limit),
+        'X-RateLimit-Remaining': String(decision.remaining),
+        'X-RateLimit-Reset': String(resetAt),
+      });
+    }
+
+    if (!decision.allowed) {
+      // ADR-07's contract holds wherever the refusal comes from: `Retry-After`
+      // plus the three `X-RateLimit-*` headers, on every 429.
+      throw ApiError.tooManyRequests(
+        decision.resetMs / 1000,
+        'Rate limit exceeded. Retry after the interval in the Retry-After header.',
+      );
+    }
+  }
 
   /**
    * Evaluate one bucket and answer the request, or let it through.
    *
-   * `mode: 'peek'` reports the budget without spending a slot, and then only
-   * writes the headers when it refuses — a request that passed the pre-auth
-   * check has a real bucket waiting for it in `preHandler`, and announcing the
-   * failure budget's numbers first would just be overwritten a moment later by
-   * the ones the caller actually spends from.
+   * `mode: 'peek'` reports the budget without spending a slot (see `enforce`
+   * for why it then stays quiet unless it refuses).
    */
   async function meter(
     request: FastifyRequest,
@@ -320,31 +413,52 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
       return null;
     }
 
-    if (mode === 'consume' || !decision.allowed) {
-      const resetAt = Math.ceil((Date.now() + decision.resetMs) / 1000);
-      reply.headers({
-        'X-RateLimit-Limit': String(decision.limit),
-        'X-RateLimit-Remaining': String(decision.remaining),
-        'X-RateLimit-Reset': String(resetAt),
-      });
-    }
-
-    if (!decision.allowed) {
-      // ADR-07's contract holds wherever the refusal comes from: `Retry-After`
-      // plus the three `X-RateLimit-*` headers, on every 429.
-      throw ApiError.tooManyRequests(
-        decision.resetMs / 1000,
-        'Rate limit exceeded. Retry after the interval in the Retry-After header.',
-      );
-    }
-
+    enforce(reply, decision, mode === 'consume');
     return decision;
+  }
+
+  /**
+   * Take one slot of the address's failure budget for the credential in a
+   * token request's body, before anything is looked up (tm 259.3 — the file
+   * header has the reasoning). Remembered on the request so `onSend` can hand
+   * it back; an address with no slot left is refused here, without the lookup.
+   */
+  async function reserveCredentialAttempt(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    const failures = authFailureBucket(request.ip, env);
+    let reservation: RateLimitReservation;
+    try {
+      reservation = await limiter.reserve(failures.key, failures.limit, failures.windowMs);
+    } catch (error) {
+      // Fails open, like `meter` and for the same reason.
+      request.log.error({ err: error }, 'rate limiter unavailable — allowing request');
+      return;
+    }
+
+    enforce(reply, reservation, false);
+    request.credentialAttempt = { key: failures.key, member: reservation.member };
   }
 
   // Stage one, before `auth` (see the file header): the limit that can be
   // decided without knowing who is asking.
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.config.skipRateLimit) return;
+
+    if (request.routeOptions.config.tokenRateLimit) {
+      // The credential this route verifies is in the body, so `Authorization`
+      // has no say in how it is metered: the failure budget is reserved and
+      // the route's bucket charged here, header or not. Otherwise a header —
+      // a stranger's garbage, or a trial account's own working token — would
+      // send the request down the branch below, which reads the failure budget
+      // without spending from it, and the body's guess would go uncounted.
+      await reserveCredentialAttempt(request, reply);
+      const bucket = bucketFor(request, env);
+      const decision = await meter(request, reply, bucket, 'consume');
+      if (decision) request.rateLimitChargedKey = bucket.key;
+      return;
+    }
 
     const credential = readCredential(request);
 
@@ -383,6 +497,33 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
 
     await meter(request, reply, bucket, 'consume');
   });
+
+  // The other half of the token endpoint's reservation. A 401 is that route
+  // refusing the credential it was shown — `invalid_grant` for a code or a
+  // refresh token, `invalid_client` for a client — which is the failure the
+  // slot stands for, so it stays spent. Anything else hands it back: a grant,
+  // a body that never reached a lookup (400), a request a bucket turned away
+  // (429), our own fault (5xx). Before the response goes out rather than after
+  // it, so a client that waits for one answer before asking again never finds
+  // its previous, successful request still holding a slot.
+  app.addHook('onSend', async (request, reply, payload) => {
+    const attempt = request.credentialAttempt;
+    if (attempt === undefined || reply.statusCode === 401) return payload;
+
+    request.credentialAttempt = undefined;
+    try {
+      await limiter.release(attempt.key, attempt.member);
+    } catch (error) {
+      // The slot stays counted until the window passes — the direction a
+      // budget that bounds guessing should fail in, and never the reason the
+      // answer itself fails.
+      request.log.error(
+        { err: error },
+        'credential attempt not handed back — counted until it expires',
+      );
+    }
+    return payload;
+  });
 }
 
 declare module 'fastify' {
@@ -397,6 +538,12 @@ declare module 'fastify' {
      * authentication with a credential.
      */
     rateLimitChargedKey?: string;
+    /**
+     * Internal to this plugin: the failure-budget slot a `tokenRateLimit` route
+     * reserved on the way in (tm 259.3), handed back in `onSend` unless the
+     * answer was a refusal. Undefined on every other request.
+     */
+    credentialAttempt?: { key: string; member: string };
   }
   interface FastifyContextConfig {
     /** For health checks and other endpoints a monitor hits continuously. */
@@ -419,6 +566,14 @@ declare module 'fastify' {
      * the shared anon one, which sign-in and the widget's token mint need.
      */
     publicConfigRateLimit?: boolean;
+    /**
+     * `POST /auth/token` (tm 259.3): use the `rl:token:<ip>` bucket instead of
+     * the shared anon one, and reserve a slot of the per-IP failure budget for
+     * the credential the body carries. Only for a route that answers 401 for
+     * exactly the presentations that budget meters — a 401 is what keeps the
+     * slot spent.
+     */
+    tokenRateLimit?: boolean;
   }
 }
 

@@ -782,30 +782,39 @@ export default async function authRoutes(
   });
 
   // --- POST /auth/token ------------------------------------------------------
+  //
+  // Its own per-address bucket, not the anonymous one sign-in shares (tm 259.3):
+  // a panel spends a refresh on every page load. Every refusal below is a 401,
+  // which is what keeps the failure-budget slot `tokenRateLimit` reserves for
+  // the body's credential spent — see `plugins/rate-limit.ts`.
 
-  app.post('/auth/token', { config: { public: true } }, async (request, reply) => {
-    const body = parse(tokenBody, request.body);
+  app.post(
+    '/auth/token',
+    { config: { public: true, tokenRateLimit: true } },
+    async (request, reply) => {
+      const body = parse(tokenBody, request.body);
 
-    const grant =
-      body.grant_type === 'authorization_code'
-        ? await oauth.exchangeAuthorizationCode({
-            code: body.code,
-            codeVerifier: body.code_verifier,
-            clientId: body.client_id,
-            clientSecret: body.client_secret,
-            redirectUri: body.redirect_uri,
-          })
-        : await oauth.refresh({
-            refreshToken: body.refresh_token,
-            clientId: body.client_id,
-            clientSecret: body.client_secret,
-          });
+      const grant =
+        body.grant_type === 'authorization_code'
+          ? await oauth.exchangeAuthorizationCode({
+              code: body.code,
+              codeVerifier: body.code_verifier,
+              clientId: body.client_id,
+              clientSecret: body.client_secret,
+              redirectUri: body.redirect_uri,
+            })
+          : await oauth.refresh({
+              refreshToken: body.refresh_token,
+              clientId: body.client_id,
+              clientSecret: body.client_secret,
+            });
 
-    // Tokens must never be cached by a proxy or the browser.
-    reply.header('Cache-Control', 'no-store');
-    reply.header('Pragma', 'no-cache');
-    return reply.send(grant);
-  });
+      // Tokens must never be cached by a proxy or the browser.
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Pragma', 'no-cache');
+      return reply.send(grant);
+    },
+  );
 
   // --- POST /auth/revoke -----------------------------------------------------
 

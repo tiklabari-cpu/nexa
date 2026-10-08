@@ -273,6 +273,24 @@ describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
   });
 });
 
+/** The `POST /auth/token` bucket (tm 259.3). */
+describe('RATE_LIMIT_TOKEN_PER_MIN', () => {
+  it('is 300 per minute when unset', () => {
+    expect(parseEnv(BASE).RATE_LIMIT_TOKEN_PER_MIN).toBe(300);
+  });
+
+  it('reads a positive whole number, and refuses anything else by name', () => {
+    expect(parseEnv({ ...BASE, RATE_LIMIT_TOKEN_PER_MIN: '1200' }).RATE_LIMIT_TOKEN_PER_MIN).toBe(
+      1200,
+    );
+    for (const value of ['0', '-1', '1.5', 'many', '']) {
+      expect(() => parseEnv({ ...BASE, RATE_LIMIT_TOKEN_PER_MIN: value }), value).toThrow(
+        /RATE_LIMIT_TOKEN_PER_MIN/,
+      );
+    }
+  });
+});
+
 /** The daily AI token caps (tm 257.8). */
 describe('AI_DAILY_*_TOKENS_*', () => {
   const DEFAULTS = {

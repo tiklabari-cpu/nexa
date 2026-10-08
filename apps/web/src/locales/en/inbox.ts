@@ -91,6 +91,9 @@ export const inbox: Messages = {
   'inbox.list.item.queuePosition': '#{position} in queue',
   'inbox.list.item.unreadAria': '{count} unread',
   'inbox.list.item.noMessages': 'No messages yet',
+  'inbox.list.error.title': "Conversations couldn't be loaded",
+  'inbox.list.error.retry': 'Try again',
+  'inbox.list.countUnavailable': 'Count unavailable',
   'inbox.list.loadMore': 'Load more',
   'inbox.list.loading': 'Loading…',
   'inbox.list.sort.ariaLabel': 'Sort conversations',
@@ -106,11 +109,20 @@ export const inbox: Messages = {
   'inbox.thread.showDetails': 'Show details panel',
   'inbox.thread.detailsLabel': 'Details',
   'inbox.thread.copilotLabel': 'Copilot',
+  'inbox.thread.error.title': "This conversation couldn't be loaded",
+  'inbox.thread.error.retry': 'Try again',
+  'inbox.thread.gone.title': 'This conversation no longer exists',
+  'inbox.thread.gone.description':
+    'It may have been removed or moved. Pick another conversation from the list.',
+  'inbox.thread.transcriptError.title': "Messages couldn't be loaded",
+  'inbox.thread.transcriptError.retry': 'Try again',
   'inbox.thread.empty.title': 'No conversation selected',
   'inbox.thread.empty.description': 'Pick a conversation from the list to see it here.',
 
   // Composer
   'inbox.composer.disabledNotice': 'This conversation is archived. Reopen it to reply.',
+  'inbox.composer.unavailableNotice':
+    "The messages couldn't be loaded, so replying is paused. Try loading them again.",
   'inbox.composer.modeAriaLabel': 'Message type',
   'inbox.composer.mode.reply': 'Reply',
   'inbox.composer.mode.note': 'Internal note',

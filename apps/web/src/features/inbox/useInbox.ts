@@ -552,6 +552,15 @@ export interface TranscriptResult {
   loadOlder: () => void;
   /** No page has arrived yet. */
   isPending: boolean;
+  /**
+   * The first page failed, so there is nothing to show. A page that fails
+   * *after* some history is on screen (`loadOlder`) is not this: the thread the
+   * agent is reading is still true, and the next scroll asks again.
+   */
+  isError: boolean;
+  error: Error | null;
+  /** Asks for the thread again; the retry for `isError`. */
+  refetch: () => void;
 }
 
 export function useTranscript(chatId: string | null): TranscriptResult {
@@ -573,6 +582,9 @@ export function useTranscript(chatId: string | null): TranscriptResult {
     isLoadingOlder: query.isFetchingNext,
     loadOlder: query.fetchNext,
     isPending: query.isPending,
+    isError: query.isError && query.pages.length === 0,
+    error: query.error,
+    refetch: query.refetch,
   };
 }
 
@@ -1241,7 +1253,7 @@ export function applyPush(
  */
 export function useViewCounts(
   channel: AdapterChannelType | null = null,
-): Record<InboxView, number | undefined> {
+): Record<InboxView, number | null | undefined> {
   const all = useChatList('all', DEFAULT_CHAT_SORT, channel);
   const mine = useChatList('my', DEFAULT_CHAT_SORT, channel);
   const queued = useChatList('queued', DEFAULT_CHAT_SORT, channel);
@@ -1275,15 +1287,21 @@ export function useViewCounts(
   //
   // It costs no extra request: `total` arrives on the same response as the
   // rows, and `mergeChatHead` carries the freshest one through a live refresh.
+  //
+  // `null` is "the read failed": the last good `total` may still be cached, and
+  // showing it would present a number nobody could confirm as the current one
+  // (tm 259.5). The rail draws a dash for it; `undefined` stays "not loaded yet".
+  const count = (list: PagedQueryResult<ChatSummary>): number | null | undefined =>
+    list.isError ? null : list.total;
   return {
-    all: all.total,
-    my: mine.total,
-    queued: queued.total,
-    unassigned: unassigned.total,
-    supervised: supervised.total,
-    archived: archived.total,
-    ai: ai.total,
-    ai_solved: aiSolved.total,
+    all: count(all),
+    my: count(mine),
+    queued: count(queued),
+    unassigned: count(unassigned),
+    supervised: count(supervised),
+    archived: count(archived),
+    ai: count(ai),
+    ai_solved: count(aiSolved),
   };
 }
 

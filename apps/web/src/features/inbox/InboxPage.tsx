@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { useSetRoutingStatus } from '../../lib/routing-status.js';
@@ -641,7 +642,7 @@ export function InboxPage(): ReactElement {
                   <option value="oldest">{t('inbox.list.sort.oldest')}</option>
                 </select>
                 <span className="tabular shrink-0 text-2xs text-content-tertiary">
-                  {visibleChats.length}
+                  {list.isError ? <CountUnavailable /> : visibleChats.length}
                 </span>
               </header>
 
@@ -675,7 +676,7 @@ export function InboxPage(): ReactElement {
                             : 'bg-inset text-content-tertiary'
                         }`}
                       >
-                        {trafficCounts[tab.id]}
+                        {list.isError ? <CountUnavailable /> : trafficCounts[tab.id]}
                       </span>
                     </button>
                   );
@@ -695,9 +696,20 @@ export function InboxPage(): ReactElement {
                   }
                 }}
               >
+                {/* A failed read is not an empty inbox (tm 259.5): the alert
+                    takes the empty state's place when nothing ever loaded, and
+                    sits above the rows when a later page or refresh failed. */}
+                {list.isError && (
+                  <LoadError
+                    title={t('inbox.list.error.title')}
+                    error={list.error}
+                    retryLabel={t('inbox.list.error.retry')}
+                    onRetry={list.refetch}
+                  />
+                )}
                 {list.isPending ? (
                   <ListSkeleton />
-                ) : visibleChats.length === 0 ? (
+                ) : list.isError && !chatsLoaded ? null : visibleChats.length === 0 ? (
                   <EmptyState
                     title={
                       chats.length > 0 && trafficTab !== 'all'
@@ -846,23 +858,34 @@ export function InboxPage(): ReactElement {
                     )}
                   </header>
 
-                  <Transcript
-                    chatId={selectedId}
-                    events={transcript.events}
-                    loading={transcript.isPending}
-                    currentAgentId={agent?.account_id ?? null}
-                    hasOlder={transcript.hasOlder}
-                    isLoadingOlder={transcript.isLoadingOlder}
-                    onLoadOlder={transcript.loadOlder}
-                    failedSends={failedSends}
-                    onRetry={(entry) => retrySend.mutate(entry.input)}
-                    {...(chat.data.active
-                      ? {
-                          onEdit: (eventId: string, text: string) =>
-                            editMessage.mutateAsync({ eventId, text }),
-                        }
-                      : {})}
-                  />
+                  {/* An empty thread with a live reply box is how a failed read used
+                      to look (tm 259.5); say it failed, and hold the composer. */}
+                  {transcript.isError ? (
+                    <ThreadLoadError
+                      title={t('inbox.thread.transcriptError.title')}
+                      error={transcript.error}
+                      retryLabel={t('inbox.thread.transcriptError.retry')}
+                      onRetry={transcript.refetch}
+                    />
+                  ) : (
+                    <Transcript
+                      chatId={selectedId}
+                      events={transcript.events}
+                      loading={transcript.isPending}
+                      currentAgentId={agent?.account_id ?? null}
+                      hasOlder={transcript.hasOlder}
+                      isLoadingOlder={transcript.isLoadingOlder}
+                      onLoadOlder={transcript.loadOlder}
+                      failedSends={failedSends}
+                      onRetry={(entry) => retrySend.mutate(entry.input)}
+                      {...(chat.data.active
+                        ? {
+                            onEdit: (eventId: string, text: string) =>
+                              editMessage.mutateAsync({ eventId, text }),
+                          }
+                        : {})}
+                    />
+                  )}
 
                   <TypingIndicator
                     chatId={selectedId}
@@ -872,10 +895,20 @@ export function InboxPage(): ReactElement {
 
                   <Composer
                     chatId={selectedId}
-                    disabled={!chat.data.active}
+                    disabled={!chat.data.active || transcript.isError}
+                    {...(chat.data.active && transcript.isError
+                      ? { disabledNotice: t('inbox.composer.unavailableNotice') }
+                      : {})}
                     tags={chat.data.thread?.tags ?? []}
                   />
                 </>
+              ) : selectedId && chat.isError ? (
+                <ThreadLoadError
+                  title={t('inbox.thread.error.title')}
+                  error={chat.error}
+                  retryLabel={t('inbox.thread.error.retry')}
+                  onRetry={() => void chat.refetch()}
+                />
               ) : (
                 <EmptyState
                   title={t('inbox.thread.empty.title')}
@@ -950,6 +983,91 @@ function CopilotButton({ onOpen }: { onOpen: () => void }): ReactElement {
   );
 }
 
+/** A counter whose read failed: a dash for the eye, a sentence for a screen reader. */
+function CountUnavailable(): ReactElement {
+  const t = useTranslate();
+  return (
+    <>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{t('inbox.list.countUnavailable')}</span>
+    </>
+  );
+}
+
+/**
+ * A read that failed, said where its content would have been, with the way to
+ * ask again. The sentence under the title is the error's own type resolved
+ * through `common.errors.*` — offline, a 429 and a 500 should not all read the
+ * same.
+ */
+function LoadError({
+  title,
+  error,
+  retryLabel,
+  onRetry,
+  fill = false,
+}: {
+  title: string;
+  error: unknown;
+  retryLabel: string;
+  onRetry: () => void;
+  /** Takes the pane's remaining height, like the transcript it stands in for. */
+  fill?: boolean;
+}): ReactElement {
+  const t = useTranslate();
+  return (
+    <div
+      role="alert"
+      className={`flex flex-col items-center justify-center gap-2 p-8 text-center ${
+        fill ? 'flex-1' : ''
+      }`}
+    >
+      <p className="text-base font-medium">{title}</p>
+      <p className="max-w-xs text-sm text-content-secondary">{t(errorMessageKey(error))}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content"
+      >
+        {retryLabel}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A failed read inside the open conversation's pane. A 404 means the chat is
+ * gone, which no retry brings back, so it gets its own sentence and no button;
+ * anything else is unreachable-for-now and offers one (tm 259.5).
+ */
+function ThreadLoadError({
+  title,
+  error,
+  retryLabel,
+  onRetry,
+}: {
+  title: string;
+  error: unknown;
+  retryLabel: string;
+  onRetry: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  if (!(error instanceof ApiClientError && error.status === 404)) {
+    return <LoadError title={title} error={error} retryLabel={retryLabel} onRetry={onRetry} fill />;
+  }
+  return (
+    <div
+      role="alert"
+      className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center"
+    >
+      <p className="text-base font-medium">{t('inbox.thread.gone.title')}</p>
+      <p className="max-w-xs text-sm text-content-secondary">
+        {t('inbox.thread.gone.description')}
+      </p>
+    </div>
+  );
+}
+
 function ViewButton({
   label,
   icon,
@@ -960,7 +1078,8 @@ function ViewButton({
   label: string;
   icon: string;
   active: boolean;
-  count?: number;
+  /** `null` is a failed read: a dash, not a stale or zero figure. */
+  count?: number | null;
   onClick: () => void;
 }): ReactElement {
   return (
@@ -979,7 +1098,9 @@ function ViewButton({
       </span>
       <span className="flex-1">{label}</span>
       {count !== undefined && (
-        <span className="tabular text-2xs text-content-tertiary">{count}</span>
+        <span className="tabular text-2xs text-content-tertiary">
+          {count === null ? <CountUnavailable /> : count}
+        </span>
       )}
     </button>
   );

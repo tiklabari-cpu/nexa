@@ -23,6 +23,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -46,6 +47,7 @@ interface Team {
 
 export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -244,7 +246,14 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
                     {canEdit && (
                       <button
                         type="button"
-                        onClick={() => remove.mutate(tag.id)}
+                        onClick={() =>
+                          confirm({
+                            title: t('settings.tags.deleteConfirmTitle', { name: tag.name }),
+                            description: t('settings.tags.deleteConfirmDescription'),
+                            confirmLabel: t('settings.delete'),
+                            onConfirm: () => remove.mutateAsync(tag.id),
+                          })
+                        }
                         aria-label={t('settings.tags.deleteAriaLabel', { name: tag.name })}
                         className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                       >
@@ -306,6 +315,7 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
           )}
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

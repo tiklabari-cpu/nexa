@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { ApiClientError, errorMessageKey, type ApiClient } from '../../lib/api-client.js';
@@ -41,6 +42,7 @@ const STATUS_KEYS: Record<Website['status'], { tone: StatusTone; labelKey: strin
 
 export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const { brandId } = useBrand();
@@ -226,11 +228,21 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                     {canEdit && (
                       <button
                         type="button"
-                        onClick={() => remove.mutate(site.id)}
+                        onClick={() =>
+                          confirm({
+                            title: t('settings.websiteWidgets.removeConfirmTitle', {
+                              domain: site.domain,
+                            }),
+                            description: t('settings.websiteWidgets.removeConfirmDescription'),
+                            confirmLabel: t('settings.remove'),
+                            onConfirm: () => remove.mutateAsync(site.id),
+                          })
+                        }
+                        disabled={remove.isPending}
                         aria-label={t('settings.websiteWidgets.removeAriaLabel', {
                           domain: site.domain,
                         })}
-                        className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                        className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
                       >
                         {t('settings.remove')}
                       </button>
@@ -259,6 +271,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
           </div>
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

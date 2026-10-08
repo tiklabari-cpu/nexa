@@ -14,6 +14,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -29,6 +30,7 @@ interface TrustedDomain {
 
 export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -151,7 +153,16 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
                   {canEdit && (
                     <button
                       type="button"
-                      onClick={() => remove.mutate(item.id)}
+                      onClick={() =>
+                        confirm({
+                          title: t('settings.trustedDomains.removeConfirmTitle', {
+                            domain: item.domain,
+                          }),
+                          description: t('settings.trustedDomains.removeConfirmDescription'),
+                          confirmLabel: t('settings.remove'),
+                          onConfirm: () => remove.mutateAsync(item.id),
+                        })
+                      }
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
                       {t('settings.remove')}
@@ -163,6 +174,7 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
           )}
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

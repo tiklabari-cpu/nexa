@@ -20,6 +20,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -250,6 +251,7 @@ function CustomFieldRow({
   onChanged: () => void;
 }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const [label, setLabel] = useState(field.label);
 
@@ -310,7 +312,14 @@ function CustomFieldRow({
         {canEdit && (
           <button
             type="button"
-            onClick={() => remove.mutate()}
+            onClick={() =>
+              confirm({
+                title: t('settings.customFields.deleteConfirmTitle', { label: field.label }),
+                description: t('settings.customFields.deleteConfirmDescription'),
+                confirmLabel: t('settings.delete'),
+                onConfirm: () => remove.mutateAsync(),
+              })
+            }
             aria-label={t('settings.customFields.deleteAriaLabel', {
               label: field.label,
             })}
@@ -322,6 +331,7 @@ function CustomFieldRow({
       </div>
 
       {error && <ErrorNotice message={t(errorMessageKey(error))} />}
+      {dialog}
     </li>
   );
 }

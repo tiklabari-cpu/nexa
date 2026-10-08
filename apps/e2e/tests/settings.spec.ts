@@ -8,6 +8,7 @@
  */
 import {
   API_BASE,
+  confirmDialog,
   DEMO,
   expect,
   ownerAccessToken,
@@ -90,6 +91,7 @@ test.describe('website widgets', () => {
         .filter({ hasText: domain })
         .getByRole('button', { name: `Remove ${domain}` })
         .click()
+        .then(() => confirmDialog(agentPage, 'Remove'))
         .catch(() => {});
       await agentPage
         .getByRole('region', { name: 'Trusted domains' })
@@ -97,6 +99,74 @@ test.describe('website widgets', () => {
         .filter({ hasText: domain })
         .getByRole('button', { name: 'Remove' })
         .click()
+        .then(() => confirmDialog(agentPage, 'Remove'))
+        .catch(() => {});
+    }
+  });
+
+  // tm 259.7 (UX audit Y3): removing a website stops the widget on that site, and
+  // the button used to do it on a single click. Now it asks first; only the
+  // dialog's own "Remove" sends the DELETE, and Cancel / Escape leave the site.
+  test('removing a website asks first and only deletes on confirm', async ({
+    agentPage,
+    request,
+  }) => {
+    const domain = `remove-check-${Date.now()}.localhost`;
+    const token = await ownerAccessToken(request);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    await agentPage.goto('/app/settings/website-widgets');
+    const section = agentPage.getByRole('region', { name: 'Website widgets' });
+    await section.getByLabel('Website domain').fill(domain);
+    await section.getByRole('button', { name: 'Add website' }).click();
+    const row = section.locator('li').filter({ hasText: domain });
+    await expect(row).toBeVisible();
+
+    const deletes: string[] = [];
+    agentPage.on('request', (r) => {
+      if (r.method() === 'DELETE' && r.url().includes('/websites/')) deletes.push(r.url());
+    });
+    const stillListed = async (): Promise<boolean> => {
+      const list = await request.get(`${API_BASE}/websites`, { headers });
+      const body = (await list.json()) as { items: { domain: string }[] };
+      return body.items.some((site) => site.domain === domain);
+    };
+
+    try {
+      // Click → a dialog that says what happens; nothing has been sent.
+      await row.getByRole('button', { name: `Remove ${domain}` }).click();
+      const dialog = agentPage.getByRole('dialog', { name: `Remove ${domain}?` });
+      await expect(dialog).toContainText('The chat widget stops working on this site');
+      await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      await agentPage.screenshot({ path: 'kanit/259.7-remove-website-confirm.png' });
+      expect(deletes).toEqual([]);
+
+      // Escape and Cancel both leave the site in place.
+      await agentPage.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+      await row.getByRole('button', { name: `Remove ${domain}` }).click();
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(row).toBeVisible();
+      expect(deletes).toEqual([]);
+      expect(await stillListed()).toBe(true);
+
+      // Confirm → exactly one DELETE, and the row goes.
+      await row.getByRole('button', { name: `Remove ${domain}` }).click();
+      await confirmDialog(agentPage, 'Remove');
+      await expect(row).toHaveCount(0);
+      expect(deletes).toHaveLength(1);
+      expect(await stillListed()).toBe(false);
+    } finally {
+      // Leave the trusted domain the add created behind it no more than needed.
+      await agentPage.goto('/app/settings/trusted-domains');
+      await agentPage
+        .getByRole('region', { name: 'Trusted domains' })
+        .locator('li')
+        .filter({ hasText: domain })
+        .getByRole('button', { name: 'Remove' })
+        .click()
+        .then(() => confirmDialog(agentPage, 'Remove'))
         .catch(() => {});
     }
   });
@@ -233,6 +303,7 @@ test.describe('settings', () => {
       .filter({ hasText: domain })
       .getByRole('button', { name: 'Remove' })
       .click();
+    await confirmDialog(agentPage, 'Remove');
     await expect(agentPage.getByText(domain)).toHaveCount(0);
   });
 
@@ -280,6 +351,7 @@ test.describe('settings', () => {
       .filter({ hasText: name })
       .getByRole('button', { name: `Delete tag ${name}` })
       .click();
+    await confirmDialog(agentPage, 'Delete');
     await expect(section().getByText(name)).toHaveCount(0);
   });
 
@@ -341,6 +413,7 @@ test.describe('settings', () => {
       await expect(row.getByText('All teams · 0 in use')).toBeVisible();
 
       await row.getByRole('button', { name: `Delete tag ${name}` }).click();
+      await confirmDialog(agentPage, 'Delete');
       await expect(section().getByText(name)).toHaveCount(0);
       tagId = undefined;
     } finally {
@@ -459,6 +532,7 @@ test.describe('settings', () => {
       expect(await shortcutsAsAgent()).toContain(shortcut);
 
       await row.getByRole('button', { name: `Delete #${shortcut}` }).click();
+      await confirmDialog(agentPage, 'Delete');
       await expect(section().getByText(`#${shortcut}`)).toHaveCount(0);
       replyId = undefined;
     } finally {
@@ -1102,6 +1176,7 @@ test.describe('routing rules', () => {
       ).toBeDisabled();
 
       await row.getByRole('button', { name: `Delete rule ${ruleName}` }).click();
+      await confirmDialog(agentPage, 'Delete');
       await expect(section.locator('li').filter({ hasText: ruleName })).toHaveCount(0);
 
       // Same request, same team, after the console removed the rule.

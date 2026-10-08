@@ -18,6 +18,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -50,6 +51,7 @@ function templateText(field: TemplateField): Validator {
 
 export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -252,7 +254,18 @@ export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactEl
                       </button>
                       <button
                         type="button"
-                        onClick={() => remove.mutate(template.id)}
+                        onClick={() =>
+                          confirm({
+                            title: t('settings.ticketEmailTemplates.deleteConfirmTitle', {
+                              name: template.name,
+                            }),
+                            description: t(
+                              'settings.ticketEmailTemplates.deleteConfirmDescription',
+                            ),
+                            confirmLabel: t('settings.delete'),
+                            onConfirm: () => remove.mutateAsync(template.id),
+                          })
+                        }
                         aria-label={t('settings.ticketEmailTemplates.deleteAriaLabel', {
                           name: template.name,
                         })}
@@ -268,6 +281,7 @@ export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactEl
           )}
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

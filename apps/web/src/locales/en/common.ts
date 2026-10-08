@@ -64,6 +64,11 @@ export const common: Messages = {
   'common.actions.dismiss': 'Dismiss',
   // LoadError.tsx — the retry every list's failed-read alert shares (tm 259.6).
   'common.loadError.retry': 'Try again',
+  // ConfirmDialog.tsx — the shared "are you sure?" (tm 259.7). Filed here, but under
+  // `ui.`, not `common.`: `common.errors.*` has to equal ERROR_TYPES exactly.
+  'ui.confirm.cancel': 'Cancel',
+  'ui.confirm.delete': 'Delete',
+  'ui.confirm.pending': 'Working…',
   'common.actions.collapsePanel': 'Collapse panel',
   // Tour.tsx's own chrome (FR-MOD-02.2.3) — step content is the caller's, but
   // Back/Next/Skip/Done and the counter are generic across every tour.

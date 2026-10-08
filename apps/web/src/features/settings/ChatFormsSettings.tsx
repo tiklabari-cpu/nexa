@@ -34,6 +34,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -51,6 +52,7 @@ import {
 
 export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [isRequired, setIsRequired] = useState(false);
@@ -234,7 +236,14 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                   {canEdit && (
                     <button
                       type="button"
-                      onClick={() => remove.mutate(field.id)}
+                      onClick={() =>
+                        confirm({
+                          title: t('settings.chatForms.deleteConfirmTitle', { label: field.label }),
+                          description: t('settings.chatForms.deleteConfirmDescription'),
+                          confirmLabel: t('settings.delete'),
+                          onConfirm: () => remove.mutateAsync(field.id),
+                        })
+                      }
                       aria-label={t('settings.chatForms.deleteAriaLabel', { label: field.label })}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
@@ -247,6 +256,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
           )}
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

@@ -136,6 +136,9 @@ export const settings: Messages = {
   'settings.trustedDomains.title': 'Güvenilir alan adları',
   'settings.trustedDomains.description':
     "Widget'ın kontrol ettiği izin listesi. Yukarıda bir web sitesi eklemek burayı sizin için doldurur; yalnızca alt alan adlarını kapsamak gibi ince ayarlar için burayı elle düzenleyin.",
+  'settings.trustedDomains.removeConfirmTitle': 'Alan adı {domain} kaldırılsın mı?',
+  'settings.trustedDomains.removeConfirmDescription':
+    'Widget bu alan adına artık güvenmez. Bu işlem geri alınamaz.',
   'settings.trustedDomains.loadError': 'Güvenilir alan adları yüklenemedi.',
   'settings.trustedDomains.domainLabel': 'Alan adı',
   'settings.trustedDomains.domainRequiredError': 'Bir alan adı girin.',
@@ -157,6 +160,9 @@ export const settings: Messages = {
   'settings.cannedResponses.empty.title': 'Henüz kayıtlı yanıt yok',
   'settings.cannedResponses.empty.description': 'Ekibinizin en sık yazdığı yanıtları kaydedin.',
   'settings.cannedResponses.deleteAriaLabel': '#{shortcut} kısayolunu sil',
+  'settings.cannedResponses.deleteConfirmTitle': '#{shortcut} kısayolu silinsin mi?',
+  'settings.cannedResponses.deleteConfirmDescription':
+    'Hazır yanıt, onu kullanabilen herkes için silinir. Bu işlem geri alınamaz.',
   'settings.cannedResponses.teamLabel': 'İlgili ekip',
   'settings.cannedResponses.allTeams': 'Tüm ekipler',
   'settings.cannedResponses.teamOnly': 'yalnız {name}',
@@ -182,6 +188,9 @@ export const settings: Messages = {
   'settings.tags.teamCount.other': '{count} ekip',
   'settings.tags.inUse': '{count} kullanımda',
   'settings.tags.deleteAriaLabel': '{name} etiketini sil',
+  'settings.tags.deleteConfirmTitle': 'Etiket “{name}” silinsin mi?',
+  'settings.tags.deleteConfirmDescription':
+    'Etiket hesaptaki herkes için silinir. Bu işlem geri alınamaz.',
   'settings.tags.teamsLabel': 'Ekipler',
   'settings.tags.teamsHint':
     'Bu etiketin tüm ekiplere uygulanması için hiçbir kutuyu işaretlemeyin.',
@@ -224,6 +233,9 @@ export const settings: Messages = {
   'settings.ticketEmailTemplates.enable': 'Etkinleştir',
   'settings.ticketEmailTemplates.disable': 'Devre dışı bırak',
   'settings.ticketEmailTemplates.deleteAriaLabel': '{name} şablonunu sil',
+  'settings.ticketEmailTemplates.deleteConfirmTitle': 'Şablon {name} silinsin mi?',
+  'settings.ticketEmailTemplates.deleteConfirmDescription':
+    'Şablon hesaptaki herkes için silinir. Bu işlem geri alınamaz.',
 
   // Özel alanlar — CustomFieldsSettings.tsx
   'settings.customFields.title': 'Özel alanlar',
@@ -243,6 +255,9 @@ export const settings: Messages = {
   'settings.customFields.empty.description':
     'Ekibinizin talep ve kişilerde ihtiyaç duyduğu alanları ekleyin — bir oyuncu kimliği ya da KYC durumu gibi.',
   'settings.customFields.deleteAriaLabel': '{label} alanını sil',
+  'settings.customFields.deleteConfirmTitle': 'Alan {label} silinsin mi?',
+  'settings.customFields.deleteConfirmDescription':
+    'Alan hesaptaki herkes için silinir. Bu işlem geri alınamaz.',
   'settings.customFields.labelFieldAriaLabel': '{label} etiketi',
 
   // Sohbet formları (öncesi/sonrası/talep/aday) — ChatFormsSettings.tsx
@@ -263,6 +278,9 @@ export const settings: Messages = {
   'settings.chatForms.empty.description':
     'Ziyaretçiler sohbete başlamadan önce, sohbet bittikten sonra ya da kimse müsait değilken mesaj bırakırken onlardan bilgi istemek için bir alan ekleyin — bir sipariş numarası, bir hesap kimliği gibi.',
   'settings.chatForms.deleteAriaLabel': '{label} alanını sil',
+  'settings.chatForms.deleteConfirmTitle': 'Alan {label} silinsin mi?',
+  'settings.chatForms.deleteConfirmDescription':
+    'Alan bu formdan kalkar; ziyaretçilerden artık istenmez. Bu işlem geri alınamaz.',
 
   // Kanallar — Channels.tsx
   'settings.channels.title': 'Kanallar',
@@ -389,6 +407,9 @@ export const settings: Messages = {
   'settings.websiteWidgets.getCode': 'Kodu al',
   'settings.websiteWidgets.hideCode': 'Kodu gizle',
   'settings.websiteWidgets.removeAriaLabel': '{domain} kaldır',
+  'settings.websiteWidgets.removeConfirmTitle': 'Web sitesi {domain} kaldırılsın mı?',
+  'settings.websiteWidgets.removeConfirmDescription':
+    'Widget bu sitede çalışmayı durdurur; oradaki ziyaretçiler artık sohbet başlatamaz. Bu işlem geri alınamaz.',
   'settings.websiteWidgets.footerHintPrefix': 'Kod parçasını her sayfada kapanış',
   'settings.websiteWidgets.footerHintSuffix': 'etiketinden hemen önce yapıştırın.',
   'settings.websiteWidgets.customizeWidget': "Widget'ı özelleştir",
@@ -442,6 +463,9 @@ export const settings: Messages = {
     'Bu abonelik altında ikinci bir mağaza veya destek hattı çalıştırmak için bir marka ekleyin.',
   'settings.brands.default': 'Varsayılan',
   'settings.brands.removeAriaLabel': '{name} kaldır',
+  'settings.brands.removeConfirmTitle': 'Marka {name} kaldırılsın mı?',
+  'settings.brands.removeConfirmDescription':
+    'Marka aboneliğinizden kaldırılır. Bu işlem geri alınamaz.',
   'settings.brands.nameFieldAriaLabel': '{name} adı',
 
   // Widget görünümü (white-label) — WidgetCustomization.tsx
@@ -842,6 +866,9 @@ export const settings: Messages = {
   'settings.skills.empty.description':
     "Bir yönlendirme kuralında zorunlu kılmak veya Ekip'te bir temsilciye atamak için bir yetenek ekleyin.",
   'settings.skills.deleteAriaLabel': '{name} yeteneğini sil',
+  'settings.skills.deleteConfirmTitle': 'Yetenek {name} silinsin mi?',
+  'settings.skills.deleteConfirmDescription':
+    'Yetenek hesaptaki herkes için silinir. Bu işlem geri alınamaz.',
 
   // Yönlendirme kuralları — RoutingRules.tsx
   'settings.routing.title': 'Yönlendirme',
@@ -859,6 +886,9 @@ export const settings: Messages = {
   'settings.routing.fallbackDeleteTitle':
     'Yedek kural silinemez — bunun yerine başka bir ekibe yönlendirin',
   'settings.routing.deleteAriaLabel': '{name} kuralını sil',
+  'settings.routing.deleteConfirmTitle': 'Kural {name} silinsin mi?',
+  'settings.routing.deleteConfirmDescription':
+    'Yeni sohbetler artık bu kurala göre yönlendirilmez. Bu işlem geri alınamaz.',
   'settings.routing.anything': 'Herhangi biri',
   'settings.routing.conditionSkill': 'yetenek {names}',
   'settings.routing.form.nameLabel': 'Kural adı',
@@ -897,6 +927,9 @@ export const settings: Messages = {
   'settings.ticketRules.empty.description':
     'Talepleri açıldıkları anda otomatik ata, önceliklendir veya etiketle.',
   'settings.ticketRules.deleteAriaLabel': '{name} kuralını sil',
+  'settings.ticketRules.deleteConfirmTitle': 'Kural {name} silinsin mi?',
+  'settings.ticketRules.deleteConfirmDescription':
+    'Yeni biletler artık bu kural tarafından işlenmez. Bu işlem geri alınamaz.',
   'settings.ticketRules.subjectContains': 'konu “{text}” içeriyor',
   'settings.ticketRules.fromSource': '{source} kaynağından',
   'settings.ticketRules.anyTicket': 'herhangi bir talep',

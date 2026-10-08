@@ -14,6 +14,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -38,6 +39,7 @@ interface TicketRule {
 
 export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -259,7 +261,16 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
                       </button>
                       <button
                         type="button"
-                        onClick={() => remove.mutate(rule.id)}
+                        onClick={() =>
+                          confirm({
+                            title: t('settings.ticketRules.deleteConfirmTitle', {
+                              name: rule.name,
+                            }),
+                            description: t('settings.ticketRules.deleteConfirmDescription'),
+                            confirmLabel: t('settings.delete'),
+                            onConfirm: () => remove.mutateAsync(rule.id),
+                          })
+                        }
                         aria-label={t('settings.ticketRules.deleteAriaLabel', { name: rule.name })}
                         className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                       >
@@ -273,6 +284,7 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
           )}
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

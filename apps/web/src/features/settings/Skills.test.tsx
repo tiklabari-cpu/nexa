@@ -6,7 +6,7 @@
  * read-only viewer sees the list with no add or delete controls.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
@@ -78,6 +78,9 @@ describe('Skills', () => {
     await screen.findByText('Billing');
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete skill Billing' }));
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }),
+    );
 
     // Optimistic: gone from the list before the server has answered.
     await waitFor(() => expect(screen.queryByText('Billing')).not.toBeInTheDocument());

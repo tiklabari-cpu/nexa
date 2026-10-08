@@ -182,6 +182,9 @@ describe('Brands', () => {
     await screen.findByDisplayValue('Default');
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove Acme EU' }));
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }),
+    );
 
     const otherRow = screen.getByDisplayValue('Acme EU').closest('li')!;
     expect(await within(otherRow).findByRole('alert')).toHaveTextContent(

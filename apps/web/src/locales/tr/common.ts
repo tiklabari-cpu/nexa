@@ -49,6 +49,10 @@ export const common: Messages = {
   'common.actions.dismiss': 'Kapat',
   // LoadError.tsx (tm 259.6).
   'common.loadError.retry': 'Yeniden dene',
+  // ConfirmDialog.tsx (tm 259.7).
+  'ui.confirm.cancel': 'Vazgeç',
+  'ui.confirm.delete': 'Sil',
+  'ui.confirm.pending': 'Bekleyin…',
   'common.actions.collapsePanel': 'Paneli daralt',
   // Tour.tsx's own chrome (FR-MOD-02.2.3).
   'common.actions.tourNext': 'İleri',

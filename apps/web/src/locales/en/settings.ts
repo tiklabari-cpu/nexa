@@ -148,6 +148,9 @@ export const settings: Messages = {
   'settings.trustedDomains.title': 'Trusted domains',
   'settings.trustedDomains.description':
     'The allowlist the widget checks. Adding a website above fills this in for you; edit it here only for finer control, such as covering subdomains.',
+  'settings.trustedDomains.removeConfirmTitle': 'Remove {domain}?',
+  'settings.trustedDomains.removeConfirmDescription':
+    'The widget no longer treats this domain as trusted. This cannot be undone.',
   'settings.trustedDomains.loadError': 'Could not load trusted domains.',
   'settings.trustedDomains.domainLabel': 'Domain',
   'settings.trustedDomains.domainRequiredError': 'Enter a domain.',
@@ -169,6 +172,9 @@ export const settings: Messages = {
   'settings.cannedResponses.empty.title': 'No saved replies',
   'settings.cannedResponses.empty.description': 'Save the answers your team types most often.',
   'settings.cannedResponses.deleteAriaLabel': 'Delete #{shortcut}',
+  'settings.cannedResponses.deleteConfirmTitle': 'Delete #{shortcut}?',
+  'settings.cannedResponses.deleteConfirmDescription':
+    'The saved reply is deleted for everyone who can use it. This cannot be undone.',
   'settings.cannedResponses.teamLabel': 'Team',
   'settings.cannedResponses.allTeams': 'All teams',
   'settings.cannedResponses.teamOnly': '{name} only',
@@ -192,6 +198,9 @@ export const settings: Messages = {
   'settings.tags.teamCount.other': '{count} teams',
   'settings.tags.inUse': '{count} in use',
   'settings.tags.deleteAriaLabel': 'Delete tag {name}',
+  'settings.tags.deleteConfirmTitle': 'Delete tag “{name}”?',
+  'settings.tags.deleteConfirmDescription':
+    'The tag is deleted for everyone on the account. This cannot be undone.',
   'settings.tags.teamsLabel': 'Teams',
   'settings.tags.teamsHint': 'Leave every box unchecked to apply this tag to all teams.',
   'settings.tags.editTeamsButton': 'Edit teams',
@@ -232,6 +241,9 @@ export const settings: Messages = {
   'settings.ticketEmailTemplates.enable': 'Enable',
   'settings.ticketEmailTemplates.disable': 'Disable',
   'settings.ticketEmailTemplates.deleteAriaLabel': 'Delete template {name}',
+  'settings.ticketEmailTemplates.deleteConfirmTitle': 'Delete template {name}?',
+  'settings.ticketEmailTemplates.deleteConfirmDescription':
+    'The template is deleted for everyone on the account. This cannot be undone.',
 
   // Custom fields — CustomFieldsSettings.tsx
   'settings.customFields.title': 'Custom fields',
@@ -251,6 +263,9 @@ export const settings: Messages = {
   'settings.customFields.empty.description':
     'Add fields your team needs on tickets and contacts, like a player id or a KYC status.',
   'settings.customFields.deleteAriaLabel': 'Delete field {label}',
+  'settings.customFields.deleteConfirmTitle': 'Delete field {label}?',
+  'settings.customFields.deleteConfirmDescription':
+    'The field is deleted for everyone on the account. This cannot be undone.',
   'settings.customFields.labelFieldAriaLabel': '{label} label',
 
   // Chat forms (pre-chat/post-chat/ticket/prospect) — ChatFormsSettings.tsx
@@ -271,6 +286,9 @@ export const settings: Messages = {
   'settings.chatForms.empty.description':
     'Add a field to ask visitors for details — an order number, an account id — before they start chatting, once the chat ends, or when they leave a message because nobody is available.',
   'settings.chatForms.deleteAriaLabel': 'Delete field {label}',
+  'settings.chatForms.deleteConfirmTitle': 'Delete field {label}?',
+  'settings.chatForms.deleteConfirmDescription':
+    'The field is removed from this form, so visitors are no longer asked for it. This cannot be undone.',
 
   // Channels — Channels.tsx
   'settings.channels.title': 'Channels',
@@ -395,6 +413,9 @@ export const settings: Messages = {
   'settings.websiteWidgets.getCode': 'Get code',
   'settings.websiteWidgets.hideCode': 'Hide code',
   'settings.websiteWidgets.removeAriaLabel': 'Remove {domain}',
+  'settings.websiteWidgets.removeConfirmTitle': 'Remove {domain}?',
+  'settings.websiteWidgets.removeConfirmDescription':
+    'The chat widget stops working on this site, so visitors there can no longer start a chat. This cannot be undone.',
   'settings.websiteWidgets.footerHintPrefix': 'Paste the snippet immediately before',
   'settings.websiteWidgets.footerHintSuffix': 'on every page.',
   'settings.websiteWidgets.customizeWidget': 'Customize widget',
@@ -446,6 +467,9 @@ export const settings: Messages = {
     'Add a brand to run a second storefront or support line under this subscription.',
   'settings.brands.default': 'Default',
   'settings.brands.removeAriaLabel': 'Remove {name}',
+  'settings.brands.removeConfirmTitle': 'Remove {name}?',
+  'settings.brands.removeConfirmDescription':
+    'The brand is removed from your subscription. This cannot be undone.',
   'settings.brands.nameFieldAriaLabel': '{name} name',
 
   // Widget appearance / white-label — WidgetCustomization.tsx
@@ -847,6 +871,9 @@ export const settings: Messages = {
   'settings.skills.empty.description':
     'Add a skill to require it in a routing rule or assign it to an agent in Team.',
   'settings.skills.deleteAriaLabel': 'Delete skill {name}',
+  'settings.skills.deleteConfirmTitle': 'Delete skill {name}?',
+  'settings.skills.deleteConfirmDescription':
+    'The skill is deleted for everyone on the account. This cannot be undone.',
 
   // Routing rules — RoutingRules.tsx
   'settings.routing.title': 'Routing',
@@ -864,6 +891,9 @@ export const settings: Messages = {
   'settings.routing.fallbackDeleteTitle':
     'The fallback rule cannot be deleted — point it at another team instead',
   'settings.routing.deleteAriaLabel': 'Delete rule {name}',
+  'settings.routing.deleteConfirmTitle': 'Delete rule {name}?',
+  'settings.routing.deleteConfirmDescription':
+    'New chats are no longer routed by this rule. This cannot be undone.',
   'settings.routing.anything': 'Anything',
   'settings.routing.conditionSkill': 'skill {names}',
   'settings.routing.form.nameLabel': 'Rule name',
@@ -902,6 +932,9 @@ export const settings: Messages = {
   'settings.ticketRules.empty.description':
     'Auto-assign, prioritise or tag tickets the moment they are opened.',
   'settings.ticketRules.deleteAriaLabel': 'Delete rule {name}',
+  'settings.ticketRules.deleteConfirmTitle': 'Delete rule {name}?',
+  'settings.ticketRules.deleteConfirmDescription':
+    'New tickets are no longer handled by this rule. This cannot be undone.',
   'settings.ticketRules.subjectContains': 'subject contains “{text}”',
   'settings.ticketRules.fromSource': 'from {source}',
   'settings.ticketRules.anyTicket': 'any ticket',

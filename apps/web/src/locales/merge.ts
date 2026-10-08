@@ -68,7 +68,7 @@ export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   audit: ['audit.'],
   auth: ['auth.'],
   billing: ['billing.'],
-  common: ['common.'],
+  common: ['common.', 'ui.'],
   customers: ['customers.', 'customFields.', 'traffic.', 'campaigns.', 'goals.'],
   home: ['home.'],
   inbox: ['inbox.'],

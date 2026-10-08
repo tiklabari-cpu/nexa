@@ -10,6 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -141,6 +142,7 @@ function BrandRow({
   onChanged: () => void;
 }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const [name, setName] = useState(brand.name);
 
@@ -194,7 +196,14 @@ function BrandRow({
         {canEdit && !brand.is_default && (
           <button
             type="button"
-            onClick={() => remove.mutate()}
+            onClick={() =>
+              confirm({
+                title: t('settings.brands.removeConfirmTitle', { name: brand.name }),
+                description: t('settings.brands.removeConfirmDescription'),
+                confirmLabel: t('settings.remove'),
+                onConfirm: () => remove.mutateAsync(),
+              })
+            }
             disabled={remove.isPending}
             aria-label={t('settings.brands.removeAriaLabel', { name: brand.name })}
             className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
@@ -205,6 +214,7 @@ function BrandRow({
       </div>
 
       {error && <ErrorNotice message={t(errorMessageKey(error))} />}
+      {dialog}
     </li>
   );
 }

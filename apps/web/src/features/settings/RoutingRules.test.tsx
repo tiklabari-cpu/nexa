@@ -14,7 +14,7 @@
  * dead — deleting it would be the way around the refusal to disable it.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
@@ -221,6 +221,9 @@ describe('RoutingRules — deleting a rule', () => {
     api.delete.mockResolvedValue(undefined);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete rule Checkout page' }));
+    // Nothing is sent until the dialog is confirmed (tm 259.7).
+    expect(api.delete).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/settings/routing-rules/rule-2'));
   });

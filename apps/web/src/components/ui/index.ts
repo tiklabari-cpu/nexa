@@ -1,7 +1,7 @@
 /**
  * The design-system primitives (FR-EK-C.2).
  *
- * Banner, Dropdown, Modal and Panel — the four overlay/notice shapes the app
+ * Banner, ConfirmDialog, Dropdown, Modal and Panel — the overlay/notice shapes the app
  * had grown one-off copies of — live here so every screen consumes the same
  * behaviour rather than re-deriving it. Import from `components/ui`, not the
  * individual files, so the surface stays a single seam.
@@ -14,6 +14,7 @@ export {
   type ConditionFieldOption,
   type ConditionFiltersLabels,
 } from './ConditionFilters.js';
+export { ConfirmDialog, useConfirm, type ConfirmRequest } from './ConfirmDialog.js';
 export { Dropdown } from './Dropdown.js';
 export { Modal } from './Modal.js';
 export { Panel, PanelSection } from './Panel.js';

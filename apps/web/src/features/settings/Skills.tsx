@@ -13,6 +13,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -34,6 +35,7 @@ interface Expertise {
 
 export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const { confirm, dialog } = useConfirm();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -142,7 +144,14 @@ export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
                     <button
                       type="button"
                       disabled={remove.isPending}
-                      onClick={() => remove.mutate(skill.id)}
+                      onClick={() =>
+                        confirm({
+                          title: t('settings.skills.deleteConfirmTitle', { name: skill.name }),
+                          description: t('settings.skills.deleteConfirmDescription'),
+                          confirmLabel: t('settings.delete'),
+                          onConfirm: () => remove.mutateAsync(skill.id),
+                        })
+                      }
                       aria-label={t('settings.skills.deleteAriaLabel', { name: skill.name })}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
                     >
@@ -155,6 +164,7 @@ export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
           )}
         </Card>
       )}
+      {dialog}
     </Section>
   );
 }

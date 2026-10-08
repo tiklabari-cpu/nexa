@@ -428,6 +428,15 @@ export async function signUpFreshOwner(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app\/onboarding/);
 }
 
+/**
+ * Press the danger button of the shared confirmation dialog (tm 259.7). A
+ * settings deletion no longer fires on the row's own click: the row opens a
+ * dialog, and nothing is sent until "Delete" / "Remove" is pressed in it.
+ */
+export async function confirmDialog(page: Page, label: 'Delete' | 'Remove'): Promise<void> {
+  await page.getByRole('dialog').getByRole('button', { name: label, exact: true }).click();
+}
+
 /** The widget lives in a cross-origin iframe; everything inside is addressed through it. */
 export function widgetFrame(page: Page) {
   return page.frameLocator('#siyahtus-widget-frame');

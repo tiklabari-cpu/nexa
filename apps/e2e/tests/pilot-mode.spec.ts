@@ -34,7 +34,10 @@ import {
   PILOT_TERMS_URL,
 } from './pilot-stack.js';
 
-/** Until `GET /deployment` answers, the panel draws the flag-off page; wait for the answer. */
+/**
+ * Opens `path` and checks the stack answered `GET /deployment` as a pilot. The
+ * panel draws nothing before that answer (tm 259.4); the check is on the stack.
+ */
 async function gotoAfterDeployment(page: Page, path: string): Promise<void> {
   const deployment = page.waitForResponse(
     (response) => response.url().endsWith('/api/v1/deployment') && response.ok(),
@@ -281,4 +284,95 @@ test.describe('public pilot (PILOT_MODE=true)', () => {
     );
     await page.screenshot({ path: 'kanit/257.12-pilot-widget.png', fullPage: true });
   });
+
+  test('W7 nothing is drawn as an ordinary deployment while GET /deployment is on its way', async ({
+    page,
+  }) => {
+    // Signed out: the sign-in form waits for the answer instead of offering
+    // the seed's password first and taking it back when the answer arrives.
+    let release = await holdDeployment(page);
+    await page.goto('/');
+    await expect(page.getByRole('status')).toHaveText('Loading…');
+    await expect(page.getByText(DEMO.email)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+    release();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await expect(page.getByText(DEMO.email)).toHaveCount(0);
+    await page.unroute(DEPLOYMENT_ROUTE);
+
+    // Signed in: a reload restores the session, and the shell waits too — no
+    // Billing in the rail, no menu to find Apps in.
+    await signIn(page);
+    release = await holdDeployment(page);
+    await page.reload();
+    // The restore shows "Loading…" of its own, so a bare "no Billing" would
+    // pass before the shell had a chance to appear. Give it that chance — an
+    // ordinary page load has its shell up well inside this — and read the
+    // screen as it is at that moment.
+    await page
+      .getByRole('link', { name: 'Inbox' })
+      .waitFor({ timeout: 3_000 })
+      .catch(() => undefined);
+    expect(await page.getByRole('link', { name: 'Billing' }).count()).toBe(0);
+    expect(await page.getByRole('button', { name: 'App menu' }).count()).toBe(0);
+    await expect(page.getByRole('status')).toHaveText('Loading…');
+    await page.screenshot({ path: 'kanit/259-4-deployment-loading.png', fullPage: true });
+    release();
+    const modules = page.getByRole('navigation', { name: 'Modules' });
+    await expect(modules.getByRole('link', { name: 'Inbox' })).toBeVisible();
+    await expect(modules.getByRole('link', { name: 'Billing' })).toHaveCount(0);
+  });
+
+  test('W8 a GET /deployment that keeps failing ends on "cannot reach the server", and "Try again" recovers', async ({
+    page,
+  }) => {
+    let failed = 0;
+    await page.route(DEPLOYMENT_ROUTE, (route) => {
+      failed += 1;
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { type: 'internal', message: 'unavailable' } }),
+      });
+    });
+    await page.goto('/');
+
+    // Three attempts with backoff in between, then the screen — never the
+    // ordinary deployment's sign-in form with the demo password on it.
+    await expect(page.getByRole('heading', { name: 'Cannot reach the server' })).toBeVisible({
+      timeout: 15_000,
+    });
+    expect(failed).toBe(3);
+    await expect(page.getByText(DEMO.email)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+    await page.screenshot({ path: 'kanit/259-4-deployment-unreachable.png', fullPage: true });
+
+    await page.unroute(DEPLOYMENT_ROUTE);
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await expect(page.getByText(DEMO.email)).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
+      'href',
+      PILOT_TERMS_URL,
+    );
+  });
 });
+
+const DEPLOYMENT_ROUTE = '**/api/v1/deployment';
+
+/**
+ * Holds every `GET /deployment` the page sends until the returned function is
+ * called (tm 259.4) — a slow network, made deterministic: whatever the screen
+ * shows meanwhile stays on it for as long as an assertion needs to look.
+ */
+async function holdDeployment(page: Page): Promise<() => void> {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(DEPLOYMENT_ROUTE, async (route) => {
+    await released;
+    await route.continue();
+  });
+  return release;
+}

@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App.js';
+import { DeploymentGate } from './components/DeploymentGate.js';
 import { ApiClientError } from './lib/api-client.js';
 import './styles/index.css';
 
@@ -24,7 +25,10 @@ createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        {/* Nothing draws before this deployment's settings are in (tm 259.4). */}
+        <DeploymentGate>
+          <App />
+        </DeploymentGate>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

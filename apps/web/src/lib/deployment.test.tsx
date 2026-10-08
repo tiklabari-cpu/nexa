@@ -1,7 +1,8 @@
 /**
  * `useDeployment` (tm 257.13): the anonymous read of `GET /deployment`, its one
- * shared cache entry, and the ordinary-deployment answer it gives while that
- * read is loading or has failed.
+ * shared cache entry, its retries (tm 259.4), and the ordinary-deployment
+ * answer it gives a screen rendered on its own — the app itself never sees
+ * that answer, `DeploymentGate` waits for the server's.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
@@ -33,11 +34,12 @@ function renderDeployment(
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe('useDeployment', () => {
-  it('answers as an ordinary deployment while the read is in flight', () => {
+  it('answers as an ordinary deployment while nothing is cached, outside the gate', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() => new Promise<Response>(() => {})),
@@ -80,14 +82,27 @@ describe('useDeployment', () => {
         throw new TypeError('Failed to fetch');
       },
     ],
-  ])('falls back to pilot mode off on %s', async (_label, respond) => {
+  ])('tries three times, a second and then two apart, on %s', async (_label, respond) => {
+    vi.useFakeTimers();
     const fetch = vi.fn(respond);
     vi.stubGlobal('fetch', fetch);
 
+    // The test client says `retry: false`; the read's own definition wins.
     const { result, queryClient } = renderDeployment();
-    await waitFor(() =>
-      expect(queryClient.getQueryState(DEPLOYMENT_QUERY_KEY)?.status).toBe('error'),
-    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(queryClient.getQueryState(DEPLOYMENT_QUERY_KEY)?.status).toBe('error');
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(result.current).toStrictEqual(DEPLOYMENT_FALLBACK);
   });
 

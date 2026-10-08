@@ -8,19 +8,24 @@
  * that hides a surface in pilot mode reads it through `useDeployment`, which
  * is also the one seam a test mocks.
  *
- * While the answer is loading, or when the first read fails, this returns
- * the settings of an ordinary deployment: pilot mode off, sign-up open. That
- * only ever *shows* something — and the API refuses every hidden surface on
- * its own, so showing it costs a 403, never a hole. A later failed refetch
- * keeps the last answer instead of flipping a screen back.
+ * The app does not draw a screen before that answer is in (tm 259.4):
+ * `DeploymentGate`, around the whole app in `main.tsx`, waits for the first
+ * read and stops on "cannot reach the server" if it keeps failing. So under
+ * the gate `useDeployment` always has the server's answer — and keeps it: a
+ * later failed refetch leaves the last answer in place rather than flipping a
+ * screen back.
  */
-import { useQuery } from '@tanstack/react-query';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 import type { DeploymentConfig } from '@siyahtus/types';
 import { ApiClient } from './api-client.js';
 
 export const DEPLOYMENT_QUERY_KEY = ['deployment'] as const;
 
-/** What a screen assumes until the server has said otherwise. */
+/**
+ * What `useDeployment` answers with no server answer cached — which, under
+ * `DeploymentGate`, never happens. It is for a screen rendered on its own, as
+ * a unit test does; the app itself does not fall back to it (fail-closed).
+ */
 export const DEPLOYMENT_FALLBACK: DeploymentConfig = {
   pilot_mode: false,
   contact_email: null,
@@ -41,11 +46,26 @@ export function fetchDeployment(client: ApiClient = new ApiClient()): Promise<De
   return client.get<DeploymentConfig>('/deployment');
 }
 
+/**
+ * The one definition of the read, shared by the gate and every screen.
+ *
+ * Three attempts, a second and then two apart, before the gate gives up: a
+ * blip in the network should not cost an agent a "cannot reach the server"
+ * screen, and a server that is really down should not leave them on
+ * "Loading…" for long. Every error is retried, a 4xx included — the route
+ * takes no input, so a 4xx here is a proxy or a rate limit, not a bad request.
+ */
+export const deploymentQuery = queryOptions({
+  queryKey: DEPLOYMENT_QUERY_KEY,
+  queryFn: () => fetchDeployment(),
+  staleTime: 60_000,
+  retry: 2,
+  retryDelay: (failures) => 1_000 * 2 ** failures,
+  // Attempted offline too: the default waits for the browser to say it is
+  // back online, which would hold the gate on "Loading…" with no way out.
+  networkMode: 'always',
+});
+
 export function useDeployment(): DeploymentConfig {
-  const query = useQuery({
-    queryKey: DEPLOYMENT_QUERY_KEY,
-    queryFn: () => fetchDeployment(),
-    staleTime: 60_000,
-  });
-  return query.data ?? DEPLOYMENT_FALLBACK;
+  return useQuery(deploymentQuery).data ?? DEPLOYMENT_FALLBACK;
 }

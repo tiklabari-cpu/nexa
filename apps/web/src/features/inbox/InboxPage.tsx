@@ -765,6 +765,7 @@ export function InboxPage(): ReactElement {
                             )}
                             {item.unread_count > 0 && (
                               <span
+                                role="img"
                                 aria-label={t('inbox.list.item.unreadAria', {
                                   count: item.unread_count,
                                 })}

@@ -18,6 +18,7 @@ import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { enumLabel } from '../../lib/enum-label.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 interface CopilotSource {
@@ -144,11 +145,13 @@ export function CopilotKnowledge(): ReactElement {
               {items.map((source) => (
                 <tr key={source.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-2.5 font-medium">{source.name}</td>
-                  <td className="px-4 py-2.5 capitalize text-content-secondary">{source.type}</td>
+                  <td className="px-4 py-2.5 text-content-secondary">
+                    {enumLabel(t, 'team.copilot.type', source.type)}
+                  </td>
                   <td className="px-4 py-2.5">
                     <StatusDot
                       tone={STATUS_TONE[source.status] ?? 'neutral'}
-                      label={source.status}
+                      label={enumLabel(t, 'team.copilot.status', source.status)}
                     />
                   </td>
                   <td className="tabular px-4 py-2.5 text-right text-content-secondary">

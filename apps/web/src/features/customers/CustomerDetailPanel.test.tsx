@@ -11,6 +11,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
 import { ApiClientError } from '../../lib/api-client.js';
@@ -58,18 +59,20 @@ function renderPanel(
   api.get.mockResolvedValue(customer);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <CustomerDetailPanel
-        customerId={customer.id}
-        canEdit={false}
-        canBan={false}
-        canErase={options.canErase ?? false}
-        onChanged={() => {}}
-        onBanToggle={() => {}}
-        banPending={false}
-        onErased={options.onErased ?? (() => {})}
-      />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <CustomerDetailPanel
+          customerId={customer.id}
+          canEdit={false}
+          canBan={false}
+          canErase={options.canErase ?? false}
+          onChanged={() => {}}
+          onBanToggle={() => {}}
+          banPending={false}
+          onErased={options.onErased ?? (() => {})}
+        />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -266,12 +269,56 @@ describe('CustomerDetailPanel — regression: existing cards still render', () =
     expect(screen.getByRole('heading', { name: 'Conversations' })).toBeInTheDocument();
     expect(screen.getByText('CHAT0000001')).toBeInTheDocument();
     expect(screen.getByText('Open')).toBeInTheDocument();
+    // The row opens the conversation; the id is no longer a dead string (D14).
+    expect(screen.getByRole('link', { name: 'Conversation of Jul 20, 2026' })).toHaveAttribute(
+      'href',
+      '/app/inbox?chat=CHAT0000001',
+    );
   });
 });
 
 describe('CustomerDetailPanel localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();
+  });
+
+  it('words the conversation link in Turkish', async () => {
+    api.get.mockReset();
+    api.get.mockResolvedValue(
+      baseCustomer({
+        chats: [
+          {
+            id: 'CHAT0000001',
+            active: false,
+            created_at: '2026-07-20T10:05:00.000Z',
+            last_event_at: null,
+          },
+        ],
+      }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <CustomerDetailPanel
+            customerId="cust-1"
+            canEdit={false}
+            canBan={false}
+            canErase={false}
+            onChanged={() => {}}
+            onBanToggle={() => {}}
+            banPending={false}
+            onErased={() => {}}
+          />
+        </QueryClientProvider>
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('link', { name: '20 Tem 2026 tarihli sohbet' })).toHaveAttribute(
+      'href',
+      '/app/inbox?chat=CHAT0000001',
+    );
   });
 
   it('paints the panel in Turkish when that is the active locale', () => {

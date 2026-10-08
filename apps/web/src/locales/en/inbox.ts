@@ -336,6 +336,7 @@ export const inbox: Messages = {
   'inbox.ticket.merge.selectLabel': 'Merge into another ticket',
   'inbox.ticket.merge.selectPlaceholder': 'Merge into…',
   'inbox.ticket.merge.cta': 'Merge',
+  'inbox.ticket.merge.option': '{subject} · {status} · {date}',
   'inbox.ticket.backToTickets': 'Tickets',
   'inbox.ticket.detail.empty.title': 'No ticket selected',
   'inbox.ticket.detail.empty.description': 'Pick a ticket from the grid to see it here.',

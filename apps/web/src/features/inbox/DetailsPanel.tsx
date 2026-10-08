@@ -176,7 +176,7 @@ export function DetailsPanel({
             />
           </Row>
           <Row label={t('inbox.details.row.chatId')}>
-            <span className="font-mono text-2xs">{chat.id}</span>
+            <span className="select-all font-mono text-2xs">{chat.id}</span>
           </Row>
           <Row label={t('inbox.details.row.assignee')}>
             <div className="flex min-w-0 items-center gap-2">

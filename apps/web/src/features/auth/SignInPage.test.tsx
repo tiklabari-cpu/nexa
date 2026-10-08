@@ -208,6 +208,39 @@ describe('SignInPage under SSO enforcement', () => {
     );
   });
 
+  it('names the role in the chooser in the panel’s language, not as the server’s code (O8)', async () => {
+    stubStore([
+      { ...WORKSPACE, license_id: '1', organization_name: 'Acme', role: 'owner' },
+      { ...WORKSPACE, license_id: '2', organization_name: 'Globex', role: 'viceowner' },
+    ]);
+    renderSignIn();
+    await submitCredentials();
+
+    expect(await screen.findByRole('button', { name: /Acme/ })).toHaveTextContent('Owner');
+    expect(screen.getByRole('button', { name: /Globex/ })).toHaveTextContent('Vice owner');
+    expect(screen.queryByText('viceowner')).not.toBeInTheDocument();
+  });
+
+  it('says the role in Turkish when the panel is Turkish', async () => {
+    stubStore([
+      { ...WORKSPACE, license_id: '1', organization_name: 'Acme', role: 'owner' },
+      { ...WORKSPACE, license_id: '2', organization_name: 'Globex', role: 'agent' },
+    ]);
+    renderWithLocale(
+      <MemoryRouter initialEntries={['/']}>
+        <SignInPage />
+      </MemoryRouter>,
+      'tr',
+    );
+    await userEvent.type(screen.getByLabelText('E-posta'), 'agent@acme.localhost');
+    await userEvent.type(screen.getByLabelText('Parola'), 'correct-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Oturum aç' }));
+
+    expect(await screen.findByRole('button', { name: /Acme/ })).toHaveTextContent('Sahip');
+    expect(screen.getByRole('button', { name: /Globex/ })).toHaveTextContent('Temsilci');
+    resetLocale();
+  });
+
   it('treats a server that says nothing as one that still takes passwords', async () => {
     // The field is absent before enforcement existed; reading absence as "off"
     // would turn every sign-in into a refusal on an older API.

@@ -371,6 +371,7 @@ export const reports: Messages = {
     'Once a ticket is created in this window, its priority breakdown shows up here.',
   'reports.cases.byPriority.caption': 'Tickets by stored queue priority',
   'reports.cases.byPriority.column': 'Priority',
+  'reports.cases.byPriority.nearest': '{level} ({value})',
 
   // Leads (FR-MOD-07.7, v2)
   'reports.leads.error':

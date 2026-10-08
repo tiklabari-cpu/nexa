@@ -12,7 +12,10 @@ import {
   formatCount,
   formatDate,
   formatDateTime,
+  formatDay,
+  formatLanguage,
   formatMoney,
+  formatPeriod,
   formatRate,
   formatWeekday,
   setFormatLocale,
@@ -99,5 +102,44 @@ describe('countryFlag (FR-MOD-03.2.3)', () => {
     expect(countryFlag('')).toBeNull();
     expect(countryFlag('USA')).toBeNull();
     expect(countryFlag('1A')).toBeNull();
+  });
+});
+
+describe('formatPeriod — "202610" is a month, not a number (D21)', () => {
+  it('names the month in the active language', () => {
+    expect(formatPeriod('202610', 'en')).toBe('October 2026');
+    expect(formatPeriod('202610', 'tr')).toBe('Ekim 2026');
+    expect(formatPeriod('202601', 'en')).toBe('January 2026');
+  });
+
+  it('returns anything that is not a real YYYYMM as written', () => {
+    expect(formatPeriod('202613', 'en')).toBe('202613');
+    expect(formatPeriod('October', 'en')).toBe('October');
+    expect(formatPeriod(null)).toBeNull();
+  });
+});
+
+describe('formatDay — a report bucket day keeps its day (D13)', () => {
+  it('formats the UTC day in the active language', () => {
+    expect(formatDay('2026-10-07', 'en')).toBe('Oct 7, 2026');
+    expect(formatDay('2026-10-07', 'tr')).toBe('7 Eki 2026');
+  });
+
+  it('returns a non-day as written', () => {
+    expect(formatDay('soon', 'en')).toBe('soon');
+    expect(formatDay(undefined)).toBeNull();
+  });
+});
+
+describe('formatLanguage — a language code is a name (O8)', () => {
+  it('writes the name in the active language', () => {
+    expect(formatLanguage('en', 'en')).toBe('English');
+    expect(formatLanguage('tr', 'en')).toBe('Turkish');
+    expect(formatLanguage('en', 'tr')).toBe('İngilizce');
+  });
+
+  it('keeps a code it cannot parse, upper-cased', () => {
+    expect(formatLanguage('en_GB', 'en')).toBe('EN_GB');
+    expect(formatLanguage('', 'en')).toBeNull();
   });
 });

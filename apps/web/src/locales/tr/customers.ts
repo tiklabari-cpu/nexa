@@ -98,6 +98,7 @@ export const customers: Messages = {
   'customers.detail.noConversations': 'Henüz sohbet yok.',
   'customers.detail.chatOpen': 'Açık',
   'customers.detail.chatClosed': 'Kapalı',
+  'customers.detail.chatLink': '{date} tarihli sohbet',
   'customers.detail.groups': 'Ekipler',
   'customers.detail.noGroups':
     'Henüz bir ekibe yönlendirilmedi. Sohbetlerinden biri atandığında ekipler burada görünür.',

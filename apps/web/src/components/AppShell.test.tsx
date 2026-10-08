@@ -28,6 +28,7 @@ import { readBrandId, useAuth, useBrandStore } from '../lib/auth-store.js';
 import { useLeaveGuard } from '../lib/dirty-guard.js';
 import { useNavStore } from '../lib/nav-store.js';
 import { installFakeWebSocket } from '../test/fake-socket.js';
+import { resetLocale, setLocale } from '../test/i18n.js';
 
 const BRAND_KEY = 'siyahtus.brand_id';
 
@@ -290,6 +291,22 @@ describe('rail badges (FR-MOD-01.2)', () => {
 });
 
 describe('account menu', () => {
+  afterEach(() => resetLocale());
+
+  it('names the signed-in role as a word, not the server code (O8)', async () => {
+    useAuth.setState({ agent: { ...useAuth.getState().agent!, role: 'viceowner' } });
+    renderShell();
+    expect(screen.getByText('Vice owner')).toBeInTheDocument();
+    expect(screen.queryByText('viceowner')).not.toBeInTheDocument();
+  });
+
+  it('says it in Turkish when the panel is Turkish', () => {
+    setLocale('tr');
+    renderShell();
+    expect(screen.getByText('Sahip')).toBeInTheDocument();
+    expect(screen.queryByText('owner')).not.toBeInTheDocument();
+  });
+
   it('keeps sign out out of reach while closed', () => {
     renderShell();
     expect(screen.getByRole('button', { name: 'Sign out' })).not.toBeVisible();

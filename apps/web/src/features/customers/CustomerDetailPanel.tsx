@@ -12,6 +12,7 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardSkeleton } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/Modal.js';
@@ -269,9 +270,17 @@ export function CustomerDetailPanel({
           <ul className="divide-y divide-border">
             {customer.chats.map((chat) => (
               <li key={chat.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
-                <span className="font-mono text-2xs text-content-tertiary">{chat.id}</span>
-                <span className="flex-1 text-2xs text-content-secondary">
-                  {formatDate(chat.created_at)}
+                {/* The row is the conversation: it opens in the inbox, which shows a
+                    closed one read-only rather than 404ing. The id stays as a
+                    quiet, select-in-one-click second column for support to quote. */}
+                <Link
+                  to={`/app/inbox?chat=${encodeURIComponent(chat.id)}`}
+                  className="flex-1 text-content-brand underline underline-offset-2"
+                >
+                  {t('customers.detail.chatLink', { date: formatDate(chat.created_at) ?? '' })}
+                </Link>
+                <span className="select-all font-mono text-2xs text-content-tertiary">
+                  {chat.id}
                 </span>
                 <StatusDot
                   tone={chat.active ? 'success' : 'neutral'}

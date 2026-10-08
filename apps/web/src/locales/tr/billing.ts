@@ -31,6 +31,15 @@ export const billing: Messages = {
   'billing.plan.kpi.estimatedTotalHintTrial': 'Deneme süresince ücret alınmaz',
   'billing.plan.kpi.estimatedTotalHintPeriod': 'Bu dönem',
   'billing.plan.kpi.status': 'Durum',
+  'billing.plan.name.growth': 'Growth',
+  'billing.plan.name.enterprise': 'Enterprise',
+  'billing.plan.cycle.monthly': 'Aylık',
+  'billing.plan.cycle.annual': 'Yıllık',
+  'billing.plan.statusValue.trialing': 'Deneme',
+  'billing.plan.statusValue.active': 'Etkin',
+  'billing.plan.statusValue.past_due': 'Gecikmiş',
+  'billing.plan.statusValue.canceled': 'İptal edildi',
+  'billing.provider.mock': 'Demo faturalama',
 
   // Manage plan — ManagePlan
   'billing.managePlan.title': 'Planı yönet',

@@ -560,3 +560,73 @@ describe('Settings forms localisation (NFR-I18N2)', () => {
     expect(screen.getByRole('region', { name: 'Talep kuralları' })).toBeInTheDocument();
   });
 });
+
+/** O8 (tm 259.17): a field's type is a word, not the code the server stores. */
+describe('Field types read as words', () => {
+  const FIELDS = {
+    items: [
+      {
+        id: 'a',
+        entity: 'contact',
+        label: 'Opted in',
+        type: 'boolean',
+        required: true,
+        form_placement: 'pre_chat',
+        show_in_table: false,
+      },
+      {
+        id: 'b',
+        entity: 'contact',
+        label: 'Birthday',
+        type: 'date',
+        required: false,
+        form_placement: 'post_chat',
+        show_in_table: false,
+      },
+    ],
+  };
+
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('labels the type in the Custom fields list and in its type picker', async () => {
+    api.get.mockResolvedValue(FIELDS);
+    renderComponent(<CustomFieldsSettings canEdit />);
+
+    const row = (await screen.findByDisplayValue('Opted in')).closest('li')!;
+    expect(row).toHaveTextContent('Yes / No');
+    expect(row).not.toHaveTextContent('boolean');
+    expect(screen.getByDisplayValue('Birthday').closest('li')).toHaveTextContent('Date');
+
+    const picker = screen.getByLabelText('Type');
+    expect(within(picker).getByRole('option', { name: 'Text' })).toBeInTheDocument();
+    expect(within(picker).getByRole('option', { name: 'Number' })).toBeInTheDocument();
+    expect(within(picker).getByRole('option', { name: 'Yes / No' })).toBeInTheDocument();
+    expect(within(picker).getByRole('option', { name: 'Date' })).toBeInTheDocument();
+  });
+
+  it('labels the type in the Chat forms list too', async () => {
+    api.get.mockResolvedValue(FIELDS);
+    renderComponent(<ChatFormsSettings canEdit />);
+
+    const row = (await screen.findByText('Opted in')).closest('li')!;
+    expect(row).toHaveTextContent('Yes / No');
+    expect(row).not.toHaveTextContent('boolean');
+  });
+
+  it('says them in Turkish', async () => {
+    api.get.mockResolvedValue(FIELDS);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <CustomFieldsSettings canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    const row = (await screen.findByDisplayValue('Opted in')).closest('li')!;
+    expect(row).toHaveTextContent('Evet / Hayır');
+    expect(screen.getByDisplayValue('Birthday').closest('li')).toHaveTextContent('Tarih');
+  });
+});

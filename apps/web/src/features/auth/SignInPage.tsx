@@ -5,6 +5,7 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { LegalLinks } from './LegalLinks.js';
 import { ResendVerification } from './PublicPages.js';
+import { enumLabel } from '../../lib/enum-label.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
 import { downloadRecoveryCodes } from '../../lib/recovery-codes.js';
@@ -551,9 +552,9 @@ export function SignInPage(): ReactElement {
                     className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2.5 text-left text-sm hover:bg-surface-2 disabled:opacity-50"
                   >
                     <span>{workspace.organization_name}</span>
-                    <span className="text-2xs capitalize text-content-tertiary">
+                    <span className="text-2xs text-content-tertiary">
                       {passwordWorks(workspace)
-                        ? workspace.role
+                        ? enumLabel(t, 'team.role', workspace.role)
                         : t('auth.signin.ssoRequiredBadge')}
                     </span>
                   </button>

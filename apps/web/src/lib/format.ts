@@ -151,3 +151,58 @@ export function formatWeekday(
   const reference = new Date(Date.UTC(2024, 0, 1 + WEEKDAY_OFFSET[day]));
   return new Intl.DateTimeFormat(locale, { weekday: style, timeZone: 'UTC' }).format(reference);
 }
+
+/**
+ * A language code → its name, written in the active UI language: `"en"` →
+ * `"English"` / `"İngilizce"`. A code the runtime cannot name (or a malformed
+ * one) comes back upper-cased as written, so a stored value is never hidden.
+ */
+export function formatLanguage(
+  code: string | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (!code) return null;
+  try {
+    return new Intl.DisplayNames(locale, { type: 'language' }).of(code) ?? code.toUpperCase();
+  } catch {
+    return code.toUpperCase();
+  }
+}
+
+/**
+ * A billing period `"202610"` → `"October 2026"` in the active UI language.
+ * Anything that is not six digits with a real month is returned as written.
+ * Formatted in UTC: a period is a calendar month, not an instant, so the
+ * viewer's time zone must not move it into the month before.
+ */
+export function formatPeriod(
+  period: string | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (!period) return null;
+  const match = /^(\d{4})(0[1-9]|1[0-2])$/.exec(period);
+  if (!match) return period;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+  return new Intl.DateTimeFormat(locale, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+/**
+ * A calendar day `"2026-10-07"` (the reports' UTC day buckets) → a short date
+ * in the active UI language. Formatted in UTC for the same reason as
+ * {@link formatPeriod}: the day is a label, not a moment. Not a `YYYY-MM-DD`
+ * → returned as written.
+ */
+export function formatDay(
+  day: string | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (!day) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  const date = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return day;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+}

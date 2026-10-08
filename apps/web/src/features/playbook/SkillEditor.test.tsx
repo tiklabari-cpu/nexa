@@ -134,6 +134,46 @@ describe('SkillEditor — required transfer target', () => {
   });
 });
 
+describe('SkillEditor — a step’s type is named in words (O8)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('shows the type label under each collapsed step, not its code', () => {
+    renderEditor(
+      makeSkill([
+        { type: 'transfer_to_team', group: 'Support' },
+        { type: 'send_message', text: 'Hello' },
+      ]),
+    );
+
+    const transfer = screen.getByRole('button', { name: /Hand over to Support/ });
+    expect(transfer).toHaveTextContent('Transfer to a team');
+    expect(transfer).not.toHaveTextContent('transfer_to_team');
+    expect(screen.queryByText(/send_message/)).not.toBeInTheDocument();
+  });
+
+  it('says it in Turkish', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <SkillEditor
+            skill={makeSkill([{ type: 'send_message', text: 'Merhaba' }])}
+            canEdit
+            onSaved={() => {}}
+            onDeleted={() => {}}
+          />
+        </QueryClientProvider>
+      </MemoryRouter>,
+      'tr',
+    );
+    expect(screen.queryByText(/send_message/)).not.toBeInTheDocument();
+    const stepToggle = document.querySelector<HTMLElement>('button[aria-controls^="step-body-"]');
+    expect(stepToggle).toHaveTextContent('Mesaj gönder');
+  });
+});
+
 describe('SkillEditor — required name (FR-MOD-06.2.2)', () => {
   it('blocks the save and shows a reason when the name is cleared', async () => {
     const user = userEvent.setup();

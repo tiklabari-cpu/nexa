@@ -74,6 +74,36 @@ describe('Teams — read-only viewer', () => {
   });
 });
 
+describe('Teams — the card names its language (O8)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('writes the language as a name, not the stored code upper-cased', async () => {
+    api.get.mockResolvedValue({
+      items: [SUPPORT, { ...SUPPORT, id: 2, name: 'Ventas', language_code: 'es' }],
+    });
+    renderTeams({ canManage: false });
+    await screen.findByText('Support');
+
+    expect(screen.getByText(/· English/)).toBeInTheDocument();
+    expect(screen.getByText(/· Spanish/)).toBeInTheDocument();
+    expect(screen.queryByText(/· EN$/)).not.toBeInTheDocument();
+  });
+
+  it('writes it in the panel’s language', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <Teams agents={AGENTS} canManage={false} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    await screen.findByText('Support');
+    expect(screen.getByText(/· İngilizce/)).toBeInTheDocument();
+  });
+});
+
 describe('Teams — create', () => {
   it('sends the name (and omits a blank language) to POST /groups', async () => {
     renderTeams();

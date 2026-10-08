@@ -17,6 +17,7 @@ import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { useDeployment } from '../lib/deployment.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
+import { enumLabel } from '../lib/enum-label.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
 import { InviteTeammates, usePendingInvitations } from '../features/team/InviteTeammates.js';
@@ -819,7 +820,7 @@ function AccountMenu(): ReactElement {
           </p>
           <p className="truncate text-xs text-content-secondary">{agent?.email}</p>
           <p className="mt-1 text-2xs uppercase tracking-wide text-content-tertiary">
-            {agent?.role}
+            {agent ? enumLabel(t, 'team.role', agent.role) : null}
           </p>
 
           {/* Language switcher (I18N1): a plain labelled select so the whole panel

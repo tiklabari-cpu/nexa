@@ -592,8 +592,9 @@ describe('ReportsPage — Reviews report (07.8)', () => {
     renderReports(<ReportsPage />);
     await openReviewsTab();
 
-    expect(screen.getByText('2026-07-20')).toBeInTheDocument();
-    expect(screen.getByText('2026-07-21')).toBeInTheDocument();
+    expect(screen.getByText('Jul 20, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Jul 21, 2026')).toBeInTheDocument();
+    expect(screen.queryByText('2026-07-20')).not.toBeInTheDocument();
     // A day that did get rated shows its real CSAT — including a true 0% when
     // every rating that day was bad. That 0% is data, not the unknown case.
     expect(screen.getByText('75%')).toBeInTheDocument();
@@ -682,7 +683,7 @@ describe('ReportsPage — Reviews report (07.8)', () => {
     ).toBeInTheDocument();
     expect(
       within(insights).getByText(
-        '60% of this period’s negative ratings (12) landed on 2026-07-21.',
+        '60% of this period’s negative ratings (12) landed on Jul 21, 2026.',
       ),
     ).toBeInTheDocument();
     // The tone reaches a colour-blind reader as a word, not only as a hue
@@ -1611,13 +1612,62 @@ describe('ReportsPage — Cases + Leads tabs, permission-gated visibility (07.7-
     renderReports(<ReportsPage />);
     await openCasesTab();
 
-    expect(screen.getByText('2026-07-20')).toBeInTheDocument();
+    expect(screen.getByText('Jul 20, 2026')).toBeInTheDocument();
+    expect(screen.queryByText('2026-07-20')).not.toBeInTheDocument();
     const byStatus = screen.getByRole('region', { name: 'By status' });
-    expect(within(byStatus).getByText('open')).toBeInTheDocument();
+    expect(within(byStatus).getByText('Open')).toBeInTheDocument();
     expect(within(byStatus).getByText('9')).toBeInTheDocument();
     const byPriority = screen.getByRole('region', { name: 'By priority' });
-    expect(within(byPriority).getByText('10')).toBeInTheDocument();
-    expect(within(byPriority).getByText('-5')).toBeInTheDocument();
+    // The inbox's own words for a priority; an in-between value keeps its number
+    // so two rows that snap to the same level stay two rows.
+    expect(within(byPriority).getByText('Normal (10)')).toBeInTheDocument();
+    expect(within(byPriority).getByText('Normal (-5)')).toBeInTheDocument();
+    expect(within(byStatus).queryByText('open')).not.toBeInTheDocument();
+  });
+
+  it('names an exact priority level and an unknown status the way the inbox does', async () => {
+    mockGroupsCasesLeads({
+      cases: {
+        by_status: [
+          { status: 'solved', count: 4 },
+          { status: 'escalated', count: 1 },
+        ],
+        by_priority: [
+          { priority: 100, count: 2 },
+          { priority: 0, count: 7 },
+        ],
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openCasesTab();
+
+    const byStatus = screen.getByRole('region', { name: 'By status' });
+    expect(within(byStatus).getByText('Solved')).toBeInTheDocument();
+    // A status this panel has no word for is shown as written, never blank.
+    expect(within(byStatus).getByText('escalated')).toBeInTheDocument();
+    const byPriority = screen.getByRole('region', { name: 'By priority' });
+    expect(within(byPriority).getByText('Urgent')).toBeInTheDocument();
+    expect(within(byPriority).getByText('Normal')).toBeInTheDocument();
+    expect(within(byPriority).queryByText('100')).not.toBeInTheDocument();
+  });
+
+  it('writes the by-day dates in the panel’s language, on the right day', async () => {
+    mockGroupsCasesLeads({
+      cases: { by_day: [{ date: '2026-07-20', open: 1, closed: 2, total: 3 }] },
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ReportsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+    await userEvent.click(await screen.findByRole('tab', { name: 'Talepler' }));
+
+    expect(await screen.findByText('20 Tem 2026')).toBeInTheDocument();
+    resetLocale();
   });
 
   it('shows a meaningful empty state per section, not an empty table, when Cases has no data', async () => {
@@ -1644,7 +1694,7 @@ describe('ReportsPage — Cases + Leads tabs, permission-gated visibility (07.7-
 
     expect(within(volumeKpi('New leads')).getByText('12')).toBeInTheDocument();
     expect(within(volumeKpi('New leads')).getByText(/↑ 5 vs previous/)).toBeInTheDocument();
-    expect(screen.getByText('2026-07-20')).toBeInTheDocument();
+    expect(screen.getByText('Jul 20, 2026')).toBeInTheDocument();
   });
 
   it('shows a meaningful empty state, not an empty table, when Leads has no data', async () => {

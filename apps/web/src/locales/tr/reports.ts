@@ -359,6 +359,7 @@ export const reports: Messages = {
     'Bu aralıkta bir talep oluşturulduğunda öncelik dağılımı burada görünür.',
   'reports.cases.byPriority.caption': 'Kayıtlı sıra önceliğine göre talepler',
   'reports.cases.byPriority.column': 'Öncelik',
+  'reports.cases.byPriority.nearest': '{level} ({value})',
 
   // Leads (FR-MOD-07.7, v2)
   'reports.leads.error':

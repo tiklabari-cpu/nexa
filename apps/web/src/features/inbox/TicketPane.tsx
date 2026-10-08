@@ -13,13 +13,14 @@
  * merged-in children are listed here with their own unmerge affordance.
  */
 import { useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
-import { formatDateTime } from '../../lib/format.js';
+import { formatDate, formatDateTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import {
   useAddFollower,
@@ -139,6 +140,23 @@ export function TicketList({
 }
 
 /**
+ * An id for a person to quote, not to read: one quiet monospace line that ends
+ * in an ellipsis when it is long, whole in the tooltip, and whole on the
+ * clipboard after a single click (`select-all` selects the full text, not the
+ * clipped part).
+ */
+function IdRef({ id, className }: { id: string; className: string }): ReactElement {
+  return (
+    <span
+      title={id}
+      className={`inline-block max-w-[9rem] select-all truncate align-bottom font-mono ${className}`}
+    >
+      {id}
+    </span>
+  );
+}
+
+/**
  * Splits a `{id}`-carrying template around the id so it keeps its monospace
  * styling instead of collapsing into plain interpolated text.
  */
@@ -147,7 +165,7 @@ function withMonospaceId(template: string, id: string): ReactElement {
   return (
     <>
       {before}
-      <span className="font-mono text-xs">{id}</span>
+      <IdRef id={id} className="text-xs" />
       {after}
     </>
   );
@@ -328,7 +346,9 @@ function MergeSection({
           <ul className="flex flex-col gap-1.5">
             {ticket.merged_ticket_ids.map((id) => (
               <li key={id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 font-mono text-xs">{id}</span>
+                <span className="flex-1">
+                  <IdRef id={id} className="text-xs" />
+                </span>
                 <button
                   type="button"
                   onClick={() => unmerge.mutate(id)}
@@ -357,7 +377,11 @@ function MergeSection({
             <option value="">{t('inbox.ticket.merge.selectPlaceholder')}</option>
             {targets.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
-                {candidate.subject} ({candidate.id})
+                {t('inbox.ticket.merge.option', {
+                  subject: candidate.subject,
+                  status: t(STATUS_LABEL_KEY[candidate.status]),
+                  date: formatDate(candidate.created_at) ?? '',
+                })}
               </option>
             ))}
           </select>
@@ -461,7 +485,7 @@ export function TicketDetailPane({
         {onBack && <BackToTickets onBack={onBack} />}
         <h2 className="flex-1 truncate text-sm font-semibold">{data.subject}</h2>
         <PriorityPill value={data.priority} t={t} />
-        <span className="font-mono text-2xs text-content-tertiary">{data.id}</span>
+        <IdRef id={data.id} className="text-2xs text-content-tertiary" />
         <StatusDot tone={toneFor(data.status)} label={t(STATUS_LABEL_KEY[data.status])} />
       </header>
 
@@ -496,7 +520,12 @@ export function TicketDetailPane({
           <dt className="text-content-tertiary">{t('inbox.ticket.row.fromChat')}</dt>
           <dd>
             {data.source_chat_id ? (
-              <span className="font-mono text-xs">{data.source_chat_id}</span>
+              <Link
+                to={`/app/inbox?chat=${encodeURIComponent(data.source_chat_id)}`}
+                className="font-mono text-xs text-content-brand underline underline-offset-2"
+              >
+                {data.source_chat_id}
+              </Link>
             ) : (
               <span className="text-content-tertiary">{t('inbox.ticket.createdDirectly')}</span>
             )}

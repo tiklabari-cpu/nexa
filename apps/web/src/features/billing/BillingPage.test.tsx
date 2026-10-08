@@ -1325,6 +1325,72 @@ describe('BillingPage — API package purchase history (FR-MOD-09.3)', () => {
   });
 });
 
+/** A Plan summary card, found by its label: the span that sits above a KPI value. */
+function planCard(label: string): HTMLElement {
+  const labelEl = screen
+    .getAllByText(label)
+    .find((el) => el.tagName === 'SPAN' && el.nextElementSibling?.classList.contains('tabular'));
+  if (!labelEl?.parentElement) throw new Error(`no card for ${label}`);
+  return labelEl.parentElement;
+}
+
+describe('BillingPage — raw server values read as words (D21)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('names the period as a month, not as 202607', async () => {
+    mockBilling({});
+    renderBilling(<BillingPage />);
+
+    expect(
+      await screen.findByText('Plan, usage and charges for period July 2026.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/202607./)).not.toBeInTheDocument();
+  });
+
+  it('names the plan, the cycle, the status and the payment provider', async () => {
+    mockBilling({ plan: 'enterprise', billingCycle: 'annual', access: 'trialing' });
+    renderBilling(<BillingPage />);
+    await screen.findByText('Plan, usage and charges for period July 2026.');
+
+    const plan = planCard('Plan');
+    expect(plan).toHaveTextContent('Enterprise');
+    expect(plan).toHaveTextContent('Annual');
+    expect(plan).not.toHaveTextContent('enterprise');
+    expect(planCard('Status')).toHaveTextContent('Trial');
+    expect(planCard('Status')).not.toHaveTextContent('trialing');
+    expect(screen.getByText(/Payment provider: Demo billing./)).toBeInTheDocument();
+    expect(screen.queryByText(/provider: mock/)).not.toBeInTheDocument();
+  });
+
+  it('says them in Turkish, the month included', async () => {
+    mockBilling({ plan: 'growth', billingCycle: 'monthly' });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <BillingPage />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByText('Temmuz 2026 dönemi için plan, kullanım ve ücretler.'),
+    ).toBeInTheDocument();
+    expect(planCard('Plan')).toHaveTextContent('Aylık');
+    expect(planCard('Durum')).toHaveTextContent('Etkin');
+    expect(screen.getByText(/Ödeme sağlayıcısı: Demo faturalama./)).toBeInTheDocument();
+  });
+
+  it('keeps a plan, status or provider it has no word for as written', async () => {
+    mockBilling({ plan: 'platinum' });
+    renderBilling(<BillingPage />);
+    await screen.findByText('Plan, usage and charges for period July 2026.');
+
+    expect(planCard('Plan')).toHaveTextContent('platinum');
+  });
+});
+
 describe('BillingPage localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();

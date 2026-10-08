@@ -170,6 +170,8 @@ describe('the conversation list on a realtime event (FR-MOD-02.2.2)', () => {
     await waitFor(() => expect(rowOrder()).toEqual(['Cara', 'Ada', 'Ben']));
     // «+ unread» is the same clause of the same criterion.
     expect(await within(listPanel()).findByLabelText('1 unread')).toBeInTheDocument();
+    // A bare dot with only an aria-label is not reliably read; it needs a role (D14).
+    expect(within(listPanel()).getByRole('img', { name: '1 unread' })).toBeInTheDocument();
   });
 
   it('keeps the open conversation open while the list re-orders around it', async () => {

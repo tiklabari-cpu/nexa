@@ -23,7 +23,8 @@ import { Banner } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
-import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
+import { formatCount, formatDate, formatMoney, formatPeriod } from '../../lib/format.js';
+import { enumLabel } from '../../lib/enum-label.js';
 import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
 import { newAttemptKey } from './attempt-key.js';
 
@@ -245,7 +246,9 @@ export function BillingPage(): ReactElement {
   return (
     <Page
       title={t('billing.page.title')}
-      description={t('billing.page.description', { period: use.period_label })}
+      description={t('billing.page.description', {
+        period: formatPeriod(use.period_label) ?? use.period_label,
+      })}
     >
       {sub.access === 'read_only' && (
         <Banner tone="warning" role="alert" title={t('billing.readOnly.title')}>
@@ -268,7 +271,11 @@ export function BillingPage(): ReactElement {
 
       <Section title={t('billing.plan.title')}>
         <KpiGrid>
-          <Kpi label={t('billing.plan.kpi.plan')} value={sub.plan} hint={sub.billing_cycle} />
+          <Kpi
+            label={t('billing.plan.kpi.plan')}
+            value={enumLabel(t, 'billing.plan.name', sub.plan)}
+            hint={enumLabel(t, 'billing.plan.cycle', sub.billing_cycle)}
+          />
           <Kpi
             label={t('billing.plan.kpi.seats')}
             value={formatCount(sub.seats)}
@@ -287,7 +294,7 @@ export function BillingPage(): ReactElement {
           />
           <Kpi
             label={t('billing.plan.kpi.status')}
-            value={sub.status}
+            value={enumLabel(t, 'billing.plan.statusValue', sub.status)}
             tone={
               sub.access === 'active' ? 'good' : sub.access === 'read_only' ? 'warn' : 'neutral'
             }
@@ -457,7 +464,9 @@ export function BillingPage(): ReactElement {
       <InvoicesSection />
 
       <p className="text-2xs text-content-tertiary">
-        {t('billing.page.providerNotice', { provider: sub.provider })}
+        {t('billing.page.providerNotice', {
+          provider: enumLabel(t, 'billing.provider', sub.provider),
+        })}
       </p>
     </Page>
   );
@@ -917,7 +926,7 @@ function PlanSelector({
                   onClick={() => setConfirmingId(plan.id)}
                   className={planButton(isCurrent)}
                 >
-                  {plan.id}
+                  {enumLabel(t, 'billing.plan.name', plan.id)}
                 </button>
               );
             })}
@@ -1723,7 +1732,9 @@ function InvoicesSection(): ReactElement {
                   >
                     <td className="px-4 py-2">
                       <span className="font-medium">{invoice.number}</span>
-                      <span className="ml-2 text-content-tertiary">{invoice.period_label}</span>
+                      <span className="ml-2 text-content-tertiary">
+                        {formatPeriod(invoice.period) ?? invoice.period_label}
+                      </span>
                       {/* What the total is made of, on the statement itself. A
                           row that shows only an amount makes "why is this
                           $29.99 more than last month" a support ticket — and a

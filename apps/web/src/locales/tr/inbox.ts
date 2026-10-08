@@ -318,6 +318,7 @@ export const inbox: Messages = {
   'inbox.ticket.merge.selectLabel': 'Başka bir talebe birleştir',
   'inbox.ticket.merge.selectPlaceholder': 'Birleştirilecek talebi seçin…',
   'inbox.ticket.merge.cta': 'Birleştir',
+  'inbox.ticket.merge.option': '{subject} · {status} · {date}',
   'inbox.ticket.backToTickets': 'Talepler',
   'inbox.ticket.detail.empty.title': 'Talep seçilmedi',
   'inbox.ticket.detail.empty.description': 'Burada görmek için ızgaradan bir talep seçin.',

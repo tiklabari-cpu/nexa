@@ -107,6 +107,7 @@ export const customers: Messages = {
   'customers.detail.noConversations': 'No conversations yet.',
   'customers.detail.chatOpen': 'Open',
   'customers.detail.chatClosed': 'Closed',
+  'customers.detail.chatLink': 'Conversation of {date}',
   'customers.detail.groups': 'Groups',
   'customers.detail.noGroups':
     'Not routed to a team yet. Groups appear here once one of their conversations is assigned.',

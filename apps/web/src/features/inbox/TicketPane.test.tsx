@@ -7,9 +7,10 @@
  * requires.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { TicketDetailPane, TicketList } from './TicketPane.js';
 import type { Ticket, TicketDetail } from './types.js';
 import { useAuth } from '../../lib/auth-store.js';
@@ -117,9 +118,11 @@ function renderPane(detail: TicketDetail, candidates: Ticket[] = []) {
   const handles = stubFetch(detail);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider client={client}>
-      <TicketDetailPane ticketId={detail.id} candidates={candidates} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <TicketDetailPane ticketId={detail.id} candidates={candidates} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
   return handles;
 }
@@ -218,6 +221,35 @@ describe('TicketDetailPane HelpDesk actions', () => {
         ),
       ).toBe(true),
     );
+  });
+
+  it('names a merge target by what it is about, not by its id (D14)', async () => {
+    renderPane(makeDetail(), [
+      makeSummary({ id: 'TCK2', subject: 'Duplicate report', status: 'pending' }),
+    ]);
+    const select = await screen.findByLabelText('Merge into another ticket');
+
+    const option = within(select).getByRole('option', {
+      name: 'Duplicate report · Pending · Jan 1, 2026',
+    });
+    expect(option).toHaveValue('TCK2');
+    expect(within(select).queryByRole('option', { name: /TCK2/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the ticket id quiet but whole: a tooltip and one-click select (D14)', async () => {
+    const longId = '0f3c9a52-7d1e-4b8a-9c36-5a1e2d4f7b90';
+    renderPane(makeDetail({ id: longId }));
+    const ref = await screen.findByTitle(longId);
+
+    expect(ref).toHaveTextContent(longId);
+    expect(ref).toHaveClass('truncate', 'select-all');
+  });
+
+  it('links the source chat instead of printing a dead id (D14)', async () => {
+    renderPane(makeDetail({ source_chat_id: 'CHAT0000001' }));
+    const link = await screen.findByRole('link', { name: 'CHAT0000001' });
+
+    expect(link).toHaveAttribute('href', '/app/inbox?chat=CHAT0000001');
   });
 
   it('shows a merged ticket read-only and unmerges it', async () => {

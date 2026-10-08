@@ -36,6 +36,15 @@ export const billing: Messages = {
   'billing.plan.kpi.estimatedTotalHintTrial': 'Nothing billed during the trial',
   'billing.plan.kpi.estimatedTotalHintPeriod': 'This period',
   'billing.plan.kpi.status': 'Status',
+  'billing.plan.name.growth': 'Growth',
+  'billing.plan.name.enterprise': 'Enterprise',
+  'billing.plan.cycle.monthly': 'Monthly',
+  'billing.plan.cycle.annual': 'Annual',
+  'billing.plan.statusValue.trialing': 'Trial',
+  'billing.plan.statusValue.active': 'Active',
+  'billing.plan.statusValue.past_due': 'Past due',
+  'billing.plan.statusValue.canceled': 'Canceled',
+  'billing.provider.mock': 'Demo billing',
 
   // Manage plan — ManagePlan
   'billing.managePlan.title': 'Manage plan',

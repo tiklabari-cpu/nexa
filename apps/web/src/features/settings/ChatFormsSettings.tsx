@@ -39,6 +39,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { enumLabel } from '../../lib/enum-label.js';
 import { useTranslate } from '../../lib/i18n.js';
 import {
   CUSTOM_FIELD_TYPES,
@@ -160,7 +161,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                 >
                   {CUSTOM_FIELD_TYPES.map((type) => (
                     <option key={type} value={type}>
-                      {type}
+                      {enumLabel(t, 'settings.fieldType', type)}
                     </option>
                   ))}
                 </select>
@@ -230,7 +231,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                     {t(placementKey(field.form_placement ?? 'pre_chat'))}
                   </span>
                   <span className="text-2xs text-content-tertiary">
-                    {field.type}
+                    {enumLabel(t, 'settings.fieldType', field.type)}
                     {field.required ? t('settings.requiredSuffix') : ''}
                   </span>
                   {canEdit && (

@@ -122,6 +122,46 @@ describe('CopilotKnowledge', () => {
     expect(api.get).not.toHaveBeenCalled();
   });
 
+  it('names a source’s type and status in words, not in the server’s codes (D14)', async () => {
+    auth.scopes = ['agents-bot--all:ro'];
+    api.get.mockResolvedValue({
+      items: [
+        { ...SOURCES.items[0], id: 's1', name: 'Refunds', type: 'article', status: 'ready' },
+        { ...SOURCES.items[0], id: 's2', name: 'Site', type: 'website', status: 'indexing' },
+        { ...SOURCES.items[0], id: 's3', name: 'Blank', type: 'faq', status: 'empty' },
+        { ...SOURCES.items[0], id: 's4', name: 'Odd', type: 'file', status: 'archived' },
+      ],
+    });
+    renderKnowledge(<CopilotKnowledge />);
+    await screen.findByText('Refunds');
+
+    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(screen.getByText('Indexing')).toBeInTheDocument();
+    expect(screen.getByText('No content')).toBeInTheDocument();
+    expect(screen.getByText('Article')).toBeInTheDocument();
+    expect(screen.getByText('Website')).toBeInTheDocument();
+    expect(screen.getByText('FAQ')).toBeInTheDocument();
+    // A status this panel has no word for is shown as written, never blank.
+    expect(screen.getByText('archived')).toBeInTheDocument();
+    expect(screen.queryByText('ready')).not.toBeInTheDocument();
+    expect(screen.queryByText('article')).not.toBeInTheDocument();
+  });
+
+  it('says the same in Turkish', async () => {
+    auth.scopes = ['agents-bot--all:ro'];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <CopilotKnowledge />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    await screen.findByText('Refund policy');
+    expect(screen.getByText('Hazır')).toBeInTheDocument();
+    expect(screen.getByText('Makale')).toBeInTheDocument();
+  });
+
   it('paints the section in Turkish when that is the active locale', async () => {
     auth.scopes = ['agents-bot--all:rw'];
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

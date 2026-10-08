@@ -31,13 +31,16 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import {
   formatCount,
+  formatDay,
   formatDuration,
   formatMoney,
   formatRate,
   formatWeekday,
   type Weekday,
 } from '../../lib/format.js';
+import { enumLabel } from '../../lib/enum-label.js';
 import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
+import { nearestPriority } from '../inbox/ticket-priority.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import {
   SAVED_REPORT_VIEW_NAME_MAX,
@@ -1380,7 +1383,7 @@ function insightSentence(t: TFunction, insight: ReviewInsight): string {
     responses: formatCount(responses ?? 0) ?? '',
     previous: formatCount(previous_responses ?? 0) ?? '',
     points: formatCount(Math.abs(delta_points ?? 0)) ?? '',
-    date: date ?? '',
+    date: formatDay(date) ?? '',
     bad: formatCount(bad ?? 0) ?? '',
     share: formatRate(share) ?? '',
   });
@@ -1492,7 +1495,7 @@ function DailyBar({ rows }: { rows: Array<CsatSummary & { date: string }> }): Re
       <tbody>
         {rows.map((row) => (
           <tr key={row.date} className="border-b border-border last:border-0">
-            <td className="tabular px-4 py-2">{row.date}</td>
+            <td className="tabular px-4 py-2">{formatDay(row.date)}</td>
             <td className="px-4 py-2">
               <DayBar good={row.good} bad={row.bad} max={max} />
             </td>
@@ -1554,7 +1557,11 @@ function BreakdownTab(props: TabProps): ReactElement {
             <SplitTable
               caption={t('reports.breakdown.byDay.caption')}
               firstColumn={t('reports.common.dayColumn')}
-              rows={data.by_day.map((row) => ({ key: row.date, label: row.date, ...row }))}
+              rows={data.by_day.map((row) => ({
+                key: row.date,
+                label: formatDay(row.date) ?? row.date,
+                ...row,
+              }))}
             />
           )}
         </Card>
@@ -2120,7 +2127,7 @@ function CasesDailyTable({ rows }: { rows: ReportsCases['by_day'] }): ReactEleme
       <tbody>
         {rows.map((row) => (
           <tr key={row.date} className="border-b border-border last:border-0">
-            <td className="tabular px-4 py-2">{row.date}</td>
+            <td className="tabular px-4 py-2">{formatDay(row.date)}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.open)}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.closed)}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.total)}</td>
@@ -2152,13 +2159,27 @@ function CasesStatusTable({ rows }: { rows: ReportsCases['by_status'] }): ReactE
       <tbody>
         {rows.map((row) => (
           <tr key={row.status} className="border-b border-border last:border-0">
-            <td className="truncate px-4 py-2 capitalize">{row.status}</td>
+            <td className="truncate px-4 py-2">{enumLabel(t, 'inbox.ticketStatus', row.status)}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.count)}</td>
           </tr>
         ))}
       </tbody>
     </table>
   );
+}
+
+/**
+ * A stored priority as the level the inbox calls it. The column is a signed
+ * integer, so a value between two levels snaps to the nearest one and keeps its
+ * number beside the word — two rows that both read "Normal" must stay two rows
+ * a reader can tell apart.
+ */
+function priorityLabel(t: TFunction, value: number): string {
+  const level = nearestPriority(value);
+  const word = t(`inbox.priority.${level.label.toLowerCase()}`);
+  return level.value === value
+    ? word
+    : t('reports.cases.byPriority.nearest', { level: word, value: formatCount(value) ?? '' });
 }
 
 function CasesPriorityTable({ rows }: { rows: ReportsCases['by_priority'] }): ReactElement {
@@ -2182,7 +2203,7 @@ function CasesPriorityTable({ rows }: { rows: ReportsCases['by_priority'] }): Re
       <tbody>
         {rows.map((row) => (
           <tr key={row.priority} className="border-b border-border last:border-0">
-            <td className="tabular px-4 py-2">{row.priority}</td>
+            <td className="px-4 py-2">{priorityLabel(t, row.priority)}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.count)}</td>
           </tr>
         ))}
@@ -2268,7 +2289,7 @@ function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactEleme
       <tbody>
         {rows.map((row) => (
           <tr key={row.date} className="border-b border-border last:border-0">
-            <td className="tabular px-4 py-2">{row.date}</td>
+            <td className="tabular px-4 py-2">{formatDay(row.date)}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.count)}</td>
           </tr>
         ))}

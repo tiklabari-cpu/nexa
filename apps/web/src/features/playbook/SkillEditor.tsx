@@ -530,9 +530,10 @@ export function SkillEditor({
                         className="w-full text-left"
                       >
                         <span className="block text-sm">{describeStepText(entry.step, t)}</span>
-                        <code className="text-2xs text-content-tertiary">
-                          {entry.step.type} <span aria-hidden="true">{open ? '▴' : '▾'}</span>
-                        </code>
+                        <span className="text-2xs text-content-tertiary">
+                          {t(STEP_TYPE_LABEL_KEYS[entry.step.type])}{' '}
+                          <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+                        </span>
                       </button>
 
                       {/* Stays in the collapsed summary on purpose: a step that

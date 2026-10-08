@@ -113,6 +113,11 @@ describe('DetailsPanel visitor context', () => {
     expect(within(rowValue('Duration')).getByText('3m 20s')).toBeInTheDocument();
   });
 
+  it('shows the chat id as a quiet row that selects whole on one click (D14)', () => {
+    renderPanel(baseChat());
+    expect(within(rowValue('Chat ID')).getByText('TJ1H8CFKRV')).toHaveClass('select-all');
+  });
+
   it('shows an empty state for a visitor with no recorded visit', () => {
     renderPanel(chatWithVisitor(null));
 

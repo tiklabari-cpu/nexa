@@ -21,6 +21,7 @@ import { Card, CardSkeleton, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { formatLanguage } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { TeamEditor } from './TeamEditor.js';
 import { TeamMembers } from './TeamMembers.js';
@@ -100,7 +101,7 @@ export function Teams({ agents, canManage }: TeamsProps): ReactElement {
                   <h3 className="truncate text-sm font-medium">{group.name}</h3>
                   <p className="text-2xs text-content-tertiary">
                     {t('team.page.memberCount', { count: group.agents.length })} ·{' '}
-                    {group.language_code.toUpperCase()}
+                    {formatLanguage(group.language_code)}
                   </p>
                 </div>
                 {canManage && (

@@ -135,12 +135,12 @@ export function PersonalAccessTokens(): ReactElement {
           // here only when a demotion has left `sessionScopes` stale).
           const field = firstRejectedField(error);
           if (field === 'name') {
-            // i18n-ignore: server-specific validation detail, see the note above.
+            // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
             setFieldError('name', error.message);
             return;
           }
           if (error.type === 'validation' || error.type === 'authorization') {
-            // i18n-ignore: server-specific refusal detail, see the note above.
+            // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from (the missing scope's name).
             setSubmitError(error.message);
             return;
           }

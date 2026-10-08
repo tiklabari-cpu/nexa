@@ -22,7 +22,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { confirmLeave } from '../../lib/dirty-guard.js';
 import { formatDate } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
-import { useTranslate } from '../../lib/i18n.js';
+import { getLocale, useTranslate } from '../../lib/i18n.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
@@ -208,7 +208,8 @@ export function PlaybookPage(): ReactElement {
     mutationFn: (template: SkillTemplate) => {
       const aiAgentId = agents.data?.items.find((a) => a.kind === 'ai_agent')?.id;
       return api.post<Skill>('/skills', {
-        ...templateToDraft(template),
+        // In the language the console is in now, so the skill reads like its admin.
+        ...templateToDraft(template, getLocale()),
         ...(aiAgentId ? { ai_agent_id: aiAgentId } : {}),
       });
     },
@@ -591,7 +592,7 @@ export function PlaybookPage(): ReactElement {
                           <VirtualList
                             items={visibleItems}
                             rowHeight={56}
-                            label="Skills"
+                            label={t('playbook.skills.title')}
                             renderRow={(skill) => (
                               <div
                                 key={skill.id}

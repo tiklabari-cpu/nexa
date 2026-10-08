@@ -370,7 +370,7 @@ function RegisterAppModal({
         // lose that detail, so it is shown as-is (Composer.tsx/IpAllowlist.tsx
         // precedent). Any other failure funnels through the catalogue as usual.
         if (error instanceof ApiClientError && error.type === 'validation') {
-          // i18n-ignore: server-specific validation detail, see the note above.
+          // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
           setSubmitError(error.message);
           return;
         }
@@ -549,7 +549,7 @@ function EditAppModal({ app, onClose }: { app: PartnerApp; onClose: () => void }
         // Same reasoning as the register form: the server names exactly which
         // redirect URI was rejected and why.
         if (error instanceof ApiClientError && error.type === 'validation') {
-          // i18n-ignore: server-specific validation detail, see RegisterAppModal.
+          // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from (same as RegisterAppModal).
           setSubmitError(error.message);
           return;
         }

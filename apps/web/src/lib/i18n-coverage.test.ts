@@ -392,6 +392,201 @@ describe('catalogue layout', () => {
   });
 });
 
+/** Every non-test `.ts`/`.tsx` under `src`, repo-relative and posix-slashed. */
+function sourceFiles(): string[] {
+  const found: string[] = [];
+  walk(join(process.cwd(), 'src'), found);
+  return found
+    .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
+    .map((file) => relative(process.cwd(), file).split(sep).join('/'))
+    .filter((file) => !file.startsWith('src/test/') && !file.startsWith('src/locales/'))
+    .sort();
+}
+
+/**
+ * Example values that read the same in every language — an address, a path, a
+ * range, a colour, a time, a language code. Anything else handed to
+ * `placeholder` as a literal is a word, and a word belongs in the catalogue.
+ */
+const LANGUAGE_NEUTRAL_PLACEHOLDER = [
+  /^[/#]/, // a path or a hex colour
+  /^(?:https?:\/\/|urn:|-----BEGIN)/,
+  /^[\d.:/]+$/, // an IP address, a CIDR range, a time
+  /^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:, ?[a-z0-9-]+(?:\.[a-z0-9-]+)+)*$/, // a domain, or a list of them
+  /^[a-z]+\/[a-z0-9.+-]+(?:, ?[a-z]+\/[a-z0-9.+-]+)*$/, // MIME types
+  /^[a-z]{2}$/, // a language code
+];
+
+/**
+ * Identifiers rather than words, named one by one so a new one is a decision
+ * someone reviews: a tag slug, a SAML attribute name, and the sample name of
+ * an identity-provider connection (a product name plus a tenant label).
+ */
+const NEUTRAL_PLACEHOLDER_WORDS: ReadonlySet<string> = new Set([
+  'vip',
+  'displayName',
+  'Okta (corp)',
+]);
+
+/** String literals handed to `placeholder` that are words in one language. */
+function wordPlaceholders(original: string): { line: number; text: string }[] {
+  const waived = waivedLines(original);
+  const source = stripComments(original);
+  const hits: { line: number; text: string }[] = [];
+  for (const match of source.matchAll(
+    /\bplaceholder\s*=\s*(?:"([^"]*)"|\{\s*['"`]([^'"`]*)['"`]\s*\})/g,
+  )) {
+    const text = match[1] ?? match[2] ?? '';
+    if (!/[A-Za-z]/.test(text)) continue;
+    if (NEUTRAL_PLACEHOLDER_WORDS.has(text)) continue;
+    if (LANGUAGE_NEUTRAL_PLACEHOLDER.some((shape) => shape.test(text))) continue;
+    const line = lineOf(source, match.index);
+    if (!waived.has(line)) hits.push({ line, text });
+  }
+  return hits;
+}
+
+/** The argument text of every `new Notification(…)`, balanced on its parentheses. */
+function notificationCalls(source: string): { line: number; text: string }[] {
+  const calls: { line: number; text: string }[] = [];
+  for (const match of source.matchAll(/new Notification\(/g)) {
+    let depth = 1;
+    let end = match.index + match[0].length;
+    while (end < source.length && depth > 0) {
+      const char = source[end]!;
+      if (char === '(') depth += 1;
+      else if (char === ')') depth -= 1;
+      end += 1;
+    }
+    calls.push({
+      line: lineOf(source, match.index),
+      text: source.slice(match.index + match[0].length, end - 1),
+    });
+  }
+  return calls;
+}
+
+/**
+ * Every quoted literal in `text` that holds a space — a sentence, not an
+ * identifier like `'chat_id'`. Read left to right so a closing quote is never
+ * mistaken for an opening one.
+ */
+function sentenceLiterals(text: string): string[] {
+  const found: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const quote = text[index]!;
+    if (quote !== "'" && quote !== '"' && quote !== '`') {
+      index += 1;
+      continue;
+    }
+    let end = index + 1;
+    while (end < text.length && text[end] !== quote) end += text[end] === '\\' ? 2 : 1;
+    const literal = text.slice(index + 1, end);
+    if (/\s/.test(literal)) found.push(literal);
+    index = end + 1;
+  }
+  return found;
+}
+
+/** `new Error('a sentence')` — prose a person could end up reading. */
+function sentenceErrors(original: string): { line: number; text: string }[] {
+  const waived = waivedLines(original);
+  const source = stripComments(original);
+  const hits: { line: number; text: string }[] = [];
+  for (const match of source.matchAll(
+    /new Error\(\s*(['"`])((?:(?!\1)[^\n])*\s(?:(?!\1)[^\n])*)\1/g,
+  )) {
+    const line = lineOf(source, match.index);
+    if (!waived.has(line)) hits.push({ line, text: match[2]! });
+  }
+  return hits;
+}
+
+describe('leaks the markup scan cannot see (O14, tm 259.18)', () => {
+  it('leaves no word as a literal placeholder in a registered file', () => {
+    const offenders: string[] = [];
+    for (const file of TRANSLATED_FILES) {
+      for (const hit of wordPlaceholders(read(file))) {
+        offenders.push(`${file}:${hit.line} — ${hit.text}`);
+      }
+    }
+    expect(
+      offenders,
+      'a placeholder made of words must come from t(); an address, path or range may stay literal',
+    ).toEqual([]);
+  });
+
+  it('puts no sentence in a desktop notification outside the catalogue', () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      const source = stripComments(read(file));
+      for (const call of notificationCalls(source)) {
+        for (const text of sentenceLiterals(call.text))
+          offenders.push(`${file}:${call.line} — ${text}`);
+        if (/^\s*['"`]/.test(call.text)) offenders.push(`${file}:${call.line} — literal title`);
+      }
+    }
+    expect(
+      offenders,
+      'new Notification(...) must take its title and fallback body from translate(getLocale(), key)',
+    ).toEqual([]);
+  });
+
+  it('keeps sentence-shaped Error messages developer-only', () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      if (file === 'src/main.tsx') continue;
+      for (const hit of sentenceErrors(read(file))) {
+        offenders.push(`${file}:${hit.line} — ${hit.text}`);
+      }
+    }
+    expect(
+      offenders,
+      'an Error whose message is a sentence can reach a screen as `error.message`; throw a code ' +
+        '(see lib/auth-flow-error.ts) or, for a developer-only guard, say so with // i18n-ignore',
+    ).toEqual([]);
+  });
+
+  it('knows its own patterns: a word placeholder, a notification sentence and an Error sentence are all caught', () => {
+    expect(wordPlaceholders('<input placeholder="Order number" />')).toHaveLength(1);
+    expect(wordPlaceholders("<input placeholder={'Billing'} />")).toHaveLength(1);
+    for (const neutral of [
+      '/pricing',
+      '10.0.0.0/24',
+      'shop.example',
+      '09:00',
+      'en',
+      '#2d67fa',
+      'vip',
+    ]) {
+      expect(wordPlaceholders(`<input placeholder="${neutral}" />`), neutral).toHaveLength(0);
+    }
+    expect(
+      wordPlaceholders('<input placeholder="Billing" /> {/* i18n-ignore: test */}'),
+    ).toHaveLength(0);
+    expect(
+      wordPlaceholders('// i18n-ignore: a name\n<input placeholder="Billing" />'),
+    ).toHaveLength(0);
+
+    const [call] = notificationCalls(
+      "new Notification('New message', { body: x ?? 'A visitor wrote.' })",
+    );
+    expect(sentenceLiterals(call!.text).sort()).toEqual(['A visitor wrote.', 'New message']);
+    expect(
+      notificationCalls("new Notification(t('k'), { tag: payload['chat_id'] })").flatMap((c) =>
+        sentenceLiterals(c.text),
+      ),
+    ).toEqual([]);
+
+    expect(sentenceErrors("throw new Error('Workspace not found.')")).toHaveLength(1);
+    expect(sentenceErrors("throw new Error('workspace_not_found')")).toHaveLength(0);
+    expect(sentenceErrors("// i18n-ignore: guard\nthrow new Error('Save it first.')")).toHaveLength(
+      0,
+    );
+  });
+});
+
 describe('screen coverage', () => {
   it('registers every file that already calls t()', () => {
     const unregistered = SCREENS.filter(

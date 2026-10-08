@@ -3,7 +3,7 @@ import {
   TRAFFIC_FIELD_DEFS,
   availableFields,
   buildTrafficParams,
-  conditionError,
+  conditionErrorKey,
   conditionsAreValid,
   conditionsFromSearchParams,
   newCondition,
@@ -51,42 +51,42 @@ describe('availableFields', () => {
   });
 });
 
-describe('conditionError', () => {
+describe('conditionErrorKey', () => {
   it('accepts a well-formed value for every field', () => {
-    expect(conditionError({ field: 'activity', value: 'chatting' })).toBeNull();
-    expect(conditionError({ field: 'page_url_contains', value: '/pricing' })).toBeNull();
-    expect(conditionError({ field: 'came_from_contains', value: 'google.com' })).toBeNull();
-    expect(conditionError({ field: 'country_code', value: 'us' })).toBeNull();
-    expect(conditionError({ field: 'is_lead', value: 'false' })).toBeNull();
-    expect(conditionError({ field: 'group_id', value: '42' })).toBeNull();
+    expect(conditionErrorKey({ field: 'activity', value: 'chatting' })).toBeNull();
+    expect(conditionErrorKey({ field: 'page_url_contains', value: '/pricing' })).toBeNull();
+    expect(conditionErrorKey({ field: 'came_from_contains', value: 'google.com' })).toBeNull();
+    expect(conditionErrorKey({ field: 'country_code', value: 'us' })).toBeNull();
+    expect(conditionErrorKey({ field: 'is_lead', value: 'false' })).toBeNull();
+    expect(conditionErrorKey({ field: 'group_id', value: '42' })).toBeNull();
   });
 
   it('rejects an empty value with a field-under message', () => {
     for (const def of TRAFFIC_FIELD_DEFS) {
       if (def.kind === 'select') continue; // a select is never truly empty
-      expect(conditionError({ field: def.field, value: '' })).toBeTruthy();
-      expect(conditionError({ field: def.field, value: '   ' })).toBeTruthy();
+      expect(conditionErrorKey({ field: def.field, value: '' })).toBeTruthy();
+      expect(conditionErrorKey({ field: def.field, value: '   ' })).toBeTruthy();
     }
   });
 
   it('rejects a country code that is not exactly two letters', () => {
-    expect(conditionError({ field: 'country_code', value: 'USA' })).toBeTruthy();
-    expect(conditionError({ field: 'country_code', value: '1' })).toBeTruthy();
+    expect(conditionErrorKey({ field: 'country_code', value: 'USA' })).toBeTruthy();
+    expect(conditionErrorKey({ field: 'country_code', value: '1' })).toBeTruthy();
   });
 
   it('rejects a non-numeric group id', () => {
-    expect(conditionError({ field: 'group_id', value: 'abc' })).toBeTruthy();
-    expect(conditionError({ field: 'group_id', value: '4.2' })).toBeTruthy();
+    expect(conditionErrorKey({ field: 'group_id', value: 'abc' })).toBeTruthy();
+    expect(conditionErrorKey({ field: 'group_id', value: '4.2' })).toBeTruthy();
   });
 
   it('rejects a page-url-contains value over the 2048-character budget', () => {
-    expect(conditionError({ field: 'page_url_contains', value: 'a'.repeat(2049) })).toBeTruthy();
-    expect(conditionError({ field: 'page_url_contains', value: 'a'.repeat(2048) })).toBeNull();
+    expect(conditionErrorKey({ field: 'page_url_contains', value: 'a'.repeat(2049) })).toBeTruthy();
+    expect(conditionErrorKey({ field: 'page_url_contains', value: 'a'.repeat(2048) })).toBeNull();
   });
 
   it('rejects an activity or lead value outside their enum', () => {
-    expect(conditionError({ field: 'activity', value: 'bogus' })).toBeTruthy();
-    expect(conditionError({ field: 'is_lead', value: 'maybe' })).toBeTruthy();
+    expect(conditionErrorKey({ field: 'activity', value: 'bogus' })).toBeTruthy();
+    expect(conditionErrorKey({ field: 'is_lead', value: 'maybe' })).toBeTruthy();
   });
 });
 

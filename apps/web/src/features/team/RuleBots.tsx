@@ -194,7 +194,7 @@ export function RuleBots(): ReactElement {
                     onBlur={() => botForm.blur('name')}
                     aria-invalid={botNameError ? true : undefined}
                     aria-describedby={botNameError ? 'rule-bot-name-error' : undefined}
-                    placeholder="FAQ bot"
+                    placeholder={t('team.ruleBots.botNamePlaceholder')}
                     maxLength={120}
                     className={INPUT}
                   />
@@ -585,7 +585,7 @@ function RuleForm({
             onBlur={() => form.blur('name')}
             aria-invalid={nameError ? true : undefined}
             aria-describedby={nameError ? `rule-name-error-${bot.id}` : undefined}
-            placeholder="Opening hours"
+            placeholder={t('team.ruleBots.ruleNamePlaceholder')}
             maxLength={120}
             className={INPUT}
           />
@@ -620,7 +620,7 @@ function RuleForm({
             onBlur={() => form.blur('when')}
             aria-invalid={whenError ? true : undefined}
             aria-describedby={whenError ? `rule-when-error-${bot.id}` : undefined}
-            placeholder="hours"
+            placeholder={t('team.ruleBots.whenPlaceholder')}
             maxLength={2048}
             className={INPUT}
           />
@@ -677,7 +677,7 @@ function RuleForm({
               onBlur={() => form.blur('then')}
               aria-invalid={thenError ? true : undefined}
               aria-describedby={thenError ? `rule-then-error-${bot.id}` : undefined}
-              placeholder="We are open 09:00-18:00."
+              placeholder={t('team.ruleBots.thenPlaceholder')}
               maxLength={2000}
               className={INPUT}
             />

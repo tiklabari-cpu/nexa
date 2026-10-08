@@ -144,7 +144,7 @@ export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactEl
                   onBlur={() => form.blur('name')}
                   aria-invalid={nameError ? true : undefined}
                   aria-describedby={nameError ? 'template-name-error' : undefined}
-                  placeholder="Ticket received"
+                  placeholder={t('settings.ticketEmailTemplates.namePlaceholder')}
                   maxLength={120}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
@@ -162,7 +162,7 @@ export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactEl
                   onBlur={() => form.blur('subject')}
                   aria-invalid={subjectError ? true : undefined}
                   aria-describedby={subjectError ? 'template-subject-error' : undefined}
-                  placeholder="We received your ticket {{ticket.id}}"
+                  placeholder={t('settings.ticketEmailTemplates.subjectPlaceholder')}
                   maxLength={200}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
@@ -180,7 +180,7 @@ export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactEl
                   onBlur={() => form.blur('body')}
                   aria-invalid={bodyError ? true : undefined}
                   aria-describedby={bodyError ? 'template-body-error' : undefined}
-                  placeholder="Hi {{customer.name}}, thanks for reaching out."
+                  placeholder={t('settings.ticketEmailTemplates.bodyPlaceholder')}
                   maxLength={10000}
                   rows={4}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"

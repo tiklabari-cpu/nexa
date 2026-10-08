@@ -138,4 +138,26 @@ describe('CustomersFilters localisation (NFR-I18N2)', () => {
     expect(screen.getByText('Tüm filtrelerle eşleştir')).toBeInTheDocument();
     expect(screen.getByText('Uygulanan filtre yok — herkes gösteriliyor.')).toBeInTheDocument();
   });
+
+  it('names every field and option in Turkish (O14, tm 259.18)', async () => {
+    const user = userEvent.setup();
+    renderWithLocale(<CustomersFilters initialConditions={[]} onChange={vi.fn()} />, 'tr');
+    await user.click(screen.getByRole('button', { name: 'Filtre ekle' }));
+    for (const name of ['Ülke', 'Şu tarihten beri etkin', 'Şu tarihe kadar etkin', 'Bileti var']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('button', { name: 'Bileti var' }));
+    expect(screen.getByRole('option', { name: 'Bileti yok' })).toBeInTheDocument();
+    expect(screen.queryByText(/Has tickets|No tickets/)).not.toBeInTheDocument();
+  });
+
+  it('puts the error under an invalid field in Turkish', async () => {
+    const user = userEvent.setup();
+    renderWithLocale(<CustomersFilters initialConditions={[]} onChange={vi.fn()} />, 'tr');
+    await user.click(screen.getByRole('button', { name: 'Filtre ekle' }));
+    await user.click(screen.getByRole('button', { name: 'Ülke' }));
+    await user.type(screen.getByLabelText('Ülke'), 'USA');
+    await user.tab();
+    expect(screen.getByText('2 harfli bir ülke kodu kullanın, örneğin TR.')).toBeVisible();
+  });
 });

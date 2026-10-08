@@ -52,9 +52,8 @@ export const customers: Messages = {
   'customers.page.banned': 'Banned',
   'customers.page.never': 'Never',
 
-  // Contacts filter panel — CustomersFilters.tsx (field labels/options/errors
-  // stay in customers-filters.ts, English-only — see the file's own note,
-  // same convention as traffic.filters.*)
+  // Contacts filter panel — CustomersFilters.tsx (customers-filters.ts holds the
+  // catalogue keys, this file the words — tm 259.18)
   'customers.filters.heading': 'Match all filters',
   'customers.filters.clear': 'Clear',
   'customers.filters.addFilter': 'Add filter',
@@ -62,6 +61,18 @@ export const customers: Messages = {
   'customers.filters.allApplied': 'Every filter is already applied.',
   'customers.filters.empty': 'No filters applied — everyone is shown.',
   'customers.filters.removeField': 'Remove {label} filter',
+  'customers.filters.field.country': 'Country',
+  'customers.filters.field.activeFrom': 'Active from',
+  'customers.filters.field.activeUntil': 'Active until',
+  'customers.filters.field.hasTickets': 'Has tickets',
+  'customers.filters.option.hasTickets': 'Has tickets',
+  'customers.filters.option.noTickets': 'No tickets',
+  'customers.filters.error.countryRequired': 'Enter a country code.',
+  'customers.filters.error.countryFormat': 'Use a 2-letter country code, like US.',
+  'customers.filters.error.startRequired': 'Choose a start date.',
+  'customers.filters.error.endRequired': 'Choose an end date.',
+  'customers.filters.error.dateFormat': 'Enter a valid date.',
+  'customers.filters.error.ticketsChoice': 'Choose has tickets or no tickets.',
 
   // Customer detail panel — CustomerDetailPanel.tsx
   'customers.detail.emptySelection': 'Select someone to see their history.',
@@ -201,8 +212,8 @@ export const customers: Messages = {
   'traffic.panel.preChatForm': 'Pre-chat form',
   'traffic.panel.noPagesForVisit': 'No pages recorded for this visit.',
 
-  // Traffic filter panel — TrafficFilters.tsx (field labels/options/errors stay
-  // in traffic-filters.ts, English-only — see the file's own note)
+  // Traffic filter panel — TrafficFilters.tsx (traffic-filters.ts holds the
+  // catalogue keys, this file the words — tm 259.18)
   'traffic.filters.heading': 'Match all filters',
   'traffic.filters.clear': 'Clear',
   'traffic.filters.addFilter': 'Add filter',
@@ -210,6 +221,24 @@ export const customers: Messages = {
   'traffic.filters.allApplied': 'Every filter is already applied.',
   'traffic.filters.empty': 'No filters applied — every visitor is shown.',
   'traffic.filters.removeField': 'Remove {label} filter',
+  'traffic.filters.field.activity': 'Activity',
+  'traffic.filters.field.pageUrl': 'Page URL contains',
+  'traffic.filters.field.cameFrom': 'Came from contains',
+  'traffic.filters.field.country': 'Country',
+  'traffic.filters.field.lead': 'Lead',
+  'traffic.filters.field.team': 'Team',
+  'traffic.filters.option.lead': 'Lead',
+  'traffic.filters.option.notLead': 'Not a lead',
+  'traffic.filters.team.unknown': 'Team {id} (not in your list)',
+  'traffic.filters.error.activity': 'Choose an activity.',
+  'traffic.filters.error.lead': 'Choose lead or not a lead.',
+  'traffic.filters.error.pageUrlRequired': 'Enter text to match in the page URL.',
+  'traffic.filters.error.cameFromRequired': 'Enter text to match in the referrer.',
+  'traffic.filters.error.tooLong': 'Keep it under 2048 characters.',
+  'traffic.filters.error.countryRequired': 'Enter a country code.',
+  'traffic.filters.error.countryFormat': 'Use a 2-letter country code, like US.',
+  'traffic.filters.error.teamRequired': 'Choose a team.',
+  'traffic.filters.error.teamFormat': 'Choose a team from the list.',
 
   // Campaigns — CampaignsPage.tsx
   'campaigns.page.description': 'Reach visitors with proactive, targeted messages.',

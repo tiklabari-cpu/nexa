@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignInPage } from './SignInPage.js';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
+import { AuthFlowError } from '../../lib/auth-flow-error.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { DeploymentConfig } from '@siyahtus/types';
 
@@ -271,12 +272,12 @@ describe('SignInPage arriving from an identity provider', () => {
     useAuth.setState({
       busy: false,
       startSsoLogin: vi.fn(async () => {
-        throw new Error('Single sign-on is not available for this connection.');
+        throw new AuthFlowError('no_app');
       }),
     });
     renderSignIn(`/login?sso=${CONNECTION}`);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/not available/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no app to sign in to/);
     // Somewhere to go next, rather than a dead status line.
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });

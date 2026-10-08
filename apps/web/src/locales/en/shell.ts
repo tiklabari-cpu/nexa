@@ -68,6 +68,11 @@ export const shell: Messages = {
   'shell.presence.more.one': '{count} more online: {names}',
   'shell.presence.more.other': '{count} more online: {names}',
 
+  // Desktop notification — features/notifications/useNotifications.ts (not a
+  // component: it reads the active locale at the moment the push arrives)
+  'shell.notification.title': 'New message',
+  'shell.notification.fallbackBody': 'A visitor sent a new message.',
+
   // Navigation (rail + command palette)
   'nav.home': 'Home',
   'nav.inbox': 'Inbox',

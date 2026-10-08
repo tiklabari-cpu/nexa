@@ -51,6 +51,14 @@ export const billing: Messages = {
   'billing.managePlan.plan.loading': 'Planlar yükleniyor…',
   'billing.managePlan.plan.loadError': 'Plan kataloğu yüklenemedi.',
   'billing.managePlan.plan.genericError': 'Plan değiştirilemedi. Tekrar deneyin.',
+  // The server's refusals of a plan change, by their stable `details.reason`
+  // (lib/reason-message.ts, tm 259.18).
+  'billing.reason.plan_below_usage':
+    '{plan} planı {included} AI çözümü içeriyor — bu ay kullanılan {used} çözümün altında.',
+  'billing.reason.seats_below_active':
+    'Koltuk sayısı, bu çalışma alanındaki {active_agents} etkin temsilcinin altında olamaz.',
+  'billing.reason.plan_unknown': 'Bu plan kullanılamıyor.',
+  'billing.reason.cycle_unknown': 'Bu faturalama dönemi kullanılamıyor.',
   'billing.managePlan.plan.overQuotaReason':
     '{plan} planı {included} AI çözümü içeriyor — bu dönem kullanılan {used} çözümün altında.',
   'billing.managePlan.plan.confirmListed':

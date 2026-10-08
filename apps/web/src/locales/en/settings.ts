@@ -639,6 +639,20 @@ export const settings: Messages = {
   'settings.sso.requireButton': 'Require single sign-on',
   'settings.sso.requiring': 'Requiring…',
   'settings.sso.requireErrorFallback': 'Could not require single sign-on.',
+  // Refusals that name the exact fix, by the server's stable `details.reason`
+  // (lib/reason-message.ts, tm 259.18).
+  'settings.reason.sso_no_break_glass_owner':
+    'That would lock this workspace out: with single sign-on required, an owner with a password is the only way back in when the identity provider cannot answer. Set a password on the owner account before requiring SSO.',
+  'settings.reason.sso_domain_code_expired':
+    'That verification code has expired. Send a new one to the domain and try again.',
+  'settings.reason.sso_domain_none_outstanding':
+    'No verification code is outstanding for that domain. Send one first.',
+  'settings.reason.sso_domain_code_mismatch':
+    'That verification code does not match. Check it and retry.',
+  'settings.reason.sso_domain_challenge_too_soon':
+    'A verification message for that domain was just sent. Wait a minute before sending another.',
+  'settings.reason.ip_allowlist_self_lockout':
+    'That would lock you out: the list must still include the address you are connecting from.',
   'settings.sso.removeModalTitle': 'Remove {name}?',
   'settings.sso.removeModalDescription':
     'Anyone who signs in through this connection loses that path immediately. This cannot be undone.',
@@ -1057,4 +1071,21 @@ export const settings: Messages = {
     'Anything still using this token stops working immediately, and it cannot be undone.',
   'settings.pat.revoke.confirmButton': 'Revoke token',
   'settings.pat.revoke.revoking': 'Revoking…',
+
+  // Example values shown inside empty fields (tm 259.18). Only the ones made of
+  // words live here; an address, a CIDR range, a certificate or a time stays a
+  // literal in the markup because it reads the same in every language.
+  'settings.brands.namePlaceholder': 'Acme Support',
+  'settings.cannedResponses.shortcutPlaceholder': 'shipping',
+  'settings.cannedResponses.messagePlaceholder': 'Standard delivery takes 3-5 working days.',
+  'settings.chatForms.labelPlaceholder': 'Order number',
+  'settings.customFields.namePlaceholder': 'Player ID',
+  'settings.ipAllowlist.labelPlaceholder': 'Office VPN',
+  'settings.skills.namePlaceholder': 'Billing',
+  'settings.sso.scimNamePlaceholder': 'Okta (corp) provisioning',
+  'settings.ticketEmailTemplates.namePlaceholder': 'Ticket received',
+  'settings.ticketEmailTemplates.subjectPlaceholder': 'We received your ticket {{ticket.id}}',
+  'settings.ticketEmailTemplates.bodyPlaceholder': 'Hi {{customer.name}}, thanks for reaching out.',
+  'settings.ticketRules.namePlaceholder': 'Refunds',
+  'settings.ticketRules.subjectPlaceholder': 'refund',
 };

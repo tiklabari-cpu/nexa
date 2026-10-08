@@ -23,6 +23,7 @@
 import { create } from 'zustand';
 import { readNotificationPreferences, type NotificationPreferences } from '@siyahtus/types';
 import { ApiClient, ApiClientError } from './api-client.js';
+import { AuthFlowError, authFailureCode } from './auth-flow-error.js';
 import { savePrefs } from '../features/notifications/notifications.js';
 
 export interface Membership {
@@ -107,6 +108,7 @@ interface AuthState {
    * it on. The token is kept in all three.
    */
   reconnect: 'waiting' | 'trying' | 'paused' | null;
+  /** Why the last sign-in step failed, as a code (`authFailureCode`) — never prose. */
   error: string | null;
   busy: boolean;
   /**
@@ -922,7 +924,7 @@ export const useAuth = create<AuthState>((set, get) => {
           .post<{ memberships: Membership[] }>('/auth/login', { email, password })
           .then((r) => r.memberships);
         const membership = memberships.find((m) => m.license_id === licenseId);
-        if (!membership) throw new Error('Workspace not found.');
+        if (!membership) throw new AuthFlowError('workspace_not_found');
 
         // The server tells us which client to use. Deriving it from the
         // organisation name used to work only because the seed named clients to
@@ -961,7 +963,7 @@ export const useAuth = create<AuthState>((set, get) => {
         acceptGrant(grant);
         set({ agent, status: 'signed-in', error: null, sessionEnded: false });
       } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Sign-in failed.' });
+        set({ error: authFailureCode(error, 'sign_in_failed') });
         throw error;
       } finally {
         set({ busy: false });
@@ -996,7 +998,7 @@ export const useAuth = create<AuthState>((set, get) => {
               `/auth/sso/${encodeURIComponent(connectionId)}`,
             )
           ).client_id;
-        if (!resolved) throw new Error('This workspace has no app to sign in to.');
+        if (!resolved) throw new AuthFlowError('no_app');
 
         const verifier = createVerifier();
         const pending: PendingSsoLogin = {
@@ -1021,7 +1023,7 @@ export const useAuth = create<AuthState>((set, get) => {
           `/api/v1/auth/saml/${encodeURIComponent(connectionId)}/login?${query.toString()}`,
         );
       } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Could not start single sign-on.' });
+        set({ error: authFailureCode(error, 'sso_start_failed') });
         throw error;
       } finally {
         set({ busy: false });
@@ -1035,13 +1037,13 @@ export const useAuth = create<AuthState>((set, get) => {
         // Spent on sight, whatever happens next. A verifier that survives its
         // own callback is one a second visit to this URL could try to reuse.
         writeSession(SSO_PENDING_KEY, null);
-        if (!raw) throw new Error('This sign-in did not start in this browser.');
+        if (!raw) throw new AuthFlowError('sso_not_started');
 
         const pending = JSON.parse(raw) as PendingSsoLogin;
         // The state is ours and the server returns it untouched, so a callback
         // carrying somebody else's — or none — is not the login we started.
         if (!pending.state || pending.state !== state) {
-          throw new Error('This sign-in did not start in this browser.');
+          throw new AuthFlowError('sso_not_started');
         }
 
         const grant = await anonymous.post<TokenGrant>('/auth/token', {
@@ -1058,7 +1060,7 @@ export const useAuth = create<AuthState>((set, get) => {
         acceptGrant(grant);
         set({ agent, status: 'signed-in', error: null, sessionEnded: false });
       } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Sign-in failed.' });
+        set({ error: authFailureCode(error, 'sign_in_failed') });
         throw error;
       } finally {
         set({ busy: false });

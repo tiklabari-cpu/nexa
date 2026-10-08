@@ -142,7 +142,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                   onBlur={() => form.blur('label')}
                   aria-invalid={labelError ? true : undefined}
                   aria-describedby={labelError ? 'pcf-label-error' : undefined}
-                  placeholder="Order number"
+                  placeholder={t('settings.chatForms.labelPlaceholder')}
                   maxLength={120}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />

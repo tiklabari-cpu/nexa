@@ -71,6 +71,18 @@ export const common: Messages = {
   'ui.confirm.pending': 'Working…',
   'ui.writeError.delete': "“{name}” couldn't be deleted.",
   'ui.writeError.remove': "“{name}” couldn't be removed.",
+  // lib/form.tsx — the default message of each validator, for a form that passes none
+  // (tm 259.18). A form that words its own error keeps its own wording.
+  'ui.form.required': 'This field is required.',
+  'ui.form.minLength': 'Enter at least {count} characters.',
+  'ui.form.maxLength': 'Enter at most {count} characters.',
+  'ui.form.email': 'Enter a valid email address.',
+  'ui.form.emailListEmpty': 'Enter at least one email address.',
+  'ui.form.emailListInvalid': 'Not a valid address: {addresses}',
+  'ui.form.domain': 'Enter a valid domain, like shop.example.',
+  'ui.form.phone': 'Enter a valid phone number, e.g. +15551234567.',
+  'ui.form.cardLast4': 'Enter the last 4 digits — exactly 4 numbers.',
+  'ui.form.submitFailed': 'Something went wrong. Please try again.',
   'common.actions.collapsePanel': 'Collapse panel',
   // Tour.tsx's own chrome (FR-MOD-02.2.3) — step content is the caller's, but
   // Back/Next/Skip/Done and the counter are generic across every tour.

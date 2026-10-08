@@ -128,6 +128,7 @@ describe('IpAllowlist', () => {
         message:
           'That would lock you out: the list must still include the address you are connecting from.',
         requestId: '-',
+        details: { reason: 'ip_allowlist_self_lockout' },
       }),
     );
     renderComponent(<IpAllowlist canEdit />);
@@ -294,5 +295,59 @@ describe('IpAllowlist localisation (NFR-I18N2)', () => {
     );
 
     expect(await screen.findByRole('region', { name: 'IP izin listesi' })).toBeInTheDocument();
+  });
+
+  it('words the self-lockout refusal in Turkish from its code, not the server’s English (O14, tm 259.18)', async () => {
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message:
+          'That would lock you out: the list must still include the address you are connecting from.',
+        requestId: '-',
+        details: { reason: 'ip_allowlist_self_lockout' },
+      }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <IpAllowlist canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+    await screen.findByText('10.0.0.0/24');
+
+    await userEvent.type(screen.getByPlaceholderText('10.0.0.0/24'), '198.51.100.9');
+    await userEvent.click(screen.getByRole('button', { name: 'Girdi ekle' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Bu işlem sizi dışarıda bırakır');
+    expect(alert).not.toHaveTextContent(/lock you out/);
+  });
+
+  it('answers a refusal with no code in the error-type sentence, never the server’s prose', async () => {
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message: 'Not a valid CIDR range in English.',
+        requestId: '-',
+      }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <IpAllowlist canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+    await screen.findByText('10.0.0.0/24');
+
+    await userEvent.type(screen.getByPlaceholderText('10.0.0.0/24'), '198.51.100.9');
+    await userEvent.click(screen.getByRole('button', { name: 'Girdi ekle' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('İşaretli alanları kontrol edip yeniden deneyin.');
+    expect(alert).not.toHaveTextContent(/English/);
   });
 });

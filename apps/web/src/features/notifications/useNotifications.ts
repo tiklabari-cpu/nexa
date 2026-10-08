@@ -7,6 +7,7 @@
  * owns the browser state the decision needs — focus and the unread count.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { getLocale, translate } from '../../lib/i18n.js';
 import {
   decideNotification,
   loadPrefs,
@@ -89,8 +90,11 @@ function isFocused(): boolean {
 function showDesktop(payload: Record<string, unknown>): void {
   try {
     const event = payload['event'] as { text?: string } | undefined;
-    new Notification('New message', {
-      body: event?.text?.slice(0, 140) ?? 'A visitor sent a new message.',
+    // Not a component, so no `useTranslate`: the language is read when the push
+    // arrives, which is also when a mid-session switch has already taken effect.
+    const locale = getLocale();
+    new Notification(translate(locale, 'shell.notification.title'), {
+      body: event?.text?.slice(0, 140) ?? translate(locale, 'shell.notification.fallbackBody'),
       // One notification per chat replaces the last rather than stacking.
       tag: typeof payload['chat_id'] === 'string' ? (payload['chat_id'] as string) : undefined,
     });

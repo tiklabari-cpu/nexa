@@ -249,6 +249,46 @@ describe('DetailsPanel — supervisor takeover', () => {
     ).not.toBeInTheDocument();
   });
 
+  it.each([
+    [
+      'authorization',
+      403,
+      'Only an admin or owner can take over a chat.',
+      'yalnızca yönetici ya da sahip',
+    ],
+    [
+      'takeover_conflict',
+      409,
+      'Another supervisor took this chat over first.',
+      'başka bir süpervizör',
+    ],
+  ] as const)(
+    'words a %s refusal in Turkish from its type, not the server’s English (tm 259.18)',
+    async (type, status, english, turkish) => {
+      authState.agent = { role: 'admin' };
+      api.post.mockRejectedValue(
+        new ApiClientError({ type, status, message: english, requestId: 'req-tr' }),
+      );
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      renderWithLocale(
+        <QueryClientProvider client={queryClient}>
+          <DetailsPanel chat={baseChat()} chatId={baseChat().id} />
+        </QueryClientProvider>,
+        'tr',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Devral' }));
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Bu sohbeti devralmak istiyor musunuz?',
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Devral' }));
+
+      expect(await within(dialog).findByText(new RegExp(turkish))).toBeInTheDocument();
+      expect(within(dialog).queryByText(english)).not.toBeInTheDocument();
+      resetLocale();
+    },
+  );
+
   it('hides the control on an archived chat, even for an owner', () => {
     authState.agent = { role: 'owner' };
     renderPanel({ ...baseChat(), active: false });

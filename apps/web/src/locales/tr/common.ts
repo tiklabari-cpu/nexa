@@ -55,6 +55,18 @@ export const common: Messages = {
   'ui.confirm.pending': 'Bekleyin…',
   'ui.writeError.delete': '“{name}” silinemedi.',
   'ui.writeError.remove': '“{name}” kaldırılamadı.',
+  // lib/form.tsx — the default message of each validator, for a form that passes none
+  // (tm 259.18). A form that words its own error keeps its own wording.
+  'ui.form.required': 'Bu alan zorunludur.',
+  'ui.form.minLength': 'En az {count} karakter girin.',
+  'ui.form.maxLength': 'En fazla {count} karakter girin.',
+  'ui.form.email': 'Geçerli bir e-posta adresi girin.',
+  'ui.form.emailListEmpty': 'En az bir e-posta adresi girin.',
+  'ui.form.emailListInvalid': 'Geçerli bir adres değil: {addresses}',
+  'ui.form.domain': 'Geçerli bir alan adı girin, örneğin magaza.example.',
+  'ui.form.phone': 'Geçerli bir telefon numarası girin, örneğin +905551234567.',
+  'ui.form.cardLast4': 'Son 4 haneyi girin — tam olarak 4 rakam.',
+  'ui.form.submitFailed': 'Bir şeyler ters gitti. Lütfen tekrar deneyin.',
   'common.actions.collapsePanel': 'Paneli daralt',
   // Tour.tsx's own chrome (FR-MOD-02.2.3).
   'common.actions.tourNext': 'İleri',

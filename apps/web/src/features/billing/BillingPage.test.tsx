@@ -697,6 +697,7 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1 · FR-MOD
         message:
           'The growth plan includes 200 AI resolutions, below the 250 already used this month.',
         requestId: 'req-1',
+        details: { reason: 'plan_below_usage', plan: 'growth', included: 200, used: 250 },
       }),
     );
     renderBilling(<BillingPage />);
@@ -705,7 +706,7 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1 · FR-MOD
     await user.click(screen.getByRole('button', { name: 'Confirm plan change' }));
 
     expect(await screen.findByTestId('plan-change-error')).toHaveTextContent(
-      'The growth plan includes 200 AI resolutions, below the 250 already used this month.',
+      'The Growth plan includes 200 AI resolutions — below the 250 already used this month.',
     );
   });
 

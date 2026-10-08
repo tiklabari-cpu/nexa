@@ -111,6 +111,7 @@ function readAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    // i18n-ignore: only the fallback when the browser gives no `reader.error`; callers map the failure to a coded reason.
     reader.onerror = () => reject(reader.error ?? new Error('Could not read the file.'));
     reader.readAsText(file);
   });

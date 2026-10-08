@@ -396,6 +396,7 @@ describe('SsoConnection', () => {
         message:
           'A verification message for that domain was just sent. Wait a minute before sending another.',
         requestId: '-',
+        details: { reason: 'sso_domain_challenge_too_soon' },
       }),
     );
     renderComponent(<SsoConnection canEdit />);
@@ -495,6 +496,7 @@ describe('SsoConnection', () => {
         message:
           'That would lock this workspace out: with single sign-on required, an owner with a password is the only way back in when the identity provider cannot answer. Set a password on the owner account before requiring SSO.',
         requestId: '-',
+        details: { reason: 'sso_no_break_glass_owner' },
       }),
     );
     renderComponent(<SsoConnection canEdit />);

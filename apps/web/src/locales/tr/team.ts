@@ -429,4 +429,9 @@ export const team: Messages = {
   'team.ruleBots.describe.add_tag': '"{value}" etiketini ekle',
   'team.ruleBots.describe.transfer_to_group_id': '{value} takımına devret',
   'team.ruleBots.andJoiner': ' ve ',
+  // Alanların içinde görünen örnek değerler (tm 259.18).
+  'team.ruleBots.botNamePlaceholder': 'SSS botu',
+  'team.ruleBots.ruleNamePlaceholder': 'Çalışma saatleri',
+  'team.ruleBots.whenPlaceholder': 'saat',
+  'team.ruleBots.thenPlaceholder': '09:00-18:00 arasında açığız.',
 };

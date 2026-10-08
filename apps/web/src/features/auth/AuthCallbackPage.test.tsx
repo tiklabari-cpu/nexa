@@ -12,6 +12,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthCallbackPage } from './AuthCallbackPage.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { AuthFlowError } from '../../lib/auth-flow-error.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
@@ -64,7 +65,7 @@ describe('AuthCallbackPage', () => {
   it('shows why a refused exchange failed, and offers the way back', async () => {
     useAuth.setState({
       completeSsoLogin: vi.fn(async () => {
-        throw new Error('This sign-in did not start in this browser.');
+        throw new AuthFlowError('sso_not_started');
       }),
     });
 
@@ -112,5 +113,45 @@ describe('AuthCallbackPage localisation (NFR-I18N2)', () => {
     });
 
     expect(screen.getByRole('status')).toHaveTextContent('Oturumunuz açılıyor…');
+  });
+
+  it('words a refused exchange in Turkish, from the store’s code and not its message (O14, tm 259.18)', async () => {
+    useAuth.setState({
+      completeSsoLogin: vi.fn(async () => {
+        throw new AuthFlowError('sso_not_started');
+      }),
+    });
+
+    await act(async () => {
+      renderWithLocale(
+        <MemoryRouter initialEntries={['/auth/callback?code=abc123&state=xyz']}>
+          <AuthCallbackPage />
+        </MemoryRouter>,
+        'tr',
+      );
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Bu oturum açma bu tarayıcıda başlatılmamış.');
+    expect(alert).not.toHaveTextContent(/did not start/);
+  });
+
+  it('puts an unexpected thrown value in the generic Turkish sentence, never its text', async () => {
+    useAuth.setState({
+      completeSsoLogin: vi.fn(async () => {
+        throw new Error('Failed to fetch');
+      }),
+    });
+
+    await act(async () => {
+      renderWithLocale(
+        <MemoryRouter initialEntries={['/auth/callback?code=abc123&state=xyz']}>
+          <AuthCallbackPage />
+        </MemoryRouter>,
+        'tr',
+      );
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Oturum açma başarısız oldu.');
   });
 });

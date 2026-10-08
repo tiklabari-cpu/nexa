@@ -329,6 +329,8 @@ describe('sso enforcement', () => {
       expect(res.statusCode).toBe(400);
       expect(errorBody(res).type).toBe('validation');
       expect(errorBody(res).message).toContain('lock this workspace out');
+      // The stable code the console words this from (tm 259.18).
+      expect(errorBody(res).details).toMatchObject({ reason: 'sso_no_break_glass_owner' });
       // And nothing was written: a refused guard must not leave the flag set.
       const row = await owner.ssoConnection.findUniqueOrThrow({ where: { id: connectionId } });
       expect(row.enforced).toBe(false);

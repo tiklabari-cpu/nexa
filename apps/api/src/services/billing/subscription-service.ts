@@ -164,13 +164,17 @@ export async function updateSubscription(
   });
 
   const plan = input.plan ?? existing?.plan ?? 'growth';
-  if (!(plan in PLANS)) throw ApiError.validation(`Unknown plan: ${plan}.`);
+  if (!(plan in PLANS)) {
+    throw ApiError.validation(`Unknown plan: ${plan}.`, { reason: 'plan_unknown' });
+  }
   const planId = plan as PlanId;
   const spec = PLANS[planId];
 
   const billingCycle = input.billingCycle ?? existing?.billingCycle ?? 'monthly';
   if (!(BILLING_CYCLES as readonly string[]).includes(billingCycle)) {
-    throw ApiError.validation(`Unknown billing cycle: ${billingCycle}.`);
+    throw ApiError.validation(`Unknown billing cycle: ${billingCycle}.`, {
+      reason: 'cycle_unknown',
+    });
   }
 
   // Seats floor: you cannot buy fewer seats than you have non-suspended agents
@@ -180,6 +184,9 @@ export async function updateSubscription(
   if (requestedSeats < floor) {
     throw ApiError.validation(
       `Seats cannot be fewer than the ${floor} active agent(s) on this workspace.`,
+      // Codes plus the numbers the sentence is about, so the console can word it
+      // itself (tm 259.18); the message stays for API clients and logs.
+      { reason: 'seats_below_active', active_agents: floor },
     );
   }
 
@@ -202,6 +209,12 @@ export async function updateSubscription(
     throw ApiError.validation(
       `The ${planId} plan includes ${spec.aiResolutionsIncluded} AI resolutions, ` +
         `below the ${currentAiUsage} already used this month.`,
+      {
+        reason: 'plan_below_usage',
+        plan: planId,
+        included: spec.aiResolutionsIncluded,
+        used: currentAiUsage,
+      },
     );
   }
 

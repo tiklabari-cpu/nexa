@@ -637,6 +637,20 @@ export const settings: Messages = {
   'settings.sso.requireButton': 'Tek oturum açmayı zorunlu kıl',
   'settings.sso.requiring': 'Zorunlu kılınıyor…',
   'settings.sso.requireErrorFallback': 'Tek oturum açma zorunlu kılınamadı.',
+  // Refusals that name the exact fix, by the server's stable `details.reason`
+  // (lib/reason-message.ts, tm 259.18).
+  'settings.reason.sso_no_break_glass_owner':
+    'Bu işlem çalışma alanının kilitlenmesine yol açar: tek oturum açma zorunluyken kimlik sağlayıcı yanıt veremediğinde geri dönmenin tek yolu şifresi olan bir sahiptir. SSO’yu zorunlu kılmadan önce sahip hesabına bir şifre belirleyin.',
+  'settings.reason.sso_domain_code_expired':
+    'Doğrulama kodunun süresi doldu. Alan adına yeni bir kod gönderip yeniden deneyin.',
+  'settings.reason.sso_domain_none_outstanding':
+    'Bu alan adı için bekleyen bir doğrulama kodu yok. Önce bir kod gönderin.',
+  'settings.reason.sso_domain_code_mismatch':
+    'Doğrulama kodu eşleşmiyor. Kodu kontrol edip yeniden deneyin.',
+  'settings.reason.sso_domain_challenge_too_soon':
+    'Bu alan adına doğrulama mesajı az önce gönderildi. Yenisini göndermeden önce bir dakika bekleyin.',
+  'settings.reason.ip_allowlist_self_lockout':
+    'Bu işlem sizi dışarıda bırakır: liste, bağlandığınız adresi de içermeye devam etmelidir.',
   'settings.sso.removeModalTitle': '{name} kaldırılsın mı?',
   'settings.sso.removeModalDescription':
     'Bu bağlantı üzerinden oturum açan herkes o yolu hemen kaybeder. Bu geri alınamaz.',
@@ -1053,4 +1067,22 @@ export const settings: Messages = {
     'Bu jetonu hala kullanan her şey anında çalışmayı durdurur ve bu geri alınamaz.',
   'settings.pat.revoke.confirmButton': 'Jetonu iptal et',
   'settings.pat.revoke.revoking': 'İptal ediliyor…',
+
+  // Alanların içinde görünen örnek değerler (tm 259.18). Yalnız sözcüklerden
+  // oluşanlar burada; adres, CIDR aralığı, sertifika ve saat her dilde aynı
+  // okunduğu için işaretlemede sabit kalır.
+  'settings.brands.namePlaceholder': 'Acme Destek',
+  'settings.cannedResponses.shortcutPlaceholder': 'kargo',
+  'settings.cannedResponses.messagePlaceholder': 'Standart teslimat 3-5 iş günü sürer.',
+  'settings.chatForms.labelPlaceholder': 'Sipariş numarası',
+  'settings.customFields.namePlaceholder': 'Oyuncu kimliği',
+  'settings.ipAllowlist.labelPlaceholder': 'Ofis VPN’i',
+  'settings.skills.namePlaceholder': 'Faturalama',
+  'settings.sso.scimNamePlaceholder': 'Okta (kurumsal) kullanıcı sağlama',
+  'settings.ticketEmailTemplates.namePlaceholder': 'Talep alındı',
+  'settings.ticketEmailTemplates.subjectPlaceholder': '{{ticket.id}} numaralı talebinizi aldık',
+  'settings.ticketEmailTemplates.bodyPlaceholder':
+    'Merhaba {{customer.name}}, bize ulaştığınız için teşekkürler.',
+  'settings.ticketRules.namePlaceholder': 'İadeler',
+  'settings.ticketRules.subjectPlaceholder': 'iade',
 };

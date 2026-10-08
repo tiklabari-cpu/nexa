@@ -120,7 +120,7 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
                   onBlur={() => form.blur('label')}
                   aria-invalid={labelError ? true : undefined}
                   aria-describedby={labelError ? 'cf-label-error' : undefined}
-                  placeholder="Player ID"
+                  placeholder={t('settings.customFields.namePlaceholder')}
                   maxLength={120}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />

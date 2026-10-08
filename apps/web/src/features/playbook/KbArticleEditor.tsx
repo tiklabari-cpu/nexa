@@ -213,6 +213,7 @@ export function KbArticleEditor({
 
   const publish = useMutation({
     mutationFn: (status: 'draft' | 'published') => {
+      // i18n-ignore: a developer guard — the Publish control is only rendered once `current` exists.
       if (!current) throw new Error('Save the article before publishing it.');
       return api.patch<KbArticle>(`/kb-articles/${current.id}`, { status });
     },
@@ -224,6 +225,7 @@ export function KbArticleEditor({
 
   const remove = useMutation({
     mutationFn: () => {
+      // i18n-ignore: a developer guard — the Delete control is only rendered once `current` exists.
       if (!current) throw new Error('Save the article before deleting it.');
       return api.delete(`/kb-articles/${current.id}`);
     },

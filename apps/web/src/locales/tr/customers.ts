@@ -43,9 +43,8 @@ export const customers: Messages = {
   'customers.page.banned': 'Engellendi',
   'customers.page.never': 'Hiç',
 
-  // Contacts filter panel — CustomersFilters.tsx (field labels/options/errors
-  // stay in customers-filters.ts, English-only — see the file's own note,
-  // same convention as traffic.filters.*)
+  // Contacts filter panel — CustomersFilters.tsx (customers-filters.ts holds the
+  // catalogue keys, this file the words — tm 259.18)
   'customers.filters.heading': 'Tüm filtrelerle eşleştir',
   'customers.filters.clear': 'Temizle',
   'customers.filters.addFilter': 'Filtre ekle',
@@ -53,6 +52,18 @@ export const customers: Messages = {
   'customers.filters.allApplied': 'Tüm filtreler zaten uygulanmış.',
   'customers.filters.empty': 'Uygulanan filtre yok — herkes gösteriliyor.',
   'customers.filters.removeField': '{label} filtresini kaldır',
+  'customers.filters.field.country': 'Ülke',
+  'customers.filters.field.activeFrom': 'Şu tarihten beri etkin',
+  'customers.filters.field.activeUntil': 'Şu tarihe kadar etkin',
+  'customers.filters.field.hasTickets': 'Bileti var',
+  'customers.filters.option.hasTickets': 'Bileti var',
+  'customers.filters.option.noTickets': 'Bileti yok',
+  'customers.filters.error.countryRequired': 'Bir ülke kodu girin.',
+  'customers.filters.error.countryFormat': '2 harfli bir ülke kodu kullanın, örneğin TR.',
+  'customers.filters.error.startRequired': 'Bir başlangıç tarihi seçin.',
+  'customers.filters.error.endRequired': 'Bir bitiş tarihi seçin.',
+  'customers.filters.error.dateFormat': 'Geçerli bir tarih girin.',
+  'customers.filters.error.ticketsChoice': '“Bileti var” ya da “Bileti yok” seçin.',
 
   // Customer detail panel — CustomerDetailPanel.tsx
   'customers.detail.emptySelection': 'Geçmişini görmek için birini seçin.',
@@ -189,8 +200,8 @@ export const customers: Messages = {
   'traffic.panel.preChatForm': 'Sohbet öncesi form',
   'traffic.panel.noPagesForVisit': 'Bu ziyaret için kayıtlı sayfa yok.',
 
-  // Traffic filter panel — TrafficFilters.tsx (field labels/options/errors stay
-  // in traffic-filters.ts, English-only — see the file's own note)
+  // Traffic filter panel — TrafficFilters.tsx (traffic-filters.ts holds the
+  // catalogue keys, this file the words — tm 259.18)
   'traffic.filters.heading': 'Tüm filtrelerle eşleştir',
   'traffic.filters.clear': 'Temizle',
   'traffic.filters.addFilter': 'Filtre ekle',
@@ -198,6 +209,24 @@ export const customers: Messages = {
   'traffic.filters.allApplied': 'Tüm filtreler zaten uygulanmış.',
   'traffic.filters.empty': 'Uygulanan filtre yok — her ziyaretçi gösteriliyor.',
   'traffic.filters.removeField': '{label} filtresini kaldır',
+  'traffic.filters.field.activity': 'Etkinlik',
+  'traffic.filters.field.pageUrl': 'Sayfa adresi şunu içeriyor',
+  'traffic.filters.field.cameFrom': 'Geldiği adres şunu içeriyor',
+  'traffic.filters.field.country': 'Ülke',
+  'traffic.filters.field.lead': 'Potansiyel müşteri',
+  'traffic.filters.field.team': 'Ekip',
+  'traffic.filters.option.lead': 'Potansiyel müşteri',
+  'traffic.filters.option.notLead': 'Potansiyel müşteri değil',
+  'traffic.filters.team.unknown': 'Ekip {id} (listenizde yok)',
+  'traffic.filters.error.activity': 'Bir etkinlik seçin.',
+  'traffic.filters.error.lead': '“Potansiyel müşteri” ya da “Potansiyel müşteri değil” seçin.',
+  'traffic.filters.error.pageUrlRequired': 'Sayfa adresinde aranacak bir metin girin.',
+  'traffic.filters.error.cameFromRequired': 'Yönlendiren adreste aranacak bir metin girin.',
+  'traffic.filters.error.tooLong': '2048 karakterin altında tutun.',
+  'traffic.filters.error.countryRequired': 'Bir ülke kodu girin.',
+  'traffic.filters.error.countryFormat': '2 harfli bir ülke kodu kullanın, örneğin TR.',
+  'traffic.filters.error.teamRequired': 'Bir ekip seçin.',
+  'traffic.filters.error.teamFormat': 'Listeden bir ekip seçin.',
 
   // Campaigns — CampaignsPage.tsx
   'campaigns.page.description': 'Ziyaretçilere proaktif, hedefli mesajlarla ulaşın.',

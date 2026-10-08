@@ -169,6 +169,12 @@ export const inbox: Messages = {
   'inbox.composer.uploading': 'Uploading…',
   'inbox.composer.hint': 'Enter to send · Shift+Enter for a new line',
   'inbox.composer.attachError': 'Could not attach that file.',
+  // uploadAttachment.ts — why an upload was refused, built from the server's limits
+  'inbox.composer.upload.typeNotAllowed':
+    'Files of type {type} are not allowed. Allowed types: {allowed}.',
+  'inbox.composer.upload.tooLarge': 'That file is larger than this workspace allows (up to {max}).',
+  'inbox.composer.upload.tooLargeUnknown': 'That file is too large to upload.',
+  'inbox.composer.upload.failedStatus': 'The upload failed (status {status}). Try again.',
   'inbox.composer.send.pending': 'Sending…',
   'inbox.composer.send.cta': 'Send',
 
@@ -253,6 +259,9 @@ export const inbox: Messages = {
     'This chat is unassigned — it will be reassigned to you.',
   'inbox.details.takeover.fallbackName': 'the current agent',
   'inbox.details.takeover.errorGeneric': 'Could not take over this chat.',
+  // The two refusals the dialog keeps apart (a 403 and a 409 must not read alike).
+  'inbox.details.takeover.errorForbidden': 'Only an admin or owner can take over a chat.',
+  'inbox.details.takeover.errorConflict': 'Another supervisor took this chat over first.',
   'inbox.details.takeover.cancel': 'Cancel',
   'inbox.details.takeover.pending': 'Taking over…',
 

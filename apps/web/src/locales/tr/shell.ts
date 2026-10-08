@@ -66,6 +66,11 @@ export const shell: Messages = {
   'shell.presence.more.one': '{count} kişi daha çevrimiçi: {names}',
   'shell.presence.more.other': '{count} kişi daha çevrimiçi: {names}',
 
+  // Desktop notification — features/notifications/useNotifications.ts (not a
+  // component: it reads the active locale at the moment the push arrives)
+  'shell.notification.title': 'Yeni mesaj',
+  'shell.notification.fallbackBody': 'Bir ziyaretçi yeni bir mesaj gönderdi.',
+
   // Navigation
   'nav.home': 'Ana Sayfa',
   'nav.inbox': 'Gelen Kutusu',

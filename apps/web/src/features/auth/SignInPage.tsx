@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth, type Membership, type TwoFactorEnrollment } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { authFailureMessage } from '../../lib/auth-flow-error.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { LegalLinks } from './LegalLinks.js';
 import { ResendVerification } from './PublicPages.js';
@@ -153,8 +154,7 @@ export function SignInPage(): ReactElement {
     if (!ssoParam || ssoStarted.current) return;
     ssoStarted.current = true;
     startSsoLogin(ssoParam).catch((cause: unknown) => {
-      // i18n-ignore: a store-thrown message, not raw server prose (see continueWithSso below).
-      setSsoError(cause instanceof Error ? cause.message : t('auth.signin.ssoLinkFailed'));
+      setSsoError(authFailureMessage(t, cause, 'auth.signin.ssoLinkFailed'));
     });
   }, [ssoParam, startSsoLogin, t]);
 
@@ -177,8 +177,7 @@ export function SignInPage(): ReactElement {
     try {
       await startSsoLogin(connectionId, workspace.client_id);
     } catch (cause) {
-      // i18n-ignore: see the ssoParam effect above — a store-thrown message, not raw server prose.
-      report(cause instanceof Error ? cause.message : t('auth.signin.ssoStartFailed'));
+      report(authFailureMessage(t, cause, 'auth.signin.ssoStartFailed'));
     }
   };
 

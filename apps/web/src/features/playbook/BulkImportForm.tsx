@@ -53,7 +53,7 @@ function rejectionMessage(reason: BulkFileRejectionReason, t: TFunction): string
  */
 function errorMessage(error: unknown, t: TFunction): string | null {
   if (!error) return null;
-  // i18n-ignore: server-specific validation detail, see the note above.
+  // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
   return error instanceof ApiClientError ? error.message : t('playbook.bulk.processError');
 }
 

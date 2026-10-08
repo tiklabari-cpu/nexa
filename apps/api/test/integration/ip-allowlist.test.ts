@@ -94,6 +94,8 @@ describe('ip allow-list', () => {
     );
     expect(res.statusCode).toBe(400);
     expect(message(res)).toMatch(/lock you out/i);
+    // The stable code the console words this from (tm 259.18).
+    expect(res.json().error.details).toMatchObject({ reason: 'ip_allowlist_self_lockout' });
     expect(await owner.ipAllowlistEntry.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
   });
 

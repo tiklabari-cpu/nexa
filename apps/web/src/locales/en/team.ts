@@ -439,4 +439,9 @@ export const team: Messages = {
   'team.ruleBots.describe.add_tag': 'tag "{value}"',
   'team.ruleBots.describe.transfer_to_group_id': 'transfer to {value}',
   'team.ruleBots.andJoiner': ' and ',
+  // Example values shown inside empty fields (tm 259.18).
+  'team.ruleBots.botNamePlaceholder': 'FAQ bot',
+  'team.ruleBots.ruleNamePlaceholder': 'Opening hours',
+  'team.ruleBots.whenPlaceholder': 'hours',
+  'team.ruleBots.thenPlaceholder': 'We are open 09:00-18:00.',
 };

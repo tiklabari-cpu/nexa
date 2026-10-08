@@ -5,7 +5,7 @@ import { Banner, Dropdown, Modal, Panel, PanelSection } from '../../components/u
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
-import { getLocale, useTranslate } from '../../lib/i18n.js';
+import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
@@ -534,6 +534,18 @@ function assignErrorKey(error: unknown): string {
 }
 
 /**
+ * The sentence for a refused takeover, from the error TYPE: a 403 says who may
+ * do it, a 409 says someone beat you to it, and anything else goes through the
+ * ADR-06 catalogue. A value that is not an API error at all is the generic line.
+ */
+function takeoverErrorMessage(error: unknown, t: TFunction): string {
+  if (!(error instanceof ApiClientError)) return t('inbox.details.takeover.errorGeneric');
+  if (error.type === 'authorization') return t('inbox.details.takeover.errorForbidden');
+  if (error.type === 'takeover_conflict') return t('inbox.details.takeover.errorConflict');
+  return t(errorMessageKey(error));
+}
+
+/**
  * The confirmation dialog for a supervisor takeover. Split out of
  * `DetailsPanel` so its own `useChatAction` mutation only runs while the
  * dialog is actually open; the assignee's name comes from the panel, which
@@ -563,12 +575,10 @@ function TakeoverModal({
       {actions.takeover.isError && (
         <Banner tone="danger" className="mt-3">
           {/* The 403 vs 409 wording must stay distinct (see the failure-specific
-              tests) — the catalogue's generic authorization/conflict buckets would
-              collapse both into one sentence, so the server's own text is shown as-is. */}
-          {actions.takeover.error instanceof ApiClientError
-            ? // i18n-ignore: server text shown by design, see comment above.
-              actions.takeover.error.message
-            : t('inbox.details.takeover.errorGeneric')}
+              tests), and says more than the catalogue's general sentence for the
+              type — so the dialog words each from the error TYPE, in the console's
+              language, instead of printing the server's English. */}
+          {takeoverErrorMessage(actions.takeover.error, t)}
         </Banner>
       )}
 

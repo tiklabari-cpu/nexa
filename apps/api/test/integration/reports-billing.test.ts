@@ -4910,6 +4910,14 @@ describe('reports and billing', () => {
       const response = await server.patch('/billing/subscription', { plan: 'growth' }, auth);
       expect(response.statusCode).toBe(400);
       expect(response.json().error.type).toBe('validation');
+      // Code plus the numbers the sentence is about, for the console to word
+      // itself (tm 259.18).
+      expect(response.json().error.details).toEqual({
+        reason: 'plan_below_usage',
+        plan: 'growth',
+        included: 200,
+        used: 250,
+      });
       expect(
         (await owner.subscription.findFirstOrThrow({ where: { licenseId: fx.a.licenseId } })).plan,
       ).toBe('enterprise');

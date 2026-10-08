@@ -628,6 +628,14 @@ describe('paging (P5-PAGE-f)', () => {
 });
 
 /**
+ * Reads of the board itself. The filter panel also lists the workspace's teams
+ * (`GET /groups`, tm 259.18); these tests count how often the *board* is
+ * re-read, so that read must not be in the tally.
+ */
+const boardReads = (): number =>
+  api.get.mock.calls.filter(([url]) => String(url).startsWith('/traffic')).length;
+
+/**
  * The board is live off the socket as well as off the clock (FR-MOD-03.1.1).
  *
  * `traffic_visitor_updated` says a visitor moved; the board's answer is to
@@ -654,7 +662,7 @@ describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
     api.get.mockResolvedValue(trafficPage([alex(), mira()]));
     renderPage();
     await screen.findByText('Alex Moreau');
-    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(boardReads()).toBe(1);
 
     // Browsing → Chatting, the transition the acceptance criterion names. The
     // server is the one that decides the bucket; the push only said who to look
@@ -692,7 +700,7 @@ describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
     // One request, and it is the head. An `invalidateQueries` on an infinite
     // query would have re-asked for every loaded page — a request per page on
     // every visitor event, which is exactly what the poll was built to avoid.
-    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(boardReads()).toBe(1);
     expect(api.get).toHaveBeenCalledWith('/traffic?limit=100');
     expect(screen.getByText('Robin Lee')).toBeInTheDocument();
   });
@@ -724,7 +732,7 @@ describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
       api.get.mockResolvedValue(trafficPage([alex(), mira()]));
       renderPage();
       await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
-      expect(api.get).toHaveBeenCalledTimes(1);
+      expect(boardReads()).toBe(1);
 
       // Five visitors move in the same instant — one campaign fire, or a queue
       // drain handing out five waiting chats. React batches the five store
@@ -734,7 +742,7 @@ describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
         for (const id of ['c1', 'c2', 'c3', 'c4', 'c5']) noteTrafficVisitorUpdated(id);
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(api.get).toHaveBeenCalledTimes(2);
+      expect(boardReads()).toBe(2);
 
       // Spread across ticks, which is what a busy workspace actually produces,
       // the window is what holds the line: four more pushes inside it, one
@@ -744,14 +752,14 @@ describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
           noteTrafficVisitorUpdated(id);
           await vi.advanceTimersByTimeAsync(50);
         });
-        expect(api.get).toHaveBeenCalledTimes(2);
+        expect(boardReads()).toBe(2);
       }
 
       await act(async () => void (await vi.advanceTimersByTimeAsync(700)));
-      expect(api.get).toHaveBeenCalledTimes(3);
+      expect(boardReads()).toBe(3);
       // And nothing keeps firing once the burst is over.
       await act(async () => void (await vi.advanceTimersByTimeAsync(700)));
-      expect(api.get).toHaveBeenCalledTimes(3);
+      expect(boardReads()).toBe(3);
     } finally {
       vi.useRealTimers();
     }
@@ -763,15 +771,15 @@ describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
       api.get.mockResolvedValue(trafficPage([alex()]));
       renderPage();
       await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
-      expect(api.get).toHaveBeenCalledTimes(1);
+      expect(boardReads()).toBe(1);
 
       // Nothing pushes: the socket is down, or the change is one no request
       // produces at all — a supervision lapsing after its 90s liveness window,
       // a visit ageing out of the 30-minute one. The board must still move.
       await act(async () => void (await vi.advanceTimersByTimeAsync(8_000)));
-      expect(api.get).toHaveBeenCalledTimes(2);
+      expect(boardReads()).toBe(2);
       await act(async () => void (await vi.advanceTimersByTimeAsync(8_000)));
-      expect(api.get).toHaveBeenCalledTimes(3);
+      expect(boardReads()).toBe(3);
     } finally {
       vi.useRealTimers();
     }
@@ -786,7 +794,7 @@ describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
     renderPage();
 
     await screen.findByText('Alex Moreau');
-    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(boardReads()).toBe(1);
   });
 });
 

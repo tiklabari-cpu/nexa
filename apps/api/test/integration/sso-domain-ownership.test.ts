@@ -62,6 +62,8 @@ describe('sso domain ownership', () => {
     (res.json() as { error: { type: string } }).error.type;
   const message = (res: { json: () => unknown }) =>
     (res.json() as { error: { message: string } }).error.message;
+  const details = (res: { json: () => unknown }) =>
+    (res.json() as { error: { details?: Record<string, unknown> } }).error.details;
 
   const createBody = (domains: string[]) => ({
     name: 'Okta (corp)',
@@ -311,6 +313,8 @@ describe('sso domain ownership', () => {
     const wrong = await verify(created.id, 'acme.test', 'not-the-code');
     expect(wrong.statusCode).toBe(400);
     expect(errorType(wrong)).toBe('validation');
+    // The stable code the console words this from (tm 259.18).
+    expect(details(wrong)).toMatchObject({ reason: 'sso_domain_code_mismatch' });
 
     // The outstanding challenge survives on purpose: consuming it would let
     // anybody holding a stale token — or simply guessing — lock the workspace
@@ -335,6 +339,7 @@ describe('sso domain ownership', () => {
     const res = await verify(created.id, 'acme.test', code);
     expect(res.statusCode).toBe(400);
     expect(message(res)).toContain('expired');
+    expect(details(res)).toMatchObject({ reason: 'sso_domain_code_expired' });
   });
 
   it('refuses a verify with no challenge outstanding', async () => {
@@ -342,6 +347,7 @@ describe('sso domain ownership', () => {
     const res = await verify(created.id, 'acme.test', 'anything');
     expect(res.statusCode).toBe(400);
     expect(message(res)).toContain('No verification code');
+    expect(details(res)).toMatchObject({ reason: 'sso_domain_none_outstanding' });
   });
 
   it('will not mail a second challenge straight away', async () => {
@@ -355,6 +361,7 @@ describe('sso domain ownership', () => {
     const again = await challenge(created.id, 'acme.test');
     expect(again.statusCode).toBe(400);
     expect(message(again)).toContain('Wait a minute');
+    expect(details(again)).toMatchObject({ reason: 'sso_domain_challenge_too_soon' });
 
     // A minute later it goes out again — this is a bound, not a one-shot.
     await owner.ssoDomainVerification.updateMany({

@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../../lib/api-client.js';
+import { authFailureMessage } from '../../lib/auth-flow-error.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 
@@ -52,8 +53,7 @@ export function AuthCallbackPage(): ReactElement {
         setError(t('auth.callback.unverified'));
         return;
       }
-      // i18n-ignore: a store-thrown message, not raw server prose reaching the screen.
-      setError(cause instanceof Error ? cause.message : t('auth.callback.genericFailure'));
+      setError(authFailureMessage(t, cause, 'auth.callback.genericFailure'));
     });
   }, [code, state, completeSsoLogin, t]);
 

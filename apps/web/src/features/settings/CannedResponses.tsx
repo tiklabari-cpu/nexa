@@ -186,7 +186,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                       onBlur={() => form.blur('shortcut')}
                       aria-invalid={shortcutError ? true : undefined}
                       aria-describedby={shortcutError ? 'new-shortcut-error' : undefined}
-                      placeholder="shipping"
+                      placeholder={t('settings.cannedResponses.shortcutPlaceholder')}
                       className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                     />
                   </div>
@@ -204,7 +204,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                     onBlur={() => form.blur('text')}
                     aria-invalid={textError ? true : undefined}
                     aria-describedby={textError ? 'new-reply-error' : undefined}
-                    placeholder="Standard delivery takes 3-5 working days."
+                    placeholder={t('settings.cannedResponses.messagePlaceholder')}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />
                   <FieldError id="new-reply-error" message={textError} />

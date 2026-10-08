@@ -83,7 +83,7 @@ export function Brands({ canEdit }: { canEdit: boolean }): ReactElement {
                   onBlur={() => form.blur('name')}
                   aria-invalid={nameError ? true : undefined}
                   aria-describedby={nameError ? 'new-brand-name-error' : undefined}
-                  placeholder="Acme Support"
+                  placeholder={t('settings.brands.namePlaceholder')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
                 <FieldError id="new-brand-name-error" message={nameError} />

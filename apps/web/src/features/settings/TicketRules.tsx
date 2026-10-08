@@ -142,7 +142,7 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
                     onBlur={() => form.blur('name')}
                     aria-invalid={nameError ? true : undefined}
                     aria-describedby={nameError ? 'rule-name-error' : undefined}
-                    placeholder="Refunds"
+                    placeholder={t('settings.ticketRules.namePlaceholder')}
                     maxLength={120}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />
@@ -160,7 +160,7 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
                     onBlur={() => form.blur('subject_contains')}
                     aria-invalid={subjectError ? true : undefined}
                     aria-describedby={subjectError ? 'rule-subject-error' : undefined}
-                    placeholder="refund"
+                    placeholder={t('settings.ticketRules.subjectPlaceholder')}
                     maxLength={2048}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />

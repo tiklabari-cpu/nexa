@@ -27,12 +27,14 @@ export interface CustomerCondition {
 
 interface CustomerFieldOption {
   value: string;
-  label: string;
+  /** Catalogue key — the panel's wrapper translates it (`CustomersFilters.tsx`). */
+  labelKey: string;
 }
 
 export interface CustomerFieldDef {
   field: CustomerConditionField;
-  label: string;
+  /** Catalogue key, not words: this file stays language-free (tm 259.18). */
+  labelKey: string;
   kind: 'select' | 'text' | 'date';
   options?: readonly CustomerFieldOption[];
   placeholder?: string;
@@ -41,33 +43,33 @@ export interface CustomerFieldDef {
 }
 
 const HAS_TICKETS_OPTIONS: readonly CustomerFieldOption[] = [
-  { value: 'true', label: 'Has tickets' },
-  { value: 'false', label: 'No tickets' },
+  { value: 'true', labelKey: 'customers.filters.option.hasTickets' },
+  { value: 'false', labelKey: 'customers.filters.option.noTickets' },
 ];
 
 export const CUSTOMER_FIELD_DEFS: readonly CustomerFieldDef[] = [
   {
     field: 'country_code',
-    label: 'Country',
+    labelKey: 'customers.filters.field.country',
     kind: 'text',
     placeholder: 'US',
     initialValue: '',
   },
   {
     field: 'last_activity_from',
-    label: 'Active from',
+    labelKey: 'customers.filters.field.activeFrom',
     kind: 'date',
     initialValue: '',
   },
   {
     field: 'last_activity_to',
-    label: 'Active until',
+    labelKey: 'customers.filters.field.activeUntil',
     kind: 'date',
     initialValue: '',
   },
   {
     field: 'has_tickets',
-    label: 'Has tickets',
+    labelKey: 'customers.filters.field.hasTickets',
     kind: 'select',
     options: HAS_TICKETS_OPTIONS,
     initialValue: 'true',
@@ -80,6 +82,7 @@ const FIELD_DEF_BY_FIELD = new Map<CustomerConditionField, CustomerFieldDef>(
 
 export function fieldDef(field: CustomerConditionField): CustomerFieldDef {
   const def = FIELD_DEF_BY_FIELD.get(field);
+  // i18n-ignore: a developer error (a field outside the closed catalogue), never shown.
   if (!def) throw new Error(`Unknown customer filter field: ${field}`);
   return def;
 }
@@ -100,27 +103,31 @@ export function availableFields(
 const COUNTRY_CODE = /^[A-Za-z]{2}$/;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** `null` when the value is acceptable; the field-under message otherwise. */
-export function conditionError(condition: CustomerCondition): string | null {
+/**
+ * `null` when the value is acceptable; otherwise the catalogue key of the
+ * field-under message — the wrapper resolves it, so the words follow the
+ * panel's language instead of being fixed here.
+ */
+export function conditionErrorKey(condition: CustomerCondition): string | null {
   const value = condition.value.trim();
   switch (condition.field) {
     case 'country_code':
-      if (!value) return 'Enter a country code.';
-      return COUNTRY_CODE.test(value) ? null : 'Use a 2-letter country code, like US.';
+      if (!value) return 'customers.filters.error.countryRequired';
+      return COUNTRY_CODE.test(value) ? null : 'customers.filters.error.countryFormat';
     case 'last_activity_from':
-      if (!value) return 'Choose a start date.';
-      return DATE_ONLY.test(value) ? null : 'Enter a valid date.';
+      if (!value) return 'customers.filters.error.startRequired';
+      return DATE_ONLY.test(value) ? null : 'customers.filters.error.dateFormat';
     case 'last_activity_to':
-      if (!value) return 'Choose an end date.';
-      return DATE_ONLY.test(value) ? null : 'Enter a valid date.';
+      if (!value) return 'customers.filters.error.endRequired';
+      return DATE_ONLY.test(value) ? null : 'customers.filters.error.dateFormat';
     case 'has_tickets':
-      return value === 'true' || value === 'false' ? null : 'Choose has tickets or no tickets.';
+      return value === 'true' || value === 'false' ? null : 'customers.filters.error.ticketsChoice';
   }
 }
 
 /** Every condition in the list passes its own validator. */
 export function conditionsAreValid(conditions: readonly CustomerCondition[]): boolean {
-  return conditions.every((condition) => conditionError(condition) === null);
+  return conditions.every((condition) => conditionErrorKey(condition) === null);
 }
 
 /**
@@ -135,7 +142,7 @@ export function conditionsAreValid(conditions: readonly CustomerCondition[]): bo
 export function buildCustomerParams(conditions: readonly CustomerCondition[]): URLSearchParams {
   const params = new URLSearchParams();
   for (const condition of conditions) {
-    if (conditionError(condition)) continue;
+    if (conditionErrorKey(condition)) continue;
     const value = condition.value.trim();
     params.append(
       condition.field,

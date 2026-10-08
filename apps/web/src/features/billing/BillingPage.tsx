@@ -22,7 +22,8 @@ import {
 import { Banner } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import { useTranslate } from '../../lib/i18n.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { reasonMessage } from '../../lib/reason-message.js';
 import { formatCount, formatDate, formatMoney, formatPeriod } from '../../lib/format.js';
 import { enumLabel } from '../../lib/enum-label.js';
 import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
@@ -174,6 +175,24 @@ interface ApiPackagePurchaseResult {
 
 const CARD_BRANDS = ['visa', 'mastercard', 'amex', 'discover'] as const;
 
+/**
+ * The sentence for a refused plan change. The downgrade guard names the quota
+ * and the figures; the server sends them as a code plus numbers (`details`),
+ * worded here in the console's language, with the plan by its display name.
+ * Any other refusal gets the plan-change sentence.
+ */
+function planChangeErrorMessage(t: TFunction, error: unknown): string {
+  const plan = error instanceof ApiClientError ? error.details?.['plan'] : undefined;
+  return (
+    reasonMessage(
+      t,
+      error,
+      'billing.reason',
+      typeof plan === 'string' ? { plan: enumLabel(t, 'billing.plan.name', plan) } : {},
+    ) ?? t('billing.managePlan.plan.genericError')
+  );
+}
+
 export function BillingPage(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -307,14 +326,7 @@ export function BillingPage(): ReactElement {
         aiUsed={ai.used}
         onChange={change.mutate}
         pending={change.isPending}
-        error={
-          change.error
-            ? change.error instanceof ApiClientError
-              ? // i18n-ignore — the downgrade guard names the exact quota exceeded and by how much; a generic sentence would leave the workspace guessing which plan to try (SsoConnection.tsx's same call).
-                change.error.message
-              : t('billing.managePlan.plan.genericError')
-            : null
-        }
+        error={change.error ? planChangeErrorMessage(t, change.error) : null}
       />
 
       <Section title={t('billing.aiMeter.title')} description={t('billing.aiMeter.description')}>

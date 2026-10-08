@@ -1073,6 +1073,10 @@ export default async function settingsRoutes(
           if (wouldLockOut(request.ip, nextEntries)) {
             throw ApiError.validation(
               'That would lock you out: the list must still include the address you are connecting from.',
+              // A stable code beside the prose: the console words this refusal in
+              // its own language from the code (tm 259.18); the message stays for
+              // API clients and logs.
+              { reason: 'ip_allowlist_self_lockout' },
             );
           }
 
@@ -1210,6 +1214,8 @@ export default async function settingsRoutes(
 
     throw ApiError.validation(
       'That would lock this workspace out: with single sign-on required, an owner with a password is the only way back in when the identity provider cannot answer. Set a password on the owner account before requiring SSO.',
+      // Stable code beside the prose, for the console's own wording (tm 259.18).
+      { reason: 'sso_no_break_glass_owner' },
     );
   }
 
@@ -1556,6 +1562,7 @@ export default async function settingsRoutes(
         ) {
           throw ApiError.validation(
             'A verification message for that domain was just sent. Wait a minute before sending another.',
+            { reason: 'sso_domain_challenge_too_soon' },
           );
         }
 
@@ -1646,6 +1653,12 @@ export default async function settingsRoutes(
             challenge.reason === 'expired'
               ? 'That verification code has expired. Send a new one to the domain and try again.'
               : 'No verification code is outstanding for that domain. Send one first.',
+            {
+              reason:
+                challenge.reason === 'expired'
+                  ? 'sso_domain_code_expired'
+                  : 'sso_domain_none_outstanding',
+            },
           );
         }
         // Compared as digests, so this branch never handles the plaintext of a
@@ -1656,7 +1669,9 @@ export default async function settingsRoutes(
           // The outstanding challenge deliberately survives a wrong answer.
           // Consuming it would let anybody holding a stale token — or simply
           // guessing — lock the workspace out of proving its own domain.
-          throw ApiError.validation('That verification code does not match. Check it and retry.');
+          throw ApiError.validation('That verification code does not match. Check it and retry.', {
+            reason: 'sso_domain_code_mismatch',
+          });
         }
 
         const updated = await tx.ssoDomainVerification.update({

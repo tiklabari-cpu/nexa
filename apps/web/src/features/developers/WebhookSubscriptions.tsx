@@ -291,7 +291,7 @@ function SubscribeForm({
         // the exception, and the server prefixes them, so the client can tell
         // them apart without re-deriving the rule it is not the authority on.
         if (error instanceof ApiClientError && error.type === 'validation') {
-          // i18n-ignore: server names the exact rejection, see the note above.
+          // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
           setFieldError(error.message.startsWith('app_id:') ? 'app_id' : 'url', error.message);
           return;
         }

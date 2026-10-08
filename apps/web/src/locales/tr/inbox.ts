@@ -153,6 +153,13 @@ export const inbox: Messages = {
   'inbox.composer.uploading': 'Yükleniyor…',
   'inbox.composer.hint': 'Göndermek için Enter · Yeni satır için Shift+Enter',
   'inbox.composer.attachError': 'Bu dosya eklenemedi.',
+  // uploadAttachment.ts — why an upload was refused, built from the server's limits
+  'inbox.composer.upload.typeNotAllowed':
+    '{type} türündeki dosyalara izin verilmiyor. İzin verilen türler: {allowed}.',
+  'inbox.composer.upload.tooLarge':
+    'Bu dosya, çalışma alanının izin verdiğinden büyük (en fazla {max}).',
+  'inbox.composer.upload.tooLargeUnknown': 'Bu dosya yüklemek için çok büyük.',
+  'inbox.composer.upload.failedStatus': 'Yükleme başarısız oldu (durum {status}). Yeniden deneyin.',
   'inbox.composer.send.pending': 'Gönderiliyor…',
   'inbox.composer.send.cta': 'Gönder',
 
@@ -234,6 +241,10 @@ export const inbox: Messages = {
   'inbox.details.takeover.bodyUnassigned': 'Bu sohbet atanmamış — size atanacak.',
   'inbox.details.takeover.fallbackName': 'geçerli temsilci',
   'inbox.details.takeover.errorGeneric': 'Bu sohbet devralınamadı.',
+  // The two refusals the dialog keeps apart (a 403 and a 409 must not read alike).
+  'inbox.details.takeover.errorForbidden':
+    'Bir sohbeti yalnızca yönetici ya da sahip devralabilir.',
+  'inbox.details.takeover.errorConflict': 'Bu sohbeti başka bir süpervizör daha önce devraldı.',
   'inbox.details.takeover.cancel': 'Vazgeç',
   'inbox.details.takeover.pending': 'Devralınıyor…',
 

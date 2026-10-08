@@ -30,10 +30,11 @@ import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, optional, required, useForm, type Validator } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { reasonMessage } from '../../lib/reason-message.js';
 
 interface IpAllowlistEntry {
   id: string;
@@ -146,7 +147,7 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
                   id="new-allowlist-label"
                   value={form.values.label}
                   onChange={(event) => form.setValue('label', event.target.value)}
-                  placeholder="Office VPN"
+                  placeholder={t('settings.ipAllowlist.labelPlaceholder')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
               </label>
@@ -161,10 +162,9 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
 
               {add.isError && (
                 <p role="alert" className="w-full text-2xs text-danger">
-                  {add.error instanceof ApiClientError
-                    ? // i18n-ignore — self-lockout guard names the exact fix; genericizing would strand the one person who can act on it (08.9.6-g).
-                      add.error.message
-                    : t(errorMessageKey(add.error))}
+                  {/* The self-lockout guard names the exact fix, so it keeps its own
+                      sentence — worded from the server's `details.reason`, not its prose. */}
+                  {reasonMessage(t, add.error, 'settings.reason') ?? t(errorMessageKey(add.error))}
                 </p>
               )}
             </form>

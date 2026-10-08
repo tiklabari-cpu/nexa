@@ -20,7 +20,11 @@ import { useTypingStore } from './typing.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
 import { AI_DAILY_CAP_MESSAGE_KEY } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import { uploadAttachment, type UploadedAttachment } from './uploadAttachment.js';
+import {
+  uploadAttachment,
+  uploadFailureMessage,
+  type UploadedAttachment,
+} from './uploadAttachment.js';
 import {
   replySuggestionIds,
   withCopilotDraft,
@@ -233,10 +237,9 @@ export function Composer({
     try {
       setAttachment(await uploadAttachment(api, file));
     } catch (error) {
-      // The message from `/uploads` is already user-facing ("Files of type … are
-      // not allowed."), so surface it rather than a generic line.
-      // i18n-ignore: dynamic server validation text, shown as-is by design (see above).
-      setUploadError(error instanceof Error ? error.message : t('inbox.composer.attachError'));
+      // The server's refusal names its limits in `details`; the sentence is built
+      // here, in the console's language, rather than printing its English.
+      setUploadError(uploadFailureMessage(t, error, file));
     } finally {
       setUploading(false);
     }

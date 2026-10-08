@@ -47,6 +47,7 @@ import { FieldError, required, useForm } from '../../lib/form.js';
 import { formatDate } from '../../lib/format.js';
 import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { reasonMessage } from '../../lib/reason-message.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 
 interface SsoAttributeMapping {
@@ -424,10 +425,13 @@ function DomainProofs({
       {failure && (
         <ErrorNotice
           message={
-            failure instanceof ApiClientError
-              ? // i18n-ignore — the server names the exact obstacle (wait a minute, the code expired, it does not match); a generic sentence would leave the owner guessing which.
-                failure.message
-              : t('settings.sso.domainErrorFallback')
+            // The server names the exact obstacle (wait a minute, the code expired,
+            // it does not match) as a `details.reason`; worded here, in the console's
+            // language. A refusal without one goes through the error-type catalogue.
+            reasonMessage(t, failure, 'settings.reason') ??
+            (failure instanceof ApiClientError
+              ? t(errorMessageKey(failure))
+              : t('settings.sso.domainErrorFallback'))
           }
         />
       )}
@@ -909,10 +913,13 @@ function SsoConnections({
           {toggle.isError && (
             <ErrorNotice
               message={
-                toggle.error instanceof ApiClientError
-                  ? // i18n-ignore — self-lockout guard names the exact fix (set a password on the owner account); genericizing would strand the one person who can act on it (S11-h).
-                    toggle.error.message
-                  : t('settings.sso.requireErrorFallback')
+                // The self-lockout guard names the exact fix (set a password on the
+                // owner account), so it has its own sentence, chosen by the server's
+                // `details.reason` rather than printed from its prose.
+                reasonMessage(t, toggle.error, 'settings.reason') ??
+                (toggle.error instanceof ApiClientError
+                  ? t(errorMessageKey(toggle.error))
+                  : t('settings.sso.requireErrorFallback'))
               }
             />
           )}
@@ -1053,7 +1060,7 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
                     onBlur={() => form.blur('name')}
                     aria-invalid={nameError ? true : undefined}
                     aria-describedby={nameError ? 'scim-token-name-error' : undefined}
-                    placeholder="Okta (corp) provisioning"
+                    placeholder={t('settings.sso.scimNamePlaceholder')}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />
                   <FieldError id="scim-token-name-error" message={nameError} />

@@ -14,6 +14,20 @@
  * not. Validators compose in order, first failure wins.
  */
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { getLocale, translate, type TranslateParams } from './i18n.js';
+
+/**
+ * A default message, in the language the console is in when the rule *runs*.
+ *
+ * The defaults used to be English constants, so a Turkish form that did not
+ * pass its own message (an email box, an invite list) answered in English
+ * (tm 259.18). They are looked up at validation time rather than when the
+ * validator is built: a validator can outlive a language switch, and a message
+ * is only ever needed at the moment a value fails.
+ */
+function say(key: string, params?: TranslateParams): string {
+  return translate(getLocale(), key, params);
+}
 
 /** Returns `null` for a valid value, or the field-under error message otherwise. */
 export type Validator = (value: string) => string | null;
@@ -29,8 +43,8 @@ export function compose(...validators: Validator[]): Validator {
   };
 }
 
-export function required(message = 'This field is required.'): Validator {
-  return (value) => (value.trim() ? null : message);
+export function required(message?: string): Validator {
+  return (value) => (value.trim() ? null : (message ?? say('ui.form.required')));
 }
 
 /** Wraps a validator so a blank value passes — for a field where "not set" is
@@ -42,7 +56,7 @@ export function optional(validator: Validator): Validator {
 
 export function minLength(length: number, message?: string): Validator {
   return (value) =>
-    value.trim().length >= length ? null : (message ?? `Enter at least ${length} characters.`);
+    value.trim().length >= length ? null : (message ?? say('ui.form.minLength', { count: length }));
 }
 
 /**
@@ -56,15 +70,15 @@ export function minLength(length: number, message?: string): Validator {
  */
 export function maxLength(length: number, message?: string): Validator {
   return (value) =>
-    value.trim().length <= length ? null : (message ?? `Enter at most ${length} characters.`);
+    value.trim().length <= length ? null : (message ?? say('ui.form.maxLength', { count: length }));
 }
 
 // One address shape, shared by `email` and `emailList`: a local part, an @, and a
 // dotted domain — enough to reject typos without pretending to be RFC 5322.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function email(message = 'Enter a valid email address.'): Validator {
-  return (value) => (EMAIL.test(value.trim()) ? null : message);
+export function email(message?: string): Validator {
+  return (value) => (EMAIL.test(value.trim()) ? null : (message ?? say('ui.form.email')));
 }
 
 /** Splits however addresses were pasted — commas, newlines or spaces. */
@@ -86,14 +100,14 @@ export function emailList(
     invalidMessage?: (bad: string[]) => string;
   } = {},
 ): Validator {
-  const emptyMessage = options.emptyMessage ?? 'Enter at least one email address.';
-  const invalidMessage =
-    options.invalidMessage ?? ((bad) => `Not a valid address: ${bad.join(', ')}`);
   return (raw) => {
     const addresses = splitList(raw);
-    if (addresses.length === 0) return emptyMessage;
+    if (addresses.length === 0) return options.emptyMessage ?? say('ui.form.emailListEmpty');
     const bad = addresses.filter((address) => !EMAIL.test(address));
-    return bad.length > 0 ? invalidMessage(bad) : null;
+    if (bad.length === 0) return null;
+    return options.invalidMessage
+      ? options.invalidMessage(bad)
+      : say('ui.form.emailListInvalid', { addresses: bad.join(', ') });
   };
 }
 
@@ -102,8 +116,9 @@ export function emailList(
  * digits and hyphens. Kept permissive on purpose: `widget-check-7.localhost` is a
  * perfectly good domain to install a widget on during development.
  */
-export function domain(message = 'Enter a valid domain, like shop.example.'): Validator {
+export function domain(customMessage?: string): Validator {
   return (value) => {
+    const message = customMessage ?? say('ui.form.domain');
     const host = value.trim().toLowerCase();
     if (!host || /[\s/@]/.test(host)) return message;
     const labels = host.split('.');
@@ -120,8 +135,8 @@ export function domain(message = 'Enter a valid domain, like shop.example.'): Va
 // caught here rather than round-tripping to the server first.
 const PHONE_NUMBER = /^\+?[0-9]{3,20}$/;
 
-export function phoneNumber(message = 'Enter a valid phone number, e.g. +15551234567.'): Validator {
-  return (value) => (PHONE_NUMBER.test(value.trim()) ? null : message);
+export function phoneNumber(message?: string): Validator {
+  return (value) => (PHONE_NUMBER.test(value.trim()) ? null : (message ?? say('ui.form.phone')));
 }
 
 // Mirrors the API's payment-method zod schema (`apps/api/src/routes/reports.ts`
@@ -129,8 +144,8 @@ export function phoneNumber(message = 'Enter a valid phone number, e.g. +1555123
 // round-tripping to the server first.
 const CARD_LAST4 = /^\d{4}$/;
 
-export function cardLast4(message = 'Enter the last 4 digits — exactly 4 numbers.'): Validator {
-  return (value) => (CARD_LAST4.test(value.trim()) ? null : message);
+export function cardLast4(message?: string): Validator {
+  return (value) => (CARD_LAST4.test(value.trim()) ? null : (message ?? say('ui.form.cardLast4')));
 }
 
 export interface SubmitHelpers<V extends Record<string, string>> {
@@ -265,7 +280,7 @@ export function useForm<V extends Record<string, string>>(
     const helpers: SubmitHelpers<V> = { setFieldError, setSubmitError, reset };
     void Promise.resolve()
       .then(() => onSubmit(values, helpers))
-      .catch(() => setSubmitError('Something went wrong. Please try again.'))
+      .catch(() => setSubmitError(say('ui.form.submitFailed')))
       .finally(() => setIsSubmitting(false));
   }
 

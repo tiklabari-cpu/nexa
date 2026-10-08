@@ -159,6 +159,11 @@ export const auth: Messages = {
   'auth.callback.signingIn': 'Oturumunuz açılıyor…',
   'auth.callback.noCode': 'Bu oturum açma tamamlanmadı. Oturum açma sayfasından yeniden başlayın.',
   'auth.callback.genericFailure': 'Oturum açma başarısız oldu.',
+  // The sign-in store's own refusals, by code (lib/auth-flow-error.ts, tm 259.18).
+  'auth.flow.workspace_not_found': 'Bu çalışma alanı hesabınızda bulunamadı.',
+  'auth.flow.no_app': 'Bu çalışma alanında oturum açılacak bir uygulama yok.',
+  'auth.flow.sso_not_started':
+    'Bu oturum açma bu tarayıcıda başlatılmamış. Oturum açma sayfasından yeniden başlayın.',
   'auth.callback.unverified':
     'Oturum açmadan önce e-posta adresinizi doğrulayın. Size gönderdiğimiz bağlantıyı açın ya da oturum açma sayfasından yenisini isteyin.',
 

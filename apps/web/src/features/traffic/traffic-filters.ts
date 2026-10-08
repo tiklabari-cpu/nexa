@@ -27,71 +27,76 @@ export interface TrafficCondition {
 
 interface TrafficFieldOption {
   value: string;
-  label: string;
+  /** Catalogue key — `TrafficFilters.tsx` translates it. */
+  labelKey: string;
 }
 
 export interface TrafficFieldDef {
   field: TrafficConditionField;
-  label: string;
+  /** Catalogue key, not words: this file stays language-free (tm 259.18). */
+  labelKey: string;
   kind: 'select' | 'text';
+  /**
+   * The choices of a closed select. `group_id` has none here: its choices are
+   * the workspace's own teams, which only the wrapper can load.
+   */
   options?: readonly TrafficFieldOption[];
   placeholder?: string;
   /** What a freshly added row starts with. */
   initialValue: string;
 }
 
-// Reuses 13.2-g's tab labels rather than restating them, so the two surfaces
-// can never disagree on what to call a state.
+// Reuses 13.2-g's tab labels (the same `traffic.tab.*` keys) rather than
+// restating them, so the two surfaces can never disagree on what to call a state.
 const ACTIVITY_OPTIONS: readonly TrafficFieldOption[] = TRAFFIC_TABS.filter(
   (tab) => tab.id !== 'all',
-).map((tab) => ({ value: tab.id, label: tab.label }));
+).map((tab) => ({ value: tab.id, labelKey: `traffic.tab.${tab.id}` }));
 
 const LEAD_OPTIONS: readonly TrafficFieldOption[] = [
-  { value: 'true', label: 'Lead' },
-  { value: 'false', label: 'Not a lead' },
+  { value: 'true', labelKey: 'traffic.filters.option.lead' },
+  { value: 'false', labelKey: 'traffic.filters.option.notLead' },
 ];
 
 export const TRAFFIC_FIELD_DEFS: readonly TrafficFieldDef[] = [
   {
     field: 'activity',
-    label: 'Activity',
+    labelKey: 'traffic.filters.field.activity',
     kind: 'select',
     options: ACTIVITY_OPTIONS,
     initialValue: ACTIVITY_OPTIONS[0]!.value,
   },
   {
     field: 'page_url_contains',
-    label: 'Page URL contains',
+    labelKey: 'traffic.filters.field.pageUrl',
     kind: 'text',
     placeholder: '/pricing',
     initialValue: '',
   },
   {
     field: 'came_from_contains',
-    label: 'Came from contains',
+    labelKey: 'traffic.filters.field.cameFrom',
     kind: 'text',
     placeholder: 'google.com',
     initialValue: '',
   },
   {
     field: 'country_code',
-    label: 'Country',
+    labelKey: 'traffic.filters.field.country',
     kind: 'text',
     placeholder: 'US',
     initialValue: '',
   },
   {
     field: 'is_lead',
-    label: 'Lead',
+    labelKey: 'traffic.filters.field.lead',
     kind: 'select',
     options: LEAD_OPTIONS,
     initialValue: 'true',
   },
   {
     field: 'group_id',
-    label: 'Group ID',
-    kind: 'text',
-    placeholder: '1',
+    labelKey: 'traffic.filters.field.team',
+    kind: 'select',
     initialValue: '',
   },
 ];
@@ -102,6 +107,7 @@ const FIELD_DEF_BY_FIELD = new Map<TrafficConditionField, TrafficFieldDef>(
 
 export function fieldDef(field: TrafficConditionField): TrafficFieldDef {
   const def = FIELD_DEF_BY_FIELD.get(field);
+  // i18n-ignore: a developer error (a field outside the closed catalogue), never shown.
   if (!def) throw new Error(`Unknown traffic filter field: ${field}`);
   return def;
 }
@@ -123,34 +129,37 @@ const COUNTRY_CODE = /^[A-Za-z]{2}$/;
 const DIGITS_ONLY = /^\d+$/;
 const MAX_TEXT_LENGTH = 2048; // matches 13.2-f's z.string().max(2048)
 
-/** `null` when the value is acceptable; the field-under message otherwise. */
-export function conditionError(condition: TrafficCondition): string | null {
+/**
+ * `null` when the value is acceptable; otherwise the catalogue key of the
+ * field-under message, which the wrapper resolves in the panel's language.
+ */
+export function conditionErrorKey(condition: TrafficCondition): string | null {
   const value = condition.value.trim();
   switch (condition.field) {
     case 'activity':
       return ACTIVITY_OPTIONS.some((option) => option.value === value)
         ? null
-        : 'Choose an activity.';
+        : 'traffic.filters.error.activity';
     case 'is_lead':
-      return value === 'true' || value === 'false' ? null : 'Choose lead or not a lead.';
+      return value === 'true' || value === 'false' ? null : 'traffic.filters.error.lead';
     case 'page_url_contains':
-      if (!value) return 'Enter text to match in the page URL.';
-      return value.length <= MAX_TEXT_LENGTH ? null : 'Keep it under 2048 characters.';
+      if (!value) return 'traffic.filters.error.pageUrlRequired';
+      return value.length <= MAX_TEXT_LENGTH ? null : 'traffic.filters.error.tooLong';
     case 'came_from_contains':
-      if (!value) return 'Enter text to match in the referrer.';
-      return value.length <= MAX_TEXT_LENGTH ? null : 'Keep it under 2048 characters.';
+      if (!value) return 'traffic.filters.error.cameFromRequired';
+      return value.length <= MAX_TEXT_LENGTH ? null : 'traffic.filters.error.tooLong';
     case 'country_code':
-      if (!value) return 'Enter a country code.';
-      return COUNTRY_CODE.test(value) ? null : 'Use a 2-letter country code, like US.';
+      if (!value) return 'traffic.filters.error.countryRequired';
+      return COUNTRY_CODE.test(value) ? null : 'traffic.filters.error.countryFormat';
     case 'group_id':
-      if (!value) return 'Enter a group ID.';
-      return DIGITS_ONLY.test(value) ? null : 'Enter a numeric group ID.';
+      if (!value) return 'traffic.filters.error.teamRequired';
+      return DIGITS_ONLY.test(value) ? null : 'traffic.filters.error.teamFormat';
   }
 }
 
 /** Every condition in the list passes its own validator. */
 export function conditionsAreValid(conditions: readonly TrafficCondition[]): boolean {
-  return conditions.every((condition) => conditionError(condition) === null);
+  return conditions.every((condition) => conditionErrorKey(condition) === null);
 }
 
 /**
@@ -164,7 +173,7 @@ export function conditionsAreValid(conditions: readonly TrafficCondition[]): boo
 export function buildTrafficParams(conditions: readonly TrafficCondition[]): URLSearchParams {
   const params = new URLSearchParams();
   for (const condition of conditions) {
-    if (conditionError(condition)) continue;
+    if (conditionErrorKey(condition)) continue;
     const value = condition.value.trim();
     params.append(
       condition.field,
@@ -185,7 +194,7 @@ export function resolveActivity(
   conditions: readonly TrafficCondition[],
 ): readonly TrafficActivity[] | undefined {
   const activityCondition = conditions.find(
-    (condition) => condition.field === 'activity' && conditionError(condition) === null,
+    (condition) => condition.field === 'activity' && conditionErrorKey(condition) === null,
   );
   if (activityCondition) return [activityCondition.value as TrafficActivity];
   return tabActivities;

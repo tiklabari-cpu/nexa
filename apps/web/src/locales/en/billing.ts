@@ -56,6 +56,14 @@ export const billing: Messages = {
   'billing.managePlan.plan.loading': 'Loading plans…',
   'billing.managePlan.plan.loadError': 'Could not load the plan catalogue.',
   'billing.managePlan.plan.genericError': 'Could not change the plan. Try again.',
+  // The server's refusals of a plan change, by their stable `details.reason`
+  // (lib/reason-message.ts, tm 259.18).
+  'billing.reason.plan_below_usage':
+    'The {plan} plan includes {included} AI resolutions — below the {used} already used this month.',
+  'billing.reason.seats_below_active':
+    'Seats cannot be fewer than the {active_agents} active agent(s) on this workspace.',
+  'billing.reason.plan_unknown': 'That plan is not available.',
+  'billing.reason.cycle_unknown': 'That billing cycle is not available.',
   'billing.managePlan.plan.overQuotaReason':
     'The {plan} plan includes {included} AI resolutions — below the {used} already used this period.',
   'billing.managePlan.plan.confirmListed':

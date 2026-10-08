@@ -12,6 +12,8 @@
  * them passes, so "Use template" / "Try this" can never mint a skill the server
  * would reject.
  */
+import { translate, type Locale } from '../../lib/i18n.js';
+import { TEMPLATE_TEXT_TR, type StepText, type TemplateText } from './templates-tr.js';
 import type { SkillStep } from './types.js';
 
 /** The template "types" an admin chooses between in the gallery. */
@@ -713,16 +715,52 @@ export interface SkillDraft {
   steps: SkillStep[];
 }
 
+/** The catalogue's words in a language other than the English it is authored in. */
+const TEMPLATE_TEXT: Partial<Record<Locale, Readonly<Record<string, TemplateText>>>> = {
+  tr: TEMPLATE_TEXT_TR,
+};
+
 /**
- * A fresh copy of a template's authorable content. Steps are cloned so an
- * editor mutating them cannot reach back into the shared catalogue.
+ * A fresh copy of a template's authorable content, in `locale` (D18, tm
+ * 259.18). Steps are cloned so an editor mutating them cannot reach back into
+ * the shared catalogue.
+ *
+ * The skill a template mints is what the workspace's visitors are answered
+ * with, so picking a card in a Turkish console used to leave an English skill
+ * behind it. Only words are swapped (`templates-tr.ts` says which); step
+ * order, intents, field names, tags and team names are the catalogue's own. A
+ * template with no text in `locale` — or English itself — is the catalogue as
+ * authored, the same fall-back `t()` makes for a missing key.
  */
-export function templateToDraft(template: SkillTemplate): SkillDraft {
+export function templateToDraft(template: SkillTemplate, locale: Locale = 'en'): SkillDraft {
+  const text = TEMPLATE_TEXT[locale]?.[template.id];
+  if (!text) {
+    return {
+      name: template.name,
+      instruction: template.instruction,
+      steps: template.steps.map((step) => ({ ...step })),
+    };
+  }
   return {
-    name: template.name,
-    instruction: template.instruction,
-    steps: template.steps.map((step) => ({ ...step })),
+    name: translate(locale, templateNameKey(template.id)),
+    instruction: text.instruction,
+    steps: template.steps.map((step, index) => localiseStep(step, text.steps[index])),
   };
+}
+
+/** `step` with the words of `text` laid over it; a field the step does not have is left alone. */
+function localiseStep(step: SkillStep, text: StepText | undefined): SkillStep {
+  if (!text) return { ...step };
+  switch (step.type) {
+    case 'detect_intent':
+      return { ...step, ...(text.phrases ? { phrases: [...text.phrases] } : {}) };
+    case 'request_info':
+      return { ...step, ...(text.prompt ? { prompt: text.prompt } : {}) };
+    case 'send_message':
+      return { ...step, ...(step.source === 'text' && text.text ? { text: text.text } : {}) };
+    default:
+      return { ...step };
+  }
 }
 
 /** Templates in one category, catalogue order preserved. */

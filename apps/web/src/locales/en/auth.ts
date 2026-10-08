@@ -162,6 +162,11 @@ export const auth: Messages = {
   'auth.callback.signingIn': 'Signing you in…',
   'auth.callback.noCode': 'This sign-in did not complete. Start again from the sign-in page.',
   'auth.callback.genericFailure': 'Sign-in failed.',
+  // The sign-in store's own refusals, by code (lib/auth-flow-error.ts, tm 259.18).
+  'auth.flow.workspace_not_found': 'That workspace was not found on your account.',
+  'auth.flow.no_app': 'This workspace has no app to sign in to.',
+  'auth.flow.sso_not_started':
+    'This sign-in did not start in this browser. Start again from the sign-in page.',
   'auth.callback.unverified':
     'Confirm your email address before signing in. Open the link we sent you, or ask for a new one from the sign-in page.',
 

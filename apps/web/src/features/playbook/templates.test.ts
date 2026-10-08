@@ -23,6 +23,7 @@ import {
   type SkillTemplate,
   type TemplateCategory,
 } from './templates.js';
+import { TEMPLATE_TEXT_TR } from './templates-tr.js';
 import type { SkillStep } from './types.js';
 
 /** A faithful mirror of `@siyahtus/ai-mock` `validateStep`, kept in sync by intent. */
@@ -242,5 +243,117 @@ describe('templateToDraft', () => {
     const draft = templateToDraft(template);
     (draft.steps[0] as { intent?: string }).intent = 'changed';
     expect((template.steps[0] as { intent?: string }).intent).not.toBe('changed');
+  });
+});
+
+/**
+ * D18 (tm 259.18): a template picked in a Turkish console mints a Turkish
+ * skill. The words are `templates-tr.ts`; everything the engine matches on is
+ * the catalogue's own, and these pin the line between the two.
+ */
+describe('templateToDraft in Turkish', () => {
+  const tr = (template: SkillTemplate) => templateToDraft(template, 'tr');
+
+  it('is the catalogue as authored in English, by default and by name', () => {
+    const template = findTemplate('order-status') as SkillTemplate;
+    expect(templateToDraft(template)).toEqual(templateToDraft(template, 'en'));
+    expect(templateToDraft(template).instruction).toBe(template.instruction);
+  });
+
+  it('has text for every template, one entry per step', () => {
+    for (const template of SKILL_TEMPLATES) {
+      const text = TEMPLATE_TEXT_TR[template.id];
+      expect(text, `${template.id} has no Turkish text`).toBeDefined();
+      expect(text!.steps, `${template.id} step count`).toHaveLength(template.steps.length);
+    }
+    expect(Object.keys(TEMPLATE_TEXT_TR).sort()).toEqual(SKILL_TEMPLATES.map((t) => t.id).sort());
+  });
+
+  it('only supplies words a step of that type can carry', () => {
+    for (const template of SKILL_TEMPLATES) {
+      template.steps.forEach((step, index) => {
+        const text = TEMPLATE_TEXT_TR[template.id]!.steps[index]!;
+        const where = `${template.id}[${index}] (${step.type})`;
+        if (text.phrases) expect(step.type, where).toBe('detect_intent');
+        if (text.prompt) expect(step.type, where).toBe('request_info');
+        if (text.text) {
+          expect(step.type, where).toBe('send_message');
+          expect((step as { source: string }).source, where).toBe('text');
+        }
+      });
+    }
+  });
+
+  it('leaves what the engine and the workspace match on exactly as authored', () => {
+    for (const template of SKILL_TEMPLATES) {
+      const draft = tr(template);
+      expect(draft.steps).toHaveLength(template.steps.length);
+      draft.steps.forEach((step, index) => {
+        const original = template.steps[index]!;
+        const where = `${template.id}[${index}]`;
+        expect(step.type, where).toBe(original.type);
+        // Identifiers: the intent, the collected field, the tag, the team name
+        // and where a reply comes from are not words to translate.
+        for (const key of ['intent', 'field', 'tag', 'group', 'source'] as const) {
+          expect((step as unknown as Record<string, unknown>)[key], `${where}.${key}`).toBe(
+            (original as unknown as Record<string, unknown>)[key],
+          );
+        }
+      });
+    }
+  });
+
+  it('opens skills the API will accept, as the English ones do', () => {
+    for (const template of SKILL_TEMPLATES) {
+      for (const step of tr(template).steps) expect(stepIsValid(step), template.id).toBe(true);
+    }
+  });
+
+  it('has really been translated: name from the catalogue, instruction and every question and reply Turkish', () => {
+    for (const template of SKILL_TEMPLATES) {
+      const draft = tr(template);
+      expect(draft.name, template.id).toBe(translate('tr', templateNameKey(template.id)));
+      expect(draft.name, template.id).not.toBe(template.name);
+      expect(draft.instruction, template.id).not.toBe(template.instruction);
+
+      // The Spanish greeting is Spanish on purpose; everything else must differ.
+      if (template.id === 'multilingual-greeting') continue;
+      draft.steps.forEach((step, index) => {
+        const original = template.steps[index]!;
+        const where = `${template.id}[${index}]`;
+        if (step.type === 'request_info') {
+          expect(step.prompt, where).not.toBe((original as { prompt: string }).prompt);
+        }
+        if (step.type === 'send_message' && step.source === 'text') {
+          expect(step.text, where).not.toBe((original as { text?: string }).text);
+        }
+        if (step.type === 'detect_intent' && original.type === 'detect_intent') {
+          expect(step.phrases?.length, where).toBeGreaterThan(0);
+          for (const phrase of step.phrases ?? []) {
+            expect(original.phrases ?? [], `${where} "${phrase}"`).not.toContain(phrase);
+          }
+        }
+      });
+    }
+  });
+
+  it('quotes in its instruction the very reply it sends, as the English instruction does', () => {
+    for (const template of SKILL_TEMPLATES) {
+      const draft = tr(template);
+      template.steps.forEach((step, index) => {
+        if (step.type !== 'send_message' || step.source !== 'text') return;
+        if (!template.instruction.includes(`"${step.text}"`)) return;
+        const sent = (draft.steps[index] as { text: string }).text;
+        expect(draft.instruction, template.id).toContain(`"${sent}"`);
+      });
+    }
+  });
+
+  it('keeps the catalogue untouched: a Turkish draft is a copy', () => {
+    const template = findTemplate('order-status') as SkillTemplate;
+    const draft = tr(template);
+    (draft.steps[1] as { prompt: string }).prompt = 'changed';
+    expect((template.steps[1] as { prompt: string }).prompt).toBe('What is your order number?');
+    expect(TEMPLATE_TEXT_TR['order-status']!.steps[1]!.prompt).not.toBe('changed');
   });
 });

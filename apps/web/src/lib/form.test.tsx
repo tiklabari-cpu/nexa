@@ -3,15 +3,18 @@
  * every screen, and the hook gates Submit and surfaces field-under errors.
  */
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resetLocale, setLocale } from '../test/i18n.js';
 import {
   cardLast4,
   compose,
   domain,
   email,
   emailList,
+  maxLength,
   minLength,
   optional,
+  phoneNumber,
   required,
   splitList,
   useForm,
@@ -144,5 +147,62 @@ describe('useForm', () => {
     expect(result.current.values).toEqual({ name: '' });
     expect(result.current.submitError).toBeNull();
     expect(result.current.isDirty).toBe(false);
+  });
+});
+
+describe('default messages follow the console language (O14, tm 259.18)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('are English by default', () => {
+    expect(required()('')).toBe('This field is required.');
+    expect(email()('x')).toBe('Enter a valid email address.');
+    expect(minLength(3)('a')).toBe('Enter at least 3 characters.');
+  });
+
+  it('are Turkish in a Turkish console, for every validator that has a default', () => {
+    setLocale('tr');
+    expect(required()('')).toBe('Bu alan zorunludur.');
+    expect(email()('x')).toBe('Geçerli bir e-posta adresi girin.');
+    expect(minLength(3)('a')).toBe('En az 3 karakter girin.');
+    expect(maxLength(2)('abc')).toBe('En fazla 2 karakter girin.');
+    expect(emailList()('')).toBe('En az bir e-posta adresi girin.');
+    expect(emailList()('a@b.com, broken')).toBe('Geçerli bir adres değil: broken');
+    expect(domain()('nope')).toBe('Geçerli bir alan adı girin, örneğin magaza.example.');
+    expect(phoneNumber()('abc')).toBe('Geçerli bir telefon numarası girin, örneğin +905551234567.');
+    expect(cardLast4()('12')).toBe('Son 4 haneyi girin — tam olarak 4 rakam.');
+  });
+
+  it('answers in the language of the moment the rule runs, not when it was built', () => {
+    const rule = email();
+    setLocale('tr');
+    expect(rule('x')).toBe('Geçerli bir e-posta adresi girin.');
+    setLocale('en');
+    expect(rule('x')).toBe('Enter a valid email address.');
+  });
+
+  it('keeps a message the form worded itself, in either language', () => {
+    setLocale('tr');
+    expect(required('Needed.')('')).toBe('Needed.');
+    expect(emailList({ invalidMessage: (bad) => `bad: ${bad.length}` })('x')).toBe('bad: 1');
+  });
+
+  it('words a failed submit in Turkish too', async () => {
+    setLocale('tr');
+    const { result } = renderHook(() =>
+      useForm({
+        initial: { name: 'Robin' },
+        validators: {},
+        onSubmit: () => Promise.reject(new Error('boom')),
+      }),
+    );
+    await act(async () => {
+      result.current.handleSubmit();
+      await Promise.resolve();
+    });
+    await vi.waitFor(() =>
+      expect(result.current.submitError).toBe('Bir şeyler ters gitti. Lütfen tekrar deneyin.'),
+    );
   });
 });

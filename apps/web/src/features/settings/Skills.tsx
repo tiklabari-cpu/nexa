@@ -104,7 +104,7 @@ export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
                     onBlur={() => form.blur('name')}
                     aria-invalid={nameError ? true : undefined}
                     aria-describedby={nameError ? 'new-skill-name-error' : undefined}
-                    placeholder="Billing"
+                    placeholder={t('settings.skills.namePlaceholder')}
                     maxLength={EXPERTISE_NAME_MAX_LENGTH}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />

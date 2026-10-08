@@ -189,6 +189,10 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
         {/* An address under /app that is not a page says so (UX audit D11). */}
         <Route path="*" element={<NotFoundPage />} />
       </Route>
+      {/* The wizard's address once setup is done. Finishing the wizard flips the
+          gate while the address is still this one, so without this the shell's
+          "Page not found" showed for a moment before the inbox (tm 259.26). */}
+      <Route path="/app/onboarding" element={<Navigate to="/app/inbox" replace />} />
       {/* Anything outside /app, including the OAuth callback path, lands in the inbox. */}
       <Route path="*" element={<Navigate to="/app/inbox" replace />} />
     </Routes>

@@ -212,6 +212,37 @@ test.describe('scrolling regions are reachable and their focus ring is visible',
     ).toEqual([]);
     assertNoBlockingViolations(scan);
   });
+
+  // Found by tm 259.26's pilot re-measurement: on a phone the open conversation
+  // outgrows its pane, and the transcript is a box of bubbles nothing in which
+  // takes focus — a keyboard user could not scroll back through it.
+  test('the inbox transcript on a phone can be scrolled from the keyboard', async ({
+    agentPage,
+  }, testInfo) => {
+    await agentPage.setViewportSize({ width: 390, height: 844 });
+    await agentPage.goto('/app/inbox');
+    await continuePastNarrowNotice(agentPage);
+    const log = agentPage.getByRole('log', { name: 'Conversation transcript' });
+    await expect(log).toBeVisible();
+
+    // The precondition this is about: the transcript really scrolls here.
+    await expect
+      .poll(() => log.evaluate((node) => node.scrollHeight > node.clientHeight + 1))
+      .toBe(true);
+    await expect(log).toHaveAttribute('tabindex', '0');
+
+    // Reached and scrolled with the keyboard alone.
+    await log.focus();
+    await expect(log).toBeFocused();
+    const before = await log.evaluate((node) => node.scrollTop);
+    await agentPage.keyboard.press('Home');
+    await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeLessThan(before);
+
+    const scan = await scanScreen(agentPage, 'Inbox (390 px)', testInfo);
+    expect(
+      [...scan.blocking, ...scan.advisory].filter((v) => v.id === 'scrollable-region-focusable'),
+    ).toEqual([]);
+  });
 });
 
 test.describe('the trial banner link', () => {

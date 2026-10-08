@@ -34,6 +34,9 @@ vi.mock('./lib/deployment.js', () => ({ useDeployment: () => deployment.current 
 vi.mock('./components/AppShell.js', () => ({ AppShell: () => <Outlet /> }));
 vi.mock('./features/inbox/InboxPage.js', () => ({ InboxPage: () => <p>Inbox module</p> }));
 vi.mock('./features/auth/SignInPage.js', () => ({ SignInPage: () => <p>Sign-in form</p> }));
+vi.mock('./features/onboarding/OnboardingWizard.js', () => ({
+  OnboardingWizard: () => <p>Onboarding wizard</p>,
+}));
 
 function LocationProbe(): React.ReactElement {
   const location = useLocation();
@@ -96,6 +99,30 @@ describe('an unknown address under /app', () => {
 
   it('leaves the real pages and the index redirect alone', async () => {
     renderAt('/app');
+    expect(await screen.findByText('Inbox module')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/inbox');
+  });
+});
+
+describe('the wizard address once setup is done (tm 259.26)', () => {
+  it('leads to the inbox, not to "Page not found"', async () => {
+    renderAt('/app/onboarding');
+    expect(await screen.findByText('Inbox module')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/inbox');
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
+  });
+
+  it('finishing the wizard swaps to the shell without a "Page not found" in between', async () => {
+    useAuth.setState({ ...SIGNED_IN, agent: { ...SIGNED_IN.agent, onboarding_completed: false } });
+    renderAt('/app/onboarding');
+    expect(await screen.findByText('Onboarding wizard')).toBeInTheDocument();
+
+    // What the wizard's `finish` does first: the local gate flips while the
+    // address is still the wizard's.
+    act(() =>
+      useAuth.setState({ ...SIGNED_IN, agent: { ...SIGNED_IN.agent, onboarding_completed: true } }),
+    );
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
     expect(await screen.findByText('Inbox module')).toBeInTheDocument();
     expect(screen.getByTestId('location')).toHaveTextContent('/app/inbox');
   });

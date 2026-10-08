@@ -122,6 +122,27 @@ export function Transcript({
     // because it is the reading it must decline to take.
   }, [chatId, events, isLoadingOlder]);
 
+  /**
+   * Is the log scrolling right now? (tm 259.26 · O16)
+   *
+   * A bubble takes no focus, so once the conversation outgrows the pane a
+   * keyboard user could not scroll back through it (axe
+   * `scrollable-region-focusable`, the inbox at 390 px). The log is a tab stop
+   * exactly while it overflows — `Page`'s rule. Measured again whenever the
+   * content changes and whenever the pane is resized.
+   */
+  const [overflowing, setOverflowing] = useState(false);
+  useLayoutEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const measure = (): void => setOverflowing(node.scrollHeight > node.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loading, events, failedSends, isLoadingOlder]);
+
   const handleScroll = (): void => {
     const node = containerRef.current;
     if (!node) return;
@@ -151,7 +172,9 @@ export function Transcript({
       role="log"
       aria-live="polite"
       aria-label={t('inbox.transcript.ariaLabel')}
-      className="flex flex-1 flex-col gap-3 overflow-y-auto p-5"
+      // The ring is drawn inside: the pane around the log clips an outer one.
+      tabIndex={overflowing ? 0 : undefined}
+      className="flex flex-1 flex-col gap-3 overflow-y-auto p-5 focus-visible:-outline-offset-2"
     >
       {isLoadingOlder && (
         <div className="flex shrink-0 flex-col gap-3" data-testid="transcript-older-loading">

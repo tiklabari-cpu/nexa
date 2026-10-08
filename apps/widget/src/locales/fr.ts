@@ -12,6 +12,12 @@ export const fr: Record<string, string> = {
   'error.connect': 'Le chat est actuellement indisponible. Merci de réessayer sous peu.',
   'error.upload': "Ce fichier n'a pas pu être joint.",
   'error.send': 'Message non envoyé. Vérifiez votre connexion et réessayez.',
+  'error.rejected': "Ce message n'a pas pu être envoyé. Essayez de le reformuler.",
+  'error.rateLimited':
+    'Vous envoyez des messages trop vite. Patientez quelques secondes puis réessayez.',
+  'error.uploadTooLarge': 'Ce fichier est trop volumineux pour être joint.',
+  'error.uploadTooLargeMax': 'Ce fichier est trop volumineux. La limite est de {max}.',
+  'error.uploadType': 'Ce type de fichier ne peut pas être joint.',
   'error.readOnly': 'Cette conversation ne peut pas recevoir de nouveaux messages pour le moment.',
   'attach.label': 'Joindre un fichier',
   'attach.remove': 'Supprimer la pièce jointe',

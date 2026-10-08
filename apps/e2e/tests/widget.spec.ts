@@ -126,6 +126,29 @@ test.describe('widget embedding', () => {
     await expect(widgetFrame(page).getByRole('log', { name: 'Conversation' })).toContainText(text);
   });
 
+  test('a message the spam filter refuses says so, not "check your connection" (tm 259.10)', async ({
+    page,
+    organizationId,
+  }) => {
+    await openWidget(page, organizationId);
+    const frame = widgetFrame(page);
+    // The same character twenty times over opens no chat (`spam-filter.ts`
+    // CHAR_RUN_RE); the server answers 403 `message_rejected`.
+    const text = 'a'.repeat(30);
+    const box = frame.getByRole('textbox', { name: 'Message' });
+    await box.fill(text);
+    await frame.getByRole('button', { name: 'Send' }).click();
+
+    const status = frame.locator('.nx-status');
+    await expect(status).toHaveText(
+      "That message couldn't be sent. Please try wording it differently.",
+    );
+    await expect(status).not.toContainText('connection');
+    // The visitor's words are still there to reword, and nothing was posted.
+    await expect(box).toHaveValue(text);
+    await expect(frame.getByRole('log', { name: 'Conversation' })).not.toContainText(text);
+  });
+
   /**
    * The tracking code (FR-MOD-13.5, 13.5-g) as a shop actually installs it: a
    * global the host page's own script calls, on a page where the visitor never

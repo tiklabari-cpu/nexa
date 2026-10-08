@@ -26,6 +26,7 @@ import {
   createTranslator,
   isRtlLocale,
   resolveWidgetLocale,
+  type WidgetLocale,
   type WidgetTranslate,
 } from './i18n.js';
 
@@ -237,6 +238,10 @@ export function mount(doc: Document = document, win: Window = window): void {
   // thread it through every string the widget writes to the DOM (I18N1).
   const locale = resolveWidgetLocale(config.language);
   const t = createTranslator(config.language);
+  // Send held after a 429 (`pauseSending`); declared up here because
+  // `renderClosed` reads it and runs long before the first send.
+  let sendPaused = false;
+  let sendPauseTimer: ReturnType<typeof setTimeout> | undefined;
   // NFR-I18N1: direction is as fixed as the locale it comes from. Set once on
   // the document element so the whole panel — laid out with logical CSS
   // (`inset-inline-*`, flexbox `flex-start`/`flex-end`), not `left`/`right` —
@@ -334,7 +339,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // Append only what is new: rebuilding the list would lose scroll position
     // and restart CSS animations on messages already on screen.
     for (const event of state.events.slice(renderedCount)) {
-      ui.transcript.append(renderBubble(doc, event, api, attachmentCache, t));
+      ui.transcript.append(renderBubble(doc, event, api, attachmentCache, t, locale));
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
@@ -578,7 +583,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   function renderClosed(): void {
     ui.closedBanner.hidden = !state.closed;
     ui.input.disabled = state.closed;
-    ui.send.disabled = state.closed || state.sending;
+    ui.send.disabled = state.closed || state.sending || sendPaused;
     ui.attach.disabled = state.closed || state.uploading;
     // Hidden rather than merely disabled when the licence has attachments
     // switched off entirely (FR-MOD-08.9.4) — showing it only to refuse a
@@ -1135,7 +1140,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     } catch (error) {
       // The licence's file-sharing rules live on the server; a refusal (wrong
       // type, too large) surfaces here rather than being guessed at.
-      state.error = t('error.upload');
+      state.error = uploadRefusal(error, t, locale);
       renderStatus();
       console.warn('siyahtus widget: upload failed', error);
     } finally {
@@ -1181,7 +1186,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   async function send(): Promise<void> {
     const text = ui.input.value.trim();
     const attachment = state.pendingAttachment;
-    if ((!text && !attachment) || state.sending) return;
+    if ((!text && !attachment) || state.sending || sendPaused) return;
 
     state.sending = true;
     ui.send.disabled = true;
@@ -1241,11 +1246,13 @@ export function mount(doc: Document = document, win: Window = window): void {
       // (402 `license_expired`, tm 257.15). "Check your connection" would send them
       // hunting for a fault that is not theirs; say the conversation is closed to
       // new messages instead, whatever the deployment.
-      state.error = t(
-        error instanceof WidgetApiError && error.status === 402 && error.type === 'license_expired'
-          ? 'error.readOnly'
-          : 'error.send',
-      );
+      // The other refusals are the server answering, so "check your connection"
+      // is wrong for them too (tm 259.10): a message the spam filter or a ban
+      // turned away needs different words, a 429 needs the visitor to wait.
+      state.error = t(sendRefusalKey(error));
+      if (error instanceof WidgetApiError && error.status === 429) {
+        pauseSending(error.retryAfter);
+      }
       // Put the text and attachment back so neither is lost.
       ui.input.value = text;
       state.pendingAttachment = attachment;
@@ -1257,9 +1264,30 @@ export function mount(doc: Document = document, win: Window = window): void {
       console.warn('siyahtus widget: send failed', error);
     } finally {
       state.sending = false;
-      ui.send.disabled = false;
+      ui.send.disabled = sendPaused;
       ui.input.focus();
     }
+  }
+
+  /**
+   * Hold Send for the seconds a 429 asked for. The text stays in the box; when
+   * the wait is over the "too fast" line goes too, so it does not outlive the
+   * reason for it.
+   */
+  function pauseSending(retryAfter: number | undefined): void {
+    sendPaused = true;
+    clearTimeout(sendPauseTimer);
+    sendPauseTimer = setTimeout(
+      () => {
+        sendPaused = false;
+        ui.send.disabled = state.closed || state.sending;
+        if (state.error === t('error.rateLimited')) {
+          state.error = null;
+          renderStatus();
+        }
+      },
+      Math.min(retryAfter ?? DEFAULT_PAUSE_SECONDS, MAX_PAUSE_SECONDS) * 1000,
+    );
   }
 
   async function refresh(): Promise<void> {
@@ -2457,6 +2485,7 @@ function renderBubble(
   api: WidgetApi,
   cache: Map<string, string>,
   t: WidgetTranslate,
+  locale: WidgetLocale,
 ): HTMLElement {
   const row = doc.createElement('div');
   row.className = `nx-row nx-row--${event.author_type}`;
@@ -2492,7 +2521,7 @@ function renderBubble(
   const time = doc.createElement('time');
   time.className = 'nx-time';
   time.dateTime = event.created_at;
-  time.textContent = formatTime(event.created_at);
+  time.textContent = formatTime(event.created_at, locale);
 
   // The AI mark (FR-MOD-11.3) sits beside the time, outside the bubble, so what
   // the visitor copies and what a screen reader reads out of the message is
@@ -2595,11 +2624,64 @@ function fileLink(doc: Document, name: string, href: string | null): HTMLAnchorE
   return link;
 }
 
-function formatTime(iso: string): string {
+/** Clock time in the widget's language, not the browser's (tm 259.10). */
+function formatTime(iso: string, locale: WidgetLocale): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ''
-    : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    : date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Seconds Send stays held after a 429 that named no `Retry-After`, and the ceiling on one that did. */
+const DEFAULT_PAUSE_SECONDS = 5;
+const MAX_PAUSE_SECONDS = 60;
+
+/**
+ * 403 types that mean "this message / this visitor was turned away". The text is
+ * deliberately one generic sentence: the server names no rule so the spam filter
+ * cannot be probed (`customer.ts`), and a banned visitor is not told they are.
+ */
+const REFUSED_403 = new Set([
+  'message_rejected',
+  'customer_banned',
+  'not_allowed',
+  'authorization',
+]);
+
+/** Which sentence a failed send gets. A dead network (no `WidgetApiError`) keeps the connection one. */
+function sendRefusalKey(error: unknown): string {
+  if (!(error instanceof WidgetApiError)) return 'error.send';
+  if (error.status === 402 && error.type === 'license_expired') return 'error.readOnly';
+  if (error.status === 403 && error.type && REFUSED_403.has(error.type)) return 'error.rejected';
+  if (error.status === 429) return 'error.rateLimited';
+  return 'error.send';
+}
+
+/** "10 MB" / "512 KB" — units are the same in every catalog, the digits follow the locale. */
+function formatBytes(bytes: number, locale: WidgetLocale): string {
+  const mb = bytes / 1_048_576;
+  const unit = mb >= 1 ? 'MB' : 'KB';
+  const value = mb >= 1 ? mb : Math.max(1, Math.round(bytes / 1024));
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} ${unit}`;
+}
+
+/**
+ * Why an upload was refused. The grant endpoint answers 400 `validation` with the
+ * licence's limit in `details` (`uploads.ts`); a 413/415 from the byte PUT or a
+ * proxy in front of it means the same two things. Anything else stays generic.
+ */
+function uploadRefusal(error: unknown, t: WidgetTranslate, locale: WidgetLocale): string {
+  if (error instanceof WidgetApiError) {
+    const max = error.details?.max_file_size_bytes;
+    if (typeof max === 'number' && max > 0) {
+      return t('error.uploadTooLargeMax', { max: formatBytes(max, locale) });
+    }
+    if (error.status === 413) return t('error.uploadTooLarge');
+    if (error.details?.allowed_file_types !== undefined || error.status === 415) {
+      return t('error.uploadType');
+    }
+  }
+  return t('error.upload');
 }
 
 /**

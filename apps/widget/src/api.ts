@@ -380,25 +380,49 @@ export class WidgetApiError extends Error {
   /** The ADR-06 `error.type` the server named, when the failure came with one. */
   readonly type: string | undefined;
   readonly status: number | undefined;
+  /** The envelope's `details` — an upload refusal carries its limit here. */
+  readonly details: Record<string, unknown> | undefined;
+  /** Seconds the server asked the caller to wait (`Retry-After` on a 429). */
+  readonly retryAfter: number | undefined;
 
-  constructor(message: string, details: { type?: string; status?: number } = {}) {
+  constructor(
+    message: string,
+    details: {
+      type?: string;
+      status?: number;
+      details?: Record<string, unknown>;
+      retryAfter?: number;
+    } = {},
+  ) {
     super(message);
     this.name = 'WidgetApiError';
     this.type = details.type;
     this.status = details.status;
+    this.details = details.details;
+    this.retryAfter = details.retryAfter;
   }
 }
 
 async function failure(response: Response): Promise<WidgetApiError> {
   const status = response.status;
+  // A whole number of seconds; the HTTP-date form is not one the API sends.
+  const seconds = Number(response.headers?.get('retry-after'));
+  const retryAfter = Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
   try {
-    const body = (await response.json()) as { error?: { message?: string; type?: string } };
+    const body = (await response.json()) as {
+      error?: { message?: string; type?: string; details?: Record<string, unknown> };
+    };
     return new WidgetApiError(body.error?.message ?? `request failed (${status})`, {
       status,
       ...(body.error?.type ? { type: body.error.type } : {}),
+      ...(body.error?.details ? { details: body.error.details } : {}),
+      ...(retryAfter ? { retryAfter } : {}),
     });
   } catch {
-    return new WidgetApiError(`request failed (${status})`, { status });
+    return new WidgetApiError(`request failed (${status})`, {
+      status,
+      ...(retryAfter ? { retryAfter } : {}),
+    });
   }
 }
 

@@ -12,6 +12,13 @@ export const de: Record<string, string> = {
   'error.connect': 'Der Chat ist momentan nicht verfügbar. Bitte versuchen Sie es in Kürze erneut.',
   'error.upload': 'Diese Datei konnte nicht angehängt werden.',
   'error.send': 'Nachricht nicht gesendet. Bitte Verbindung prüfen und erneut versuchen.',
+  'error.rejected':
+    'Diese Nachricht konnte nicht gesendet werden. Bitte formulieren Sie sie anders.',
+  'error.rateLimited':
+    'Sie senden zu schnell. Bitte warten Sie einige Sekunden und versuchen Sie es erneut.',
+  'error.uploadTooLarge': 'Diese Datei ist zu groß zum Anhängen.',
+  'error.uploadTooLargeMax': 'Diese Datei ist zu groß. Das Limit beträgt {max}.',
+  'error.uploadType': 'Dieser Dateityp kann nicht angehängt werden.',
   'error.readOnly': 'Diese Unterhaltung kann gerade keine neuen Nachrichten empfangen.',
   'attach.label': 'Datei anhängen',
   'attach.remove': 'Anhang entfernen',

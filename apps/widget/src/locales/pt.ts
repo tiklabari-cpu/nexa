@@ -11,6 +11,12 @@ export const pt: Record<string, string> = {
   'error.connect': 'O chat está indisponível no momento. Tente novamente em breve.',
   'error.upload': 'Não foi possível anexar esse arquivo.',
   'error.send': 'Mensagem não enviada. Verifique sua conexão e tente novamente.',
+  'error.rejected': 'Não foi possível enviar essa mensagem. Tente escrevê-la de outra forma.',
+  'error.rateLimited':
+    'Você está enviando mensagens rápido demais. Aguarde alguns segundos e tente novamente.',
+  'error.uploadTooLarge': 'Esse arquivo é grande demais para anexar.',
+  'error.uploadTooLargeMax': 'Esse arquivo é grande demais. O limite é {max}.',
+  'error.uploadType': 'Esse tipo de arquivo não pode ser anexado.',
   'error.readOnly': 'Esta conversa não pode receber novas mensagens no momento.',
   'attach.label': 'Anexar um arquivo',
   'attach.remove': 'Remover anexo',

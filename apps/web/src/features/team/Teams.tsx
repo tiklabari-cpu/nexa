@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import { GROUP_PRIORITIES, type GroupPriority } from '@siyahtus/types';
 import { Card, CardSkeleton, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { LoadError } from '../../components/LoadError.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { TeamEditor } from './TeamEditor.js';
@@ -66,12 +67,22 @@ export function Teams({ agents, canManage }: TeamsProps): ReactElement {
 
   return (
     <Section title={t('team.page.teams.title')} description={t('team.page.teams.description')}>
-      {canManage && !list.isPending && groups.length > 0 && (
+      {canManage && !list.isPending && !list.isError && groups.length > 0 && (
         <div className="flex justify-end">{newTeamButton}</div>
       )}
 
       {list.isPending ? (
         <CardSkeleton rows={3} />
+      ) : list.isError && !list.data ? (
+        // A failed read is not "no teams yet" (tm 259.6) — and offering to
+        // create one beside it would invite a duplicate of a team that exists.
+        <Card>
+          <LoadError
+            title={t('team.teams.loadError.title')}
+            error={list.error}
+            onRetry={() => void list.refetch()}
+          />
+        </Card>
       ) : groups.length === 0 ? (
         <Card>
           <EmptyState

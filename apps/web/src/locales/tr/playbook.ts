@@ -225,6 +225,7 @@ export const playbook: Messages = {
   'playbook.knowledge.loading': 'Yükleniyor…',
   'playbook.knowledge.chunkCount.one': '{count} parça',
   'playbook.knowledge.chunkCount.other': '{count} parça',
+  'playbook.knowledge.loadError.title': 'Bilgi kaynakları yüklenemedi',
   'playbook.knowledge.emptyTitle': 'Dizinlenmiş bir şey yok',
   'playbook.knowledge.emptyDescription':
     'Bilgi olmadan bir beceri yalnızca sabit yanıt gönderebilir.',

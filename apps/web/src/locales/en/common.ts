@@ -62,6 +62,8 @@ export const common: Messages = {
   // The design-system primitives' own defaults — a caller that passes no label
   // still gets one in the agent's language (Banner.tsx, Panel.tsx).
   'common.actions.dismiss': 'Dismiss',
+  // LoadError.tsx — the retry every list's failed-read alert shares (tm 259.6).
+  'common.loadError.retry': 'Try again',
   'common.actions.collapsePanel': 'Collapse panel',
   // Tour.tsx's own chrome (FR-MOD-02.2.3) — step content is the caller's, but
   // Back/Next/Skip/Done and the counter are generic across every tour.

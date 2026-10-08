@@ -92,6 +92,9 @@ export const team: Messages = {
   'team.page.formerTeammate': 'Former teammate',
 
   // Teams — create/edit/delete + membership. Teams.tsx, TeamEditor.tsx, TeamMembers.tsx
+  'team.teams.loadError.title': "Teams couldn't be loaded",
+  'team.aiAgentsPage.loadError.title': "AI agents couldn't be loaded",
+  'team.page.suspended.loadError.title': "Suspended teammates couldn't be loaded",
   'team.teams.newButton': 'New team',
   'team.teams.card.edit': 'Edit',
   'team.teams.card.editAriaLabel': 'Edit team — {name}',

@@ -30,6 +30,7 @@
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReportShareLink, ReportShareLinkCreated } from '@siyahtus/types';
+import { LoadError } from '../../components/LoadError.js';
 import { Dropdown, Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -160,6 +161,17 @@ export function ShareControl({
                 {create.isPending ? t('reports.share.creating') : t('reports.share.create')}
               </button>
             </div>
+
+            {links.isError && !links.data && (
+              <div className="border-t border-border pt-2">
+                <LoadError
+                  compact
+                  title={t('reports.share.loadError.title')}
+                  error={links.error}
+                  onRetry={() => void links.refetch()}
+                />
+              </div>
+            )}
 
             {items.length > 0 && (
               <ul className="flex flex-col gap-0.5 border-t border-border pt-2">

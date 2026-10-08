@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 259.16 — AUDIT-LOG-HUMANIZE: denetim günlüğü işlemleri, kişileri ve hedefleri insan diliyle gösteriyor — done — 2026-10-08 UTC
+
+- **Yapıldı:** O8 koddan doğrulandı (HEAD'de ham `entry.action` + aktör UUID + ham hedef). İşlem listesi kapalı (`AUDIT_ACTIONS`, 99 kod): hepsi için en + tr `audit.action.<kod>` (`locales/{en,tr}/audit-labels.ts`); bilinmeyen kod ham. Aktör: `GET /agents?status=all` roster'ından ad + e-posta, yoksa `a1111111…` (tam UUID `title`'da), bot/sistem ayrı etiket. Hedef: `audit.target.<tür>` ("Çalışma alanı", "Uygulama: <id>", "Hesap: <ad>"), ham değer ikinci satırda. Filtre seçenekleri de etiketli (değer = kod); açılan satırda "Eylem kodu" ham. CSV dışa aktarımı ve Access review dokunulmadı.
+- **Doğrulama:** Kırmızı-önce: yeni `AuditLogPage.labels.test.tsx` eski kodda 10/12 kırmızı (2 koruma testi yeşil); `audit-labels.test.ts` parite testi sunucu listesini API kaynağından regex ile okur (elle liste yok; mutasyon: tr'den bir anahtar silinince kırmızı, kopyadan geri yüklendi). `AuditLogPage.test.tsx` roster'ı ayrı mock'a aldı (`Once` sırası bozulmasın) ve ham kod beklentileri etiketlendi. `test:gate build statik --force` + `birim --force` yeşil (0 cached); e2e `settings team a11y` 146/146 yeşil (özel yığın).
+- **Kararlar:** `audit-labels.ts` `.ts` (i18n-coverage yalnız `.tsx` tarar, TRANSLATED_FILES'a gerek yok). `client:`/`partner_app:` önekleri "Uygulama: <id>". Roster erişilemezse sessizce kısaltılmış UUID'ye düşer.
+- **Sonraki pencereye not:** `ACTION_GROUPS` (filtre açılır listesi) hâlâ 99 kodun yalnız ~60'ını gruplar; kalan ~39 kod (ör. `auth.sso_login`, `scim_token.*`, `customer.banned`) etiketli ama filtrede yok — kapsam dışı bırakıldı. Tarih filtresinin UTC gün sorunu 259.19'un.
+
 ## tm 259.15 — SETTINGS-SECTION-HEADER: Ayarlar sayfasının başlığı bölümün adı, alt satırı "Ayarlar · <grup>" — done — 2026-10-08 UTC
 
 - **Yapıldı:** O9 koddan doğrulandı (HEAD'de `SettingsPage.tsx` sabit `settings.pageTitle`/`pageDescription`). Başlık = `t(entry.labelKey)` (gezinmenin etiketi), alt satır = `settings.pageBreadcrumb` "Settings · {group}" / "Ayarlar · {group}" (karar: kart içi açıklama tekrarlanmadı, alternatif seçilmedi). `groupLabelKey(entry)` `settings-sections.ts`'e eklendi — 259.20 sekme başlığını aynı iki anahtardan türetebilir. Eski iki anahtar silindi.

@@ -1297,7 +1297,7 @@ test.describe('audit log', () => {
 
     await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
     const table = agentPage.getByRole('table', { name: 'Audit log' });
-    await expect(table.getByText('auth.login').first()).toBeVisible();
+    await expect(table.getByText('Signed in').first()).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/92.10-audit-log.png', fullPage: true });
   });
 
@@ -1336,7 +1336,7 @@ test.describe('audit log', () => {
     // Filter to the created event — a server-side query, so page size cannot
     // hide the row behind the day's other activity.
     await agentPage.getByLabel('Filter by action').selectOption('webhook.created');
-    await expect(table.getByText('webhook.created').first()).toBeVisible();
+    await expect(table.getByText('Webhook created').first()).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/92.11-audit-webhook.png', fullPage: true });
   });
 
@@ -1376,10 +1376,10 @@ test.describe('audit log', () => {
     await agentPage.getByLabel('Filter by action').selectOption('webhook.created');
 
     const table = agentPage.getByRole('table', { name: 'Audit log' });
-    await expect(table.getByText('webhook.created').first()).toBeVisible();
+    await expect(table.getByText('Webhook created').first()).toBeVisible();
 
     const toggle = agentPage
-      .getByRole('button', { name: /^Detail for webhook\.created at / })
+      .getByRole('button', { name: /^Detail for Webhook created at / })
       .first();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await toggle.click();

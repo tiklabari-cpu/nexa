@@ -7551,6 +7551,7 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
   "expands a row to reveal what the entry recorded, and what it deliberately did not"
   (`url_host` görünür, yazılmamış URL yolu görünmez) + a11y taraması artık açık satırı da
   tarıyor · `kanit/92.12-audit-entry-detail.png` · tm 181.5
+- ✅ Denetim günlüğü insan diliyle okunuyor (UX bulgusu O8): işlem kodu için en + tr etiket (99 kodun hepsi; bilinmeyen kod ham), aktör roster'dan ad + e-posta (yoksa kısaltılmış UUID, bot/sistem ayrı etiket), hedef "Çalışma alanı" / "Uygulama: …" / "Hesap: <ad>" ile ham değer ikinci satırda; filtre seçenekleri de etiketli, açılan satırda "Eylem kodu" ham kalıyor; CSV dışa aktarımı ve Access review dokunulmadı — `apps/web/src/features/audit/AuditLogPage.tsx` · `audit-labels.ts` · `locales/{en,tr}/audit-labels.ts` · test `AuditLogPage.labels.test.tsx` (12) · `audit-labels.test.ts` (4, sunucunun `AUDIT_ACTIONS` listesini API kaynağından okur) · e2e `settings.spec.ts` + `team.spec.ts` etiketlere çevrildi · tm 259.16
 
 #### K09.3 — 09.3 · API istek paketleri (Essential/Pro/Pro+)
 

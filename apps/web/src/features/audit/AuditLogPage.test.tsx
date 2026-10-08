@@ -9,7 +9,7 @@
  * URL.
  *
  * Row assertions are scoped to the `<table>`: the action filter's options
- * carry the same raw action strings the table cells do (e.g. `auth.login`),
+ * carry the same labels the table cells do (e.g. "Signed in"),
  * so an unscoped `getByText` can match the wrong element.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -21,7 +21,7 @@ import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
-const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
+const { api, roster } = vi.hoisted(() => ({ api: { get: vi.fn() }, roster: { get: vi.fn() } }));
 
 const ADMIN_SCOPES = ['audit_log--all:ro'];
 
@@ -32,7 +32,12 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthStore>();
   return {
     ...actual,
-    useApiClient: () => api,
+    // The roster read (`GET /agents`, who an actor id is) is a second request the
+    // page makes beside the trail; it gets its own mock so the `api.get` call
+    // order the trail tests pin (`mockResolvedValueOnce`) stays the trail's alone.
+    useApiClient: () => ({
+      get: (path: string) => (path.startsWith('/agents') ? roster.get(path) : api.get(path)),
+    }),
     useAuth: (selector: (state: { agent: { scopes: string[]; role: string } }) => unknown) =>
       selector({ agent: { scopes: currentScopes, role: currentRole } }),
   };
@@ -71,6 +76,8 @@ beforeEach(() => {
   currentScopes = ADMIN_SCOPES;
   currentRole = 'owner';
   api.get.mockReset();
+  roster.get.mockReset();
+  roster.get.mockResolvedValue({ items: [] });
 });
 
 describe('AuditLogPage', () => {
@@ -79,9 +86,9 @@ describe('AuditLogPage', () => {
     renderPage(<AuditLogPage />);
 
     const rows = within(await screen.findByRole('table'));
-    expect(rows.getByText('member.role_changed')).toBeInTheDocument();
+    expect(rows.getByText('Role changed')).toBeInTheDocument();
     expect(rows.getByText('Agent')).toBeInTheDocument();
-    expect(rows.getByText('a1111111-1111-1111-1111-111111111111')).toBeInTheDocument();
+    expect(rows.getByText('a1111111…')).toBeInTheDocument();
     expect(rows.getByText('account:b2222222-2222-2222-2222-222222222222')).toBeInTheDocument();
     expect(rows.getByText('203.0.113.5')).toBeInTheDocument();
     expect(api.get).toHaveBeenCalledWith('/audit-log');
@@ -142,8 +149,8 @@ describe('AuditLogPage', () => {
     const loadMore = await screen.findByRole('button', { name: 'Load more' });
     await userEvent.click(loadMore);
 
-    await waitFor(() => expect(within(table()).getByText('auth.login')).toBeInTheDocument());
-    expect(within(table()).getByText('member.role_changed')).toBeInTheDocument();
+    await waitFor(() => expect(within(table()).getByText('Signed in')).toBeInTheDocument());
+    expect(within(table()).getByText('Role changed')).toBeInTheDocument();
     expect(api.get).toHaveBeenLastCalledWith('/audit-log?page_id=cursor-1');
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
   });
@@ -158,8 +165,8 @@ describe('AuditLogPage', () => {
 
     await userEvent.selectOptions(screen.getByLabelText('Filter by action'), 'auth.login');
 
-    await waitFor(() => expect(within(table()).getByText('auth.login')).toBeInTheDocument());
-    expect(within(table()).queryByText('member.role_changed')).not.toBeInTheDocument();
+    await waitFor(() => expect(within(table()).getByText('Signed in')).toBeInTheDocument());
+    expect(within(table()).queryByText('Role changed')).not.toBeInTheDocument();
     expect(api.get).toHaveBeenLastCalledWith('/audit-log?action=auth.login');
   });
 
@@ -280,7 +287,7 @@ describe('AuditLogPage entry detail', () => {
   }
 
   function toggle(): HTMLElement {
-    return screen.getByRole('button', { name: /^Detail for member\.role_changed at / });
+    return screen.getByRole('button', { name: /^Detail for Role changed at / });
   }
 
   it('does not fetch a detail until a row is expanded', async () => {

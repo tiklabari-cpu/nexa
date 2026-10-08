@@ -352,10 +352,7 @@ test.describe('Team — changing a teammate’s role (NFR-S12)', () => {
       await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
       await agentPage.getByLabel('Filter by action').selectOption('member.role_changed');
       await expect(
-        agentPage
-          .getByRole('table', { name: 'Audit log' })
-          .getByText('member.role_changed')
-          .first(),
+        agentPage.getByRole('table', { name: 'Audit log' }).getByText('Role changed').first(),
       ).toBeVisible();
     } finally {
       const restored = await request.put(`${API_BASE}/agents/${sam!.id}/role`, {

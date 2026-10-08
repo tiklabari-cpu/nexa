@@ -16,13 +16,15 @@
  * too small to need it).
  *
  * Action codes (`auth.login`, `member.invited`, …) are the server's own event
- * names, shown verbatim in the filter and the table — like ticket status/
- * priority elsewhere (I18N-f/g), a raw identifier is data, not chrome, and
- * this screen has no per-action dictionary to translate 60-odd of them into.
- * Only the nine group labels above them are chrome, and those are translated.
- * The same rule covers metadata *keys* in the expanded row (`from`, `to`,
- * `mailbox`, `kind`): an open vocabulary written one `writeAuditEntry` call at
- * a time cannot be given a dictionary that stays true.
+ * names. The list is closed (`AUDIT_ACTIONS`), so the table and the filter show
+ * a label for each ("Signed in") and a parity test fails when the server
+ * writes one that has none (tm 259.16, `audit-labels.ts`); a code with no label
+ * is shown raw, and the expanded row keeps the code. Actors are named from the
+ * roster and targets read "Workspace" / "App: …" with the raw value on a second
+ * line — the CSV export and the access review stay raw, for the auditor.
+ * Metadata *keys* in the expanded row (`from`, `to`, `mailbox`, `kind`) remain
+ * verbatim: an open vocabulary written one `writeAuditEntry` call at a time
+ * cannot be given a dictionary that stays true.
  *
  * ## What the expanded row shows, and why it is not a JSON dump (M-UI-e)
  *
@@ -66,8 +68,17 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
-import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { AccessReviewExport } from './AccessReviewExport.js';
+import {
+  actionLabel,
+  actorCell,
+  buildRoster,
+  targetCell,
+  type CellText,
+  type Roster,
+  type RosterMember,
+} from './audit-labels.js';
 
 interface AuditLogEntry {
   id: string;
@@ -96,8 +107,42 @@ interface AuditLogEntryDetail extends AuditLogEntry {
   chain_seq: number | null;
 }
 
-function actorLabel(t: TFunction, actorType: AuditLogEntry['actor_type']): string {
-  return t(`audit.actor.${actorType}`);
+/**
+ * Who the trail's actor ids are. `status=all` so a suspended teammate still has
+ * a name on the entries they wrote. A caller the route refuses (or any failure)
+ * gets an empty roster — every actor then reads as a shortened id, which is
+ * still true, rather than the whole trail failing to load.
+ */
+function useRoster(enabled: boolean): Roster {
+  const api = useApiClient();
+  const query = useQuery({
+    queryKey: ['audit-log', 'roster'],
+    queryFn: () => api.get<{ items: RosterMember[] }>('/agents?status=all'),
+    enabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+  return buildRoster(query.data?.items);
+}
+
+/** A two-line cell: the words, then the quieter raw value under them. */
+function TwoLine({ cell, mono = false }: { cell: CellText | null; mono?: boolean }): ReactElement {
+  if (!cell) return <>—</>;
+  return (
+    <>
+      <span className="block" {...(cell.title && !cell.secondary ? { title: cell.title } : {})}>
+        {cell.primary}
+      </span>
+      {cell.secondary && (
+        <span
+          className={`block truncate text-2xs text-content-tertiary${mono ? ' font-mono' : ''}`}
+          {...(cell.title ? { title: cell.title } : {})}
+        >
+          {cell.secondary}
+        </span>
+      )}
+    </>
+  );
 }
 
 /**
@@ -331,6 +376,7 @@ export function AuditLogPage(): ReactElement {
   });
 
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const roster = useRoster(canView);
 
   // A linked entry that the current filter/page does not contain still has to
   // open — that is the whole point of addressing it by id. It gets the same
@@ -422,7 +468,7 @@ export function AuditLogPage(): ReactElement {
                             >
                               <span className="sr-only">
                                 {t('audit.detail.toggleAriaLabel', {
-                                  action: entry.action,
+                                  action: actionLabel(t, entry.action),
                                   time: formatDateTime(entry.created_at) ?? entry.created_at,
                                 })}
                               </span>
@@ -432,17 +478,15 @@ export function AuditLogPage(): ReactElement {
                           <td className="whitespace-nowrap px-4 py-2.5 text-content-secondary">
                             {formatDateTime(entry.created_at) ?? '—'}
                           </td>
-                          <td className="px-4 py-2.5 font-mono text-2xs">{entry.action}</td>
+                          <td className="px-4 py-2.5">{actionLabel(t, entry.action)}</td>
                           <td className="px-4 py-2.5">
-                            <span className="block">{actorLabel(t, entry.actor_type)}</span>
-                            {entry.actor_id && (
-                              <span className="block truncate font-mono text-2xs text-content-tertiary">
-                                {entry.actor_id}
-                              </span>
-                            )}
+                            <TwoLine
+                              cell={actorCell(t, entry.actor_type, entry.actor_id, roster)}
+                              mono
+                            />
                           </td>
-                          <td className="px-4 py-2.5 font-mono text-2xs text-content-secondary">
-                            {entry.target ?? '—'}
+                          <td className="px-4 py-2.5 text-content-secondary">
+                            <TwoLine cell={targetCell(t, entry.target, roster)} mono />
                           </td>
                           <td className="px-4 py-2.5 font-mono text-2xs text-content-secondary">
                             {entry.ip ?? '—'}
@@ -537,6 +581,7 @@ function AuditEntryDetail({ entryId }: { entryId: string }): ReactElement {
     <div className="space-y-3">
       <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-[max-content_1fr]">
         <DetailField label={t('audit.detail.entryId')} value={entry.id} mono />
+        <DetailField label={t('audit.detail.actionCode')} value={entry.action} mono />
         <DetailField
           label={t('audit.detail.chainPosition')}
           // `null` is a fact about the row, not a missing value: it predates the
@@ -620,7 +665,7 @@ function AuditFilters({
             <optgroup key={group.labelKey} label={t(group.labelKey)}>
               {group.actions.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {actionLabel(t, value)}
                 </option>
               ))}
             </optgroup>

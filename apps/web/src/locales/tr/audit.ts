@@ -1,7 +1,10 @@
 import type { Messages } from '../merge.js';
+import { auditLabels } from './audit-labels.js';
 
 /** Denetim günlüğü ekranı (I18N-j, tm 133.10). See the English file. */
 export const audit: Messages = {
+  ...auditLabels,
+  'audit.detail.actionCode': 'Eylem kodu',
   'audit.title': 'Denetim günlüğü',
   'audit.description':
     'Oturum açmalar, rol değişiklikleri, silmeler ve webhook değişiklikleri — varsayılan olarak son 30 gün.',

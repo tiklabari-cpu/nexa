@@ -1,4 +1,5 @@
 import type { Messages } from '../merge.js';
+import { auditLabels } from './audit-labels.js';
 
 /**
  * The audit log screen (`features/audit/AuditLogPage.tsx`, I18N-j, tm 133.10).
@@ -10,6 +11,8 @@ import type { Messages } from '../merge.js';
  * purpose — see the module doc in `AuditLogPage.tsx`.
  */
 export const audit: Messages = {
+  ...auditLabels,
+  'audit.detail.actionCode': 'Action code',
   'audit.title': 'Audit log',
   'audit.description':
     'Sign-ins, role changes, deletions and webhook changes — the last 30 days by default.',

@@ -121,7 +121,7 @@ export const billing: Messages = {
   // API packages — ApiPackagesSection, ApiPackageCard
   'billing.apiPackages.title': 'API paketleri',
   'billing.apiPackages.description':
-    'Planınızın dahil API çağrılarının üzerine tek seferlik takviyeler. Faturalandırma sahte (ADR-13) — bir paket satın almak hiçbir kart ücretlendirmez.',
+    'Planınızın dahil API çağrılarının üzerine tek seferlik takviyeler. Faturalandırma sahte — bir paket satın almak hiçbir kart ücretlendirmez.',
   'billing.apiPackages.loadError': 'API paket kataloğu yüklenemedi.',
   'billing.apiPackages.buyErrorTitle': 'Paket satın alınamadı.',
   'billing.apiPackages.buyErrorDescription':

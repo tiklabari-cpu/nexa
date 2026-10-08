@@ -126,7 +126,7 @@ export const billing: Messages = {
   // API packages — ApiPackagesSection, ApiPackageCard
   'billing.apiPackages.title': 'API packages',
   'billing.apiPackages.description':
-    "One-off top-ups on top of your plan's included API calls. Billing is mocked (ADR-13) — buying a package charges no card.",
+    "One-off top-ups on top of your plan's included API calls. Billing is mocked — buying a package charges no card.",
   'billing.apiPackages.loadError': 'Could not load the API package catalogue.',
   'billing.apiPackages.buyErrorTitle': 'Could not buy the package.',
   'billing.apiPackages.buyErrorDescription':

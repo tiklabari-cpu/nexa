@@ -81,7 +81,7 @@ export const team: Messages = {
     'Copilot, bir temsilciye yardım ederken bu kaynaktan artık alıntı yapamaz. Bu geri alınamaz.',
   'team.page.chatbots.title': 'Sohbet botları',
   'team.page.chatbots.description':
-    'Bot hesapları kendi başlarına yanıt verir. Ücretsizdirler — bir bot asla koltuk kullanmaz (FR-MOD-04.6).',
+    'Bot hesapları kendi başlarına yanıt verir. Ücretsizdirler — bir bot asla koltuk kullanmaz.',
   'team.page.empty.noChatbotsTitle': 'Henüz sohbet botu yok',
   'team.page.empty.noChatbotsDescription':
     'Sık sorulan soruları otomatik yanıtlamak için Senaryolar’da bir AI ajanı oluşturun.',
@@ -138,7 +138,7 @@ export const team: Messages = {
   'team.teams.editor.deleting': 'Siliniyor…',
   'team.teams.members.title': 'Üyeler — {name}',
   'team.teams.members.description':
-    'Birden fazla üye müsaitken bir sohbetin önce kime gideceğini öncelik belirler (ADR-08).',
+    'Birden fazla üye müsaitken bir sohbetin önce kime gideceğini öncelik belirler.',
   'team.teams.members.priorityAriaLabel': 'Öncelik — {name}',
   'team.teams.members.removeButton': 'Çıkar',
   'team.teams.members.removeAriaLabel': '{name} adlı kişiyi bu ekipten çıkar',
@@ -338,9 +338,8 @@ export const team: Messages = {
   // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
   'team.copilot.title': 'Copilot bilgisi',
   'team.copilot.description':
-    'Copilot bir temsilciye yardım ederken neleri aktarabileceği. Müşteriye bakan AI temsilcinin bilgisinden ayrı tutulur ve hiçbir zaman bir müşteriye gösterilmez (FR-MOD-12.2).',
-  'team.copilot.shortDescription':
-    'Copilot bir temsilciye yardım ederken neleri aktarabileceği (FR-MOD-12.2).',
+    'Copilot bir temsilciye yardım ederken neleri aktarabileceği. Müşteriye bakan AI temsilcinin bilgisinden ayrı tutulur ve hiçbir zaman bir müşteriye gösterilmez.',
+  'team.copilot.shortDescription': 'Copilot bir temsilciye yardım ederken neleri aktarabileceği.',
   'team.copilot.noAccess.title': 'Copilot bilgisine erişim yok',
   'team.copilot.noAccess.description':
     'Copilot bilgi tabanını yönetmek AI temsilci iznini gerektirir. Bir sahipten vermesini isteyin.',

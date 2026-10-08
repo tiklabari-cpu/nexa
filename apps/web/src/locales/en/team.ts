@@ -88,7 +88,7 @@ export const team: Messages = {
     'Copilot can no longer quote this source when it assists an agent. This cannot be undone.',
   'team.page.chatbots.title': 'Chatbots',
   'team.page.chatbots.description':
-    'Bot accounts answer on their own. They are free — a bot never uses a seat (FR-MOD-04.6).',
+    'Bot accounts answer on their own. They are free — a bot never uses a seat.',
   'team.page.empty.noChatbotsTitle': 'No chatbots yet',
   'team.page.empty.noChatbotsDescription':
     'Create an AI agent in the Playbook to answer common questions automatically.',
@@ -146,7 +146,7 @@ export const team: Messages = {
   'team.teams.editor.deleting': 'Deleting…',
   'team.teams.members.title': 'Members — {name}',
   'team.teams.members.description':
-    'Priority decides who gets a conversation first when more than one member is free (ADR-08).',
+    'Priority decides who gets a conversation first when more than one member is free.',
   'team.teams.members.priorityAriaLabel': 'Priority — {name}',
   'team.teams.members.removeButton': 'Remove',
   'team.teams.members.removeAriaLabel': 'Remove {name} from this team',
@@ -348,8 +348,8 @@ export const team: Messages = {
   // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
   'team.copilot.title': 'Copilot knowledge',
   'team.copilot.description':
-    "What Copilot may quote when it assists an agent. Kept apart from the customer-facing AI agent's knowledge, and never shown to a customer (FR-MOD-12.2).",
-  'team.copilot.shortDescription': 'What Copilot may quote when it assists an agent (FR-MOD-12.2).',
+    "What Copilot may quote when it assists an agent. Kept apart from the customer-facing AI agent's knowledge, and never shown to a customer.",
+  'team.copilot.shortDescription': 'What Copilot may quote when it assists an agent.',
   'team.copilot.noAccess.title': 'No access to Copilot knowledge',
   'team.copilot.noAccess.description':
     'Managing the Copilot knowledge base needs the AI agent permission. Ask an owner to grant it.',

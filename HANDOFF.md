@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 259.14 — COPY-INTERNAL-REFS: müşteriye görünen metinlerde iç gereksinim/karar kodu yok, geri gelmesini nöbetçi engelliyor — done — 2026-10-08 UTC
+
+- **Yapıldı:** O7 koddan doğrulandı: panel locale DEĞERLERİNDE en ve tr'de 14'er metin `(FR-MOD-…)`, `(PRD §…)`, `(ADR-…)` taşıyordu (görevin saydığı 7 anahtar + Reports'un 9 bölüm açıklaması; ekip/billing dahil). Parantez silindi, cümle korundu (`reports.ts`, `team.ts`, `billing.ts`, en + tr). Widget'ın 8 kataloğunda hiç yoktu — yalnız nöbet eklendi.
+- **Nöbetçi:** `apps/web/src/locales/locale-copy.test.ts` (kalıp: `FR-`/`NFR-`/`ADR-`/`PRD`/`WORKSCHED`/`tm <n>`/`§<n>`; kendi kalıbını da sınar) + `apps/widget/src/locales/locales.test.ts`'e aynı kalıp + `apps/e2e/tests/copy-internal-refs.spec.ts` (AI agents, Team, Reports'un her sekmesi, en + tr; `innerText` + `title`/`aria-label`). Kod yorumları ve test başlıkları kapsam dışı (karar 3).
+- **Doğrulama:** Kırmızı-önce: nöbetçi en/tr 14'er kırmızı; mutasyon (`team.ts`'e "(FR-MOD-04.6)" geri → en kırmızı, anlık kopyadan geri yüklendi); e2e eski locale ile 2/2 kırmızı (`FR-M`, `PRD`), yeni ile 2/2. `ReportsPage.test.tsx` bir testi eski kodu (`/FR-MOD-13.5/`) arıyordu → yeni cümleye çevrildi. `test:gate build statik birim --force` yeşil (0 cached 20/9/8). Entegrasyon koşulmadı: yalnız locale değerleri + testler.
+- **Sonraki pencereye not:** Locale dosyalarındaki YORUMLARDA (`// … (FR-MOD-…)`, `(tm …)`) kod duruyor — müşteri görmez, bilerek bırakıldı. Kalıp `Ek A` kimliklerini (`FR-13-EK.3` gibi) da yakalar; yeni bir kod biçimi çıkarsa üç kopyada (web test, widget test, e2e) güncelle.
+
 ## tm 259.13 — DETAILS-TEAM-NAMES: sohbet detayındaki Teams bölümü ekip adını gösteriyor, numarasını değil — done — 2026-10-08 UTC
 
 - **Yapıldı:** O5 koddan doğrulandı (HEAD'de `group_ids.join(', ')`). `DetailsPanel.tsx` Teams bölümü `['team','groups']` sorgusunu (Teams/Tags/RoutingRules ile aynı anahtar, yeni istek yok) okuyor: ad, adla sıralı (`localeCompare` panel diliyle); liste yüklenirken her ekip "…"; listede olmayan ya da liste okunamadığında "Team #id" / "Ekip #id" (`inbox.details.teams.unknown`, en + tr). Boş durum aynı.

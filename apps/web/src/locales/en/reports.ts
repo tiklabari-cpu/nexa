@@ -164,14 +164,14 @@ export const reports: Messages = {
   'reports.overview.kpi.achievedGoals': 'Achieved goals',
   'reports.overview.resolution.title': 'Resolution',
   'reports.overview.resolution.description':
-    'How closed conversations were handled (PRD §7.3.2). Manual, assisted and automated add up to every closed case.',
+    'How closed conversations were handled. Manual, assisted and automated add up to every closed case.',
   'reports.overview.resolution.lowConfidence.one':
     'Only {count} closed case in this range — shares may not be reliable',
   'reports.overview.resolution.lowConfidence.other':
     'Only {count} closed cases in this range — shares may not be reliable',
   'reports.overview.chats.title': 'Chats',
   'reports.overview.chats.description':
-    'How fast the AI clears conversations and how long they run (PRD §7.3.3).',
+    'How fast the AI clears conversations and how long they run.',
   'reports.overview.kpi.automatedPerHour': 'Automated chats / hour',
   'reports.overview.kpi.automatedPerHourHint': 'AI resolutions per hour across the window',
   'reports.overview.kpi.totalDuration': 'Total chat duration',
@@ -202,7 +202,7 @@ export const reports: Messages = {
     'Could not load the AI Agent report. Check that the API is reachable and try again.',
   'reports.aiAgent.resolution.title': 'AI resolution',
   'reports.aiAgent.resolution.description':
-    'What the AI Agent handled without a human (ADR-09) — the same figure the invoice bills.',
+    'What the AI Agent handled without a human — the same figure the invoice bills.',
   'reports.aiAgent.kpi.resolutions': 'AI resolutions',
   'reports.aiAgent.kpi.resolutionRate': 'Resolution rate',
   'reports.aiAgent.deflection.title': 'Deflection',
@@ -219,7 +219,7 @@ export const reports: Messages = {
     'Could not load the Reviews report. Check that the API is reachable and try again.',
   'reports.reviews.csat.title': 'Satisfaction (CSAT)',
   'reports.reviews.csat.description':
-    'Rated good as a share of all ratings (PRD §7.8). Null, never 0%, when nobody rated.',
+    'Rated good as a share of all ratings. Null, never 0%, when nobody rated.',
   'reports.reviews.csat.emptyDescription':
     'Once customers rate their conversations, the good / bad split shows up here.',
   'reports.reviews.csat.good': 'Rated good',
@@ -243,7 +243,7 @@ export const reports: Messages = {
   // the figures, so an insight is as translated as the card above it.
   'reports.reviews.insights.title': 'Insights',
   'reports.reviews.insights.description':
-    'What these figures say, read off them by fixed rules rather than guessed (PRD §7.8).',
+    'What these figures say, read off them by fixed rules rather than guessed.',
   'reports.reviews.insights.emptyTitle': 'Nothing to report',
   'reports.reviews.insights.emptyDescription':
     'This period produced no statement this version of the console knows how to word.',
@@ -271,8 +271,7 @@ export const reports: Messages = {
     '{share} of this period’s negative ratings ({bad}) landed on {date}.',
 
   'reports.reviews.ecommerce.title': 'Ecommerce',
-  'reports.reviews.ecommerce.description':
-    'Sales attributed to supported conversations (PRD §7.8, tracked sales §13.5).',
+  'reports.reviews.ecommerce.description': 'Sales attributed to supported conversations.',
   'reports.reviews.ecommerce.emptyDescription':
     'Connect a sales source to attribute revenue to supported conversations.',
   'reports.reviews.ecommerce.cta': 'Configure sales platforms',
@@ -280,8 +279,7 @@ export const reports: Messages = {
   // Breakdown (FR-MOD-07.5)
   'reports.breakdown.error':
     'Could not load the breakdown. Check that the API is reachable and try again.',
-  'reports.breakdown.byDay.description':
-    'The resolution split (PRD §7.3.2) resolved over each UTC day in the window.',
+  'reports.breakdown.byDay.description': 'The resolution split for each UTC day in the window.',
   'reports.breakdown.byDay.emptyTitle': 'No conversations yet',
   'reports.breakdown.byDay.emptyDescription':
     'Once conversations happen in this window, their daily split shows up here.',
@@ -322,7 +320,7 @@ export const reports: Messages = {
   'reports.staffing.error':
     'Could not load the staffing forecast. Check that the API is reachable and try again.',
   'reports.staffing.description':
-    "Required vs scheduled agents per UTC weekday and hour, from observed volume and the presence log (PRD §5.3). Gaps are the shortfall to close; a cell with too little history shows '—', never a guessed number.",
+    "Required vs scheduled agents per UTC weekday and hour, from observed volume and the presence log. Gaps are the shortfall to close; a cell with too little history shows '—', never a guessed number.",
   'reports.staffing.emptyTitle': 'No staffing data in this window',
   'reports.staffing.emptyDescription':
     'Once conversations happen in this window, the required-vs-scheduled forecast shows up here.',
@@ -392,7 +390,7 @@ export const reports: Messages = {
   'reports.sales.description': 'Sales attributed to supported conversations.',
   'reports.sales.kpi.conversions': 'Conversions',
   'reports.sales.emptyDescription':
-    'Connect a sales source to attribute revenue to supported conversations, using the Sales tracker (FR-MOD-13.5).',
+    'Connect a sales source to attribute revenue to supported conversations, using the Sales tracker.',
 
   // Team performance (FR-MOD-07.7, v2)
   'reports.teamPerformance.error':

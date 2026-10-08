@@ -30,6 +30,18 @@ describe('widget locale catalogs', () => {
     });
   }
 
+  // A visitor reads these. Requirement, decision and task codes belong in code
+  // comments (tm 259.14); the panel's twin of this check is locale-copy.test.ts.
+  it('shows no internal requirement or decision codes in any catalog', () => {
+    const internalRef = /\b(?:N?FR-[A-Z0-9]|ADR-?\d|PRD\b|WORKSCHED|tm \d)|§\s*\d|\bNFR-[A-Z]/;
+    const hits = locales.flatMap((locale) =>
+      Object.entries(CATALOGS[locale])
+        .filter(([, value]) => internalRef.test(value))
+        .map(([key, value]) => `${locale}['${key}']: ${value}`),
+    );
+    expect(hits).toEqual([]);
+  });
+
   it('marks only Arabic as right-to-left', () => {
     expect([...RTL_LOCALES]).toEqual(['ar']);
   });

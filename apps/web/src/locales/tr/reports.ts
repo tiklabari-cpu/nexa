@@ -152,14 +152,14 @@ export const reports: Messages = {
   'reports.overview.kpi.achievedGoals': 'Ulaşılan hedefler',
   'reports.overview.resolution.title': 'Çözüm',
   'reports.overview.resolution.description':
-    'Kapanan sohbetlerin nasıl ele alındığı (PRD §7.3.2). Manuel, destekli ve otomatik, her kapanan vakanın toplamını oluşturur.',
+    'Kapanan sohbetlerin nasıl ele alındığı. Manuel, destekli ve otomatik, her kapanan vakanın toplamını oluşturur.',
   'reports.overview.resolution.lowConfidence.one':
     'Bu aralıkta yalnızca {count} kapanmış vaka var — paylar güvenilir olmayabilir',
   'reports.overview.resolution.lowConfidence.other':
     'Bu aralıkta yalnızca {count} kapanmış vaka var — paylar güvenilir olmayabilir',
   'reports.overview.chats.title': 'Sohbetler',
   'reports.overview.chats.description':
-    'AI’nın sohbetleri ne kadar hızlı sonuçlandırdığı ve ne kadar sürdükleri (PRD §7.3.3).',
+    'AI’nın sohbetleri ne kadar hızlı sonuçlandırdığı ve ne kadar sürdükleri.',
   'reports.overview.kpi.automatedPerHour': 'Saatte otomatik sohbet',
   'reports.overview.kpi.automatedPerHourHint': 'Aralık boyunca saat başına AI çözümü',
   'reports.overview.kpi.totalDuration': 'Toplam sohbet süresi',
@@ -191,7 +191,7 @@ export const reports: Messages = {
     'AI Ajanı raporu yüklenemedi. API’ye erişilebildiğinden emin olun ve yeniden deneyin.',
   'reports.aiAgent.resolution.title': 'AI çözümü',
   'reports.aiAgent.resolution.description':
-    'AI Ajanının insan olmadan çözdüğü (ADR-09) — faturada yer alan rakamla aynı.',
+    'AI Ajanının insan olmadan çözdüğü — faturada yer alan rakamla aynı.',
   'reports.aiAgent.kpi.resolutions': 'AI çözümleri',
   'reports.aiAgent.kpi.resolutionRate': 'Çözüm oranı',
   'reports.aiAgent.deflection.title': 'Yönlendirme',
@@ -208,7 +208,7 @@ export const reports: Messages = {
     'Değerlendirmeler raporu yüklenemedi. API’ye erişilebildiğinden emin olun ve yeniden deneyin.',
   'reports.reviews.csat.title': 'Memnuniyet (CSAT)',
   'reports.reviews.csat.description':
-    'Tüm değerlendirmelerin bir payı olarak olumlu oran (PRD §7.8). Kimse değerlendirmediyse boş, asla %0 değil.',
+    'Tüm değerlendirmelerin bir payı olarak olumlu oran. Kimse değerlendirmediyse boş, asla %0 değil.',
   'reports.reviews.csat.emptyDescription':
     'Müşteriler sohbetlerini değerlendirdiğinde olumlu/olumsuz dağılım burada görünür.',
   'reports.reviews.csat.good': 'Olumlu',
@@ -231,7 +231,7 @@ export const reports: Messages = {
   // İçgörüler (FR-MOD-07.8) — API kimlik + rakam gönderir, cümle burada kurulur.
   'reports.reviews.insights.title': 'İçgörüler',
   'reports.reviews.insights.description':
-    'Bu rakamların ne söylediği — tahmin edilmez, sabit kurallarla türetilir (PRD §7.8).',
+    'Bu rakamların ne söylediği — tahmin edilmez, sabit kurallarla türetilir.',
   'reports.reviews.insights.emptyTitle': 'Söylenecek bir şey yok',
   'reports.reviews.insights.emptyDescription':
     'Bu dönem, konsolun bu sürümünün ifade edebildiği bir sonuç üretmedi.',
@@ -259,8 +259,7 @@ export const reports: Messages = {
     'Bu dönemdeki olumsuz değerlendirmelerin ({bad}) {share} kadarı {date} gününde geldi.',
 
   'reports.reviews.ecommerce.title': 'E-ticaret',
-  'reports.reviews.ecommerce.description':
-    'Desteklenen sohbetlere atfedilen satışlar (PRD §7.8, izlenen satışlar §13.5).',
+  'reports.reviews.ecommerce.description': 'Desteklenen sohbetlere atfedilen satışlar.',
   'reports.reviews.ecommerce.emptyDescription':
     'Desteklenen sohbetlere gelir atfetmek için bir satış kaynağı bağlayın.',
   'reports.reviews.ecommerce.cta': 'Satış platformlarını yapılandır',
@@ -268,8 +267,7 @@ export const reports: Messages = {
   // Breakdown (FR-MOD-07.5)
   'reports.breakdown.error':
     'Dağılım yüklenemedi. API’ye erişilebildiğinden emin olun ve yeniden deneyin.',
-  'reports.breakdown.byDay.description':
-    'Aralıktaki her UTC günü için çözüm dağılımı (PRD §7.3.2).',
+  'reports.breakdown.byDay.description': 'Aralıktaki her UTC günü için çözüm dağılımı.',
   'reports.breakdown.byDay.emptyTitle': 'Henüz sohbet yok',
   'reports.breakdown.byDay.emptyDescription':
     'Bu aralıkta sohbetler gerçekleştiğinde günlük dağılımları burada görünür.',
@@ -309,7 +307,7 @@ export const reports: Messages = {
   'reports.staffing.error':
     'Personel tahmini yüklenemedi. API’ye erişilebildiğinden emin olun ve yeniden deneyin.',
   'reports.staffing.description':
-    "Gözlenen hacim ve varlık kaydından, her UTC hafta günü ve saati için gereken ile planlanan temsilci sayısı (PRD §5.3). Açıklar kapatılması gereken farktır; yeterli geçmişi olmayan bir hücre asla tahmini bir sayı değil, her zaman '—' gösterir.",
+    "Gözlenen hacim ve varlık kaydından, her UTC hafta günü ve saati için gereken ile planlanan temsilci sayısı. Açıklar kapatılması gereken farktır; yeterli geçmişi olmayan bir hücre asla tahmini bir sayı değil, her zaman '—' gösterir.",
   'reports.staffing.emptyTitle': 'Bu aralıkta personel verisi yok',
   'reports.staffing.emptyDescription':
     'Bu aralıkta sohbetler gerçekleştiğinde gereken-planlanan tahmini burada görünür.',
@@ -380,7 +378,7 @@ export const reports: Messages = {
   'reports.sales.description': 'Desteklenen sohbetlere atfedilen satışlar.',
   'reports.sales.kpi.conversions': 'Dönüşümler',
   'reports.sales.emptyDescription':
-    'Desteklenen sohbetlere gelir atfetmek için Satış izleyiciyi (FR-MOD-13.5) kullanarak bir satış kaynağı bağlayın.',
+    'Desteklenen sohbetlere gelir atfetmek için Satış izleyiciyi kullanarak bir satış kaynağı bağlayın.',
 
   // Team performance (FR-MOD-07.7, v2)
   'reports.teamPerformance.error':

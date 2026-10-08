@@ -1791,7 +1791,8 @@ describe('ReportsPage — Sales + Team performance tabs, permission-gated visibi
     await openSalesTab();
 
     expect(screen.getByText('Sales tracking not set up')).toBeInTheDocument();
-    expect(screen.getByText(/FR-MOD-13.5/)).toBeInTheDocument();
+    expect(screen.getByText(/using the Sales tracker/)).toBeInTheDocument();
+    expect(screen.queryByText(/FR-MOD-13.5/)).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });

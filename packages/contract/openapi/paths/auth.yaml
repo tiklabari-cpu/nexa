@@ -727,7 +727,9 @@ personalAccessTokens:
     description: |
       The plaintext token is in this response and nowhere else — only its hash
       is stored. A token cannot be granted scopes the creating session does not
-      already hold.
+      already hold (403, `error.details.reason: scopes_not_held`, `scopes` the
+      comma-separated ones it lacks); a request left with no valid scope is a 400
+      with `reason: scopes_required` (tm 261).
     requestBody:
       required: true
       content:

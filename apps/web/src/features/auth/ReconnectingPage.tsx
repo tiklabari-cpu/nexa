@@ -15,6 +15,7 @@
 import { useEffect, useRef, type ReactElement } from 'react';
 import { cn } from '../../components/ui/cn.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { usePageTitle } from '../../lib/document-title.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 const PROGRESS_KEYS = {
@@ -22,6 +23,13 @@ const PROGRESS_KEYS = {
   trying: 'auth.reconnecting.trying',
   paused: 'auth.reconnecting.paused',
 } as const;
+
+/** Names the tab "Reconnecting…" while a whole-page reconnect screen is up. */
+function ReconnectingTitle(): null {
+  const t = useTranslate();
+  usePageTitle(t('auth.reconnecting.title'));
+  return null;
+}
 
 export function ReconnectingPage({ overShell = false }: { overShell?: boolean }): ReactElement {
   const t = useTranslate();
@@ -44,6 +52,7 @@ export function ReconnectingPage({ overShell = false }: { overShell?: boolean })
         overShell ? 'fixed inset-0 z-50' : 'min-h-full',
       )}
     >
+      {!overShell && <ReconnectingTitle />}
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-xs">
         <h1 ref={heading} tabIndex={-1} className="text-lg font-semibold">
           {t('auth.reconnecting.title')}

@@ -142,8 +142,9 @@ describe('BulkImportForm', () => {
       new ApiClientError({
         type: 'validation',
         status: 400,
-        message: 'csv: too many rows.',
+        message: 'csv: Line 202, column 1: the file holds more than 200 rows.',
         requestId: 'req-1',
+        details: { reason: 'csv_too_many_rows', line: 202, column: 1, max_rows: 200 },
       }),
     );
     const user = userEvent.setup();
@@ -153,7 +154,9 @@ describe('BulkImportForm', () => {
     const input = screen.getByLabelText('CSV file');
     await user.upload(input, csvFile(VALID_CSV));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('csv: too many rows.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Line 202, column 1: the file holds more than 200 rows.',
+    );
     // The form is not locked: the file input stays enabled for another try.
     expect(screen.getByLabelText('CSV file')).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();

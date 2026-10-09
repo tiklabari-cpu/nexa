@@ -184,6 +184,7 @@ describe('DeveloperPortal', () => {
         status: 400,
         message: 'redirect_uri "javascript:alert(1)" is not acceptable: only https is allowed',
         requestId: 'req_test',
+        details: { reason: 'redirect_uri_scheme', uri: 'javascript:alert(1)' },
       }),
     );
     renderPortal();
@@ -193,11 +194,13 @@ describe('DeveloperPortal', () => {
     const dialog = screen.getByRole('dialog', { name: 'Register app' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Register' }));
 
+    // Worded by the console from the server's code (tm 261), not the server's prose.
     await waitFor(() =>
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
-        'redirect_uri "javascript:alert(1)" is not acceptable: only https is allowed',
+        'The redirect URI “javascript:alert(1)” must use https (http is allowed only on localhost, for development).',
       ),
     );
+    expect(within(dialog).getByRole('alert')).not.toHaveTextContent('is not acceptable');
     // The dialog stays open on failure — nothing was silently thrown away.
     expect(screen.getByRole('dialog', { name: 'Register app' })).toBeInTheDocument();
   });
@@ -271,6 +274,7 @@ describe('DeveloperPortal', () => {
           status: 400,
           message: 'redirect_uri "javascript:alert(1)" is not acceptable: only https is allowed',
           requestId: 'req_test',
+          details: { reason: 'redirect_uri_scheme', uri: 'javascript:alert(1)' },
         }),
       );
       renderPortal();
@@ -283,7 +287,7 @@ describe('DeveloperPortal', () => {
 
       await waitFor(() =>
         expect(within(dialog).getByRole('alert')).toHaveTextContent(
-          'redirect_uri "javascript:alert(1)" is not acceptable: only https is allowed',
+          'The redirect URI “javascript:alert(1)” must use https (http is allowed only on localhost, for development).',
         ),
       );
       expect(

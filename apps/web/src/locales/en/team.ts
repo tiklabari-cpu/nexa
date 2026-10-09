@@ -231,10 +231,14 @@ export const team: Messages = {
   'team.invite.error.generic': 'Could not send those invitations.',
   'team.invite.pending.caption': 'Invitations not yet accepted',
   'team.invite.pending.empty': 'No pending invitations.',
+  'team.invite.pending.loading': 'Loading invitations…',
+  'team.invite.pending.noAccess': "You don't have permission to see pending invitations.",
+  'team.invite.pending.loadError': 'Pending invitations could not be loaded.',
   'team.invite.pending.email': 'Email',
   'team.invite.pending.role': 'Role',
   'team.invite.pending.invitedBy': 'Invited by',
   'team.invite.pending.revoke': 'Revoke',
+  'team.invite.pending.revokeAriaLabel': 'Revoke invitation for {email}',
 
   // What an invitation costs, before it is sent (FR-MOD-04.4). Conditional
   // wording on purpose: the seat lands when somebody joins, not when they are
@@ -372,6 +376,7 @@ export const team: Messages = {
   'team.copilot.status.indexing': 'Indexing',
   'team.copilot.status.empty': 'No content',
   'team.copilot.deleteButton': 'Delete',
+  'team.copilot.deleteAriaLabel': 'Delete {name}',
   'team.copilot.add.title': 'Add a source',
   'team.copilot.add.error': 'Could not add that source. Check the name and content and try again.',
   'team.copilot.add.nameRequiredError': 'Enter a name.',

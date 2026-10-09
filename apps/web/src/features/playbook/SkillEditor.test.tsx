@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '../../lib/api-client.js';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { confirmLeave } from '../../lib/dirty-guard.js';
-import { renderWithLocale, resetLocale } from '../../test/i18n.js';
+import { renderWithLocale, resetLocale, setLocale } from '../../test/i18n.js';
 import type { Skill, SkillRun, SkillStep } from './types.js';
 
 const { api } = vi.hoisted(() => ({
@@ -528,7 +528,8 @@ describe('SkillEditor — preview (FR-MOD-06.2.5)', () => {
           transfer_to: null,
           summary: null,
           log: [],
-          errors: ['Step 1: transfer_to_team requires a group'],
+          errors: ['Step 1: transfer_to_team needs a team'],
+          error_details: [{ reason: 'transfer_to_team_needs_team', step: 1 }],
         });
       }
       return Promise.reject(new Error(`unexpected post ${path}`));
@@ -538,7 +539,68 @@ describe('SkillEditor — preview (FR-MOD-06.2.5)', () => {
     await user.click(screen.getByRole('button', { name: 'Run preview' }));
 
     expect(await screen.findByText('Would do nothing')).toBeInTheDocument();
-    expect(screen.getByText('Step 1: transfer_to_team requires a group')).toBeInTheDocument();
+    // Worded by the editor from the code (tm 261), not the server's English prose.
+    expect(
+      screen.getByText('Step 1: choose a team to hand the conversation over to.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/transfer_to_team/)).toBeNull();
+  });
+
+  it('words an engine-reported error in Turkish, never in the server’s English', async () => {
+    const user = userEvent.setup();
+    api.post.mockImplementation((path: string) => {
+      if (path === '/skills/preview') {
+        return Promise.resolve({
+          outcome: 'skipped',
+          reply: null,
+          tags: [],
+          transfer_to: null,
+          summary: null,
+          log: [],
+          errors: ['Step 2: unknown step type: dance'],
+          error_details: [{ reason: 'unknown_step_type', step: 2, type: 'dance' }],
+        });
+      }
+      return Promise.reject(new Error(`unexpected post ${path}`));
+    });
+
+    setLocale('tr');
+    try {
+      renderEditor(makeSkill(steps));
+      await user.click(screen.getByRole('button', { name: 'Önizlemeyi çalıştır' }));
+
+      expect(
+        await screen.findByText('2. adım: “dance” bilinen bir adım türü değil.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/unknown step type/)).toBeNull();
+    } finally {
+      resetLocale();
+    }
+  });
+
+  it('falls back to a general sentence for a code this build has no wording for', async () => {
+    const user = userEvent.setup();
+    api.post.mockImplementation((path: string) => {
+      if (path === '/skills/preview') {
+        return Promise.resolve({
+          outcome: 'skipped',
+          reply: null,
+          tags: [],
+          transfer_to: null,
+          summary: null,
+          log: [],
+          errors: ['Step 1: something invented next year'],
+          error_details: [{ reason: 'invented_next_year', step: 1 }],
+        });
+      }
+      return Promise.reject(new Error(`unexpected post ${path}`));
+    });
+
+    renderEditor(makeSkill(steps));
+    await user.click(screen.getByRole('button', { name: 'Run preview' }));
+
+    expect(await screen.findByText('The steps could not be run.')).toBeInTheDocument();
+    expect(screen.queryByText(/invented next year/)).toBeNull();
   });
 });
 

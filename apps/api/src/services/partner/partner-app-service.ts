@@ -117,43 +117,56 @@ const SAFE_SELECT = {
  * produce a stored value that looks right and never matches.
  */
 export function validateRedirectUri(raw: string): string {
-  const reject = (why: string): never => {
-    throw ApiError.validation(`redirect_uri ${JSON.stringify(raw)} is not acceptable: ${why}`);
+  // `reason` is what the console words in the viewer's language (tm 261); the
+  // sentence stays for API callers. `uri` is the value the sentence is about.
+  const reject = (reason: string, why: string, extra: Record<string, unknown> = {}): never => {
+    throw ApiError.validation(`redirect_uri ${JSON.stringify(raw)} is not acceptable: ${why}`, {
+      reason: `redirect_uri_${reason}`,
+      uri: raw,
+      ...extra,
+    });
   };
 
-  if (raw.length > MAX_REDIRECT_URI_LENGTH) return reject('longer than 2048 characters');
+  if (raw.length > MAX_REDIRECT_URI_LENGTH) {
+    return reject('too_long', 'longer than 2048 characters', { max: MAX_REDIRECT_URI_LENGTH });
+  }
 
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
     // Catches relative URIs (`/callback`) too — a redirect target must be absolute.
-    return reject('it is not an absolute URI');
+    return reject('not_absolute', 'it is not an absolute URI');
   }
 
   // A fragment is never sent to the server and cannot be matched, and a
   // registered `#` is how a fragment-injection trick gets a foothold.
   // Checked on the raw string because `new URL('…/cb#')` reports an empty hash.
-  if (raw.includes('#')) return reject('it contains a fragment');
+  if (raw.includes('#')) return reject('fragment', 'it contains a fragment');
   // Mirrors `OauthService.isRegisteredRedirect`, which refuses any candidate
   // containing `..` — a registered one could therefore never match.
-  if (raw.includes('..')) return reject('it contains a path traversal segment');
+  if (raw.includes('..')) return reject('path_traversal', 'it contains a path traversal segment');
   // Wildcards are not a feature: matching is exact, so a `*` would only ever be
   // a stored value that never matches — or an invitation to add prefix matching
   // later, which is how open redirects are born.
-  if (raw.includes('*')) return reject('wildcards are not supported; matching is exact');
+  if (raw.includes('*')) {
+    return reject('wildcard', 'wildcards are not supported; matching is exact');
+  }
   // `https://evil.test@good.test/cb` reads as `good.test` to a human and
   // resolves to `good.test` — but the credentials make phishing-grade URLs
   // trivial, and the SSRF guard refuses them on the webhook side for the same
   // reason.
-  if (url.username || url.password) return reject('it embeds credentials');
-  if (!url.hostname) return reject('it has no host');
+  if (url.username || url.password) return reject('credentials', 'it embeds credentials');
+  if (!url.hostname) return reject('no_host', 'it has no host');
 
   // https only, with the loopback exception the authorization endpoint already
   // makes so that local development works at all.
   const isLoopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
-    return reject('only https is allowed (http is permitted on localhost for development)');
+    return reject(
+      'scheme',
+      'only https is allowed (http is permitted on localhost for development)',
+    );
   }
 
   // The last rule is the one that prevents silent breakage rather than attack:
@@ -163,7 +176,9 @@ export function validateRedirectUri(raw: string): string {
   const canonical = url.toString();
   if (canonical !== raw) {
     return reject(
+      'not_canonical',
       `it is not in canonical form and would never match; register ${JSON.stringify(canonical)} instead`,
+      { canonical },
     );
   }
 
@@ -171,14 +186,23 @@ export function validateRedirectUri(raw: string): string {
 }
 
 export function validateRedirectUris(raw: string[]): string[] {
-  if (raw.length === 0) throw ApiError.validation('At least one redirect_uri is required.');
+  if (raw.length === 0) {
+    throw ApiError.validation('At least one redirect_uri is required.', {
+      reason: 'redirect_uris_required',
+    });
+  }
   if (raw.length > MAX_REDIRECT_URIS) {
-    throw ApiError.validation(`At most ${MAX_REDIRECT_URIS} redirect_uris are allowed.`);
+    throw ApiError.validation(`At most ${MAX_REDIRECT_URIS} redirect_uris are allowed.`, {
+      reason: 'redirect_uris_too_many',
+      max: MAX_REDIRECT_URIS,
+    });
   }
 
   const uris = raw.map(validateRedirectUri);
   if (new Set(uris).size !== uris.length) {
-    throw ApiError.validation('redirect_uris must not contain duplicates.');
+    throw ApiError.validation('redirect_uris must not contain duplicates.', {
+      reason: 'redirect_uris_duplicate',
+    });
   }
   return uris;
 }
@@ -200,6 +224,7 @@ export function narrowScopes(requested: string[], held: readonly string[]): stri
   if (escalating.length > 0) {
     throw ApiError.authorization(
       `Cannot grant scopes the current session does not hold: ${escalating.join(', ')}`,
+      { reason: 'scopes_not_held', scopes: escalating.join(', ') },
     );
   }
 
@@ -207,6 +232,7 @@ export function narrowScopes(requested: string[], held: readonly string[]): stri
   if (scopes.length === 0) {
     throw ApiError.validation(
       'At least one valid scope is required; a client with no scopes is unbounded, not restricted.',
+      { reason: 'scopes_required' },
     );
   }
   return [...new Set(scopes)];
@@ -325,6 +351,7 @@ export class PartnerAppService {
     if (existing.clientType !== 'confidential') {
       throw ApiError.validation(
         'A public client has no secret to rotate; it authenticates with PKCE alone.',
+        { reason: 'public_client_no_secret' },
       );
     }
 

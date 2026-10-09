@@ -25,7 +25,8 @@ import { SCOPES } from '@siyahtus/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
+import { reasonMessage } from '../../lib/reason-message.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, required, splitList, useForm, type Validator } from '../../lib/form.js';
@@ -379,15 +380,12 @@ function RegisterAppModal({
         onRegistered(registration);
       } catch (error) {
         // The server names exactly which redirect URI or scope was rejected and
-        // why (validation only) — the ADR-06 general validation sentence would
-        // lose that detail, so it is shown as-is (Composer.tsx/IpAllowlist.tsx
-        // precedent). Any other failure funnels through the catalogue as usual.
-        if (error instanceof ApiClientError && error.type === 'validation') {
-          // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
-          setSubmitError(error.message);
-          return;
-        }
-        setSubmitError(t(errorMessageKey(error)));
+        // why, as a stable `details.reason` plus the rejected value (tm 261): the
+        // console words it in its own language and the value fills the sentence.
+        // Any other failure funnels through the catalogue as usual.
+        setSubmitError(
+          reasonMessage(t, error, 'apps.developers.reason') ?? t(errorMessageKey(error)),
+        );
       }
     },
   });
@@ -561,12 +559,9 @@ function EditAppModal({ app, onClose }: { app: PartnerApp; onClose: () => void }
       } catch (error) {
         // Same reasoning as the register form: the server names exactly which
         // redirect URI was rejected and why.
-        if (error instanceof ApiClientError && error.type === 'validation') {
-          // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from (same as RegisterAppModal).
-          setSubmitError(error.message);
-          return;
-        }
-        setSubmitError(t(errorMessageKey(error)));
+        setSubmitError(
+          reasonMessage(t, error, 'apps.developers.reason') ?? t(errorMessageKey(error)),
+        );
       }
     },
   });

@@ -182,6 +182,10 @@ describe('workspace event → zap (FR-MOD-09.4)', () => {
 
     expect(response.statusCode).toBe(400);
     expect((response.json() as { error: { message: string } }).error.message).toContain('app_id');
+    // tm 261: the console words the refusal itself, with the card's name.
+    expect(
+      (response.json() as { error: { details: Record<string, unknown> } }).error.details,
+    ).toMatchObject({ reason: 'app_not_connected', app_name: expect.any(String) });
     // Nothing was stored, so nothing can fire later either.
     expect(await owner.webhook.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
   });
@@ -207,6 +211,9 @@ describe('workspace event → zap (FR-MOD-09.4)', () => {
       auth(),
     );
     expect(response.statusCode).toBe(400);
+    expect(
+      (response.json() as { error: { details: Record<string, unknown> } }).error.details,
+    ).toMatchObject({ reason: 'app_not_automation' });
     expect(await owner.webhook.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
   });
 

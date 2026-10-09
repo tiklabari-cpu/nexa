@@ -302,7 +302,7 @@ const SITES: Site[] = [
         ],
       },
     },
-    trigger: 'Remove',
+    trigger: 'Remove example.com',
     title: 'Remove example.com?',
     confirm: 'Remove',
     deletePath: '/settings/trusted-domains/td-1',

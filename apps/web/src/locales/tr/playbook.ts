@@ -345,6 +345,26 @@ export const playbook: Messages = {
   'playbook.editor.runPreview': 'Önizlemeyi çalıştır',
   'playbook.editor.running': 'Çalıştırılıyor…',
   'playbook.editor.previewError': 'Önizleme çalıştırılamadı.',
+  'playbook.editor.stepProblem.generic': 'Adımlar çalıştırılamadı.',
+  'playbook.editor.stepProblem.steps_not_array': 'Adımlar bir liste olmalıdır.',
+  'playbook.editor.stepProblem.step_not_object': '{step}. adım: bu adım geçerli değil.',
+  'playbook.editor.stepProblem.unknown_step_type':
+    '{step}. adım: “{type}” bilinen bir adım türü değil.',
+  'playbook.editor.stepProblem.detect_intent_needs_intent':
+    '{step}. adım: bu adımın eşleşeceği niyeti adlandırın.',
+  'playbook.editor.stepProblem.detect_intent_bad_phrases':
+    '{step}. adım: örnek ifadeler metin olmalıdır.',
+  'playbook.editor.stepProblem.request_info_needs_field':
+    '{step}. adım: toplanacak bilgiyi adlandırın.',
+  'playbook.editor.stepProblem.request_info_needs_prompt':
+    '{step}. adım: bunu istemek için sorulacak soruyu yazın.',
+  'playbook.editor.stepProblem.tag_needs_tag': '{step}. adım: uygulanacak etiketi adlandırın.',
+  'playbook.editor.stepProblem.send_message_bad_source':
+    '{step}. adım: sabit bir metin göndereceğinizi ya da bilgi tabanından yanıtlayacağınızı seçin.',
+  'playbook.editor.stepProblem.send_message_needs_text':
+    '{step}. adım: gönderilecek yanıtı yazın ya da bunun yerine bilgi tabanından yanıtlatın.',
+  'playbook.editor.stepProblem.transfer_to_team_needs_team':
+    '{step}. adım: sohbetin devredileceği bir takım seçin.',
   'playbook.editor.replyLabel': 'Müşteriye yanıt',
   'playbook.editor.summaryLabel': 'Sonraki temsilci için özet',
   'playbook.editor.handsOverTo': '{name} ekibine devrediliyor',
@@ -464,6 +484,19 @@ export const playbook: Messages = {
   'playbook.bulk.rejectEmptyFile': 'Bu dosya boş.',
   'playbook.bulk.rejectTooLarge': 'Bu dosya {size} MiB sınırının üzerinde.',
   'playbook.bulk.processError': 'O dosya işlenemedi.',
+  'playbook.bulk.reason.csv_file_too_large': 'Dosya {max_bytes} baytlık sınırı aşıyor.',
+  'playbook.bulk.reason.csv_too_many_rows':
+    '{line}. satır, {column}. sütun: dosya {max_rows} satırdan fazla içeriyor.',
+  'playbook.bulk.reason.csv_cell_too_long':
+    '{line}. satır, {column}. sütun: bu değer {max_cell_chars} karakterlik sınırdan uzun.',
+  'playbook.bulk.reason.csv_unclosed_quote':
+    '{line}. satır, {column}. sütun: tırnaklı bir değer burada açılıyor ama hiç kapanmıyor.',
+  'playbook.bulk.reason.csv_text_after_closing_quote':
+    '{line}. satır, {column}. sütun: tırnaklı bir değer burada bitiyor ama alan devam ediyor; değerin tamamını tırnak içine alın ya da iç tırnakları ikiletin.',
+  'playbook.bulk.reason.csv_header_missing': 'İlk satırda gerekli sütun(lar) eksik: {columns}.',
+  'playbook.bulk.reason.csv_too_many_website_rows':
+    'Bu dosyada {rows} web sitesi satırı var; tek bir içe aktarma en fazla {max} site tarayabilir.',
+  'playbook.bulk.reason.ai_agent_not_found': 'Bu AI ajanı yok.',
   'playbook.bulk.results.emptyTitle': 'Henüz gösterilecek bir şey yok',
   'playbook.bulk.results.emptyDescription':
     'Satırlarını burada görmek için en az bir veri satırı olan bir CSV dosyası seçin.',

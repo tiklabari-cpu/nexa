@@ -202,6 +202,59 @@ describe('partner apps (FR-MOD-09.4)', () => {
       expect((await register({ redirect_uris: [] })).statusCode).toBe(400);
     });
 
+    // tm 261: the sentence is English; the console words `details.reason` itself.
+    it('names why in details.reason, with the value the sentence is about', async () => {
+      const cases: Array<[string, string]> = [
+        ['http://evil.example.test/callback', 'redirect_uri_scheme'],
+        ['https://partner-a.example.test/*', 'redirect_uri_wildcard'],
+        ['https://partner-a.example.test/callback#token', 'redirect_uri_fragment'],
+        ['https://partner-a.example.test/a/../callback', 'redirect_uri_path_traversal'],
+        ['https://evil.example.test@partner-a.example.test/callback', 'redirect_uri_credentials'],
+        ['/callback', 'redirect_uri_not_absolute'],
+        ['https://partner-a.example.test:443/callback', 'redirect_uri_not_canonical'],
+      ];
+      for (const [uri, reason] of cases) {
+        const res = await register({ redirect_uris: [uri] });
+        expect(res.statusCode, uri).toBe(400);
+        const error = (res.json() as { error: { details: Record<string, unknown> } }).error;
+        expect(error.details['reason'], uri).toBe(reason);
+        expect(error.details['uri'], uri).toBe(uri);
+      }
+
+      const canonical = await register({
+        redirect_uris: ['https://partner-a.example.test:443/cb'],
+      });
+      expect(
+        (canonical.json() as { error: { details: Record<string, unknown> } }).error.details[
+          'canonical'
+        ],
+      ).toBe('https://partner-a.example.test/cb');
+
+      const listReasons: Array<[string[], string]> = [
+        [[CALLBACK, CALLBACK], 'redirect_uris_duplicate'],
+        [[], 'redirect_uris_required'],
+        [
+          Array.from({ length: 11 }, (_, i) => `https://partner-a.example.test/cb-${i}`),
+          'redirect_uris_too_many',
+        ],
+      ];
+      for (const [uris, reason] of listReasons) {
+        const res = await register({ redirect_uris: uris });
+        const details = (res.json() as { error: { details: Record<string, unknown> } }).error
+          .details;
+        expect(details['reason']).toBe(reason);
+      }
+      const tooMany = await register({
+        redirect_uris: Array.from(
+          { length: 11 },
+          (_, i) => `https://partner-a.example.test/cb-${i}`,
+        ),
+      });
+      expect(
+        (tooMany.json() as { error: { details: Record<string, unknown> } }).error.details['max'],
+      ).toBe(10);
+    });
+
     it('accepts http on localhost, the development exception the OAuth flow already makes', async () => {
       const app = await registered({
         redirect_uris: ['http://localhost:5173/auth/callback', 'http://127.0.0.1:5173/cb'],
@@ -220,6 +273,11 @@ describe('partner apps (FR-MOD-09.4)', () => {
       const res = await register({ scopes: ['chats--all:rw'] }, narrowToken);
       expect(res.statusCode).toBe(403);
       expect(res.json().error.message).toContain('chats--all:rw');
+      // tm 261: the console words the refusal itself, from the code and the list.
+      expect(res.json().error.details).toEqual({
+        reason: 'scopes_not_held',
+        scopes: 'chats--all:rw',
+      });
     });
 
     it('refuses an unknown scope string', async () => {
@@ -229,7 +287,9 @@ describe('partner apps (FR-MOD-09.4)', () => {
     it('refuses an empty scope list — an unscoped client is unbounded, not restricted', async () => {
       // `POST /auth/authorize` reads an empty `client.scopes` as "no ceiling",
       // so this is the opposite of what an empty list looks like it means.
-      expect((await register({ scopes: [] })).statusCode).toBe(400);
+      const res = await register({ scopes: [] });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.details).toEqual({ reason: 'scopes_required' });
     });
 
     it('allows a scope the session holds only by implication (`:rw` covers `:ro`)', async () => {

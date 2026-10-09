@@ -108,14 +108,19 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 async function requireConnectedAutomation(tx: TenantClient, appId: string): Promise<string> {
   const entry = findApp(appId);
   if (!entry || !isAutomationApp(entry)) {
-    throw ApiError.validation('app_id: only an automation app (Zapier, Make) can own a webhook.');
+    throw ApiError.validation('app_id: only an automation app (Zapier, Make) can own a webhook.', {
+      reason: 'app_not_automation',
+    });
   }
   const installed = await tx.appInstallation.findFirst({
     where: { appId: entry.id },
     select: { appId: true },
   });
   if (!installed) {
-    throw ApiError.validation(`app_id: connect ${entry.name} in the app marketplace first.`);
+    throw ApiError.validation(`app_id: connect ${entry.name} in the app marketplace first.`, {
+      reason: 'app_not_connected',
+      app_name: entry.name,
+    });
   }
   return entry.id;
 }

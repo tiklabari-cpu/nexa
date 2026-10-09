@@ -110,6 +110,7 @@ describe('bulk knowledge import', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json().error.type).toBe('validation');
+    expect(response.json().error.details.reason).toBe('ai_agent_not_found');
     expect(await sourceCount('a')).toBe(0);
     expect(await sourceCount('b')).toBe(0);
   });
@@ -155,6 +156,11 @@ describe('bulk knowledge import', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().error.type).toBe('validation');
     expect(response.json().error.message).toMatch(/more than 200 rows/);
+    // tm 261: the console words the refusal itself, from the code and the limits.
+    expect(response.json().error.details).toMatchObject({
+      reason: 'csv_too_many_rows',
+      max_rows: 200,
+    });
     expect(await sourceCount('a')).toBe(0);
   });
 
@@ -168,6 +174,10 @@ describe('bulk knowledge import', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().error.type).toBe('validation');
     expect(response.json().error.message).toMatch(/100000-character limit/);
+    expect(response.json().error.details).toMatchObject({
+      reason: 'csv_cell_too_long',
+      max_cell_chars: 100_000,
+    });
     expect(await sourceCount('a')).toBe(0);
   });
 
@@ -185,6 +195,10 @@ describe('bulk knowledge import', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().error.type).toBe('validation');
     expect(response.json().error.message).toMatch(/5242880-byte limit/);
+    expect(response.json().error.details).toMatchObject({
+      reason: 'csv_file_too_large',
+      max_bytes: 5_242_880,
+    });
     expect(await sourceCount('a')).toBe(0);
   });
 
@@ -201,6 +215,10 @@ describe('bulk knowledge import', () => {
     expect(response.json().error.type).toBe('validation');
     expect(response.json().error.message).toMatch(/type/);
     expect(response.json().error.message).toMatch(/source_url/);
+    expect(response.json().error.details).toEqual({
+      reason: 'csv_header_missing',
+      columns: 'type, source_url',
+    });
     expect(await sourceCount('a')).toBe(0);
   });
 
@@ -213,6 +231,7 @@ describe('bulk knowledge import', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json().error.type).toBe('validation');
+    expect(response.json().error.details).toMatchObject({ reason: 'csv_unclosed_quote', line: 2 });
     expect(await sourceCount('a')).toBe(0);
   });
 

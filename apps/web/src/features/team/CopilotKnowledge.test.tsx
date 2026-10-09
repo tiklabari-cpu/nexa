@@ -65,7 +65,7 @@ describe('CopilotKnowledge', () => {
 
     expect(await screen.findByText('Refund policy')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Add a source' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Refund policy' })).toBeInTheDocument();
   });
 
   it('keeps Add disabled until a name and content are given, then posts them', async () => {
@@ -95,7 +95,7 @@ describe('CopilotKnowledge', () => {
     renderKnowledge(<CopilotKnowledge />);
     await screen.findByText('Refund policy');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Refund policy' }));
     expect(api.delete).not.toHaveBeenCalled();
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'Delete “Refund policy”?' })).getByRole('button', {
@@ -111,7 +111,7 @@ describe('CopilotKnowledge', () => {
 
     expect(await screen.findByText('Refund policy')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Add a source' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
   });
 
   it('tells a caller with no bot scope, and fetches nothing', () => {
@@ -175,7 +175,7 @@ describe('CopilotKnowledge', () => {
     expect(await screen.findByText('Refund policy')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Copilot bilgisi' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Kaynak ekle' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sil' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refund policy kaynağını sil' })).toBeInTheDocument();
     expect(screen.getByLabelText('İçerik')).toBeInTheDocument();
   });
 });

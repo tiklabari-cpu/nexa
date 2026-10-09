@@ -1017,10 +1017,15 @@ export default async function authRoutes(
       if (escalating.length > 0) {
         throw ApiError.authorization(
           `Cannot grant scopes the current session does not hold: ${escalating.join(', ')}`,
+          { reason: 'scopes_not_held', scopes: escalating.join(', ') },
         );
       }
       const scopes = requested.filter(isScope);
-      if (scopes.length === 0) throw ApiError.validation('At least one valid scope is required.');
+      if (scopes.length === 0) {
+        throw ApiError.validation('At least one valid scope is required.', {
+          reason: 'scopes_required',
+        });
+      }
 
       const issued = await app.tokens.issue({
         licenseId: principal.licenseId,

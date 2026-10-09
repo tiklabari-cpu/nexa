@@ -69,8 +69,11 @@ export class ApiError extends Error {
     });
   }
 
-  static authorization(message = 'Insufficient permissions for this operation.'): ApiError {
-    return new ApiError('authorization', message);
+  static authorization(
+    message = 'Insufficient permissions for this operation.',
+    details?: Record<string, unknown>,
+  ): ApiError {
+    return new ApiError('authorization', message, details ? { details } : {});
   }
 
   /**

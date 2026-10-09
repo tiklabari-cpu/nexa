@@ -311,7 +311,7 @@ describe('AppsMarketplace', () => {
     renderComponent(<AppsMarketplace />);
     await screen.findByText('HubSpot');
 
-    const categoryGroup = screen.getByRole('group', { name: 'Filter by category' });
+    const categoryGroup = screen.getByRole('group', { name: 'Category' });
     const allChip = within(categoryGroup).getByRole('button', { name: 'All' });
     const crmChip = within(categoryGroup).getByRole('button', { name: 'CRM' });
     expect(allChip).toHaveAttribute('aria-pressed', 'true');
@@ -327,20 +327,19 @@ describe('AppsMarketplace', () => {
     });
   });
 
+  // tm 261 (WCAG 2.5.3, Label in Name): the visible row label used to be
+  // aria-hidden while the group spoke a longer phrase, so the name someone read
+  // on screen was not the name a voice user could say. One label, both ways.
   it('names each chip row on screen, so four rows starting with "All" are told apart (UX audit D20)', async () => {
     api.get.mockResolvedValue({ items: [notConnected], total: 1 });
     renderComponent(<AppsMarketplace />);
     await screen.findByText('HubSpot');
 
-    const rows: Array<[string, string]> = [
-      ['Filter by category', 'Category'],
-      ['Filter by collection', 'Collection'],
-      ['Filter by pricing', 'Pricing'],
-      ['Filter by placement', 'Placement'],
-    ];
-    for (const [group, visible] of rows) {
-      const label = screen.getByRole('group', { name: group }).previousElementSibling;
-      expect(label, group).toHaveTextContent(visible);
+    for (const visible of ['Category', 'Collection', 'Pricing', 'Placement']) {
+      const label = screen.getByText(visible, { selector: 'span' });
+      expect(label, visible).not.toHaveAttribute('aria-hidden');
+      const group = screen.getByRole('group', { name: visible });
+      expect(group, visible).toHaveAttribute('aria-labelledby', label.id);
     }
   });
 
@@ -351,13 +350,13 @@ describe('AppsMarketplace', () => {
     renderComponent(<AppsMarketplace />);
     await screen.findByText('HubSpot');
 
-    const collectionGroup = screen.getByRole('group', { name: 'Filter by collection' });
+    const collectionGroup = screen.getByRole('group', { name: 'Collection' });
     await user.click(within(collectionGroup).getByRole('button', { name: 'Staff Picks' }));
     await waitFor(() => {
       expect(api.get.mock.calls.at(-1)?.[0] as string).toContain('collection=staff_picks');
     });
 
-    const pricingGroup = screen.getByRole('group', { name: 'Filter by pricing' });
+    const pricingGroup = screen.getByRole('group', { name: 'Pricing' });
     await user.click(within(pricingGroup).getByRole('button', { name: 'Free' }));
     await waitFor(() => {
       const lastUrl = api.get.mock.calls.at(-1)?.[0] as string;
@@ -366,7 +365,7 @@ describe('AppsMarketplace', () => {
       expect(lastUrl).toContain('pricing=free');
     });
 
-    const placementGroup = screen.getByRole('group', { name: 'Filter by placement' });
+    const placementGroup = screen.getByRole('group', { name: 'Placement' });
     await user.click(within(placementGroup).getByRole('button', { name: 'Fullscreen' }));
     await waitFor(() => {
       const lastUrl = api.get.mock.calls.at(-1)?.[0] as string;

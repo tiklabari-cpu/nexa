@@ -152,6 +152,7 @@ export const settings: Messages = {
   'settings.trustedDomains.description':
     'The allowlist the widget checks. Adding a website above fills this in for you; edit it here only for finer control, such as covering subdomains.',
   'settings.trustedDomains.removeConfirmTitle': 'Remove {domain}?',
+  'settings.trustedDomains.removeAriaLabel': 'Remove {domain}',
   'settings.trustedDomains.removeConfirmDescription':
     'The widget no longer treats this domain as trusted. This cannot be undone.',
   'settings.trustedDomains.loadError': 'Could not load trusted domains.',
@@ -1051,6 +1052,10 @@ export const settings: Messages = {
   'settings.pat.form.nameLabel': 'Token name',
   'settings.pat.form.namePlaceholder': 'Nightly reporting job',
   'settings.pat.form.nameError': 'Name this token, so you know what you are revoking later.',
+  'settings.pat.form.nameInvalid': 'Use a name of up to 120 characters.',
+  'settings.pat.reason.scopes_required': 'Select at least one scope.',
+  'settings.pat.reason.scopes_not_held':
+    'You cannot grant scopes your own session does not hold: {scopes}.',
   'settings.pat.form.expiryLabel': 'Expires after',
   'settings.pat.form.days': '{days} days',
   'settings.pat.form.scopesLabel': 'Scopes',

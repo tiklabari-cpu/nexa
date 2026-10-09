@@ -68,9 +68,11 @@
  */
 import {
   matchIntent,
+  stepProblemDetails,
   validateSteps,
   type SendMessageStep,
   type SkillStep,
+  type StepProblemDetails,
 } from '@siyahtus/ai-mock';
 import {
   ANSWER_BUDGETS,
@@ -303,12 +305,14 @@ export class SkillEngine {
     db: TenantRunner,
     tenant: TenantContext,
     input: { steps: unknown; message: string; aiAgentId?: string | null },
-  ): Promise<SkillRunResult & { errors: string[] }> {
+  ): Promise<SkillRunResult & { errors: string[]; error_details: StepProblemDetails[] }> {
     const parsed = validateSteps(input.steps);
     if (!parsed.ok) {
       return {
         ...NOTHING_RAN,
         errors: [parsed.index >= 0 ? `Step ${parsed.index + 1}: ${parsed.reason}` : parsed.reason],
+        // The same refusal as a code, for a console that words it in its own language.
+        error_details: [stepProblemDetails(parsed)],
       };
     }
 
@@ -318,6 +322,7 @@ export class SkillEngine {
         ...NOTHING_RAN,
         log: gate.log,
         errors: [],
+        error_details: [],
       };
     }
 
@@ -338,7 +343,7 @@ export class SkillEngine {
     const identity = { id: 'preview', name: 'Preview', aiAgentId: input.aiAgentId ?? null };
 
     if (language.unsupported) {
-      return { ...declined(identity, gate.log, language.detected), errors: [] };
+      return { ...declined(identity, gate.log, language.detected), errors: [], error_details: [] };
     }
 
     const result = await this.#execute(db, tenant, {
@@ -354,7 +359,7 @@ export class SkillEngine {
     // say is unknown, and the author is told why instead (429, tm 257.8).
     if (result.capped) throw result.capped;
 
-    return { ...result, errors: [] };
+    return { ...result, errors: [], error_details: [] };
   }
 
   /** `detect_intent` steps gate the whole skill; all of them must match. */

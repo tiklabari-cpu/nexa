@@ -44,6 +44,10 @@ webhooks:
       link-local target is rejected at registration (SSRF, NFR-S7), and checked
       again at delivery in case DNS changes underneath it.
 
+      A refused `url` carries `error.details.reason` (tm 261): `url_invalid`,
+      `url_scheme`, `url_credentials` or `url_private_host`. A refused `app_id`
+      carries `app_not_automation` or `app_not_connected` (with `app_name`).
+
       The response carries the signing `secret` **once**. Store it: every
       delivery is signed `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")` in
       the `X-Webhook-Signature` header, and there is no way to retrieve the

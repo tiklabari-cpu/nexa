@@ -65,6 +65,8 @@ function stubApi(reads: (path: string) => unknown): void {
         if (key !== undefined) return response(refused[key]!);
         return response({ status: 204 });
       }
+      const denied = Object.keys(refused).find((candidate) => `GET ${path}`.includes(candidate));
+      if (denied !== undefined) return response(refused[denied]!);
       return response({ body: reads(path) ?? { items: [] } });
     }),
   );
@@ -354,12 +356,52 @@ describe('revoking an invitation', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
+  // tm 261 (UX audit D9, rest): a card that is still loading, or that the
+  // caller may not read, used to render nothing at all under its heading.
+  it('says it is loading while the list is on its way', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    );
+    renderIn(<PendingInvitations />);
+
+    expect(screen.getByText('Loading invitations…')).toBeInTheDocument();
+  });
+
+  it('says why the list is missing when the caller may not read it (403)', async () => {
+    refused = {
+      'GET /invitations': {
+        status: 403,
+        body: { error: { type: 'forbidden', message: 'x', request_id: '-' } },
+      },
+    };
+    stubApi(() => undefined);
+    renderIn(<PendingInvitations />);
+
+    expect(
+      await screen.findByText("You don't have permission to see pending invitations."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No pending invitations.')).not.toBeInTheDocument();
+  });
+
+  it('says the list could not be loaded when the read fails otherwise', async () => {
+    refused = { 'GET /invitations': SERVER_ERROR };
+    stubApi(() => undefined);
+    renderIn(<PendingInvitations />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Pending invitations could not be loaded.',
+    );
+  });
+
   it('asks first, and the confirmed click revokes once', async () => {
     stubApi((path) => (path.startsWith('/invitations') ? INVITES : undefined));
     const user = userEvent.setup();
     renderIn(<PendingInvitations />);
 
-    await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Revoke invitation for new@acme.localhost' }),
+    );
 
     const dialog = screen.getByRole('dialog', {
       name: 'Revoke the invitation to new@acme.localhost?',
@@ -376,7 +418,9 @@ describe('revoking an invitation', () => {
     const user = userEvent.setup();
     renderIn(<PendingInvitations />);
 
-    await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Revoke invitation for new@acme.localhost' }),
+    );
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revoke' }));
 
     const alert = await screen.findByRole('alert');
@@ -470,7 +514,7 @@ describe('deleting a rule bot, a rule, or a Copilot source', () => {
     const user = userEvent.setup();
     renderIn(<CopilotKnowledge />);
 
-    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete Refund policy' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Delete “Refund policy”?' });
     expect(writes).toEqual([]);
@@ -534,7 +578,7 @@ describe('deleting a rule bot, a rule, or a Copilot source', () => {
     const user = userEvent.setup();
     renderIn(<CopilotKnowledge />);
 
-    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete Refund policy' }));
     const dialog = screen.getByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 

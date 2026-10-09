@@ -39,32 +39,47 @@ import { ApiError } from './api-error.js';
 /**
  * Validate and return a URL safe for the server to fetch, or throw a validation
  * error naming why. Returns the parsed `URL` so the caller does not re-parse.
+ *
+ * The sentence is English for API callers; `details.reason` (`url_invalid`,
+ * `url_scheme`, `url_credentials`, `url_private_host`) is what the console words
+ * in its own language (tm 261).
  */
 export function assertPublicHttpUrl(raw: string): URL {
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    throw ApiError.validation('Enter a valid URL, like https://example.com/help.');
+    throw ApiError.validation('Enter a valid URL, like https://example.com/help.', {
+      reason: 'url_invalid',
+    });
   }
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw ApiError.validation('Only http and https URLs can be fetched.');
+    throw ApiError.validation('Only http and https URLs can be fetched.', {
+      reason: 'url_scheme',
+    });
   }
 
   // Credentials in the URL would be replayed by the server against an internal
   // service that trusts them — refuse rather than strip, so nothing silently
   // authenticates as someone else.
   if (url.username || url.password) {
-    throw ApiError.validation('Remove the username and password from the URL.');
+    throw ApiError.validation('Remove the username and password from the URL.', {
+      reason: 'url_credentials',
+    });
   }
 
   const host = normaliseHost(url.hostname);
-  if (!host) throw ApiError.validation('Enter a valid URL, like https://example.com/help.');
+  if (!host) {
+    throw ApiError.validation('Enter a valid URL, like https://example.com/help.', {
+      reason: 'url_invalid',
+    });
+  }
 
   if (isBlockedHost(host)) {
     throw ApiError.validation(
       'That address points at a private or internal host and cannot be fetched.',
+      { reason: 'url_private_host' },
     );
   }
 

@@ -15,6 +15,11 @@
  *   and every dismissal is ignored — a second click cannot send a second
  *   request, and the dialog does not vanish before the answer is in.
  *
+ * - focus never leaves the dialog (tm 261, WCAG 2.4.3): the button that was
+ *   clicked goes disabled with the request, and a browser sends focus from a
+ *   disabled element to `<body>`, behind the backdrop. While the action runs
+ *   focus rests on the dialog's body; a refusal hands it to the live danger
+ *   button the alert is about.
  * - a refused action (tm 259.9) stays in the dialog: when the request names a
  *   `failureTitle`, a rejection keeps the dialog open with `role="alert"` —
  *   that title plus the error's own sentence — and the danger button live
@@ -26,7 +31,7 @@
  * `{dialog}` in the JSX, and `confirm({...})` where the click handler used to
  * mutate. Eleven settings screens share that single pattern.
  */
-import { useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Modal } from './Modal.js';
@@ -55,6 +60,21 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps): ReactElement {
   const t = useTranslate();
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const wasPending = useRef(false);
+
+  useEffect(() => {
+    if (pending) {
+      // The clicked button is about to be disabled: take focus before the
+      // browser drops it on <body>.
+      bodyRef.current?.focus();
+    } else if (wasPending.current && failure) {
+      confirmRef.current?.focus();
+    }
+    wasPending.current = pending;
+  }, [pending, failure]);
+
   return (
     <Modal
       // Escape and the backdrop route here; both are ignored mid-request.
@@ -67,7 +87,7 @@ export function ConfirmDialog({
           {failure}
         </p>
       )}
-      <div className="flex justify-end gap-2">
+      <div ref={bodyRef} tabIndex={-1} className="flex justify-end gap-2 outline-none">
         <button
           type="button"
           // Default focus is the safe choice (Modal keeps focus the content claimed).
@@ -79,6 +99,7 @@ export function ConfirmDialog({
           {t('ui.confirm.cancel')}
         </button>
         <button
+          ref={confirmRef}
           type="button"
           disabled={pending}
           onClick={onConfirm}

@@ -37,6 +37,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
+import { reasonMessage } from '../../lib/reason-message.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
@@ -284,15 +285,18 @@ function SubscribeForm({
         reset();
         onSubscribed(registration);
       } catch (error) {
-        // The server's SSRF and shape checks (`assertPublicHttpUrl`) are both
-        // reported as a validation error naming the URL — pin it under the
-        // field the person was looking at rather than a generic banner. The
-        // two `app_id` refusals (not an automation card / not connected) are
-        // the exception, and the server prefixes them, so the client can tell
-        // them apart without re-deriving the rule it is not the authority on.
-        if (error instanceof ApiClientError && error.type === 'validation') {
-          // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
-          setFieldError(error.message.startsWith('app_id:') ? 'app_id' : 'url', error.message);
+        // The server's SSRF and shape checks (`assertPublicHttpUrl`) are reported
+        // as a validation error with a stable `details.reason` (tm 261) — pin
+        // its wording under the field the person was looking at rather than a
+        // generic banner. The two `app_id` refusals (not an automation card / not
+        // connected) are the exception: their reasons start with `app_`, so the
+        // client can tell them apart without re-deriving the rule it is not the
+        // authority on.
+        const wording = reasonMessage(t, error, 'apps.developers.webhooks.reason');
+        if (wording !== null) {
+          const reason = error instanceof ApiClientError ? error.details?.['reason'] : undefined;
+          const field = typeof reason === 'string' && reason.startsWith('app_') ? 'app_id' : 'url';
+          setFieldError(field, wording);
           return;
         }
         setSubmitError(t(errorMessageKey(error)));

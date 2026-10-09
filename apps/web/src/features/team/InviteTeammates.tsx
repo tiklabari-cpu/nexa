@@ -397,12 +397,23 @@ export function PendingInvitations(): ReactElement | null {
   const { confirm, dialog } = useConfirm();
   const items = invitations.data?.items ?? [];
 
-  // A loaded, empty list says so: the section's heading with a blank card under
-  // it read as a failed load (UX audit D9). A pending or refused read stays blank.
+  // Every state of the read says something: the section's heading with a blank
+  // card under it read as a failed load (UX audit D9) — empty, still loading,
+  // not allowed to read it, and failed are four different sentences.
   if (items.length === 0) {
-    return invitations.isSuccess ? (
-      <p className="p-4 text-sm text-content-secondary">{t('team.invite.pending.empty')}</p>
-    ) : null;
+    if (invitations.isPending) {
+      return (
+        <p className="p-4 text-sm text-content-secondary">{t('team.invite.pending.loading')}</p>
+      );
+    }
+    if (invitations.isError) {
+      return invitations.error instanceof ApiClientError && invitations.error.status === 403 ? (
+        <p className="p-4 text-sm text-content-secondary">{t('team.invite.pending.noAccess')}</p>
+      ) : (
+        <ErrorNotice message={t('team.invite.pending.loadError')} />
+      );
+    }
+    return <p className="p-4 text-sm text-content-secondary">{t('team.invite.pending.empty')}</p>;
   }
 
   // A refused revoke leaves the invitation live, so it says so where the row is.
@@ -459,6 +470,8 @@ export function PendingInvitations(): ReactElement | null {
                     })
                   }
                   disabled={revoke.isPending}
+                  // Every row says "Revoke"; the address tells them apart (WCAG 2.4.6).
+                  aria-label={t('team.invite.pending.revokeAriaLabel', { email: invite.email })}
                   className="text-xs text-danger underline"
                 >
                   {t('team.invite.pending.revoke')}

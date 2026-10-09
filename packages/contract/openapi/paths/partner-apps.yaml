@@ -73,6 +73,17 @@ partnerApps:
 
       `scopes` is required and bounded by the caller: requesting a scope the
       registering session does not itself hold is a 403.
+
+      **Refusals carry a code (tm 261).** The sentence in `error.message` is
+      English; `error.details.reason` is the stable code a console words in its
+      own language: `redirect_uri_too_long`, `redirect_uri_not_absolute`,
+      `redirect_uri_fragment`, `redirect_uri_path_traversal`,
+      `redirect_uri_wildcard`, `redirect_uri_credentials`, `redirect_uri_no_host`,
+      `redirect_uri_scheme`, `redirect_uri_not_canonical` (each with the rejected
+      `uri`; `canonical` and `max` where the sentence names them),
+      `redirect_uris_required`, `redirect_uris_too_many` (`max`),
+      `redirect_uris_duplicate`, `scopes_required`, and — on the 403 —
+      `scopes_not_held` (`scopes`, the comma-separated ones the session lacks).
     requestBody:
       required: true
       content:
@@ -131,6 +142,9 @@ partnerApp:
 
       The workspace's own sign-in client cannot be edited here (400) — it is
       first-party infrastructure, not a partner app.
+
+      Validation refusals carry the same `error.details.reason` codes as
+      registration.
     requestBody:
       required: true
       content:

@@ -211,6 +211,7 @@ test.describe('two tabs, one refresh token (tm 259.1)', () => {
     });
 
     await expect(agentPage.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await expect(agentPage).toHaveTitle('Sign in · SiyahTuş');
     await expect(
       agentPage.getByRole('status').filter({ hasText: 'Your session has ended.' }),
     ).toHaveText('Your session has ended. Sign in again to continue.');
@@ -285,6 +286,8 @@ test.describe('a passing failure keeps the session (tm 259.2)', () => {
     await agentPage.reload();
 
     await expect(agentPage.getByRole('heading', { name: 'Reconnecting…' })).toBeVisible();
+    // The tab names the wait (tm 261): a row of tabs should not all read "SiyahTuş".
+    await expect(agentPage).toHaveTitle('Reconnecting… · SiyahTuş');
     await expect(agentPage.getByRole('status')).toHaveText(
       'The server cannot be reached right now. You are still signed in, and we keep trying.',
     );

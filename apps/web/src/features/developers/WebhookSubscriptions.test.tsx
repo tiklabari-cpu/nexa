@@ -178,6 +178,7 @@ describe('WebhookSubscriptions', () => {
         status: 400,
         message: 'That address points at a private or internal host and cannot be fetched.',
         requestId: 'req_test',
+        details: { reason: 'url_private_host' },
       }),
     );
     renderComponent('webhooks');
@@ -187,9 +188,7 @@ describe('WebhookSubscriptions', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(
-          'That address points at a private or internal host and cannot be fetched.',
-        ),
+        screen.getByText('That address points at a private or internal host and cannot be called.'),
       ).toBeInTheDocument(),
     );
     // The URL input carries the error — this is a field-under error, not a banner.
@@ -337,6 +336,7 @@ describe('WebhookSubscriptions — automation card (FR-MOD-09.4)', () => {
         status: 400,
         message: 'app_id: connect Zapier in the app marketplace first.',
         requestId: 'req_test',
+        details: { reason: 'app_not_connected', app_name: 'Zapier' },
       }),
     );
     renderComponent('webhooks');
@@ -346,9 +346,7 @@ describe('WebhookSubscriptions — automation card (FR-MOD-09.4)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
 
     await waitFor(() =>
-      expect(
-        screen.getByText('app_id: connect Zapier in the app marketplace first.'),
-      ).toBeInTheDocument(),
+      expect(screen.getByText('Connect Zapier in the app marketplace first.')).toBeInTheDocument(),
     );
     // Regex, not an exact match: the rendered `FieldError` sits inside the same
     // `<label>`, so its text joins the field's accessible name.

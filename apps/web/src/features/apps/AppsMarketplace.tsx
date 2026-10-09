@@ -37,6 +37,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -191,27 +192,22 @@ function useGridColumns(): { containerRef: RefObject<HTMLDivElement>; columns: n
 
 /**
  * One row of filter chips with a name you can see (UX audit D20). Four rows of
- * chips each starting with "All" gave no hint which dimension a chip filtered;
- * the group keeps its spoken name, and the visible one is the shorter noun.
+ * chips each starting with "All" gave no hint which dimension a chip filtered.
+ * The visible noun is also the group's accessible name (`aria-labelledby`,
+ * WCAG 2.5.3): what is read on screen is what a screen-reader or voice user
+ * hears and can say, not a second, longer phrase.
  */
-function FilterRow({
-  label,
-  groupLabel,
-  children,
-}: {
-  label: string;
-  groupLabel: string;
-  children: ReactNode;
-}): ReactElement {
+function FilterRow({ label, children }: { label: string; children: ReactNode }): ReactElement {
+  const labelId = useId();
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span
-        aria-hidden="true"
+        id={labelId}
         className="w-24 shrink-0 text-2xs font-medium uppercase tracking-wide text-content-tertiary"
       >
         {label}
       </span>
-      <div role="group" aria-label={groupLabel} className="flex flex-wrap gap-1">
+      <div role="group" aria-labelledby={labelId} className="flex flex-wrap gap-1">
         {children}
       </div>
     </div>
@@ -280,10 +276,7 @@ export function AppsMarketplace(): ReactElement {
         />
       </label>
 
-      <FilterRow
-        label={t('apps.marketplace.filterLabel.category')}
-        groupLabel={t('apps.marketplace.filterByCategory')}
-      >
+      <FilterRow label={t('apps.marketplace.filterLabel.category')}>
         {CATEGORY_FILTERS.map((filter) => {
           const active = category === filter;
           return (
@@ -304,10 +297,7 @@ export function AppsMarketplace(): ReactElement {
         })}
       </FilterRow>
 
-      <FilterRow
-        label={t('apps.marketplace.filterLabel.collection')}
-        groupLabel={t('apps.marketplace.filterByCollection')}
-      >
+      <FilterRow label={t('apps.marketplace.filterLabel.collection')}>
         {COLLECTION_FILTERS.map((filter) => {
           const active = collection === filter;
           return (
@@ -328,10 +318,7 @@ export function AppsMarketplace(): ReactElement {
         })}
       </FilterRow>
 
-      <FilterRow
-        label={t('apps.marketplace.filterLabel.pricing')}
-        groupLabel={t('apps.marketplace.filterByPricing')}
-      >
+      <FilterRow label={t('apps.marketplace.filterLabel.pricing')}>
         {PRICING_FILTERS.map((filter) => {
           const active = pricing === filter;
           return (
@@ -352,10 +339,7 @@ export function AppsMarketplace(): ReactElement {
         })}
       </FilterRow>
 
-      <FilterRow
-        label={t('apps.marketplace.filterLabel.placement')}
-        groupLabel={t('apps.marketplace.filterByPlacement')}
-      >
+      <FilterRow label={t('apps.marketplace.filterLabel.placement')}>
         {PLACEMENT_FILTERS.map((filter) => {
           const active = placement === filter;
           return (

@@ -173,6 +173,8 @@ export function CopilotKnowledge(): ReactElement {
                           })
                         }
                         disabled={remove.isPending}
+                        // Every row says "Delete"; the name tells them apart (WCAG 2.4.6).
+                        aria-label={t('team.copilot.deleteAriaLabel', { name: source.name })}
                         className="text-xs text-danger underline disabled:opacity-40"
                       >
                         {t('team.copilot.deleteButton')}

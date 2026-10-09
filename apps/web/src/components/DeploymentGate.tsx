@@ -22,16 +22,24 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
 import { deploymentQuery } from '../lib/deployment.js';
+import { usePageTitle } from '../lib/document-title.js';
 import { useTranslate } from '../lib/i18n.js';
 import { LoadingPage } from './LoadingPage.js';
 
 export function DeploymentGate({ children }: { children: ReactNode }): ReactElement {
-  const t = useTranslate();
   const { data, isError, refetch } = useQuery(deploymentQuery);
 
   if (data !== undefined) return <>{children}</>;
   if (!isError) return <LoadingPage />;
+  return <Unreachable onRetry={() => void refetch()} />;
+}
 
+// Its own component so the tab title is set only while this page is up: a hook
+// in `DeploymentGate` itself would outlive the page and race the app's own
+// title once the answer arrives (child effects run before the parent's).
+function Unreachable({ onRetry }: { onRetry: () => void }): ReactElement {
+  const t = useTranslate();
+  usePageTitle(t('auth.startup.unreachable.title'));
   return (
     <main className="flex min-h-full items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-xs">
@@ -39,7 +47,7 @@ export function DeploymentGate({ children }: { children: ReactNode }): ReactElem
         <p className="mt-2 text-sm text-content-secondary">{t('auth.startup.unreachable.body')}</p>
         <button
           type="button"
-          onClick={() => void refetch()}
+          onClick={onRetry}
           className="mt-5 rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600"
         >
           {t('auth.startup.unreachable.retry')}

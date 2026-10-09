@@ -10,7 +10,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { compileInstruction, validateSteps } from '@siyahtus/ai-mock';
+import { compileInstruction, stepProblemDetails, validateSteps } from '@siyahtus/ai-mock';
 import { ANSWER_LENGTHS } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
@@ -319,6 +319,7 @@ function requireValidSteps(steps: unknown[]): unknown[] {
   if (!result.ok) {
     throw ApiError.validation(
       result.index >= 0 ? `Step ${result.index + 1}: ${result.reason}` : result.reason,
+      { ...stepProblemDetails(result) },
     );
   }
   return steps;
@@ -596,6 +597,7 @@ export default async function playbookRoutes(
         summary: result.summary,
         log: result.log,
         errors: result.errors,
+        error_details: result.error_details,
       });
     },
   );
@@ -865,7 +867,18 @@ export default async function playbookRoutes(
       try {
         document = parseCsv(body.csv, BULK_CSV_LIMITS);
       } catch (error) {
-        if (isCsvParseError(error)) throw ApiError.validation(`csv: ${error.message}`);
+        // `reason` + the numbers are what the console words in its own language
+        // (tm 261); the position and the limits are facts, not prose.
+        if (isCsvParseError(error)) {
+          throw ApiError.validation(`csv: ${error.message}`, {
+            reason: `csv_${error.code}`,
+            line: error.line,
+            column: error.column,
+            max_rows: BULK_CSV_LIMITS.maxRows,
+            max_cell_chars: BULK_CSV_LIMITS.maxCellChars,
+            max_bytes: BULK_CSV_LIMITS.maxBytes,
+          });
+        }
         throw error;
       }
 
@@ -873,8 +886,12 @@ export default async function playbookRoutes(
       try {
         columns = resolveKnowledgeBulkColumns(document.header);
       } catch (error) {
-        if (isKnowledgeBulkHeaderError(error))
-          throw ApiError.validation(`csv header: ${error.message}`);
+        if (isKnowledgeBulkHeaderError(error)) {
+          throw ApiError.validation(`csv header: ${error.message}`, {
+            reason: 'csv_header_missing',
+            columns: error.missing.join(', '),
+          });
+        }
         throw error;
       }
 
@@ -891,7 +908,11 @@ export default async function playbookRoutes(
           where: { id: body.ai_agent_id },
           select: { id: true },
         });
-        if (!agent) throw ApiError.validation('That AI agent does not exist.');
+        if (!agent) {
+          throw ApiError.validation('That AI agent does not exist.', {
+            reason: 'ai_agent_not_found',
+          });
+        }
         return creatorName(tx, addedBy);
       });
 
@@ -918,6 +939,11 @@ export default async function playbookRoutes(
         // zero outbound requests rather than the first twenty.
         throw ApiError.validation(
           `csv: this file has ${websiteRows} website rows; one import may crawl at most ${BULK_CRAWL_LIMITS.maxWebsiteRows}.`,
+          {
+            reason: 'csv_too_many_website_rows',
+            rows: websiteRows,
+            max: BULK_CRAWL_LIMITS.maxWebsiteRows,
+          },
         );
       }
 

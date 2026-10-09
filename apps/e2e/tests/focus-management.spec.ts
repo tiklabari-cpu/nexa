@@ -32,6 +32,12 @@ test.describe('closing a dialog returns focus to the button that opened it', () 
     { path: '/app/customers/goals', button: 'New goal', dialog: 'New goal' },
     { path: '/app/team', button: 'Invite teammates', dialog: 'Invite teammates' },
     { path: '/app/customers/campaigns', button: 'New campaign', dialog: 'New campaign' },
+    // tm 261: the connect form used to replace this button, so there was nothing to hand focus to.
+    {
+      path: '/app/settings/channels',
+      button: 'Connect with Facebook (mock)',
+      dialog: 'Connect Facebook Messenger',
+    },
   ] as const;
 
   for (const { path, button, dialog } of DIALOGS) {

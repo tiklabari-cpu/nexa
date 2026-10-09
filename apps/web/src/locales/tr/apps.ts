@@ -21,7 +21,6 @@ export const apps: Messages = {
   'apps.marketplace.filterLabel.collection': 'Koleksiyon',
   'apps.marketplace.filterLabel.pricing': 'Fiyat',
   'apps.marketplace.filterLabel.placement': 'Yerleşim',
-  'apps.marketplace.filterByCategory': 'Kategoriye göre filtrele',
   'apps.marketplace.category.all': 'Tümü',
   'apps.marketplace.category.crm': 'CRM',
   'apps.marketplace.category.support': 'Destek',
@@ -31,17 +30,14 @@ export const apps: Messages = {
   'apps.marketplace.category.productivity': 'Verimlilik',
   'apps.marketplace.category.analytics': 'Analiz',
   'apps.marketplace.category.channels': 'Kanallar',
-  'apps.marketplace.filterByCollection': 'Koleksiyona göre filtrele',
   'apps.marketplace.collection.all': 'Tümü',
   'apps.marketplace.collection.byText': 'Text Tarafından',
   'apps.marketplace.collection.aiPowered': 'Yapay Zeka Destekli',
   'apps.marketplace.collection.new': 'Yeni',
   'apps.marketplace.collection.staffPicks': 'Editör Seçimi',
-  'apps.marketplace.filterByPricing': 'Ödemeye göre filtrele',
   'apps.marketplace.pricing.all': 'Tümü',
   'apps.marketplace.pricing.free': 'Ücretsiz',
   'apps.marketplace.pricing.paid': 'Ücretli',
-  'apps.marketplace.filterByPlacement': 'Yerleşime göre filtrele',
   'apps.marketplace.placement.all': 'Tümü',
   'apps.marketplace.placement.details': 'Ayrıntı paneli',
   'apps.marketplace.placement.fullscreen': 'Tam ekran',
@@ -137,6 +133,31 @@ export const apps: Messages = {
   'apps.developers.form.scopesHint':
     'Uygulamaya yalnızca kendi oturumunuzun zaten sahip olduğu kapsamlar verilebilir.',
   'apps.developers.form.selectScope': 'En az bir kapsam seçin.',
+  'apps.developers.reason.redirect_uri_too_long':
+    '“{uri}” yönlendirme adresi {max} karakterden uzun.',
+  'apps.developers.reason.redirect_uri_not_absolute':
+    '“{uri}” yönlendirme adresi mutlak bir adres değil — https:// ile başlatın.',
+  'apps.developers.reason.redirect_uri_fragment':
+    '“{uri}” yönlendirme adresi parça (#…) içeriyor; yönlendirme adreslerinde parça olamaz.',
+  'apps.developers.reason.redirect_uri_path_traversal':
+    '“{uri}” yönlendirme adresi üst dizine çıkan bir parça (..) içeriyor.',
+  'apps.developers.reason.redirect_uri_wildcard':
+    '“{uri}” yönlendirme adresi joker karakter içeriyor; yönlendirme adresleri birebir eşleştirilir.',
+  'apps.developers.reason.redirect_uri_credentials':
+    '“{uri}” yönlendirme adresi kullanıcı adı ya da parola gömüyor.',
+  'apps.developers.reason.redirect_uri_no_host': '“{uri}” yönlendirme adresinde sunucu adı yok.',
+  'apps.developers.reason.redirect_uri_scheme':
+    '“{uri}” yönlendirme adresi https kullanmalı (http yalnızca geliştirme için localhost’ta kabul edilir).',
+  'apps.developers.reason.redirect_uri_not_canonical':
+    '“{uri}” yönlendirme adresi kanonik biçimde değil ve hiçbir zaman eşleşmez; bunun yerine “{canonical}” kaydedin.',
+  'apps.developers.reason.redirect_uris_required': 'En az bir yönlendirme adresi ekleyin.',
+  'apps.developers.reason.redirect_uris_too_many':
+    'Bir uygulamanın en fazla {max} yönlendirme adresi olabilir.',
+  'apps.developers.reason.redirect_uris_duplicate':
+    'Aynı yönlendirme adresi birden fazla kez yazılmış.',
+  'apps.developers.reason.scopes_required': 'En az bir kapsam seçin.',
+  'apps.developers.reason.scopes_not_held':
+    'Kendi oturumunuzun sahip olmadığı kapsamları veremezsiniz: {scopes}.',
   'apps.developers.form.register': 'Kaydet',
   'apps.developers.form.registering': 'Kaydediliyor…',
   'apps.developers.form.save': 'Kaydet',
@@ -181,6 +202,17 @@ export const apps: Messages = {
   'apps.developers.webhooks.form.urlRequired': 'Webhook’u alacak URL’yi girin.',
   'apps.developers.webhooks.form.eventLabel': 'Olay',
   'apps.developers.webhooks.form.eventRequired': 'Bir olay seçin.',
+  'apps.developers.webhooks.reason.url_invalid':
+    'https://example.com/hook gibi geçerli bir adres girin.',
+  'apps.developers.webhooks.reason.url_scheme': 'Yalnızca http ve https adresleri çağrılabilir.',
+  'apps.developers.webhooks.reason.url_credentials':
+    'Adresten kullanıcı adını ve parolayı kaldırın.',
+  'apps.developers.webhooks.reason.url_private_host':
+    'Bu adres özel ya da dahili bir sunucuya çıkıyor ve çağrılamaz.',
+  'apps.developers.webhooks.reason.app_not_automation':
+    'Bir webhook’a yalnızca otomasyon uygulaması (Zapier, Make) sahip olabilir.',
+  'apps.developers.webhooks.reason.app_not_connected':
+    'Önce uygulama pazaryerinde {app_name} uygulamasını bağlayın.',
   'apps.developers.webhooks.form.loadingEvents': 'Olaylar yükleniyor…',
   'apps.developers.webhooks.form.selectEvent': 'Bir olay seçin…',
   'apps.developers.webhooks.form.appLabel': 'Otomasyon uygulaması',

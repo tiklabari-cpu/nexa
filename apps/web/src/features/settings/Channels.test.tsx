@@ -105,6 +105,33 @@ describe('Messenger card — not connected', () => {
   });
 });
 
+// tm 261 (WCAG 2.4.3): the connect form used to *replace* the Connect button, so
+// on Escape or Cancel there was no trigger left to hand focus back to and it fell
+// to <body>. The button now stays under the dialog.
+describe('Connect dialogs hand focus back to the button that opened them', () => {
+  beforeEach(() => stubFetch({}));
+
+  it.each([
+    ['messenger', 'Connect with Facebook (mock)', 'Connect Facebook Messenger'],
+    ['whatsapp', 'Connect', 'Connect WhatsApp'],
+    ['sms', 'Connect', 'Connect SMS (Twilio)'],
+    ['instagram', 'Connect', 'Connect Instagram'],
+    ['telegram', 'Connect', 'Connect Telegram'],
+  ])('%s: Escape returns focus to the card button', async (channel, buttonName, dialogName) => {
+    const user = userEvent.setup();
+    renderChannels();
+    const card = await screen.findByTestId(`channel-${channel}`);
+    const trigger = within(card).getByRole('button', { name: buttonName });
+    await user.click(trigger);
+    expect(screen.getByRole('dialog', { name: dialogName })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: buttonName })).toHaveFocus();
+  });
+});
+
 describe('Messenger card — connected', () => {
   beforeEach(() =>
     stubFetch({

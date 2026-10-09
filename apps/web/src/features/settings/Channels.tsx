@@ -726,6 +726,19 @@ function ChannelCardView({
   );
 }
 
+/** The primary "Connect" button of a card whose connect form is a dialog. */
+function ConnectButton({ cta, onClick }: { cta: string; onClick: () => void }): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+    >
+      {cta}
+    </button>
+  );
+}
+
 /**
  * Instagram connect/disconnect (FR-MOD-08.5.7). Connect runs the mock OAuth
  * handshake — any code and Instagram user id complete it, behind the shared
@@ -801,80 +814,79 @@ function InstagramChannelAction({ channel, cta }: { channel: Channel; cta: strin
     );
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
-      >
-        {cta}
-      </button>
-    );
-  }
+  // The button stays mounted under the dialog: Modal hands focus back to it on
+  // close, and a trigger that was swapped out for the form has nowhere to
+  // receive it (tm 261, WCAG 2.4.3).
+  const opener = <ConnectButton cta={cta} onClick={() => setOpen(true)} />;
+  if (!open) return opener;
 
   return (
-    <Modal
-      onClose={close}
-      title={t('settings.channels.instagram.connectTitle')}
-      description={t('settings.channels.instagram.connectDescription')}
-    >
-      <form onSubmit={form.handleSubmit} noValidate>
-        {form.submitError && (
-          <p role="alert" className="mb-3 text-sm text-danger">
-            {form.submitError}
-          </p>
-        )}
+    <>
+      {opener}
+      <Modal
+        onClose={close}
+        title={t('settings.channels.instagram.connectTitle')}
+        description={t('settings.channels.instagram.connectDescription')}
+      >
+        <form onSubmit={form.handleSubmit} noValidate>
+          {form.submitError && (
+            <p role="alert" className="mb-3 text-sm text-danger">
+              {form.submitError}
+            </p>
+          )}
 
-        <label htmlFor="instagram-code" className="mb-1.5 block text-sm font-medium">
-          {t('settings.channels.instagram.codeLabel')}
-        </label>
-        <input
-          id="instagram-code"
-          value={form.values.code}
-          autoFocus
-          onChange={(event) => form.setValue('code', event.target.value)}
-          onBlur={() => form.blur('code')}
-          aria-invalid={form.errorFor('code') ? true : undefined}
-          aria-describedby={form.errorFor('code') ? 'instagram-code-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="instagram-code-error" message={form.errorFor('code')} />
+          <label htmlFor="instagram-code" className="mb-1.5 block text-sm font-medium">
+            {t('settings.channels.instagram.codeLabel')}
+          </label>
+          <input
+            id="instagram-code"
+            value={form.values.code}
+            autoFocus
+            onChange={(event) => form.setValue('code', event.target.value)}
+            onBlur={() => form.blur('code')}
+            aria-invalid={form.errorFor('code') ? true : undefined}
+            aria-describedby={form.errorFor('code') ? 'instagram-code-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="instagram-code-error" message={form.errorFor('code')} />
 
-        <label htmlFor="instagram-ig-user-id" className="mb-1.5 mt-3 block text-sm font-medium">
-          {t('settings.channels.instagram.userIdLabel')}
-        </label>
-        <input
-          id="instagram-ig-user-id"
-          value={form.values.ig_user_id}
-          onChange={(event) => form.setValue('ig_user_id', event.target.value)}
-          onBlur={() => form.blur('ig_user_id')}
-          aria-invalid={form.errorFor('ig_user_id') ? true : undefined}
-          aria-describedby={form.errorFor('ig_user_id') ? 'instagram-ig-user-id-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="instagram-ig-user-id-error" message={form.errorFor('ig_user_id')} />
+          <label htmlFor="instagram-ig-user-id" className="mb-1.5 mt-3 block text-sm font-medium">
+            {t('settings.channels.instagram.userIdLabel')}
+          </label>
+          <input
+            id="instagram-ig-user-id"
+            value={form.values.ig_user_id}
+            onChange={(event) => form.setValue('ig_user_id', event.target.value)}
+            onBlur={() => form.blur('ig_user_id')}
+            aria-invalid={form.errorFor('ig_user_id') ? true : undefined}
+            aria-describedby={
+              form.errorFor('ig_user_id') ? 'instagram-ig-user-id-error' : undefined
+            }
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="instagram-ig-user-id-error" message={form.errorFor('ig_user_id')} />
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            {t('settings.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={!form.canSubmit}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {form.isSubmitting
-              ? t('settings.channels.connecting')
-              : t('settings.channels.cta.connect')}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {t('settings.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!form.canSubmit}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {form.isSubmitting
+                ? t('settings.channels.connecting')
+                : t('settings.channels.cta.connect')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 
@@ -957,82 +969,79 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
     );
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
-      >
-        {cta}
-      </button>
-    );
-  }
+  // The button stays mounted under the dialog: Modal hands focus back to it on
+  // close, and a trigger that was swapped out for the form has nowhere to
+  // receive it (tm 261, WCAG 2.4.3).
+  const opener = <ConnectButton cta={cta} onClick={() => setOpen(true)} />;
+  if (!open) return opener;
 
   return (
-    <Modal
-      onClose={close}
-      title={t('settings.channels.telegram.connectTitle')}
-      description={t('settings.channels.telegram.connectDescription')}
-    >
-      <form onSubmit={form.handleSubmit} noValidate>
-        {form.submitError && (
-          <p role="alert" className="mb-3 text-sm text-danger">
-            {form.submitError}
-          </p>
-        )}
+    <>
+      {opener}
+      <Modal
+        onClose={close}
+        title={t('settings.channels.telegram.connectTitle')}
+        description={t('settings.channels.telegram.connectDescription')}
+      >
+        <form onSubmit={form.handleSubmit} noValidate>
+          {form.submitError && (
+            <p role="alert" className="mb-3 text-sm text-danger">
+              {form.submitError}
+            </p>
+          )}
 
-        <label htmlFor="telegram-bot-token" className="mb-1.5 block text-sm font-medium">
-          {t('settings.channels.telegram.tokenLabel')}
-        </label>
-        <input
-          id="telegram-bot-token"
-          value={form.values.bot_token}
-          autoFocus
-          onChange={(event) => form.setValue('bot_token', event.target.value)}
-          onBlur={() => form.blur('bot_token')}
-          aria-invalid={form.errorFor('bot_token') ? true : undefined}
-          aria-describedby={form.errorFor('bot_token') ? 'telegram-bot-token-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="telegram-bot-token-error" message={form.errorFor('bot_token')} />
+          <label htmlFor="telegram-bot-token" className="mb-1.5 block text-sm font-medium">
+            {t('settings.channels.telegram.tokenLabel')}
+          </label>
+          <input
+            id="telegram-bot-token"
+            value={form.values.bot_token}
+            autoFocus
+            onChange={(event) => form.setValue('bot_token', event.target.value)}
+            onBlur={() => form.blur('bot_token')}
+            aria-invalid={form.errorFor('bot_token') ? true : undefined}
+            aria-describedby={form.errorFor('bot_token') ? 'telegram-bot-token-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="telegram-bot-token-error" message={form.errorFor('bot_token')} />
 
-        <label htmlFor="telegram-bot-username" className="mb-1.5 mt-3 block text-sm font-medium">
-          {t('settings.channels.telegram.usernameLabel')}
-        </label>
-        <input
-          id="telegram-bot-username"
-          value={form.values.bot_username}
-          onChange={(event) => form.setValue('bot_username', event.target.value)}
-          onBlur={() => form.blur('bot_username')}
-          aria-invalid={form.errorFor('bot_username') ? true : undefined}
-          aria-describedby={
-            form.errorFor('bot_username') ? 'telegram-bot-username-error' : undefined
-          }
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="telegram-bot-username-error" message={form.errorFor('bot_username')} />
+          <label htmlFor="telegram-bot-username" className="mb-1.5 mt-3 block text-sm font-medium">
+            {t('settings.channels.telegram.usernameLabel')}
+          </label>
+          <input
+            id="telegram-bot-username"
+            value={form.values.bot_username}
+            onChange={(event) => form.setValue('bot_username', event.target.value)}
+            onBlur={() => form.blur('bot_username')}
+            aria-invalid={form.errorFor('bot_username') ? true : undefined}
+            aria-describedby={
+              form.errorFor('bot_username') ? 'telegram-bot-username-error' : undefined
+            }
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="telegram-bot-username-error" message={form.errorFor('bot_username')} />
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            {t('settings.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={!form.canSubmit}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {form.isSubmitting
-              ? t('settings.channels.connecting')
-              : t('settings.channels.cta.connect')}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {t('settings.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!form.canSubmit}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {form.isSubmitting
+                ? t('settings.channels.connecting')
+                : t('settings.channels.cta.connect')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 
@@ -1118,76 +1127,73 @@ function MessengerChannelAction({ channel, cta }: { channel: Channel; cta: strin
     );
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
-      >
-        {cta}
-      </button>
-    );
-  }
+  // The button stays mounted under the dialog: Modal hands focus back to it on
+  // close, and a trigger that was swapped out for the form has nowhere to
+  // receive it (tm 261, WCAG 2.4.3).
+  const opener = <ConnectButton cta={cta} onClick={() => setOpen(true)} />;
+  if (!open) return opener;
 
   return (
-    <Modal
-      onClose={close}
-      title={t('settings.channels.messenger.connectTitle')}
-      description={t('settings.channels.messenger.connectDescription')}
-    >
-      <form onSubmit={form.handleSubmit} noValidate>
-        {form.submitError && (
-          <p role="alert" className="mb-3 text-sm text-danger">
-            {form.submitError}
-          </p>
-        )}
+    <>
+      {opener}
+      <Modal
+        onClose={close}
+        title={t('settings.channels.messenger.connectTitle')}
+        description={t('settings.channels.messenger.connectDescription')}
+      >
+        <form onSubmit={form.handleSubmit} noValidate>
+          {form.submitError && (
+            <p role="alert" className="mb-3 text-sm text-danger">
+              {form.submitError}
+            </p>
+          )}
 
-        <label htmlFor="messenger-page-id" className="mb-1.5 block text-sm font-medium">
-          {t('settings.channels.messenger.pageIdLabel')}
-        </label>
-        <input
-          id="messenger-page-id"
-          value={form.values.page_id}
-          autoFocus
-          onChange={(event) => form.setValue('page_id', event.target.value)}
-          onBlur={() => form.blur('page_id')}
-          aria-invalid={form.errorFor('page_id') ? true : undefined}
-          aria-describedby={form.errorFor('page_id') ? 'messenger-page-id-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="messenger-page-id-error" message={form.errorFor('page_id')} />
+          <label htmlFor="messenger-page-id" className="mb-1.5 block text-sm font-medium">
+            {t('settings.channels.messenger.pageIdLabel')}
+          </label>
+          <input
+            id="messenger-page-id"
+            value={form.values.page_id}
+            autoFocus
+            onChange={(event) => form.setValue('page_id', event.target.value)}
+            onBlur={() => form.blur('page_id')}
+            aria-invalid={form.errorFor('page_id') ? true : undefined}
+            aria-describedby={form.errorFor('page_id') ? 'messenger-page-id-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="messenger-page-id-error" message={form.errorFor('page_id')} />
 
-        <label htmlFor="messenger-page-name" className="mb-1.5 mt-3 block text-sm font-medium">
-          {t('settings.channels.messenger.pageNameLabel')}
-        </label>
-        <input
-          id="messenger-page-name"
-          value={form.values.page_name}
-          onChange={(event) => form.setValue('page_name', event.target.value)}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
+          <label htmlFor="messenger-page-name" className="mb-1.5 mt-3 block text-sm font-medium">
+            {t('settings.channels.messenger.pageNameLabel')}
+          </label>
+          <input
+            id="messenger-page-name"
+            value={form.values.page_name}
+            onChange={(event) => form.setValue('page_name', event.target.value)}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            {t('settings.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={!form.canSubmit}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {form.isSubmitting
-              ? t('settings.channels.connecting')
-              : t('settings.channels.cta.connect')}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {t('settings.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!form.canSubmit}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {form.isSubmitting
+                ? t('settings.channels.connecting')
+                : t('settings.channels.cta.connect')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 
@@ -1272,82 +1278,79 @@ function WhatsappChannelAction({ channel, cta }: { channel: Channel; cta: string
     );
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
-      >
-        {cta}
-      </button>
-    );
-  }
+  // The button stays mounted under the dialog: Modal hands focus back to it on
+  // close, and a trigger that was swapped out for the form has nowhere to
+  // receive it (tm 261, WCAG 2.4.3).
+  const opener = <ConnectButton cta={cta} onClick={() => setOpen(true)} />;
+  if (!open) return opener;
 
   return (
-    <Modal
-      onClose={close}
-      title={t('settings.channels.whatsapp.connectTitle')}
-      description={t('settings.channels.whatsapp.connectDescription')}
-    >
-      <form onSubmit={form.handleSubmit} noValidate>
-        {form.submitError && (
-          <p role="alert" className="mb-3 text-sm text-danger">
-            {form.submitError}
-          </p>
-        )}
+    <>
+      {opener}
+      <Modal
+        onClose={close}
+        title={t('settings.channels.whatsapp.connectTitle')}
+        description={t('settings.channels.whatsapp.connectDescription')}
+      >
+        <form onSubmit={form.handleSubmit} noValidate>
+          {form.submitError && (
+            <p role="alert" className="mb-3 text-sm text-danger">
+              {form.submitError}
+            </p>
+          )}
 
-        <label htmlFor="whatsapp-waba-id" className="mb-1.5 block text-sm font-medium">
-          {t('settings.channels.whatsapp.wabaIdLabel')}
-        </label>
-        <input
-          id="whatsapp-waba-id"
-          value={form.values.waba_id}
-          autoFocus
-          onChange={(event) => form.setValue('waba_id', event.target.value)}
-          onBlur={() => form.blur('waba_id')}
-          aria-invalid={form.errorFor('waba_id') ? true : undefined}
-          aria-describedby={form.errorFor('waba_id') ? 'whatsapp-waba-id-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="whatsapp-waba-id-error" message={form.errorFor('waba_id')} />
+          <label htmlFor="whatsapp-waba-id" className="mb-1.5 block text-sm font-medium">
+            {t('settings.channels.whatsapp.wabaIdLabel')}
+          </label>
+          <input
+            id="whatsapp-waba-id"
+            value={form.values.waba_id}
+            autoFocus
+            onChange={(event) => form.setValue('waba_id', event.target.value)}
+            onBlur={() => form.blur('waba_id')}
+            aria-invalid={form.errorFor('waba_id') ? true : undefined}
+            aria-describedby={form.errorFor('waba_id') ? 'whatsapp-waba-id-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="whatsapp-waba-id-error" message={form.errorFor('waba_id')} />
 
-        <label htmlFor="whatsapp-phone-number" className="mb-1.5 mt-3 block text-sm font-medium">
-          {t('settings.channels.whatsapp.phoneNumberLabel')}
-        </label>
-        <input
-          id="whatsapp-phone-number"
-          value={form.values.phone_number}
-          onChange={(event) => form.setValue('phone_number', event.target.value)}
-          onBlur={() => form.blur('phone_number')}
-          aria-invalid={form.errorFor('phone_number') ? true : undefined}
-          aria-describedby={
-            form.errorFor('phone_number') ? 'whatsapp-phone-number-error' : undefined
-          }
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="whatsapp-phone-number-error" message={form.errorFor('phone_number')} />
+          <label htmlFor="whatsapp-phone-number" className="mb-1.5 mt-3 block text-sm font-medium">
+            {t('settings.channels.whatsapp.phoneNumberLabel')}
+          </label>
+          <input
+            id="whatsapp-phone-number"
+            value={form.values.phone_number}
+            onChange={(event) => form.setValue('phone_number', event.target.value)}
+            onBlur={() => form.blur('phone_number')}
+            aria-invalid={form.errorFor('phone_number') ? true : undefined}
+            aria-describedby={
+              form.errorFor('phone_number') ? 'whatsapp-phone-number-error' : undefined
+            }
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="whatsapp-phone-number-error" message={form.errorFor('phone_number')} />
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            {t('settings.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={!form.canSubmit}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {form.isSubmitting
-              ? t('settings.channels.connecting')
-              : t('settings.channels.cta.connect')}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {t('settings.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!form.canSubmit}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {form.isSubmitting
+                ? t('settings.channels.connecting')
+                : t('settings.channels.cta.connect')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 
@@ -1434,95 +1437,92 @@ function SmsChannelAction({ channel, cta }: { channel: Channel; cta: string }): 
     );
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
-      >
-        {cta}
-      </button>
-    );
-  }
+  // The button stays mounted under the dialog: Modal hands focus back to it on
+  // close, and a trigger that was swapped out for the form has nowhere to
+  // receive it (tm 261, WCAG 2.4.3).
+  const opener = <ConnectButton cta={cta} onClick={() => setOpen(true)} />;
+  if (!open) return opener;
 
   return (
-    <Modal
-      onClose={close}
-      title={t('settings.channels.sms.connectTitle')}
-      description={t('settings.channels.sms.connectDescription')}
-    >
-      <form onSubmit={form.handleSubmit} noValidate>
-        {form.submitError && (
-          <p role="alert" className="mb-3 text-sm text-danger">
-            {form.submitError}
-          </p>
-        )}
+    <>
+      {opener}
+      <Modal
+        onClose={close}
+        title={t('settings.channels.sms.connectTitle')}
+        description={t('settings.channels.sms.connectDescription')}
+      >
+        <form onSubmit={form.handleSubmit} noValidate>
+          {form.submitError && (
+            <p role="alert" className="mb-3 text-sm text-danger">
+              {form.submitError}
+            </p>
+          )}
 
-        <label htmlFor="sms-account-sid" className="mb-1.5 block text-sm font-medium">
-          {t('settings.channels.sms.accountSidLabel')}
-        </label>
-        <input
-          id="sms-account-sid"
-          value={form.values.account_sid}
-          autoFocus
-          onChange={(event) => form.setValue('account_sid', event.target.value)}
-          onBlur={() => form.blur('account_sid')}
-          aria-invalid={form.errorFor('account_sid') ? true : undefined}
-          aria-describedby={form.errorFor('account_sid') ? 'sms-account-sid-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="sms-account-sid-error" message={form.errorFor('account_sid')} />
+          <label htmlFor="sms-account-sid" className="mb-1.5 block text-sm font-medium">
+            {t('settings.channels.sms.accountSidLabel')}
+          </label>
+          <input
+            id="sms-account-sid"
+            value={form.values.account_sid}
+            autoFocus
+            onChange={(event) => form.setValue('account_sid', event.target.value)}
+            onBlur={() => form.blur('account_sid')}
+            aria-invalid={form.errorFor('account_sid') ? true : undefined}
+            aria-describedby={form.errorFor('account_sid') ? 'sms-account-sid-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="sms-account-sid-error" message={form.errorFor('account_sid')} />
 
-        <label htmlFor="sms-auth-token" className="mb-1.5 mt-3 block text-sm font-medium">
-          {t('settings.channels.sms.authTokenLabel')}
-        </label>
-        <input
-          id="sms-auth-token"
-          type="password"
-          autoComplete="off"
-          value={form.values.auth_token}
-          onChange={(event) => form.setValue('auth_token', event.target.value)}
-          onBlur={() => form.blur('auth_token')}
-          aria-invalid={form.errorFor('auth_token') ? true : undefined}
-          aria-describedby={form.errorFor('auth_token') ? 'sms-auth-token-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="sms-auth-token-error" message={form.errorFor('auth_token')} />
+          <label htmlFor="sms-auth-token" className="mb-1.5 mt-3 block text-sm font-medium">
+            {t('settings.channels.sms.authTokenLabel')}
+          </label>
+          <input
+            id="sms-auth-token"
+            type="password"
+            autoComplete="off"
+            value={form.values.auth_token}
+            onChange={(event) => form.setValue('auth_token', event.target.value)}
+            onBlur={() => form.blur('auth_token')}
+            aria-invalid={form.errorFor('auth_token') ? true : undefined}
+            aria-describedby={form.errorFor('auth_token') ? 'sms-auth-token-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="sms-auth-token-error" message={form.errorFor('auth_token')} />
 
-        <label htmlFor="sms-phone-number" className="mb-1.5 mt-3 block text-sm font-medium">
-          {t('settings.channels.sms.phoneNumberLabel')}
-        </label>
-        <input
-          id="sms-phone-number"
-          value={form.values.phone_number}
-          onChange={(event) => form.setValue('phone_number', event.target.value)}
-          onBlur={() => form.blur('phone_number')}
-          aria-invalid={form.errorFor('phone_number') ? true : undefined}
-          aria-describedby={form.errorFor('phone_number') ? 'sms-phone-number-error' : undefined}
-          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-        />
-        <FieldError id="sms-phone-number-error" message={form.errorFor('phone_number')} />
+          <label htmlFor="sms-phone-number" className="mb-1.5 mt-3 block text-sm font-medium">
+            {t('settings.channels.sms.phoneNumberLabel')}
+          </label>
+          <input
+            id="sms-phone-number"
+            value={form.values.phone_number}
+            onChange={(event) => form.setValue('phone_number', event.target.value)}
+            onBlur={() => form.blur('phone_number')}
+            aria-invalid={form.errorFor('phone_number') ? true : undefined}
+            aria-describedby={form.errorFor('phone_number') ? 'sms-phone-number-error' : undefined}
+            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          />
+          <FieldError id="sms-phone-number-error" message={form.errorFor('phone_number')} />
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            {t('settings.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={!form.canSubmit}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {form.isSubmitting
-              ? t('settings.channels.connecting')
-              : t('settings.channels.cta.connect')}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {t('settings.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!form.canSubmit}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {form.isSubmitting
+                ? t('settings.channels.connecting')
+                : t('settings.channels.cta.connect')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }

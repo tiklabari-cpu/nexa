@@ -80,6 +80,7 @@ describe('App while a page load cannot reach the server (tm 259.2 · NFR-S2)', (
     renderAt('/app/inbox');
 
     expect(screen.getByRole('heading', { name: 'Reconnecting…' })).toBeInTheDocument();
+    expect(document.title).toBe('Reconnecting… · SiyahTuş');
     expect(screen.getByRole('status')).toHaveTextContent(
       'The server cannot be reached right now. You are still signed in, and we keep trying.',
     );

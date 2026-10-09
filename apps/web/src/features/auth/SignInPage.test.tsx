@@ -98,6 +98,21 @@ afterEach(() => {
   });
 });
 
+describe('SignInPage tab title', () => {
+  // tm 261 (WCAG 2.4.2): the heading is the product name, so without its own
+  // title the tab read "SiyahTuş" like every other screen of the app.
+  it('names the screen in the tab, and gives the bare name back when it leaves', () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <SignInPage />
+      </MemoryRouter>,
+    );
+    expect(document.title).toBe('Sign in · SiyahTuş');
+    unmount();
+    expect(document.title).toBe('SiyahTuş');
+  });
+});
+
 describe('SignInPage validation', () => {
   it('keeps Sign in disabled until email and password are valid', async () => {
     renderSignIn();

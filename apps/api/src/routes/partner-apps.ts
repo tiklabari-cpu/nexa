@@ -73,12 +73,31 @@ const patchBody = z
 
 const clientIdSchema = z.string().trim().min(1).max(128);
 
+/**
+ * The two list bounds an editor can actually hit, as the same codes the service
+ * uses for the same mistakes (tm 261): a list left empty, or longer than the cap.
+ * Every other shape refusal keeps its field-and-sentence message and no code.
+ */
+function listReason(issue: z.ZodIssue): Record<string, unknown> | undefined {
+  if (issue.path.length !== 1) return undefined;
+  if (issue.path[0] === 'redirect_uris') {
+    if (issue.code === 'too_small') return { reason: 'redirect_uris_required' };
+    if (issue.code === 'too_big') {
+      return { reason: 'redirect_uris_too_many', max: MAX_REDIRECT_URIS };
+    }
+  }
+  if (issue.path[0] === 'scopes' && issue.code === 'too_small')
+    return { reason: 'scopes_required' };
+  return undefined;
+}
+
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
   if (!result.success) {
     const issue = result.error.issues[0];
     throw ApiError.validation(
       issue ? `${issue.path.join('.') || 'body'}: ${issue.message}` : 'Invalid request.',
+      issue ? listReason(issue) : undefined,
     );
   }
   return result.data;

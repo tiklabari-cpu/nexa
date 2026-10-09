@@ -407,7 +407,13 @@ knowledgeSourcesBulk:
       import continues.
       The ADR-06 error envelope is reserved for a request refused *as a whole*
       — malformed CSV, a header missing a required column, or a budget overrun
-      (row/cell/byte limits, refused rather than silently truncated).
+      (row/cell/byte limits, refused rather than silently truncated). Each of
+      those carries `error.details.reason` (tm 261): `csv_file_too_large`,
+      `csv_too_many_rows`, `csv_cell_too_long`, `csv_unclosed_quote`,
+      `csv_text_after_closing_quote` (with `line`, `column` and the limits
+      `max_rows`, `max_cell_chars`, `max_bytes`), `csv_header_missing`
+      (`columns`, the missing ones comma-separated), `csv_too_many_website_rows`
+      (`rows`, `max`) and `ai_agent_not_found`.
 
       Today's AI allowance is one of those budgets (tm 257.20): the embedding
       of every pasted-text row is reserved before the first row is imported,

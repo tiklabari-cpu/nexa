@@ -20,7 +20,8 @@ import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { useState, type ChangeEvent, type ReactElement } from 'react';
 import { Banner } from '../../components/ui/Banner.js';
 import { Skeleton } from '../../components/Skeleton.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
+import { reasonMessage } from '../../lib/reason-message.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { FieldError } from '../../lib/form.js';
@@ -45,16 +46,16 @@ function rejectionMessage(reason: BulkFileRejectionReason, t: TFunction): string
 }
 
 /**
- * A dry-run/import refusal's server message, shown verbatim. The server names
- * the specific row/column that failed (e.g. "csv: too many rows.") and
- * BulkImportForm.test.tsx pins that exact text — folding it into the generic
- * ADR-06 bucket would lose the detail the message exists to carry (mirrors
- * Composer.tsx's upload-error waiver).
+ * A dry-run/import refusal, worded here. The server names the specific
+ * line/column or limit that failed as a stable `details.reason` plus the numbers
+ * (tm 261) — folding it into the generic ADR-06 bucket would lose the detail the
+ * sentence exists to carry. A refusal with no reason this build knows (the AI
+ * allowance, say) goes through the error-type catalogue.
  */
 function errorMessage(error: unknown, t: TFunction): string | null {
   if (!error) return null;
-  // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
-  return error instanceof ApiClientError ? error.message : t('playbook.bulk.processError');
+  if (!(error instanceof ApiClientError)) return t('playbook.bulk.processError');
+  return reasonMessage(t, error, 'playbook.bulk.reason') ?? t(errorMessageKey(error));
 }
 
 function downloadTemplate(): void {

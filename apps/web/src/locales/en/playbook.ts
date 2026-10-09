@@ -345,6 +345,27 @@ export const playbook: Messages = {
   'playbook.editor.runPreview': 'Run preview',
   'playbook.editor.running': 'Running…',
   'playbook.editor.previewError': 'Could not run the preview.',
+  // Why the steps could not be run, from the server's `reason` (tm 261).
+  'playbook.editor.stepProblem.generic': 'The steps could not be run.',
+  'playbook.editor.stepProblem.steps_not_array': 'The steps must be a list.',
+  'playbook.editor.stepProblem.step_not_object': 'Step {step}: this step is not valid.',
+  'playbook.editor.stepProblem.unknown_step_type':
+    'Step {step}: “{type}” is not a known step type.',
+  'playbook.editor.stepProblem.detect_intent_needs_intent':
+    'Step {step}: name the intent this step should match.',
+  'playbook.editor.stepProblem.detect_intent_bad_phrases':
+    'Step {step}: the example phrases must be text.',
+  'playbook.editor.stepProblem.request_info_needs_field':
+    'Step {step}: name the information to collect.',
+  'playbook.editor.stepProblem.request_info_needs_prompt':
+    'Step {step}: write the question to ask for it.',
+  'playbook.editor.stepProblem.tag_needs_tag': 'Step {step}: name the tag to apply.',
+  'playbook.editor.stepProblem.send_message_bad_source':
+    'Step {step}: choose whether to send fixed text or answer from knowledge.',
+  'playbook.editor.stepProblem.send_message_needs_text':
+    'Step {step}: write the reply to send, or answer from knowledge instead.',
+  'playbook.editor.stepProblem.transfer_to_team_needs_team':
+    'Step {step}: choose a team to hand the conversation over to.',
   'playbook.editor.replyLabel': 'Reply to the customer',
   'playbook.editor.summaryLabel': 'Summary for the next agent',
   'playbook.editor.handsOverTo': 'Hands over to {name}',
@@ -466,6 +487,21 @@ export const playbook: Messages = {
   'playbook.bulk.rejectEmptyFile': 'This file is empty.',
   'playbook.bulk.rejectTooLarge': 'This file is over the {size} MiB limit.',
   'playbook.bulk.processError': 'Could not process that file.',
+  // A whole-file refusal, from the server's `reason` and its numbers (tm 261).
+  'playbook.bulk.reason.csv_file_too_large': 'The file is over the {max_bytes}-byte limit.',
+  'playbook.bulk.reason.csv_too_many_rows':
+    'Line {line}, column {column}: the file holds more than {max_rows} rows.',
+  'playbook.bulk.reason.csv_cell_too_long':
+    'Line {line}, column {column}: this value is longer than the {max_cell_chars}-character limit.',
+  'playbook.bulk.reason.csv_unclosed_quote':
+    'Line {line}, column {column}: a quoted value opens here but never closes.',
+  'playbook.bulk.reason.csv_text_after_closing_quote':
+    'Line {line}, column {column}: a quoted value ends here but the field continues; quote the whole value or double the inner quotes.',
+  'playbook.bulk.reason.csv_header_missing':
+    'The first row is missing required column(s): {columns}.',
+  'playbook.bulk.reason.csv_too_many_website_rows':
+    'This file has {rows} website rows; one import may crawl at most {max}.',
+  'playbook.bulk.reason.ai_agent_not_found': 'That AI agent does not exist.',
   'playbook.bulk.results.emptyTitle': 'Nothing to show yet',
   'playbook.bulk.results.emptyDescription':
     'Pick a CSV file with at least one data row to see its rows here.',

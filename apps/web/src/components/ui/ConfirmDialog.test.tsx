@@ -200,6 +200,40 @@ describe('useConfirm', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
   });
 
+  // Tm 261 (WCAG 2.4.3): the button that was clicked is disabled while the
+  // request runs, and a browser sends focus from a disabled element to <body> —
+  // behind the backdrop, where a screen reader loses its place. Focus stays
+  // inside the dialog on an element that is not disabled, and a refusal hands it
+  // to the live "Delete" button the alert is about.
+  it('keeps focus inside the dialog while the action runs and after a refusal', async () => {
+    let attempt = 0;
+    let finish: () => void = () => {};
+    const action = vi.fn(() => {
+      attempt += 1;
+      if (attempt === 1) return refusal();
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const user = userEvent.setup();
+    render(<Harness action={action} failureTitle="It could not be deleted." />);
+    await user.click(screen.getByRole('button', { name: 'Trigger' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveFocus();
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const working = screen.getByRole('button', { name: 'Working…' });
+    expect(working).toBeDisabled();
+    expect(document.activeElement).not.toBe(working);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement);
+
+    finish();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Trigger' })).toHaveFocus();
+  });
+
   it('a retry clears the alert while it runs, and closes on success', async () => {
     let attempt = 0;
     let finish: () => void = () => {};

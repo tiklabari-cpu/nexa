@@ -30,12 +30,11 @@ export const apps: Messages = {
     'Connect the tools your team already uses. Connected apps show their data right inside a conversation.',
   'apps.marketplace.searchLabel': 'Search apps',
   'apps.marketplace.searchPlaceholder': 'Search apps…',
-  // Visible names of the four chip rows (UX audit D20).
+  // Visible names of the four chip rows (UX audit D20); each is also its group's accessible name.
   'apps.marketplace.filterLabel.category': 'Category',
   'apps.marketplace.filterLabel.collection': 'Collection',
   'apps.marketplace.filterLabel.pricing': 'Pricing',
   'apps.marketplace.filterLabel.placement': 'Placement',
-  'apps.marketplace.filterByCategory': 'Filter by category',
   'apps.marketplace.category.all': 'All',
   'apps.marketplace.category.crm': 'CRM',
   'apps.marketplace.category.support': 'Support',
@@ -45,17 +44,14 @@ export const apps: Messages = {
   'apps.marketplace.category.productivity': 'Productivity',
   'apps.marketplace.category.analytics': 'Analytics',
   'apps.marketplace.category.channels': 'Channels',
-  'apps.marketplace.filterByCollection': 'Filter by collection',
   'apps.marketplace.collection.all': 'All',
   'apps.marketplace.collection.byText': 'By Text',
   'apps.marketplace.collection.aiPowered': 'AI-Powered',
   'apps.marketplace.collection.new': 'New',
   'apps.marketplace.collection.staffPicks': 'Staff Picks',
-  'apps.marketplace.filterByPricing': 'Filter by pricing',
   'apps.marketplace.pricing.all': 'All',
   'apps.marketplace.pricing.free': 'Free',
   'apps.marketplace.pricing.paid': 'Paid',
-  'apps.marketplace.filterByPlacement': 'Filter by placement',
   'apps.marketplace.placement.all': 'All',
   'apps.marketplace.placement.details': 'Details panel',
   'apps.marketplace.placement.fullscreen': 'Fullscreen',
@@ -161,6 +157,32 @@ export const apps: Messages = {
   'apps.developers.form.scopesHint':
     'Only scopes your own session already holds can be granted to the app.',
   'apps.developers.form.selectScope': 'Select at least one scope.',
+  // A refusal's stable `details.reason`, worded here (tm 261). `{uri}` is the value
+  // the server rejected, so the sentence still says which one.
+  'apps.developers.reason.redirect_uri_too_long':
+    'The redirect URI “{uri}” is longer than {max} characters.',
+  'apps.developers.reason.redirect_uri_not_absolute':
+    'The redirect URI “{uri}” is not an absolute URI — start it with https://.',
+  'apps.developers.reason.redirect_uri_fragment':
+    'The redirect URI “{uri}” contains a fragment (#…), which a redirect URI cannot have.',
+  'apps.developers.reason.redirect_uri_path_traversal':
+    'The redirect URI “{uri}” contains a path traversal segment (..).',
+  'apps.developers.reason.redirect_uri_wildcard':
+    'The redirect URI “{uri}” contains a wildcard; redirect URIs are matched exactly.',
+  'apps.developers.reason.redirect_uri_credentials':
+    'The redirect URI “{uri}” embeds a username or password.',
+  'apps.developers.reason.redirect_uri_no_host': 'The redirect URI “{uri}” has no host.',
+  'apps.developers.reason.redirect_uri_scheme':
+    'The redirect URI “{uri}” must use https (http is allowed only on localhost, for development).',
+  'apps.developers.reason.redirect_uri_not_canonical':
+    'The redirect URI “{uri}” is not in canonical form and would never match; register “{canonical}” instead.',
+  'apps.developers.reason.redirect_uris_required': 'Add at least one redirect URI.',
+  'apps.developers.reason.redirect_uris_too_many': 'An app can have at most {max} redirect URIs.',
+  'apps.developers.reason.redirect_uris_duplicate':
+    'The same redirect URI is listed more than once.',
+  'apps.developers.reason.scopes_required': 'Select at least one scope.',
+  'apps.developers.reason.scopes_not_held':
+    'You cannot grant scopes your own session does not hold: {scopes}.',
   'apps.developers.form.register': 'Register',
   'apps.developers.form.registering': 'Registering…',
   'apps.developers.form.save': 'Save',
@@ -212,6 +234,17 @@ export const apps: Messages = {
   'apps.developers.webhooks.form.urlRequired': 'Enter the URL to receive the webhook.',
   'apps.developers.webhooks.form.eventLabel': 'Event',
   'apps.developers.webhooks.form.eventRequired': 'Choose an event.',
+  'apps.developers.webhooks.reason.url_invalid':
+    'Enter a valid URL, like https://example.com/hook.',
+  'apps.developers.webhooks.reason.url_scheme': 'Only http and https addresses can be called.',
+  'apps.developers.webhooks.reason.url_credentials':
+    'Remove the username and password from the URL.',
+  'apps.developers.webhooks.reason.url_private_host':
+    'That address points at a private or internal host and cannot be called.',
+  'apps.developers.webhooks.reason.app_not_automation':
+    'Only an automation app (Zapier, Make) can own a webhook.',
+  'apps.developers.webhooks.reason.app_not_connected':
+    'Connect {app_name} in the app marketplace first.',
   'apps.developers.webhooks.form.loadingEvents': 'Loading events…',
   'apps.developers.webhooks.form.selectEvent': 'Select an event…',
   'apps.developers.webhooks.form.appLabel': 'Automation app',

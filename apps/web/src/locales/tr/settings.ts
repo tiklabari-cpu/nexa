@@ -140,6 +140,7 @@ export const settings: Messages = {
   'settings.trustedDomains.description':
     "Widget'ın kontrol ettiği izin listesi. Yukarıda bir web sitesi eklemek burayı sizin için doldurur; yalnızca alt alan adlarını kapsamak gibi ince ayarlar için burayı elle düzenleyin.",
   'settings.trustedDomains.removeConfirmTitle': 'Alan adı {domain} kaldırılsın mı?',
+  'settings.trustedDomains.removeAriaLabel': '{domain} kaldır',
   'settings.trustedDomains.removeConfirmDescription':
     'Widget bu alan adına artık güvenmez. Bu işlem geri alınamaz.',
   'settings.trustedDomains.loadError': 'Güvenilir alan adları yüklenemedi.',
@@ -1047,6 +1048,10 @@ export const settings: Messages = {
   'settings.pat.form.namePlaceholder': 'Gecelik raporlama işi',
   'settings.pat.form.nameError':
     'Bu jetona bir ad verin; sonradan neyi iptal ettiğinizi bilesiniz.',
+  'settings.pat.form.nameInvalid': 'En fazla 120 karakterlik bir ad kullanın.',
+  'settings.pat.reason.scopes_required': 'En az bir kapsam seçin.',
+  'settings.pat.reason.scopes_not_held':
+    'Kendi oturumunuzun sahip olmadığı kapsamları veremezsiniz: {scopes}.',
   'settings.pat.form.expiryLabel': 'Geçerlilik süresi',
   'settings.pat.form.days': '{days} gün',
   'settings.pat.form.scopesLabel': 'Kapsamlar',

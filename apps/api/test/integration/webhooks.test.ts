@@ -134,6 +134,21 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
       ).toBe(400);
     });
 
+    // tm 261: the sentence is English; the console words `details.reason` itself.
+    it('names why in details.reason', async () => {
+      const cases: Array<[string, string]> = [
+        ['http://127.0.0.1/hook', 'url_private_host'],
+        ['ftp://example.com/x', 'url_scheme'],
+        ['http://user:pass@example.com/', 'url_credentials'],
+        ['not a url', 'url_invalid'],
+      ];
+      for (const [url, reason] of cases) {
+        const res = await register({ url, action: 'chat_started' });
+        expect(res.statusCode, url).toBe(400);
+        expect(res.json().error.details?.reason, url).toBe(reason);
+      }
+    });
+
     it('rejects an unknown action', async () => {
       const res = await register({ url: 'https://hooks.example.test/h', action: 'nope' });
       expect(res.statusCode).toBe(400);

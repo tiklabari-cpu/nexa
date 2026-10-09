@@ -202,7 +202,7 @@ describe('PersonalAccessTokens — refusals are shown, not swallowed', () => {
     fireEvent.click(screen.getByLabelText('reports_read', { exact: true }));
     fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
 
-    const message = await screen.findByText(/must contain at most 120/i);
+    const message = await screen.findByText('Use a name of up to 120 characters.');
     expect(screen.getByLabelText('Token name')).toHaveAttribute(
       'aria-describedby',
       'new-pat-name-error',
@@ -210,7 +210,7 @@ describe('PersonalAccessTokens — refusals are shown, not swallowed', () => {
     expect(message).toHaveAttribute('id', 'new-pat-name-error');
   });
 
-  it('shows the escalation refusal verbatim — it names the scope that was denied', async () => {
+  it('words the escalation refusal itself — it names the scope that was denied', async () => {
     renderScreen();
     await screen.findByText('Nightly reporting job');
     api.post.mockRejectedValue(
@@ -219,6 +219,7 @@ describe('PersonalAccessTokens — refusals are shown, not swallowed', () => {
         status: 403,
         message: 'Cannot grant scopes the current session does not hold: reports_read',
         requestId: 'req_2',
+        details: { reason: 'scopes_not_held', scopes: 'reports_read' },
       }),
     );
 
@@ -226,7 +227,11 @@ describe('PersonalAccessTokens — refusals are shown, not swallowed', () => {
     fireEvent.click(screen.getByLabelText('reports_read', { exact: true }));
     fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
 
-    expect(await screen.findByText(/does not hold: reports_read/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'You cannot grant scopes your own session does not hold: reports_read.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

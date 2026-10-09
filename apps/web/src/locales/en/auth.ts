@@ -31,6 +31,7 @@ export const auth: Messages = {
   'auth.validation.codeRequired': 'Enter your code.',
 
   // Sign in
+  'auth.signin.title': 'Sign in',
   'auth.signin.subtitle': 'Sign in to your workspace',
   'auth.signin.sessionEnded': 'Your session has ended. Sign in again to continue.',
   'auth.signin.submit': 'Sign in',

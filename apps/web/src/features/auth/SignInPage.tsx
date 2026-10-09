@@ -4,6 +4,7 @@ import { useAuth, type Membership, type TwoFactorEnrollment } from '../../lib/au
 import { ApiClientError } from '../../lib/api-client.js';
 import { authFailureMessage } from '../../lib/auth-flow-error.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { usePageTitle } from '../../lib/document-title.js';
 import { LegalLinks } from './LegalLinks.js';
 import { ResendVerification } from './PublicPages.js';
 import { enumLabel } from '../../lib/enum-label.js';
@@ -120,6 +121,8 @@ type ReportFailure = (message: string) => void;
 
 export function SignInPage(): ReactElement {
   const t = useTranslate();
+  // The heading is the product name, so the tab needs the screen's own (tm 261).
+  usePageTitle(t('auth.signin.title'));
   const [workspaces, setWorkspaces] = useState<Membership[] | null>(null);
   const [chooseError, setChooseError] = useState<string | null>(null);
   const [codeStep, setCodeStep] = useState<CodeStep | null>(null);

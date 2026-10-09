@@ -71,7 +71,18 @@ export interface SkillPreview {
   transfer_to: string | null;
   summary: string | null;
   log: SkillLogEntry[];
+  /** The English sentences, for API callers; the editor words `error_details` instead. */
   errors: string[];
+  /** The same refusals as codes, one per entry of `errors` and in its order (tm 261). */
+  error_details?: StepProblem[];
+}
+
+export interface StepProblem {
+  reason: string;
+  /** 1-based; absent when the list as a whole was refused. */
+  step?: number;
+  /** The unrecognised type, for `unknown_step_type`. */
+  type?: string;
 }
 
 export interface KnowledgeSource {

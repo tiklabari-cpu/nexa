@@ -26,6 +26,7 @@ export const auth: Messages = {
   'auth.validation.codeRequired': 'Kodunuzu girin.',
 
   // Sign in
+  'auth.signin.title': 'Oturum aç',
   'auth.signin.subtitle': 'Çalışma alanınızda oturum açın',
   'auth.signin.sessionEnded': 'Oturumunuz sona erdi. Devam etmek için yeniden oturum açın.',
   'auth.signin.submit': 'Oturum aç',

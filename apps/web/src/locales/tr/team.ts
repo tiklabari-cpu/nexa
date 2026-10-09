@@ -223,10 +223,14 @@ export const team: Messages = {
   'team.invite.error.generic': 'Bu davetler gönderilemedi.',
   'team.invite.pending.caption': 'Henüz kabul edilmemiş davetler',
   'team.invite.pending.empty': 'Bekleyen davet yok.',
+  'team.invite.pending.loading': 'Davetler yükleniyor…',
+  'team.invite.pending.noAccess': 'Bekleyen davetleri görme yetkiniz yok.',
+  'team.invite.pending.loadError': 'Bekleyen davetler yüklenemedi.',
   'team.invite.pending.email': 'E-posta',
   'team.invite.pending.role': 'Rol',
   'team.invite.pending.invitedBy': 'Davet eden',
   'team.invite.pending.revoke': 'İptal et',
+  'team.invite.pending.revokeAriaLabel': '{email} davetini iptal et',
 
   // Bir davetin bedeli, gönderilmeden önce (FR-MOD-04.4). Koltuk davet
   // edildiğinde değil katılındığında sayılır; iptal edilen ya da süresi geçen
@@ -362,6 +366,7 @@ export const team: Messages = {
   'team.copilot.status.indexing': 'Dizinleniyor',
   'team.copilot.status.empty': 'İçerik yok',
   'team.copilot.deleteButton': 'Sil',
+  'team.copilot.deleteAriaLabel': '{name} kaynağını sil',
   'team.copilot.add.title': 'Kaynak ekle',
   'team.copilot.add.error': 'Bu kaynak eklenemedi. Adı ve içeriği kontrol edip tekrar deneyin.',
   'team.copilot.add.nameRequiredError': 'Bir ad girin.',

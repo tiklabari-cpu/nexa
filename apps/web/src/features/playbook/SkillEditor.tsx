@@ -37,8 +37,9 @@ import { AI_DAILY_CAP_MESSAGE_KEY, errorMessageKey, isAiDailyCap } from '../../l
 import { useApiClient } from '../../lib/auth-store.js';
 import { useLeaveGuard, shouldWarnOnLeave } from '../../lib/dirty-guard.js';
 import { formatDateTime } from '../../lib/format.js';
-import { useTranslate, type TFunction } from '../../lib/i18n.js';
-import type { Skill, SkillPreview, SkillRun, SkillStep } from './types.js';
+import { hasMessage, useTranslate, type TFunction } from '../../lib/i18n.js';
+import { reasonMessage } from '../../lib/reason-message.js';
+import type { Skill, SkillPreview, SkillRun, SkillStep, StepProblem } from './types.js';
 import { moveStep, stepIssues } from './step-reorder.js';
 import {
   STEP_TYPES,
@@ -433,7 +434,8 @@ export function SkillEditor({
 
                 {save.isError && (
                   <span role="alert" className="text-2xs text-danger">
-                    {t(errorMessageKey(save.error))}
+                    {reasonMessage(t, save.error, 'playbook.editor.stepProblem') ??
+                      t(errorMessageKey(save.error))}
                   </span>
                 )}
 
@@ -1110,6 +1112,20 @@ function runTone(run: SkillRun): StatusTone {
   return 'success';
 }
 
+/**
+ * One refusal from a preview, worded here from the server's code (tm 261). The
+ * server's English sentence is not shown: a Turkish editor would read
+ * "transfer_to_team needs a team". A code this build has no wording for (a
+ * server ahead of the console) gets the general sentence.
+ */
+function stepProblemText(t: TFunction, problem: StepProblem | undefined): string {
+  const key = problem ? `playbook.editor.stepProblem.${problem.reason}` : null;
+  if (problem && key && hasMessage('en', key)) {
+    return t(key, { step: problem.step ?? 0, type: problem.type ?? '' });
+  }
+  return t('playbook.editor.stepProblem.generic');
+}
+
 function PreviewResult({ result }: { result: SkillPreview }): ReactElement {
   const t = useTranslate();
   const tone =
@@ -1131,9 +1147,9 @@ function PreviewResult({ result }: { result: SkillPreview }): ReactElement {
 
       {result.errors.length > 0 && (
         <ul role="alert" className="flex flex-col gap-0.5">
-          {result.errors.map((error, index) => (
+          {result.errors.map((_error, index) => (
             <li key={index} className="text-2xs text-danger">
-              {error}
+              {stepProblemText(t, result.error_details?.[index])}
             </li>
           ))}
         </ul>

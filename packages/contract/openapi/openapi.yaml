@@ -1276,6 +1276,39 @@ components:
           type: array
           description: Reasons the step list could not be run at all.
           items: { type: string }
+        error_details:
+          type: array
+          description: |
+            The same refusals as `errors`, one entry each and in the same order,
+            as codes a console can word in its own language (tm 261). `errors`
+            keeps the English sentence.
+          items: { $ref: "#/components/schemas/StepProblem" }
+
+    StepProblem:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum:
+            - steps_not_array
+            - step_not_object
+            - unknown_step_type
+            - detect_intent_needs_intent
+            - detect_intent_bad_phrases
+            - request_info_needs_field
+            - request_info_needs_prompt
+            - tag_needs_tag
+            - send_message_bad_source
+            - send_message_needs_text
+            - transfer_to_team_needs_team
+        step:
+          type: integer
+          minimum: 1
+          description: The 1-based position of the step; absent when the list as a whole was refused.
+        type:
+          type: string
+          description: The unrecognised type, for `unknown_step_type`.
 
     SkillLogEntry:
       type: object

@@ -145,7 +145,7 @@ test.describe('apps marketplace', () => {
 
     // A category chip narrows the same way: every card still rendered carries
     // that category, and a card from another one is gone.
-    const categories = agentPage.getByRole('group', { name: 'Filter by category' });
+    const categories = agentPage.getByRole('group', { name: 'Category', exact: true });
     const payments = categories.getByRole('button', { name: 'Payments', exact: true });
     await payments.click();
     await expect(payments).toHaveAttribute('aria-pressed', 'true');
@@ -163,7 +163,7 @@ test.describe('apps marketplace', () => {
     await expect(cards.first()).toBeVisible();
     const wholeCatalogueCount = await cards.count();
 
-    const collections = agentPage.getByRole('group', { name: 'Filter by collection' });
+    const collections = agentPage.getByRole('group', { name: 'Collection', exact: true });
     const staffPicks = collections.getByRole('button', { name: 'Staff Picks', exact: true });
     await staffPicks.click();
     await expect(staffPicks).toHaveAttribute('aria-pressed', 'true');
@@ -314,7 +314,7 @@ test.describe('apps marketplace', () => {
 
     // The channel-typed cards are the tail of a 100+ catalogue, so the chip is
     // how a user reaches them without scrolling the whole directory.
-    const categories = agentPage.getByRole('group', { name: 'Filter by category' });
+    const categories = agentPage.getByRole('group', { name: 'Category', exact: true });
     await categories.getByRole('button', { name: 'Channels', exact: true }).click();
 
     const card = agentPage.getByTestId('app-whatsapp');

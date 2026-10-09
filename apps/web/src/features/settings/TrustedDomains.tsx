@@ -164,6 +164,10 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
                           onConfirm: () => remove.mutateAsync(item.id),
                         })
                       }
+                      // Every row says "Remove"; the domain tells them apart (WCAG 2.4.6).
+                      aria-label={t('settings.trustedDomains.removeAriaLabel', {
+                        domain: item.domain,
+                      })}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
                       {t('settings.remove')}

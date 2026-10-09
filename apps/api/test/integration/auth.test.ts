@@ -706,6 +706,11 @@ describe('auth', () => {
       );
       expect(response.statusCode).toBe(403);
       expect(response.json().error.message).toMatch(/does not hold/);
+      // tm 261: the console words the refusal itself, from the code and the list.
+      expect(response.json().error.details).toEqual({
+        reason: 'scopes_not_held',
+        scopes: 'chats--all:rw, billing_manage',
+      });
     });
 
     it('returns the secret exactly once and stores only its hash', async () => {

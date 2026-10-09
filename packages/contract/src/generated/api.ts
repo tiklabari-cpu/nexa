@@ -885,7 +885,9 @@ export interface paths {
      * Create a personal access token
      * @description The plaintext token is in this response and nowhere else — only its hash
      *     is stored. A token cannot be granted scopes the creating session does not
-     *     already hold.
+     *     already hold (403, `error.details.reason: scopes_not_held`, `scopes` the
+     *     comma-separated ones it lacks); a request left with no valid scope is a 400
+     *     with `reason: scopes_required` (tm 261).
      */
     post: operations['createPersonalAccessToken'];
     delete?: never;
@@ -2845,7 +2847,13 @@ export interface paths {
      *     import continues.
      *     The ADR-06 error envelope is reserved for a request refused *as a whole*
      *     — malformed CSV, a header missing a required column, or a budget overrun
-     *     (row/cell/byte limits, refused rather than silently truncated).
+     *     (row/cell/byte limits, refused rather than silently truncated). Each of
+     *     those carries `error.details.reason` (tm 261): `csv_file_too_large`,
+     *     `csv_too_many_rows`, `csv_cell_too_long`, `csv_unclosed_quote`,
+     *     `csv_text_after_closing_quote` (with `line`, `column` and the limits
+     *     `max_rows`, `max_cell_chars`, `max_bytes`), `csv_header_missing`
+     *     (`columns`, the missing ones comma-separated), `csv_too_many_website_rows`
+     *     (`rows`, `max`) and `ai_agent_not_found`.
      *
      *     Today's AI allowance is one of those budgets (tm 257.20): the embedding
      *     of every pasted-text row is reserved before the first row is imported,
@@ -5380,6 +5388,10 @@ export interface paths {
      *     link-local target is rejected at registration (SSRF, NFR-S7), and checked
      *     again at delivery in case DNS changes underneath it.
      *
+     *     A refused `url` carries `error.details.reason` (tm 261): `url_invalid`,
+     *     `url_scheme`, `url_credentials` or `url_private_host`. A refused `app_id`
+     *     carries `app_not_automation` or `app_not_connected` (with `app_name`).
+     *
      *     The response carries the signing `secret` **once**. Store it: every
      *     delivery is signed `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")` in
      *     the `X-Webhook-Signature` header, and there is no way to retrieve the
@@ -5479,6 +5491,17 @@ export interface paths {
      *
      *     `scopes` is required and bounded by the caller: requesting a scope the
      *     registering session does not itself hold is a 403.
+     *
+     *     **Refusals carry a code (tm 261).** The sentence in `error.message` is
+     *     English; `error.details.reason` is the stable code a console words in its
+     *     own language: `redirect_uri_too_long`, `redirect_uri_not_absolute`,
+     *     `redirect_uri_fragment`, `redirect_uri_path_traversal`,
+     *     `redirect_uri_wildcard`, `redirect_uri_credentials`, `redirect_uri_no_host`,
+     *     `redirect_uri_scheme`, `redirect_uri_not_canonical` (each with the rejected
+     *     `uri`; `canonical` and `max` where the sentence names them),
+     *     `redirect_uris_required`, `redirect_uris_too_many` (`max`),
+     *     `redirect_uris_duplicate`, `scopes_required`, and — on the 403 —
+     *     `scopes_not_held` (`scopes`, the comma-separated ones the session lacks).
      */
     post: operations['registerPartnerApp'];
     delete?: never;
@@ -5530,6 +5553,9 @@ export interface paths {
      *
      *     The workspace's own sign-in client cannot be edited here (400) — it is
      *     first-party infrastructure, not a partner app.
+     *
+     *     Validation refusals carry the same `error.details.reason` codes as
+     *     registration.
      */
     patch: operations['updatePartnerApp'];
     trace?: never;
@@ -8318,6 +8344,31 @@ export interface components {
       log: components['schemas']['SkillLogEntry'][];
       /** @description Reasons the step list could not be run at all. */
       errors: string[];
+      /**
+       * @description The same refusals as `errors`, one entry each and in the same order,
+       *     as codes a console can word in its own language (tm 261). `errors`
+       *     keeps the English sentence.
+       */
+      error_details?: components['schemas']['StepProblem'][];
+    };
+    StepProblem: {
+      /** @enum {string} */
+      reason:
+        | 'steps_not_array'
+        | 'step_not_object'
+        | 'unknown_step_type'
+        | 'detect_intent_needs_intent'
+        | 'detect_intent_bad_phrases'
+        | 'request_info_needs_field'
+        | 'request_info_needs_prompt'
+        | 'tag_needs_tag'
+        | 'send_message_bad_source'
+        | 'send_message_needs_text'
+        | 'transfer_to_team_needs_team';
+      /** @description The 1-based position of the step; absent when the list as a whole was refused. */
+      step?: number;
+      /** @description The unrecognised type, for `unknown_step_type`. */
+      type?: string;
     };
     SkillLogEntry: {
       step: string;

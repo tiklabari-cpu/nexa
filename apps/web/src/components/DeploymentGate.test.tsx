@@ -73,6 +73,9 @@ describe('DeploymentGate', () => {
     renderGate();
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+    // The tab names the wait too (tm 261 · tm 259.20 O15): a row of tabs on a
+    // slow start should not all read the bare product name.
+    expect(document.title).toBe('Loading… · SiyahTuş');
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
     expect(screen.queryByText(/The app/)).toBeNull();
@@ -107,6 +110,7 @@ describe('DeploymentGate', () => {
     // React Query hands the result to the screen on a timer of its own.
     await act(() => vi.advanceTimersByTimeAsync(10));
     expect(screen.getByRole('heading', { name: 'Cannot reach the server' })).toBeInTheDocument();
+    expect(document.title).toBe('Cannot reach the server · SiyahTuş');
     expect(
       screen.getByText(
         'The app could not load its settings from the server. Check your connection and try again.',

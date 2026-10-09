@@ -433,9 +433,49 @@ describe('playbook — skills', () => {
         auth(token),
       );
       expect(response.statusCode).toBe(200);
-      const body = response.json() as { outcome: string; errors: string[] };
+      const body = response.json() as {
+        outcome: string;
+        errors: string[];
+        error_details: Array<Record<string, unknown>>;
+      };
       expect(body.outcome).toBe('skipped');
       expect(body.errors.length).toBeGreaterThan(0);
+      // tm 261: the same refusal as a code, so the console words it itself.
+      expect(body.error_details).toEqual([
+        { reason: 'unknown_step_type', step: 1, type: 'not_a_real_step' },
+      ]);
+    });
+
+    it('names the step and the missing piece as a code, not only as English', async () => {
+      const token = await writeToken(fx.a);
+      const response = await server.post(
+        '/skills/preview',
+        {
+          steps: [
+            { type: 'send_message', source: 'text', text: 'ok' },
+            { type: 'transfer_to_team', group: '' },
+          ],
+          message: 'Hi',
+        },
+        auth(token),
+      );
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        errors: string[];
+        error_details: Array<Record<string, unknown>>;
+      };
+      expect(body.errors).toEqual(['Step 2: transfer_to_team needs a team']);
+      expect(body.error_details).toEqual([{ reason: 'transfer_to_team_needs_team', step: 2 }]);
+    });
+
+    it('a valid step list reports no error codes either', async () => {
+      const token = await writeToken(fx.a);
+      const response = await server.post(
+        '/skills/preview',
+        { steps: [{ type: 'send_message', source: 'text', text: 'Hi there.' }], message: 'Hi' },
+        auth(token),
+      );
+      expect((response.json() as { error_details: unknown[] }).error_details).toEqual([]);
     });
   });
 

@@ -208,6 +208,14 @@ test.describe('website widgets', () => {
       await expect(alert).toContainText(`“${domain}” couldn't be removed.`);
       await expect(alert).toContainText('Something went wrong on our side');
       await expect(dialog.getByRole('button', { name: 'Remove' })).toBeEnabled();
+      // tm 261 (WCAG 2.4.3): the button that had focus went disabled while the
+      // request ran; a refusal must not leave focus on <body> behind the dialog.
+      expect(
+        await agentPage.evaluate(() =>
+          document.activeElement?.closest('[role="dialog"]')?.getAttribute('aria-labelledby'),
+        ),
+        'focus is inside the dialog, not on <body>',
+      ).toBeTruthy();
       await agentPage.screenshot({ path: 'kanit/259.9-remove-refused.png' });
 
       // Giving up leaves the site where it was — on screen and on the server.

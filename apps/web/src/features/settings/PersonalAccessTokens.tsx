@@ -58,6 +58,7 @@ import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
+import { reasonMessage } from '../../lib/reason-message.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
@@ -132,20 +133,15 @@ export function PersonalAccessTokens(): ReactElement {
           // them say something the catalogue's general sentence would lose: a
           // `validation` refusal names the field, and an `authorization` one
           // names the scope the session turned out not to hold (which reaches
-          // here only when a demotion has left `sessionScopes` stale).
+          // here only when a demotion has left `sessionScopes` stale) — as a
+          // stable `details.reason` plus that value (tm 261), worded here.
           const field = firstRejectedField(error);
           if (field === 'name') {
-            // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from.
-            setFieldError('name', error.message);
-            return;
-          }
-          if (error.type === 'validation' || error.type === 'authorization') {
-            // i18n-ignore: kept on purpose (tm 259.18): the sentence names the rejected value (a URI, a scope, a row) and the server sends no code for it, so there is nothing to translate from (the missing scope's name).
-            setSubmitError(error.message);
+            setFieldError('name', t('settings.pat.form.nameInvalid'));
             return;
           }
         }
-        setSubmitError(t(errorMessageKey(error)));
+        setSubmitError(reasonMessage(t, error, 'settings.pat.reason') ?? t(errorMessageKey(error)));
       }
     },
   });

@@ -180,7 +180,7 @@ export function PersonalAccessTokens(): ReactElement {
               noValidate
               className="flex flex-col gap-3 border-b border-border p-4"
             >
-              <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-wrap items-start gap-3">
                 {/* The error line sits outside the `<label>`, not inside it:
                     nested prose folds into the label's accessible name, so
                     `getByLabelText('Token name')` would stop matching the
@@ -234,7 +234,7 @@ export function PersonalAccessTokens(): ReactElement {
                 <button
                   type="submit"
                   disabled={!canSubmit}
-                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
                   {form.isSubmitting
                     ? t('settings.pat.form.creating')

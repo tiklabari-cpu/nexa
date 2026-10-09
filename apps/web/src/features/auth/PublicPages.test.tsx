@@ -77,20 +77,34 @@ describe('SignUpPage validation', () => {
   });
 });
 
-describe('SignUpPage region selection (ADR-12)', () => {
-  it('defaults to the European Union and warns the choice is permanent', () => {
-    renderAt(<SignUpPage />);
-    expect(screen.getByLabelText('Data region')).toHaveValue('eu');
-    expect(
-      screen.getByText(/cannot be changed after your workspace is created/i),
-    ).toBeInTheDocument();
+/**
+ * The region picker is off (owner decision 2026-10-09, PLAN §D213): one
+ * deployment serves one region, so sign-up no longer offers a choice that only
+ * one answer of could succeed. The workspace lands where the server runs.
+ */
+describe('SignUpPage asks for no region (C4-c off · §D213)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it('lets United States be chosen instead', async () => {
+  it('shows neither the region picker nor its permanence warning', () => {
     renderAt(<SignUpPage />);
-    const region = screen.getByLabelText('Data region');
-    await userEvent.selectOptions(region, 'us');
-    expect(region).toHaveValue('us');
+    expect(screen.queryByLabelText('Data region')).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot be changed after your workspace is created/i)).toBeNull();
+    expect(screen.getByLabelText('Workspace name')).toBeInTheDocument();
+  });
+
+  it('sends no region key, so the server files the workspace where it runs', async () => {
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(new Error('stop here'));
+    renderAt(<SignUpPage />);
+    await userEvent.type(screen.getByLabelText('Workspace name'), 'Acme');
+    await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
+    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    await screen.findByRole('alert');
+    expect(post.mock.calls[0]![1]).not.toHaveProperty('region');
   });
 });
 
@@ -115,7 +129,6 @@ describe('SignUpPage residency refusal (C4-h)', () => {
   async function submitSignUp(): Promise<void> {
     renderAt(<SignUpPage />);
     await userEvent.type(screen.getByLabelText('Workspace name'), 'Acme');
-    await userEvent.selectOptions(screen.getByLabelText('Data region'), 'us');
     await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
     await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
     await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
@@ -382,20 +395,6 @@ describe('SignUpPage in pilot mode (NFR-C9)', () => {
     expect(Object.keys(body as object).sort()).toEqual(
       ['email', 'name', 'organization_name', 'password'].sort(),
     );
-  });
-
-  it('still sends the chosen region on an ordinary deployment', async () => {
-    const post = vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(new Error('stop here'));
-    renderAt(<SignUpPage />);
-    await userEvent.type(screen.getByLabelText('Workspace name'), 'Acme');
-    await userEvent.selectOptions(screen.getByLabelText('Data region'), 'us');
-    await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
-    await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
-    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
-    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-
-    await screen.findByRole('alert');
-    expect(post.mock.calls[0]![1]).toMatchObject({ region: 'us' });
   });
 });
 

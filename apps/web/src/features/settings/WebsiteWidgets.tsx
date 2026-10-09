@@ -133,7 +133,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
             <form
               onSubmit={form.handleSubmit}
               noValidate
-              className="flex flex-wrap items-end gap-3 border-b border-border p-4"
+              className="flex flex-wrap items-start gap-3 border-b border-border p-4"
             >
               <label htmlFor="new-website" className="flex min-w-56 flex-1 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -174,7 +174,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
               <button
                 type="submit"
                 disabled={!form.canSubmit}
-                className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
                 {form.isSubmitting ? t('settings.adding') : t('settings.websiteWidgets.addButton')}
               </button>

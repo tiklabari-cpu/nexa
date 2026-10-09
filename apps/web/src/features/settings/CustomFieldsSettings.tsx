@@ -107,7 +107,7 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
             <form
               onSubmit={form.handleSubmit}
               noValidate
-              className="flex flex-wrap items-end gap-3 border-b border-border p-4"
+              className="flex flex-wrap items-start gap-3 border-b border-border p-4"
             >
               <label htmlFor="cf-label" className="flex w-48 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -163,7 +163,7 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
                 </select>
               </label>
 
-              <label className="flex items-center gap-2 pb-1.5 text-sm text-content-secondary">
+              <label className="mt-5 flex items-center gap-2 py-1.5 text-sm text-content-secondary">
                 <input
                   type="checkbox"
                   checked={isRequired}
@@ -177,7 +177,7 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
                   disabled, rather than hidden, so switching back to Contact
                   does not silently lose an already-expressed choice. */}
               <label
-                className={`flex items-center gap-2 pb-1.5 text-sm text-content-secondary ${
+                className={`mt-5 flex items-center gap-2 py-1.5 text-sm text-content-secondary ${
                   isContactField ? '' : 'opacity-50'
                 }`}
               >
@@ -193,7 +193,7 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
               <button
                 type="submit"
                 disabled={!form.canSubmit}
-                className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
                 {form.isSubmitting ? t('settings.adding') : t('settings.customFields.addButton')}
               </button>

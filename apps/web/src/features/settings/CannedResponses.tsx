@@ -172,7 +172,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
               noValidate
               className="flex flex-col gap-3 border-b border-border p-4"
             >
-              <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-wrap items-start gap-3">
                 <label htmlFor="new-shortcut" className="flex w-48 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                     {t('settings.cannedResponses.shortcutLabel')}
@@ -215,7 +215,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                 <button
                   type="submit"
                   disabled={!form.canSubmit}
-                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
                   {form.isSubmitting
                     ? t('settings.saving')
@@ -328,7 +328,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                   {editingId === item.id && (
                     <div
                       ref={focus.editor}
-                      className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-inset p-3"
+                      className="flex flex-wrap items-start gap-2 rounded-md border border-border bg-inset p-3"
                     >
                       {/* Not the button's wording: a field whose label is
                           identical to a button's accessible name leaves neither
@@ -357,7 +357,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                       <button
                         type="button"
                         onClick={() => setEditingId(null)}
-                        className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                        className="mt-5 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                       >
                         {t('settings.cancel')}
                       </button>
@@ -365,7 +365,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                         type="button"
                         onClick={() => void saveTeam()}
                         disabled={updateTeam.isPending}
-                        className="rounded-md bg-brand-500 px-2 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                        className="mt-5 rounded-md bg-brand-500 px-2 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                       >
                         {updateTeam.isPending ? t('settings.saving') : t('settings.save')}
                       </button>

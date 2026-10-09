@@ -69,7 +69,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { FieldError, compose, maxLength, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
-import { IANA_TIMEZONES } from '../../lib/timezones.js';
+import { IANA_TIMEZONES, timeZoneOptionLabel } from '../../lib/timezones.js';
 
 /** Mirrors both routes' `minimumRole: 'admin'` — the set `Compliance`/`SiemExport` use. */
 const VIEWER_ROLES = new Set(['admin', 'viceowner', 'owner']);
@@ -320,11 +320,13 @@ function CompanyDetailsForm({
           {/* A zone stored before this list could express it stays selectable,
               so opening the form can never silently change what is saved. */}
           {!IANA_TIMEZONES.includes(form.values.timezone) && (
-            <option value={form.values.timezone}>{form.values.timezone}</option>
+            <option value={form.values.timezone}>
+              {timeZoneOptionLabel(form.values.timezone)}
+            </option>
           )}
           {IANA_TIMEZONES.map((zone) => (
             <option key={zone} value={zone}>
-              {zone}
+              {timeZoneOptionLabel(zone)}
             </option>
           ))}
         </select>

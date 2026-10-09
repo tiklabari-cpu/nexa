@@ -305,7 +305,7 @@ function WebsiteStep(): ReactElement {
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">{t('auth.onboarding.website.heading')}</h2>
       <p className="text-sm text-content-secondary">{t('auth.onboarding.website.body')}</p>
-      <form onSubmit={form.handleSubmit} noValidate className="flex flex-wrap items-end gap-2">
+      <form onSubmit={form.handleSubmit} noValidate className="flex flex-wrap items-start gap-2">
         <label htmlFor="onboarding-domain" className="flex min-w-56 flex-1 flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
             {t('auth.onboarding.website.domainLabel')}
@@ -325,7 +325,7 @@ function WebsiteStep(): ReactElement {
         <button
           type="submit"
           disabled={!form.canSubmit}
-          className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
         >
           {form.isSubmitting
             ? t('auth.onboarding.website.submitting')
@@ -423,7 +423,7 @@ function CompanySizeStep(): ReactElement {
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">{t('auth.onboarding.company.heading')}</h2>
       <p className="text-sm text-content-secondary">{t('auth.onboarding.company.body')}</p>
-      <form onSubmit={form.handleSubmit} noValidate className="flex flex-wrap items-end gap-2">
+      <form onSubmit={form.handleSubmit} noValidate className="flex flex-wrap items-start gap-2">
         <label htmlFor="onboarding-company-size" className="flex min-w-56 flex-1 flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
             {t('auth.onboarding.company.sizeLabel')}
@@ -449,7 +449,7 @@ function CompanySizeStep(): ReactElement {
         <button
           type="submit"
           disabled={!form.canSubmit}
-          className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
         >
           {form.isSubmitting
             ? t('auth.onboarding.company.submitting')

@@ -67,10 +67,14 @@ export function Page({
       ref={ref}
       // The ring is drawn inside: the shell around the page clips an outer one.
       tabIndex={scrolling ? 0 : undefined}
-      // Below the desktop breakpoint the page is the containing block of its
-      // `sr-only` labels too, so one sitting past a wide table's edge scrolls
-      // with the page instead of widening the document (tm 259.25 · O6).
-      className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas focus-visible:-outline-offset-2 max-lg:relative"
+      // The page is the containing block of its `sr-only` labels and captions
+      // (they are `position: absolute`), so one sitting far down the page
+      // scrolls with it instead of lengthening the document. tm 259.25 did this
+      // below the desktop breakpoint only, for the sideways case (O6); on a
+      // desktop the same caption — Reports' "chats handled per agent" table —
+      // still hung below the shell and the window scrolled ~220 px past the
+      // console into empty canvas (2026-10-09). Every width, then.
+      className="relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas focus-visible:-outline-offset-2"
     >
       {/* Wraps rather than overflows: on a narrow window the actions (tabs, a
           search box) drop under the title instead of pushing the page sideways

@@ -182,7 +182,7 @@ export function RuleBots(): ReactElement {
               noValidate
               className="flex flex-col gap-3 border-b border-border p-4"
             >
-              <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-wrap items-start gap-3">
                 <label htmlFor="rule-bot-name" className="flex w-56 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                     {t('team.ruleBots.nameLabel')}
@@ -203,7 +203,7 @@ export function RuleBots(): ReactElement {
                 <button
                   type="submit"
                   disabled={!botForm.canSubmit}
-                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
                   {botForm.isSubmitting
                     ? t('team.ruleBots.adding')
@@ -574,7 +574,7 @@ function RuleForm({
 
   return (
     <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="flex flex-wrap items-start gap-2">
         <label className="flex w-36 flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
             {t('team.ruleBots.ruleNameLabel')}
@@ -691,7 +691,7 @@ function RuleForm({
       </div>
 
       {form.submitError && (
-        <p role="alert" className="text-2xs text-danger">
+        <p role="alert" className="mt-5 text-2xs text-danger">
           {form.submitError}
         </p>
       )}

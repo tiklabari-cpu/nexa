@@ -51,7 +51,7 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { formatWeekday } from '../../lib/format.js';
-import { IANA_TIMEZONES } from '../../lib/timezones.js';
+import { IANA_TIMEZONES, timeZoneOptionLabel } from '../../lib/timezones.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
 
 interface AgentOption {
@@ -271,11 +271,11 @@ function WorkScheduleModal({
             className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
           >
             {!IANA_TIMEZONES.includes(value.timezone) && (
-              <option value={value.timezone}>{value.timezone}</option>
+              <option value={value.timezone}>{timeZoneOptionLabel(value.timezone)}</option>
             )}
             {IANA_TIMEZONES.map((zone) => (
               <option key={zone} value={zone}>
-                {zone}
+                {timeZoneOptionLabel(zone)}
               </option>
             ))}
           </select>

@@ -329,6 +329,18 @@ function isRegion(value: unknown): value is Region {
 }
 
 /** FR-MOD-00.2 — create a workspace and its first owner. */
+/**
+ * Whether sign-up asks for a data region at all (C4-c). Off by the owner's
+ * decision (2026-10-09, PLAN §D213): one deployment serves one region
+ * (`SIYAHTUS_REGION`), so the only choice that could ever succeed is the one
+ * the server already makes, and offering the other one led founders straight
+ * into the C4-h refusal. With the picker off the request carries no `region`
+ * and the server files the workspace where it runs — exactly the pilot's
+ * behaviour. Turning it back on is this one constant; the refusal message
+ * below stays for a client that still sends a region.
+ */
+const REGION_PICKER_ENABLED = false;
+
 export function SignUpPage(): ReactElement {
   const t = useTranslate();
   const signIn = useAuth((s) => s.signIn);
@@ -340,12 +352,15 @@ export function SignUpPage(): ReactElement {
   // choose, and the server files the workspace where it runs. Hiding the
   // picker is not enough — the state still holds 'eu', and sending it would
   // get every sign-up refused (421) by a deployment that serves 'us'.
+  // `REGION_PICKER_ENABLED` turns the picker off everywhere, not only in the
+  // pilot (owner decision 2026-10-09, §D213).
   const {
     pilot_mode: pilotMode,
     terms_url: termsUrl,
     terms_version: termsVersion,
     privacy_policy_url: privacyUrl,
   } = useDeployment();
+  const showRegionPicker = REGION_PICKER_ENABLED && !pilotMode;
   // The terms box (tm 257.9) sits outside the form primitive, like the region
   // picker: a tick is not a string a validator has an opinion about, and the
   // four fields' rules stay exactly as they were. Shown only when the
@@ -380,7 +395,7 @@ export function SignUpPage(): ReactElement {
           password: values.password,
           name: values.name.trim(),
           organization_name: values.organization.trim(),
-          ...(pilotMode ? {} : { region }),
+          ...(showRegionPicker ? { region } : {}),
           // The version the person was shown, which the server compares
           // with its own (`terms_outdated` when they differ).
           ...(termsRequired && termsAccepted ? { terms_version: termsVersion } : {}),
@@ -447,7 +462,7 @@ export function SignUpPage(): ReactElement {
           error={form.errorFor('organization')}
           autoFocus
         />
-        {!pilotMode && (
+        {showRegionPicker && (
           <>
             <div className="mb-4">
               <label htmlFor="signup-region" className="mb-1.5 block text-sm font-medium">

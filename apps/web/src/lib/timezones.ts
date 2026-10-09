@@ -30,3 +30,64 @@ export const IANA_TIMEZONES: readonly string[] = (() => {
     return ['UTC', 'Europe/Istanbul', 'Europe/London', 'America/New_York', 'Asia/Tokyo'];
   }
 })();
+
+/**
+ * The zone's offset from UTC at `at`, as people say it: `UTC+3`, `UTC-5`,
+ * `UTC+5:30`, `UTC+0`. A list of bare IANA names asks the reader to know where
+ * `Africa/Dar_es_Salaam` is; the offset is what they actually compare.
+ *
+ * "At `at`", because a zone with daylight saving has two offsets a year —
+ * `America/New_York` is UTC-5 in January and UTC-4 in July. The picker shows
+ * today's, which is the one the schedule is about to be read in. Read from the
+ * engine (`timeZoneName: 'longOffset'` → `GMT+05:30`), never from a table, so
+ * it is right for every zone `IANA_TIMEZONES` can offer. `null` for a name the
+ * engine does not know, so a stored legacy value still renders as itself.
+ */
+export function utcOffsetLabel(zone: string, at: Date = new Date()): string | null {
+  let named: string | undefined;
+  try {
+    named = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+      .formatToParts(at)
+      .find((part) => part.type === 'timeZoneName')?.value;
+  } catch {
+    return null;
+  }
+  if (!named) return null;
+  // `GMT` alone is offset zero; otherwise `GMT±HH:MM`.
+  const match = /^GMT(?:([+-])(\d{2}):(\d{2}))?$/.exec(named);
+  if (!match) return null;
+  if (!match[1]) return 'UTC+0';
+  const hours = Number(match[2]);
+  const minutes = match[3] === '00' ? '' : `:${match[3]}`;
+  return `UTC${match[1]}${hours}${minutes}`;
+}
+
+/**
+ * Labels already built today. A picker renders all ~420 zones on every render,
+ * and each label is an `Intl.DateTimeFormat` of its own; keyed by the UTC day
+ * so a daylight-saving change is picked up by the next day at the latest.
+ */
+const labelCache = new Map<string, string>();
+let labelCacheDay = '';
+
+/** What a zone picker shows for `zone`: `Europe/Istanbul (UTC+3)`; the bare name when unknown. */
+export function timeZoneOptionLabel(zone: string, at?: Date): string {
+  // `UTC (UTC+0)` says the same thing twice.
+  if (zone === 'UTC') return zone;
+  if (at) {
+    const offset = utcOffsetLabel(zone, at);
+    return offset ? `${zone} (${offset})` : zone;
+  }
+  const now = new Date();
+  const day = now.toISOString().slice(0, 10);
+  if (day !== labelCacheDay) {
+    labelCache.clear();
+    labelCacheDay = day;
+  }
+  let label = labelCache.get(zone);
+  if (label === undefined) {
+    label = timeZoneOptionLabel(zone, now);
+    labelCache.set(zone, label);
+  }
+  return label;
+}

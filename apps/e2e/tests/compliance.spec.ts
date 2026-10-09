@@ -58,23 +58,21 @@ const PASSWORD = 'compliance-e2e-password';
 const RTM_WS = `${STACK_RTM_WS}/v1/agent/rtm/ws`;
 
 /**
- * Create a workspace through the signup form, choosing where its data lives.
+ * Create a workspace through the signup form.
  *
- * Deliberately the browser and not `POST /auth/signup`: the region is a
- * `<select>` the page owns (C4-c) rather than a form field, and driving the API
- * would prove the column while skipping the only thing that puts a value in it.
+ * The form asks for no region any more (owner decision 2026-10-09, PLAN §D213):
+ * it sends none, and the server files the workspace in the region it serves —
+ * the European Union here. A `us` request can only be made against the API,
+ * which is where door 0 below makes it.
  */
-async function signUpChoosingRegion(
-  page: Page,
-  region: 'eu' | 'us',
-): Promise<{ name: string; email: string }> {
+async function signUpThroughTheForm(page: Page): Promise<{ name: string; email: string }> {
   const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  const name = `Residency ${region.toUpperCase()} ${unique}`;
+  const name = `Residency ${unique}`;
   const email = `owner-${unique}@residency.test`;
 
   await page.goto('/signup');
   await page.getByLabel('Workspace name').fill(name);
-  await page.getByLabel('Data region').selectOption(region);
+  await expect(page.getByLabel('Data region')).toHaveCount(0);
   await page.getByLabel('Your name').fill('Robin Owner');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
@@ -151,23 +149,31 @@ test.describe('data residency, at every door (NFR-C4 · C4-b · C4-g)', () => {
     request,
   }) => {
     // --- Door 0: signup (C4-h) ----------------------------------------------
-    const { email } = await signUpChoosingRegion(page, 'us');
-
-    // The founder is left on the form, as before. What changed is everything
-    // behind it. This used to succeed: signup is anonymous, so the region gate
-    // never saw it, and the organization, the owner account and the licence
-    // were written into the *European* database — after which every identified
-    // request that workspace made was refused, forever, with nothing able to
-    // move the rows because a region is immutable. The refusal now happens
-    // before the first write.
-    const alert = page.getByRole('alert').first();
-    await expect(alert).toBeVisible();
-    await expect(alert).toHaveText(/nothing was created/i);
-    // And it says which choice would work here, because the founder's next move
-    // is to make one.
-    await expect(alert).toHaveText(/European Union/);
-    await expect(page.getByRole('link', { name: 'Inbox' })).toHaveCount(0);
-    await expect(page).toHaveURL(/\/signup/);
+    // Against the API: the form no longer offers a region (§D213), but the
+    // endpoint still takes one, and that is the door that has to hold. This used
+    // to succeed: signup is anonymous, so the region gate never saw it, and the
+    // organization, the owner account and the licence were written into the
+    // *European* database — after which every identified request that workspace
+    // made was refused, forever. The refusal happens before the first write, and
+    // names the region this deployment does serve (the form's wording for it is
+    // unit-tested in `PublicPages.test.tsx`).
+    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const email = `owner-${unique}@residency.test`;
+    const refused = await request.post(`${API_BASE}/auth/signup`, {
+      data: {
+        email,
+        password: PASSWORD,
+        name: 'Robin Owner',
+        organization_name: `Residency US ${unique}`,
+        region: 'us',
+      },
+    });
+    expect(refused.status()).toBe(421);
+    const refusal = (await refused.json()) as {
+      error: { type: string; details?: { region?: string; served_region?: string } };
+    };
+    expect(refusal.error.type).toBe('misdirected_request');
+    expect(refusal.error.details?.served_region).toBe('eu');
 
     // Nothing was created — asserted from outside the browser, against the only
     // surface that can answer for a workspace nobody holds a token for. A login
@@ -177,12 +183,12 @@ test.describe('data residency, at every door (NFR-C4 · C4-b · C4-g)', () => {
     });
     expect(login.status()).toBe(401);
 
-    // The same choice at the same form, in the region this deployment does
-    // serve, still works. Otherwise the assertions above would pass just as
+    // A sign-up through the form, which lands in the region this deployment
+    // serves, still works. Otherwise the assertions above would pass just as
     // well with signup switched off. A brand-new workspace opens on the
     // first-run wizard (FR-MOD-00.4), not the inbox — reaching it is what
     // "created, signed in, and inside" looks like here.
-    await signUpChoosingRegion(page, 'eu');
+    await signUpThroughTheForm(page);
     await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toBeVisible();
   });
 
@@ -272,10 +278,10 @@ test.describe('data residency, at every door (NFR-C4 · C4-b · C4-g)', () => {
 });
 
 test.describe('the compliance card (NFR-C4 · C4-d · C4-f · C4-g)', () => {
-  test('shows the region the founder chose, fixed, with no agreement to accept outside the US', async ({
+  test('shows the region the workspace was filed in, fixed, with no agreement to accept outside the US', async ({
     page,
   }) => {
-    await signUpChoosingRegion(page, 'eu');
+    await signUpThroughTheForm(page);
 
     // A European workspace signs in normally at this deployment, so the journey
     // continues where the American one stopped.
@@ -287,7 +293,7 @@ test.describe('the compliance card (NFR-C4 · C4-d · C4-f · C4-g)', () => {
     const card = page.getByRole('region', { name: 'Data region and compliance' });
     await expect(card.getByRole('heading', { name: 'Data region and compliance' })).toBeVisible();
 
-    // The choice made on the signup form, read back from the server — and said
+    // The region the server filed the workspace in, read back — and said
     // to be permanent, which is the claim the database trigger
     // (`organizations_region_immutable`) actually enforces.
     await expect(card.getByText('European Union')).toBeVisible();

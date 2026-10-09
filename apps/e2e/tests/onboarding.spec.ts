@@ -102,20 +102,17 @@ test.describe('onboarding wizard (FR-MOD-00.4)', () => {
   });
 });
 
-test.describe('signup region selection (C4-c, ADR-12)', () => {
-  test('defaults to the European Union, warns the choice is permanent, and can be changed', async ({
+test.describe('signup asks for no data region (C4-c off · PLAN §D213)', () => {
+  test('offers no region picker and no permanence warning — the server files the workspace where it runs', async ({
     page,
   }) => {
     await page.goto('/signup');
-    const region = page.getByLabel('Data region');
-    await expect(region).toHaveValue('eu');
-    await expect(
-      page.getByText(/cannot be changed after your workspace is created/i),
-    ).toBeVisible();
-
-    // A real control, not a static label — and the field the signup body
-    // reads from (PublicPages.tsx), not something layered on top of it.
-    await region.selectOption('us');
-    await expect(region).toHaveValue('us');
+    // Anchored on the form being there, so the absence below is not read off a
+    // page that has not rendered yet.
+    await expect(page.getByLabel('Workspace name')).toBeVisible();
+    await expect(page.getByLabel('Data region')).toHaveCount(0);
+    await expect(page.getByText(/cannot be changed after your workspace is created/i)).toHaveCount(
+      0,
+    );
   });
 });

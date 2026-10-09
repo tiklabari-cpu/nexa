@@ -11339,13 +11339,74 @@
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-10-09T00:21:16.592Z"
+      },
+      {
+        "id": "262",
+        "title": "OWNER-FIXES-1009 [OPUS-HIGH] (Opus 5.5 · efor high) Sahip istekleri: kayıtta bölge seçicisi, sayfa altı kayması, satır içi form hizası, saat dilimi UTC farkı",
+        "description": "Sahibin 2026-10-09 sohbette bildirdiği dört sorun; interaktif pencerede uygulandı, kayıt sonradan Task Master'a eklendi. PLAN §D213.",
+        "details": "Uygulandı ve doğrulandı, commit ccf4d0f8 (merge 14931a6d). Alt görevler her düzeltmenin sebebini ve dosyalarını taşır. HANDOFF \"Sahip istekleri\" girişi (2026-10-09).",
+        "testStrategy": "test:gate build statik birim --force 0 cached yeşil; web birim 220/2840; tam e2e 3 parça 387/387 (12:55).",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "SIGNUP-REGION-OFF — kayıt formunda bölge seçicisi kapalı (sahip kararı)",
+            "description": "Kayıtta ABD seçilince çıkan C4-h reddi: tek bölgeli dağıtımda öteki seçenek her zaman reddediliyordu. Sahip \"seçiciyi gizle\"yi seçti.",
+            "details": "apps/web/src/features/auth/PublicPages.tsx: REGION_PICKER_ENABLED = false — seçici ve kalıcılık uyarısı her ortamda gizli, istek region taşımıyor, sunucu çalışma alanını kendi bölgesine (SIYAHTUS_REGION) açıyor. Sunucu tarafı ve C4-h reddi değişmedi. \"Tek sunucu iki bölge\" seçeneği önerilmedi: beş kapı değişirdi, \"ABD\" etiketi verinin gerçek yerini yansıtmaz, HIPAA yanlış dayanakla açılabilirdi. PLAN §D213, C4-c maddesi ⏸.",
+            "testStrategy": "PublicPages.test.tsx: seçici yok, gövdede region yok; onboarding.spec.ts: formda Data region yok; compliance.spec.ts kapı 0 API'den (region us → 421, served_region eu).",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "262",
+            "priority": "medium",
+            "updatedAt": "2026-10-09T22:06:07.114Z"
+          },
+          {
+            "id": 2,
+            "title": "PAGE-SCROLL-OVERFLOW — sayfa altında fazladan dikey kaydırma",
+            "description": "Raporlar sayfasında pencere konsolun altına ~220 px boş alana kayıyordu.",
+            "details": "Sebep: sr-only tablo caption'ı (position: absolute) masaüstünde konumlu atası olmadığı için kaydırma kutusunun dışına, belgeye göre yerleşiyordu (1900x860 pencerede belge 1078 px). apps/web/src/components/Page.tsx kaydırıcısı artık her genişlikte relative (tm 259.25 yalnız max-lg'de yapmıştı).",
+            "testStrategy": "Tarayıcıda 19 rota tarandı: fazladan dikey/yatay kaydırma hepsinde 0 (Raporlar 218 → 0).",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "262",
+            "priority": "medium",
+            "updatedAt": "2026-10-09T22:06:07.114Z"
+          },
+          {
+            "id": 3,
+            "title": "INLINE-FORM-ALIGN — satır içi formlarda hata yazısıyla alan kayması",
+            "description": "Yönlendirme, Yetenekler, Talep kuralları ve benzeri ekleme formlarında bir alanın altına hata yazısı çıkınca komşu alanlar ve düğme yer değiştiriyordu.",
+            "details": "Sebep: flex-wrap items-end satırlar alttan hizalanıyordu. 24 satır items-start oldu; doğrudan çocuk düğmelere mt-5 (etiket satırı 1rem + gap-1), onay kutusu etiketlerine mt-5 py-1.5. Dosyalar: RoutingRules, Skills, TicketRules, Tags, CannedResponses, IpAllowlist, Brands, TrustedDomains, BannedCustomerIps, ChatFormsSettings, CustomFieldsSettings, FileSharing, PersonalAccessTokens, ScheduledExports, SsoConnection, WebsiteWidgets, WebhookSubscriptions, RuleBots, OnboardingWizard. Hata alanı olmayan dört satıra (ChatTimeout, SiemExport, SSO, TeamMembers) dokunulmadı.",
+            "testStrategy": "Tarayıcıda Yönlendirme formu: üç hata yazısı görünürken dört alan ve düğmenin üst kenarı aynı (210 px); tam e2e yeşil.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "262",
+            "priority": "medium",
+            "updatedAt": "2026-10-09T22:06:07.114Z"
+          },
+          {
+            "id": 4,
+            "title": "TIMEZONE-OFFSET-LABEL — saat dilimi seçicisinde UTC farkı",
+            "description": "Saat dilimi listesinde her bölgenin yanında UTC farkı yazsın (ör. -5, +1).",
+            "details": "apps/web/src/lib/timezones.ts: utcOffsetLabel / timeZoneOptionLabel — motorun longOffset biçiminden, bugünkü fark (yaz saati dahil), günlük önbellek; UTC yalın. Şirket bilgileri ve Çalışma programı seçicileri \"Europe/Istanbul (UTC+3)\" gösteriyor; değerler (IANA adı) değişmedi.",
+            "testStrategy": "lib/timezones.test.ts (9): tam saat, sıfır, yarım/çeyrek saat, yaz saati, bilinmeyen ad, listedeki her bölgenin farkı var.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "262",
+            "priority": "medium",
+            "updatedAt": "2026-10-09T22:06:07.114Z"
+          }
+        ],
+        "updatedAt": "2026-10-09T22:06:07.114Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-09T00:21:16.593Z",
-      "taskCount": 261,
-      "completedCount": 261,
+      "lastModified": "2026-10-09T22:06:07.114Z",
+      "taskCount": 262,
+      "completedCount": 262,
       "tags": [
         "master"
       ]

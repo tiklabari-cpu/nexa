@@ -14,6 +14,7 @@ import {
   logSafeUrl,
   maskPii,
   PROVIDER_SECRET_ENV_KEYS,
+  APPS_SECRET_LOG_PATHS,
   PROVIDER_SECRET_LOG_PATHS,
   requestPath,
 } from './log-redact.js';
@@ -176,5 +177,41 @@ describe('provider credentials', () => {
     // Only the credentials go — a model id and a host are not secrets.
     expect(written).toContain('test-model');
     expect(written).toContain('https://eu.api.openai.com/v1');
+  });
+});
+
+/**
+ * The Apps credentials (tm 263): a pasted provider key, a bot token and the
+ * key they are encrypted under. No code path logs them today — the safe client
+ * logs nothing and its errors carry no URL — so this pins the net under a
+ * careless line added later, the way the provider list above does.
+ */
+describe('Apps credentials (tm 263)', () => {
+  const KEY = 'xkeysib-apps-never-logged-7f3c';
+  const TOKEN = '7123456789:AAH-bot-never-logged-2e9d';
+  const CIPHER_KEY = 'ab'.repeat(32);
+
+  it('is part of what the server spreads', () => {
+    for (const path of APPS_SECRET_LOG_PATHS) expect(PROVIDER_SECRET_LOG_PATHS).toContain(path);
+    expect(Object.keys(envSchema.shape)).toContain('APPS_CREDENTIAL_KEY');
+  });
+
+  it('censors a key, a token and the encryption key wherever a line would carry them', () => {
+    const lines: string[] = [];
+    const logger = pino(
+      { redact: { paths: [...PROVIDER_SECRET_LOG_PATHS], censor: '[redacted]' } },
+      { write: (line: string) => lines.push(line) },
+    );
+    logger.info({ APPS_CREDENTIAL_KEY: CIPHER_KEY }, 'the environment');
+    logger.info({ env: { APPS_CREDENTIAL_KEY: CIPHER_KEY } }, 'the environment, nested');
+    logger.info({ credentials: { apiKey: KEY, subdomain: 'acme' } }, 'a verify call');
+    logger.info({ apiKey: KEY }, 'a key');
+    logger.info({ botToken: TOKEN }, 'a token');
+    logger.info({ body: { bot_token: TOKEN } }, 'a connect body');
+    logger.info({ request: { headers: { 'api-key': KEY } } }, 'a provider request');
+    const written = lines.join('\n');
+    for (const value of [KEY, TOKEN, CIPHER_KEY]) expect(written).not.toContain(value);
+    // The non-secret half stays readable.
+    expect(written).toContain('acme');
   });
 });

@@ -16,12 +16,16 @@
  * same request reaches the handler. The flag-off behaviour itself is pinned by
  * `apps` and `onboarding`, which are untouched.
  *
- * Derived pilot operations work: no Ek A catalogue ID, so no requirement tag.
+ * Live cards (tm 263) are the exception, and the only one: a card this
+ * deployment runs against its real provider (`APPS_LIVE_PROVIDERS`) is listed,
+ * connectable and shown in-chat in the pilot; every mock card stays exactly as
+ * closed as above. The last describe pins both halves on one server.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { json, startFakeProvider, type FakeProvider } from '../helpers/fake-provider.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PILOT = { PILOT_MODE: 'true', PILOT_CONTACT_EMAIL: 'pilot-contact@example.test' };
@@ -78,7 +82,12 @@ describe('pilot mode: Apps marketplace and sample data (tm 257.18)', () => {
       licenseId: fx.a.licenseId,
       organizationId: fx.a.organizationId,
       ownerId: fx.a.ownerAccountId,
-      scopes: ['access_rules:rw', 'chats--all:rw', 'properties.configuration:rw'],
+      scopes: [
+        'access_rules:rw',
+        'chats--all:rw',
+        'properties.configuration:rw',
+        'channels--all:rw',
+      ],
     });
   });
 
@@ -184,6 +193,106 @@ describe('pilot mode: Apps marketplace and sample data (tm 257.18)', () => {
       const response = await ordinary.post('/onboarding/seed-demo', undefined, auth());
       expect(response.statusCode).toBe(200);
       expect(response.json().seeded).toBe(true);
+    });
+  });
+
+  describe('live cards are the pilot marketplace (tm 263 · FR-MOD-09.2)', () => {
+    const LIVE_KEY = 'xkeysib-pilot-live-test-0123456789';
+    let provider: FakeProvider;
+    let live: TestServer;
+
+    beforeAll(async () => {
+      provider = await startFakeProvider((request, response) => {
+        if (request.path === '/brevo/v3/account' && request.headers['api-key'] === LIVE_KEY) {
+          json(response, 200, { email: 'owner@pilot.test', companyName: 'Pilot Co' });
+        } else {
+          json(response, 401, { code: 'unauthorized', message: 'Key not found' });
+        }
+      });
+      live = await startTestServer(
+        { ...PILOT, APPS_LIVE_PROVIDERS: 'brevo,telegram', APPS_CREDENTIAL_KEY: 'f6'.repeat(32) },
+        {
+          appsHttp: provider.http({ timeoutMs: 400 }),
+          appsEndpoints: {
+            brevo: `${provider.base}/brevo`,
+            freshdesk: (sub) => `${provider.base}/freshdesk/${sub}`,
+            telegram: `${provider.base}/telegram`,
+          },
+        },
+      );
+    });
+
+    afterAll(async () => {
+      await live.close();
+      await provider.close();
+    });
+
+    beforeEach(async () => {
+      await clearRateLimits(live.app);
+    });
+
+    it('lists the live cards and nothing else', async () => {
+      const all = await live.get('/settings/apps', auth());
+      expect(all.statusCode).toBe(200);
+      expect(all.json().items.map((item: { id: string }) => item.id)).toStrictEqual(['brevo']);
+      expect(all.json().items[0].live_available).toBe(true);
+      // The webhook picker's category holds no live card: still empty, not an error.
+      expect((await live.get('/settings/apps?category=productivity', auth())).json()).toMatchObject(
+        {
+          items: [],
+          total: 0,
+        },
+      );
+    });
+
+    it('lets a live card connect and disconnect, and keeps every mock door shut', async () => {
+      const connected = await live.post(
+        `/settings/apps/brevo/connect`,
+        { api_key: LIVE_KEY },
+        auth(),
+      );
+      expect(connected.statusCode).toBe(200);
+      expect(connected.json().installation).toMatchObject({ live: true, status: 'connected' });
+
+      const before = await state(fx.a.licenseId);
+      expectPilotRefusal(
+        await live.post(`/settings/apps/${KEY_APP}/connect`, { api_key: API_KEY }, auth()),
+      );
+      expectPilotRefusal(await live.post(`/settings/apps/${OAUTH_APP}/oauth/start`, {}, auth()));
+      expectPilotRefusal(await live.del(`/settings/apps/${KEY_APP}`, auth()));
+      // Telegram is live too, but as a channel: not connectable here, and the
+      // pilot gate does not open the marketplace's door for it.
+      expectPilotRefusal(await live.post('/settings/apps/hubspot/oauth/callback', {}, auth()));
+      expect(await state(fx.a.licenseId)).toStrictEqual(before);
+
+      expect((await live.del('/settings/apps/brevo', auth())).statusCode).toBe(204);
+    });
+
+    it('opens the live Telegram channel’s doors and no other channel’s', async () => {
+      // Not refused at the gate — the handler answers (here: API_BASE_URL is
+      // not public https, so it says so instead of going live).
+      const telegram = await live.post('/channels/telegram/connect', { bot_token: '1:x' }, auth());
+      expect(telegram.statusCode).not.toBe(403);
+      expectPilotRefusal(
+        await live.post('/channels/messenger/connect', { page_id: '1', page_name: 'x' }, auth()),
+      );
+      expectPilotRefusal(await live.post('/channels/telegram/webhook', {}, {}));
+    });
+
+    it('shows only live data in a conversation', async () => {
+      await owner.appInstallation.create({
+        data: { licenseId: fx.a.licenseId, appId: OAUTH_APP, externalAccount: 'acct_before' },
+      });
+      const opened = await ordinary.post('/chats', { customer_id: fx.a.customerId }, auth());
+      const chatId = (opened.json() as { id: string }).id;
+      expect((await live.get(`/chats/${chatId}/apps`, auth())).json()).toStrictEqual({ items: [] });
+
+      expect(
+        (await live.post(`/settings/apps/brevo/connect`, { api_key: LIVE_KEY }, auth())).statusCode,
+      ).toBe(200);
+      const items = (await live.get(`/chats/${chatId}/apps`, auth())).json().items;
+      expect(items.map((item: { app_id: string }) => item.app_id)).toStrictEqual(['brevo']);
+      expect(items[0].live).toBe(true);
     });
   });
 });

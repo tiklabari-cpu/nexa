@@ -231,6 +231,22 @@ describe('the shell in the public pilot (tm 257.2)', () => {
     expect(screen.queryByRole('link', { name: 'Apps' })).toBeNull();
   });
 
+  it('links the marketplace when the pilot runs live Apps cards (tm 263)', async () => {
+    deployment.current = { ...PILOT, live_apps: ['brevo'] };
+    const user = userEvent.setup();
+    renderShell();
+    await user.click(screen.getByRole('button', { name: 'App menu' }));
+    expect(screen.getByRole('link', { name: 'Apps' })).toHaveAttribute('href', '/app/apps');
+  });
+
+  it('does not link it for a live Telegram alone, which is a channel (tm 263)', async () => {
+    deployment.current = { ...PILOT, live_apps: ['telegram'] };
+    const user = userEvent.setup();
+    renderShell();
+    await user.click(screen.getByRole('button', { name: 'App menu' }));
+    expect(screen.queryByRole('link', { name: 'Apps' })).toBeNull();
+  });
+
   describe('on an ordinary deployment', () => {
     it('links the app menu to the marketplace (tm 257.18)', async () => {
       deployment.current = ORDINARY;

@@ -894,7 +894,11 @@ describe('module parity matrix — what is still owed', () => {
       // and an owner who has not verified is refused at `/auth/authorize`
       // like anywhere else, with `email_unverified`; the link opens in the
       // web panel. A boundary rather than a gap, and nothing here re-scopes.
-      contractEndpoints: 222,
+      // 222 -> 223 with `/channels/telegram/webhook/{channelId}` (tm 263) —
+      // where a live Telegram bot's updates arrive, called by Telegram with a
+      // secret header, never by a person. The app manages no channels, so
+      // there is nothing to call; nothing here re-scopes.
+      contractEndpoints: 223,
       scopeBoundaries: 1,
     });
   });

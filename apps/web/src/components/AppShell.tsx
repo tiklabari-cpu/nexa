@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { useDeployment } from '../lib/deployment.js';
+import { liveDataApps } from '../lib/live-apps.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { enumLabel } from '../lib/enum-label.js';
@@ -434,8 +435,10 @@ function useNavBadges(): Partial<Record<string, { count: number; ariaLabel: stri
  */
 function AppMenu(): ReactElement {
   const t = useTranslate();
-  // The pilot has no marketplace to link to (tm 257.18).
-  const { pilot_mode: pilotMode } = useDeployment();
+  // The pilot has no marketplace to link to (tm 257.18) — unless it runs live
+  // cards, which are then the marketplace (tm 263).
+  const deployment = useDeployment();
+  const showApps = !deployment.pilot_mode || liveDataApps(deployment).length > 0;
 
   return (
     <Dropdown
@@ -448,7 +451,7 @@ function AppMenu(): ReactElement {
       {({ close }) => (
         <div className="flex flex-col gap-1">
           <BrandSwitcher />
-          {!pilotMode && (
+          {showApps && (
             <Link
               to="/app/apps"
               className="block rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"

@@ -100,9 +100,38 @@ export const SMTP_SECRET_LOG_PATHS = [
   '*.mail.smtp.password',
 ];
 
+/**
+ * The Apps credentials (tm 263): the encryption key's env name, a pasted key or
+ * bot token wherever a service might log the credentials object
+ * (`credentials.apiKey`, `botToken`), and the provider request headers the
+ * adaptors set (`api-key`, `authorization`). The safe client itself logs
+ * nothing and its errors carry no URL — Telegram puts the token in the path.
+ */
+export const APPS_SECRET_LOG_PATHS = [
+  'APPS_CREDENTIAL_KEY',
+  '*.APPS_CREDENTIAL_KEY',
+  'apiKey',
+  '*.apiKey',
+  'credentials.apiKey',
+  '*.credentials.apiKey',
+  'botToken',
+  '*.botToken',
+  'bot_token',
+  '*.bot_token',
+  'headers["api-key"]',
+  '*.headers["api-key"]',
+  'headers.authorization',
+  '*.headers.authorization',
+];
+
 /** Every provider credential path, once — what the server's pino `redact.paths` spreads. */
 export const PROVIDER_SECRET_LOG_PATHS: readonly string[] = [
-  ...new Set([...SMTP_SECRET_LOG_PATHS, ...LLM_SECRET_LOG_PATHS, ...EMBEDDING_SECRET_LOG_PATHS]),
+  ...new Set([
+    ...SMTP_SECRET_LOG_PATHS,
+    ...LLM_SECRET_LOG_PATHS,
+    ...EMBEDDING_SECRET_LOG_PATHS,
+    ...APPS_SECRET_LOG_PATHS,
+  ]),
 ];
 
 /**

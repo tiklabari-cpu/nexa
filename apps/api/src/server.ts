@@ -22,6 +22,9 @@ import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
 import pilotGate, { PILOT_REFUSED_PATHS, type PilotRefusedPath } from './plugins/pilot-gate.js';
+import type { SafeHttp } from './lib/safe-fetch.js';
+import { liveAppIds } from './services/apps/verifiers/registry.js';
+import type { ProviderEndpoints } from './services/apps/verifiers/types.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import scheduler from './plugins/scheduler.js';
@@ -153,6 +156,16 @@ export interface BuildServerOptions {
    * surface happens to be on the list.
    */
   pilotRefusedPaths?: readonly PilotRefusedPath[];
+  /**
+   * How the live Apps cards and the live Telegram channel reach their
+   * providers (tm 263). Omitted, the real safe client (`lib/safe-fetch.ts`). A
+   * test passes one pinned to a local HTTPS fake (`test/helpers/fake-provider.ts`),
+   * with `appsEndpoints` pointing the adaptors at it — no request leaves the
+   * machine.
+   */
+  appsHttp?: SafeHttp;
+  /** Provider hosts for `appsHttp` (tm 263). Omitted, the real ones. */
+  appsEndpoints?: ProviderEndpoints;
 }
 
 export async function buildServer({
@@ -168,6 +181,8 @@ export async function buildServer({
   embeddings: injectedEmbeddings,
   embeddingFetch,
   pilotRefusedPaths = PILOT_REFUSED_PATHS,
+  appsHttp,
+  appsEndpoints,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -461,7 +476,13 @@ export async function buildServer({
   // order, so a route that needs a credential still answers 401 to a caller
   // without one, the way every other route does, and only then "not in the
   // pilot". It reads no principal either way; see the file header.
-  await app.register(pilotGate, { env, paths: pilotRefusedPaths });
+  await app.register(pilotGate, {
+    env,
+    paths: pilotRefusedPaths,
+    // The cards (and the Telegram channel) this deployment runs live: the only
+    // way through a `pilotRefused` route (tm 263).
+    liveApps: liveAppIds(env.APPS_LIVE_PROVIDERS),
+  });
   await app.register(metering, { env });
 
   app.addHook('onSend', async (request, reply) => {
@@ -484,7 +505,13 @@ export async function buildServer({
       // exception is deliberate).
       await api.register(scimRoutes, { baseUrl: `${env.API_BASE_URL}${API_PREFIX}/scim/v2` });
       await api.register(accountLifecycleRoutes, { env, mailer });
-      await api.register(chatRoutes, { env, push, automations });
+      await api.register(chatRoutes, {
+        env,
+        push,
+        automations,
+        ...(appsHttp ? { appsHttp } : {}),
+        ...(appsEndpoints ? { appsEndpoints } : {}),
+      });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
       await api.register(customerRoutes, { env, push, automations, llm: meteredLlm, knowledge });
@@ -497,7 +524,12 @@ export async function buildServer({
       await api.register(botRoutes);
       await api.register(ticketEmailTemplateRoutes);
       await api.register(customFieldRoutes);
-      await api.register(channelRoutes, { env, automations });
+      await api.register(channelRoutes, {
+        env,
+        automations,
+        ...(appsHttp ? { appsHttp } : {}),
+        ...(appsEndpoints ? { appsEndpoints } : {}),
+      });
       await api.register(reportRoutes, { env });
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
@@ -523,7 +555,11 @@ export async function buildServer({
       });
       await api.register(copilotRoutes, { env, automations, knowledge, llm: meteredCopilotLlm });
       await api.register(commandPaletteRoutes);
-      await api.register(appRoutes, { env });
+      await api.register(appRoutes, {
+        env,
+        ...(appsHttp ? { appsHttp } : {}),
+        ...(appsEndpoints ? { appsEndpoints } : {}),
+      });
       await api.register(auditLogRoutes, { env });
     },
     { prefix: API_PREFIX },

@@ -22,6 +22,7 @@ import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
 import { STORAGE_PROVIDERS } from '../services/storage/object-store.js';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 import { SECRET_KEYS, envSchema, parseEnv } from './env.js';
+import { DEV_APPS_CREDENTIAL_KEY } from '../services/apps/live-apps.js';
 
 /** The minimum a boot needs, so a failure below is about the region and nothing else. */
 const BASE: NodeJS.ProcessEnv = {
@@ -632,6 +633,7 @@ describe('production configuration', () => {
     CUSTOMER_TOKEN_SECRET: realSecret('customer'),
     UPLOAD_SIGNING_KEY: realSecret('upload'),
     AUDIT_CHAIN_SECRET: realSecret('audit'),
+    APPS_CREDENTIAL_KEY: 'c3'.repeat(32),
   };
 
   it('boots on a fully configured production environment', () => {
@@ -991,6 +993,14 @@ describe('production configuration', () => {
 
     expect(declared.sort()).toEqual([...SECRET_KEYS].sort());
     expect(declared).toHaveLength(5);
+  });
+
+  it('refuses a production boot without APPS_CREDENTIAL_KEY, or on its published value (tm 263)', () => {
+    const { APPS_CREDENTIAL_KEY: _omitted, ...withoutKey } = PROD_BASE;
+    expect(() => parseEnv(withoutKey)).toThrow(/APPS_CREDENTIAL_KEY is required in production/);
+    expect(() =>
+      parseEnv({ ...PROD_BASE, APPS_CREDENTIAL_KEY: DEV_APPS_CREDENTIAL_KEY.toUpperCase() }),
+    ).toThrow(/APPS_CREDENTIAL_KEY still holds its development placeholder/);
   });
 
   it('refuses an inbound mail webhook that authenticates nobody', () => {
@@ -1520,6 +1530,51 @@ describe('production configuration', () => {
  * harness's `withTestConnectionBudget`) is a more specific choice than this
  * deployment-wide default.
  */
+describe('Apps live providers and their credential key (tm 263 · FR-MOD-09.2)', () => {
+  const KEY = 'd4'.repeat(32);
+
+  it('leaves every card on its mock by default, with no key needed', () => {
+    const env = parseEnv(BASE);
+    expect(env.APPS_LIVE_PROVIDERS).toEqual([]);
+    expect(env.APPS_CREDENTIAL_KEY).toBeUndefined();
+    expect(env.RATE_LIMIT_APPS_CONNECT_PER_HOUR).toBe(20);
+  });
+
+  it('reads a comma list, trimmed, lower-cased and de-duplicated', () => {
+    const env = parseEnv({
+      ...BASE,
+      APPS_CREDENTIAL_KEY: KEY,
+      APPS_LIVE_PROVIDERS: ' Brevo, freshdesk ,,telegram,brevo',
+    });
+    expect(env.APPS_LIVE_PROVIDERS).toEqual(['brevo', 'freshdesk', 'telegram']);
+  });
+
+  it('refuses a provider no verifier implements', () => {
+    // A typo would otherwise leave the card on demo data while the owner believes it is live.
+    expect(() =>
+      parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: KEY, APPS_LIVE_PROVIDERS: 'brevo,zendsk' }),
+    ).toThrow(/APPS_LIVE_PROVIDERS[\s\S]*zendsk/);
+  });
+
+  it('refuses a live provider without a key, in every environment', () => {
+    expect(() => parseEnv({ ...BASE, APPS_LIVE_PROVIDERS: 'brevo' })).toThrow(
+      /APPS_CREDENTIAL_KEY is required when APPS_LIVE_PROVIDERS/,
+    );
+  });
+
+  it('accepts only 32 bytes written as hex, and reads an empty line as unset', () => {
+    expect(parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: KEY.toUpperCase() }).APPS_CREDENTIAL_KEY).toBe(
+      KEY.toUpperCase(),
+    );
+    expect(parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: '' }).APPS_CREDENTIAL_KEY).toBeUndefined();
+    for (const bad of ['d4'.repeat(31), 'd4'.repeat(33), 'zz'.repeat(32), 'dev-only-apps-key']) {
+      expect(() => parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: bad })).toThrow(
+        /APPS_CREDENTIAL_KEY[\s\S]*64 hexadecimal/,
+      );
+    }
+  });
+});
+
 describe('DATABASE_POOL_SIZE', () => {
   it('leaves the connection string untouched when unset', () => {
     expect(parseEnv(BASE).runtimeDatabaseUrl).toBe(BASE['DATABASE_URL']);

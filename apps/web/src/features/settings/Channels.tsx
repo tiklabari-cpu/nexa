@@ -35,6 +35,8 @@ import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { FieldError, compose, phoneNumber, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { isTelegramLive } from '../../lib/live-apps.js';
+import { liveConnectErrorText } from '../apps/live-errors.js';
 import { useConnectedChannels, type ConnectedChannel } from '../inbox/useInbox.js';
 import { canReadChannels } from '../inbox/views.js';
 
@@ -68,6 +70,8 @@ export interface Channel {
   href?: string;
   /** The connected channel address (e.g. an Instagram user id), shown once connected. */
   address?: string | null;
+  /** Connected to the real provider (tm 263 — a live Telegram bot). */
+  live?: boolean;
 }
 
 const STATUS_META: Record<ChannelStatus, { tone: StatusTone; labelKey: string }> = {
@@ -139,12 +143,14 @@ function ctaText(t: TFunction, cta: string): string {
  *
  * In the public pilot (`pilotMode`, tm 257.3) the grid is the first two cards
  * only: Website and Chat page are real, and everything after them is a mock
- * provider or the e-mail channel, which the pilot does not run.
+ * provider or the e-mail channel, which the pilot does not run — except a
+ * Telegram the deployment runs live (`telegramLive`, tm 263), which is real.
  */
 export function channelsFor(
   websites: WebsiteStatusRow[],
   connectedChannels: ConnectedChannel[] = [],
   pilotMode = false,
+  telegramLive = false,
 ): Channel[] {
   const connected = websites.filter((w) => w.status === 'connected').length;
   const websiteStatus: ChannelStatus =
@@ -182,7 +188,11 @@ export function channelsFor(
     instagramChannel(connectedChannels),
     telegramChannel(connectedChannels),
   ];
-  return pilotMode ? all.filter((c) => c.id === 'website' || c.id === 'chat-page') : all;
+  return pilotMode
+    ? all.filter(
+        (c) => c.id === 'website' || c.id === 'chat-page' || (telegramLive && c.id === 'telegram'),
+      )
+    : all;
 }
 
 /**
@@ -284,6 +294,7 @@ function telegramChannel(connectedChannels: ConnectedChannel[]): Channel {
     status: isConnected ? 'connected' : 'not_connected',
     cta: isConnected ? 'Disconnect' : 'Connect',
     address: isConnected ? (row?.address ?? null) : undefined,
+    live: isConnected && row?.live === true,
   };
 }
 
@@ -591,8 +602,12 @@ export function ChannelsGrid(): ReactElement {
   //
   // The pilot never asks (tm 257.3): its grid shows no adapter channel, and a
   // 403 on `GET /channels` would blank the Website and Chat page cards with it.
-  const { pilot_mode: pilotMode } = useDeployment();
-  const canChannels = canReadChannels(scopes) && !pilotMode;
+  // A live Telegram is the exception (tm 263): its card is real, and the API
+  // reads the list in the pilot like anywhere else.
+  const deployment = useDeployment();
+  const pilotMode = deployment.pilot_mode;
+  const telegramLive = isTelegramLive(deployment);
+  const canChannels = canReadChannels(scopes) && (!pilotMode || telegramLive);
 
   const websites = useQuery({
     queryKey: ['settings', 'websites', brandId],
@@ -613,6 +628,7 @@ export function ChannelsGrid(): ReactElement {
     websites.data?.items ?? [],
     connectedChannels.data?.items ?? [],
     pilotMode,
+    telegramLive,
   );
 
   return (
@@ -906,10 +922,13 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
   const api = useApiClient();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  // Live (tm 263): Telegram names the bot, so only the token is asked for,
+  // and a refusal says why in Telegram's words.
+  const live = isTelegramLive(useDeployment());
 
   const connect = useMutation({
     mutationFn: (body: { bot_token: string; bot_username: string }) =>
-      api.post('/channels/telegram/connect', body),
+      api.post('/channels/telegram/connect', live ? { bot_token: body.bot_token } : body),
     onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
   });
 
@@ -922,7 +941,7 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
     initial: { bot_token: '', bot_username: '' },
     validators: {
       bot_token: required(t('settings.channels.telegram.tokenError')),
-      bot_username: required(t('settings.channels.telegram.usernameError')),
+      bot_username: live ? () => null : required(t('settings.channels.telegram.usernameError')),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
@@ -932,7 +951,9 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
         // A 4xx (e.g. that address already belongs to another workspace) is
         // shown as a form-level notice; the query cache is untouched, so the
         // card cannot flip to Connected on a failed attempt.
-        setSubmitError(t(errorMessageKey(failure)));
+        setSubmitError(
+          live ? liveConnectErrorText(t, failure, 'Telegram') : t(errorMessageKey(failure)),
+        );
       }
     },
   });
@@ -951,7 +972,16 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
     return (
       <div className="flex flex-col gap-1">
         {channel.address && (
-          <code className="truncate text-2xs text-content-tertiary">{channel.address}</code>
+          <div className="flex items-center gap-1.5">
+            <code className="min-w-0 truncate text-2xs text-content-tertiary">
+              {channel.address}
+            </code>
+            {channel.live && (
+              <span className="shrink-0 rounded-sm bg-success/10 px-1.5 text-2xs font-medium text-success">
+                {t('settings.channels.live')}
+              </span>
+            )}
+          </div>
         )}
         <button
           type="button"
@@ -981,7 +1011,11 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
       <Modal
         onClose={close}
         title={t('settings.channels.telegram.connectTitle')}
-        description={t('settings.channels.telegram.connectDescription')}
+        description={
+          live
+            ? t('settings.channels.telegram.liveDescription')
+            : t('settings.channels.telegram.connectDescription')
+        }
       >
         <form onSubmit={form.handleSubmit} noValidate>
           {form.submitError && (
@@ -1005,21 +1039,31 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
           />
           <FieldError id="telegram-bot-token-error" message={form.errorFor('bot_token')} />
 
-          <label htmlFor="telegram-bot-username" className="mb-1.5 mt-3 block text-sm font-medium">
-            {t('settings.channels.telegram.usernameLabel')}
-          </label>
-          <input
-            id="telegram-bot-username"
-            value={form.values.bot_username}
-            onChange={(event) => form.setValue('bot_username', event.target.value)}
-            onBlur={() => form.blur('bot_username')}
-            aria-invalid={form.errorFor('bot_username') ? true : undefined}
-            aria-describedby={
-              form.errorFor('bot_username') ? 'telegram-bot-username-error' : undefined
-            }
-            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-          />
-          <FieldError id="telegram-bot-username-error" message={form.errorFor('bot_username')} />
+          {!live && (
+            <>
+              <label
+                htmlFor="telegram-bot-username"
+                className="mb-1.5 mt-3 block text-sm font-medium"
+              >
+                {t('settings.channels.telegram.usernameLabel')}
+              </label>
+              <input
+                id="telegram-bot-username"
+                value={form.values.bot_username}
+                onChange={(event) => form.setValue('bot_username', event.target.value)}
+                onBlur={() => form.blur('bot_username')}
+                aria-invalid={form.errorFor('bot_username') ? true : undefined}
+                aria-describedby={
+                  form.errorFor('bot_username') ? 'telegram-bot-username-error' : undefined
+                }
+                className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+              />
+              <FieldError
+                id="telegram-bot-username-error"
+                message={form.errorFor('bot_username')}
+              />
+            </>
+          )}
 
           <div className="mt-4 flex justify-end gap-2">
             <button

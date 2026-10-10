@@ -14,9 +14,23 @@
 import type { ReactElement, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useDeployment } from '../lib/deployment.js';
+import { liveDataApps } from '../lib/live-apps.js';
 
-export function PilotHidden({ children }: { children: ReactNode }): ReactElement {
-  const { pilot_mode: pilotMode } = useDeployment();
-  if (pilotMode) return <Navigate to="/app/inbox" replace />;
+export function PilotHidden({
+  children,
+  unlessLiveApps = false,
+}: {
+  children: ReactNode;
+  /**
+   * Open in the pilot after all when the deployment runs at least one Apps
+   * card against its real provider (tm 263): those cards are the pilot's
+   * marketplace, and the API serves exactly them.
+   */
+  unlessLiveApps?: boolean;
+}): ReactElement {
+  const deployment = useDeployment();
+  if (deployment.pilot_mode && !(unlessLiveApps && liveDataApps(deployment).length > 0)) {
+    return <Navigate to="/app/inbox" replace />;
+  }
   return <>{children}</>;
 }

@@ -49,6 +49,14 @@ declare module 'fastify' {
      * route or not. Absent, the route is served as usual.
      */
     pilotRefused?: true;
+    /**
+     * The one way through a `pilotRefused` route (tm 263): the route parameter
+     * named here (`appId`, `type`) holds a card this deployment runs live
+     * (`APPS_LIVE_PROVIDERS`). Read from the router's own params, so — like the
+     * pattern match below — no encoding of the URL can make a mock card look
+     * like a live one. A refused *path* (`PILOT_REFUSED_PATHS`) has no such door.
+     */
+    pilotLiveParam?: string;
   }
 }
 
@@ -121,8 +129,9 @@ export function matchesPilotRefusedPath(
 
 async function pilotGatePlugin(
   app: FastifyInstance,
-  options: { env: Env; paths?: readonly PilotRefusedPath[] },
+  options: { env: Env; paths?: readonly PilotRefusedPath[]; liveApps?: readonly string[] },
 ): Promise<void> {
+  const liveApps = new Set(options.liveApps ?? []);
   const paths = options.paths ?? PILOT_REFUSED_PATHS;
   assertPilotRefusedPaths(paths);
 
@@ -131,11 +140,12 @@ async function pilotGatePlugin(
   if (!options.env.PILOT_MODE) return;
 
   app.addHook('onRequest', async (request: FastifyRequest) => {
-    if (
-      !request.routeOptions.config.pilotRefused &&
-      !matchesPilotRefusedPath(paths, request.method, request.routeOptions.url)
-    ) {
-      return;
+    const byPath = matchesPilotRefusedPath(paths, request.method, request.routeOptions.url);
+    if (!request.routeOptions.config.pilotRefused && !byPath) return;
+    const liveParam = request.routeOptions.config.pilotLiveParam;
+    if (!byPath && liveParam !== undefined) {
+      const value = (request.params as Record<string, unknown> | undefined)?.[liveParam];
+      if (typeof value === 'string' && liveApps.has(value)) return;
     }
     throw new ApiError('not_allowed', 'This is not available during the pilot.', {
       details: { reason: 'pilot_mode' },

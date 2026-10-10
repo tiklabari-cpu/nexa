@@ -501,6 +501,8 @@ paths:
     $ref: "./paths/channels.yaml#/channelMessages"
   /channels/{type}/webhook:
     $ref: "./paths/channels.yaml#/channelWebhook"
+  /channels/telegram/webhook/{channelId}:
+    $ref: "./paths/channels.yaml#/telegramLiveWebhook"
   /channels/email/inbound:
     $ref: "./paths/channels.yaml#/emailInbound"
   /channels/email/addresses:
@@ -776,6 +778,13 @@ components:
             The version of the terms at `terms_url` (`TERMS_VERSION`), the value
             a sign-up form sends back as `terms_version`. Never `null` while
             `terms_url` is set.
+        live_apps:
+          type: array
+          items: { type: string, enum: [brevo, freshdesk, telegram] }
+          description: |
+            The Apps cards and channels this deployment connects to their real
+            provider (tm 263, `APPS_LIVE_PROVIDERS`). Under `pilot_mode` these
+            are the only ones served. Names only — never a key.
 
     DependencyHealth:
       type: object
@@ -2011,6 +2020,11 @@ components:
           type: boolean
           description: Whether inbound and outbound currently flow for this channel.
         created_at: { type: string, format: date-time }
+        live:
+          type: boolean
+          description: |
+            Connected to the real provider (tm 263 — a live Telegram bot, whose
+            token is held encrypted); false for every mock channel.
 
     InboundEmailAddress:
       type: object
@@ -4167,10 +4181,31 @@ components:
         grant returned and a null `api_key_last_four`; an API-key install
         carries the masked key in both, because a pasted key names no account.
       required:
-        [app_id, status, external_account, scopes, connected_at, api_key_last_four, automation]
+        [
+          app_id,
+          status,
+          live,
+          external_account,
+          scopes,
+          connected_at,
+          api_key_last_four,
+          automation,
+        ]
       properties:
         app_id: { type: string }
-        status: { type: string, enum: [connected] }
+        status:
+          type: string
+          enum: [connected, needs_reconnect]
+          description: |
+            `needs_reconnect` (tm 263): the card has since gone live and this
+            installation predates it — it holds only a hash of the old key,
+            which cannot be presented to the provider. Kept, not deleted; a new
+            key replaces it.
+        live:
+          type: boolean
+          description: |
+            Verified against the real provider and holding an encrypted
+            credential (tm 263); false for every mock install.
         external_account:
           type: string
           description: |
@@ -4239,6 +4274,7 @@ components:
           placement,
           installed,
           installation,
+          live_available,
         ]
       properties:
         id: { type: string }
@@ -4283,6 +4319,12 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/AppInstallation" }
             - { type: "null" }
+        live_available:
+          type: boolean
+          description: |
+            This deployment connects the card to its real provider (tm 263: it
+            has a verifier and `APPS_LIVE_PROVIDERS` names it). False keeps the
+            demo mock.
 
     AppOAuthStart:
       type: object
@@ -4301,7 +4343,7 @@ components:
       description: |
         A connected app's (mock) data for one conversation's customer
         (FR-MOD-09.1) — what the agent reads in the Details pane.
-      required: [app_id, app_name, icon, data_label, fields]
+      required: [app_id, app_name, icon, data_label, fields, live]
       properties:
         app_id: { type: string }
         app_name: { type: string }
@@ -4315,6 +4357,17 @@ components:
             properties:
               label: { type: string }
               value: { type: string }
+        live:
+          type: boolean
+          description: |
+            True when `fields` came from the provider itself (tm 263); false for
+            demo data.
+        unavailable:
+          type: boolean
+          enum: [true]
+          description: |
+            Set on a live card whose provider could not be read just now;
+            `fields` is then empty — never demo values.
 
     Session:
       type: object
@@ -6866,6 +6919,17 @@ components:
         written, so nothing was — a new source was not created, and an existing
         one keeps its previous text and chunks. `error.details.kind` names the
         failure class; the request can simply be repeated.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AppProviderUnavailable:
+      description: |
+        The live Apps provider did not answer in time, or answered with an
+        error of its own (`service_unavailable`, tm 263):
+        `error.details.reason` is `app_provider_unavailable` and
+        `details.provider_reason` names the class (`unreachable`,
+        `provider_error`). Nothing was written; an earlier connection stays,
+        and the request can simply be repeated.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

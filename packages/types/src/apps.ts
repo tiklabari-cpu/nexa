@@ -83,6 +83,47 @@ export function appApiKeyLastFour(key: string): string {
   return key.trim().slice(-4);
 }
 
+/**
+ * What a card asks for when it is connected with a key (tm 263). Every
+ * `api_key` card asks for the key; a few providers serve each customer from
+ * their own host and also need to know which one — Freshdesk's
+ * `<subdomain>.freshdesk.com`. Absent means `['api_key']`.
+ */
+export type AppCredentialField = 'api_key' | 'subdomain';
+
+/** The fields a card's connect form shows, in order. */
+export function appCredentialFields(entry: AppCatalogEntry): readonly AppCredentialField[] {
+  return entry.credentialFields ?? ['api_key'];
+}
+
+/**
+ * A provider subdomain: one DNS label, lower-case letters, digits and inner
+ * hyphens. Deliberately a label and never a host — no dot, no port, no scheme —
+ * so the value can only ever be spliced into the provider's own domain
+ * (`https://<label>.freshdesk.com`), never point the server somewhere else
+ * (SSRF, tm 263). Shared by the endpoint and the form.
+ */
+export const APP_SUBDOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+export type AppSubdomainProblem = 'required' | 'invalid';
+
+/**
+ * Why a subdomain is unacceptable, or `null`. Trimmed and lower-cased first —
+ * and a pasted full address (`https://acme.freshdesk.com/`) is read as its
+ * label, because that is what a person copying it from the browser meant.
+ */
+export function appSubdomainProblem(value: string): AppSubdomainProblem | null {
+  const label = normaliseAppSubdomain(value);
+  if (!label) return 'required';
+  return APP_SUBDOMAIN_PATTERN.test(label) ? null : 'invalid';
+}
+
+export function normaliseAppSubdomain(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  const pasted = /^(?:https?:\/\/)?([^/:]+)\.freshdesk\.com\/?$/.exec(trimmed);
+  return pasted ? pasted[1]! : trimmed;
+}
+
 /** The section of the directory a card sits under. */
 export const APP_CATEGORIES = [
   'crm',
@@ -186,6 +227,8 @@ export interface AppCatalogEntry {
   dataLabel?: string;
   /** The fields that data is made of. Data apps only. */
   dataFields?: readonly AppDataField[];
+  /** What connecting asks for — see {@link AppCredentialField}. Absent = the key alone. */
+  credentialFields?: readonly AppCredentialField[];
 }
 
 /**
@@ -588,6 +631,7 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     icon: '🍃',
     description: 'Show a customer’s open tickets and satisfaction rating from Freshdesk.',
     scopes: ['tickets.read', 'contacts.read'],
+    credentialFields: ['subdomain', 'api_key'],
     dataLabel: 'Freshdesk',
     dataFields: [
       { label: 'Open tickets', options: ['0', '1', '2', '4'] },
@@ -1889,14 +1933,30 @@ export function formatLastRun(lastRunAt: string | null, now: Date = new Date()):
   return 'Over a month ago';
 }
 
+export const APP_INSTALLATION_STATUSES = ['connected', 'needs_reconnect'] as const;
+export type AppInstallationStatus = (typeof APP_INSTALLATION_STATUSES)[number];
+
 /** A connected integration, as stored for a workspace. */
 export interface AppInstallation {
   app_id: string;
-  status: 'connected';
   /**
-   * The account label the (mock) OAuth grant returned, or the masked key
-   * (`••••abcd`) for an API-key install — a pasted key names no account, so the
-   * field says which key is stored instead of which account was granted.
+   * `needs_reconnect` (tm 263): the card has since been switched to its real
+   * provider, and this installation predates that — it holds only a hash of
+   * the old key, which cannot be presented to anyone. Nothing was deleted; a
+   * new connection replaces it.
+   */
+  status: AppInstallationStatus;
+  /**
+   * True when this installation was verified against the real provider and
+   * holds an encrypted credential (tm 263) — the card's "Live connection"
+   * badge. False for every mock install.
+   */
+  live: boolean;
+  /**
+   * The account label the (mock) OAuth grant returned, the account the
+   * provider named when a live key was verified, or the masked key
+   * (`••••abcd`) for a mock API-key install — a pasted key names no account, so
+   * the field says which key is stored instead of which account was granted.
    */
   external_account: string;
   /** Permissions granted — the app's requested scopes, all granted by the mock. */
@@ -1941,6 +2001,12 @@ export interface AppListItem {
   placement: AppPlacement;
   installed: boolean;
   installation: AppInstallation | null;
+  /**
+   * True when this deployment connects the card to its real provider (tm 263:
+   * it has a verifier and `APPS_LIVE_PROVIDERS` names it). False keeps the
+   * demo mock, and the card says so.
+   */
+  live_available: boolean;
 }
 
 /**
@@ -1968,6 +2034,14 @@ export interface AppChatData {
   icon: string;
   data_label: string;
   fields: Array<{ label: string; value: string }>;
+  /** True when `fields` came from the provider itself (tm 263); false for demo data. */
+  live: boolean;
+  /**
+   * Set on a live card whose provider could not be read just now (timeout,
+   * outage, a key revoked since). `fields` is then empty — a live card never
+   * falls back to invented values, which would look exactly like real ones.
+   */
+  unavailable?: true;
 }
 
 /**
@@ -2004,6 +2078,7 @@ export function appChatData(entry: AppCatalogEntry, seed: string): AppChatData {
       label: field.label,
       value: field.options[hash32(`${seed}:${field.label}`) % field.options.length] ?? '—',
     })),
+    live: false,
   };
 }
 
@@ -2041,5 +2116,7 @@ export function appAutomationChatData(
             ? formatLastRun(stats.last_run_at, now)
             : '—',
     })),
+    // Read from this workspace, not invented — but not from a provider either.
+    live: false,
   };
 }

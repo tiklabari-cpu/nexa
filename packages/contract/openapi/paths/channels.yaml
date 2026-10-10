@@ -146,9 +146,22 @@ channelConnect:
       Idempotent on the channel type: connecting again re-configures the existing
       channel rather than creating a second.
 
+      **Live Telegram (tm 263).** With `telegram` in `live_apps`
+      (`GET /deployment`), Telegram is a real channel: the body is the
+      `bot_token` alone (a `bot_username` sent is ignored — Telegram's `getMe`
+      names the bot); the token is checked with Telegram, the webhook is
+      registered at `POST /channels/telegram/webhook/{channelId}` with a fresh
+      secret, and the token is stored encrypted. A refused token answers `400`
+      with `error.details.reason: "app_credentials_invalid"`; an `API_BASE_URL`
+      Telegram cannot deliver to (not public https) answers `400` with
+      `details.reason: "telegram_webhook_unreachable"`; Telegram not answering
+      is `503` with `details.reason: "app_provider_unavailable"`. The response
+      carries `live: true`.
+
       In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
       every caller with `403 not_allowed` and `error.details.reason:
-      "pilot_mode"`, before the body is read: the pilot offers no adapter channels.
+      "pilot_mode"`, before the body is read: the pilot offers no adapter
+      channels — except a live Telegram, which it serves.
     requestBody:
       required: true
       content:
@@ -328,7 +341,10 @@ channelWebhook:
       provider does not retry something refused on purpose.
 
       Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
-      §5); a real deployment verifies the provider signature at the edge.
+      §5); a real deployment verifies the provider signature at the edge. A
+      live Telegram (tm 263) does not take this path at all — it answers `404`
+      for `telegram`; Telegram's updates arrive at
+      `POST /channels/telegram/webhook/{channelId}`, secret-checked.
 
       In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
       every caller with `403 not_allowed` and `error.details.reason:
@@ -364,6 +380,69 @@ channelWebhook:
                     reason: { type: string, enum: [spam] }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+telegramLiveWebhook:
+  parameters:
+    - name: channelId
+      in: path
+      required: true
+      description: The Telegram channel's id, as named in the URL handed to `setWebhook`.
+      schema: { type: string }
+  post:
+    tags: [Configuration]
+    operationId: ingestTelegramUpdate
+    summary: Receive a live Telegram update (tm 263)
+    description: |
+      Where a live Telegram bot's updates arrive (FR-MOD-08.5.8, tm 263) —
+      the URL the connect step registered with Telegram's `setWebhook`. Public,
+      because Telegram has no session, but authenticated: every request must
+      carry the `X-Telegram-Bot-Api-Secret-Token` registered at connect,
+      compared in constant time against its stored hash. A wrong or missing
+      secret and an unknown channel id are the same `401`.
+
+      The body is Telegram's own `Update`. A private text message becomes a
+      chat message the way every channel's does (card numbers masked, a first
+      contact spam-screened); an agent's reply goes back through `sendMessage`.
+      Anything else — an edit, a sticker, a group, another bot — is answered
+      `200` with `status: ignored` so Telegram stops retrying it.
+
+      `404` unless the deployment runs Telegram live (`live_apps`). Not refused
+      in the public pilot: it is authenticated, and only exists when live.
+    security: []
+    parameters:
+      - name: X-Telegram-Bot-Api-Secret-Token
+        in: header
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: A Telegram Bot API `Update`.
+            additionalProperties: true
+    responses:
+      "200":
+        description: Processed — `accepted` with the chat it became, or `ignored`.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [status, chat_id, customer_id]
+                  properties:
+                    status: { type: string, enum: [accepted] }
+                    chat_id: { type: string }
+                    customer_id: { type: string, format: uuid }
+                - type: object
+                  required: [status, reason]
+                  properties:
+                    status: { type: string, enum: [ignored] }
+                    reason: { type: string, enum: [spam, unsupported_update] }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
 
 emailAddresses:

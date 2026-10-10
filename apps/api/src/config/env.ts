@@ -29,6 +29,12 @@ import { SMTP_DEFAULT_TIMEOUT_MS } from '../services/mail/smtp-mailer.js';
 import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
 import { type ObjectStoreOptions, STORAGE_PROVIDERS } from '../services/storage/object-store.js';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
+import {
+  DEV_APPS_CREDENTIAL_KEY,
+  isLiveAppId,
+  LIVE_APP_IDS,
+  type LiveAppId,
+} from '../services/apps/live-apps.js';
 
 const secret = (minLength: number) =>
   z
@@ -302,6 +308,62 @@ export const envSchema = z.object({
    * archiving a key rather than replacing one.
    */
   AUDIT_CHAIN_SECRET: secret(32),
+  /**
+   * The key the Apps cards' provider credentials are encrypted under (tm 263):
+   * AES-256-GCM, 32 bytes written as 64 hex characters (`openssl rand -hex 32`).
+   *
+   * Not a `secret()`: those are HMAC roots of any length, this is a cipher key of
+   * exactly one. Optional outside production, where no card is live unless
+   * `APPS_LIVE_PROVIDERS` says so — and naming a live provider without a key
+   * stops the boot in every environment (`parseEnv`), because the alternative is
+   * accepting a credential there is nowhere safe to keep. Required in
+   * production, which also refuses the value `.env.example` publishes.
+   *
+   * Losing it loses every live connection (they read as "reconnect needed");
+   * rotating it does the same. Back it up with the other secrets, not the
+   * database: whoever holds a dump must not hold this.
+   */
+  APPS_CREDENTIAL_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string()
+      .regex(
+        /^[0-9a-fA-F]{64}$/,
+        'must be 64 hexadecimal characters (32 bytes): openssl rand -hex 32',
+      )
+      .optional(),
+  ),
+  /**
+   * Which Apps cards call their real provider (tm 263), comma-separated:
+   * `brevo`, `freshdesk`, `telegram`. Empty — the default — keeps every card on
+   * the mock it has always had, so development, the suites, the demo and e2e
+   * run as before. A name outside that list stops the boot: a typo here would
+   * otherwise leave a card silently on its demo data while the owner believes it
+   * is live. Under `PILOT_MODE=true` these are also the only cards the pilot
+   * opens (`plugins/pilot-gate.ts`).
+   */
+  APPS_LIVE_PROVIDERS: z
+    .string()
+    .default('')
+    .transform((value, ctx) => {
+      const ids = [
+        ...new Set(
+          value
+            .split(',')
+            .map((part) => part.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      ];
+      const unknown = ids.filter((id) => !isLiveAppId(id));
+      if (unknown.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `unknown provider(s) ${unknown.join(', ')}; expected any of ${LIVE_APP_IDS.join(', ')}`,
+        });
+        return z.NEVER;
+      }
+      return ids as LiveAppId[];
+    }),
 
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().max(3600).default(3600),
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2_592_000),
@@ -439,6 +501,15 @@ export const envSchema = z.object({
    * (CI, e2e, the test fixture), the way they raise the anonymous bucket.
    */
   RATE_LIMIT_SIGNUP_PER_HOUR: z.coerce.number().int().positive().default(10),
+  /**
+   * Apps connection attempts per account per **hour** (tm 263), counted at
+   * `POST /settings/apps/:appId/connect`. A live card turns each attempt into a
+   * call to the provider with whatever key was pasted, so an unbounded loop is
+   * both a key-guessing oracle against the provider and a way to get this
+   * deployment's address rate-limited by it. Twenty is a person trying several
+   * keys and several cards in one sitting; a script hits it in seconds.
+   */
+  RATE_LIMIT_APPS_CONNECT_PER_HOUR: z.coerce.number().int().positive().default(20),
 
   /**
    * Data retention windows in days (NFR-C8). Each is a positive integer; the
@@ -1146,6 +1217,17 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     }
   }
 
+  // The Apps credential key (tm 263). Required even with no live card, so a
+  // later `APPS_LIVE_PROVIDERS` change does not meet a missing key at its first
+  // connection; and never the value `.env.example` prints.
+  if (!env.APPS_CREDENTIAL_KEY) {
+    problems.push(
+      'APPS_CREDENTIAL_KEY is required in production: it encrypts the provider credentials of live Apps connections (openssl rand -hex 32).',
+    );
+  } else if (env.APPS_CREDENTIAL_KEY.toLowerCase() === DEV_APPS_CREDENTIAL_KEY) {
+    problems.push('APPS_CREDENTIAL_KEY still holds its development placeholder value.');
+  }
+
   // `.env.production.example` marks everything a deployer has to supply as
   // `<…>`, and the pilot's `.env` starts life as a copy of it (tm 255.15). Most
   // of those keys are plain strings to the schema, so a copy with one left
@@ -1587,6 +1669,14 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (replicaEscalatesPrivilege(env)) {
     throw new Error(
       "Invalid environment:\n  DATABASE_REPLICA_URL connects as the table owner while DATABASE_APP_URL does not: Postgres exempts owners from row level security, so report queries on the replica would return every tenant's rows.",
+    );
+  }
+
+  // A live card stores the key a user pasted; with nothing to encrypt it under,
+  // the only choices are refusing every connection or keeping it in the clear.
+  if (env.APPS_LIVE_PROVIDERS.length > 0 && !env.APPS_CREDENTIAL_KEY) {
+    throw new Error(
+      'Invalid environment:\n  APPS_CREDENTIAL_KEY is required when APPS_LIVE_PROVIDERS names a provider: live connections store an encrypted credential (openssl rand -hex 32).',
     );
   }
 

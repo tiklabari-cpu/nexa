@@ -16,6 +16,7 @@ import {
   SETTINGS_SECTIONS,
   searchSections,
   visibleGroups,
+  visibleSections,
   type SettingsSectionEntry,
 } from './settings-sections.js';
 
@@ -123,5 +124,19 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
   it('leaves the Billing group out of the grouped navigation in the pilot', () => {
     expect(visibleGroups(OWNER, true).map((g) => g.key)).not.toContain('billing');
     expect(visibleGroups(OWNER).map((g) => g.key)).toContain('billing');
+  });
+});
+
+describe('the Integrations door with live Apps cards (tm 263)', () => {
+  it('stays in the pilot when a card is live, and goes without one', () => {
+    const slugs = (live: boolean): string[] =>
+      visibleSections(OWNER, true, live).map((section) => section.slug);
+    expect(slugs(false)).not.toContain('integrations');
+    expect(slugs(true)).toContain('integrations');
+    // Billing has no live exception: the pilot still sells nothing.
+    expect(slugs(true)).not.toContain('billing');
+    expect(
+      searchSections(OWNER, 'marketplace', englishLabel, true, true).map((s) => s.slug),
+    ).toContain('integrations');
   });
 });

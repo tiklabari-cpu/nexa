@@ -13,6 +13,12 @@ import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-ev
 import { maskCardNumbers } from '../lib/cc-mask.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { ChannelService } from '../services/channels/channel-service.js';
+import { createLiveTelegram } from '../services/channels/telegram-live.js';
+import { createSafeHttp, type SafeHttp } from '../lib/safe-fetch.js';
+import {
+  DEFAULT_PROVIDER_ENDPOINTS,
+  type ProviderEndpoints,
+} from '../services/apps/verifiers/types.js';
 import { hasChatScope } from '../services/chat/access.js';
 import { SupervisionService } from '../services/traffic/supervision-service.js';
 import { roleAtLeast } from '../services/auth/principal.js';
@@ -120,15 +126,28 @@ export default async function chatRoutes(
     env,
     push,
     automations,
+    appsHttp,
+    appsEndpoints,
   }: {
     env: Env;
     push: PushProvider;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
+    /** How a live Telegram reply reaches the Bot API (tm 263). Omitted, the real safe client. */
+    appsHttp?: SafeHttp;
+    /** Provider hosts (tm 263). Omitted, the real ones. */
+    appsEndpoints?: ProviderEndpoints;
   },
 ): Promise<void> {
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
-  const channels = new ChannelService();
+  // Agent replies leave through the conversation's channel; a live Telegram
+  // sends them for real (tm 263).
+  const channels = new ChannelService(
+    createLiveTelegram(env, {
+      http: appsHttp ?? createSafeHttp(),
+      endpoints: appsEndpoints ?? DEFAULT_PROVIDER_ENDPOINTS,
+    }),
+  );
   const chats = new ChatService(
     app.db,
     app.redis,

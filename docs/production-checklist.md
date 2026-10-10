@@ -19,9 +19,11 @@ failing.
 - [ ] `NODE_ENV=production` is set on both `apps/api` and `apps/rtm`. Boot refuses to start
       otherwise and lists every problem at once — see `apps/api/src/config/env.test.ts`
       ("production configuration" suite) and `apps/api/test/integration/production-boot.test.ts`.
-- [ ] All six key-material secrets are freshly generated for this deployment and none is the
+- [ ] All seven key-material secrets are freshly generated for this deployment and none is the
       published `dev-only-…` placeholder: `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`,
-      `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`.
+      `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`,
+      and `APPS_CREDENTIAL_KEY` (exactly 64 hex characters; production refuses the value
+      `.env.example` publishes).
       Generate each independently — `openssl rand -hex 32`. See README
       ["Required — boot refuses without these"](../README.md#required--boot-refuses-without-these).
 - [ ] `DATABASE_APP_URL` is set to the non-owner `siyahtus_app` role and is **different** from
@@ -264,7 +266,11 @@ key. By name, what the pilot needs:
   `RTM_BASE_URL` and `API_BASE_URL` are baked into the web and widget bundles at build time,
   so changing either means `up --build`.
 - Secrets: `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`,
-  `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`.
+  `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`, `APPS_CREDENTIAL_KEY`
+  (required since tm 263 — a pilot `.env` without it no longer boots).
+- Apps live connections (tm 263): `APPS_LIVE_PROVIDERS` (comma list of `brevo`, `freshdesk`,
+  `telegram`; empty keeps every Apps card a demo mock and, under `PILOT_MODE=true`, the Apps
+  surface closed). Telegram also needs `API_BASE_URL` to be a public `https://` address.
 - Pilot mode: `PILOT_MODE=true` (turns the stub providers into a boot failure and hides the
   mock surfaces) and `PILOT_CONTACT_EMAIL` (the address the trial-end notice and the notes on
   closed features show to users; public by design).
@@ -286,18 +292,18 @@ Cloudflare Tunnel**).
 
 **Where each value comes from (tm 255.16 · 257.11).** Only names here, never values:
 
-| Key(s)                                                                                                                                                                               | Where the owner gets it                                                                                                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SMTP_USERNAME`, `SMTP_PASSWORD`                                                                                                                                                     | The PrivateEmail (Namecheap) mailbox that sends the pilot's mail. The username is the mailbox's full address. The password is that mailbox's password. |
-| `SMTP_FROM`                                                                                                                                                                          | That same mailbox's address, bare (`name@domain`) — not a secret.                                                                                      |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`                                                                                                                                              | PrivateEmail's published settings, already in the template (587 + STARTTLS, or 465 with `SMTP_SECURE=true`).                                           |
-| `LLM_API_KEY`, `EMBEDDING_API_KEY`                                                                                                                                                   | An API key from the OpenAI platform account (ADR `docs/adr/pilot-llm-embedding-provider.md` §9). The two may hold the same key.                        |
-| `LLM_MODEL`                                                                                                                                                                          | The chat model id chosen in that account. `EMBEDDING_MODEL` stays `text-embedding-3-small` (the column is `vector(1536)`).                             |
-| `SIYAHTUS_REGION`, `LLM_PROVIDER_REGION`, `EMBEDDING_PROVIDER_REGION`, `*_API_BASE_URL`                                                                                              | The owner's region decision (2026-10-02): all `us`, base URL `https://us.api.openai.com/v1`.                                                           |
-| `POSTGRES_PASSWORD`, `SIYAHTUS_APP_DB_PASSWORD`, `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET` | Generated on the host: `openssl rand -hex 32`, one per key.                                                                                            |
-| `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`, `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`                                                           | The owner's domain and the edge in front of the host.                                                                                                  |
-| `PILOT_CONTACT_EMAIL`                                                                                                                                                                | An address the owner reads. It is printed on screens, so it is not a secret.                                                                           |
-| `PRIVACY_POLICY_URL`, `TERMS_URL`, `TERMS_VERSION`                                                                                                                                   | The owner publishes both texts (https only; they are not in this repository) and picks the version label.                                              |
+| Key(s)                                                                                                                                                                                                      | Where the owner gets it                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SMTP_USERNAME`, `SMTP_PASSWORD`                                                                                                                                                                            | The PrivateEmail (Namecheap) mailbox that sends the pilot's mail. The username is the mailbox's full address. The password is that mailbox's password. |
+| `SMTP_FROM`                                                                                                                                                                                                 | That same mailbox's address, bare (`name@domain`) — not a secret.                                                                                      |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`                                                                                                                                                                     | PrivateEmail's published settings, already in the template (587 + STARTTLS, or 465 with `SMTP_SECURE=true`).                                           |
+| `LLM_API_KEY`, `EMBEDDING_API_KEY`                                                                                                                                                                          | An API key from the OpenAI platform account (ADR `docs/adr/pilot-llm-embedding-provider.md` §9). The two may hold the same key.                        |
+| `LLM_MODEL`                                                                                                                                                                                                 | The chat model id chosen in that account. `EMBEDDING_MODEL` stays `text-embedding-3-small` (the column is `vector(1536)`).                             |
+| `SIYAHTUS_REGION`, `LLM_PROVIDER_REGION`, `EMBEDDING_PROVIDER_REGION`, `*_API_BASE_URL`                                                                                                                     | The owner's region decision (2026-10-02): all `us`, base URL `https://us.api.openai.com/v1`.                                                           |
+| `POSTGRES_PASSWORD`, `SIYAHTUS_APP_DB_PASSWORD`, `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`, `APPS_CREDENTIAL_KEY` | Generated on the host: `openssl rand -hex 32`, one per key.                                                                                            |
+| `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`, `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`                                                                                  | The owner's domain and the edge in front of the host.                                                                                                  |
+| `PILOT_CONTACT_EMAIL`                                                                                                                                                                                       | An address the owner reads. It is printed on screens, so it is not a secret.                                                                           |
+| `PRIVACY_POLICY_URL`, `TERMS_URL`, `TERMS_VERSION`                                                                                                                                                          | The owner publishes both texts (https only; they are not in this repository) and picks the version label.                                              |
 
 ### Now: Cloudflare Tunnel
 
@@ -525,6 +531,7 @@ value left at its default is a decision too, and the defaults are deliberately c
 | `UNVERIFIED_SIGNUP_TTL_HOURS`             | How long an unverified, still-empty sign-up is kept (1–8760)                       | 72        | Default                                              |
 | `SCHEDULE_UNVERIFIED_SIGNUPS_MS`          | How often the sweep runs                                                           | 3600000   | Default                                              |
 | `RATE_LIMIT_SIGNUP_PER_HOUR`              | Sign-ups per IPv4 address, or per IPv6 `/64`, per hour                             | 10        | Default; a shared office or school may need more     |
+| `RATE_LIMIT_APPS_CONNECT_PER_HOUR`        | Apps connection attempts per account, per hour (a live card calls the provider)    | 20        | Default                                              |
 | `RATE_LIMIT_PUBLIC_CONFIG_PER_MIN`        | `GET /deployment` (the panel reads it on every load), per IP                       | 600       | Default                                              |
 | `RATE_LIMIT_TOKEN_PER_MIN`                | `POST /auth/token` (sign-in's code exchange, every refresh), per IP                | 300       | Default; more only for 100+ agents on one address    |
 | `MAIL_DAILY_PER_WORKSPACE`                | Everything one workspace sends, per UTC day                                        | 200       | Default                                              |
@@ -655,8 +662,9 @@ re-embed.
       addresses; it writes nothing to disk. The pilot profile also requires pilot mode
       (tm 257.12): `/deployment` says `pilot_mode: true` and every closed surface answers 403
       `pilot_mode` — a pilot whose api runs with the flag off fails the smoke test. A clean run
-      over the https names counts 45 passed with both inputs (27 without); the header of
-      `scripts/smoke.sh` has the other totals.
+      over the https names counts 46 passed with both inputs (27 without) when no Apps card is
+      live; each card in `APPS_LIVE_PROVIDERS` adds a check that its door is open (tm 263). The
+      header of `scripts/smoke.sh` has the other totals.
 
 ### Trial end and manual activation
 

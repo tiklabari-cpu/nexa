@@ -100,6 +100,30 @@ export const apps: Messages = {
   'apps.marketplace.apiKey.error': 'Could not connect the app. Check the key and try again.',
   'apps.marketplace.apiKey.submit': 'Connect app',
 
+  // Live connections (tm 263): a card this deployment connects to its real
+  // provider, told apart from the demo ones everywhere it appears.
+  'apps.live.badge.live': 'Live',
+  'apps.live.badge.liveTitle':
+    'Connects to {name} itself: the key is checked with {name} and stored encrypted.',
+  'apps.live.badge.demo': 'Demo',
+  'apps.live.badge.demoTitle':
+    'Demo connection: nothing is sent to {name}, and what chats show is sample data.',
+  'apps.live.status.needsReconnect': 'Reconnect needed',
+  'apps.live.card.reconnect': 'Reconnect',
+  'apps.live.dialog.description':
+    'The key is checked with {name} before it is saved, then stored encrypted. It is never shown again.',
+  'apps.live.subdomain.label': 'Account subdomain',
+  'apps.live.subdomain.hint': 'The part before .freshdesk.com: for acme.freshdesk.com, enter acme.',
+  'apps.live.subdomain.requiredError': 'Enter the account subdomain.',
+  'apps.live.subdomain.invalidError':
+    'Enter one word of letters, digits and hyphens, such as acme.',
+  'apps.live.error.invalidKey': '{name} did not accept this key.',
+  'apps.live.error.notFound': '{name} has no account at that address. Check the subdomain.',
+  'apps.live.error.unavailable': '{name} could not be reached. Try again in a moment.',
+  'apps.live.error.webhookUnreachable':
+    'Telegram cannot reach this server: it needs a public https address. Ask your administrator to set one.',
+  'apps.live.error.providerSaid': '{name} said: “{message}”',
+
   // DeveloperPortalPage shell — title/description shown both gated and open
   'apps.developers.page.title': 'Developers',
   'apps.developers.page.description':

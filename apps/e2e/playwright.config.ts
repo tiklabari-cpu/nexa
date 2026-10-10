@@ -245,6 +245,8 @@ export default defineConfig({
         RATE_LIMIT_TOKEN_PER_MIN: '2000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
         RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
+        // The seeded accounts connect Apps cards in several specs (tm 263).
+        RATE_LIMIT_APPS_CONNECT_PER_HOUR: '10000',
         MAIL_DAILY_PER_WORKSPACE: '1000000',
         MAIL_DAILY_EXTERNAL_PER_WORKSPACE: '1000000',
         MAIL_DAILY_GLOBAL: '1000000',

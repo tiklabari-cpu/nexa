@@ -33,10 +33,16 @@
 # /deployment (direct and through the panel's nginx), tries a sign-up without
 # accepting the terms (400 terms_not_accepted; 403 signup_closed while sign-up
 # is closed), and posts to a public channel webhook and the inbound-mail door.
-# With SMOKE_ADMIN_TOKEN it posts to the thirteen owner writes the pilot does
+# With SMOKE_ADMIN_TOKEN it posts to the fourteen owner writes the pilot does
 # not offer — four billing purchases, the HIPAA agreement, five fake channels'
-# connect, a mail forwarding address, an Apps connection and onboarding sample
-# data. With SMOKE_ORGANIZATION_ID it reads the widget block of the visitor
+# connect, a mail forwarding address, an Apps OAuth start, a demo API-key
+# card's connect and onboarding sample data.
+#
+# Live cards (tm 263) are the pilot's one exception, read from `live_apps` on
+# /deployment: a live card's connect must reach its handler (400 validation on
+# the empty `{}` — nothing is sent to the provider), a live Telegram's connect
+# likewise instead of its refusal, and anonymously a live Telegram's own webhook
+# must refuse a call without its secret (401). With SMOKE_ORGANIZATION_ID it reads the widget block of the visitor
 # token minted above (no second mint: each one writes a visitor). Every
 # refusal must be 403 not_allowed with reason pilot_mode, and every probe
 # sends `{}`: a route that is not gated answers a bare `{}` with a 400
@@ -46,9 +52,11 @@
 # (RATE_LIMIT_SIGNUP_PER_HOUR); a run after that is used up fails it with 429.
 #
 # What a clean run counts: demo 20 passed. Pilot 27 passed over https base
-# URLs, 25 passed + 2 skipped over http ones; SMOKE_ADMIN_TOKEN adds 15 and
-# SMOKE_ORGANIZATION_ID adds 3 (over http: 40 with the token, 28 with the
-# organization id, 43 with both, each + 2 skipped; over https 2 more passed).
+# URLs, 25 passed + 2 skipped over http ones; SMOKE_ADMIN_TOKEN adds 16 and
+# SMOKE_ORGANIZATION_ID adds 3 (over http: 41 with the token, 28 with the
+# organization id, 44 with both, each + 2 skipped; over https 2 more passed).
+# A live Telegram adds 1 anonymously; with the token, each live Apps data card
+# (brevo, freshdesk) adds 1 more (tm 263).
 set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:4000}"
@@ -405,6 +413,10 @@ if [ "$SMOKE_PROFILE" = pilot ]; then
   check 'api /deployment says pilot_mode true' GET "$api/deployment" 200 '"pilot_mode":true'
   signup_open=false
   grep -q '"signup_enabled":true' "$body_file" && signup_open=true
+  # The cards this pilot runs live (tm 263), e.g. `brevo telegram`; empty when none.
+  live_apps="$(grep -o '"live_apps":\[[^]]*\]' "$body_file" | sed 's/"live_apps"://' | tr -d '[]"' | tr ',' ' ')"
+  telegram_live=false
+  case " $live_apps " in *" telegram "*) telegram_live=true ;; esac
   check 'the panel serves the same /deployment through its proxy' \
     GET "$WEB_BASE/api/v1/deployment" 200 '"pilot_mode":true'
   if [ "$signup_open" = true ]; then
@@ -426,6 +438,11 @@ if [ "$SMOKE_PROFILE" = pilot ]; then
     POST "$api/channels/messenger/webhook" 403 not_allowed pilot_mode
   check_refusal 'inbound mail is refused' \
     POST "$api/channels/email/inbound" 403 not_allowed pilot_mode
+  if [ "$telegram_live" = true ]; then
+    check 'a live Telegram webhook refuses a call without its secret (401)' \
+      POST "$api/channels/telegram/webhook/00000000-0000-4000-8000-000000000000" 401 \
+      '"type":"authentication"' '{}'
+  fi
 
   if [ -n "$SMOKE_ADMIN_TOKEN" ]; then
     auth_header="Bearer $SMOKE_ADMIN_TOKEN"
@@ -440,6 +457,11 @@ if [ "$SMOKE_PROFILE" = pilot ]; then
     check_refusal 'accepting the HIPAA agreement is refused' \
       POST "$api/settings/compliance/baa" 403 not_allowed pilot_mode
     for channel in messenger whatsapp twilio instagram telegram; do
+      if [ "$channel" = telegram ] && [ "$telegram_live" = true ]; then
+        check 'connecting the live telegram reaches its handler (400 on an empty body)' \
+          POST "$api/channels/telegram/connect" 400 '"type":"validation"' '{}'
+        continue
+      fi
       check_refusal "connecting $channel is refused" \
         POST "$api/channels/$channel/connect" 403 not_allowed pilot_mode
     done
@@ -447,6 +469,13 @@ if [ "$SMOKE_PROFILE" = pilot ]; then
       POST "$api/channels/email/addresses" 403 not_allowed pilot_mode
     check_refusal 'starting an Apps connection is refused' \
       POST "$api/settings/apps/hubspot/oauth/start" 403 not_allowed pilot_mode
+    check_refusal 'connecting a demo API-key card is refused' \
+      POST "$api/settings/apps/zendesk/connect" 403 not_allowed pilot_mode
+    for app in $live_apps; do
+      [ "$app" = telegram ] && continue
+      check "connecting the live $app card reaches its handler (400 on an empty body)" \
+        POST "$api/settings/apps/$app/connect" 400 '"type":"validation"' '{}'
+    done
     check_refusal 'onboarding sample data is refused' \
       POST "$api/onboarding/seed-demo" 403 not_allowed pilot_mode
     auth_header=''

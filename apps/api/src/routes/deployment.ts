@@ -23,6 +23,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { DeploymentConfig } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
+import { liveAppIds } from '../services/apps/verifiers/registry.js';
 
 export default async function deploymentRoutes(
   app: FastifyInstance,
@@ -44,6 +45,8 @@ export default async function deploymentRoutes(
         privacy_policy_url: env.PRIVACY_POLICY_URL ?? null,
         terms_url: env.TERMS_URL ?? null,
         terms_version: env.TERMS_VERSION ?? null,
+        // Which cards are live (tm 263) — names only, never a key.
+        live_apps: liveAppIds(env.APPS_LIVE_PROVIDERS),
       };
       // A cache may keep it but must ask again: switching pilot mode off and
       // restarting has to be seen on the next read, not after a max-age.

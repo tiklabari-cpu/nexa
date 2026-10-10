@@ -11521,13 +11521,52 @@
           }
         ],
         "updatedAt": "2026-10-10T00:14:16.288Z"
+      },
+      {
+        "id": "264",
+        "title": "APPS-KEY-NOT-REQUIRED [OPUS-HIGH] (Opus 5.5 · efor high) Sahip kararı: hiçbir Apps ayarı sistemin açılmasını engellemez; anahtar yoksa kartlar demo, açılışta uyarı",
+        "description": "Sahibin 2026-10-10 isteği: tm 263'te sorulmadan konan \"production'da APPS_CREDENTIAL_KEY zorunlu\" kuralı ve diğer Apps açılış engelleri kaldırılsın. İnteraktif pencerede uygulandı, kayıt sonradan Task Master'a eklendi. PLAN §D214.",
+        "details": "Uygulandı ve doğrulandı, commit 545742ff (merge e4a7d453). Pilot .env'ine ek satır gerekmez; anahtar yalnız canlı Apps kartı açılınca gerekir.",
+        "testStrategy": "test:gate --force build/statik/birim 0 cached yeşil; entegrasyon --force 0 cached yeşil (api 3914, rtm 111) — önceki üç koşuda her seferinde farklı tek test, bilinen yük kırmızıları (resetDatabase TRUNCATE deadlock 40P01, test-datastores 180 sn), dosyalar tek başına yeşil.",
+        "status": "done",
+        "dependencies": [
+          "263"
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "APPS-ENV-NON-FATAL — Apps ayarları açılışı hiçbir koşulda durdurmasın",
+            "description": "tm 263 APPS_CREDENTIAL_KEY'i production'da zorunlu yapmış; canlı sağlayıcı varken anahtarsızlığı, bozuk anahtar biçimini ve bilinmeyen sağlayıcı adını boot hatasına çevirmişti. Sahip bunu istememişti.",
+            "details": "apps/api/src/config/env.ts: resolveAppsLive — bilinmeyen ad yok sayılır; 64 hex olmayan anahtar ya da production'da .env.example değeri kullanılmaz; kullanılabilir anahtar yoksa canlı kart yok, bütün Apps kartları demo. Her neden Env.appsLiveWarnings'te, server.ts açılışta apps.live_disabled uyarısı olarak loglar. productionProblems'tan Apps kuralı ve parseEnv'deki throw kaldırıldı.",
+            "testStrategy": "env.test.ts: production anahtarsız ve örnek anahtarla açılır (kartlar demo, uyarı var); bilinmeyen ad, anahtarsız canlı sağlayıcı, bozuk anahtar = uyarı, hata yok. Entegrasyon apps-live, production-boot, deployment-config, pilot-apps, log-profile, apps 117/117.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "264",
+            "priority": "high",
+            "updatedAt": "2026-10-10T08:24:48.896Z"
+          },
+          {
+            "id": 2,
+            "title": "APPS-ENV-DOCS — örnek env ve belgeler \"isteğe bağlı\" diyor",
+            "description": ".env.production.example'da anahtar satırı yorumda (kopyalanan şablonun <…> yer tutucusu boot'u durdurmasın).",
+            "details": ".env.example, .env.production.example, README (Required tablosundan çıkarıldı, APPS_LIVE_PROVIDERS bölümü), docs/production-checklist.md (altı anahtar + isteğe bağlı Apps anahtarı), Helm values.yaml / values.production.example.yaml (boş değer). PLAN §D214 ve KM-ENV maddesi, HANDOFF tm 263 girişi güncellendi.",
+            "testStrategy": "env.parity ve env.production-example testleri yeşil; format:check yeşil.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "264",
+            "priority": "high",
+            "updatedAt": "2026-10-10T08:24:48.896Z"
+          }
+        ],
+        "updatedAt": "2026-10-10T08:24:48.896Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-10T00:14:16.288Z",
-      "taskCount": 263,
-      "completedCount": 263,
+      "lastModified": "2026-10-10T08:24:48.896Z",
+      "taskCount": 264,
+      "completedCount": 264,
       "tags": [
         "master"
       ]

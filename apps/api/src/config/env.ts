@@ -312,12 +312,11 @@ export const envSchema = z.object({
    * The key the Apps cards' provider credentials are encrypted under (tm 263):
    * AES-256-GCM, 32 bytes written as 64 hex characters (`openssl rand -hex 32`).
    *
-   * Not a `secret()`: those are HMAC roots of any length, this is a cipher key of
-   * exactly one. Optional outside production, where no card is live unless
-   * `APPS_LIVE_PROVIDERS` says so — and naming a live provider without a key
-   * stops the boot in every environment (`parseEnv`), because the alternative is
-   * accepting a credential there is nowhere safe to keep. Required in
-   * production, which also refuses the value `.env.example` publishes.
+   * Never a reason to refuse the boot, in any environment (owner, 2026-10-10):
+   * it is only needed by a live Apps card. Absent, malformed, or — in
+   * production — the value `.env.example` publishes, the live cards stay on
+   * their demo mock and the boot logs why (`appsLiveWarnings`); everything else
+   * runs as before.
    *
    * Losing it loses every live connection (they read as "reconnect needed");
    * rotating it does the same. Back it up with the other secrets, not the
@@ -325,45 +324,27 @@ export const envSchema = z.object({
    */
   APPS_CREDENTIAL_KEY: z.preprocess(
     (value) => (value === '' ? undefined : value),
-    z
-      .string()
-      .regex(
-        /^[0-9a-fA-F]{64}$/,
-        'must be 64 hexadecimal characters (32 bytes): openssl rand -hex 32',
-      )
-      .optional(),
+    z.string().optional(),
   ),
   /**
    * Which Apps cards call their real provider (tm 263), comma-separated:
    * `brevo`, `freshdesk`, `telegram`. Empty — the default — keeps every card on
-   * the mock it has always had, so development, the suites, the demo and e2e
-   * run as before. A name outside that list stops the boot: a typo here would
-   * otherwise leave a card silently on its demo data while the owner believes it
-   * is live. Under `PILOT_MODE=true` these are also the only cards the pilot
-   * opens (`plugins/pilot-gate.ts`).
+   * the mock it has always had. A name outside that list is ignored with a
+   * boot warning, never a refusal (owner, 2026-10-10). Under `PILOT_MODE=true`
+   * these are also the only cards the pilot opens (`plugins/pilot-gate.ts`).
+   * Read the resolved list from `Env` — `parseEnv` drops what cannot run live.
    */
   APPS_LIVE_PROVIDERS: z
     .string()
     .default('')
-    .transform((value, ctx) => {
-      const ids = [
-        ...new Set(
-          value
-            .split(',')
-            .map((part) => part.trim().toLowerCase())
-            .filter(Boolean),
-        ),
-      ];
-      const unknown = ids.filter((id) => !isLiveAppId(id));
-      if (unknown.length > 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `unknown provider(s) ${unknown.join(', ')}; expected any of ${LIVE_APP_IDS.join(', ')}`,
-        });
-        return z.NEVER;
-      }
-      return ids as LiveAppId[];
-    }),
+    .transform((value) => [
+      ...new Set(
+        value
+          .split(',')
+          .map((part) => part.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ]),
 
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().max(3600).default(3600),
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2_592_000),
@@ -1115,7 +1096,14 @@ export const envSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 });
 
-export type Env = z.infer<typeof envSchema> & {
+export type Env = Omit<z.infer<typeof envSchema>, 'APPS_LIVE_PROVIDERS'> & {
+  /**
+   * The Apps cards that really run live (tm 263): `APPS_LIVE_PROVIDERS` less
+   * unknown names, and empty when there is no usable `APPS_CREDENTIAL_KEY`.
+   */
+  APPS_LIVE_PROVIDERS: LiveAppId[];
+  /** Why some or all of `APPS_LIVE_PROVIDERS` stayed on the mock — logged at boot, never fatal. */
+  appsLiveWarnings: string[];
   /** Connection string the request path should use — app role when available. */
   runtimeDatabaseUrl: string;
   /**
@@ -1215,17 +1203,6 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     if (env[key].startsWith('dev-only-')) {
       problems.push(`${key} still holds its development placeholder value.`);
     }
-  }
-
-  // The Apps credential key (tm 263). Required even with no live card, so a
-  // later `APPS_LIVE_PROVIDERS` change does not meet a missing key at its first
-  // connection; and never the value `.env.example` prints.
-  if (!env.APPS_CREDENTIAL_KEY) {
-    problems.push(
-      'APPS_CREDENTIAL_KEY is required in production: it encrypts the provider credentials of live Apps connections (openssl rand -hex 32).',
-    );
-  } else if (env.APPS_CREDENTIAL_KEY.toLowerCase() === DEV_APPS_CREDENTIAL_KEY) {
-    problems.push('APPS_CREDENTIAL_KEY still holds its development placeholder value.');
   }
 
   // `.env.production.example` marks everything a deployer has to supply as
@@ -1626,6 +1603,56 @@ function replicaEscalatesPrivilege(env: z.infer<typeof envSchema>): boolean {
   return new URL(env.DATABASE_REPLICA_URL).username === owner;
 }
 
+/**
+ * Which Apps cards can really run live, and why the others cannot (tm 263).
+ *
+ * Nothing here refuses the boot (owner, 2026-10-10): an Apps setting that
+ * cannot work leaves the live cards on their demo mock and says so in the
+ * log. A live card needs somewhere safe to keep the key a user pastes, so
+ * without a usable `APPS_CREDENTIAL_KEY` no card goes live; and in production
+ * the key `.env.example` publishes is not a usable one.
+ */
+function resolveAppsLive(env: z.infer<typeof envSchema>): {
+  providers: LiveAppId[];
+  credentialKey: string | undefined;
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  const named = env.APPS_LIVE_PROVIDERS;
+  const unknown = named.filter((id) => !isLiveAppId(id));
+  if (unknown.length > 0) {
+    warnings.push(
+      `APPS_LIVE_PROVIDERS names ${unknown.join(', ')}, which has no live adaptor (known: ${LIVE_APP_IDS.join(', ')}); ignored.`,
+    );
+  }
+  let providers = named.filter(isLiveAppId);
+
+  let credentialKey = env.APPS_CREDENTIAL_KEY;
+  if (credentialKey !== undefined && !/^[0-9a-fA-F]{64}$/.test(credentialKey)) {
+    warnings.push(
+      'APPS_CREDENTIAL_KEY is not 64 hexadecimal characters (openssl rand -hex 32); it is ignored.',
+    );
+    credentialKey = undefined;
+  } else if (
+    credentialKey !== undefined &&
+    env.NODE_ENV === 'production' &&
+    credentialKey.toLowerCase() === DEV_APPS_CREDENTIAL_KEY
+  ) {
+    warnings.push(
+      'APPS_CREDENTIAL_KEY is the published development value; it is ignored in production.',
+    );
+    credentialKey = undefined;
+  }
+
+  if (providers.length > 0 && !credentialKey) {
+    warnings.push(
+      `APPS_LIVE_PROVIDERS names ${providers.join(', ')} but there is no usable APPS_CREDENTIAL_KEY to encrypt their keys with; every Apps card stays a demo.`,
+    );
+    providers = [];
+  }
+  return { providers, credentialKey, warnings };
+}
+
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const result = envSchema.safeParse(source);
   if (!result.success) {
@@ -1672,13 +1699,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     );
   }
 
-  // A live card stores the key a user pasted; with nothing to encrypt it under,
-  // the only choices are refusing every connection or keeping it in the clear.
-  if (env.APPS_LIVE_PROVIDERS.length > 0 && !env.APPS_CREDENTIAL_KEY) {
-    throw new Error(
-      'Invalid environment:\n  APPS_CREDENTIAL_KEY is required when APPS_LIVE_PROVIDERS names a provider: live connections store an encrypted credential (openssl rand -hex 32).',
-    );
-  }
+  const appsLive = resolveAppsLive(env);
 
   if (env.NODE_ENV === 'production') {
     const problems = productionProblems(env);
@@ -1691,6 +1712,9 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
   return {
     ...env,
+    APPS_CREDENTIAL_KEY: appsLive.credentialKey,
+    APPS_LIVE_PROVIDERS: appsLive.providers,
+    appsLiveWarnings: appsLive.warnings,
     runtimeDatabaseUrl: withPoolSize(
       env.DATABASE_APP_URL ?? env.DATABASE_URL,
       env.DATABASE_POOL_SIZE,

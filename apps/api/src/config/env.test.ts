@@ -995,12 +995,22 @@ describe('production configuration', () => {
     expect(declared).toHaveLength(5);
   });
 
-  it('refuses a production boot without APPS_CREDENTIAL_KEY, or on its published value (tm 263)', () => {
+  it('boots in production without APPS_CREDENTIAL_KEY, or on its published value — Apps just stay demos (tm 263)', () => {
+    // Owner, 2026-10-10: an Apps setting never stops the deployment.
     const { APPS_CREDENTIAL_KEY: _omitted, ...withoutKey } = PROD_BASE;
-    expect(() => parseEnv(withoutKey)).toThrow(/APPS_CREDENTIAL_KEY is required in production/);
-    expect(() =>
-      parseEnv({ ...PROD_BASE, APPS_CREDENTIAL_KEY: DEV_APPS_CREDENTIAL_KEY.toUpperCase() }),
-    ).toThrow(/APPS_CREDENTIAL_KEY still holds its development placeholder/);
+    const bare = parseEnv(withoutKey);
+    expect(bare.APPS_CREDENTIAL_KEY).toBeUndefined();
+    expect(bare.APPS_LIVE_PROVIDERS).toEqual([]);
+    expect(bare.appsLiveWarnings).toEqual([]);
+
+    const published = parseEnv({
+      ...PROD_BASE,
+      APPS_CREDENTIAL_KEY: DEV_APPS_CREDENTIAL_KEY.toUpperCase(),
+      APPS_LIVE_PROVIDERS: 'brevo',
+    });
+    expect(published.APPS_CREDENTIAL_KEY).toBeUndefined();
+    expect(published.APPS_LIVE_PROVIDERS).toEqual([]);
+    expect(published.appsLiveWarnings.join(' ')).toMatch(/published development value/);
   });
 
   it('refuses an inbound mail webhook that authenticates nobody', () => {
@@ -1537,6 +1547,7 @@ describe('Apps live providers and their credential key (tm 263 · FR-MOD-09.2)',
     const env = parseEnv(BASE);
     expect(env.APPS_LIVE_PROVIDERS).toEqual([]);
     expect(env.APPS_CREDENTIAL_KEY).toBeUndefined();
+    expect(env.appsLiveWarnings).toEqual([]);
     expect(env.RATE_LIMIT_APPS_CONNECT_PER_HOUR).toBe(20);
   });
 
@@ -1547,30 +1558,36 @@ describe('Apps live providers and their credential key (tm 263 · FR-MOD-09.2)',
       APPS_LIVE_PROVIDERS: ' Brevo, freshdesk ,,telegram,brevo',
     });
     expect(env.APPS_LIVE_PROVIDERS).toEqual(['brevo', 'freshdesk', 'telegram']);
+    expect(env.appsLiveWarnings).toEqual([]);
   });
 
-  it('refuses a provider no verifier implements', () => {
-    // A typo would otherwise leave the card on demo data while the owner believes it is live.
-    expect(() =>
-      parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: KEY, APPS_LIVE_PROVIDERS: 'brevo,zendsk' }),
-    ).toThrow(/APPS_LIVE_PROVIDERS[\s\S]*zendsk/);
+  // Owner, 2026-10-10: none of these stops the boot; each is a warning.
+  it('ignores a provider no verifier implements, and says so', () => {
+    const env = parseEnv({
+      ...BASE,
+      APPS_CREDENTIAL_KEY: KEY,
+      APPS_LIVE_PROVIDERS: 'brevo,zendsk',
+    });
+    expect(env.APPS_LIVE_PROVIDERS).toEqual(['brevo']);
+    expect(env.appsLiveWarnings.join(' ')).toMatch(/zendsk/);
   });
 
-  it('refuses a live provider without a key, in every environment', () => {
-    expect(() => parseEnv({ ...BASE, APPS_LIVE_PROVIDERS: 'brevo' })).toThrow(
-      /APPS_CREDENTIAL_KEY is required when APPS_LIVE_PROVIDERS/,
-    );
+  it('keeps every card a demo when a live provider has no key, and says so', () => {
+    const env = parseEnv({ ...BASE, APPS_LIVE_PROVIDERS: 'brevo' });
+    expect(env.APPS_LIVE_PROVIDERS).toEqual([]);
+    expect(env.appsLiveWarnings.join(' ')).toMatch(/no usable APPS_CREDENTIAL_KEY/);
   });
 
-  it('accepts only 32 bytes written as hex, and reads an empty line as unset', () => {
+  it('uses only 32 bytes written as hex; anything else is ignored with a warning', () => {
     expect(parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: KEY.toUpperCase() }).APPS_CREDENTIAL_KEY).toBe(
       KEY.toUpperCase(),
     );
     expect(parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: '' }).APPS_CREDENTIAL_KEY).toBeUndefined();
     for (const bad of ['d4'.repeat(31), 'd4'.repeat(33), 'zz'.repeat(32), 'dev-only-apps-key']) {
-      expect(() => parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: bad })).toThrow(
-        /APPS_CREDENTIAL_KEY[\s\S]*64 hexadecimal/,
-      );
+      const env = parseEnv({ ...BASE, APPS_CREDENTIAL_KEY: bad, APPS_LIVE_PROVIDERS: 'brevo' });
+      expect(env.APPS_CREDENTIAL_KEY).toBeUndefined();
+      expect(env.APPS_LIVE_PROVIDERS).toEqual([]);
+      expect(env.appsLiveWarnings.join(' ')).toMatch(/64 hexadecimal/);
     }
   });
 });

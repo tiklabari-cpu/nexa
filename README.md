@@ -441,18 +441,17 @@ needs to configure, not a hosted instance of it.
 
 ### Required — boot refuses without these
 
-| Variable                | Why it's required                                                                                                                                                                                                                                                                 |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`          | Migration/owner connection. Always required, in every `NODE_ENV`.                                                                                                                                                                                                                 |
-| `DATABASE_APP_URL`      | Runtime connection, required specifically under `NODE_ENV=production`. See "DATABASE_URL vs DATABASE_APP_URL" below — this is the one most likely to be skipped by habit and worst to skip.                                                                                       |
-| `REDIS_URL`             | Presence, rate limiting, pub/sub. Always required.                                                                                                                                                                                                                                |
-| `JWT_SIGNING_KEY`       | Signs agent session tokens. Always required; production additionally refuses the published `dev-only-…` placeholder.                                                                                                                                                              |
-| `WEBHOOK_HMAC_SEED`     | Signs outbound webhook payloads (NFR-S7). Same production-only placeholder refusal.                                                                                                                                                                                               |
-| `CUSTOMER_TOKEN_SECRET` | Signs widget customer tokens — must be byte-identical between `apps/api` and `apps/rtm`. Same production-only placeholder refusal.                                                                                                                                                |
-| `UPLOAD_SIGNING_KEY`    | Signs upload URLs. Same production-only placeholder refusal.                                                                                                                                                                                                                      |
-| `AUDIT_CHAIN_SECRET`    | Roots the audit hash chain (NFR-C6) — deliberately not stored in the database. Same production-only placeholder refusal.                                                                                                                                                          |
-| `APPS_CREDENTIAL_KEY`   | Encrypts the provider credentials of live Apps connections (tm 263) — AES-256-GCM, exactly 64 hex characters. Required under `NODE_ENV=production` (which also refuses the value `.env.example` publishes), and in every environment once `APPS_LIVE_PROVIDERS` names a provider. |
-| `INBOUND_EMAIL_SECRET`  | Authenticates the inbound mail webhook, required specifically under `NODE_ENV=production` — unset, the recipient address is the only routing key, and it's handed to customers.                                                                                                   |
+| Variable                | Why it's required                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | Migration/owner connection. Always required, in every `NODE_ENV`.                                                                                                                           |
+| `DATABASE_APP_URL`      | Runtime connection, required specifically under `NODE_ENV=production`. See "DATABASE_URL vs DATABASE_APP_URL" below — this is the one most likely to be skipped by habit and worst to skip. |
+| `REDIS_URL`             | Presence, rate limiting, pub/sub. Always required.                                                                                                                                          |
+| `JWT_SIGNING_KEY`       | Signs agent session tokens. Always required; production additionally refuses the published `dev-only-…` placeholder.                                                                        |
+| `WEBHOOK_HMAC_SEED`     | Signs outbound webhook payloads (NFR-S7). Same production-only placeholder refusal.                                                                                                         |
+| `CUSTOMER_TOKEN_SECRET` | Signs widget customer tokens — must be byte-identical between `apps/api` and `apps/rtm`. Same production-only placeholder refusal.                                                          |
+| `UPLOAD_SIGNING_KEY`    | Signs upload URLs. Same production-only placeholder refusal.                                                                                                                                |
+| `AUDIT_CHAIN_SECRET`    | Roots the audit hash chain (NFR-C6) — deliberately not stored in the database. Same production-only placeholder refusal.                                                                    |
+| `INBOUND_EMAIL_SECRET`  | Authenticates the inbound mail webhook, required specifically under `NODE_ENV=production` — unset, the recipient address is the only routing key, and it's handed to customers.             |
 
 Generate each secret independently, per deployment — never reuse a value across
 environments:
@@ -752,8 +751,10 @@ adaptor: `brevo` (verifies with `GET https://api.brevo.com/v3/account`, reads a 
 chat panel), `freshdesk` (asks for the helpdesk subdomain; verifies with
 `GET https://<subdomain>.freshdesk.com/api/v2/agents/me`, reads the requester's tickets) and
 `telegram` (a real channel: `getMe`, `setWebhook` with a secret token, real `sendMessage`;
-needs `API_BASE_URL` to be a public `https://` address). A name outside the three stops the
-boot, and naming any requires `APPS_CREDENTIAL_KEY`.
+needs `API_BASE_URL` to be a public `https://` address). Live cards also need
+`APPS_CREDENTIAL_KEY` (64 hex characters, `openssl rand -hex 32`). None of this can stop the
+boot: an unknown name, a missing or malformed key — or, in production, the key `.env.example`
+publishes — leaves every Apps card a demo and logs a warning (`apps.live_disabled`).
 
 A live card's key is checked with the provider before it is saved, stored AES-256-GCM
 encrypted under `APPS_CREDENTIAL_KEY`, and never returned or logged. Every provider call goes

@@ -305,6 +305,11 @@ export async function buildServer({
     forceCloseConnections: false,
   });
 
+  // An Apps setting that cannot work never stops the boot (tm 263, owner
+  // 2026-10-10): the live cards stay demos and the reason is logged here.
+  for (const warning of env.appsLiveWarnings)
+    app.log.warn({ event: 'apps.live_disabled' }, warning);
+
   // The provider is chosen by the setting that names it, not by `NODE_ENV`
   // (M-PROV-a · §D113/K3). The branch that used to be here meant `MAIL_PROVIDER`
   // was validated at boot and then never read, so an operator who set it got a

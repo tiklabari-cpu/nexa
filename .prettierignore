@@ -60,3 +60,6 @@ apps/load/results/
 # files that were never valid YAML on their own, only after Helm renders them.
 # `Chart.yaml`/`values.yaml` (plain YAML, no template syntax) are NOT ignored.
 infra/helm/siyahtus/templates/
+# Per-user Claude Code permissions: never committed (globally gitignored),
+# rewritten by the tool itself as approvals accumulate (tm 263).
+.claude/settings.local.json

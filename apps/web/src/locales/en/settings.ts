@@ -397,6 +397,10 @@ export const settings: Messages = {
   'settings.channels.telegram.usernameError': 'Enter the bot username.',
   'settings.channels.telegram.disconnectConfirm':
     'Disconnect Telegram? Messages will stop arriving until you reconnect.',
+  // tm 263: the live bot — the name comes from Telegram, only the token is asked for.
+  'settings.channels.telegram.liveDescription':
+    'Paste the token @BotFather gave you. It is checked with Telegram, the bot name comes from Telegram, and the token is stored encrypted.',
+  'settings.channels.live': 'Live',
 
   // Website widgets — WebsiteWidgets.tsx
   'settings.websiteWidgets.title': 'Website widgets',

@@ -23,6 +23,12 @@
  * The list drives itself entirely from `/settings/apps`: the status is read, not
  * decided here, so a card can never claim to be connected when it is not.
  *
+ * Live or demo (tm 263): every data card says which it is. A card this
+ * deployment connects to its real provider (`live_available`) is "Live" — its
+ * key is checked with the provider before it is saved, a refusal shows the
+ * provider's own reason, and an install from before it went live reads
+ * "Reconnect needed". Every other card is "Demo", and connects as it always did.
+ *
  * The catalogue is 100+ cards (09.2 v2), so neither the grid nor the request may
  * be unbounded any more:
  *   - The cards are cut into fixed-height rows (`app-grid.ts`) and scrolled
@@ -55,6 +61,9 @@ import {
   APP_PLACEMENTS,
   APP_PRICING_VALUES,
   appApiKeyProblem,
+  appCredentialFields,
+  appSubdomainProblem,
+  findApp,
   type AppCategory,
   type AppCollection,
   type AppListItem,
@@ -73,6 +82,7 @@ import { formatDateTime } from '../../lib/format.js';
 import { FieldError, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { chunkIntoRows, columnsForWidth } from './app-grid.js';
+import { liveConnectErrorText } from './live-errors.js';
 
 const APPS_KEY = ['settings', 'apps'] as const;
 
@@ -540,8 +550,11 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
   // lives in the form's state and this call, and nowhere else — it is never put
   // in the query cache, because the response deliberately does not contain it.
   const connectWithKey = useMutation({
-    mutationFn: (apiKey: string) =>
-      api.post<AppListItem>(`/settings/apps/${app.id}/connect`, { api_key: apiKey }),
+    mutationFn: (credentials: { apiKey: string; subdomain?: string }) =>
+      api.post<AppListItem>(`/settings/apps/${app.id}/connect`, {
+        api_key: credentials.apiKey,
+        ...(credentials.subdomain !== undefined ? { subdomain: credentials.subdomain } : {}),
+      }),
     onSuccess: async () => {
       setConnecting(false);
       await invalidate();
@@ -553,6 +566,10 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
     onSuccess: () => invalidate(),
   });
 
+  // An install from before this card went live holds no key the provider can
+  // be asked with (tm 263): kept, and asked for again.
+  const needsReconnect = app.installation?.status === 'needs_reconnect';
+
   return (
     <Card className="h-full">
       <div data-testid={`app-${app.id}`} className="flex h-full flex-col gap-2 p-4">
@@ -562,18 +579,25 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
           </span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.name}</span>
           <StatusDot
-            tone={app.installed ? 'success' : 'neutral'}
+            tone={needsReconnect ? 'warning' : app.installed ? 'success' : 'neutral'}
             label={
-              app.installed
-                ? t('apps.marketplace.card.connected')
-                : t('apps.marketplace.card.notConnected')
+              needsReconnect
+                ? t('apps.live.status.needsReconnect')
+                : app.installed
+                  ? t('apps.marketplace.card.connected')
+                  : t('apps.marketplace.card.notConnected')
             }
           />
         </div>
 
-        <span className="self-start rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
-          {t(CATEGORY_KEY[app.category])}
-        </span>
+        {/* The category and whether the card is real share one line: the row
+            height is fixed, so the badge must not cost a line of its own. */}
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
+            {t(CATEGORY_KEY[app.category])}
+          </span>
+          <LiveBadge live={app.live_available} name={app.name} t={t} />
+        </div>
 
         {/* Clamped: the row height is fixed, so a long description shortens
             rather than pushing the action out of its card. */}
@@ -612,16 +636,27 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
                 })}
               </p>
             )}
-            <button
-              type="button"
-              onClick={() => disconnect.mutate()}
-              disabled={disconnect.isPending}
-              className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
-            >
-              {disconnect.isPending
-                ? t('apps.marketplace.card.disconnecting')
-                : t('apps.marketplace.card.disconnect')}
-            </button>
+            <div className="flex items-center gap-2">
+              {needsReconnect && (
+                <button
+                  type="button"
+                  onClick={() => setConnecting(true)}
+                  className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+                >
+                  {t('apps.live.card.reconnect')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => disconnect.mutate()}
+                disabled={disconnect.isPending}
+                className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                {disconnect.isPending
+                  ? t('apps.marketplace.card.disconnecting')
+                  : t('apps.marketplace.card.disconnect')}
+              </button>
+            </div>
           </div>
         ) : (
           <button
@@ -642,9 +677,12 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
           <ApiKeyDialog
             app={app}
             t={t}
-            failed={connectWithKey.isError}
-            onSubmit={(apiKey) => connectWithKey.mutateAsync(apiKey)}
-            onCancel={() => setConnecting(false)}
+            failure={connectWithKey.error}
+            onSubmit={(credentials) => connectWithKey.mutateAsync(credentials)}
+            onCancel={() => {
+              connectWithKey.reset();
+              setConnecting(false);
+            }}
           />
         ) : (
           <ConsentDialog
@@ -657,6 +695,26 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
           />
         ))}
     </Card>
+  );
+}
+
+/**
+ * Whether a card talks to its real provider (tm 263). Text, not colour alone,
+ * with the longer explanation as its title: "Demo" is what makes a mock card's
+ * sample data honest.
+ */
+function LiveBadge({ live, name, t }: { live: boolean; name: string; t: TFunction }): ReactElement {
+  return (
+    <span
+      title={
+        live ? t('apps.live.badge.liveTitle', { name }) : t('apps.live.badge.demoTitle', { name })
+      }
+      className={`rounded-sm px-1.5 py-0.5 text-2xs font-medium ${
+        live ? 'bg-success/10 text-success' : 'bg-inset text-content-tertiary'
+      }`}
+    >
+      {live ? t('apps.live.badge.live') : t('apps.live.badge.demo')}
+    </span>
   );
 }
 
@@ -740,19 +798,31 @@ function ConsentDialog({
 function ApiKeyDialog({
   app,
   t,
-  failed,
+  failure,
   onSubmit,
   onCancel,
 }: {
   app: AppListItem;
   t: TFunction;
-  failed: boolean;
-  onSubmit: (apiKey: string) => Promise<unknown>;
+  /** The last refused attempt, if any — its reason is shown, never the key. */
+  failure: unknown;
+  onSubmit: (credentials: { apiKey: string; subdomain?: string }) => Promise<unknown>;
   onCancel: () => void;
 }): ReactElement {
+  // From the shared catalogue, not the response: what a card asks for is the
+  // same everywhere (Freshdesk also needs its helpdesk's subdomain).
+  const entry = findApp(app.id);
+  const needsSubdomain = entry ? appCredentialFields(entry).includes('subdomain') : false;
   const form = useForm({
-    initial: { apiKey: '' },
+    initial: { apiKey: '', subdomain: '' },
     validators: {
+      subdomain: (value: string) => {
+        if (!needsSubdomain) return null;
+        const problem = appSubdomainProblem(value);
+        if (problem === 'required') return t('apps.live.subdomain.requiredError');
+        if (problem === 'invalid') return t('apps.live.subdomain.invalidError');
+        return null;
+      },
       apiKey: (value: string) => {
         const problem = appApiKeyProblem(value);
         if (problem === 'required') return t('apps.marketplace.apiKey.requiredError');
@@ -769,20 +839,61 @@ function ApiKeyDialog({
     },
     onSubmit: async (values) => {
       // Trimmed here as well as on the server: what is validated and what is
-      // sent have to be the same string, or the bounds mean two things.
-      await onSubmit(values.apiKey.trim());
+      // sent have to be the same string, or the bounds mean two things. A
+      // refusal is shown below from the mutation's error; the key stays in
+      // the field, never in the message.
+      try {
+        await onSubmit({
+          apiKey: values.apiKey.trim(),
+          ...(needsSubdomain ? { subdomain: values.subdomain.trim() } : {}),
+        });
+      } catch {
+        /* rendered from `failure` */
+      }
     },
   });
   const keyError = form.errorFor('apiKey');
+  const subdomainError = form.errorFor('subdomain');
 
   return (
     <Modal
       onClose={onCancel}
       title={t('apps.marketplace.apiKey.title', { name: app.name })}
-      description={t('apps.marketplace.apiKey.description')}
+      description={
+        app.live_available
+          ? t('apps.live.dialog.description', { name: app.name })
+          : t('apps.marketplace.apiKey.description')
+      }
       className="w-[26rem]"
     >
       <form onSubmit={form.handleSubmit} noValidate className="mt-1 flex flex-col gap-1">
+        {needsSubdomain && (
+          <>
+            <label
+              htmlFor={`app-subdomain-${app.id}`}
+              className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+            >
+              {t('apps.live.subdomain.label')}
+            </label>
+            <input
+              id={`app-subdomain-${app.id}`}
+              autoComplete="off"
+              spellCheck={false}
+              value={form.values.subdomain}
+              onChange={(event) => form.setValue('subdomain', event.target.value)}
+              onBlur={() => form.blur('subdomain')}
+              aria-invalid={subdomainError ? true : undefined}
+              aria-describedby={`app-subdomain-${app.id}-hint${
+                subdomainError ? ` app-subdomain-${app.id}-error` : ''
+              }`}
+              className="rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none"
+            />
+            <FieldError id={`app-subdomain-${app.id}-error`} message={subdomainError} />
+            <p id={`app-subdomain-${app.id}-hint`} className="mb-2 text-2xs text-content-tertiary">
+              {t('apps.live.subdomain.hint')}
+            </p>
+          </>
+        )}
         {/* The hint sits outside the label on purpose: text inside it becomes
             part of the field's accessible name. */}
         <label
@@ -805,7 +916,15 @@ function ApiKeyDialog({
         <FieldError id={`app-api-key-${app.id}-error`} message={keyError} />
         <p className="text-2xs text-content-tertiary">{t('apps.marketplace.apiKey.hint')}</p>
 
-        {failed && <ErrorNotice message={t('apps.marketplace.apiKey.error')} />}
+        {failure != null && (
+          <ErrorNotice
+            message={
+              app.live_available
+                ? liveConnectErrorText(t, failure, app.name)
+                : t('apps.marketplace.apiKey.error')
+            }
+          />
+        )}
 
         <div className="mt-4 flex justify-end gap-2">
           <button

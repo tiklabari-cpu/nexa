@@ -50,6 +50,7 @@ const PRODUCTION_ENV: NodeJS.ProcessEnv = {
   CUSTOMER_TOKEN_SECRET: realSecret('customer'),
   UPLOAD_SIGNING_KEY: realSecret('upload'),
   AUDIT_CHAIN_SECRET: realSecret('audit'),
+  APPS_CREDENTIAL_KEY: 'c3'.repeat(32),
 };
 
 describe('a server built from a production environment', () => {

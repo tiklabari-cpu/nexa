@@ -176,11 +176,12 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
           }
         />
         {/* The marketplace is mock OAuth and unused API keys (tm 257.18): the pilot's
-            Apps address leads to the inbox. */}
+            Apps address leads to the inbox — unless the deployment runs live
+            cards, which are then the whole marketplace (tm 263). */}
         <Route
           path="apps"
           element={
-            <PilotHidden>
+            <PilotHidden unlessLiveApps>
               <AppsMarketplacePage />
             </PilotHidden>
           }

@@ -11400,13 +11400,134 @@
           }
         ],
         "updatedAt": "2026-10-09T22:06:07.114Z"
+      },
+      {
+        "id": "263",
+        "title": "APPS-LIVE-ADAPTERS [OPUS-HIGH] (Opus 5.5 · efor high) Apps mağazası API-anahtarlı kartlara gerçek bağlantı katmanı: şifreli kimlik, güvenli dış çağrı, Brevo/Freshdesk/Telegram adaptörleri, pilot izin listesi",
+        "description": "Sahibin 2026-10-10 görevi. Yalnız provider api_key kartlar; OAuth kartlarına dokunulmaz. Adaptör kaydında olmayan kart bugünkü mock davranışını aynen korur; gerçek adaptör APPS_LIVE_PROVIDERS ile açılır. PLAN §D214.",
+        "details": "Plan: interaktif pencere, sahip onaylı. Testler gerçek ağa çıkmaz (yerel HTTPS sahte sunucu). Sınırlar: gerçek secret/anahtar YOK, production deploy YOK.\n\nKAPANIŞ (2026-10-10): test:gate --force build/birim/entegrasyon 0 cached yeşil (api 174/3914, rtm 111); statik --force yeşil (.prettierignore: .claude/settings.local.json). Web birim 220/2853. Tam e2e ilk koşu 382/387 (yük, parça ~25 dk) → kırmızı dosyalar 154/154 yeşil; pilot 8/8, session 2/2; req-coverage exit 0; db:check-drift temiz; migration provası eski satırlarla temiz. Sapmalar: 422 yerine 400/503 + details.reason; status CHECK genişletilmedi (needs_reconnect hesaplanır); zendesk/intercom/mailerlite/activecampaign/airtable doğrulanamadı → mock. PLAN §D214, HANDOFF.",
+        "testStrategy": "Alt görevlerde; kapanış DoD kapısı (CONVENTIONS §1).",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "CREDENTIAL-CIPHER — AES-256-GCM kimlik bilgisi şifrelemesi + APPS_CREDENTIAL_KEY",
+            "description": "apps/api/src/lib/credential-cipher.ts: v1:<iv>:<tag>:<ct>, AAD satıra bağlı (licenseId:appId). APPS_CREDENTIAL_KEY 64 hex, production'da zorunlu, boot doğrulaması.",
+            "details": "Env AUDIT_CHAIN_SECRET kalıbı: env.ts şema + SECRET_KEYS + hex refine, .env.example, .env.production.example, turbo.json globalEnv, ci.yml, README env tablosu, docs/production-checklist.md, Helm secret/values. Düz anahtar log/yanıt/hata/audit'e yazılmaz.",
+            "testStrategy": "credential-cipher.test.ts: tur, yanlış anahtar/AAD/tag/biçim reddi; env.test.ts hex biçim + production zorunluluğu; production-boot / pilot-gate env tabanları.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 2,
+            "title": "SAFE-FETCH — dış çağrılar için tek güvenli HTTPS sarmalayıcı",
+            "description": "apps/api/src/lib/safe-fetch.ts: yalnız https, ~8 sn zaman aşımı, yanıt boyutu sınırı, yönlendirme izlenmez, çözümlenen adres SSRF/DNS-rebinding kontrolü (lib/ssrf.ts pinnedConnection).",
+            "details": "Hata sınıfları timeout | too_large | network | blocked | redirect; mesajda URL sorgusu ya da başlık yok. Test enjeksiyonu resolver + ca ile (buildServer appsHttp).",
+            "testStrategy": "safe-fetch.test.ts yerel HTTPS sahte sunucu + egress guard: 200, zaman aşımı, büyük yanıt, 3xx, http şeması, özel IP, DNS-rebinding.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 3,
+            "title": "VERIFIER-REGISTRY — kart başına doğrulayıcı arayüzü, Brevo + Freshdesk",
+            "description": "services/apps/verifiers: verify(credentials) -> {ok, accountLabel?, reason?}, opsiyonel fetchChatData. Kayıtta olmayan ya da APPS_LIVE_PROVIDERS'ta açılmayan kart bugünkü mock davranışını aynen korur.",
+            "details": "Brevo GET https://api.brevo.com/v3/account (api-key başlığı); Freshdesk GET https://<alanadi>.freshdesk.com/api/v2/agents/me (Basic key:X), alt alan adı deseni ile ilk SSRF katmanı. APPS_LIVE_PROVIDERS env 4 kaynakta. Uç noktası bu ortamda doğrulanamayan kartlara adaptör yazılmaz.",
+            "testStrategy": "Adaptör testleri sahte sunucuya: geçerli, 401/403, zaman aşımı, 5xx, büyük yanıt, alt alan adı SSRF reddi.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 4,
+            "title": "APP-INSTALL-CREDENTIALS — app_installations şifreli kimlik sütunları + needs_reconnect",
+            "description": "Migration yalnız genişletir: credential_ciphertext, credential_config jsonb, verified_at, live; status CHECK needs_reconnect'i de kabul eder. Eski hash'li satırlar silinmez.",
+            "details": "Canlı açılan kartın hash'li eski satırı okunurken needs_reconnect gösterilir; yeni anahtarla bağlanınca connected. Geçersiz anahtarda satır yazılmaz.",
+            "testStrategy": "Migration provası geçici DB'de eski hash'li satırla; db:check-drift.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 5,
+            "title": "APPS-CONNECT-LIVE — servis/rota: gerçek doğrulama, 422, hız sınırı, gerçek sohbet verisi",
+            "description": "connect canlı kartta sağlayıcıya doğrular; 422 app_credentials_invalid + reason + temizlenmiş sağlayıcı mesajı; rl:apps-connect kullanıcı başına (RATE_LIMIT_APPS_CONNECT_PER_HOUR); chatData canlı kartta gerçek veri.",
+            "details": "Liste öğesine live/status/live_available; audit metadata live (anahtar yok). OpenAPI appConnect gövdesi subdomain alır.",
+            "testStrategy": "apps-live.test.ts: bağlan, geçersiz anahtar, needs_reconnect, eski satır korunur, tenant izolasyonu, gerçek sohbet verisi, hız sınırı, sızıntı (log + yanıt + audit + DB).",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 6,
+            "title": "TELEGRAM-LIVE — Telegram tam kanal: getMe, setWebhook + secret token, gerçek sendMessage",
+            "description": "Sahip kararı tam kanal. Mock ChannelAdapter aynen kalır; telegram APPS_LIVE_PROVIDERS içindeyse gerçek adaptör seçilir.",
+            "details": "Bot token channels tablosunda şifreli; setWebhook url API_BASE_URL/api/v1/channels/telegram/webhook/{channelId}, secret_token hash'i saklanır; yeni gelen rota sabit-zamanlı secret karşılaştırması; ayrılınca deleteWebhook. Mobil parite +1.",
+            "testStrategy": "Entegrasyon: getMe/setWebhook sahte sunucuya, secret token reddi, gerçek Update -> sohbet, ajan yanıtı -> sendMessage, token sızıntısı yok.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 7,
+            "title": "PILOT-LIVE-ALLOWLIST — pilot modda yalnız gerçek adaptörlü kartlar açık",
+            "description": "PILOT_MODE kaldırılmaz; pilot-gate canlı kart için istisna; /deployment live_apps; web yalnız canlı kartları gösterir; scripts/smoke.sh pilot kapısı güncel ve yeşil.",
+            "details": "hubspot OAuth reddi kalır; canlı olmayan api_key kartına connect reddi eklenir; sayılar güncellenir.",
+            "testStrategy": "pilot-apps.test.ts izin listesi; web pilot görünürlüğü birim; smoke.sh pilot provası.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 8,
+            "title": "APPS-UI-LIVE — Gerçek bağlantı / Demo rozetleri, alt alan adı alanı, sağlayıcı hata metni",
+            "description": "AppsMarketplace rozetleri, ApiKeyDialog kart alanlarına göre, 422 nedenine göre metin; anahtar hiç geri gösterilmez. en + tr, TRANSLATED_FILES, axe temiz.",
+            "details": "Kanallar -> Telegram canlıyken yalnız token alanı.",
+            "testStrategy": "AppsMarketplace.test.tsx; apps.spec.ts mock akışı yeşil; a11y.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          },
+          {
+            "id": 9,
+            "title": "APPS-LIVE-CLOSE — sözleşme, belgeler, DoD kapısı, kapanış",
+            "description": "OpenAPI + üretilmiş tipler + mobil parite; README/checklist; test:gate --force 0 cached, e2e parçalı + pilot + session, req-coverage, db:check-drift; HANDOFF + PLAN §D214; commit + push + done.",
+            "details": "Mutasyonlar: doğrulamayı atla, SSRF kontrolünü kaldır, log redaksiyonunu kaldır -> ilgili testler kırmızı.",
+            "testStrategy": "DoD kapısı exit code'larla.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "263",
+            "priority": "high",
+            "updatedAt": "2026-10-10T00:14:16.288Z"
+          }
+        ],
+        "updatedAt": "2026-10-10T00:14:16.288Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-09T22:06:07.114Z",
-      "taskCount": 262,
-      "completedCount": 262,
+      "lastModified": "2026-10-10T00:14:16.288Z",
+      "taskCount": 263,
+      "completedCount": 263,
       "tags": [
         "master"
       ]

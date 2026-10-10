@@ -19,16 +19,29 @@
  * turning the address a provider names into a licence — goes through the
  * `channel_resolve_license` SECURITY DEFINER function, because no session exists
  * when a provider calls in.
+ *
+ * Telegram can also run live (tm 263, `telegram-live.ts`): built with a
+ * {@link TelegramLive}, this service keeps the bot token encrypted on the
+ * channel row, sends replies through the real Bot API, and resolves the live
+ * webhook by channel id (`channel_webhook_target`). Without one it is exactly
+ * the mock it was.
  */
+import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
+import {
+  channelCredentialAad,
+  decryptCredential,
+  encryptCredential,
+} from '../../lib/credential-cipher.js';
 import { maskCardNumbers } from '../../lib/cc-mask.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { CustomerPrincipal } from '../auth/principal.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../security/spam-filter.js';
 import { getAdapter } from './registry.js';
-import type { ChannelType } from './channel-adapter.js';
+import type { ChannelType, NormalizedInbound } from './channel-adapter.js';
+import { hashWebhookSecret, type TelegramLive } from './telegram-live.js';
 
 /** The channel `status` values the `channels_status_check` constraint allows
  *  that matter here: `connected` (on) and `off`. */
@@ -62,6 +75,8 @@ export interface ConnectedChannel {
   address: string | null;
   connected: boolean;
   created_at: string;
+  /** True for a channel connected to its real provider (tm 263 — a live Telegram bot). */
+  live: boolean;
 }
 
 interface ChannelRow {
@@ -70,6 +85,29 @@ interface ChannelRow {
   status: string;
   config: Prisma.JsonValue;
   createdAt: Date;
+  credentialCiphertext: string | null;
+}
+
+const CHANNEL_SELECT = {
+  type: true,
+  brandId: true,
+  status: true,
+  config: true,
+  createdAt: true,
+  credentialCiphertext: true,
+} as const;
+
+/** The live Telegram channel this service runs, when the deployment switched it on (tm 263). */
+export interface LiveTelegramOptions {
+  live: TelegramLive;
+  /** `APPS_CREDENTIAL_KEY`. */
+  credentialKey: string;
+}
+
+/** Where a live Telegram connect is going, resolved before Telegram is told. */
+export interface TelegramLiveTarget {
+  channelId: string;
+  brandId: string;
 }
 
 /**
@@ -123,6 +161,13 @@ const MESSAGES_DEFAULT_LIMIT = 25;
 const MESSAGES_MAX_LIMIT = 100;
 
 export class ChannelService {
+  constructor(private readonly telegram: LiveTelegramOptions | null = null) {}
+
+  /** The live Telegram, when this deployment runs one. */
+  get liveTelegram(): TelegramLive | null {
+    return this.telegram?.live ?? null;
+  }
+
   // -------------------------------------------------------------------------
   // Connect / list / disconnect — the `channels` table consumer
   // -------------------------------------------------------------------------
@@ -162,7 +207,7 @@ export class ChannelService {
         // others are `off` and `soon`).
         create: { licenseId: tenant.licenseId, brandId, type, status: CONNECTED, config: stored },
         update: { status: CONNECTED, config: stored },
-        select: { type: true, brandId: true, status: true, config: true, createdAt: true },
+        select: CHANNEL_SELECT,
       });
       return this.serialise(row);
     } catch (error) {
@@ -225,7 +270,7 @@ export class ChannelService {
   async list(tx: TenantClient): Promise<ConnectedChannel[]> {
     const rows = await tx.channel.findMany({
       orderBy: { createdAt: 'asc' },
-      select: { type: true, brandId: true, status: true, config: true, createdAt: true },
+      select: CHANNEL_SELECT,
     });
     return rows.map((row) => this.serialise(row));
   }
@@ -238,9 +283,158 @@ export class ChannelService {
   async disconnect(tx: TenantClient, type: ChannelType): Promise<number> {
     const { count } = await tx.channel.updateMany({
       where: { type, status: { not: OFF } },
-      data: { status: OFF },
+      // A live channel's token and webhook secret go with it: an off channel
+      // has nothing left to authenticate or to send with (tm 263).
+      data: { status: OFF, credentialCiphertext: null, webhookSecretHash: null },
     });
     return count;
+  }
+
+  // -------------------------------------------------------------------------
+  // Live Telegram (tm 263)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Where a live Telegram connect will write: this brand's existing Telegram
+   * row if there is one, else a fresh id — decided before Telegram is told,
+   * because the webhook URL names the row. Refuses a bot another workspace has
+   * connected, as every channel's connect does.
+   */
+  async telegramLiveTarget(
+    tx: TenantClient,
+    tenant: TenantContext,
+    username: string,
+  ): Promise<TelegramLiveTarget> {
+    const brandId = tenant.brandId ?? (await this.defaultBrandId(tx));
+    await this.assertAddressFree(tx, 'telegram', username, tenant.licenseId, brandId);
+    const existing = await tx.channel.findFirst({
+      where: { licenseId: tenant.licenseId, brandId, type: 'telegram' },
+      select: { id: true },
+    });
+    return { channelId: existing?.id ?? randomUUID(), brandId };
+  }
+
+  /** Store a verified live bot: token encrypted to this row, only the secret's hash kept. */
+  async storeTelegramLive(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: TelegramLiveTarget & { username: string; token: string; secret: string },
+  ): Promise<ConnectedChannel> {
+    const telegram = this.requireLiveTelegram();
+    const config = { bot_username: input.username, address: input.username, live: true };
+    const data = {
+      status: CONNECTED,
+      config: config as Prisma.InputJsonValue,
+      credentialCiphertext: encryptCredential(
+        input.token,
+        telegram.credentialKey,
+        channelCredentialAad(String(tenant.licenseId), input.channelId),
+      ),
+      webhookSecretHash: hashWebhookSecret(input.secret),
+    };
+    try {
+      const row = await tx.channel.upsert({
+        where: {
+          licenseId_brandId_type: {
+            licenseId: tenant.licenseId,
+            brandId: input.brandId,
+            type: 'telegram',
+          },
+        },
+        create: {
+          id: input.channelId,
+          licenseId: tenant.licenseId,
+          brandId: input.brandId,
+          type: 'telegram',
+          ...data,
+        },
+        update: data,
+        select: { ...CHANNEL_SELECT, id: true },
+      });
+      // The row that existed when the target was read is the row Telegram was
+      // pointed at; a concurrent connect that replaced it would leave the
+      // webhook naming a row with another secret, so say so instead.
+      if (row.id !== input.channelId) throw addressTaken();
+      return this.serialise(row);
+    } catch (error) {
+      if (isUniqueViolation(error)) throw addressTaken();
+      throw error;
+    }
+  }
+
+  /**
+   * The live bot token of this workspace's `type` channel, decrypted, or null
+   * — read before a disconnect so the webhook can be removed at Telegram after
+   * the row is off.
+   */
+  async liveToken(
+    tx: TenantClient,
+    tenant: TenantContext,
+    type: ChannelType,
+  ): Promise<string | null> {
+    if (type !== 'telegram' || !this.telegram) return null;
+    const row = await tx.channel.findFirst({
+      where: { type, status: CONNECTED },
+      select: { id: true, credentialCiphertext: true },
+    });
+    if (!row?.credentialCiphertext) return null;
+    try {
+      return decryptCredential(
+        row.credentialCiphertext,
+        this.telegram.credentialKey,
+        channelCredentialAad(String(tenant.licenseId), row.id),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The live webhook's door (`POST /channels/telegram/webhook/{id}`): resolve
+   * the channel by id before any tenant context exists, check Telegram's
+   * secret header in constant time, then hand the update to the same inbound
+   * path every channel takes. An unknown id and a wrong secret are the same
+   * 401, so the path cannot be used to learn which ids exist.
+   */
+  async ingestTelegramLive(
+    db: PrismaClient,
+    chats: ChatService,
+    channelId: string,
+    secretHeader: string | undefined,
+    body: unknown,
+  ): Promise<InboundOutcome | { status: 'ignored'; reason: 'unsupported_update' }> {
+    const telegram = this.requireLiveTelegram();
+    const rows = /^[0-9a-f-]{36}$/i.test(channelId)
+      ? await db.$queryRaw<
+          Array<{
+            license_id: bigint;
+            organization_id: string;
+            license_status: string;
+            channel_type: string;
+            address: string | null;
+            webhook_secret_hash: string;
+          }>
+        >(Prisma.sql`SELECT * FROM channel_webhook_target(${channelId}::uuid)`)
+      : [];
+    const target = rows[0];
+    if (
+      !target ||
+      target.channel_type !== 'telegram' ||
+      !telegram.live.secretMatches(secretHeader, target.webhook_secret_hash)
+    ) {
+      throw ApiError.authentication('Invalid webhook secret.');
+    }
+    if (target.license_status === 'canceled' || !target.address) {
+      throw ApiError.notFound('Unknown channel recipient.');
+    }
+    const normalized = telegram.live.parseUpdate(body, target.address);
+    if (!normalized) return { status: 'ignored', reason: 'unsupported_update' };
+    return this.ingestNormalized(db, chats, 'telegram', normalized);
+  }
+
+  private requireLiveTelegram(): LiveTelegramOptions {
+    if (!this.telegram) throw ApiError.notFound('Not found.');
+    return this.telegram;
   }
 
   // -------------------------------------------------------------------------
@@ -265,7 +459,16 @@ export class ChannelService {
     type: ChannelType,
     payload: unknown,
   ): Promise<InboundOutcome> {
-    const normalized = getAdapter(type).parseInbound(payload);
+    return this.ingestNormalized(db, chats, type, getAdapter(type).parseInbound(payload));
+  }
+
+  /** The provider-agnostic half of {@link ingestInbound}, shared with the live Telegram webhook. */
+  async ingestNormalized(
+    db: PrismaClient,
+    chats: ChatService,
+    type: ChannelType,
+    normalized: NormalizedInbound,
+  ): Promise<InboundOutcome> {
     const tenant = await this.resolveLicense(db, type, normalized.address);
 
     // Mask before anything reads the text, so the masked value is what the spam
@@ -541,7 +744,7 @@ export class ChannelService {
     // license and — under a brand context — to that one brand's channel.
     const channel = await tx.channel.findFirst({
       where: { type },
-      select: { status: true, config: true },
+      select: { id: true, status: true, config: true, credentialCiphertext: true },
     });
     if (!channel || channel.status !== CONNECTED) {
       throw ApiError.validation('That channel is not connected.');
@@ -550,11 +753,33 @@ export class ChannelService {
     const externalId = input.externalId ?? (await this.externalIdForChat(tx, type, input.chatId!));
     const config = (channel.config ?? {}) as Record<string, unknown>;
 
-    const { providerMessageId } = await getAdapter(type).send({
-      config,
-      externalId,
-      text: input.text,
-    });
+    // A Telegram connected while it was a mock has no token to send with: once
+    // the channel is live, a "sent" mock id would be a reply nobody receives.
+    if (type === 'telegram' && this.telegram && !channel.credentialCiphertext) {
+      throw ApiError.validation(
+        'Reconnect Telegram: this channel was connected before it went live.',
+        {
+          reason: 'channel_needs_reconnect',
+        },
+      );
+    }
+
+    let providerMessageId: string;
+    if (type === 'telegram' && channel.credentialCiphertext && this.telegram) {
+      // A live bot (tm 263): the reply really leaves, through the Bot API.
+      const token = decryptCredential(
+        channel.credentialCiphertext,
+        this.telegram.credentialKey,
+        channelCredentialAad(String(tenant.licenseId), channel.id),
+      );
+      providerMessageId = await this.telegram.live.sendMessage(token, externalId, input.text);
+    } else {
+      ({ providerMessageId } = await getAdapter(type).send({
+        config,
+        externalId,
+        text: input.text,
+      }));
+    }
 
     await this.record(tx, tenant, {
       channelType: type,
@@ -720,6 +945,7 @@ export class ChannelService {
       address: row.status === CONNECTED ? address : null,
       connected: row.status === CONNECTED,
       created_at: row.createdAt.toISOString(),
+      live: row.status === CONNECTED && row.credentialCiphertext !== null,
     };
   }
 }

@@ -26,7 +26,8 @@ vi.mock('../../lib/auth-store.js', () => ({
 }));
 vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
 
-const config = (pilotMode: boolean): DeploymentConfig => ({
+const config = (pilotMode: boolean, liveApps: string[] = []): DeploymentConfig => ({
+  live_apps: liveApps,
   pilot_mode: pilotMode,
   contact_email: null,
   signup_enabled: true,
@@ -92,5 +93,79 @@ describe('DetailsPanel Apps section (tm 257.18)', () => {
 
     expect(await screen.findByText('No connected apps.')).toBeInTheDocument();
     expect(api.get).toHaveBeenCalledWith(`/chats/${CHAT.id}/apps`);
+  });
+});
+
+describe('DetailsPanel Apps section with live cards (tm 263 · FR-MOD-09.2)', () => {
+  it('is drawn in the pilot when a card is live, and tells live data from demo data', async () => {
+    deployment.current = config(true, ['brevo', 'telegram']);
+    api.get.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === `/chats/${CHAT.id}/apps`
+          ? {
+              items: [
+                {
+                  app_id: 'brevo',
+                  app_name: 'Brevo',
+                  icon: '🌤️',
+                  data_label: 'Brevo',
+                  fields: [{ label: 'Subscribed', value: 'Yes' }],
+                  live: true,
+                },
+                {
+                  app_id: 'freshdesk',
+                  app_name: 'Freshdesk',
+                  icon: '🍃',
+                  data_label: 'Freshdesk',
+                  fields: [],
+                  live: true,
+                  unavailable: true,
+                },
+              ],
+            }
+          : { items: [] },
+      ),
+    );
+    renderPanel();
+
+    const brevo = await screen.findByTestId('chat-app-brevo');
+    expect(brevo).toHaveTextContent('Live');
+    expect(brevo).toHaveTextContent('Subscribed');
+    expect(screen.getByTestId('chat-app-freshdesk')).toHaveTextContent(
+      'Could not load this from Freshdesk right now.',
+    );
+  });
+
+  it('labels a mock card’s data Demo, and says when a live card has no record', async () => {
+    deployment.current = config(false, ['brevo']);
+    api.get.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === `/chats/${CHAT.id}/apps`
+          ? {
+              items: [
+                {
+                  app_id: 'zendesk',
+                  app_name: 'Zendesk',
+                  icon: '🎫',
+                  data_label: 'Zendesk',
+                  fields: [{ label: 'Open tickets', value: '2' }],
+                  live: false,
+                },
+                {
+                  app_id: 'brevo',
+                  app_name: 'Brevo',
+                  icon: '🌤️',
+                  data_label: 'Brevo',
+                  fields: [],
+                  live: true,
+                },
+              ],
+            }
+          : { items: [] },
+      ),
+    );
+    renderPanel();
+    expect(await screen.findByTestId('chat-app-zendesk')).toHaveTextContent('Demo');
+    expect(screen.getByTestId('chat-app-brevo')).toHaveTextContent('No record for this customer.');
   });
 });

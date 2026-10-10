@@ -5,6 +5,7 @@ import { Banner, Dropdown, Modal, Panel, PanelSection } from '../../components/u
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { liveDataApps } from '../../lib/live-apps.js';
 import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useChatAction } from './useInbox.js';
@@ -141,12 +142,15 @@ export function DetailsPanel({
   //
   // The public pilot has no marketplace (tm 257.18): the section is not drawn
   // and the read is not made — the API answers it with an empty list anyway.
-  const { pilot_mode: pilotMode } = useDeployment();
+  // Live cards are the exception (tm 263): their data is the provider's own,
+  // so with any switched on the section is back, showing only them.
+  const deployment = useDeployment();
+  const showApps = !deployment.pilot_mode || liveDataApps(deployment).length > 0;
   const apps = useQuery({
     queryKey: ['chat-apps', chatId],
     queryFn: () => api.get<{ items: AppChatData[] }>(`/chats/${chatId}/apps`),
     staleTime: 30_000,
-    enabled: !pilotMode,
+    enabled: showApps,
   });
   const connectedApps = apps.data?.items ?? [];
 
@@ -296,7 +300,7 @@ export function DetailsPanel({
         {/* Data pulled from connected marketplace apps (FR-MOD-09.1): a CRM's
           lifecycle stage, a store's order count — the context an integration is
           connected to provide. Empty until an app is connected in Settings. */}
-        {!pilotMode && (
+        {showApps && (
           <PanelSection title={t('inbox.details.section.apps')}>
             {connectedApps.length === 0 ? (
               <p className="text-xs text-content-tertiary">{t('inbox.details.apps.empty')}</p>
@@ -306,13 +310,32 @@ export function DetailsPanel({
                   <div key={app.app_id} data-testid={`chat-app-${app.app_id}`}>
                     <div className="mb-1 flex items-center gap-1.5 text-2xs font-medium text-content-secondary">
                       <span aria-hidden="true">{app.icon}</span>
-                      <span className="truncate">{app.data_label}</span>
+                      <span className="min-w-0 flex-1 truncate">{app.data_label}</span>
+                      {/* Live data is the provider's; demo data is sample data,
+                          and the agent must be able to tell (tm 263). */}
+                      <span
+                        className={`shrink-0 rounded-sm px-1 text-2xs ${
+                          app.live ? 'bg-success/10 text-success' : 'bg-inset text-content-tertiary'
+                        }`}
+                      >
+                        {app.live ? t('inbox.details.apps.live') : t('inbox.details.apps.demo')}
+                      </span>
                     </div>
-                    {app.fields.map((field) => (
-                      <Row key={field.label} label={field.label}>
-                        <span className="text-xs">{field.value}</span>
-                      </Row>
-                    ))}
+                    {app.unavailable ? (
+                      <p className="text-xs text-content-tertiary">
+                        {t('inbox.details.apps.unavailable', { name: app.app_name })}
+                      </p>
+                    ) : app.live && app.fields.length === 0 ? (
+                      <p className="text-xs text-content-tertiary">
+                        {t('inbox.details.apps.noRecord')}
+                      </p>
+                    ) : (
+                      app.fields.map((field) => (
+                        <Row key={field.label} label={field.label}>
+                          <span className="text-xs">{field.value}</span>
+                        </Row>
+                      ))
+                    )}
                   </div>
                 ))}
               </div>

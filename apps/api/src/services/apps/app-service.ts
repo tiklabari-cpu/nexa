@@ -34,6 +34,17 @@
  * They used to be drawn from a fixed option list like every other card's, which
  * is the finding this closed: a card that looked like it was reporting and was
  * not.
+ *
+ * **Live cards (tm 263).** A card with a verifier (`verifiers/registry.ts`) that
+ * the deployment names in `APPS_LIVE_PROVIDERS` talks to its real provider: the
+ * pasted key is checked with one read-only call *before* anything is written
+ * ({@link AppService.verifyCredentials}, outside any transaction), a refused key
+ * writes nothing — an earlier connection stays as it was — and an accepted one
+ * is kept encrypted (`lib/credential-cipher.ts`), because a live card has to
+ * present it again for every chat-panel read. Every other card keeps the mock
+ * described above, byte for byte. A mock installation of a card that has since
+ * gone live holds only a hash nobody can present, so it reads as
+ * `needs_reconnect` — kept, not deleted, until a new key replaces it.
  */
 import { Buffer } from 'node:buffer';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -46,6 +57,9 @@ import {
   appApiKeyProblem,
   appAutomationChatData,
   appChatData,
+  appCredentialFields,
+  appSubdomainProblem,
+  normaliseAppSubdomain,
   appCollections,
   appPlacement,
   appPricing,
@@ -66,10 +80,25 @@ import {
   type AppPricing,
   type AppProvider,
 } from '@siyahtus/types';
+import { Prisma } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
+import {
+  appCredentialAad,
+  decryptCredential,
+  encryptCredential,
+} from '../../lib/credential-cipher.js';
 import { hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { WebhookService } from '../webhooks/webhook-service.js';
+import type { LiveAppId } from './live-apps.js';
+import { liveVerifier } from './verifiers/registry.js';
+import type {
+  AppCredentials,
+  AppVerifier,
+  ChatField,
+  ProviderContext,
+  VerifyFailureReason,
+} from './verifiers/types.js';
 
 /** A start's `state` is good for ten minutes — long enough for a consent, not to replay. */
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -87,6 +116,99 @@ interface InstallationRow {
   externalAccount: string;
   connectedAt: Date;
   apiKeyLastFour: string | null;
+  live: boolean;
+}
+
+/**
+ * How the deployment runs its live cards (tm 263). Absent — the default for a
+ * service built without it — every card is a mock, exactly as before.
+ */
+export interface AppsLiveOptions {
+  /** `APPS_LIVE_PROVIDERS`. */
+  providers: readonly LiveAppId[];
+  /** `APPS_CREDENTIAL_KEY`; required whenever `providers` is not empty (env.ts). */
+  credentialKey: string | undefined;
+  /** The safe HTTP client and the provider hosts every adaptor call goes through. */
+  context: ProviderContext;
+}
+
+/** A credential the provider has just accepted — the only thing stored for a live card. */
+export interface VerifiedCredential {
+  appId: string;
+  credentials: AppCredentials;
+  accountLabel: string;
+  verifiedAt: Date;
+}
+
+/** A live card's chat-panel read, planned inside the transaction and run outside it. */
+export interface LiveChatRead {
+  index: number;
+  entry: AppCatalogEntry;
+  verifier: AppVerifier;
+  ciphertext: string;
+}
+
+/** What {@link AppService.chatDataPlan} hands {@link AppService.chatDataResolve}. */
+export interface ChatDataPlan {
+  items: AppChatData[];
+  email: string | null;
+  live: LiveChatRead[];
+}
+
+/** What the provider's refusal reads as to the caller. */
+function credentialError(reason: VerifyFailureReason, providerMessage?: string): ApiError {
+  const refused = reason === 'invalid_key' || reason === 'not_found';
+  const details: Record<string, unknown> = {
+    reason: refused ? 'app_credentials_invalid' : 'app_provider_unavailable',
+    provider_reason: reason,
+    ...(providerMessage ? { provider_message: providerMessage } : {}),
+  };
+  // A refused key is the caller's to fix (400, the `validation` shape every
+  // form already renders); a provider that did not answer is nobody's input
+  // error, and a retry may well work (503). No new error type: the reason is
+  // in `details`, the `signup_closed` precedent (§D195(4)).
+  if (refused) {
+    return ApiError.validation(
+      reason === 'not_found'
+        ? 'The provider has no account at that address.'
+        : 'The provider did not accept this key.',
+      details,
+    );
+  }
+  return new ApiError('service_unavailable', 'The provider could not be reached. Try again.', {
+    details,
+  });
+}
+
+/**
+ * The trimmed key, or the 400 the form would have shown. Restated rather than
+ * trusted from the route: the shared rule is the one the form validates
+ * against too, so a caller that skips the console cannot store something the
+ * console would have refused.
+ */
+function validApiKey(raw: string): string {
+  const apiKey = raw.trim();
+  const problem = appApiKeyProblem(apiKey);
+  if (problem) {
+    throw ApiError.validation(
+      problem === 'required'
+        ? 'api_key: an API key is required.'
+        : `api_key: must be between ${APP_API_KEY_MIN_LENGTH} and ${APP_API_KEY_MAX_LENGTH} characters.`,
+    );
+  }
+  return apiKey;
+}
+
+/** A live card's chat-panel entry before (or without) its provider data. */
+function liveShell(entry: AppCatalogEntry): AppChatData {
+  return {
+    app_id: entry.id,
+    app_name: entry.name,
+    icon: entry.icon,
+    data_label: entry.dataLabel ?? entry.name,
+    fields: [],
+    live: true,
+  };
 }
 
 /** How {@link AppService.list} narrows the catalogue — the query contract, parsed. */
@@ -102,6 +224,8 @@ export interface AppListOptions {
   placement?: AppPlacement;
   /** Keyset cursor: the `id` of the last card on the previous page. */
   pageId?: string;
+  /** Restrict the catalogue to these cards — the pilot's live ones (tm 263). */
+  onlyIds?: readonly string[];
 }
 
 /** One page of the catalogue joined with this workspace's connections. */
@@ -170,7 +294,8 @@ function requireProvider(appId: string, provider: AppProvider): AppCatalogEntry 
 function toListItem(
   entry: AppCatalogEntry,
   row: InstallationRow | null,
-  automation?: AppAutomationStats,
+  automation: AppAutomationStats | undefined,
+  liveAvailable: boolean,
 ): AppListItem {
   return {
     id: entry.id,
@@ -185,10 +310,14 @@ function toListItem(
     pricing: appPricing(entry),
     placement: appPlacement(entry),
     installed: row !== null,
+    live_available: liveAvailable,
     installation: row
       ? {
           app_id: entry.id,
-          status: 'connected',
+          // A row written before the card went live holds only a hash: there is
+          // nothing to present to the provider, so it asks for a new key.
+          status: liveAvailable && !row.live ? 'needs_reconnect' : 'connected',
+          live: liveAvailable && row.live,
           external_account: row.externalAccount,
           scopes: [...entry.scopes],
           connected_at: row.connectedAt.toISOString(),
@@ -209,8 +338,29 @@ export class AppService {
    */
   readonly #webhooks = new WebhookService();
 
-  constructor(secret: string) {
+  readonly #live: AppsLiveOptions | undefined;
+
+  constructor(secret: string, live?: AppsLiveOptions) {
     this.#secret = secret;
+    this.#live = live;
+  }
+
+  /** The verifier for a card this deployment runs live, or null for a mock card. */
+  #verifier(appId: string): AppVerifier | null {
+    return this.#live ? liveVerifier(appId, this.#live.providers) : null;
+  }
+
+  /** Whether `appId` is a card this deployment runs live. */
+  isLive(appId: string): boolean {
+    return this.#verifier(appId) !== null;
+  }
+
+  #credentialKey(): string {
+    const key = this.#live?.credentialKey;
+    // env.ts refuses a live provider without a key at boot; reaching here
+    // without one means a service was built around that check.
+    if (!key) throw ApiError.internal('Live Apps credentials have no encryption key.');
+    return key;
   }
 
   /**
@@ -250,7 +400,10 @@ export class AppService {
     tenant: TenantContext,
     options: AppListOptions,
   ): Promise<AppListPage> {
-    const matches = filterAppCatalog(APP_CATALOG, {
+    const catalogue = options.onlyIds
+      ? APP_CATALOG.filter((entry) => options.onlyIds!.includes(entry.id))
+      : APP_CATALOG;
+    const matches = filterAppCatalog(catalogue, {
       ...(options.query !== undefined ? { query: options.query } : {}),
       ...(options.category !== undefined ? { category: options.category } : {}),
       ...(options.collection !== undefined ? { collection: options.collection } : {}),
@@ -281,7 +434,7 @@ export class AppService {
 
     return {
       items: page.page.map((entry) =>
-        toListItem(entry, byApp.get(entry.id) ?? null, stats.get(entry.id)),
+        toListItem(entry, byApp.get(entry.id) ?? null, stats.get(entry.id), this.isLive(entry.id)),
       ),
       total: page.total,
       ...(page.nextPageId !== undefined ? { nextPageId: page.nextPageId } : {}),
@@ -351,7 +504,52 @@ export class AppService {
     });
     // Read rather than assumed zero: re-connecting a card whose subscriptions
     // are still in place must not report it as having none.
-    return toListItem(entry, row, (await this.#automationStats(tx, [entry])).get(entry.id));
+    return toListItem(entry, row, (await this.#automationStats(tx, [entry])).get(entry.id), false);
+  }
+
+  /**
+   * Check a pasted credential with the provider itself (tm 263) — for a live
+   * card only; a mock card answers `null` and is connected exactly as before.
+   *
+   * Runs **outside** any transaction, before anything is written: the call can
+   * take seconds, and a database transaction held open across someone else's
+   * network is a pool slot gone for that long. A refusal throws (400
+   * `app_credentials_invalid`, or 503 `app_provider_unavailable`) with the
+   * provider's own words, already stripped of anything resembling the key; the
+   * caller then writes nothing, so a connection that worked keeps working.
+   */
+  async verifyCredentials(
+    appId: string,
+    input: { apiKey: string; subdomain?: string },
+  ): Promise<VerifiedCredential | null> {
+    const entry = requireProvider(appId, 'api_key');
+    const apiKey = validApiKey(input.apiKey);
+    let subdomain: string | undefined;
+    if (appCredentialFields(entry).includes('subdomain')) {
+      const raw = input.subdomain ?? '';
+      const problem = appSubdomainProblem(raw);
+      if (problem) {
+        throw ApiError.validation(
+          problem === 'required'
+            ? 'subdomain: this app needs its account subdomain.'
+            : 'subdomain: must be one DNS label of letters, digits and hyphens (acme for acme.freshdesk.com).',
+        );
+      }
+      subdomain = normaliseAppSubdomain(raw);
+    }
+
+    const verifier = this.#verifier(entry.id);
+    if (!verifier) return null;
+
+    const credentials: AppCredentials = { apiKey, ...(subdomain ? { subdomain } : {}) };
+    const verdict = await verifier.verify(credentials, this.#live!.context);
+    if (!verdict.ok) throw credentialError(verdict.reason, verdict.providerMessage);
+    return {
+      appId: entry.id,
+      credentials,
+      accountLabel: verdict.accountLabel,
+      verifiedAt: new Date(),
+    };
   }
 
   /**
@@ -375,20 +573,18 @@ export class AppService {
     tenant: TenantContext,
     appId: string,
     input: { apiKey: string },
+    verified: VerifiedCredential | null = null,
   ): Promise<AppListItem> {
     const entry = requireProvider(appId, 'api_key');
+    const apiKey = validApiKey(input.apiKey);
 
-    const apiKey = input.apiKey.trim();
-    // Restated rather than trusted from the route: the shared rule is the one
-    // the form validates against too, so a caller that skips the console cannot
-    // store something the console would have refused.
-    const problem = appApiKeyProblem(apiKey);
-    if (problem) {
-      throw ApiError.validation(
-        problem === 'required'
-          ? 'api_key: an API key is required.'
-          : `api_key: must be between ${APP_API_KEY_MIN_LENGTH} and ${APP_API_KEY_MAX_LENGTH} characters.`,
-      );
+    if (this.isLive(entry.id)) {
+      // A live card is stored only with the provider's acceptance in hand, and
+      // only the credential that was accepted — never a different one.
+      if (!verified || verified.appId !== entry.id || verified.credentials.apiKey !== apiKey) {
+        throw ApiError.internal('A live app was connected without a verified credential.');
+      }
+      return this.#storeLive(tx, tenant, entry, verified);
     }
 
     const lastFour = appApiKeyLastFour(apiKey);
@@ -400,6 +596,11 @@ export class AppService {
         externalAccount: maskApiKey(apiKey),
         apiKeyHash: hashToken(apiKey),
         apiKeyLastFour: lastFour,
+        // Back on the mock: whatever a live connection held goes with it.
+        live: false,
+        credentialCiphertext: null,
+        credentialConfig: Prisma.DbNull,
+        verifiedAt: null,
       },
       create: {
         licenseId: tenant.licenseId,
@@ -412,7 +613,37 @@ export class AppService {
     });
     // Same reason as the OAuth path: rotating Make's key leaves its scenarios
     // wired, so the card has to keep saying so.
-    return toListItem(entry, row, (await this.#automationStats(tx, [entry])).get(entry.id));
+    return toListItem(entry, row, (await this.#automationStats(tx, [entry])).get(entry.id), false);
+  }
+
+  /** Write an accepted live credential: encrypted, bound to this row, never echoed. */
+  async #storeLive(
+    tx: TenantClient,
+    tenant: TenantContext,
+    entry: AppCatalogEntry,
+    verified: VerifiedCredential,
+  ): Promise<AppListItem> {
+    const { apiKey, subdomain } = verified.credentials;
+    const data = {
+      status: 'connected',
+      externalAccount: verified.accountLabel,
+      apiKeyHash: hashToken(apiKey),
+      apiKeyLastFour: appApiKeyLastFour(apiKey),
+      live: true,
+      credentialCiphertext: encryptCredential(
+        JSON.stringify(verified.credentials),
+        this.#credentialKey(),
+        appCredentialAad(String(tenant.licenseId), entry.id),
+      ),
+      credentialConfig: subdomain ? { subdomain } : Prisma.DbNull,
+      verifiedAt: verified.verifiedAt,
+    };
+    const row = await tx.appInstallation.upsert({
+      where: { licenseId_appId: { licenseId: tenant.licenseId, appId: entry.id } },
+      update: data,
+      create: { licenseId: tenant.licenseId, appId: entry.id, ...data },
+    });
+    return toListItem(entry, row, undefined, true);
   }
 
   /**
@@ -438,10 +669,21 @@ export class AppService {
 
   /**
    * A conversation's connected-app data (KK "bağlanınca veri sohbet içinde"):
-   * for each connected app, the (mock) data it exposes about this chat's
-   * customer, keyed off the customer's identity so it is stable per person.
+   * for each connected app, the data it exposes about this chat's customer.
+   *
+   * Two phases since tm 263, because a live card's data is a provider call:
+   * {@link chatDataPlan} reads everything it needs inside the tenant
+   * transaction (and answers mock and automation cards right there), and
+   * {@link chatDataResolve} makes the live calls after it has closed — in
+   * parallel, each bounded by the safe client's timeout. A live card that
+   * cannot be read says so (`unavailable`); it never falls back to the demo
+   * values, which would be indistinguishable from real ones.
    */
-  async chatData(tx: TenantClient, tenant: TenantContext, chatId: string): Promise<AppChatData[]> {
+  async chatDataPlan(
+    tx: TenantClient,
+    tenant: TenantContext,
+    chatId: string,
+  ): Promise<ChatDataPlan> {
     const chat = await tx.chat.findFirst({
       where: { id: chatId, licenseId: tenant.licenseId },
       select: { customer: { select: { id: true, email: true } } },
@@ -452,23 +694,70 @@ export class AppService {
 
     const installed = await tx.appInstallation.findMany({ where: { licenseId: tenant.licenseId } });
     const seed = chat.customer.email ?? chat.customer.id;
-    const entries = installed
-      .map((row) => findApp(row.appId))
+    const pairs = installed.flatMap((row) => {
+      const entry = findApp(row.appId);
       // Only data apps surface in-chat; channel apps never reach here (they are
       // not connectable in the marketplace), but keep the filter explicit.
-      .filter((entry): entry is AppCatalogEntry => entry !== undefined && !isChannelApp(entry));
+      return entry && !isChannelApp(entry) ? [{ row, entry }] : [];
+    });
 
     // An automation card is not a data source about this customer, so its two
     // figures come from the workspace's own registry (FR-MOD-09.4) and never
     // from the deterministic customer stub. Routing one through `appChatData`
     // is exactly the defect this closed — it used to answer with a plausible
     // number drawn from a fixed list.
-    const stats = await this.#automationStats(tx, entries);
-    return entries.map((entry) =>
-      isAutomationApp(entry)
-        ? appAutomationChatData(entry, stats.get(entry.id) ?? NO_AUTOMATION_STATS)
-        : appChatData(entry, seed),
+    const stats = await this.#automationStats(
+      tx,
+      pairs.map((pair) => pair.entry),
     );
+    const live: LiveChatRead[] = [];
+    const items = pairs.map(({ row, entry }, index): AppChatData => {
+      const verifier = this.#verifier(entry.id);
+      if (verifier) {
+        // A live card shows the provider's data or nothing: a mock install
+        // left over from before it went live has no credential to read with.
+        if (row.live && row.credentialCiphertext && verifier.fetchChatData) {
+          live.push({ index, entry, verifier, ciphertext: row.credentialCiphertext });
+          return liveShell(entry);
+        }
+        return { ...liveShell(entry), unavailable: true };
+      }
+      return isAutomationApp(entry)
+        ? appAutomationChatData(entry, stats.get(entry.id) ?? NO_AUTOMATION_STATS)
+        : appChatData(entry, seed);
+    });
+    return { items, email: chat.customer.email, live };
+  }
+
+  async chatDataResolve(tenant: TenantContext, plan: ChatDataPlan): Promise<AppChatData[]> {
+    const items = [...plan.items];
+    await Promise.all(
+      plan.live.map(async (read) => {
+        let fields: ChatField[] | null;
+        try {
+          const credentials = JSON.parse(
+            decryptCredential(
+              read.ciphertext,
+              this.#credentialKey(),
+              appCredentialAad(String(tenant.licenseId), read.entry.id),
+            ),
+          ) as AppCredentials;
+          fields = await read.verifier.fetchChatData!(
+            credentials,
+            { email: plan.email },
+            this.#live!.context,
+          );
+        } catch {
+          // A rotated key, a revoked credential, an outage: the card says it
+          // could not be read, and nothing about the failure (which may name
+          // the provider's host or worse) goes into the response.
+          items[read.index] = { ...liveShell(read.entry), unavailable: true };
+          return;
+        }
+        items[read.index] = { ...liveShell(read.entry), fields: fields ?? [] };
+      }),
+    );
+    return items;
   }
 
   // --- OAuth state signing ---------------------------------------------------

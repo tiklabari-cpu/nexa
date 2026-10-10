@@ -186,9 +186,28 @@ appConnect:
       Re-connecting an already-connected app replaces the stored key, so
       rotating one is the same call.
 
+      **Live cards (tm 263).** A card the deployment runs against its real
+      provider (`live_available` on the list; `APPS_LIVE_PROVIDERS`) is checked
+      with one read-only provider call before anything is written — Brevo
+      `GET /v3/account`, Freshdesk `GET /api/v2/agents/me` on the named
+      helpdesk. A refused key answers `400 validation` with
+      `error.details.reason: "app_credentials_invalid"`,
+      `details.provider_reason` (`invalid_key` or `not_found`) and, when the
+      provider gave one, `details.provider_message` (its words, at most 200
+      characters, with anything sharing eight characters with the key removed);
+      a provider that does not answer in time answers `503 service_unavailable`
+      with `details.reason: "app_provider_unavailable"`. Either way nothing is
+      written and an earlier connection stays. An accepted key is stored
+      encrypted (AES-256-GCM), never returned, and `external_account` becomes
+      the account the provider named.
+
+      Attempts are limited per caller per hour (`RATE_LIMIT_APPS_CONNECT_PER_HOUR`,
+      default 20), refused ones included: `429`.
+
       In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
       every caller with `403 not_allowed` and `error.details.reason:
-      "pilot_mode"`, before the body is read: the pilot has no marketplace, so no key is stored.
+      "pilot_mode"`, before the body is read — except for a live card
+      (`live_apps` on `GET /deployment`), which the pilot serves.
     requestBody:
       required: true
       content:
@@ -206,6 +225,15 @@ appConnect:
                   `APP_API_KEY_MIN_LENGTH`/`APP_API_KEY_MAX_LENGTH` in
                   @siyahtus/types, which the console's form validates against, so
                   the client never refuses a key the server would accept.
+              subdomain:
+                type: string
+                maxLength: 255
+                description: |
+                  The provider account's subdomain, for a card that names one
+                  (tm 263 — Freshdesk: `acme` for `acme.freshdesk.com`; a pasted
+                  `https://acme.freshdesk.com/` is read as `acme`). Must be one
+                  DNS label; it is only ever placed under the provider's own
+                  domain. Required for such a card, ignored for the others.
     responses:
       "200":
         description: The now-connected app
@@ -217,6 +245,7 @@ appConnect:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/AppProviderUnavailable" }
 
 app:
   parameters:

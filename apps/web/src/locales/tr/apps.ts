@@ -80,6 +80,29 @@ export const apps: Messages = {
   'apps.marketplace.apiKey.error': 'Uygulama bağlanamadı. Anahtarı kontrol edip yeniden deneyin.',
   'apps.marketplace.apiKey.submit': 'Uygulamayı bağla',
 
+  'apps.live.badge.live': 'Gerçek',
+  'apps.live.badge.liveTitle':
+    'Doğrudan {name} ile bağlanır: anahtar {name} ile doğrulanır ve şifreli saklanır.',
+  'apps.live.badge.demo': 'Demo',
+  'apps.live.badge.demoTitle':
+    'Demo bağlantı: {name} tarafına hiçbir şey gönderilmez, sohbetlerde görünenler örnek veridir.',
+  'apps.live.status.needsReconnect': 'Yeniden bağlanın',
+  'apps.live.card.reconnect': 'Yeniden bağla',
+  'apps.live.dialog.description':
+    'Anahtar kaydedilmeden önce {name} ile doğrulanır, sonra şifreli saklanır. Bir daha gösterilmez.',
+  'apps.live.subdomain.label': 'Hesap alt alan adı',
+  'apps.live.subdomain.hint':
+    '.freshdesk.com’dan önceki kısım: acme.freshdesk.com için acme yazın.',
+  'apps.live.subdomain.requiredError': 'Hesap alt alan adını girin.',
+  'apps.live.subdomain.invalidError':
+    'Harf, rakam ve kısa çizgiden oluşan tek bir sözcük girin, ör. acme.',
+  'apps.live.error.invalidKey': '{name} bu anahtarı kabul etmedi.',
+  'apps.live.error.notFound': '{name} bu adreste bir hesap bulamadı. Alt alan adını kontrol edin.',
+  'apps.live.error.unavailable': '{name} şu anda yanıt vermiyor. Birazdan yeniden deneyin.',
+  'apps.live.error.webhookUnreachable':
+    'Telegram bu sunucuya ulaşamıyor: herkese açık bir https adresi gerekiyor. Yöneticinizden bunu ayarlamasını isteyin.',
+  'apps.live.error.providerSaid': '{name} yanıtı: “{message}”',
+
   'apps.developers.page.title': 'Geliştiriciler',
   'apps.developers.page.description':
     'Bu çalışma alanı adına API üzerinden işlem yapabilecek OAuth uygulamaları kaydedin.',

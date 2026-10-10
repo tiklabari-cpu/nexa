@@ -391,6 +391,9 @@ export const settings: Messages = {
   'settings.channels.telegram.usernameError': 'Bot kullanıcı adını girin.',
   'settings.channels.telegram.disconnectConfirm':
     'Telegram bağlantısı kesilsin mi? Yeniden bağlanana kadar mesajlar gelmeyi durdurur.',
+  'settings.channels.telegram.liveDescription':
+    '@BotFather’ın verdiği token’ı yapıştırın. Telegram ile doğrulanır, bot adı Telegram’dan alınır ve token şifreli saklanır.',
+  'settings.channels.live': 'Gerçek',
 
   // Web sitesi widget'ları — WebsiteWidgets.tsx
   'settings.websiteWidgets.title': "Web sitesi widget'ları",

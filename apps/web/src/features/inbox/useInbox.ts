@@ -1312,6 +1312,8 @@ export interface ConnectedChannel {
   address: string | null;
   connected: boolean;
   created_at: string;
+  /** Connected to the real provider (tm 263 — a live Telegram bot). Absent from older servers. */
+  live?: boolean;
 }
 
 /**

@@ -5106,9 +5106,28 @@ export interface paths {
      *     Re-connecting an already-connected app replaces the stored key, so
      *     rotating one is the same call.
      *
+     *     **Live cards (tm 263).** A card the deployment runs against its real
+     *     provider (`live_available` on the list; `APPS_LIVE_PROVIDERS`) is checked
+     *     with one read-only provider call before anything is written — Brevo
+     *     `GET /v3/account`, Freshdesk `GET /api/v2/agents/me` on the named
+     *     helpdesk. A refused key answers `400 validation` with
+     *     `error.details.reason: "app_credentials_invalid"`,
+     *     `details.provider_reason` (`invalid_key` or `not_found`) and, when the
+     *     provider gave one, `details.provider_message` (its words, at most 200
+     *     characters, with anything sharing eight characters with the key removed);
+     *     a provider that does not answer in time answers `503 service_unavailable`
+     *     with `details.reason: "app_provider_unavailable"`. Either way nothing is
+     *     written and an earlier connection stays. An accepted key is stored
+     *     encrypted (AES-256-GCM), never returned, and `external_account` becomes
+     *     the account the provider named.
+     *
+     *     Attempts are limited per caller per hour (`RATE_LIMIT_APPS_CONNECT_PER_HOUR`,
+     *     default 20), refused ones included: `429`.
+     *
      *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
      *     every caller with `403 not_allowed` and `error.details.reason:
-     *     "pilot_mode"`, before the body is read: the pilot has no marketplace, so no key is stored.
+     *     "pilot_mode"`, before the body is read — except for a live card
+     *     (`live_apps` on `GET /deployment`), which the pilot serves.
      */
     post: operations['connectAppWithApiKey'];
     delete?: never;
@@ -5715,9 +5734,22 @@ export interface paths {
      *     Idempotent on the channel type: connecting again re-configures the existing
      *     channel rather than creating a second.
      *
+     *     **Live Telegram (tm 263).** With `telegram` in `live_apps`
+     *     (`GET /deployment`), Telegram is a real channel: the body is the
+     *     `bot_token` alone (a `bot_username` sent is ignored — Telegram's `getMe`
+     *     names the bot); the token is checked with Telegram, the webhook is
+     *     registered at `POST /channels/telegram/webhook/{channelId}` with a fresh
+     *     secret, and the token is stored encrypted. A refused token answers `400`
+     *     with `error.details.reason: "app_credentials_invalid"`; an `API_BASE_URL`
+     *     Telegram cannot deliver to (not public https) answers `400` with
+     *     `details.reason: "telegram_webhook_unreachable"`; Telegram not answering
+     *     is `503` with `details.reason: "app_provider_unavailable"`. The response
+     *     carries `live: true`.
+     *
      *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
      *     every caller with `403 not_allowed` and `error.details.reason:
-     *     "pilot_mode"`, before the body is read: the pilot offers no adapter channels.
+     *     "pilot_mode"`, before the body is read: the pilot offers no adapter
+     *     channels — except a live Telegram, which it serves.
      */
     post: operations['connectChannel'];
     delete?: never;
@@ -5858,13 +5890,53 @@ export interface paths {
      *     provider does not retry something refused on purpose.
      *
      *     Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
-     *     §5); a real deployment verifies the provider signature at the edge.
+     *     §5); a real deployment verifies the provider signature at the edge. A
+     *     live Telegram (tm 263) does not take this path at all — it answers `404`
+     *     for `telegram`; Telegram's updates arrive at
+     *     `POST /channels/telegram/webhook/{channelId}`, secret-checked.
      *
      *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
      *     every caller with `403 not_allowed` and `error.details.reason:
      *     "pilot_mode"`, before the body is read: the pilot offers no adapter channels, so this public door is shut to the whole internet.
      */
     post: operations['ingestChannelWebhook'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/telegram/webhook/{channelId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The Telegram channel's id, as named in the URL handed to `setWebhook`. */
+        channelId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Receive a live Telegram update (tm 263)
+     * @description Where a live Telegram bot's updates arrive (FR-MOD-08.5.8, tm 263) —
+     *     the URL the connect step registered with Telegram's `setWebhook`. Public,
+     *     because Telegram has no session, but authenticated: every request must
+     *     carry the `X-Telegram-Bot-Api-Secret-Token` registered at connect,
+     *     compared in constant time against its stored hash. A wrong or missing
+     *     secret and an unknown channel id are the same `401`.
+     *
+     *     The body is Telegram's own `Update`. A private text message becomes a
+     *     chat message the way every channel's does (card numbers masked, a first
+     *     contact spam-screened); an agent's reply goes back through `sendMessage`.
+     *     Anything else — an edit, a sticker, a group, another bot — is answered
+     *     `200` with `status: ignored` so Telegram stops retrying it.
+     *
+     *     `404` unless the deployment runs Telegram live (`live_apps`). Not refused
+     *     in the public pilot: it is authenticated, and only exists when live.
+     */
+    post: operations['ingestTelegramUpdate'];
     delete?: never;
     options?: never;
     head?: never;
@@ -7930,6 +8002,12 @@ export interface components {
        *     `terms_url` is set.
        */
       terms_version: string | null;
+      /**
+       * @description The Apps cards and channels this deployment connects to their real
+       *     provider (tm 263, `APPS_LIVE_PROVIDERS`). Under `pilot_mode` these
+       *     are the only ones served. Names only — never a key.
+       */
+      live_apps?: ('brevo' | 'freshdesk' | 'telegram')[];
     };
     DependencyHealth: {
       /** @enum {string} */
@@ -8927,6 +9005,11 @@ export interface components {
       connected: boolean;
       /** Format: date-time */
       created_at: string;
+      /**
+       * @description Connected to the real provider (tm 263 — a live Telegram bot, whose
+       *     token is held encrypted); false for every mock channel.
+       */
+      live?: boolean;
     };
     /**
      * @description A forwarding address the workspace's support mail arrives at
@@ -10562,8 +10645,19 @@ export interface components {
      */
     AppInstallation: {
       app_id: string;
-      /** @enum {string} */
-      status: 'connected';
+      /**
+       * @description `needs_reconnect` (tm 263): the card has since gone live and this
+       *     installation predates it — it holds only a hash of the old key,
+       *     which cannot be presented to the provider. Kept, not deleted; a new
+       *     key replaces it.
+       * @enum {string}
+       */
+      status: 'connected' | 'needs_reconnect';
+      /**
+       * @description Verified against the real provider and holding an encrypted
+       *     credential (tm 263); false for every mock install.
+       */
+      live: boolean;
       /**
        * @description The account label the (mock) OAuth grant returned, or the masked key
        *     (`••••abcd`) for an API-key install — what the card shows to say
@@ -10651,6 +10745,12 @@ export interface components {
       placement: 'details' | 'fullscreen' | 'messagebox';
       installed: boolean;
       installation: components['schemas']['AppInstallation'] | null;
+      /**
+       * @description This deployment connects the card to its real provider (tm 263: it
+       *     has a verifier and `APPS_LIVE_PROVIDERS` names it). False keeps the
+       *     demo mock.
+       */
+      live_available: boolean;
     };
     /** @description The result of starting the (mock) OAuth flow (FR-MOD-09.1). */
     AppOAuthStart: {
@@ -10672,6 +10772,17 @@ export interface components {
         label: string;
         value: string;
       }[];
+      /**
+       * @description True when `fields` came from the provider itself (tm 263); false for
+       *     demo data.
+       */
+      live: boolean;
+      /**
+       * @description Set on a live card whose provider could not be read just now;
+       *     `fields` is then empty — never demo values.
+       * @enum {boolean}
+       */
+      unavailable?: true;
     };
     /**
      * @description The account and the workspaces it may sign in to. Deliberately carries
@@ -12790,6 +12901,22 @@ export interface components {
      *     failure class; the request can simply be repeated.
      */
     EmbeddingUnavailable: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
+     * @description The live Apps provider did not answer in time, or answered with an
+     *     error of its own (`service_unavailable`, tm 263):
+     *     `error.details.reason` is `app_provider_unavailable` and
+     *     `details.provider_reason` names the class (`unreachable`,
+     *     `provider_error`). Nothing was written; an earlier connection stays,
+     *     and the request can simply be repeated.
+     */
+    AppProviderUnavailable: {
       headers: {
         [name: string]: unknown;
       };
@@ -20740,6 +20867,14 @@ export interface operations {
            *     the client never refuses a key the server would accept.
            */
           api_key: string;
+          /**
+           * @description The provider account's subdomain, for a card that names one
+           *     (tm 263 — Freshdesk: `acme` for `acme.freshdesk.com`; a pasted
+           *     `https://acme.freshdesk.com/` is read as `acme`). Must be one
+           *     DNS label; it is only ever placed under the provider's own
+           *     domain. Required for such a card, ignored for the others.
+           */
+          subdomain?: string;
         };
       };
     };
@@ -20758,6 +20893,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['AppProviderUnavailable'];
     };
   };
   listChatApps: {
@@ -21844,6 +21980,53 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  ingestTelegramUpdate: {
+    parameters: {
+      query?: never;
+      header: {
+        'X-Telegram-Bot-Api-Secret-Token': string;
+      };
+      path: {
+        /** @description The Telegram channel's id, as named in the URL handed to `setWebhook`. */
+        channelId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Processed — `accepted` with the chat it became, or `ignored`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json':
+            | {
+                /** @enum {string} */
+                status: 'accepted';
+                chat_id: string;
+                /** Format: uuid */
+                customer_id: string;
+              }
+            | {
+                /** @enum {string} */
+                status: 'ignored';
+                /** @enum {string} */
+                reason: 'spam' | 'unsupported_update';
+              };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
     };
   };

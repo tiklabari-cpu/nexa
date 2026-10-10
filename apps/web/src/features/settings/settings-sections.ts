@@ -79,6 +79,11 @@ export interface SettingsSectionEntry {
    */
   pilotHidden?: true;
   /**
+   * Shown in the pilot after all when it runs live Apps cards (tm 263) — the
+   * Integrations door, whose marketplace is then those cards.
+   */
+  pilotLiveApps?: true;
+  /**
    * Terms from `keywords` that stop matching in the public pilot (tm 257.3):
    * the section stays, but searching for what it no longer offers ("whatsapp"
    * on a Channels page that shows two cards) must not point at it.
@@ -257,8 +262,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'Integrations',
     keywords: ['marketplace', 'apps', 'zapier'],
     // The marketplace it opens is not in the pilot (tm 257.18); with the door
-    // gone the section, and the words that found it, go too.
+    // gone the section, and the words that found it, go too — unless the
+    // pilot runs live cards, which are then its marketplace (tm 263).
     pilotHidden: true,
+    pilotLiveApps: true,
   },
   // `GET /mcp/manifest` is public — the manifest is documentation.
   {
@@ -400,10 +407,23 @@ export function sectionHref(entry: SettingsSectionEntry): string {
 export function visibleSections(
   scopes: readonly string[],
   pilotMode = false,
+  liveApps = false,
 ): SettingsSectionEntry[] {
   return SETTINGS_SECTIONS.filter(
-    (s) => !(pilotMode && s.pilotHidden) && hasAnyScope(scopes, s.scope ?? []),
+    (s) => !isPilotHiddenSection(s, pilotMode, liveApps) && hasAnyScope(scopes, s.scope ?? []),
   );
+}
+
+/**
+ * Whether the pilot hides `entry` — with live Apps cards (tm 263) the
+ * Integrations door stays.
+ */
+export function isPilotHiddenSection(
+  entry: SettingsSectionEntry,
+  pilotMode: boolean,
+  liveApps = false,
+): boolean {
+  return pilotMode && entry.pilotHidden === true && !(entry.pilotLiveApps && liveApps);
 }
 
 /**
@@ -425,10 +445,11 @@ export function searchSections(
   query: string,
   labelOf: (entry: SettingsSectionEntry) => string,
   pilotMode = false,
+  liveApps = false,
 ): SettingsSectionEntry[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
-  return visibleSections(scopes, pilotMode).filter((section) => {
+  return visibleSections(scopes, pilotMode, liveApps).filter((section) => {
     if (labelOf(section).toLowerCase().includes(needle)) return true;
     const dropped = pilotMode ? (section.pilotDroppedKeywords ?? []) : [];
     return (section.keywords ?? []).some(
@@ -445,8 +466,9 @@ export function searchSections(
 export function visibleGroups(
   scopes: readonly string[],
   pilotMode = false,
+  liveApps = false,
 ): { key: SettingsGroupKey; labelKey: string; sections: SettingsSectionEntry[] }[] {
-  const sections = visibleSections(scopes, pilotMode);
+  const sections = visibleSections(scopes, pilotMode, liveApps);
   return SETTINGS_GROUPS.map((g) => ({
     ...g,
     sections: sections.filter((s) => s.group === g.key),

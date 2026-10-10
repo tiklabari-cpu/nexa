@@ -57,6 +57,8 @@ describe('GET /deployment', () => {
           privacy_policy_url: null,
           terms_url: null,
           terms_version: null,
+          // No Apps card is live unless APPS_LIVE_PROVIDERS names one (tm 263).
+          live_apps: [],
         });
         expect(response.headers['cache-control']).toBe('no-cache');
       },
@@ -79,6 +81,8 @@ describe('GET /deployment', () => {
           privacy_policy_url: null,
           terms_url: null,
           terms_version: null,
+          // No Apps card is live unless APPS_LIVE_PROVIDERS names one (tm 263).
+          live_apps: [],
         });
       },
     );
@@ -96,6 +100,20 @@ describe('GET /deployment', () => {
         expect(body.privacy_policy_url).toBe('https://siyahtus.test/privacy');
         expect(body.terms_url).toBe('https://siyahtus.test/terms');
         expect(body.terms_version).toBe('2026-10-01');
+      },
+    );
+  });
+
+  it('names the live Apps cards, and nothing about their keys (tm 263)', async () => {
+    await withServer(
+      {
+        APPS_LIVE_PROVIDERS: 'telegram, brevo',
+        APPS_CREDENTIAL_KEY: 'a7'.repeat(32),
+      },
+      async (server) => {
+        const response = await server.get('/deployment');
+        expect(response.json().live_apps).toStrictEqual(['telegram', 'brevo']);
+        expect(response.body).not.toContain('a7a7');
       },
     );
   });

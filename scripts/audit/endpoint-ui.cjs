@@ -151,6 +151,12 @@ const HEADLESS = [
       'exists when it arrives). Same shape as the mail webhook above.',
   },
   {
+    op: 'POST /channels/telegram/webhook/{channelId}',
+    reason:
+      "a live Telegram bot's update callback (tm 263). The caller is Telegram, authenticated " +
+      'by the `X-Telegram-Bot-Api-Secret-Token` registered with `setWebhook`, not a browser.',
+  },
+  {
     op: 'GET /channels/{type}/messages',
     reason:
       'the wire-level message log (M-CHOBS-a). Its own handler says what it is for: the table ' +

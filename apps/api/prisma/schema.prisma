@@ -1810,6 +1810,12 @@ model Channel {
   config    Json     @default("{}")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  /// tm 263: a live Telegram bot token, encrypted (lib/credential-cipher.ts).
+  /// Null for every mock channel. Paired with `webhookSecretHash` (CHECK).
+  credentialCiphertext String? @map("credential_ciphertext")
+  /// SHA-256 of the secret_token Telegram presents on every webhook call.
+  webhookSecretHash    String? @map("webhook_secret_hash")
+
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   brand   Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
@@ -2597,6 +2603,16 @@ model AppInstallation {
   /// The last four characters of that key — the display hint. Set exactly when
   /// `apiKeyHash` is (a database CHECK holds the pair together).
   apiKeyLastFour String? @map("api_key_last_four")
+
+  /// tm 263: the provider credential of a live card, AES-256-GCM under
+  /// APPS_CREDENTIAL_KEY (lib/credential-cipher.ts). Never returned by any
+  /// endpoint. Set exactly when `live` is (database CHECK).
+  credentialCiphertext String?   @map("credential_ciphertext")
+  /// The non-secret half of a credential (Freshdesk's subdomain).
+  credentialConfig     Json?     @map("credential_config")
+  /// When the provider last accepted the credential.
+  verifiedAt           DateTime? @map("verified_at") @db.Timestamptz(6)
+  live                 Boolean   @default(false)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 

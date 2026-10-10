@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppListItem, AppListResponse } from '@siyahtus/types';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
@@ -423,6 +424,7 @@ describe('AppsMarketplace', () => {
       description: 'A catalogue card.',
       scopes: ['contacts.read'],
       channel: null,
+      live_available: false,
       collections: [],
       pricing: 'free',
       placement: 'details',
@@ -705,5 +707,138 @@ describe('AppsMarketplace — automation cards (FR-MOD-09.4)', () => {
 
     await screen.findByText('HubSpot');
     expect(screen.queryByTestId('app-hubspot-automation')).toBeNull();
+  });
+
+  // tm 263: live cards, told apart from demo ones.
+  describe('live connections (FR-MOD-09.2)', () => {
+    const liveFreshdesk = {
+      id: 'freshdesk',
+      name: 'Freshdesk',
+      category: 'support',
+      provider: 'api_key',
+      icon: '🍃',
+      description: 'Open tickets from Freshdesk.',
+      scopes: ['tickets.read'],
+      channel: null,
+      installed: false,
+      installation: null,
+      live_available: true,
+    };
+
+    it('labels a live card Live and a mock card Demo, in words', async () => {
+      api.get.mockResolvedValue({ items: [liveFreshdesk, keyApp], total: 2 });
+      renderComponent(<AppsMarketplace />);
+      const live = await screen.findByTestId('app-freshdesk');
+      expect(within(live).getByText('Live')).toBeInTheDocument();
+      expect(within(screen.getByTestId('app-zendesk')).getByText('Demo')).toBeInTheDocument();
+    });
+
+    it('asks a live Freshdesk for its subdomain and sends it with the key', async () => {
+      api.get.mockResolvedValue({ items: [liveFreshdesk], total: 1 });
+      api.post.mockResolvedValue({ ...liveFreshdesk, installed: true });
+      renderComponent(<AppsMarketplace />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+
+      const subdomain = await screen.findByLabelText('Account subdomain');
+      expect(screen.getByText(/checked with Freshdesk before it is saved/)).toBeInTheDocument();
+      await userEvent.type(subdomain, 'acme.evil.test');
+      await userEvent.type(screen.getByLabelText('API key'), 'fd-key-0123456789abcdef');
+      await userEvent.tab();
+      expect(
+        await screen.findByText('Enter one word of letters, digits and hyphens, such as acme.'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Connect app' })).toBeDisabled();
+
+      await userEvent.clear(subdomain);
+      await userEvent.type(subdomain, 'acme');
+      await userEvent.click(screen.getByRole('button', { name: 'Connect app' }));
+      await waitFor(() =>
+        expect(api.post).toHaveBeenCalledWith('/settings/apps/freshdesk/connect', {
+          api_key: 'fd-key-0123456789abcdef',
+          subdomain: 'acme',
+        }),
+      );
+    });
+
+    it('shows the provider’s reason for a refused key, never the key', async () => {
+      api.get.mockResolvedValue({
+        items: [{ ...liveFreshdesk, id: 'brevo', name: 'Brevo' }],
+        total: 1,
+      });
+      api.post.mockRejectedValue(
+        new ApiClientError({
+          type: 'validation',
+          status: 400,
+          message: 'The provider did not accept this key.',
+          requestId: 'r1',
+          details: {
+            reason: 'app_credentials_invalid',
+            provider_reason: 'invalid_key',
+            provider_message: 'Key not found',
+          },
+        }),
+      );
+      renderComponent(<AppsMarketplace />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+      await userEvent.type(await screen.findByLabelText('API key'), 'xkeysib-secret-0123456789');
+      await userEvent.click(screen.getByRole('button', { name: 'Connect app' }));
+
+      const notice = await screen.findByText(/Brevo did not accept this key\./);
+      expect(notice).toHaveTextContent('Brevo said: “Key not found”');
+      expect(document.body.textContent).not.toContain('xkeysib-secret-0123456789');
+    });
+
+    it('says when the provider could not be reached', async () => {
+      api.get.mockResolvedValue({
+        items: [{ ...liveFreshdesk, id: 'brevo', name: 'Brevo' }],
+        total: 1,
+      });
+      api.post.mockRejectedValue(
+        new ApiClientError({
+          type: 'service_unavailable',
+          status: 503,
+          message: 'x',
+          requestId: 'r2',
+          details: { reason: 'app_provider_unavailable', provider_reason: 'unreachable' },
+        }),
+      );
+      renderComponent(<AppsMarketplace />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+      await userEvent.type(await screen.findByLabelText('API key'), 'k'.repeat(20));
+      await userEvent.click(screen.getByRole('button', { name: 'Connect app' }));
+      expect(
+        await screen.findByText('Brevo could not be reached. Try again in a moment.'),
+      ).toBeInTheDocument();
+    });
+
+    it('asks an install from before the card went live to reconnect, and keeps it', async () => {
+      api.get.mockResolvedValue({
+        items: [
+          {
+            ...liveFreshdesk,
+            id: 'brevo',
+            name: 'Brevo',
+            installed: true,
+            installation: {
+              app_id: 'brevo',
+              status: 'needs_reconnect',
+              live: false,
+              external_account: '••••1234',
+              scopes: [],
+              connected_at: '2026-09-06T00:00:00.000Z',
+              api_key_last_four: '1234',
+              automation: null,
+            },
+          },
+        ],
+        total: 1,
+      });
+      renderComponent(<AppsMarketplace />);
+      const card = await screen.findByTestId('app-brevo');
+      expect(within(card).getByText('Reconnect needed')).toBeInTheDocument();
+      expect(within(card).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+      await userEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));
+      expect(await screen.findByLabelText('API key')).toBeInTheDocument();
+    });
   });
 });

@@ -28,4 +28,12 @@ export interface DeploymentConfig {
   terms_url: string | null;
   /** `TERMS_VERSION`: what a sign-up sends back once the terms are accepted. */
   terms_version: string | null;
+  /**
+   * The Apps cards and channels this deployment connects to their real
+   * provider (tm 263, `APPS_LIVE_PROVIDERS`): `brevo`, `freshdesk`, `telegram`.
+   * Under `pilot_mode` these are the only ones the panel shows — the API opens
+   * exactly these doors and no other. Optional for older servers: absent reads
+   * as none.
+   */
+  live_apps?: string[];
 }

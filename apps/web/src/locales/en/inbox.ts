@@ -239,6 +239,11 @@ export const inbox: Messages = {
   'inbox.details.teams.unknown': 'Team #{id}',
   'inbox.details.section.apps': 'Apps',
   'inbox.details.apps.empty': 'No connected apps.',
+  // tm 263: a live card's data is the provider's; a demo card's is sample data.
+  'inbox.details.apps.live': 'Live',
+  'inbox.details.apps.demo': 'Demo',
+  'inbox.details.apps.unavailable': 'Could not load this from {name} right now.',
+  'inbox.details.apps.noRecord': 'No record for this customer.',
   'inbox.details.section.visitedPages': 'Visited pages',
   'inbox.details.visitedPages.empty': 'No pages recorded for this visitor.',
   'inbox.details.section.visitInfo': 'Visit info',

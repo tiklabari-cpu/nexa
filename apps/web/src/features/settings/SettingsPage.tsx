@@ -23,6 +23,7 @@ import { hasAnyScope } from '@siyahtus/types';
 import { Page } from '../../components/Page.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { liveDataApps } from '../../lib/live-apps.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Brands } from './Brands.js';
 import { CompanyDetails } from './CompanyDetails.js';
@@ -56,7 +57,12 @@ import { Skills } from './Skills.js';
 import { RoutingRules } from './RoutingRules.js';
 import { TicketRules } from './TicketRules.js';
 import { SettingsNav } from './SettingsNav.js';
-import { defaultSectionSlug, findSection, groupLabelKey } from './settings-sections.js';
+import {
+  defaultSectionSlug,
+  findSection,
+  groupLabelKey,
+  isPilotHiddenSection,
+} from './settings-sections.js';
 
 export { NotificationSettings } from './NotificationSettings.js';
 export { Integrations } from './Integrations.js';
@@ -169,7 +175,7 @@ export function SettingsIndex(): ReactElement {
 export function SettingsPage(): ReactElement {
   const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
-  const { pilot_mode: pilotMode } = useDeployment();
+  const deployment = useDeployment();
   const { section } = useParams();
   const entry = findSection(section);
   const render = entry ? SECTION_ELEMENTS[entry.slug] : undefined;
@@ -178,7 +184,7 @@ export function SettingsPage(): ReactElement {
     !entry ||
     !render ||
     !hasAnyScope(scopes, entry.scope ?? []) ||
-    (pilotMode && entry.pilotHidden)
+    isPilotHiddenSection(entry, deployment.pilot_mode, liveDataApps(deployment).length > 0)
   ) {
     return <Navigate to="/app/settings" replace />;
   }

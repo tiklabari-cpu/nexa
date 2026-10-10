@@ -25,6 +25,12 @@ import { TicketService } from '../services/tickets/ticket-service.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { ChannelService } from '../services/channels/channel-service.js';
+import { createLiveTelegram } from '../services/channels/telegram-live.js';
+import { createSafeHttp, type SafeHttp } from '../lib/safe-fetch.js';
+import {
+  DEFAULT_PROVIDER_ENDPOINTS,
+  type ProviderEndpoints,
+} from '../services/apps/verifiers/types.js';
 import { isChannelType, type ChannelType } from '../services/channels/channel-adapter.js';
 import {
   ingestInboundEmail,
@@ -120,17 +126,36 @@ function secretMatches(provided: string | undefined, expected: string): boolean 
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * A live Telegram connect (tm 263): the token alone. The bot's username comes
+ * from Telegram's `getMe`; one sent here is ignored rather than trusted.
+ */
+const telegramLiveConnectBody = z.object({
+  bot_token: z.string().trim().min(1).max(128),
+  bot_username: z.string().trim().max(64).optional(),
+});
+
 export default async function channelRoutes(
   app: FastifyInstance,
   options: {
     env: Env;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
+    /** How a live Telegram reaches the Bot API (tm 263). Omitted, the real safe client. */
+    appsHttp?: SafeHttp;
+    /** Provider hosts (tm 263). Omitted, the real ones. */
+    appsEndpoints?: ProviderEndpoints;
   },
 ): Promise<void> {
   const { env, automations } = options;
   const tickets = new TicketService();
-  const channels = new ChannelService();
+  const channels = new ChannelService(
+    createLiveTelegram(env, {
+      http: options.appsHttp ?? createSafeHttp(),
+      endpoints: options.appsEndpoints ?? DEFAULT_PROVIDER_ENDPOINTS,
+    }),
+  );
+  const telegramLive = channels.liveTelegram;
   const emailAddresses = new InboundEmailAddressService(env.INBOUND_EMAIL_DOMAIN);
   const publisher = new RealtimePublisher(app.redis, app.log);
   // The same chat core the widget uses — so a channel message routes, delivers
@@ -159,10 +184,39 @@ export default async function channelRoutes(
 
   app.post<{ Params: { type: string } }>(
     '/channels/:type/connect',
-    { config: { scopes: ['channels--all:rw'], pilotRefused: true } },
+    { config: { scopes: ['channels--all:rw'], pilotRefused: true, pilotLiveParam: 'type' } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
       const tenant = request.tenant();
+      if (type === 'telegram' && telegramLive) {
+        // Live Telegram (tm 263), in three steps so no transaction waits on
+        // Telegram: ask whose token this is, decide the row (the webhook URL
+        // names it) and point Telegram at it, then store — token encrypted,
+        // only the webhook secret's hash.
+        const body = parse(telegramLiveConnectBody, request.body);
+        telegramLive.assertWebhookReachable();
+        telegramLive.assertTokenShape(body.bot_token);
+        const { username } = await telegramLive.getMe(body.bot_token);
+        const target = await request.withTenant((tx) =>
+          channels.telegramLiveTarget(tx, tenant, username),
+        );
+        const { secret } = await telegramLive.setWebhook(body.bot_token, target.channelId);
+        const channel = await request.withTenant(async (tx) => {
+          const result = await channels.storeTelegramLive(tx, tenant, {
+            ...target,
+            username,
+            token: body.bot_token,
+            secret,
+          });
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'channel.connected',
+            target: `channel:${type}`,
+            metadata: { type, brand_id: result.brand_id, live: true },
+          });
+          return result;
+        });
+        return reply.send(channel);
+      }
       const channel = await request.withTenant(async (tx) => {
         const result = await channels.connect(tx, tenant, type, request.body);
         // The bot token / API key / webhook secret and the address itself
@@ -184,7 +238,12 @@ export default async function channelRoutes(
     { config: { scopes: ['channels--all:rw'] } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
+      const tenant = request.tenant();
+      let liveToken: string | null = null;
       const changed = await request.withTenant(async (tx) => {
+        // Read before the row turns off (which drops the token): the webhook is
+        // removed at Telegram after commit, best effort (tm 263).
+        liveToken = await channels.liveToken(tx, tenant, type);
         const count = await channels.disconnect(tx, type);
         // Only a disconnect that actually changed something is worth an entry
         // — a 404 (nothing connected) is not an event.
@@ -200,6 +259,10 @@ export default async function channelRoutes(
       // Nothing changed means no such connected channel in this tenant — 404
       // keeps that indistinguishable from another tenant's (NFR-S5).
       if (changed === 0) throw ApiError.notFound('Channel not found.');
+      if (liveToken && telegramLive) {
+        const removed = await telegramLive.deleteWebhook(liveToken);
+        if (!removed) request.log.warn('telegram deleteWebhook failed after disconnect');
+      }
       return reply.status(204).send();
     },
   );
@@ -250,7 +313,7 @@ export default async function channelRoutes(
 
   app.post<{ Params: { type: string } }>(
     '/channels/:type/messages',
-    { config: { scopes: ['channels--all:rw'], pilotRefused: true } },
+    { config: { scopes: ['channels--all:rw'], pilotRefused: true, pilotLiveParam: 'type' } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
       const body = parse(outboundBody, request.body);
@@ -285,10 +348,39 @@ export default async function channelRoutes(
     { config: { public: true, pilotRefused: true } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
+      // A live Telegram takes updates only on its own, secret-checked path
+      // below; this flat mock door authenticates nobody (tm 263).
+      if (type === 'telegram' && telegramLive) throw ApiError.notFound('Not found.');
       // The outcome carries its own status now: a message the spam filter drops
       // is `ignored`, and — like the e-mail path — still a 200, so the provider
       // does not retry something that was refused on purpose.
       const result = await channels.ingestInbound(app.db, chats, type, request.body);
+      return reply.send(result);
+    },
+  );
+
+  /**
+   * The live Telegram webhook (tm 263 · FR-MOD-08.5.8). Public — Telegram has
+   * no session — but not open: every update must carry the
+   * `X-Telegram-Bot-Api-Secret-Token` that `setWebhook` registered, compared
+   * in constant time against its hash. Not `pilotRefused`, because it is
+   * authenticated; with the live channel off it is a 404 like any unknown path.
+   * Whatever arrives that is not a private text message is answered 200 and
+   * dropped, so Telegram does not keep retrying it.
+   */
+  app.post<{ Params: { channelId: string } }>(
+    '/channels/telegram/webhook/:channelId',
+    { config: { public: true } },
+    async (request, reply) => {
+      if (!telegramLive) throw ApiError.notFound('Not found.');
+      const header = request.headers['x-telegram-bot-api-secret-token'];
+      const result = await channels.ingestTelegramLive(
+        app.db,
+        chats,
+        request.params.channelId,
+        Array.isArray(header) ? header[0] : header,
+        request.body,
+      );
       return reply.send(result);
     },
   );

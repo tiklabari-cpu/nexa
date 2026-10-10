@@ -8,7 +8,8 @@
  * is left to them, unchanged.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ADMIN_SCOPES, DEFAULT_AGENT_SCOPES, type DeploymentConfig } from '@siyahtus/types';
@@ -200,5 +201,78 @@ describe('settings search in the public pilot (tm 257.3)', () => {
     for (const query of ['messenger', 'whatsapp', 'sms', 'telegram', 'instagram', 'email']) {
       expect(hits(query, false)).toContain('channels');
     }
+  });
+});
+
+describe('a live Telegram in the public pilot (tm 263 · FR-MOD-08.5.8)', () => {
+  const LIVE_PILOT: DeploymentConfig = { ...PILOT, live_apps: ['telegram'] };
+
+  it('adds the Telegram card to the pilot grid, and reads GET /channels for it', async () => {
+    expect(channelsFor([], [], true, true).map((c) => c.id)).toEqual([
+      'website',
+      'chat-page',
+      'telegram',
+    ]);
+    const fetchMock = stubFetch();
+    renderGrid(LIVE_PILOT);
+    expect(await screen.findByTestId('channel-telegram')).toBeInTheDocument();
+    expect(screen.queryByTestId('channel-messenger')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(urlsAsked(fetchMock).some((url) => url.includes('/channels'))).toBe(true),
+    );
+  });
+
+  it('asks only for the token — Telegram names the bot — and sends only the token', async () => {
+    const fetchMock = stubFetch();
+    renderGrid(LIVE_PILOT);
+    const card = await screen.findByTestId('channel-telegram');
+    await userEvent.click(card.querySelector('button')!);
+    expect(await screen.findByLabelText('Bot token')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Bot username')).toBeNull();
+    expect(screen.getByText(/the bot name comes from Telegram/)).toBeInTheDocument();
+
+    await userEvent.type(
+      screen.getByLabelText('Bot token'),
+      '123456:ABC-token-value-0123456789abcdef',
+    );
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(([url]) =>
+        String(url).includes('/channels/telegram/connect'),
+      );
+      expect(post).toBeDefined();
+      expect(JSON.parse(String((post![1] as RequestInit).body))).toEqual({
+        bot_token: '123456:ABC-token-value-0123456789abcdef',
+      });
+    });
+  });
+
+  it('marks a connected live bot as Live', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        okJson(
+          String(url).includes('/channels')
+            ? {
+                items: [
+                  {
+                    type: 'telegram',
+                    status: 'connected',
+                    address: 'acme_bot',
+                    connected: true,
+                    created_at: '2026-10-10T00:00:00.000Z',
+                    live: true,
+                  },
+                ],
+              }
+            : { items: [] },
+        ),
+      ),
+    );
+    renderGrid(LIVE_PILOT);
+    const card = await screen.findByTestId('channel-telegram');
+    await waitFor(() => expect(card).toHaveTextContent('acme_bot'));
+    expect(card).toHaveTextContent('Live');
   });
 });

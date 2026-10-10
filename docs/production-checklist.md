@@ -19,11 +19,11 @@ failing.
 - [ ] `NODE_ENV=production` is set on both `apps/api` and `apps/rtm`. Boot refuses to start
       otherwise and lists every problem at once — see `apps/api/src/config/env.test.ts`
       ("production configuration" suite) and `apps/api/test/integration/production-boot.test.ts`.
-- [ ] All seven key-material secrets are freshly generated for this deployment and none is the
+- [ ] All six key-material secrets are freshly generated for this deployment and none is the
       published `dev-only-…` placeholder: `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`,
-      `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`,
-      and `APPS_CREDENTIAL_KEY` (exactly 64 hex characters; production refuses the value
-      `.env.example` publishes).
+      `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`.
+      Only if Apps cards go live (`APPS_LIVE_PROVIDERS`): `APPS_CREDENTIAL_KEY` as well — optional,
+      never a boot failure; without a usable one the cards stay demos and the boot logs why.
       Generate each independently — `openssl rand -hex 32`. See README
       ["Required — boot refuses without these"](../README.md#required--boot-refuses-without-these).
 - [ ] `DATABASE_APP_URL` is set to the non-owner `siyahtus_app` role and is **different** from
@@ -266,8 +266,9 @@ key. By name, what the pilot needs:
   `RTM_BASE_URL` and `API_BASE_URL` are baked into the web and widget bundles at build time,
   so changing either means `up --build`.
 - Secrets: `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`,
-  `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`, `APPS_CREDENTIAL_KEY`
-  (required since tm 263 — a pilot `.env` without it no longer boots).
+  `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`.
+- Optional, live Apps cards only (tm 263): `APPS_CREDENTIAL_KEY` (64 hex characters). The pilot
+  boots without it; the Apps cards then stay demos.
 - Apps live connections (tm 263): `APPS_LIVE_PROVIDERS` (comma list of `brevo`, `freshdesk`,
   `telegram`; empty keeps every Apps card a demo mock and, under `PILOT_MODE=true`, the Apps
   surface closed). Telegram also needs `API_BASE_URL` to be a public `https://` address.
@@ -292,18 +293,18 @@ Cloudflare Tunnel**).
 
 **Where each value comes from (tm 255.16 · 257.11).** Only names here, never values:
 
-| Key(s)                                                                                                                                                                                                      | Where the owner gets it                                                                                                                                |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SMTP_USERNAME`, `SMTP_PASSWORD`                                                                                                                                                                            | The PrivateEmail (Namecheap) mailbox that sends the pilot's mail. The username is the mailbox's full address. The password is that mailbox's password. |
-| `SMTP_FROM`                                                                                                                                                                                                 | That same mailbox's address, bare (`name@domain`) — not a secret.                                                                                      |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`                                                                                                                                                                     | PrivateEmail's published settings, already in the template (587 + STARTTLS, or 465 with `SMTP_SECURE=true`).                                           |
-| `LLM_API_KEY`, `EMBEDDING_API_KEY`                                                                                                                                                                          | An API key from the OpenAI platform account (ADR `docs/adr/pilot-llm-embedding-provider.md` §9). The two may hold the same key.                        |
-| `LLM_MODEL`                                                                                                                                                                                                 | The chat model id chosen in that account. `EMBEDDING_MODEL` stays `text-embedding-3-small` (the column is `vector(1536)`).                             |
-| `SIYAHTUS_REGION`, `LLM_PROVIDER_REGION`, `EMBEDDING_PROVIDER_REGION`, `*_API_BASE_URL`                                                                                                                     | The owner's region decision (2026-10-02): all `us`, base URL `https://us.api.openai.com/v1`.                                                           |
-| `POSTGRES_PASSWORD`, `SIYAHTUS_APP_DB_PASSWORD`, `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`, `APPS_CREDENTIAL_KEY` | Generated on the host: `openssl rand -hex 32`, one per key.                                                                                            |
-| `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`, `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`                                                                                  | The owner's domain and the edge in front of the host.                                                                                                  |
-| `PILOT_CONTACT_EMAIL`                                                                                                                                                                                       | An address the owner reads. It is printed on screens, so it is not a secret.                                                                           |
-| `PRIVACY_POLICY_URL`, `TERMS_URL`, `TERMS_VERSION`                                                                                                                                                          | The owner publishes both texts (https only; they are not in this repository) and picks the version label.                                              |
+| Key(s)                                                                                                                                                                                                                                | Where the owner gets it                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SMTP_USERNAME`, `SMTP_PASSWORD`                                                                                                                                                                                                      | The PrivateEmail (Namecheap) mailbox that sends the pilot's mail. The username is the mailbox's full address. The password is that mailbox's password. |
+| `SMTP_FROM`                                                                                                                                                                                                                           | That same mailbox's address, bare (`name@domain`) — not a secret.                                                                                      |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`                                                                                                                                                                                               | PrivateEmail's published settings, already in the template (587 + STARTTLS, or 465 with `SMTP_SECURE=true`).                                           |
+| `LLM_API_KEY`, `EMBEDDING_API_KEY`                                                                                                                                                                                                    | An API key from the OpenAI platform account (ADR `docs/adr/pilot-llm-embedding-provider.md` §9). The two may hold the same key.                        |
+| `LLM_MODEL`                                                                                                                                                                                                                           | The chat model id chosen in that account. `EMBEDDING_MODEL` stays `text-embedding-3-small` (the column is `vector(1536)`).                             |
+| `SIYAHTUS_REGION`, `LLM_PROVIDER_REGION`, `EMBEDDING_PROVIDER_REGION`, `*_API_BASE_URL`                                                                                                                                               | The owner's region decision (2026-10-02): all `us`, base URL `https://us.api.openai.com/v1`.                                                           |
+| `POSTGRES_PASSWORD`, `SIYAHTUS_APP_DB_PASSWORD`, `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`, and `APPS_CREDENTIAL_KEY` if Apps cards go live | Generated on the host: `openssl rand -hex 32`, one per key.                                                                                            |
+| `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`, `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`                                                                                                            | The owner's domain and the edge in front of the host.                                                                                                  |
+| `PILOT_CONTACT_EMAIL`                                                                                                                                                                                                                 | An address the owner reads. It is printed on screens, so it is not a secret.                                                                           |
+| `PRIVACY_POLICY_URL`, `TERMS_URL`, `TERMS_VERSION`                                                                                                                                                                                    | The owner publishes both texts (https only; they are not in this repository) and picks the version label.                                              |
 
 ### Now: Cloudflare Tunnel
 

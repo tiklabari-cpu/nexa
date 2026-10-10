@@ -247,10 +247,11 @@ secrets:
   # hides a deleted row. Keep every old value on rotation: entries already
   # written only verify under the value they were written with.
   AUDIT_CHAIN_SECRET: "<generate: openssl rand -hex 32>"
-  # Encrypts live Apps credentials (tm 263) — exactly 64 hex characters.
-  # Never stored with the database; rotating it means every live connection
-  # must be reconnected.
-  APPS_CREDENTIAL_KEY: "<generate: openssl rand -hex 32>"
+  # Optional (tm 263): only live Apps cards need it — exactly 64 hex
+  # characters (openssl rand -hex 32). Empty, every Apps card stays a demo and
+  # the boot logs why. Never stored with the database; rotating it means every
+  # live connection must be reconnected.
+  APPS_CREDENTIAL_KEY: ""
   # Owner role: runs migrations (templates/migrate-job.yaml). Never used by
   # the request path — see DATABASE_APP_URL below.
   DATABASE_URL: "postgresql://<owner_user>:<owner_password>@<db-host>:5432/<db>"

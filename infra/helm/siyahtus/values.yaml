@@ -470,8 +470,8 @@ secrets:
   UPLOAD_SIGNING_KEY: dev-only-upload-signing-key-change-me-0123456789
   AUDIT_CHAIN_SECRET: dev-only-audit-chain-secret-change-me-0123456789abcdef
   # Encrypts live Apps credentials (tm 263): exactly 64 hex characters, so it
-  # cannot carry the `dev-only-` prefix; production refuses this published
-  # value by name instead (`productionProblems`).
+  # cannot carry the `dev-only-` prefix. Optional, never a boot failure:
+  # production ignores this published value and the live cards stay demos.
   APPS_CREDENTIAL_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   DATABASE_URL: postgresql://siyahtus:CHANGE_ME@CHANGE_ME:5432/siyahtus
   DATABASE_APP_URL: postgresql://siyahtus_app:CHANGE_ME@CHANGE_ME:5432/siyahtus

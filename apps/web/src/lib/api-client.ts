@@ -6,6 +6,7 @@
  * value and support can correlate a user report with a server log line.
  */
 import { isErrorType, type ApiErrorBody, type ErrorType } from '@siyahtus/types';
+import { getLocale } from './i18n.js';
 
 export class ApiClientError extends Error {
   readonly type: ErrorType | 'network';
@@ -219,6 +220,10 @@ export class ApiClient {
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const brandId = this.#getBrandId();
     if (brandId) headers.set('X-SiyahTus-Brand', brandId);
+    // The language the panel is showing (tm 265), so mail the request sets off
+    // — a reset link, an invitation — and later mail to this member are written
+    // in it. The browser's own Accept-Language may name another one.
+    if (!headers.has('X-SiyahTus-Locale')) headers.set('X-SiyahTus-Locale', getLocale());
     return headers;
   }
 

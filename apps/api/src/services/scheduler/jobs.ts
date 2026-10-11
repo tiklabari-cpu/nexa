@@ -146,7 +146,7 @@ export function buildSchedulerJobs({
       name: 'sla',
       intervalMs: intervals.sla,
       async run() {
-        const report = await new SlaSweeper(db, mailer).run();
+        const report = await new SlaSweeper(db, mailer, env.WEB_APP_URL).run();
         return {
           counts: {
             tenants: report.totals.tenants,

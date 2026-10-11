@@ -191,3 +191,59 @@ describe('rfc5322Date', () => {
     expect(rfc5322Date(new Date('2026-01-05T03:04:05Z'))).toBe('Mon, 05 Jan 2026 03:04:05 +0000');
   });
 });
+
+describe('composeMessage with HTML and attachments (tm 265)', () => {
+  const HTML = '<p>Merhaba <strong>dünya</strong></p>';
+
+  it('keeps a text-only message exactly one text/plain part', () => {
+    const message = composeMessage(BASE);
+    expect(message).not.toContain('multipart/');
+    expect(headerValue(message, 'Content-Type')).toBe('text/plain; charset=utf-8');
+  });
+
+  it('sends text first and HTML last in a multipart/alternative', () => {
+    const message = composeMessage({ ...BASE, body: 'Merhaba dünya', html: HTML });
+    const type = headerValue(message, 'Content-Type');
+    expect(type).toMatch(/^multipart\/alternative; boundary="=_siyahtus_[A-Za-z0-9]+"$/);
+    const boundary = /boundary="([^"]+)"/.exec(type)![1]!;
+    const sections = message.split(`--${boundary}`);
+    // Preamble, text, HTML, and the close delimiter.
+    expect(sections).toHaveLength(4);
+    expect(sections[1]).toContain('Content-Type: text/plain; charset=utf-8');
+    expect(sections[2]).toContain('Content-Type: text/html; charset=utf-8');
+    expect(sections[3]!.startsWith('--')).toBe(true);
+    const html = sections[2]!.slice(sections[2]!.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, '');
+    expect(decodeQuotedPrintable(html)).toBe(HTML);
+    // Every line on the wire stays within the limits, 7-bit.
+    for (const line of message.split('\r\n')) {
+      expect(line.length).toBeLessThanOrEqual(998);
+      expect(line).toMatch(/^[\x20-\x7e]*$/);
+    }
+  });
+
+  it('wraps an attachment in multipart/mixed, base64 in 76-character lines', () => {
+    const csv = `\uFEFFname,city\r\nAyşe,İstanbul\r\n${'x'.repeat(200)}\r\n`;
+    const message = composeMessage({
+      ...BASE,
+      html: HTML,
+      attachments: [
+        { filename: 'rapor "q3".csv', contentType: 'text/csv; charset=utf-8', content: csv },
+      ],
+    });
+    expect(headerValue(message, 'Content-Type')).toMatch(/^multipart\/mixed; boundary=/);
+    expect(message).toContain('Content-Type: multipart/alternative; boundary=');
+    // A quote in the name cannot end the parameter early.
+    expect(message).toContain('Content-Disposition: attachment; filename="rapor _q3_.csv"');
+    const start = message.indexOf('Content-Disposition: attachment');
+    const body = message.slice(message.indexOf('\r\n\r\n', start) + 4);
+    const base64Lines = body.split('\r\n').filter((line) => /^[A-Za-z0-9+/=]+$/.test(line));
+    expect(base64Lines.length).toBeGreaterThan(1);
+    for (const line of base64Lines) expect(line.length).toBeLessThanOrEqual(76);
+    expect(Buffer.from(base64Lines.join(''), 'base64').toString('utf8')).toBe(csv);
+  });
+
+  it('names the language, and refuses one that is not a language tag', () => {
+    expect(headerValue(composeMessage({ ...BASE, language: 'tr' }), 'Content-Language')).toBe('tr');
+    expect(composeMessage({ ...BASE, language: 'tr\r\nBcc: x@y.test' })).not.toContain('Bcc:');
+  });
+});

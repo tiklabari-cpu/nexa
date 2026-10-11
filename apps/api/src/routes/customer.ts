@@ -10,6 +10,8 @@
  * would work, but the agent API is what agents should use, and keeping the two
  * disjoint means the widget surface can be reasoned about on its own.
  */
+import { isMailLocale } from '../services/mail/templates/layout.js';
+import { visitorMessageMail } from '../services/mail/templates/messages.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -420,14 +422,18 @@ export default async function customerRoutes(
 
         // The account carries the address; the membership carries the per-user,
         // per-license opt-in — read together so the decision has both.
-        const [account, membership] = await Promise.all([
+        const [account, membership, organization] = await Promise.all([
           tx.account.findUnique({
             where: { id: thread.assigneeId },
             select: { email: true, name: true },
           }),
           tx.agentMembership.findUnique({
             where: { licenseId_agentId: { licenseId, agentId: thread.assigneeId } },
-            select: { notifyEmail: true },
+            select: { notifyEmail: true, locale: true },
+          }),
+          tx.organization.findUnique({
+            where: { id: request.tenant().organizationId },
+            select: { name: true },
           }),
         ]);
 
@@ -435,6 +441,9 @@ export default async function customerRoutes(
           assigneeId: thread.assigneeId,
           email: account?.email ?? null,
           name: account?.name ?? null,
+          // The agent's panel language (tm 265), not the visitor's.
+          locale: isMailLocale(membership?.locale) ? membership.locale : 'en',
+          workspaceName: organization?.name ?? 'SiyahTuş',
           // No membership row would be an inconsistency, not an opt-out; default
           // on, matching the column default.
           emailEnabled: membership?.notifyEmail ?? true,
@@ -482,8 +491,15 @@ export default async function customerRoutes(
           to: channel.email,
           licenseId,
           kind: 'notification',
-          subject: 'New message from a visitor',
-          body: `Hi ${channel.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,
+          ...visitorMessageMail(
+            { locale: channel.locale, appUrl: env.WEB_APP_URL },
+            {
+              agentName: channel.name,
+              workspaceName: channel.workspaceName,
+              inboxUrl: `${env.WEB_APP_URL}/app/inbox`,
+              settingsUrl: `${env.WEB_APP_URL}/app/settings/notifications`,
+            },
+          ),
         },
         (outcome) =>
           logUnsentMail(request.log, 'assignee_notification.mail', outcome, { chat_id: chatId }),

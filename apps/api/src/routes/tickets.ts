@@ -8,6 +8,7 @@
  * Writes are covered by the licence gate hook, so an expired trial refuses to
  * create or edit a ticket (402, ADR-10) without this file having to know.
  */
+import { ticketNoticeMail } from '../services/mail/templates/messages.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -321,7 +322,17 @@ export default async function ticketRoutes(
           });
         }
 
-        return { ticket: updated, notice: mail };
+        // The frame around the workspace's own words (tm 265) names it.
+        const organization = mail
+          ? await tx.organization.findUnique({
+              where: { id: tenant.organizationId },
+              select: { name: true },
+            })
+          : null;
+        return {
+          ticket: updated,
+          notice: mail ? { ...mail, workspaceName: organization?.name ?? 'SiyahTuş' } : null,
+        };
       });
 
       // After the commit, never inside it: a mail must not be able to hold a
@@ -338,10 +349,20 @@ export default async function ticketRoutes(
             to: notice.to,
             licenseId: tenant.licenseId,
             kind: 'ticket_notice',
-            subject: notice.subject,
-            // Added here, at the send, rather than by the renderer: the line is
-            // the deployment's statement, not part of the workspace's template.
-            body: pilotMode ? withPilotNoReplyLine(notice.body) : notice.body,
+            // The workspace's subject and text, untouched, in the shared frame
+            // (tm 265). The customer's language is not known to the server, so
+            // the frame's few words are English.
+            ...ticketNoticeMail(
+              { locale: 'en' },
+              {
+                workspaceName: notice.workspaceName,
+                subject: notice.subject,
+                // Added here, at the send, rather than by the renderer: the line
+                // is the deployment's statement, not part of the workspace's
+                // template.
+                body: pilotMode ? withPilotNoReplyLine(notice.body) : notice.body,
+              },
+            ),
           },
           (outcome) =>
             logUnsentMail(request.log, 'ticket.notice_mail', outcome, {

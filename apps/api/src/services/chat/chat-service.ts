@@ -13,6 +13,7 @@
  * The database-level ones are deliberate: a rule checked only here is one
  * concurrent request away from being violated.
  */
+import { isMailLocale, type MailLocale } from '../mail/templates/layout.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import {
   AGENT_COMPOSING_TTL_SECONDS,
@@ -1179,6 +1180,7 @@ export class ChatService {
         // together the way `notifyAssignee` does so the decision has both.
         let assignee: { email: string | null; name: string | null; emailEnabled: boolean } | null =
           null;
+        let assigneeLocale: MailLocale = 'en';
         if (thread?.assigneeId) {
           const [account, membership] = await Promise.all([
             tx.account.findUnique({
@@ -1189,7 +1191,7 @@ export class ChatService {
               where: {
                 licenseId_agentId: { licenseId: tenant.licenseId, agentId: thread.assigneeId },
               },
-              select: { notifyEmail: true },
+              select: { notifyEmail: true, locale: true },
             }),
           ]);
           assignee = {
@@ -1197,9 +1199,25 @@ export class ChatService {
             name: account?.name ?? null,
             emailEnabled: membership?.notifyEmail ?? true,
           };
+          assigneeLocale = isMailLocale(membership?.locale) ? membership.locale : 'en';
         }
 
-        return { customer: chat.customer, assignee, events, nameById };
+        // The frame of both copies (tm 265): whose conversation it was, and the
+        // time zone its times are read in.
+        const organization = await tx.organization.findUnique({
+          where: { id: tenant.organizationId },
+          select: { name: true, timezone: true },
+        });
+
+        return {
+          customer: chat.customer,
+          assignee,
+          assigneeLocale,
+          events,
+          nameById,
+          workspaceName: organization?.name ?? 'SiyahTuş',
+          timeZone: organization?.timezone ?? 'UTC',
+        };
       });
       if (!data) return;
 
@@ -1225,6 +1243,14 @@ export class ChatService {
           chatId,
           customerName: data.customer?.name ?? null,
           lines,
+          frame: {
+            workspaceName: data.workspaceName,
+            timeZone: data.timeZone,
+            // The team's copy reads in the assignee's panel language; the
+            // visitor's language is not known to the server, so theirs is
+            // English (tm 265 — a follow-up records the widget's language).
+            locale: recipient.party === 'team' ? data.assigneeLocale : 'en',
+          },
         });
         // Nothing worth sending this party (e.g. a chat of only system events).
         if (!content) continue;
@@ -1242,8 +1268,7 @@ export class ChatService {
           to: recipient.to,
           licenseId: tenant.licenseId,
           kind: recipient.party === 'customer' ? 'chat_transcript' : 'notification',
-          subject: content.subject,
-          body: content.body,
+          ...content,
         });
       }
     } catch {

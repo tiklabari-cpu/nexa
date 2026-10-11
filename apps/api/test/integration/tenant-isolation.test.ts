@@ -33,6 +33,11 @@ import { toPdf, type CsvCell } from '../../src/routes/reports-export.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
+/** The CSV a scheduled report carried — an attachment since tm 265, not the body. */
+function csvOf(message: { attachments?: Array<{ content: string }> } | undefined): string {
+  return message?.attachments?.[0]?.content ?? '';
+}
+
 const APP_URL = process.env['DATABASE_APP_URL'];
 const OWNER_URL = process.env['DATABASE_URL'];
 
@@ -1314,19 +1319,19 @@ describe('tenant isolation (RLS)', () => {
         [fixtures.a.agentEmail, fixtures.b.agentEmail].sort(),
       );
 
-      // The CSV is embedded in the body, so the assertions read the delivery
+      // The CSV travels as the attachment (tm 265), so the assertions read the delivery
       // itself rather than something rebuilt beside it. Both directions: the
       // tracer is present where it belongs, absent across the boundary — a
       // "not present" that was never findable proves nothing.
-      expect(toA?.body).toContain('Agent a');
-      expect(toA?.body).toContain(fixtures.a.agentAccountId);
-      expect(toA?.body).not.toContain('Agent b');
-      expect(toA?.body).not.toContain(fixtures.b.agentAccountId);
+      expect(csvOf(toA)).toContain('Agent a');
+      expect(csvOf(toA)).toContain(fixtures.a.agentAccountId);
+      expect(csvOf(toA)).not.toContain('Agent b');
+      expect(csvOf(toA)).not.toContain(fixtures.b.agentAccountId);
 
-      expect(toB?.body).toContain('Agent b');
-      expect(toB?.body).toContain(fixtures.b.agentAccountId);
-      expect(toB?.body).not.toContain('Agent a');
-      expect(toB?.body).not.toContain(fixtures.a.agentAccountId);
+      expect(csvOf(toB)).toContain('Agent b');
+      expect(csvOf(toB)).toContain(fixtures.b.agentAccountId);
+      expect(csvOf(toB)).not.toContain('Agent a');
+      expect(csvOf(toB)).not.toContain(fixtures.a.agentAccountId);
     });
 
     it("never carries tenant B's tag vocabulary into tenant A's delivery", async () => {
@@ -1350,7 +1355,7 @@ describe('tenant isolation (RLS)', () => {
 
       const inbox = await mailbox();
       const toA = inbox.find((message) => message.to === fixtures.a.agentEmail);
-      expect(toA?.body).not.toContain(B_TAG);
+      expect(csvOf(toA)).not.toContain(B_TAG);
     });
 
     it('mails nothing more however many times the job is triggered', async () => {

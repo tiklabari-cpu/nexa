@@ -10,38 +10,106 @@
  * over 76 characters, so a link read straight off the wire is a broken link.
  *
  * Decodes exactly what `src/services/mail/mime.ts` writes and nothing more — a
- * single-part `text/plain` body and `B` encoded-words — which is also why it is
- * a test helper and not a parser anybody should reuse. Shared with the e2e
+ * single `text/plain` part, or since tm 265 a `multipart/alternative` (text +
+ * HTML) possibly inside a `multipart/mixed` with base64 attachments — and `B`
+ * encoded-words. `body` is always the plain-text part, so a test that reads a
+ * link out of it works whatever else the message carries. Which is also why it
+ * is a test helper and not a parser anybody should reuse. Shared with the e2e
  * suite's SMTP stand-in (`scripts/mock-smtp-server.ts`).
  */
+
+export interface ReceivedAttachment {
+  filename: string;
+  contentType: string;
+  content: string;
+}
 
 export interface ReceivedMail {
   to: string;
   from: string;
   subject: string;
+  /** The plain-text part. */
+  body: string;
+  /** The HTML part, when the message had one. */
+  html?: string;
+  attachments?: ReceivedAttachment[];
+  /** `Content-Language`, when set. */
+  language?: string;
+}
+
+interface Part {
+  headers: Map<string, string>;
   body: string;
 }
 
-export function readReceivedMail(raw: string): ReceivedMail {
+function splitPart(raw: string): Part {
   const split = raw.indexOf('\r\n\r\n');
   const head = split < 0 ? raw : raw.slice(0, split);
-  const encodedBody = split < 0 ? '' : raw.slice(split + 4);
-
+  const body = split < 0 ? '' : raw.slice(split + 4);
   const headers = new Map<string, string>();
   // Unfold first: a folded header continues on a line starting with whitespace.
   for (const line of head.replace(/\r\n[ \t]+/g, ' ').split('\r\n')) {
     const colon = line.indexOf(':');
     if (colon > 0) headers.set(line.slice(0, colon).toLowerCase(), line.slice(colon + 1).trim());
   }
+  return { headers, body };
+}
 
-  const quotedPrintable = /quoted-printable/i.test(headers.get('content-transfer-encoding') ?? '');
-  const body = quotedPrintable ? decodeQuotedPrintable(encodedBody) : encodedBody;
+function decodePartBody(part: Part): string {
+  const encoding = (part.headers.get('content-transfer-encoding') ?? '').toLowerCase();
+  if (encoding === 'quoted-printable') return decodeQuotedPrintable(part.body);
+  if (encoding === 'base64') {
+    return Buffer.from(part.body.replace(/\s+/g, ''), 'base64').toString('utf8');
+  }
+  return part.body;
+}
 
+/** The leaf parts of a (possibly nested) multipart body, in order. */
+function leaves(part: Part): Part[] {
+  const type = part.headers.get('content-type') ?? 'text/plain';
+  const boundary = /boundary="([^"]+)"/i.exec(type)?.[1];
+  if (!/^multipart\//i.test(type) || !boundary) return [part];
+  const sections = part.body.split(`--${boundary}`);
+  // [0] is the preamble, the last one starts with `--` (the close delimiter).
+  return sections
+    .slice(1)
+    .filter((section) => !section.startsWith('--'))
+    .map((section) => splitPart(section.replace(/^\r\n/, '').replace(/\r\n$/, '')))
+    .flatMap(leaves);
+}
+
+export function readReceivedMail(raw: string): ReceivedMail {
+  const top = splitPart(raw);
+  const parts = leaves(top);
+
+  let body = '';
+  let html: string | undefined;
+  const attachments: ReceivedAttachment[] = [];
+  for (const part of parts) {
+    const type = part.headers.get('content-type') ?? 'text/plain';
+    const disposition = part.headers.get('content-disposition') ?? '';
+    if (/^attachment/i.test(disposition)) {
+      attachments.push({
+        filename: /filename="([^"]*)"/i.exec(disposition)?.[1] ?? '',
+        contentType: type.split(';')[0]!.trim(),
+        content: decodePartBody(part),
+      });
+    } else if (/^text\/html/i.test(type)) {
+      html = decodePartBody(part).replace(/\r\n/g, '\n');
+    } else if (/^text\/plain/i.test(type)) {
+      body = decodePartBody(part);
+    }
+  }
+
+  const language = top.headers.get('content-language');
   return {
-    to: headers.get('to') ?? '',
-    from: headers.get('from') ?? '',
-    subject: decodeEncodedWords(headers.get('subject') ?? ''),
+    to: top.headers.get('to') ?? '',
+    from: top.headers.get('from') ?? '',
+    subject: decodeEncodedWords(top.headers.get('subject') ?? ''),
     body: body.replace(/\r\n/g, '\n').replace(/\n+$/, ''),
+    ...(html !== undefined ? { html } : {}),
+    ...(attachments.length > 0 ? { attachments } : {}),
+    ...(language ? { language } : {}),
   };
 }
 

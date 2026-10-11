@@ -35,7 +35,7 @@ async function main(): Promise<void> {
     // everything else outgoing (PLAN A4), sent under `smtp` (tm 255.3) —
     // behind the daily mail caps (tm 257.14). A capped digest is not marked
     // announced, so the next pass tries again.
-    const report = await new SlaSweeper(db, createJobMailer(env, db)).run();
+    const report = await new SlaSweeper(db, createJobMailer(env, db), env.WEB_APP_URL).run();
 
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.stderr.write(

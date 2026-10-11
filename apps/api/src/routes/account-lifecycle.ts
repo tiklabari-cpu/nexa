@@ -24,6 +24,13 @@ import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
 import { clientNetworkKey } from '../lib/ip-allowlist.js';
+import { requestLocale } from '../lib/request-locale.js';
+import {
+  accountExistsMail,
+  invitationMail,
+  passwordResetMail,
+  verifyEmailMail,
+} from '../services/mail/templates/messages.js';
 
 const NEUTRAL_RESET_MESSAGE = 'If an account exists for that address, we sent a link.';
 
@@ -172,8 +179,11 @@ export default async function accountLifecycleRoutes(
         to,
         licenseId: null,
         kind: 'email_verification',
-        subject: 'Confirm your email address for SiyahTuş',
-        body: `Open this link to confirm this address and finish setting up your workspace:\n\n${env.WEB_APP_URL}/verify-email?token=${encodeURIComponent(token)}\n\nYou will be asked for the password you chose when you signed up. The link expires in ${hours} ${hours === 1 ? 'hour' : 'hours'} and works once.\n\nIf you did not sign up, ignore this message: without the password the link does nothing.`,
+        // In the language the person signing up is reading the form in (tm 265).
+        ...verifyEmailMail(
+          { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+          { url: `${env.WEB_APP_URL}/verify-email?token=${encodeURIComponent(token)}`, hours },
+        ),
       },
       async (outcome) => {
         // A cap refusal was logged where it was decided (`mail-caps.ts`).
@@ -422,8 +432,13 @@ export default async function accountLifecycleRoutes(
             to: body.email,
             licenseId: null,
             kind: 'account_exists_notice',
-            subject: 'You already have a SiyahTuş account',
-            body: `Someone — perhaps you — just tried to create a SiyahTuş workspace with this address, but it already has an account, so nothing was created.\n\nTo get in, sign in at ${env.WEB_APP_URL}/signin. If you do not remember the password, reset it at ${env.WEB_APP_URL}/forgot-password.\n\nIf this was not you, you can ignore this message: nothing about your account has changed.`,
+            ...accountExistsMail(
+              { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+              {
+                signInUrl: `${env.WEB_APP_URL}/signin`,
+                resetUrl: `${env.WEB_APP_URL}/forgot-password`,
+              },
+            ),
           },
           (outcome) => {
             if (outcome.status === 'sent' || isCapRefusal(outcome)) return;
@@ -523,8 +538,10 @@ export default async function accountLifecycleRoutes(
           to: body.email,
           licenseId: null,
           kind: 'password_reset',
-          subject: 'Reset your SiyahTuş password',
-          body: `Open this link to choose a new password:\n\n${env.WEB_APP_URL}/reset-password?token=${encodeURIComponent(token)}\n\nIt expires in one hour and works once.`,
+          ...passwordResetMail(
+            { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+            { url: `${env.WEB_APP_URL}/reset-password?token=${encodeURIComponent(token)}` },
+          ),
         },
         (outcome) => {
           // A daily cap's refusal (tm 257.14) was logged where it was decided,
@@ -791,7 +808,11 @@ export default async function accountLifecycleRoutes(
       });
     }
 
-    const created = await withTenant(app.db, tenant, async (tx) => {
+    const {
+      records: created,
+      workspaceName,
+      inviterName,
+    } = await withTenant(app.db, tenant, async (tx) => {
       const records = await lifecycle.createInvitations(
         tx,
         tenant,
@@ -810,7 +831,20 @@ export default async function accountLifecycleRoutes(
           metadata: { role: invite.role },
         });
       }
-      return records;
+      // Who is asking, and to join what (tm 265): an invitation that names
+      // neither reads like the phishing it is not.
+      const [organization, inviter] = await Promise.all([
+        tx.organization.findUnique({
+          where: { id: tenant.organizationId },
+          select: { name: true },
+        }),
+        tx.account.findUnique({ where: { id: principal.accountId }, select: { name: true } }),
+      ]);
+      return {
+        records,
+        workspaceName: organization?.name ?? 'SiyahTuş',
+        inviterName: inviter?.name ?? null,
+      };
     });
 
     // After the commit, and never able to undo it (tm 255.4). The invitations
@@ -826,8 +860,12 @@ export default async function accountLifecycleRoutes(
           to: invite.email,
           licenseId: tenant.licenseId,
           kind: 'invitation',
-          subject: 'You have been invited to a SiyahTuş workspace',
-          body: `Open this link to join:\n\n${invite.accept_url}\n\nIt expires in seven days and works once.`,
+          // The invitee's language is unknown until they open the panel; the
+          // inviter's is the best guess — the same team (tm 265).
+          ...invitationMail(
+            { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+            { url: invite.accept_url ?? '', workspaceName, inviterName, days: 7 },
+          ),
         }),
       ),
     );

@@ -2,11 +2,18 @@
  * The bytes of one outgoing message — RFC 5322 headers, one `text/plain` part
  * (tm 255.3).
  *
- * Every message SiyahTuş sends is a plain-text body with a subject (`Message` in
- * `mailer.ts`; turning the templates into HTML is out of scope), so the MIME
- * this needs is one part and seven headers. What has to be right is the
- * encoding, because both halves routinely carry Turkish and every other
- * non-ASCII script:
+ * A message is a plain-text body with a subject, and since tm 265 optionally an
+ * HTML alternative and file attachments (`Message` in `mailer.ts`):
+ *
+ * - text only — one `text/plain` part, byte for byte what it always was;
+ * - text + HTML — `multipart/alternative`, plain text first (RFC 2046 §5.1.4:
+ *   the last part is the preferred one, so a client that renders HTML shows it
+ *   and every other shows the text);
+ * - with attachments — `multipart/mixed` around the above, each attachment
+ *   base64 in its own part.
+ *
+ * What has to be right is the encoding, because every part routinely carries
+ * Turkish and every other non-ASCII script:
  *
  * - **Subject** — RFC 2047 `B` encoded-words when it is not plain ASCII. Each
  *   word holds whole characters (§5: a word must not split one), and each line
@@ -33,11 +40,26 @@ const ENCODED_LINE_LIMIT = 76;
 /** A quoted-printable line may be at most this long, soft break included (RFC 2045 §6.7). */
 const QP_LINE_LIMIT = 76;
 
+/** A file carried with a message (tm 265 — the scheduled report's CSV). */
+export interface MailAttachment {
+  /** Shown to the reader; quotes and line breaks are removed before it reaches a header. */
+  filename: string;
+  /** e.g. `text/csv; charset=utf-8`. */
+  contentType: string;
+  /** The file's text; sent as its UTF-8 bytes, base64 encoded. */
+  content: string;
+}
+
 export interface ComposeInput {
   from: string;
   to: string;
   subject: string;
   body: string;
+  /** The HTML alternative of `body`, when there is one (tm 265). */
+  html?: string | undefined;
+  attachments?: readonly MailAttachment[] | undefined;
+  /** `Content-Language` (RFC 3282), e.g. `tr`. */
+  language?: string | undefined;
   date: Date;
   /** Without the angle brackets. */
   messageId: string;
@@ -51,10 +73,81 @@ export function composeMessage(input: ComposeInput): string {
     `Date: ${rfc5322Date(input.date)}`,
     `Message-ID: <${input.messageId}>`,
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=utf-8',
-    'Content-Transfer-Encoding: quoted-printable',
   ];
-  return `${headers.join(CRLF)}${CRLF}${CRLF}${encodeQuotedPrintable(input.body)}${CRLF}`;
+  if (input.language && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(input.language)) {
+    headers.push(`Content-Language: ${input.language}`);
+  }
+
+  const textPart: MimePart = {
+    headers: [
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: quoted-printable',
+    ],
+    body: encodeQuotedPrintable(input.body),
+  };
+  let content: MimePart = textPart;
+  if (input.html !== undefined) {
+    content = multipart('alternative', `alt-${input.messageId}`, [
+      textPart,
+      {
+        headers: [
+          'Content-Type: text/html; charset=utf-8',
+          'Content-Transfer-Encoding: quoted-printable',
+        ],
+        body: encodeQuotedPrintable(input.html),
+      },
+    ]);
+  }
+  if (input.attachments && input.attachments.length > 0) {
+    content = multipart('mixed', `mix-${input.messageId}`, [
+      content,
+      ...input.attachments.map(attachmentPart),
+    ]);
+  }
+
+  return `${[...headers, ...content.headers].join(CRLF)}${CRLF}${CRLF}${content.body}${CRLF}`;
+}
+
+interface MimePart {
+  headers: string[];
+  body: string;
+}
+
+/**
+ * A boundary no part can contain: derived from the message id (unique per
+ * message) and limited to RFC 2046's safe characters. Every part's body is
+ * quoted-printable or base64, and neither can produce a line starting `--`
+ * followed by this string, because `=` is the only character QP adds and the
+ * boundary carries none.
+ */
+function boundaryFor(seed: string): string {
+  return `=_siyahtus_${seed.replace(/[^A-Za-z0-9]/g, '').slice(0, 48)}`;
+}
+
+function multipart(subtype: 'alternative' | 'mixed', seed: string, parts: MimePart[]): MimePart {
+  const boundary = boundaryFor(seed);
+  const body = [
+    ...parts.map(
+      (part) => `--${boundary}${CRLF}${part.headers.join(CRLF)}${CRLF}${CRLF}${part.body}`,
+    ),
+    `--${boundary}--`,
+  ].join(CRLF);
+  return { headers: [`Content-Type: multipart/${subtype}; boundary="${boundary}"`], body };
+}
+
+function attachmentPart(attachment: MailAttachment): MimePart {
+  const filename = attachment.filename.replace(/[\r\n"\\]+/g, '_').trim() || 'attachment';
+  const contentType = attachment.contentType.replace(/[\r\n]+/g, ' ');
+  const base64 = Buffer.from(attachment.content, 'utf8').toString('base64');
+  return {
+    headers: [
+      `Content-Type: ${contentType}; name="${filename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${filename}"`,
+    ],
+    // 76-character lines (RFC 2045 §6.8).
+    body: (base64.match(/.{1,76}/g) ?? ['']).join(CRLF),
+  };
 }
 
 /**

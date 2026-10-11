@@ -47,6 +47,8 @@ describe('transcriptRecipients', () => {
 
 describe('renderTranscript', () => {
   const at = (iso: string) => new Date(iso);
+  /** Istanbul is UTC+3 all year: 10:00Z reads 13:00. */
+  const frame = { workspaceName: 'Acme', timeZone: 'Europe/Istanbul', locale: 'en' as const };
   const lines: TranscriptLine[] = [
     {
       authorType: 'customer',
@@ -88,16 +90,39 @@ describe('renderTranscript', () => {
       chatId: 'CHAT12345678',
       customerName: 'Vic',
       lines,
+      frame,
     });
     expect(content).not.toBeNull();
-    expect(content!.subject).toMatch(/your chat transcript/i);
-    expect(content!.body).toContain('My order is late');
-    expect(content!.body).toContain('Let me check on that');
-    // The note addressed to agents must never surface to the visitor.
-    expect(content!.body).not.toContain('refund pre-approved');
-    // The visitor's own line is labelled with their name, the agent's with theirs.
-    expect(content!.body).toContain('Vic: My order is late');
-    expect(content!.body).toContain('Ada: Let me check on that');
+    expect(content!.subject).toBe('Your conversation with Acme');
+    // The note addressed to agents must never surface to the visitor —
+    // in either half of the message.
+    for (const part of [content!.body, content!.html]) {
+      expect(part).toContain('My order is late');
+      expect(part).toContain('Let me check on that');
+      expect(part).not.toContain('refund pre-approved');
+    }
+    // Each line is labelled with its author and read in the workspace's zone.
+    expect(content!.body).toContain('[13:00] Vic: My order is late');
+    expect(content!.body).toContain('[13:01] Ada: Let me check on that');
+    expect(content!.body).toContain('Sunday, 26 July 2026');
+    expect(content!.body).toContain('Times are in Europe/Istanbul time.');
+    expect(content!.body).toContain('Conversation ID: CHAT12345678');
+    // A visitor gets no link to the agent panel.
+    expect(content!.html).not.toMatch(/href="https?:/);
+  });
+
+  it('writes the team copy in the assignee language, notes marked as notes', () => {
+    const content = renderTranscript({
+      audience: 'team',
+      chatId: 'CHAT12345678',
+      customerName: 'Vic',
+      lines,
+      frame: { ...frame, locale: 'tr' },
+    });
+    expect(content!.subject).toBe('Sohbet dökümü: Vic (CHAT12345678)');
+    expect(content!.body).toContain('[13:02] Ada · dahili not: VIP — refund pre-approved');
+    expect(content!.body).toContain('26 Temmuz 2026 Pazar');
+    expect(content!.html).toContain('lang="tr"');
   });
 
   it("includes the internal note in the team's copy", () => {
@@ -106,10 +131,12 @@ describe('renderTranscript', () => {
       chatId: 'CHAT12345678',
       customerName: 'Vic',
       lines,
+      frame,
     });
     expect(content).not.toBeNull();
     expect(content!.subject).toContain('Vic');
     expect(content!.body).toContain('refund pre-approved');
+    expect(content!.body).toContain('Ada · internal note');
   });
 
   it('renders nothing when the chat carried only system events', () => {
@@ -129,10 +156,17 @@ describe('renderTranscript', () => {
         chatId: 'C',
         customerName: null,
         lines: systemOnly,
+        frame,
       }),
     ).toBeNull();
     expect(
-      renderTranscript({ audience: 'team', chatId: 'C', customerName: null, lines: systemOnly }),
+      renderTranscript({
+        audience: 'team',
+        chatId: 'C',
+        customerName: null,
+        lines: systemOnly,
+        frame,
+      }),
     ).toBeNull();
   });
 
@@ -152,7 +186,8 @@ describe('renderTranscript', () => {
       chatId: 'C',
       customerName: null,
       lines: withFile,
+      frame,
     });
-    expect(content!.body).toContain('Visitor: (file)');
+    expect(content!.body).toContain('Visitor: (sent a file)');
   });
 });

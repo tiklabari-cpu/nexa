@@ -35,6 +35,8 @@
  * a small set that JavaScript then judges properly. The alternative, teaching
  * SQL the workspace's rota, would put the calendar in two places.
  */
+import { isMailLocale, type MailLocale } from '../mail/templates/layout.js';
+import { slaBreachMail } from '../mail/templates/messages.js';
 import { type PrismaClient } from '@prisma/client';
 import type { SlaSubjectType, SlaTarget } from '@siyahtus/types';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
@@ -94,9 +96,13 @@ export class SlaSweeper {
   readonly #db: PrismaClient;
   readonly #mailer: Mailer;
 
-  constructor(db: PrismaClient, mailer: Mailer) {
+  readonly #appUrl: string | undefined;
+
+  /** `appUrl` is `WEB_APP_URL`, for the alert's link to Reports (tm 265). */
+  constructor(db: PrismaClient, mailer: Mailer, appUrl?: string) {
     this.#db = db;
     this.#mailer = mailer;
+    this.#appUrl = appUrl;
   }
 
   async run(options: { now?: Date } = {}): Promise<SlaSweepReport> {
@@ -278,11 +284,22 @@ export class SlaSweeper {
     if (recipient) {
       // A daily mail cap's refusal (tm 257.14) is a `failed` like any other:
       // the breaches stay unannounced and the next pass tries again.
+      const shown = pending.slice(0, NOTIFICATION_DETAIL_LIMIT);
       const outcome = await deliver(this.#mailer, {
-        to: recipient,
+        to: recipient.email,
         licenseId: context.licenseId,
-        subject: `SiyahTuş: ${pending.length} SLA target${pending.length === 1 ? '' : 's'} missed`,
-        body: renderBreachDigest(pending),
+        ...slaBreachMail(
+          {
+            locale: recipient.locale,
+            ...(this.#appUrl ? { appUrl: this.#appUrl } : {}),
+          },
+          {
+            workspaceName: recipient.workspaceName,
+            breaches: shown,
+            more: pending.length - shown.length,
+            reportsUrl: this.#appUrl ? `${this.#appUrl}/app/reports` : null,
+          },
+        ),
         kind: 'notification',
       });
       if (outcome.status === 'failed') return { notified: 0, unannounced: pending.length };
@@ -307,47 +324,28 @@ export class SlaSweeper {
    * opted out of e-mail (`notify_email`) is respected: a per-user channel
    * preference means the same thing here as it does in the inbox.
    */
-  async #recipient(context: TenantContext): Promise<string | null> {
+  async #recipient(
+    context: TenantContext,
+  ): Promise<{ email: string; locale: MailLocale; workspaceName: string } | null> {
     return withTenant(this.#db, context, async (tx) => {
-      const membership = await tx.agentMembership.findFirst({
-        where: { role: 'owner', suspended: false, notifyEmail: true },
-        orderBy: { createdAt: 'asc' },
-        select: { agent: { select: { email: true } } },
-      });
-      return membership?.agent.email ?? null;
+      const [membership, organization] = await Promise.all([
+        tx.agentMembership.findFirst({
+          where: { role: 'owner', suspended: false, notifyEmail: true },
+          orderBy: { createdAt: 'asc' },
+          select: { locale: true, agent: { select: { email: true } } },
+        }),
+        tx.organization.findUnique({
+          where: { id: context.organizationId },
+          select: { name: true },
+        }),
+      ]);
+      if (!membership) return null;
+      return {
+        email: membership.agent.email,
+        // The owner's panel language (tm 265).
+        locale: isMailLocale(membership.locale) ? membership.locale : 'en',
+        workspaceName: organization?.name ?? 'SiyahTuş',
+      };
     });
   }
-}
-
-interface PendingBreach {
-  subjectType: string;
-  subjectId: string;
-  target: string;
-  targetMinutes: number;
-  elapsedMinutes: number;
-}
-
-/** The alert body — plain text, because that is what a mock mailbox is read as. */
-export function renderBreachDigest(breaches: readonly PendingBreach[]): string {
-  const shown = breaches.slice(0, NOTIFICATION_DETAIL_LIMIT);
-  const lines = shown.map(
-    (breach) =>
-      `- ${breach.subjectType} ${breach.subjectId}: ${label(breach.target)} target ` +
-      `${breach.targetMinutes} min, elapsed ${breach.elapsedMinutes} min`,
-  );
-  if (breaches.length > shown.length) {
-    lines.push(`- ...and ${breaches.length - shown.length} more`);
-  }
-  return [
-    `${breaches.length} SLA target${breaches.length === 1 ? ' was' : 's were'} missed:`,
-    '',
-    ...lines,
-    '',
-    'SiyahTuş measures and marks SLA targets; it does not re-route or re-prioritise',
-    'the conversations behind them.',
-  ].join('\n');
-}
-
-function label(target: string): string {
-  return target === 'first_response' ? 'first response' : 'resolution';
 }

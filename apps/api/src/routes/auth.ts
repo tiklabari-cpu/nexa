@@ -1,3 +1,5 @@
+import { headerLocale, LOCALE_HEADER, requestLocale } from '../lib/request-locale.js';
+import { twoFactorEnabledMail } from '../services/mail/templates/messages.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
@@ -911,6 +913,7 @@ export default async function authRoutes(
               select: {
                 routingStatus: true,
                 concurrentChatsLimit: true,
+                locale: true,
                 ...NOTIFICATION_PREFERENCE_SELECT,
               },
             }),
@@ -934,6 +937,20 @@ export default async function authRoutes(
             // billing scope an agent does not carry.
             trialState(tx, request.tenant()),
           ]);
+          // The language this person reads the panel in (tm 265), kept on the
+          // membership so mail sent to them later — a visitor's message, a
+          // transcript, a scheduled report — is written in it. The panel sends
+          // it with every request; this read happens on every load, so a write
+          // is only needed when it changed.
+          const locale = headerLocale(request.headers[LOCALE_HEADER]);
+          if (membership && locale && membership.locale !== locale) {
+            await tx.agentMembership.update({
+              where: {
+                licenseId_agentId: { licenseId: principal.licenseId, agentId: principal.accountId },
+              },
+              data: { locale },
+            });
+          }
           return { account, membership, license, organization, trial };
         }),
         twoFactor.status(principal.accountId),
@@ -1254,16 +1271,15 @@ export default async function authRoutes(
         to: email,
         licenseId: null,
         kind: 'notification',
-        subject: 'Two-factor authentication is now on for your SiyahTuş account',
-        body:
-          `Two-factor authentication was just turned on for ${email}, from the ` +
-          `workspace "${organization?.name ?? 'SiyahTuş'}". It applies to every ` +
-          `workspace this account can sign in to.\n\n` +
-          `If this was you, keep your recovery codes somewhere safe — they are ` +
-          `the way back in if you lose your authenticator app.\n\n` +
-          `If it was not you, somebody else can now decide whether you get in. ` +
-          `Turn it off from Account Settings while you are still signed in, and ` +
-          `tell an owner of that workspace.`,
+        ...twoFactorEnabledMail(
+          { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+          {
+            email,
+            workspaceName: organization?.name ?? 'SiyahTuş',
+            at: new Date(),
+            settingsUrl: `${env.WEB_APP_URL}/app/settings/two-factor`,
+          },
+        ),
       });
     } catch (err) {
       // A daily cap's refusal was logged where it was decided.

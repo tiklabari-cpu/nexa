@@ -217,7 +217,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     expect(toTeam).toBeDefined();
 
     // The visitor sees the conversation but never the internal note.
-    expect(toCustomer!.subject).toMatch(/your chat transcript/i);
+    expect(toCustomer!.subject).toMatch(/^your conversation with /i);
     expect(toCustomer!.body).toContain('My order is late');
     expect(toCustomer!.body).toContain('Let me check on that');
     expect(toCustomer!.body).not.toContain('refund pre-approved');

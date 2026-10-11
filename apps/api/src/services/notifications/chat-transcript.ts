@@ -17,6 +17,13 @@
  * `all`-recipient events only, exactly as the live read filters them.
  */
 
+import type { MailLocale, RenderedEmail, TranscriptRole } from '../mail/templates/layout.js';
+import {
+  customerTranscriptMail,
+  teamTranscriptMail,
+  type TranscriptMessage,
+} from '../mail/templates/messages.js';
+
 /** Which party a transcript is addressed to. */
 export type TranscriptParty = 'customer' | 'team';
 
@@ -75,9 +82,15 @@ export interface TranscriptLine {
   createdAt: Date;
 }
 
-export interface TranscriptContent {
-  subject: string;
-  body: string;
+/**
+ * What the transcript is framed with (tm 265): the workspace it came from, the
+ * time zone its times are read in, and the reader's language.
+ */
+export interface TranscriptFrame {
+  workspaceName: string;
+  /** IANA name — the workspace's own (`organizations.timezone`). */
+  timeZone: string;
+  locale: MailLocale;
 }
 
 /**
@@ -88,13 +101,18 @@ export interface TranscriptContent {
  * note must never leave the team. Either copy is skipped when it would carry no
  * actual conversation (a chat that only ever produced system events), so a chat
  * that opened and closed without a word does not spam two mailboxes.
+ *
+ * Since tm 265 the result is the full message — subject, plain text and HTML —
+ * from the shared templates; in the team's copy an internal note is marked as
+ * one rather than left to look like something the visitor saw.
  */
 export function renderTranscript(opts: {
   audience: TranscriptParty;
   chatId: string;
   customerName: string | null;
   lines: TranscriptLine[];
-}): TranscriptContent | null {
+  frame: TranscriptFrame;
+}): RenderedEmail | null {
   const visible =
     opts.audience === 'customer'
       ? opts.lines.filter((line) => line.recipients === 'all')
@@ -104,38 +122,69 @@ export function renderTranscript(opts: {
   // least one real message before mailing anyone.
   if (!visible.some((line) => line.authorType !== 'system')) return null;
 
-  const who = opts.customerName ?? 'Visitor';
-  const rendered = visible.map((line) => formatLine(line, opts.customerName)).join('\n');
+  const tr = opts.frame.locale === 'tr';
+  const messages: TranscriptMessage[] = visible.map((line) => ({
+    role: roleOf(line, opts.audience),
+    who: authorLabel(line, opts.customerName, tr),
+    text: line.text?.trim() ? line.text.trim() : systemText(line.type, tr),
+    at: line.createdAt,
+  }));
 
   if (opts.audience === 'customer') {
-    return {
-      subject: `Your chat transcript (${opts.chatId})`,
-      body: `Here is a copy of your conversation (${opts.chatId}):\n\n${rendered}\n`,
-    };
+    // A visitor gets no link to the agent panel: nothing there is theirs.
+    return customerTranscriptMail(
+      { locale: opts.frame.locale },
+      {
+        workspaceName: opts.frame.workspaceName,
+        chatId: opts.chatId,
+        timeZone: opts.frame.timeZone,
+        messages,
+      },
+    );
   }
-
-  return {
-    subject: `Chat transcript — ${who} (${opts.chatId})`,
-    body: `Transcript of the conversation with ${who} (${opts.chatId}):\n\n${rendered}\n`,
-  };
+  return teamTranscriptMail(
+    { locale: opts.frame.locale },
+    {
+      workspaceName: opts.frame.workspaceName,
+      customerName: opts.customerName ?? (tr ? 'Ziyaretçi' : 'Visitor'),
+      chatId: opts.chatId,
+      timeZone: opts.frame.timeZone,
+      messages,
+    },
+  );
 }
 
-function formatLine(line: TranscriptLine, customerName: string | null): string {
-  const content = line.text?.trim() ? line.text.trim() : `(${line.type})`;
-  return `[${line.createdAt.toISOString()}] ${authorLabel(line, customerName)}: ${content}`;
+function roleOf(line: TranscriptLine, audience: TranscriptParty): TranscriptRole {
+  if (line.authorType === 'system') return 'system';
+  if (audience === 'team' && line.recipients !== 'all') return 'note';
+  if (line.authorType === 'customer') return 'customer';
+  if (line.authorType === 'bot') return 'bot';
+  return 'agent';
 }
 
-function authorLabel(line: TranscriptLine, customerName: string | null): string {
-  switch (line.authorType) {
-    case 'customer':
-      return customerName ?? 'Visitor';
-    case 'agent':
-      return line.authorName ?? 'Agent';
-    case 'bot':
-      return line.authorName ?? 'AI Agent';
-    case 'system':
-      return 'System';
-    default:
-      return line.authorName ?? 'Unknown';
-  }
+/** A line with no text — a file, a rich message, a system event — named by its kind. */
+function systemText(type: string, tr: boolean): string {
+  if (type === 'file') return tr ? '(dosya gönderildi)' : '(sent a file)';
+  return tr ? `(${type})` : `(${type})`;
+}
+
+function authorLabel(line: TranscriptLine, customerName: string | null, tr: boolean): string {
+  const base = (() => {
+    switch (line.authorType) {
+      case 'customer':
+        return customerName ?? (tr ? 'Ziyaretçi' : 'Visitor');
+      case 'agent':
+        return line.authorName ?? (tr ? 'Temsilci' : 'Agent');
+      case 'bot':
+        return line.authorName ?? (tr ? 'Yapay zekâ asistanı' : 'AI Agent');
+      case 'system':
+        return tr ? 'Sistem' : 'System';
+      default:
+        return line.authorName ?? (tr ? 'Bilinmiyor' : 'Unknown');
+    }
+  })();
+  // An internal note is the team's alone; say so where it is shown.
+  return line.recipients !== 'all' && line.authorType !== 'system'
+    ? `${base} · ${tr ? 'dahili not' : 'internal note'}`
+    : base;
 }

@@ -57,11 +57,13 @@ test.describe('invitation e-mail over SMTP — the link in the mail makes a team
     await expect(dialog.getByText(/Invitations sent/)).toBeVisible();
     await dialog.getByRole('button', { name: 'Done' }).click();
 
+    // The invitation names who asks and to what (tm 265).
     const mail = await waitForMail(
       request,
       invitee,
-      'You have been invited to a SiyahTuş workspace',
+      `Robin Owner invited you to join Auth Mail Co ${id} on SiyahTuş`,
     );
+    expect(mail.html, 'the invitation carries the HTML half').toContain('Accept invitation');
     const link = linkIn(mail, '/join');
 
     // The invitee is somebody else, in a browser with no session of the owner's.

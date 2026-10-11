@@ -255,7 +255,7 @@ describe('sso domain ownership', () => {
     // The message says plainly that ignoring it is safe. Its most likely reader
     // did not ask for it, so a message that pressured them would be a phishing
     // template we wrote ourselves.
-    expect(letter!.body).toContain('ignore this message');
+    expect(letter!.body).toContain('If you were not expecting this, ignore this email.');
 
     // The token is in the message and nowhere else the caller can reach: the
     // response carries no code, and the row carries only a digest.

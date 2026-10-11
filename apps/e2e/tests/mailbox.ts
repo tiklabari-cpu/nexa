@@ -17,7 +17,10 @@ export interface Mail {
   to: string;
   from: string;
   subject: string;
+  /** The plain-text part. */
   body: string;
+  /** The HTML part, when the message had one (tm 265). */
+  html?: string;
   /** Arrival order across the whole run. */
   received: number;
 }

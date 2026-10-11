@@ -275,6 +275,10 @@ model AgentMembership {
   /// "Unpin side navigation"). Per user and per license, like the notify_*
   /// columns above, and read by `/agents/me/ui-preferences`.
   settingsNavPinned    Boolean   @default(true) @map("settings_nav_pinned")
+  /// The language this member reads the panel in (`en` | `tr`, tm 265) — what
+  /// mail sent to them later is written in. Recorded by `GET /auth/me`; NULL
+  /// (never seen) reads as English.
+  locale               String?
   awaitingApproval     Boolean   @default(false) @map("awaiting_approval")
   suspended            Boolean   @default(false) @map("suspended")
   /// Tie-breaker for round-robin assignment (ADR-08 step 4).

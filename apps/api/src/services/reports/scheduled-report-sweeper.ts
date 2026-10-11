@@ -58,6 +58,7 @@ import { deliver, isCapRefusal } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import { buildGroupCsv } from './report-csv.js';
 import { buildScheduledReportMail } from './scheduled-report-mail.js';
+import { isMailLocale, type MailLocale } from '../mail/templates/layout.js';
 import { periodFor, type ReportPeriod } from './scheduled-report-period.js';
 
 /**
@@ -296,19 +297,53 @@ export class ScheduledReportSweeper {
     let recipientCount = 0;
     let rowCount = 0;
     try {
-      const table = await withTenantRead(this.#readDb, context, (tx) =>
-        buildGroupCsv(tx, context.licenseId, definition.groupId, period.from, period.to),
+      const { table, workspaceName, localeByEmail } = await withTenantRead(
+        this.#readDb,
+        context,
+        async (tx) => {
+          const [csvTable, organization, members] = await Promise.all([
+            buildGroupCsv(tx, context.licenseId, definition.groupId, period.from, period.to),
+            tx.organization.findUnique({
+              where: { id: context.organizationId },
+              select: { name: true },
+            }),
+            // A recipient who is a member of this workspace reads the report
+            // in their panel language (tm 265); anyone else in English.
+            tx.agentMembership.findMany({
+              where: {
+                licenseId: context.licenseId,
+                agent: { email: { in: definition.recipients } },
+              },
+              select: { locale: true, agent: { select: { email: true } } },
+            }),
+          ]);
+          return {
+            table: csvTable,
+            workspaceName: organization?.name ?? 'SiyahTuş',
+            localeByEmail: new Map(
+              members.map((m) => [
+                m.agent.email.toLowerCase(),
+                isMailLocale(m.locale) ? m.locale : ('en' as MailLocale),
+              ]),
+            ),
+          };
+        },
       );
       rowCount = table.rows.length;
 
-      const mail = buildScheduledReportMail({
-        groupLabel: reportGroup(definition.groupId)?.label ?? definition.groupId,
-        periodFrom: period.from,
-        periodTo: period.to,
-        csv: toCsv(table.headers, table.rows),
-        rowCount,
-        filename: exportFilename(definition.groupId, period.from, period.to),
-      });
+      const csv = toCsv(table.headers, table.rows);
+      const mailIn = (locale: MailLocale) =>
+        buildScheduledReportMail({
+          groupLabel: reportGroup(definition.groupId)?.label ?? definition.groupId,
+          periodFrom: period.from,
+          periodTo: period.to,
+          csv,
+          rowCount,
+          filename: exportFilename(definition.groupId, period.from, period.to),
+          workspaceName,
+          locale,
+        });
+      const mails = { en: mailIn('en'), tr: mailIn('tr') };
 
       // One message per recipient rather than one with many addressees: the
       // recipients are colleagues, but a combined header would still tell each
@@ -333,8 +368,7 @@ export class ScheduledReportSweeper {
         const outcome = await deliver(this.#mailer, {
           to,
           licenseId: context.licenseId,
-          subject: mail.subject,
-          body: mail.body,
+          ...mails[localeByEmail.get(to.toLowerCase()) ?? 'en'],
           kind: 'scheduled_report',
         });
         if (outcome.status === 'sent') {

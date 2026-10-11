@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient, ApiClientError } from './api-client.js';
+import { useLocaleStore } from './i18n.js';
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -38,6 +39,19 @@ describe('ApiClient', () => {
 
     const [, init] = fetchImpl.mock.calls[0]!;
     expect(new Headers(init!.headers).get('X-SiyahTus-Brand')).toBe('brand-b');
+  });
+
+  it('says which language the panel is showing, for the mail a request sets off (tm 265)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ ok: true }));
+    const client = new ApiClient({ fetchImpl });
+
+    useLocaleStore.setState({ locale: 'tr' });
+    await client.post('/auth/forgot-password', { email: 'a@b.co' });
+    useLocaleStore.setState({ locale: 'en' });
+    await client.get('/health');
+
+    expect(new Headers(fetchImpl.mock.calls[0]![1]!.headers).get('X-SiyahTus-Locale')).toBe('tr');
+    expect(new Headers(fetchImpl.mock.calls[1]![1]!.headers).get('X-SiyahTus-Locale')).toBe('en');
   });
 
   it('omits X-SiyahTus-Brand entirely when no brand is selected', async () => {

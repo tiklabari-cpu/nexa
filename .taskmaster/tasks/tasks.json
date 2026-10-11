@@ -11560,13 +11560,98 @@
           }
         ],
         "updatedAt": "2026-10-10T08:24:48.896Z"
+      },
+      {
+        "id": "265",
+        "title": "MAIL-TEMPLATES [OPUS-HIGH] (Opus 5.5 · efor high) Bütün e-postalar markalı HTML + düz metin şablonlara, Türkçe ve İngilizce",
+        "description": "Sahibin 2026-10-11 isteği: \"Her birini mükemmel mail templateleri haline getir, önerdiğin HTML template değişikliklerini de yap.\" Bugün her e-posta tek parça, İngilizce düz metin.",
+        "details": "Plan interaktif pencerede; sahibin tm 264 dersi: açılışı durduran kural yok. Dış servis yok (gönderim yine SMTP/dosya taşıyıcısı).\n\nKAPANIŞ (2026-10-11): 12 e-posta ortak şablonda HTML + düz metin, en + tr; planlı rapor CSV eki; dil X-SiyahTus-Locale + agent_memberships.locale (migration 20261011090000_membership_locale). test:gate --force 0 cached yeşil (api 3918, rtm 111; ilk koşuda push-notifications TRUNCATE deadlock, tek başına 3/3 yeşil, aşama yeniden yeşil). Tam e2e 387/387, pilot 8/8, session 2/2, req-coverage exit 0, db:check-drift temiz. Varsayım: müşteriye gidenler İngilizce (dil sunucuda bilinmiyor). Önizleme: pnpm --filter @siyahtus/api mail:preview → docs/eposta-onizleme.html. PLAN §D215, HANDOFF.",
+        "testStrategy": "Alt görevlerde; kapanış DoD kapısı (CONVENTIONS §1).",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "MAIL-MIME — HTML + düz metin (multipart/alternative) ve dosya eki (multipart/mixed)",
+            "description": "mime.ts tek parça text/plain yerine, HTML varsa multipart/alternative, ek varsa multipart/mixed yazar. HTML ve eksiz mesaj bugünkü baytlarla aynı kalır.",
+            "details": "Message.html ve Message.attachments isteğe bağlı; FileMailer bunları da kaydeder; test çözücüsü (test/helpers/received-mail.ts) çok parçalıyı okur, body düz metin parçası olarak kalır.",
+            "testStrategy": "mime.test.ts: parça yapısı, sınırlar, QP/base64, başlık enjeksiyonu; smtp ve dosya taşıyıcı testleri yeşil.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "265",
+            "priority": "high",
+            "updatedAt": "2026-10-11T14:00:24.786Z"
+          },
+          {
+            "id": 2,
+            "title": "MAIL-LAYOUT — ortak markalı HTML şablonu",
+            "description": "Tablo tabanlı, satır içi stilli, 600 px, marka başlığı, görünmez önizleme satırı, her istemcide çalışan düğme, kod kutusu, alt bilgi, koyu mod uyumu. Her dinamik değer HTML-escape edilir; bağlantılar yalnız http/https.",
+            "details": "services/mail/templates/layout.ts; düz metin sürümü aynı içerikten üretilir.",
+            "testStrategy": "layout.test.ts: escape, yalnız güvenli URL, düğme + düz metinde bağlantı kendi satırında.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "265",
+            "priority": "high",
+            "updatedAt": "2026-10-11T14:00:24.786Z"
+          },
+          {
+            "id": 3,
+            "title": "MAIL-LOCALE — e-posta dili (Türkçe / İngilizce)",
+            "description": "Panel her isteğe X-SiyahTus-Locale ekler; kişinin kendi tetiklediği e-postalar o dilde, ajana sonradan gidenler üyelik kaydındaki dilde (oturum yenilenirken kaydedilir).",
+            "details": "agent_memberships.locale (yalnız genişleten migration). Müşteriye giden e-postalarda dil bilinmiyor → İngilizce (varsayım, HANDOFF).",
+            "testStrategy": "Dil seçimi birim; entegrasyonda Türkçe başlıkla gelen şifre sıfırlama Türkçe gider.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "265",
+            "priority": "high",
+            "updatedAt": "2026-10-11T14:00:24.786Z"
+          },
+          {
+            "id": 4,
+            "title": "MAIL-COPY — 11 e-postanın metni ve tasarımı (en + tr)",
+            "description": "Kayıt doğrulama, hesap zaten var, şifre sıfırlama, davet, 2FA, SSO alan adı, ziyaretçi mesajı, iki sohbet dökümü, planlı rapor (CSV ek), talep bildirimi (çalışma alanı metni markalı çerçevede).",
+            "details": "Konu satırları, önizleme satırları, düğme metinleri, güvenlik notları; dökümlerde çalışma alanı saat dilimi.",
+            "testStrategy": "Mevcut e-posta entegrasyon testleri güncel metinle yeşil; e2e auth-mail bağlantı ayıklama yeşil.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "265",
+            "priority": "high",
+            "updatedAt": "2026-10-11T14:00:24.786Z"
+          },
+          {
+            "id": 5,
+            "title": "MAIL-PREVIEW — gerçek şablondan üretilen önizleme sayfası",
+            "description": "Komut: pnpm --filter @siyahtus/api mail:preview → docs/eposta-onizleme.html (her e-posta, iki dil, HTML ve düz metin).",
+            "details": "Önizleme gerçek render fonksiyonlarını örnek verilerle çağırır; elle yazılmış HTML değil.",
+            "testStrategy": "Önizleme betiği hatasız çalışır; sayfa tarayıcıda kontrol edilir.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "265",
+            "priority": "high",
+            "updatedAt": "2026-10-11T14:00:24.786Z"
+          },
+          {
+            "id": 6,
+            "title": "MAIL-CLOSE — DoD kapısı, belgeler, kapanış",
+            "description": "test:gate --force, ilgili e2e, HANDOFF + PLAN, commit + push + done.",
+            "details": "",
+            "testStrategy": "DoD kapısı exit code'larla.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "265",
+            "priority": "high",
+            "updatedAt": "2026-10-11T14:00:24.786Z"
+          }
+        ],
+        "updatedAt": "2026-10-11T14:00:24.786Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-10T08:24:48.896Z",
-      "taskCount": 264,
-      "completedCount": 264,
+      "lastModified": "2026-10-11T14:00:24.786Z",
+      "taskCount": 265,
+      "completedCount": 265,
       "tags": [
         "master"
       ]

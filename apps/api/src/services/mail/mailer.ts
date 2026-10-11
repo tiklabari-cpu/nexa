@@ -13,12 +13,23 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import type { MailAttachment } from './mime.js';
 import { SmtpMailer, type MailLogger, type SmtpConfig } from './smtp-mailer.js';
 
 export interface Message {
   to: string;
   subject: string;
+  /** The plain-text body — always present; every client can show it. */
   body: string;
+  /**
+   * The HTML alternative of `body` (tm 265), from `templates/`. Sent as
+   * `multipart/alternative` beside the text, never instead of it.
+   */
+  html?: string;
+  /** Files carried with the message (tm 265 — the scheduled report's CSV). */
+  attachments?: MailAttachment[];
+  /** The language the message is written in (`en`, `tr`) — `Content-Language`. */
+  locale?: string;
   /**
    * The workspace this mail is sent for, or `null` for mail about an account
    * rather than a workspace — the password reset, the sign-up link, the

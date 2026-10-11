@@ -54,6 +54,11 @@ import {
   type TenantFixture,
 } from '../helpers/fixtures.js';
 
+/** The CSV a scheduled report carried — an attachment since tm 265, not the body. */
+function csvOf(message: { attachments?: Array<{ content: string }> } | undefined): string {
+  return message?.attachments?.[0]?.content ?? '';
+}
+
 const APP_URL = process.env['DATABASE_APP_URL'];
 
 /** A Saturday. The previous complete day is 2026-08-07. */
@@ -207,7 +212,9 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
     // Subject names the group and the UTC period — the mail says what it is
     // without anyone parsing the CSV.
     expect(inbox[0]?.subject).toBe('Scheduled report: Team performance (2026-08-07 – 2026-08-07)');
-    expect(inbox[0]?.body).toContain('Agent a');
+    expect(csvOf(inbox[0])).toContain('Agent a');
+    // The message says what it is; the data is the attachment.
+    expect(inbox[0]?.body).toContain('Rows: 1');
 
     const [run] = await runsOf(fx.a);
     expect(run).toMatchObject({
@@ -236,7 +243,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
     const inbox = await mailbox();
     expect(inbox).toHaveLength(1);
-    expect(inbox[0]?.body).toContain('No rows for this period.');
+    expect(inbox[0]?.body).toContain('There was no data for 2026-08-07 – 2026-08-07.');
     expect((await runsOf(fx.a))[0]).toMatchObject({ status: 'sent', rowCount: 0 });
   });
 
@@ -369,10 +376,10 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
     // The CSV names the assignee, so "only its own data" is readable rather
     // than inferred: neither report may mention the other workspace's agent.
-    expect(toA?.body).toContain('Agent a');
-    expect(toA?.body).not.toContain('Agent b');
-    expect(toB?.body).toContain('Agent b');
-    expect(toB?.body).not.toContain('Agent a');
+    expect(csvOf(toA)).toContain('Agent a');
+    expect(csvOf(toA)).not.toContain('Agent b');
+    expect(csvOf(toB)).toContain('Agent b');
+    expect(csvOf(toB)).not.toContain('Agent a');
 
     // And the run rows stay on their own licence.
     expect(await runsOf(fx.a)).toHaveLength(1);
@@ -581,10 +588,10 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
       expect(inbox).toHaveLength(2);
       const toA = inbox.find((m) => m.to === fx.a.agentEmail);
       const toB = inbox.find((m) => m.to === fx.b.agentEmail);
-      expect(toA?.body).toContain('Agent a');
-      expect(toA?.body).not.toContain('Agent b');
-      expect(toB?.body).toContain('Agent b');
-      expect(toB?.body).not.toContain('Agent a');
+      expect(csvOf(toA)).toContain('Agent a');
+      expect(csvOf(toA)).not.toContain('Agent b');
+      expect(csvOf(toB)).toContain('Agent b');
+      expect(csvOf(toB)).not.toContain('Agent a');
     }, 30_000);
 
     /**

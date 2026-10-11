@@ -162,6 +162,9 @@ export class SmtpMailer implements Mailer {
       to: message.to,
       subject: message.subject,
       body: message.body,
+      html: message.html,
+      attachments: message.attachments,
+      language: message.locale,
       date: this.#now(),
       messageId,
     });

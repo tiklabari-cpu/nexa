@@ -6,6 +6,8 @@
  * most: until a customer's domain is on this list the widget cannot mint a
  * token on their site, so the product shipped in a state nobody could deploy.
  */
+import { requestLocale } from '../lib/request-locale.js';
+import { ssoDomainChallengeMail } from '../services/mail/templates/messages.js';
 import { isIP } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
@@ -287,34 +289,6 @@ const DOMAIN_VERIFICATION_SELECT = {
   challengeSentAt: true,
   verifiedAt: true,
 } as const;
-
-/**
- * What lands in `postmaster@<domain>`.
- *
- * Written for somebody who did not ask for it and may never have heard of this
- * product: it names the domain, says what the code does, and says plainly that
- * ignoring the message is safe. That last sentence is the point — this message
- * is sent to an address the *requester* chose, so its most likely reader is
- * somebody who has no idea who asked, and a message that pressures them is a
- * phishing template we wrote ourselves.
- */
-function domainChallengeBody(domain: string, token: string): string {
-  const hours = Math.round(DOMAIN_CHALLENGE_TTL_MS / 3_600_000);
-  return [
-    `Somebody is configuring single sign-on for ${domain} and has asked us to`,
-    `confirm that they operate the domain.`,
-    ``,
-    `Verification code: ${token}`,
-    ``,
-    `If you were expecting this, pass the code to whoever is setting up the`,
-    `connection. It stops working in ${hours} hours.`,
-    ``,
-    `If you were not expecting this, ignore this message. Without the code`,
-    `nothing about ${domain} changes, and nobody can sign in as one of your`,
-    `addresses.`,
-    ``,
-  ].join('\n');
-}
 
 /**
  * How many live SCIM provisioning tokens one workspace may hold (NFR-S11).
@@ -915,7 +889,7 @@ export default async function settingsRoutes(
   app: FastifyInstance,
   options: { env: Env; mailer: Mailer },
 ): Promise<void> {
-  const { mailer } = options;
+  const { mailer, env } = options;
 
   // --- Trusted domains -------------------------------------------------------
 
@@ -1599,8 +1573,10 @@ export default async function settingsRoutes(
         to: mailbox,
         licenseId: request.tenant().licenseId,
         kind: 'notification',
-        subject: `Verify ${domain} for single sign-on`,
-        body: domainChallengeBody(domain, token),
+        ...ssoDomainChallengeMail(
+          { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+          { domain, code: token, hours: Math.round(DOMAIN_CHALLENGE_TTL_MS / 3_600_000) },
+        ),
       });
       // A daily mail cap refused it (tm 257.14): a minute will not help, so
       // the 503's "try again in a minute" would be wrong. 429 `limit_reached`

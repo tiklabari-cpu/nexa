@@ -318,9 +318,18 @@ const SAMPLES: Sample[] = [
   },
 ];
 
+/**
+ * The page's "Koyu" switch shows a message in the dark theme by making its
+ * `prefers-color-scheme` rules unconditional — a frame cannot be told the
+ * reader's OS is dark — which is exactly what Apple Mail shows in dark mode.
+ * The swap happens in the page, so each message is embedded once.
+ */
+const DARK_QUERY = '@media (prefers-color-scheme: dark)';
+
 function card(sample: Sample, locale: MailLocale): string {
   const mail = sample.render(locale);
   const id = `${sample.id}-${locale}`;
+  if (!mail.html.includes(DARK_QUERY)) throw new Error(`${id}: no dark-mode rules to preview`);
   return `<article class="mail" id="${id}" data-locale="${locale}">
   <header>
     <h2>${escapeHtml(sample.title[locale])}</h2>
@@ -331,7 +340,7 @@ function card(sample: Sample, locale: MailLocale): string {
       ${sample.attachment ? `<dt>${locale === 'tr' ? 'Ek' : 'File'}</dt><dd>📎 ${escapeHtml(sample.attachment)}</dd>` : ''}
     </dl>
   </header>
-  <iframe title="${escapeHtml(mail.subject)}" srcdoc="${escapeHtml(mail.html)}"></iframe>
+  <div class="frame"><iframe title="${escapeHtml(mail.subject)}" srcdoc="${escapeHtml(mail.html)}"></iframe></div>
   <details><summary>${locale === 'tr' ? 'Düz metin hali' : 'Plain-text version'}</summary><pre>${escapeHtml(mail.body)}</pre></details>
 </article>`;
 }
@@ -349,26 +358,29 @@ function page(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SiyahTuş e-postaları</title>
 <style>
-  :root { --bg:#eceef1; --card:#fff; --ink:#111318; --muted:#5d6573; --line:#dde1e7; --accent:#111318; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121418; --card:#1c1f25; --ink:#eef0f3; --muted:#9aa2b1; --line:#2f343d; --accent:#eef0f3; } }
+  :root { --bg:#f6f6f8; --card:#ffffff; --ink:#16161d; --muted:#5f5f6e; --line:#e4e4ea; --accent:#5b4fe9; --on-accent:#ffffff; --stage:#ececf1; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#09090c; --card:#111116; --ink:#f2f2f5; --muted:#a4a4b2; --line:#24242d; --accent:#8f87ff; --on-accent:#09090c; --stage:#050507; } }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 -apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 Inter,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
   .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
-  h1 { font-size:22px; margin:0 0 4px; }
+  h1 { font-size:22px; margin:0 0 4px; letter-spacing:-0.3px; }
   .lead { color:var(--muted); margin:0 0 16px; }
-  .switch { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin-bottom:16px; }
-  .switch button { border:0; background:transparent; color:var(--ink); padding:6px 16px; font:inherit; cursor:pointer; }
-  .switch button[aria-pressed="true"] { background:var(--accent); color:var(--bg); }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .switch { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; background:var(--card); }
+  .switch button { border:0; background:transparent; color:var(--ink); padding:6px 14px; font:inherit; font-size:14px; cursor:pointer; }
+  .switch button[aria-pressed="true"] { background:var(--accent); color:var(--on-accent); }
   nav { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:24px; }
   nav a { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:3px 10px; font-size:13px; color:var(--ink); text-decoration:none; }
-  .mail { background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:24px; overflow:hidden; }
+  .mail { background:var(--card); border:1px solid var(--line); border-radius:14px; margin-bottom:24px; overflow:hidden; }
   .mail header { padding:14px 18px; border-bottom:1px solid var(--line); }
   .mail h2 { font-size:16px; margin:0; }
   .when { margin:2px 0 8px; color:var(--muted); font-size:13px; }
   dl { display:grid; grid-template-columns:64px 1fr; gap:2px 8px; margin:0; font-size:13px; }
   dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
-  iframe { display:block; width:100%; height:720px; border:0; background:#f2f3f5; }
-  [data-locale] iframe { min-height:200px; }
+  .frame { background:var(--stage); }
+  body[data-scheme="dark"] .frame { background:#050507; }
+  iframe { display:block; width:100%; height:720px; min-height:200px; border:0; margin:0 auto; }
+  body[data-width="phone"] iframe { width:390px; max-width:100%; }
   details { border-top:1px solid var(--line); padding:10px 18px; }
   summary { cursor:pointer; color:var(--muted); font-size:13px; }
   pre { white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.5 ui-monospace,Consolas,monospace; margin:10px 0 0; }
@@ -376,13 +388,23 @@ function page(): string {
   body[data-show="en"] [data-locale="tr"], body[data-show="en"] [data-for="tr"] { display:none; }
 </style>
 </head>
-<body data-show="tr">
+<body data-show="tr" data-scheme="light" data-width="desktop">
 <div class="wrap">
   <h1>SiyahTuş e-postaları</h1>
-  <p class="lead">Gerçek şablonlardan üretildi (<code>pnpm --filter @siyahtus/api mail:preview</code>). Her e-posta HTML ve düz metin olarak birlikte gider; e-posta programı HTML'i gösteremezse düz metni gösterir. Bağlantılar, kodlar ve isimler örnektir.</p>
-  <div class="switch" role="group" aria-label="Dil / Language">
-    <button type="button" data-lang="tr" aria-pressed="true">Türkçe</button>
-    <button type="button" data-lang="en" aria-pressed="false">English</button>
+  <p class="lead">Gerçek şablonlardan üretildi (<code>pnpm --filter @siyahtus/api mail:preview</code>). Her e-posta HTML ve düz metin olarak birlikte gider; e-posta programı HTML'i gösteremezse düz metni gösterir. Koyu mod, e-posta programı koyu temadayken (Apple Mail, iOS, Outlook for Mac) görünen haldir. Bağlantılar, kodlar ve isimler örnektir.</p>
+  <div class="controls">
+    <div class="switch" role="group" aria-label="Dil / Language">
+      <button type="button" data-set="show" data-value="tr" aria-pressed="true">Türkçe</button>
+      <button type="button" data-set="show" data-value="en" aria-pressed="false">English</button>
+    </div>
+    <div class="switch" role="group" aria-label="Tema">
+      <button type="button" data-set="scheme" data-value="light" aria-pressed="true">Açık</button>
+      <button type="button" data-set="scheme" data-value="dark" aria-pressed="false">Koyu</button>
+    </div>
+    <div class="switch" role="group" aria-label="Ekran">
+      <button type="button" data-set="width" data-value="desktop" aria-pressed="true">Masaüstü</button>
+      <button type="button" data-set="width" data-value="phone" aria-pressed="false">Telefon</button>
+    </div>
   </div>
   <nav>${nav}</nav>
   ${cards}
@@ -398,16 +420,24 @@ function page(): string {
       frame.style.height = doc.documentElement.scrollHeight + 'px';
     } catch (_) {}
   };
-  for (const frame of document.querySelectorAll('iframe')) {
+  const frames = () => document.querySelectorAll('iframe');
+  const DARK = ${JSON.stringify(DARK_QUERY)};
+  const FORCED = '@media all';
+  for (const frame of frames()) {
     frame.addEventListener('load', () => fit(frame));
     fit(frame);
   }
-  for (const button of document.querySelectorAll('[data-lang]')) {
+  for (const button of document.querySelectorAll('[data-set]')) {
     button.addEventListener('click', () => {
-      document.body.dataset.show = button.dataset.lang;
-      // A frame measured while hidden measured nothing.
-      for (const frame of document.querySelectorAll('iframe')) fit(frame);
-      for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b === button));
+      const key = button.dataset.set;
+      document.body.dataset[key] = button.dataset.value;
+      for (const b of document.querySelectorAll('[data-set="' + key + '"]')) b.setAttribute('aria-pressed', String(b === button));
+      // A new theme is a new document (its load refits it); a new language or
+      // width only re-measures — a frame measured while hidden measured nothing.
+      if (key === 'scheme') {
+        const [from, to] = button.dataset.value === 'dark' ? [DARK, FORCED] : [FORCED, DARK];
+        for (const frame of frames()) frame.srcdoc = frame.srcdoc.replace(from, to);
+      } else for (const frame of frames()) fit(frame);
     });
   }
 </script>

@@ -247,6 +247,100 @@ describe('the shared frame', () => {
   });
 });
 
+/** The letter in the header's tile — whose mail this is. */
+function markOf(mail: RenderedEmail): string | undefined {
+  return mail.html.match(/class="st-mark"[^>]*>([^<]*)<\/td>/)?.[1];
+}
+
+describe('the Graphite + Indigo theme (tm 266)', () => {
+  it('gives every message the graphite header, and a tile saying what kind of mail it is', () => {
+    for (const locale of ['en', 'tr'] as const) {
+      for (const [name, mail] of Object.entries(everyMail(locale))) {
+        expect(mail.html, name).toContain('class="st-head');
+        // The brand indigo, solid under the gradient for clients that drop gradients.
+        expect(mail.html, name).toContain('background-color:#5b4fe9');
+        // The workspace's own words get no tile of ours; every other mail does.
+        if (name === 'ticket') expect(mail.html, name).not.toContain('class="st-tile');
+        else expect(mail.html, name).toContain('class="st-tile');
+        // Only the missed-SLA alert is tinted red.
+        expect(mail.html.includes('class="st-tile st-tile-alert"'), name).toBe(name === 'sla');
+      }
+    }
+  });
+
+  it('keeps the icons out of the text half, which reads exactly as before', () => {
+    const mails = everyMail('en');
+    // Each message's first line is still its heading — no emoji in front of it.
+    expect(mails['verify']!.body.startsWith('Confirm your email address\n')).toBe(true);
+    for (const [name, mail] of Object.entries(mails)) {
+      expect(mail.body, name).not.toMatch(/\p{Extended_Pictographic}/u);
+    }
+  });
+
+  it("heads a workspace's mail to its customers with the workspace, and signs it as the carrier", () => {
+    for (const name of ['customerTranscript', 'ticket']) {
+      const en = everyMail('en')[name]!;
+      expect(markOf(en), name).toBe('A');
+      expect(en.html, name).toContain('Sent with SiyahTuş');
+      expect(everyMail('tr')[name]!.html, name).toContain('SiyahTuş ile gönderildi');
+      expect(en.html, name).not.toContain('>SiyahTuş</td>');
+    }
+    // The ticket's text half stays exactly the workspace's words; the transcript signs off.
+    expect(everyMail('en')['ticket']!.body).toBe('Hi,\nIt is solved.');
+    expect(everyMail('en')['customerTranscript']!.body.endsWith('\n\nSent with SiyahTuş')).toBe(
+      true,
+    );
+    // Everyone else's mail is SiyahTuş's own.
+    expect(markOf(everyMail('en')['verify']!)).toBe('S');
+    expect(markOf(everyMail('en')['teamTranscript']!)).toBe('S');
+  });
+
+  it('writes the tile letter by the rules of the reader’s language', () => {
+    const tile = (locale: MailLocale, workspaceName: string) =>
+      markOf(
+        customerTranscriptMail(
+          { locale },
+          { workspaceName, chatId: 'C1', timeZone: 'UTC', messages: [] },
+        ),
+      );
+    expect(tile('tr', 'istanbul kitap')).toBe('İ');
+    expect(tile('tr', 'ırmak')).toBe('I');
+    expect(tile('en', 'istanbul kitap')).toBe('I');
+    // Escaped like every other name.
+    expect(tile('en', '<b>Co')).toBe('&lt;');
+  });
+
+  it('sets the "if this was not you" warning of a security notice apart, in the same words', () => {
+    const mail = everyMail('en')['twoFactor']!;
+    const warning = 'If this was not you, someone else may have access to your account.';
+    expect(mail.html).toMatch(new RegExp(`class="st-callout"[^>]*>${warning}`));
+    expect(mail.body).toContain(warning);
+  });
+
+  it('starts the fine print under an action below a hairline', () => {
+    const html = everyMail('en')['reset']!.html;
+    const button = html.indexOf('class="st-button"');
+    const rule = html.indexOf('class="st-rule"');
+    const note = html.indexOf('The link expires in one hour and works once.');
+    expect(button).toBeGreaterThan(0);
+    expect(rule).toBeGreaterThan(button);
+    expect(note).toBeGreaterThan(rule);
+  });
+
+  it('follows the reader into dark mode, and pins Outlook to a font it has', () => {
+    const html = everyMail('en')['verify']!.html;
+    expect(html).toContain('<meta name="color-scheme" content="light dark">');
+    expect(html).toContain('@media (prefers-color-scheme: dark)');
+    expect(html).toMatch(/<!--\[if mso\]>[\s\S]*font-family:'Segoe UI'[\s\S]*<!\[endif\]-->/);
+  });
+
+  it('puts the visitor on the left and the team on the right of a transcript', () => {
+    const html = everyMail('en')['teamTranscript']!.html;
+    expect(html).toMatch(/align="left"[^>]*><tr><td class="st-bubble-customer"/);
+    expect(html).toMatch(/align="right"[^>]*><tr><td class="st-bubble-agent"/);
+  });
+});
+
 describe('a templated message on the wire', () => {
   it('arrives as text + HTML, decodes to both halves, and names its language', () => {
     const mail = passwordResetMail(

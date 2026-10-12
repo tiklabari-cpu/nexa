@@ -11645,13 +11645,86 @@
           }
         ],
         "updatedAt": "2026-10-11T14:00:24.786Z"
+      },
+      {
+        "id": "266",
+        "title": "MAIL-THEME [OPUS-HIGH] (Opus 5.5 · efor high) E-postalar panelin \"Graphite + Indigo\" temasında",
+        "description": "Sahibin 2026-10-12 sorusu: \"Maillerimiz profesyonel mi? Süper bi temada olsunlar kral.\" tm 265 şablonu doğru ve güvenliydi ama sadeydi: siyah \"S\", tek renk siyah düğme, markayla uyuşmayan mavi bağlantılar, e-posta türleri arasında görsel fark yok.",
+        "details": "Plan interaktif pencerede; panelin yeni teması aynı klasörde başka bir oturumda commit'lenmemiş duruyordu, iş ayrı bir git worktree'de yapıldı (onun dosyalarına dokunulmadı). Açılışı durduran kural yok; API, sözleşme, veritabanı değişmedi.\n\nKAPANIŞ (2026-10-12): 12 e-posta panelin \"Graphite + Indigo\" temasında — grafit başlık + indigo→mor \"S\" karosu, marka şeridi, türüne göre ikon karosu (SLA kırmızı), indigo düğme, panel gibi sohbet baloncukları, 2FA uyarısı kehribar kutuda; müşteriye gidenler çalışma alanının adıyla + \"SiyahTuş ile gönderildi\"; koyu mod, dar ekran, Outlook yazı tipi. Düz metin yarısı aynı (müşteri dökümü imzası dışında). test:gate --force 0 cached yeşil (build, typecheck+lint, format:check, birim 6.391, entegrasyon api 175 dosya / 3.918 · rtm 111). E-posta okuyan e2e (auth-mail team tickets settings onboarding notifications) 62/62; kanit PNG'leri geri alındı. Önizleme: pnpm --filter @siyahtus/api mail:preview → docs/eposta-onizleme.html (Açık/Koyu, Masaüstü/Telefon). PLAN §D216, HANDOFF.",
+        "testStrategy": "Alt görevlerde; kapanış DoD kapısı (CONVENTIONS §1).",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "updatedAt": "2026-10-12T18:02:17.433Z",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "MAIL-THEME-LAYOUT — grafit başlık, marka şeridi, ikon karosu, indigo düğme",
+            "description": "Ortak şablon panelin token değerleriyle: grafit başlık bandı + indigo→mor \"S\" karosu, ince marka şeridi, e-posta türünü söyleyen ikon karosu (SLA kırmızı), tek indigo düğme, yuvarlak bilgi paneli, kesikli kod kutusu, ince yazı öncesi çizgi.",
+            "details": "apps/api/src/services/mail/templates/layout.ts; EmailContent icon/tone; yeni callout bloğu (2FA \"siz değilseniz\" uyarısı). Gradyanlar düz rengin üstünde (Outlook düz rengi gösterir).",
+            "testStrategy": "templates.test.ts: başlık, karo, yalnız SLA kırmızı, callout, ince çizgi sırası.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "266",
+            "priority": "high",
+            "updatedAt": "2026-10-12T18:02:17.433Z"
+          },
+          {
+            "id": 2,
+            "title": "MAIL-THEME-BUBBLES — dökümler panel gibi",
+            "description": "Ziyaretçi solda gri, ekip sağda indigo, dahili not kehribar ve kesikli, AI pembe; gün çipi ortada; konuşmacı tarafını gösteren köşe.",
+            "details": "transcriptRowHtml; koyu modda not etiketi kehribar kalır, ajan baloncuğu beyaz yazılı kalır.",
+            "testStrategy": "templates.test.ts: ziyaretçi align=left, ekip align=right; st-bubble-note.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "266",
+            "priority": "high",
+            "updatedAt": "2026-10-12T18:02:17.433Z"
+          },
+          {
+            "id": 3,
+            "title": "MAIL-THEME-SENDER — müşteriye gidenler çalışma alanının adıyla",
+            "description": "Müşteri dökümü ve talep bildirimi başlıkta çalışma alanının adı + baş harfi karosu, altta \"Sent with SiyahTuş / SiyahTuş ile gönderildi\".",
+            "details": "EmailContent.sender; messages.ts poweredBy(); baş harf okurun dilinin kurallarıyla (tr: istanbul → İ). Talep bildiriminin düz metni birebir çalışma alanının sözü kalır.",
+            "testStrategy": "templates.test.ts: karo harfi, imza, Türkçe büyük harf, escape.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "266",
+            "priority": "high",
+            "updatedAt": "2026-10-12T18:02:17.433Z"
+          },
+          {
+            "id": 4,
+            "title": "MAIL-THEME-CLIENTS — koyu mod, dar ekran, Outlook",
+            "description": "Koyu mod panelin grafitiyle; 620 px altında dolgu/başlık küçülür, baloncuklar genişler; Outlook yazı tipi Segoe UI; format-detection kapalı.",
+            "details": "prefers-color-scheme sınıf kuralları; <!--[if mso]> yazı tipi ve 96 DPI; görsel ve web yazı tipi yok.",
+            "testStrategy": "templates.test.ts: color-scheme meta, dark media query, mso koşullu stil.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "266",
+            "priority": "high",
+            "updatedAt": "2026-10-12T18:02:17.433Z"
+          },
+          {
+            "id": 5,
+            "title": "MAIL-THEME-PREVIEW — önizlemede Açık/Koyu ve Masaüstü/Telefon",
+            "description": "docs/eposta-onizleme.html dil düğmesinin yanında tema ve ekran düğmeleri.",
+            "details": "apps/api/scripts/mail-preview.ts; koyu görünüm e-postanın kendi koyu kurallarını koşulsuz yapar (sayfada, her e-posta bir kez gömülü).",
+            "testStrategy": "Tarayıcıda gözle: 12 e-posta tr/en, açık/koyu, masaüstü/telefon.",
+            "status": "done",
+            "dependencies": [],
+            "parentId": "266",
+            "priority": "high",
+            "updatedAt": "2026-10-12T18:02:17.433Z"
+          }
+        ]
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-11T14:00:24.786Z",
-      "taskCount": 265,
-      "completedCount": 265,
+      "lastModified": "2026-10-12T18:02:17.433Z",
+      "taskCount": 266,
+      "completedCount": 266,
       "tags": [
         "master"
       ]

@@ -54,6 +54,34 @@ function signature(ctx: MailContext): string {
   return where ? `SiyahTuş · ${where}` : 'SiyahTuş';
 }
 
+/**
+ * The signature on mail a workspace sends its own customers: the workspace
+ * heads it, and we are only the carrier.
+ */
+function poweredBy(locale: MailLocale): string {
+  return tr(locale) ? 'SiyahTuş ile gönderildi' : 'Sent with SiyahTuş';
+}
+
+/**
+ * The tile above each heading — one per kind of mail, so a reader tells a
+ * security notice from a report before reading a word. Written as escapes:
+ * the source stays ASCII, and each is a code point that renders in colour
+ * without a variation selector.
+ */
+const ICON = {
+  verify: '\u{1F4E9}', // envelope with arrow
+  account: '\u{1F464}', // bust in silhouette
+  key: '\u{1F511}', // key
+  wave: '\u{1F44B}', // waving hand
+  lock: '\u{1F510}', // closed lock with key
+  globe: '\u{1F310}', // globe with meridians
+  speech: '\u{1F4AC}', // speech balloon
+  receipt: '\u{1F9FE}', // receipt
+  clipboard: '\u{1F4CB}', // clipboard
+  chart: '\u{1F4CA}', // bar chart
+  alarm: '\u{23F0}', // alarm clock
+} as const;
+
 function fallback(ctx: MailContext): string {
   return tr(ctx.locale)
     ? 'Düğme çalışmazsa bu bağlantıyı tarayıcınıza yapıştırın:'
@@ -87,6 +115,7 @@ export function verifyEmailMail(
     preheader: t
       ? 'Çalışma alanınızın kurulumunu tamamlamak için tek bir adım kaldı.'
       : 'One step left to finish setting up your workspace.',
+    icon: ICON.verify,
     heading: t ? 'E-posta adresinizi doğrulayın' : 'Confirm your email address',
     blocks: [
       {
@@ -135,6 +164,7 @@ export function accountExistsMail(
     preheader: t
       ? 'Bu adresle yeniden kayıt denendi; yeni bir şey oluşturulmadı.'
       : 'Someone tried to sign up with this address again. Nothing new was created.',
+    icon: ICON.account,
     heading: t ? 'Zaten bir hesabınız var' : 'You already have an account',
     blocks: [
       {
@@ -181,6 +211,7 @@ export function passwordResetMail(ctx: MailContext, input: { url: string }): Ren
     preheader: t
       ? 'Bağlantı bir saat geçerli ve yalnızca bir kez kullanılabilir.'
       : 'The link works once and expires in one hour.',
+    icon: ICON.key,
     heading: t ? 'Şifrenizi sıfırlayın' : 'Reset your password',
     blocks: [
       {
@@ -239,6 +270,7 @@ export function invitationMail(
     preheader: t
       ? 'Ekibe katılın ve müşteri sohbetlerini birlikte yanıtlamaya başlayın.'
       : 'Join the team and start answering customer conversations together.',
+    icon: ICON.wave,
     heading: t ? `${ws} ekibine katılın` : `Join ${ws}`,
     blocks: [
       {
@@ -283,6 +315,7 @@ export function twoFactorEnabledMail(
     preheader: t
       ? 'Hesabınızda bir güvenlik değişikliği oldu; sizin yaptığınızdan emin olun.'
       : 'A security setting on your account changed. Make sure it was you.',
+    icon: ICON.lock,
     heading: t ? 'İki adımlı doğrulama açıldı' : 'Two-factor authentication is on',
     blocks: [
       {
@@ -306,7 +339,7 @@ export function twoFactorEnabledMail(
           : 'If this was you, keep your recovery codes somewhere safe. They are your way back in if you lose your phone.',
       },
       {
-        type: 'note',
+        type: 'callout',
         text: t
           ? 'Bunu siz yapmadıysanız hesabınıza başkası erişmiş olabilir. Hemen giriş yapın, Hesap ayarlarından iki adımlı doğrulamayı kapatıp şifrenizi değiştirin ve çalışma alanının bir sahibine haber verin.'
           : 'If this was not you, someone else may have access to your account. Sign in now, turn two-factor authentication off in your account settings, change your password, and tell an owner of the workspace.',
@@ -343,6 +376,7 @@ export function ssoDomainChallengeMail(
     preheader: t
       ? `${d} alan adının size ait olduğunu doğrulamak için bir kod.`
       : `A code to confirm that ${d} belongs to you.`,
+    icon: ICON.globe,
     heading: t ? `${d} alan adını doğrulayın` : `Confirm you manage ${d}`,
     blocks: [
       {
@@ -388,6 +422,7 @@ export function visitorMessageMail(
     preheader: t
       ? 'Size atanmış bir sohbette yanıt bekleyen bir mesaj var.'
       : 'A message is waiting for you in a conversation assigned to you.',
+    icon: ICON.speech,
     heading: t ? 'Bir ziyaretçi size yazdı' : 'A visitor sent you a message',
     blocks: [
       {
@@ -471,11 +506,13 @@ export function customerTranscriptMail(
   return renderEmail({
     locale: ctx.locale,
     homeUrl: ctx.appUrl ?? '',
+    sender: ws,
     eyebrow: ws,
     subject: t ? `${ws} ile görüşmenizin kopyası` : `Your conversation with ${ws}`,
     preheader: t
       ? 'Kayıtlarınız için görüşmenin tam metni.'
       : 'The full conversation, for your records.',
+    icon: ICON.receipt,
     heading: t ? 'Görüşmenizin kopyası' : 'A copy of your conversation',
     blocks: [
       {
@@ -496,7 +533,7 @@ export function customerTranscriptMail(
       t
         ? `Bu e-postayı, ${ws} ile sohbet ederken e-posta adresinizi paylaştığınız için aldınız.`
         : `You received this email because you shared your email address while chatting with ${ws}.`,
-      signature(ctx),
+      poweredBy(ctx.locale),
     ],
   });
 }
@@ -523,6 +560,7 @@ export function teamTranscriptMail(
     preheader: t
       ? 'Arşivlenen görüşmenin tam metni, dahili notlarla birlikte.'
       : 'The full archived conversation, internal notes included.',
+    icon: ICON.clipboard,
     heading: t ? `${who} ile görüşme` : `Conversation with ${who}`,
     blocks: [
       {
@@ -578,6 +616,7 @@ export function scheduledReportMail(
       : input.rowCount === 0
         ? 'There was no data for this period.'
         : `${rows}, attached as a CSV file.`,
+    icon: ICON.chart,
     heading: t ? `${input.reportLabel} raporu` : `${input.reportLabel} report`,
     blocks: [
       {
@@ -683,6 +722,8 @@ export function slaBreachMail(
     preheader: t
       ? 'Hangi görüşmenin hangi hedefi aştığını görün.'
       : 'See which conversations missed which targets.',
+    icon: ICON.alarm,
+    tone: 'alert',
     heading: t ? 'SLA hedefleri kaçırıldı' : 'SLA targets missed',
     blocks,
     footer: [
@@ -709,6 +750,7 @@ export function ticketNoticeMail(
   const rendered = renderEmail({
     locale: ctx.locale,
     homeUrl: ctx.appUrl ?? '',
+    sender: input.workspaceName,
     eyebrow: input.workspaceName,
     subject: input.subject,
     preheader: firstLine(input.body),
@@ -718,7 +760,7 @@ export function ticketNoticeMail(
       t
         ? `Bu e-postayı, ${input.workspaceName} ile açık bir talebiniz olduğu için aldınız.`
         : `You received this email because you have a request open with ${input.workspaceName}.`,
-      signature(ctx),
+      poweredBy(ctx.locale),
     ],
   });
   return { ...rendered, body: input.body };

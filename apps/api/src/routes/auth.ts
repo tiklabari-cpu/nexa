@@ -1,5 +1,6 @@
 import { headerLocale, LOCALE_HEADER, requestLocale } from '../lib/request-locale.js';
 import { twoFactorEnabledMail } from '../services/mail/templates/messages.js';
+import { panelAppearance, readWorkspaceFontChoice } from '../services/appearance/panel-font.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
@@ -914,6 +915,8 @@ export default async function authRoutes(
                 routingStatus: true,
                 concurrentChatsLimit: true,
                 locale: true,
+                fontPreset: true,
+                fontPresetSetAt: true,
                 ...NOTIFICATION_PREFERENCE_SELECT,
               },
             }),
@@ -937,6 +940,9 @@ export default async function authRoutes(
             // billing scope an agent does not carry.
             trialState(tx, request.tenant()),
           ]);
+          // The panel font (owner, 2026-10-13), resolved here once so the
+          // panel paints an answer rather than re-deriving the rule.
+          const workspaceFont = await readWorkspaceFontChoice(tx);
           // The language this person reads the panel in (tm 265), kept on the
           // membership so mail sent to them later — a visitor's message, a
           // transcript, a scheduled report — is written in it. The panel sends
@@ -951,7 +957,7 @@ export default async function authRoutes(
               data: { locale },
             });
           }
-          return { account, membership, license, organization, trial };
+          return { account, membership, license, organization, trial, workspaceFont };
         }),
         twoFactor.status(principal.accountId),
       ]);
@@ -978,6 +984,12 @@ export default async function authRoutes(
         notification_preferences: serialiseNotificationPreferences(profile.membership),
         onboarding_completed: profile.license?.onboardingCompletedAt != null,
         license: { access: profile.trial.access, trial_ends_at: profile.trial.trialEndsAt },
+        appearance: panelAppearance({
+          workspace: profile.workspaceFont,
+          user: profile.membership
+            ? { preset: profile.membership.fontPreset, setAt: profile.membership.fontPresetSetAt }
+            : null,
+        }),
         two_factor: {
           enabled: twoFactorStatus.enabled,
           pending: twoFactorStatus.pending,

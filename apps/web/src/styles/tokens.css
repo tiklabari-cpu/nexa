@@ -187,6 +187,87 @@
   box-sizing: border-box;
 }
 
+/**
+ * Panel font presets (owner, 2026-10-13). The built-in look is these values on
+ * `:root` — exactly what `body` and the headings carried before presets
+ * existed — and each `html[data-font=…]` block below retunes them.
+ * `lib/font.ts` sets the attribute from the server's answer; the values are
+ * `@siyahtus/types` · `PANEL_FONT_DESIGNS`, and `tokens.test.ts` holds the
+ * two together. Independent of the theme on purpose: the same face in both.
+ */
+:root {
+  --font-body:
+    'Inter Variable', 'Inter var', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-heading:
+    'Inter Variable', 'Inter var', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-size-body: 0.8125rem;
+  --ls-body: normal;
+  --ls-heading: -0.011em;
+  /* cv11: single-storey a · ss03: rounded quotes · cv02: open 4 — Inter's
+     calmer "display" alternates, which is most of what makes it look modern. */
+  --font-features: 'cv11' 1, 'ss03' 1, 'cv02' 1;
+  --kpi-weight: 700;
+}
+
+html[data-font='plus-jakarta'] {
+  --font-body: 'Plus Jakarta Sans Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Plus Jakarta Sans Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-size-body: 0.84375rem;
+  --ls-body: 0.002em;
+  --ls-heading: -0.015em;
+  --font-features: normal;
+  --kpi-weight: 700;
+}
+
+html[data-font='manrope-dm-sans'] {
+  --font-body: 'DM Sans Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Manrope Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-size-body: 0.84375rem;
+  --ls-body: 0.004em;
+  --ls-heading: -0.02em;
+  --font-features: normal;
+  --kpi-weight: 700;
+}
+
+html[data-font='nunito'] {
+  --font-body: 'Nunito Sans Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Nunito Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-size-body: 0.875rem;
+  --ls-body: 0.003em;
+  --ls-heading: -0.01em;
+  --font-features: normal;
+  --kpi-weight: 750;
+}
+
+html[data-font='figtree'] {
+  --font-body: 'Figtree Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Figtree Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-size-body: 0.84375rem;
+  --ls-body: 0.002em;
+  --ls-heading: -0.012em;
+  --font-features: normal;
+  --kpi-weight: 700;
+}
+
+/* Back to the built-in face under this element whatever the panel shows — the
+   Settings widget preview, which stands for the visitor's widget, not the
+   team's panel. */
+.font-preset-reset {
+  --font-body:
+    'Inter Variable', 'Inter var', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-heading:
+    'Inter Variable', 'Inter var', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-size-body: 0.8125rem;
+  --ls-body: normal;
+  --ls-heading: -0.011em;
+  --font-features: 'cv11' 1, 'ss03' 1, 'cv02' 1;
+  --kpi-weight: 700;
+  font-family: var(--font-body);
+  font-feature-settings: var(--font-features);
+  font-size: var(--font-size-body);
+  letter-spacing: var(--ls-body);
+}
+
 html,
 body,
 #root {
@@ -199,22 +280,12 @@ body {
   color: var(--text-primary);
   /* `Inter Variable` is bundled (`@fontsource-variable/inter`, imported in
      main.tsx) — before the redesign the stack named Inter but nothing loaded
-     it, so Windows rendered every screen in Segoe UI. */
-  font-family:
-    'Inter Variable',
-    'Inter var',
-    Inter,
-    -apple-system,
-    'Segoe UI',
-    system-ui,
-    sans-serif;
-  /* cv11: single-storey a · ss03: rounded quotes · cv02: open 4 — Inter's
-     calmer "display" alternates, which is most of what makes it look modern. */
-  font-feature-settings:
-    'cv11' 1,
-    'ss03' 1,
-    'cv02' 1;
-  font-size: 0.8125rem;
+     it, so Windows rendered every screen in Segoe UI. The other presets'
+     files load on demand (`lib/font.ts`). */
+  font-family: var(--font-body);
+  font-feature-settings: var(--font-features);
+  font-size: var(--font-size-body);
+  letter-spacing: var(--ls-body);
   line-height: 1.25rem;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -225,7 +296,8 @@ body {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.011em;
+  font-family: var(--font-heading);
+  letter-spacing: var(--ls-heading);
 }
 
 ::selection {

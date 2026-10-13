@@ -38,6 +38,25 @@ export const shell: Messages = {
   'shell.account.theme': 'Tema',
   'shell.account.theme.dark': 'Koyu',
   'shell.account.theme.light': 'Açık',
+  // Panel yazı tipi ön ayarları (sahip, 2026-10-13). Adlar fontların kendi
+  // adıdır, her dilde Latin harfleriyle kalır.
+  'shell.account.font': 'Yazı tipi',
+  'shell.account.font.workspaceDefault': 'Çalışma alanı varsayılanı',
+  'shell.account.font.source.builtin': 'Yerleşik: {font}',
+  'shell.account.font.source.workspace': 'Çalışma alanı varsayılanı: {font} · {date}',
+  'shell.account.font.source.user': 'Senin seçimin: {font} · {date}',
+  'shell.account.font.saveError': 'Yazı tipi kaydedilemedi.',
+  'shell.font.inter': 'Inter (varsayılan)',
+  'shell.font.plus-jakarta': 'Plus Jakarta Sans',
+  'shell.font.manrope-dm-sans': 'Manrope + DM Sans',
+  'shell.font.nunito': 'Nunito',
+  'shell.font.figtree': 'Figtree',
+  'shell.font.inter.description': 'Net ve nötr — panelin kendi görünümü.',
+  'shell.font.plus-jakarta.description': 'Geometrik ve sıcak, biraz daha ferah.',
+  'shell.font.manrope-dm-sans.description':
+    'Yumuşak Manrope başlıklar, rahat okunan DM Sans gövde.',
+  'shell.font.nunito.description': 'Yuvarlak hatlı ve sıcak; beşi içinde en büyük gövde yazısı.',
+  'shell.font.figtree.description': "Temiz ve modern, Inter'den daha yumuşak.",
   'shell.brand': 'Marka',
   // Uygulama menüsü (FR-MOD-01.1.1). Logonun tetikleyici etiketi + panelindeki,
   // rayda kendi ikonu olmayan tek hedef.

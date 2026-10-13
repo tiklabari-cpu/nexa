@@ -21,6 +21,7 @@ import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { enumLabel } from '../lib/enum-label.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
+import { FontPicker } from './FontPicker.js';
 import { InviteTeammates, usePendingInvitations } from '../features/team/InviteTeammates.js';
 import { CreateTeamButton } from '../features/team/CreateTeamButton.js';
 import { roleAtLeast } from '../features/team/RoleMenu.js';
@@ -916,6 +917,9 @@ function AccountMenu(): ReactElement {
               ))}
             </select>
           </label>
+
+          {/* Panel font (owner, 2026-10-13), under the theme it sits beside. */}
+          <FontPicker />
 
           <button
             type="button"

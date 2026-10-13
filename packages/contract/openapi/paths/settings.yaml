@@ -1619,6 +1619,50 @@ salesTracker:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+appearance:
+  get:
+    tags: [Settings]
+    operationId: getWorkspaceAppearanceSettings
+    summary: The workspace's default panel font
+    description: |
+      Readable by every member (owner, 2026-10-13): the account menu and the
+      Appearance section both say where the font comes from. A workspace that
+      never set one reads `font_preset: null`, with no side effect.
+    responses:
+      "200":
+        description: The current default
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WorkspaceAppearanceSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: setWorkspaceAppearanceSettings
+    summary: Set or remove the workspace's default panel font
+    description: |
+      **Owner only** — admin and vice-owner get `403`. A preset is stamped
+      with the time of the write, which is what "latest wins" orders against
+      each member's own choice; `null` removes the default and its time.
+      Written to the audit log.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/UpdateWorkspaceAppearanceSettings" }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WorkspaceAppearanceSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 routingRules:
   get:
     tags: [Settings]

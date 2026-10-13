@@ -23,6 +23,14 @@
       } catch {
         document.documentElement.dataset.theme = 'light';
       }
+      // The panel font preset the last load was given (src/lib/font.ts), so
+      // the first paint is not Inter while the profile request is in flight.
+      try {
+        var font = localStorage.getItem('siyahtus.font');
+        if (['plus-jakarta', 'manrope-dm-sans', 'nunito', 'figtree'].indexOf(font) !== -1) {
+          document.documentElement.dataset.font = font;
+        }
+      } catch {}
     </script>
   </head>
   <body>

@@ -52,6 +52,24 @@ export const settings: Messages = {
   'settings.nav.section.notifications': 'Notifications',
   'settings.nav.section.company': 'Company details',
   'settings.nav.section.brands': 'Brands',
+  'settings.nav.section.appearance': 'Appearance',
+  'settings.appearance.title': 'Appearance',
+  'settings.appearance.description':
+    'The font every member sees the panel in. A member can still pick their own in the account menu — whichever was chosen last applies.',
+  'settings.appearance.legend': 'Workspace font',
+  // A glyph sample with every Turkish letter, shown under each preset in both
+  // languages on purpose: the dotted/dotless i and the cedillas are where
+  // fonts differ most.
+  'settings.appearance.sample': 'Pijamalı hasta yağız şoföre çabucak güvendi.',
+  'settings.appearance.save': 'Save default',
+  'settings.appearance.remove': 'Remove default',
+  'settings.appearance.saved': 'Saved — members see it the next time the panel loads.',
+  'settings.appearance.removed': 'Default removed.',
+  'settings.appearance.ownerOnly': 'Only the workspace owner can change this setting.',
+  'settings.appearance.current.none': 'No workspace default: members who chose nothing see Inter.',
+  'settings.appearance.current.set': 'Current default: {font} · set {date}',
+  'settings.appearance.yours': 'Your panel now: {source}',
+  'settings.appearance.loadError': 'The appearance settings could not be loaded.',
   'settings.nav.section.channels': 'All channels',
   'settings.nav.section.websiteWidgets': 'Website widgets',
   'settings.nav.section.widget': 'Widget appearance',

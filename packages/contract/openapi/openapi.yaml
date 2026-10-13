@@ -439,6 +439,8 @@ paths:
     $ref: "./paths/settings.yaml#/widgetSettings"
   /settings/sales-tracker:
     $ref: "./paths/settings.yaml#/salesTracker"
+  /settings/appearance:
+    $ref: "./paths/settings.yaml#/appearance"
 
   /settings/apps:
     $ref: "./paths/apps.yaml#/apps"
@@ -668,9 +670,89 @@ components:
         navigation" switch. It defaults to `true` — the navigation is the only
         way between Settings sections, so a new member sees it and folds it away
         rather than having to discover it.
-      required: [settings_nav_pinned]
+      required: [settings_nav_pinned, font_preset, font_preset_set_at]
       properties:
         settings_nav_pinned: { type: boolean }
+        font_preset:
+          allOf:
+            - $ref: "#/components/schemas/PanelFontPreset"
+          nullable: true
+          description: |
+            The panel font this member chose; `null` follows the workspace
+            default. Whether it applies is `GET /auth/me`'s `appearance`: the
+            later of this choice and the workspace default wins.
+        font_preset_set_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When `font_preset` was chosen. Read-only; `null` with no choice.
+    PanelFontPreset:
+      type: string
+      description: |
+        One of the panel's five font presets (owner, 2026-10-13;
+        `@siyahtus/types` · `PANEL_FONT_PRESETS`). `inter` is the panel's
+        built-in look.
+      enum: [inter, plus-jakarta, manrope-dm-sans, nunito, figtree]
+    WorkspaceAppearanceSettings:
+      type: object
+      description: |
+        The workspace's default panel font (`workspace_appearance_settings`),
+        set by the owner only. `null` = no default: members see the built-in
+        Inter unless they chose a font of their own. License-scoped, not
+        brand-scoped.
+      required: [font_preset, font_preset_set_at]
+      properties:
+        font_preset:
+          allOf:
+            - $ref: "#/components/schemas/PanelFontPreset"
+          nullable: true
+        font_preset_set_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the owner last set the default; `null` with none.
+    UpdateWorkspaceAppearanceSettings:
+      type: object
+      additionalProperties: false
+      required: [font_preset]
+      properties:
+        font_preset:
+          allOf:
+            - $ref: "#/components/schemas/PanelFontPreset"
+          nullable: true
+          description: The new default, or `null` to remove it.
+    PanelAppearance:
+      type: object
+      description: |
+        What the panel paints, resolved on the server: the later of the
+        workspace default and the caller's own choice, or the built-in Inter
+        when neither exists. Both layers ride along so the account menu can
+        say where the font comes from.
+      required:
+        [
+          effective_font_preset,
+          source,
+          workspace_font_preset,
+          workspace_font_preset_set_at,
+          user_font_preset,
+          user_font_preset_set_at,
+        ]
+      properties:
+        effective_font_preset:
+          $ref: "#/components/schemas/PanelFontPreset"
+        source:
+          type: string
+          enum: [builtin, workspace, user]
+        workspace_font_preset:
+          allOf:
+            - $ref: "#/components/schemas/PanelFontPreset"
+          nullable: true
+        workspace_font_preset_set_at: { type: string, format: date-time, nullable: true }
+        user_font_preset:
+          allOf:
+            - $ref: "#/components/schemas/PanelFontPreset"
+          nullable: true
+        user_font_preset_set_at: { type: string, format: date-time, nullable: true }
     Health:
       type: object
       description: |

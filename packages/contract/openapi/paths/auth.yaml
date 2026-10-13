@@ -409,6 +409,13 @@ me:
                     on every incoming message and cannot afford a fetch;
                     `/agents/me/notification-preferences` is the same object on
                     its own.
+                appearance:
+                  allOf:
+                    - $ref: "../openapi.yaml#/components/schemas/PanelAppearance"
+                  description: |
+                    Agent principals only. The panel font to paint — the later of
+                    the workspace default and the caller's own choice — resolved
+                    here so the panel never reapplies the rule itself.
                 two_factor:
                   type: object
                   required: [enabled, pending, recovery_codes_remaining]

@@ -237,6 +237,9 @@ export const AUDIT_ACTIONS = [
   // revenue is recorded in, or widening the attribution window all move the
   // revenue figures a workspace reports. The entry names the changed fields only.
   'settings.sales_tracker_updated',
+  // The workspace's default panel font (owner, 2026-10-13): it repaints every
+  // member's panel, so who changed it and to what is worth a line.
+  'settings.appearance_updated',
   // SLA targets (FR-MOD-11.5 · 11.5-d). Recorded with the *values*, not just the
   // changed field names — unlike most settings entries. A target is a promise
   // the workspace made about response time, and the question asked after an

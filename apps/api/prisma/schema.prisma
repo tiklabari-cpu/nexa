@@ -200,6 +200,7 @@ model License {
   chatSupervisions       ChatSupervision[]
   goalAchievements       GoalAchievement[]
   salesTrackerSettings   SalesTrackerSettings?
+  appearanceSettings     WorkspaceAppearanceSettings?
   trackedSales           TrackedSale[]
   slaPolicy              SlaPolicy?
   slaBreaches            SlaBreach[]
@@ -275,6 +276,11 @@ model AgentMembership {
   /// "Unpin side navigation"). Per user and per license, like the notify_*
   /// columns above, and read by `/agents/me/ui-preferences`.
   settingsNavPinned    Boolean   @default(true) @map("settings_nav_pinned")
+  /// This member's own panel font (owner, 2026-10-13; `@siyahtus/types` ·
+  /// `PANEL_FONT_PRESETS`). NULL = follow the workspace default. The later of
+  /// this and `workspace_appearance_settings.font_preset_set_at` applies.
+  fontPreset           String?   @map("font_preset")
+  fontPresetSetAt      DateTime? @map("font_preset_set_at") @db.Timestamptz(6)
   /// The language this member reads the panel in (`en` | `tr`, tm 265) — what
   /// mail sent to them later is written in. Recorded by `GET /auth/me`; NULL
   /// (never seen) reads as English.
@@ -1464,6 +1470,21 @@ model SalesTrackerSettings {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("sales_tracker_settings")
+}
+
+/// Per-license panel appearance (owner, 2026-10-13): the workspace's default
+/// font preset, which only the owner sets. A singleton keyed by the license
+/// alone, like `sales_tracker_settings` — the panel's look does not vary by
+/// brand. No row until the first save; a read with none is "no default".
+model WorkspaceAppearanceSettings {
+  licenseId       BigInt    @id @map("license_id")
+  fontPreset      String?   @map("font_preset")
+  fontPresetSetAt DateTime? @map("font_preset_set_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_appearance_settings")
 }
 
 /// One order reported by the widget snippet's `siyahtus('trackSale', …)` call

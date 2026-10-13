@@ -118,7 +118,8 @@ describe('Settings navigation catalogue (FR-MOD-08.1)', () => {
     expect(new Set(mapped).size).toBe(mapped.length);
     // Measured 2026-09-23: 32 sections rendered on the single page; the audit
     // log's door is now the navigation's own link, so 31 section files.
-    expect(SECTION_FILES).toHaveLength(31);
+    // Appearance (the workspace's default panel font, 2026-10-13) made 32.
+    expect(SECTION_FILES).toHaveLength(32);
 
     const groups = new Set(SETTINGS_GROUPS.map((g) => g.key));
     for (const s of SETTINGS_SECTIONS) expect(groups.has(s.group), s.slug).toBe(true);

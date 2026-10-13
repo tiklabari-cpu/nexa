@@ -424,7 +424,9 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
       <div
         // A neutral "page" the widget sits on, so the surface stands out whether
         // it is light or dark.
-        className="relative flex min-h-72 flex-col overflow-hidden rounded-lg border border-border bg-[repeating-linear-gradient(45deg,rgba(120,120,120,.06)_0,rgba(120,120,120,.06)_10px,transparent_10px,transparent_20px)] p-3"
+        // `font-preset-reset`: the preview stands for the visitor's widget, so
+        // the panel's font preset stops at its edge.
+        className="font-preset-reset relative flex min-h-72 flex-col overflow-hidden rounded-lg border border-border bg-[repeating-linear-gradient(45deg,rgba(120,120,120,.06)_0,rgba(120,120,120,.06)_10px,transparent_10px,transparent_20px)] p-3"
         data-testid="widget-preview"
       >
         {/* The open panel */}

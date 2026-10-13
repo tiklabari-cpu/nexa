@@ -177,6 +177,14 @@ uiPreferences:
               settings_nav_pinned:
                 type: boolean
                 description: Whether the Settings side navigation is shown pinned (`true`) or folded away.
+              font_preset:
+                allOf:
+                  - $ref: "../openapi.yaml#/components/schemas/PanelFontPreset"
+                nullable: true
+                description: |
+                  The caller's own panel font, stamped with the time of the
+                  write; `null` clears the choice (and its time) so the
+                  workspace default applies again.
     responses:
       "200":
         description: Preferences updated

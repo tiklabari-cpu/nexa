@@ -5,6 +5,9 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App.js';
 import { DeploymentGate } from './components/DeploymentGate.js';
 import { ApiClientError } from './lib/api-client.js';
+// Bundled, not fetched from a font CDN: the panel ships self-hosted and its CSP
+// allows no third-party origins. Only the subsets a page uses are downloaded.
+import '@fontsource-variable/inter';
 import './styles/index.css';
 
 const queryClient = new QueryClient({

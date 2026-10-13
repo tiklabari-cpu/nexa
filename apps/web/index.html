@@ -11,7 +11,7 @@
       store is a deferred module — set it there and a light-theme agent gets a
       dark frame first. This attribute used to be hard-coded `dark`, which made
       the light ramp in `tokens.css` unreachable for everyone; it is now the
-      agent's remembered choice, defaulting to dark.
+      agent's remembered choice, defaulting to light (dark until 2026-10-12).
 
       Kept in step with `src/lib/theme.ts` (same key, same default) by
       `src/lib/theme.test.ts`, which reads this file.
@@ -19,9 +19,9 @@
     <script>
       try {
         document.documentElement.dataset.theme =
-          localStorage.getItem('siyahtus.theme') === 'light' ? 'light' : 'dark';
+          localStorage.getItem('siyahtus.theme') === 'dark' ? 'dark' : 'light';
       } catch {
-        document.documentElement.dataset.theme = 'dark';
+        document.documentElement.dataset.theme = 'light';
       }
     </script>
   </head>

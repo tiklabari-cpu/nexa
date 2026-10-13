@@ -2134,10 +2134,15 @@ model WidgetSettings {
   /// `bottom-right` | `bottom-left` — the `widget_settings_position_check`.
   position         String   @default("bottom-right")
   /// `auto` | `light` | `dark` — the `widget_settings_theme_check`.
-  theme            String   @default("auto")
+  theme            String   @default("light")
   mobileFullscreen Boolean  @default(true) @map("mobile_fullscreen")
   /// The removable "Powered by SiyahTuş" footer (FR-MOD-11.5).
   poweredBy        Boolean  @default(true) @map("powered_by")
+  /// The welcome message's bold first line and its text (owner, 2026-10-13);
+  /// null shows the widget's built-in line. Lengths are the
+  /// `widget_settings_welcome_*_length` checks.
+  welcomeTitle     String?  @map("welcome_title")
+  welcomeText      String?  @map("welcome_text")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

@@ -1549,6 +1549,16 @@ widgetSettings:
                 enum: [auto, light, dark]
               mobile_fullscreen: { type: boolean }
               powered_by: { type: boolean }
+              welcome_title:
+                type: string
+                nullable: true
+                maxLength: 120
+                description: Trimmed; an empty string clears it (stored as null).
+              welcome_text:
+                type: string
+                nullable: true
+                maxLength: 500
+                description: Trimmed; an empty string clears it (stored as null).
     responses:
       "200":
         description: Updated

@@ -76,18 +76,18 @@ export function NarrowScreenNotice({ onContinue }: { onContinue: () => void }): 
   }, []);
 
   return (
-    <main className="flex min-h-full items-center justify-center bg-canvas p-6 text-content">
+    <main className="auth-stage flex min-h-full items-center justify-center bg-canvas p-6 text-content">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2.5">
           <span
             aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white"
+            className="brand-mark flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500 text-base font-bold text-white"
           >
             S
           </span>
           <span className="text-lg font-semibold">{BASE_TITLE}</span>
         </div>
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-5">
+        <div className="auth-card flex flex-col gap-3 rounded-xl border border-border bg-surface p-6">
           <h1 ref={headingRef} tabIndex={-1} className="text-lg font-semibold">
             {t('shell.narrow.title')}
           </h1>

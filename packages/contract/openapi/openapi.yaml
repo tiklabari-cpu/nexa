@@ -2807,7 +2807,17 @@ components:
         Per-license widget appearance (FR-MOD-11.7, `widget_settings`). A
         workspace that has never customised it reads the shipped defaults; the
         values are baked into the install snippet and applied by the widget.
-      required: [primary_color, position, theme, mobile_fullscreen, powered_by, updated_at]
+      required:
+        [
+          primary_color,
+          position,
+          theme,
+          mobile_fullscreen,
+          powered_by,
+          welcome_title,
+          welcome_text,
+          updated_at,
+        ]
       properties:
         brand_id:
           type: string
@@ -2831,6 +2841,22 @@ components:
         powered_by:
           type: boolean
           description: The removable "Powered by SiyahTuş" footer (FR-MOD-11.5).
+        welcome_title:
+          type: string
+          nullable: true
+          maxLength: 120
+          description: >-
+            Bold first line of the welcome message the widget opens with, or
+            null for none.
+        welcome_text:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: >-
+            The workspace's own welcome message, shown as the team's first
+            bubble when the panel opens; null keeps the widget's built-in line.
+            `**bold**`, `*italic*` and `[label](https://…)` links render; any
+            other text is shown as typed.
         updated_at: { type: string, format: date-time, nullable: true }
 
     WidgetAppearance:
@@ -2847,6 +2873,8 @@ components:
           theme,
           mobile_fullscreen,
           powered_by,
+          welcome_title,
+          welcome_text,
           privacy_policy_url,
           powered_by_url,
         ]
@@ -2869,6 +2897,16 @@ components:
             Whether the "Powered by SiyahTuş" footer shows. Already ruled on by
             the white-label entitlement, so a workspace without it always reads
             true.
+        welcome_title:
+          type: string
+          nullable: true
+          description: Bold first line of the welcome message, or null.
+        welcome_text:
+          type: string
+          nullable: true
+          description: >-
+            The workspace's welcome message (see `WidgetSettings`), or null for
+            the widget's built-in line.
         privacy_policy_url:
           type: string
           format: uri

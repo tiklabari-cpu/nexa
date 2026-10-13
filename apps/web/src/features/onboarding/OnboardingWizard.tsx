@@ -132,8 +132,8 @@ export function OnboardingWizard(): ReactElement {
   };
 
   return (
-    <main className="flex min-h-full items-center justify-center bg-canvas px-4 py-10 text-content">
-      <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-sm">
+    <main className="auth-stage flex min-h-full items-center justify-center bg-canvas px-4 py-10 text-content">
+      <div className="auth-card w-full max-w-xl rounded-xl border border-border bg-surface shadow-sm">
         <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div>
             <h1 className="text-base font-semibold">{t('auth.onboarding.title')}</h1>

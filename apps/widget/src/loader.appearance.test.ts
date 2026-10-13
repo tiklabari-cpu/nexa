@@ -88,10 +88,10 @@ describe('loader mobile fullscreen', () => {
     dispatch('siyahtus:close');
 
     const el = frame()!;
-    expect(el.style.width).toBe('84px');
-    expect(el.style.height).toBe('84px');
+    expect(el.style.width).toBe('124px');
+    expect(el.style.height).toBe('124px');
     expect(el.style.top).toBe('');
-    expect(el.style.right).toBe('16px');
+    expect(el.style.right).toBe('0px');
   });
 
   it('stays a floating card on a phone when fullscreen is turned off', () => {

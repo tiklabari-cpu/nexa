@@ -9601,6 +9601,10 @@ export interface components {
       mobile_fullscreen: boolean;
       /** @description The removable "Powered by SiyahTuş" footer (FR-MOD-11.5). */
       powered_by: boolean;
+      /** @description Bold first line of the welcome message the widget opens with, or null for none. */
+      welcome_title: string | null;
+      /** @description The workspace's own welcome message, shown as the team's first bubble when the panel opens; null keeps the widget's built-in line. `**bold**`, `*italic*` and `[label](https://…)` links render; any other text is shown as typed. */
+      welcome_text: string | null;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -9620,6 +9624,10 @@ export interface components {
       mobile_fullscreen: boolean;
       /** @description Whether the "Powered by SiyahTuş" footer shows. Already ruled on by the white-label entitlement, so a workspace without it always reads true. */
       powered_by: boolean;
+      /** @description Bold first line of the welcome message, or null. */
+      welcome_title: string | null;
+      /** @description The workspace's welcome message (see `WidgetSettings`), or null for the widget's built-in line. */
+      welcome_text: string | null;
       /**
        * Format: uri
        * @description The deployment's privacy policy (`PRIVACY_POLICY_URL`). The widget links it from its footer; null when the deployment publishes none.
@@ -20642,6 +20650,10 @@ export interface operations {
           theme?: 'auto' | 'light' | 'dark';
           mobile_fullscreen?: boolean;
           powered_by?: boolean;
+          /** @description Trimmed; an empty string clears it (stored as null). */
+          welcome_title?: string | null;
+          /** @description Trimmed; an empty string clears it (stored as null). */
+          welcome_text?: string | null;
         };
       };
     };

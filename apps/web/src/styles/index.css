@@ -4,6 +4,96 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* Hover and selection states ease in rather than snapping. In `base`, so any
+     component that sets its own `transition-*` utility still wins. */
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  [role='button'],
+  [role='tab'],
+  [role='option'],
+  [role='menuitem'] {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-out);
+  }
+
+  /* Set by `lib/theme.ts` for the frames a theme switch takes to repaint. */
+  .theme-switching *,
+  .theme-switching *::before,
+  .theme-switching *::after {
+    transition: none !important;
+  }
+
+  /* Text fields light up with the brand on focus — the outline ring from
+     tokens.css still draws for keyboard focus; this is the mouse-click half.
+     `:where()` keeps the weight at two classes: enough to beat a plain
+     `border-border`, never enough to beat a `focus:border-*` utility, and a
+     field marked invalid keeps its danger border. */
+  :where(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea):focus:not(
+      [aria-invalid='true']
+    ) {
+    border-color: var(--brand-500);
+  }
+}
+
+@layer components {
+  /**
+   * The backdrop of the public pages (sign-in, sign-up, password reset,
+   * onboarding): two soft brand glows over a faint grid, faded out towards the
+   * edges. Painted on a pseudo-element behind the content, so the element's
+   * own computed background stays the solid `--bg-canvas` that contrast
+   * checks read, and every form still sits on a solid `--bg-surface` card.
+   */
+  .auth-stage {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .auth-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(42rem 26rem at 50% 6%, var(--glow-a), transparent 72%),
+      radial-gradient(30rem 22rem at 78% 78%, var(--glow-b), transparent 70%),
+      radial-gradient(26rem 20rem at 20% 70%, var(--glow-c), transparent 70%),
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 32px 32px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 32px 32px;
+    -webkit-mask-image: radial-gradient(ellipse 95% 90% at 50% 40%, #000 45%, transparent 100%);
+    mask-image: radial-gradient(ellipse 95% 90% at 50% 40%, #000 45%, transparent 100%);
+  }
+
+  /* The card a public form lives in: lifted off the glow, never transparent. */
+  .auth-stage .auth-card {
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /**
+   * The "S" logo tile: an indigo→violet gradient with a top highlight. White on
+   * both stops clears AA (5.62 · 5.93), so the gradient never costs contrast.
+   */
+  .brand-mark {
+    background-color: var(--brand-500);
+    background-image: linear-gradient(135deg, var(--brand-500) 0%, var(--brand-violet) 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 4px 14px -4px var(--glow-a);
+  }
+
+  .brand-mark:hover {
+    filter: brightness(1.08);
+  }
+}
+
 @layer utilities {
   /* Visually hidden but available to assistive technology. */
   .sr-only {

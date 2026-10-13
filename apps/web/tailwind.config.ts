@@ -33,9 +33,11 @@ export default {
         },
         brand: {
           100: 'var(--brand-100)',
+          200: 'var(--brand-200)',
           500: 'var(--brand-500)',
           600: 'var(--brand-600)',
           700: 'var(--brand-700)',
+          900: 'var(--brand-900)',
           950: 'var(--brand-950)',
         },
         success: 'var(--success)',
@@ -46,7 +48,15 @@ export default {
         note: 'var(--note)',
       },
       fontFamily: {
-        sans: ['Inter var', 'Inter', '-apple-system', 'Segoe UI', 'system-ui', 'sans-serif'],
+        sans: [
+          'Inter Variable',
+          'Inter var',
+          'Inter',
+          '-apple-system',
+          'Segoe UI',
+          'system-ui',
+          'sans-serif',
+        ],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {
@@ -59,15 +69,20 @@ export default {
         '2xl': ['1.625rem', { lineHeight: '2.125rem' }],
         '3xl': ['2.125rem', { lineHeight: '2.625rem' }],
       },
+      // Read from tokens.css, so a theme can retune them — the dark theme's
+      // shadows are hairline rings, which literal values here could not follow.
       borderRadius: {
-        sm: '4px',
-        md: '8px',
-        lg: '12px',
+        DEFAULT: 'var(--radius-sm)',
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
       },
       boxShadow: {
-        xs: '0 1px 2px rgb(16 24 40 / 0.06)',
-        sm: '0 2px 6px rgb(16 24 40 / 0.08)',
-        md: '0 8px 24px rgb(16 24 40 / 0.12)',
+        xs: 'var(--shadow-xs)',
+        sm: 'var(--shadow-sm)',
+        md: 'var(--shadow-md)',
+        lg: 'var(--shadow-lg)',
       },
       spacing: {
         rail: '56px',

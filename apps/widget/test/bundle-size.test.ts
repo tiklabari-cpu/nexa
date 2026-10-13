@@ -12,8 +12,13 @@ import { describe, expect, it } from 'vitest';
 
 const distDir = resolve(import.meta.dirname, '../dist');
 
-/** Hard ceiling from the PRD. */
-const TOTAL_BUDGET_BYTES = 50 * 1024;
+/**
+ * Hard ceiling. The PRD's NFR-P3 set 50 KB; the owner raised it to 60 KB on
+ * 2026-10-13 to ship the design reference's Manrope face (≈22 KB, Latin +
+ * Turkish subset, weights 500–700) — fonts now count towards it, since the
+ * visitor downloads them like everything else.
+ */
+const TOTAL_BUDGET_BYTES = 60 * 1024;
 /** The loader runs on the host page itself, so it gets a far tighter budget. */
 const LOADER_BUDGET_BYTES = 8 * 1024;
 
@@ -25,7 +30,7 @@ function collectAssets(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) return collectAssets(full);
-    return /\.(js|css)$/.test(entry.name) ? [full] : [];
+    return /\.(js|css|woff2)$/.test(entry.name) ? [full] : [];
   });
 }
 
@@ -38,7 +43,7 @@ describe('widget bundle budget', () => {
     expect(size, `loader.js is ${size} B gzipped`).toBeLessThanOrEqual(LOADER_BUDGET_BYTES);
   });
 
-  it('keeps everything the browser downloads under 50 KB gzipped (NFR-P3)', () => {
+  it('keeps everything the browser downloads under 60 KB gzipped (NFR-P3)', () => {
     expect(existsSync(distDir), 'run `pnpm --filter @siyahtus/widget build` first').toBe(true);
     const assets = collectAssets(distDir);
     expect(assets.length).toBeGreaterThan(0);

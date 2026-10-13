@@ -14,7 +14,7 @@
  * badge exists for usually arrives after the tab is gone.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from './widget.js';
+import { GREETING_DELAY_MS, PREVIEW_MS, mount } from './widget.js';
 
 const API = 'https://api.test/v1';
 
@@ -240,10 +240,20 @@ describe('widget unread badge (FR-MOD-11.1)', () => {
   });
 
   it('lights the launcher for a proactive card too, and drops it when dismissed', async () => {
+    vi.useFakeTimers();
     const root = mountWidget();
 
-    // The greeting owns the card slot from the first frame; it has no number
-    // to show, so the animation is its half of the KK's "badge/animation".
+    // Only the launcher at first: the greeting waits until the visitor has
+    // been on the page a while (owner, 2026-10-13), and so does its cue.
+    expect(root.querySelector<HTMLElement>('.nx-greeting')!.hidden).toBe(true);
+    expect(launcher(root).classList.contains('nx-attention')).toBe(false);
+    await vi.advanceTimersByTimeAsync(GREETING_DELAY_MS - 1);
+    expect(root.querySelector<HTMLElement>('.nx-greeting')!.hidden).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+
+    // Then the greeting owns the card slot; it has no number to show, so the
+    // animation is its half of the KK's "badge/animation".
+    expect(root.querySelector<HTMLElement>('.nx-greeting')!.hidden).toBe(false);
     expect(launcher(root).classList.contains('nx-attention')).toBe(true);
 
     root.querySelector<HTMLButtonElement>('.nx-greet-browse')!.click();
@@ -294,5 +304,84 @@ describe('widget closed-panel polling (FR-MOD-11.1)', () => {
 
     await vi.advanceTimersByTimeAsync(4_000);
     expect(chatPolls).toBe(4);
+  });
+});
+
+/**
+ * The reply preview (owner, 2026-10-13): a reply that lands while the panel is
+ * closed is shown above the launcher for `PREVIEW_MS` — the design reference's
+ * teaser — on top of the badge, which counts it the moment it arrives.
+ */
+describe('widget reply preview', () => {
+  const preview = (root: HTMLElement): HTMLElement =>
+    root.querySelector<HTMLElement>('.nx-preview')!;
+
+  /** A returning visitor whose second poll brings the agent's reply. */
+  async function replyArrivesClosed(): Promise<HTMLElement> {
+    eventsAt = (poll) => (poll === 1 ? [VISITOR_ASK] : [VISITOR_ASK, AGENT_REPLY]);
+    returningVisitor();
+    vi.useFakeTimers();
+    const root = mountWidget();
+    await settle();
+    expect(chatPolls).toBe(1);
+    expect(preview(root).hidden).toBe(true);
+    // The closed panel's poll cadence (30 s) brings the reply in.
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(chatPolls).toBe(2);
+    return root;
+  }
+
+  it('previews a reply that lands with the panel closed, and counts it at once', async () => {
+    const root = await replyArrivesClosed();
+
+    expect(preview(root).hidden).toBe(false);
+    expect(preview(root).querySelector('.nx-preview-msg')!.textContent).toBe('agent e2');
+    // No agent on the snapshot: the card falls back to the widget's own title.
+    expect(preview(root).querySelector('.nx-preview-name')!.textContent).toBe('Chat with us');
+    expect(badge(root).textContent).toBe('1');
+    // It takes the proactive card's slot rather than stacking on the greeting.
+    expect(root.querySelector<HTMLElement>('.nx-greeting')!.hidden).toBe(true);
+  });
+
+  it('shows for PREVIEW_MS and then leaves the badge to carry the news', async () => {
+    const root = await replyArrivesClosed();
+
+    await vi.advanceTimersByTimeAsync(PREVIEW_MS - 1);
+    expect(preview(root).hidden).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(preview(root).hidden).toBe(true);
+    expect(badge(root).textContent).toBe('1');
+  });
+
+  it('opens the conversation when clicked, like the launcher', async () => {
+    const root = await replyArrivesClosed();
+
+    root.querySelector<HTMLButtonElement>('.nx-preview-body')!.click();
+
+    expect(root.querySelector<HTMLElement>('.nx-panel')!.hidden).toBe(false);
+    expect(preview(root).hidden).toBe(true);
+    expect(badge(root).hidden).toBe(true);
+  });
+
+  it('its × tucks only the card away — the reply is still unread', async () => {
+    const root = await replyArrivesClosed();
+
+    root.querySelector<HTMLButtonElement>('.nx-preview-close')!.click();
+
+    expect(preview(root).hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('.nx-panel')!.hidden).toBe(true);
+    expect(badge(root).textContent).toBe('1');
+  });
+
+  it('does not pop for replies already waiting when the page opened', async () => {
+    // The visitor was already told about this one — by the badge, on the page
+    // they were on before. A card on every page they open would be nagging.
+    eventsAt = () => [VISITOR_ASK, AGENT_REPLY];
+    returningVisitor();
+    const root = mountWidget();
+    await waitForPoll(1);
+
+    expect(badge(root).textContent).toBe('1');
+    expect(preview(root).hidden).toBe(true);
   });
 });

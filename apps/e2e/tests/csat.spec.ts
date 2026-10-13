@@ -29,6 +29,7 @@ import {
   ACME_OWNER,
   API_BASE,
   HOST_PAGE,
+  arriveForGreeting,
   openWidget,
   ownerAccessTokenFor,
   signIn,
@@ -155,7 +156,7 @@ test('an archived conversation asks the visitor the workspace questions, takes a
     // has a name. The answers they leave below have to be findable on a *person*
     // in the CRM, and an anonymous visitor is only addressable as "the most
     // recent one" — which is not a proof, it is a coincidence waiting to break.
-    await visitor.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
+    await arriveForGreeting(visitor, `${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
     const frame = widgetFrame(visitor);
     await frame.getByRole('button', { name: "Let's chat" }).click();
     await frame.getByRole('textbox', { name: 'Your name' }).fill(visitorName);

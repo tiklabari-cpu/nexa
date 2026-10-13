@@ -10,14 +10,14 @@
  * is where the "campaign wins when both are pending" decision lives.
  *
  * Synchronisation throughout waits on `chatPolls` (how many times the mock
- * has answered `GET /customer/chat`), not on the card's `hidden` flag — the
- * plain greeting is already showing the instant the widget mounts (nothing
- * dismissed it yet), so `hidden` flips to `false` before the connect this
- * file is about has even started, and would make a `waitFor` on it resolve
- * without actually waiting for anything.
+ * has answered `GET /customer/chat`), not on the card's `hidden` flag — once
+ * `GREETING_DELAY_MS` has passed the plain greeting shows too (nothing
+ * dismissed it yet), so `hidden` can flip to `false` for a reason that has
+ * nothing to do with the connect this file is about, and a `waitFor` on it
+ * would resolve without actually waiting for anything.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from './widget.js';
+import { GREETING_DELAY_MS, mount } from './widget.js';
 
 const API = 'https://api.test/v1';
 
@@ -175,9 +175,11 @@ describe('widget campaign card (FR-MOD-03.3.2)', () => {
 
   it('falls back to the greeting once nothing is owed', async () => {
     campaignAt = () => null;
+    vi.useFakeTimers();
     const root = mountWidget();
     connectWithoutOpening();
-    await waitForPoll(1);
+    await vi.advanceTimersByTimeAsync(GREETING_DELAY_MS);
+    expect(chatPolls).toBeGreaterThanOrEqual(1);
 
     expect(card(root).hidden).toBe(false);
     expect(card(root).dataset['kind']).toBe('greeting');

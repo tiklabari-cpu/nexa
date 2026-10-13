@@ -41,6 +41,16 @@ export interface SiyahTusWidgetConfig {
 /** Below this host-viewport width the widget is treated as being on a phone. */
 const MOBILE_MAX_WIDTH = 480;
 
+/**
+ * How far the frame sits from the screen corner: flush. The widget document
+ * places its launcher and panel 28 px in from the corner itself, so on the
+ * screen-edge sides their shadows run off the screen instead of being cut off
+ * by the frame's own edge a few pixels short of it.
+ */
+const FRAME_EDGE = '0px';
+/** The widget's largest frame (the open panel, 488 × 802) plus some slack. */
+const MAX_FRAME = { width: 520, height: 840 } as const;
+
 interface SiyahTusGlobal extends SiyahTusWidgetConfig {
   open?: () => void;
   close?: () => void;
@@ -156,10 +166,12 @@ export function boot(
 
   Object.assign(frame.style, {
     position: 'fixed',
-    bottom: '16px',
-    [corner]: '16px',
-    width: '84px',
-    height: '84px',
+    bottom: FRAME_EDGE,
+    [corner]: FRAME_EDGE,
+    width: '124px',
+    height: '124px',
+    // A short window must not push the panel's header off the top of it.
+    maxHeight: `calc(100vh - 2 * ${FRAME_EDGE})`,
     border: '0',
     zIndex: '2147483000',
     colorScheme: 'normal',
@@ -172,8 +184,8 @@ export function boot(
   // Geometry is recomputed from these plus whether the panel is open, so that
   // opening on a phone can fill the viewport (FR-MOD-11.7, "mobil tam ekran")
   // rather than leave a 380 px card overhanging a 360 px screen.
-  let wantWidth = 84;
-  let wantHeight = 84;
+  let wantWidth = 124;
+  let wantHeight = 124;
   let open = false;
 
   const applyGeometry = (): void => {
@@ -187,14 +199,16 @@ export function boot(
         bottom: '0px',
         width: '100%',
         height: '100%',
+        maxHeight: 'none',
       });
       return;
     }
     // Floating card in its corner — the default everywhere but a phone.
     frame.style.top = '';
-    frame.style[corner] = '16px';
+    frame.style[corner] = FRAME_EDGE;
     frame.style[corner === 'left' ? 'right' : 'left'] = '';
-    frame.style.bottom = '16px';
+    frame.style.bottom = FRAME_EDGE;
+    frame.style.maxHeight = `calc(100vh - 2 * ${FRAME_EDGE})`;
     frame.style.width = `${wantWidth}px`;
     frame.style.height = `${wantHeight}px`;
   };
@@ -224,8 +238,8 @@ export function boot(
     }
 
     if (data.type === 'siyahtus:resize') {
-      const height = clampDimension(data.height, 84, 720);
-      const width = clampDimension(data.width, 84, 420);
+      const height = clampDimension(data.height, 84, MAX_FRAME.height);
+      const width = clampDimension(data.width, 84, MAX_FRAME.width);
       if (height) wantHeight = height;
       if (width) wantWidth = width;
     }

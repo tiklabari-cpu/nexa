@@ -510,6 +510,13 @@ export const settings: Messages = {
   'settings.widgetCustomization.poweredByLabel': 'Show “Powered by SiyahTuş”',
   'settings.widgetCustomization.poweredByHint':
     'A small credit in the widget footer. Turn it off to remove it.',
+  'settings.widgetCustomization.welcomeLegend': 'Welcome message',
+  'settings.widgetCustomization.welcomeHint':
+    'Shown as your team’s first message when a visitor opens the chat. Leave both empty to use the built-in line.',
+  'settings.widgetCustomization.welcomeTitleLabel': 'Title',
+  'settings.widgetCustomization.welcomeTextLabel': 'Message',
+  'settings.widgetCustomization.welcomeTextHint':
+    'For a link, write [label](https://address). **bold** and *italic* work too.',
   'settings.widgetCustomization.entitlementError':
     'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.saveButton': 'Save appearance',

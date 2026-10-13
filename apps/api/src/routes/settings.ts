@@ -18,6 +18,8 @@ import {
   COMPANY_SIZES,
   DEFAULT_SALES_TRACKER_CONFIG,
   DEFAULT_WIDGET_APPEARANCE,
+  WIDGET_WELCOME_TEXT_MAX,
+  WIDGET_WELCOME_TITLE_MAX,
   EXPERTISE_NAME_MAX_LENGTH,
   isIanaTimeZone,
   RETENTION_TIERS,
@@ -545,8 +547,23 @@ const updateWidgetBody = z
     theme: z.enum(WIDGET_THEMES as unknown as [string, ...string[]]).optional(),
     mobile_fullscreen: z.boolean().optional(),
     powered_by: z.boolean().optional(),
+    // The welcome message (owner, 2026-10-13). Trimmed before the length check,
+    // so the limit is on what the visitor will read; an empty box — or null —
+    // clears it back to the widget's built-in line.
+    welcome_title: welcomeField(WIDGET_WELCOME_TITLE_MAX),
+    welcome_text: welcomeField(WIDGET_WELCOME_TEXT_MAX),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+function welcomeField(max: number) {
+  return z
+    .string()
+    .trim()
+    .max(max, `must be at most ${max} characters`)
+    .transform((value) => (value === '' ? null : value))
+    .nullable()
+    .optional();
+}
 
 /**
  * Sales tracker configuration (FR-MOD-13.5). Every field is optional so the
@@ -2692,6 +2709,8 @@ export default async function settingsRoutes(
           ? { mobileFullscreen: body.mobile_fullscreen }
           : {}),
         ...(body.powered_by !== undefined ? { poweredBy: body.powered_by } : {}),
+        ...(body.welcome_title !== undefined ? { welcomeTitle: body.welcome_title } : {}),
+        ...(body.welcome_text !== undefined ? { welcomeText: body.welcome_text } : {}),
       };
 
       // Upsert because signup leaves no row: a workspace customising the widget
@@ -3342,6 +3361,8 @@ function serialiseWidget(
     position: string;
     theme: string;
     mobileFullscreen: boolean;
+    welcomeTitle: string | null;
+    welcomeText: string | null;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3354,6 +3375,8 @@ function serialiseWidget(
     theme: row?.theme ?? DEFAULT_WIDGET_APPEARANCE.theme,
     mobile_fullscreen: row?.mobileFullscreen ?? DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
     powered_by: poweredBy,
+    welcome_title: row?.welcomeTitle ?? DEFAULT_WIDGET_APPEARANCE.welcome_title,
+    welcome_text: row?.welcomeText ?? DEFAULT_WIDGET_APPEARANCE.welcome_text,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

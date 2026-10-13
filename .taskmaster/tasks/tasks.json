@@ -11718,13 +11718,24 @@
             "updatedAt": "2026-10-12T18:02:17.433Z"
           }
         ]
+      },
+      {
+        "id": "267",
+        "title": "PANEL-WIDGET-RESTYLE [OPUS-HIGH] (Opus 5.5 · efor high) Panelin yeni açık/koyu teması; widget tasarım referansına göre yeniden giydirildi, yanıt önizlemesi ve karşılama mesajı",
+        "description": "Sahibin 2026-10-12/13 istekleri (interaktif pencere): \"Her 2 temayı da tekrar yazar mısın? Modern, kullanışlı ve sade olsun\"; varsayılan tema aydınlık; widget \"canli-destek-widget_3.html\" referansına göre (yalnız görünüm, davranış aynı); karşılama kartı 30 sn sonra; kapalıyken gelen yanıt 15 sn önizleme; marka sahibinin giriş yazısı.",
+        "details": "KAPANIŞ (2026-10-13), commit dff696df + merge 1e4206d4, düzeltme fae87a10:\n- Panel: tokens.css iki tema baştan (Inter), varsayılan light; auth sayfaları; nginx CSP hash.\n- Widget: Manrope (latin+tr woff2, OFL, apps/widget/public/fonts); NFR-P3 bütçesi 50 -> 60 KB ve fontları da sayıyor (sahip kararı 2026-10-13).\n- Widget varsayılan teması light (migration 20261012090000_widget_theme_default_light: auto -> light).\n- Çerçeve köşeye yaslı (FRAME_EDGE 0), sayfaya bakan kenarlarda gölge payı: kapalı 124 px, panel 488x802, kart 384x320; sert gölge kutusu yok.\n- Panel açıkken baloncuk kalıyor (panel üstünde, baloncuk × olur); mobil tam ekranda gizli.\n- Avatar: isimden pastel ton + beyaz halka + durum noktası; kimse yokken üçlü ekip avatarı. Başlık 18 px.\n- Karşılama kartı 30 sn gecikmeli (GREETING_DELAY_MS), kampanya gecikmesiz.\n- Yanıt önizlemesi: panel kapalıyken gelen ekip mesajı 15 sn kart (PREVIEW_MS), tıklayınca açar, rozet sayar.\n- Karşılama mesajı: widget_settings.welcome_title/welcome_text (migration 20261013090000_widget_welcome_message, CHECK 120/500), kontrat + types + API (zod) + Ayarlar -> Widget formu; [etiket](https://...) bağlantı, innerHTML yok.\n- Mobil tokens.ts + uygulama ikonu yeni panel renklerine (brand-500 #5b4fe9).\nKapı: build+statik+birim --force OK; entegrasyon --force OK (api 3922); e2e parçalı 379/387 -> düzeltilen 3 dosya 130/130.\nNotlar: widget önizlemesi (Ayarlar -> Widget) eski görünümde; mesaj başına avatar yok (sahip kararı 6b).",
+        "testStrategy": "Kapanış DoD kapısı (CONVENTIONS §1); widget.css.test.ts, widget.welcome.test.ts, widget.unread önizleme testleri, settings + widget-token-links entegrasyon, e2e widget/ux-polish-low/a11y.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "updatedAt": "2026-10-13T12:50:24.723Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-12T18:02:17.433Z",
-      "taskCount": 266,
-      "completedCount": 266,
+      "lastModified": "2026-10-13T12:50:24.723Z",
+      "taskCount": 267,
+      "completedCount": 267,
       "tags": [
         "master"
       ]

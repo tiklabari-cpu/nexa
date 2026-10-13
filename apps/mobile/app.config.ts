@@ -11,7 +11,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 // brand-500 — apps/mobile/src/theme/tokens.ts (`COLORS.light.brand500`).
 // `apps/mobile/scripts/gen-assets.mjs` draws every generated icon in this
 // same color; `src/__tests__/assets.test.ts` checks the two do not drift.
-const BRAND_500 = '#2d67fa';
+const BRAND_500 = '#5b4fe9';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,

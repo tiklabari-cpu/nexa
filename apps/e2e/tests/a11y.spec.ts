@@ -1678,7 +1678,10 @@ test.describe('WCAG 2.1 AA (axe)', () => {
 
     // (2) Remove the indicator outright, the way `outline-none` does.
     const removed = await page.addStyleTag({
-      content: ':focus-visible { outline: none !important; }',
+      // Only the style: the `outline` shorthand would also reset the colour to
+      // `currentcolor`, and on a white-text button over a white card that is
+      // 1:1 — the colour half of the point below would then not hold.
+      content: ':focus-visible { outline-style: none !important; }',
     });
     const missing = await measureFocusRing('Gate probe', 'Sign in button (no outline)', button);
     console.log(describeFocusRing(missing));

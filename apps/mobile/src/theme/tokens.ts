@@ -48,81 +48,81 @@ export interface ColorTokens {
 }
 
 const LIGHT: ColorTokens = {
-  bgCanvas: '#f7f8fa',
+  bgCanvas: '#f6f6f8',
   bgSurface: '#ffffff',
-  bgSurface2: '#f1f3f7',
-  bgRail: '#111726',
-  bgInset: '#e9ecf2',
-  border: '#dde1e9',
-  borderStrong: '#c3c9d6',
+  bgSurface2: '#f3f3f6',
+  bgRail: '#0c0c10',
+  bgInset: '#ececf1',
+  border: '#e4e4ea',
+  borderStrong: '#cfcfd8',
 
-  textPrimary: '#111726',
-  textSecondary: '#4a5468',
-  textTertiary: '#606878',
+  textPrimary: '#16161d',
+  textSecondary: '#4b4b5a',
+  textTertiary: '#5f5f6e',
   textInverse: '#ffffff',
 
-  brand100: '#e4ecff',
-  brand500: '#2d67fa',
-  brand600: '#1f52d8',
-  brand700: '#1740ac',
-  brand950: '#0f1e42',
-  brandText: '#1f52d8',
-  focusRing: '#2d67fa', // var(--brand-500)
+  brand100: '#eeedfe',
+  brand500: '#5b4fe9',
+  brand600: '#4a3fd6',
+  brand700: '#372cb3',
+  brand950: '#1e1a4a',
+  brandText: '#4a3fd6',
+  focusRing: '#5b4fe9', // var(--brand-500)
 
-  success: '#10744f',
-  warning: '#945800',
-  danger: '#c42a2a',
-  info: '#0b6e99',
-  ai: '#7c3aed',
-  note: '#806413',
+  success: '#0f7349',
+  warning: '#925400',
+  danger: '#c4253a',
+  info: '#0a6b94',
+  ai: '#a3218f',
+  note: '#7d6210',
 
-  bubbleAgentBg: '#2d67fa', // var(--brand-500)
+  bubbleAgentBg: '#5b4fe9', // var(--brand-500)
   bubbleAgentText: '#ffffff',
-  bubbleCustomerBg: '#eff1f5',
-  bubbleCustomerText: '#111726', // var(--text-primary)
-  bubbleNoteBg: '#fff6e5',
-  bubbleAiBg: '#f3edff',
+  bubbleCustomerBg: '#f0f0f4',
+  bubbleCustomerText: '#16161d', // var(--text-primary)
+  bubbleNoteBg: '#fff7e6',
+  bubbleAiBg: '#fbeff9',
 };
 
 /** Dark inherits every token it does not override — same as `[data-theme='dark']` does in CSS. */
 const DARK: ColorTokens = {
   ...LIGHT,
-  bgCanvas: '#0b1020',
-  bgSurface: '#121829',
-  bgSurface2: '#1a2136',
-  bgRail: '#080c18',
-  bgInset: '#0e1424',
-  border: '#232c44',
-  borderStrong: '#313c58',
+  bgCanvas: '#09090c',
+  bgSurface: '#111116',
+  bgSurface2: '#18181f',
+  bgRail: '#050507',
+  bgInset: '#0d0d12',
+  border: '#24242d',
+  borderStrong: '#34343f',
 
-  textPrimary: '#edf0f6',
-  textSecondary: '#a6b0c4',
-  textTertiary: '#868fa6',
-  textInverse: '#0b1020',
+  textPrimary: '#f2f2f5',
+  textSecondary: '#a4a4b2',
+  textTertiary: '#8a8a99',
+  textInverse: '#09090c',
 
-  brandText: '#7aa2ff',
-  focusRing: '#7aa2ff',
+  brandText: '#a5a0ff',
+  focusRing: '#8f87ff',
 
-  success: '#3dd68c',
+  success: '#3ed68c',
   warning: '#f5b14c',
-  danger: '#ff6b6b',
+  danger: '#ff6b7a',
   info: '#4fc3f7',
-  ai: '#b392f7',
+  ai: '#f08ae0',
   note: '#ffce73',
 
-  bubbleCustomerBg: '#1e2740',
-  bubbleCustomerText: '#edf0f6', // var(--text-primary), which dark overrides above
-  bubbleNoteBg: '#2e2210',
-  bubbleAiBg: '#241a3d',
+  bubbleCustomerBg: '#1c1c24',
+  bubbleCustomerText: '#f2f2f5', // var(--text-primary), which dark overrides above
+  bubbleNoteBg: '#2b2110',
+  bubbleAiBg: '#2a1328',
 };
 
 export const COLORS: Record<ThemeName, ColorTokens> = { light: LIGHT, dark: DARK };
 
 /** `--radius-sm/md/lg` from `tokens.css`, as RN's unitless px numbers. */
 export const RADIUS = {
-  sm: 4,
-  md: 8,
-  lg: 12,
+  sm: 6,
+  md: 10,
+  lg: 14,
 } as const;
 
 /**

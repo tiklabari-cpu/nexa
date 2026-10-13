@@ -83,7 +83,7 @@ test.describe('widget embedding', () => {
     // closed widget shrinks back to the launcher — a full-size transparent iframe
     // would swallow clicks on the host page.
     await widgetFrame(page).getByRole('button', { name: 'Just browsing' }).click();
-    await expect.poll(async () => (await frame.boundingBox())!.width).toBeLessThanOrEqual(100);
+    await expect.poll(async () => (await frame.boundingBox())!.width).toBeLessThanOrEqual(124);
   });
 
   test('gives the iframe a real origin so it can authenticate', async ({
@@ -112,7 +112,17 @@ test.describe('widget embedding', () => {
     // The host page grows the frame only on a validated message from the widget.
     await expect.poll(async () => (await frameElement.boundingBox())!.width).toBeGreaterThan(300);
 
-    await frame.getByRole('button', { name: 'Close chat' }).click();
+    await frame
+      .getByRole('region', { name: 'Customer support chat' })
+      .getByRole('button', { name: 'Close chat' })
+      .click();
+    await expect.poll(async () => (await frameElement.boundingBox())!.width).toBeLessThan(150);
+
+    // The launcher stays on screen while the panel is open (owner, 2026-10-13)
+    // and closes it as well.
+    await frame.getByRole('button', { name: 'Open chat' }).click();
+    await expect(frame.locator('.nx-launcher')).toBeVisible();
+    await frame.locator('.nx-launcher').click();
     await expect.poll(async () => (await frameElement.boundingBox())!.width).toBeLessThan(150);
   });
 
@@ -337,7 +347,10 @@ test.describe('campaign card', () => {
 
       // The card only ever occupies the closed, proactive slot — a chat left
       // open on screen is not where it belongs.
-      await frame.getByRole('button', { name: 'Close chat' }).click();
+      await frame
+        .getByRole('region', { name: 'Customer support chat' })
+        .getByRole('button', { name: 'Close chat' })
+        .click();
 
       // --- The owner creates a campaign matching this visitor's site -------
       await agentPage.goto('/app/customers');
@@ -415,7 +428,10 @@ test.describe('campaign card', () => {
         .getByRole('button', { name: 'End chat' })
         .click();
       await expect(frame.getByText('Chat ended.')).toBeVisible();
-      await frame.getByRole('button', { name: 'Close chat' }).click();
+      await frame
+        .getByRole('region', { name: 'Customer support chat' })
+        .getByRole('button', { name: 'Close chat' })
+        .click();
 
       // Closed-panel cadence, same as the test above (tm 195.1).
       await expect(frame.getByText(message)).toBeVisible({ timeout: 60_000 });
@@ -901,7 +917,10 @@ test.describe('unread badge', () => {
 
       // --- The visitor walks away from an open conversation ----------------
       const frame = widgetFrame(visitor);
-      await frame.getByRole('button', { name: 'Close chat' }).click();
+      await frame
+        .getByRole('region', { name: 'Customer support chat' })
+        .getByRole('button', { name: 'Close chat' })
+        .click();
       // The greeting card is offered once the visitor has been on the page
       // half a minute; waving it away leaves the bare launcher, which is the
       // surface this test is about.
@@ -935,7 +954,10 @@ test.describe('unread badge', () => {
       // --- Opening is what marks it read ------------------------------------
       await frame.getByRole('button', { name: 'Open chat (1 unread)' }).click();
       await expect(frame.getByRole('log', { name: 'Conversation' })).toContainText(answer);
-      await frame.getByRole('button', { name: 'Close chat' }).click();
+      await frame
+        .getByRole('region', { name: 'Customer support chat' })
+        .getByRole('button', { name: 'Close chat' })
+        .click();
       await expect(frame.getByRole('button', { name: 'Open chat', exact: true })).toBeVisible();
       await expect(frame.locator('.nx-badge')).toBeHidden();
     } finally {

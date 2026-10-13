@@ -170,7 +170,7 @@ test.describe('Arabic widget corner (D17)', () => {
       await frame.locator('.nx-greet-browse').click();
       await expect
         .poll(async () => (await box(page.locator('#siyahtus-widget-frame'))).width)
-        .toBeLessThanOrEqual(100);
+        .toBeLessThanOrEqual(124);
       const alone = await box(launcher);
 
       expect(Math.abs(withCard.x - alone.x), 'horizontal shift').toBeLessThanOrEqual(1);

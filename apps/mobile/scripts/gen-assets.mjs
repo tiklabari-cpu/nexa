@@ -4,7 +4,7 @@
  * No npm image library — just `node:zlib`'s deflate + CRC32 and a hand-written
  * PNG chunk writer, so the repo does not gain a new devDependency for four
  * flat-color monograms. Source: brand-500 in `../src/theme/tokens.ts`
- * (`#2d67fa`, checked against it by `src/__tests__/assets.test.ts`) and a
+ * (`#5b4fe9`, checked against it by `src/__tests__/assets.test.ts`) and a
  * plain block "S" — no external artwork is copied (13.7-u).
  *
  * Deterministic: every byte here comes from the constants below, so
@@ -19,7 +19,7 @@ import { crc32, deflateSync } from 'node:zlib';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ASSETS_DIR = join(HERE, '..', 'assets');
 
-const BRAND_500 = [0x2d, 0x67, 0xfa, 0xff]; // apps/mobile/src/theme/tokens.ts COLORS.light.brand500
+const BRAND_500 = [0x5b, 0x4f, 0xe9, 0xff]; // apps/mobile/src/theme/tokens.ts COLORS.light.brand500
 const WHITE = [0xff, 0xff, 0xff, 0xff];
 const TRANSPARENT = [0x00, 0x00, 0x00, 0x00];
 

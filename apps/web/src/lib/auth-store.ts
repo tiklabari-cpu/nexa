@@ -21,10 +21,16 @@
  * through, the server refuses, or the agent signs out.
  */
 import { create } from 'zustand';
-import { readNotificationPreferences, type NotificationPreferences } from '@siyahtus/types';
+import {
+  readNotificationPreferences,
+  type NotificationPreferences,
+  type PanelAppearance,
+  type PanelFontPreset,
+} from '@siyahtus/types';
 import { ApiClient, ApiClientError } from './api-client.js';
 import { AuthFlowError, authFailureCode } from './auth-flow-error.js';
 import { savePrefs } from '../features/notifications/notifications.js';
+import { useFontStore } from './font.js';
 
 export interface Membership {
   license_id: string;
@@ -79,6 +85,12 @@ export interface CurrentAgent {
     access: 'trialing' | 'active' | 'read_only';
     trial_ends_at: string | null;
   };
+  /**
+   * The panel font to paint (owner, 2026-10-13), resolved by the server — the
+   * later of the workspace default and the caller's own choice. Absent from an
+   * older server, which reads as the built-in Inter.
+   */
+  appearance?: PanelAppearance;
 }
 
 /** What `POST /auth/2fa/enroll` hands back — the authenticator app's half. */
@@ -195,6 +207,15 @@ interface AuthState {
    * becomes both the store's value and the synchronous cache the inbox reads.
    */
   setNotificationPreferences: (patch: Partial<NotificationPreferences>) => Promise<void>;
+  /**
+   * The caller's own panel font (owner, 2026-10-13); `null` follows the
+   * workspace default again. Painted at once for a preset — a choice made now
+   * is the latest by definition — then replaced by the server's resolved
+   * answer; rolled back if the write fails.
+   */
+  setFontPreset: (preset: PanelFontPreset | null) => Promise<void>;
+  /** Re-read which font applies — after the owner changed the workspace default. */
+  refreshAppearance: () => Promise<void>;
   /** Flip the local gate once the wizard has told the server setup is done. */
   markOnboarded: () => void;
 }
@@ -822,6 +843,7 @@ export const useAuth = create<AuthState>((set, get) => {
     // request the app already makes on every sign-in and restore is where the
     // value has to arrive.
     cachePreferences(agent.notification_preferences);
+    useFontStore.getState().setAppearance(agent.appearance);
     return agent;
   }
 
@@ -1092,6 +1114,30 @@ export const useAuth = create<AuthState>((set, get) => {
       await sessionClient().request('PUT', '/agents/me/routing-status', { routing_status: status });
       const current = get().agent;
       if (current) set({ agent: { ...current, routing_status: status } });
+    },
+
+    async setFontPreset(preset) {
+      const { accessToken, agent } = get();
+      if (!accessToken || !agent) return;
+
+      const fonts = useFontStore.getState();
+      const previous = fonts.appearance ?? agent.appearance;
+      if (preset !== null) fonts.preview(preset);
+      try {
+        await sessionClient().request('PUT', '/agents/me/ui-preferences', { font_preset: preset });
+        await get().refreshAppearance();
+      } catch (error) {
+        useFontStore.getState().setAppearance(previous);
+        throw error;
+      }
+    },
+
+    async refreshAppearance() {
+      if (!get().accessToken) return;
+      const me = await sessionClient().request<CurrentAgent>('GET', '/auth/me');
+      useFontStore.getState().setAppearance(me.appearance);
+      const current = get().agent;
+      if (current) set({ agent: { ...current, appearance: me.appearance } });
     },
 
     async setNotificationPreferences(patch) {

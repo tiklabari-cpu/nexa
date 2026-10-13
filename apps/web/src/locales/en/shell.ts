@@ -42,6 +42,24 @@ export const shell: Messages = {
   'shell.account.theme': 'Theme',
   'shell.account.theme.dark': 'Dark',
   'shell.account.theme.light': 'Light',
+  // Panel font presets (owner, 2026-10-13). The names are the fonts' own and
+  // stay in Latin script in every language.
+  'shell.account.font': 'Font',
+  'shell.account.font.workspaceDefault': 'Workspace default',
+  'shell.account.font.source.builtin': 'Built-in: {font}',
+  'shell.account.font.source.workspace': 'Workspace default: {font} · {date}',
+  'shell.account.font.source.user': 'Your choice: {font} · {date}',
+  'shell.account.font.saveError': 'The font could not be saved.',
+  'shell.font.inter': 'Inter (default)',
+  'shell.font.plus-jakarta': 'Plus Jakarta Sans',
+  'shell.font.manrope-dm-sans': 'Manrope + DM Sans',
+  'shell.font.nunito': 'Nunito',
+  'shell.font.figtree': 'Figtree',
+  'shell.font.inter.description': 'Crisp and neutral — the panel as it ships.',
+  'shell.font.plus-jakarta.description': 'Geometric and friendly, a little more open.',
+  'shell.font.manrope-dm-sans.description': 'Soft Manrope headings over easy-reading DM Sans.',
+  'shell.font.nunito.description': 'Rounded and warm; the largest body text of the five.',
+  'shell.font.figtree.description': 'Clean and modern, softer than Inter.',
   'shell.brand': 'Brand',
   // App menu (FR-MOD-01.1.1). The logo's trigger label, plus the one
   // destination in its panel that has no rail icon of its own.

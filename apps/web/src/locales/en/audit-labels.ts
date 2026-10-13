@@ -54,6 +54,7 @@ export const auditLabels: Messages = {
   'audit.action.settings.chat_timeout_updated': 'Chat timeout updated',
   'audit.action.settings.widget_updated': 'Chat widget updated',
   'audit.action.settings.sales_tracker_updated': 'Sales tracker updated',
+  'audit.action.settings.appearance_updated': 'Panel font default changed',
   'audit.action.settings.sla_updated': 'Response targets updated',
   'audit.action.sale.tracked': 'Sale tracked',
   'audit.action.settings.sandbox_created': 'Sandbox workspace created',

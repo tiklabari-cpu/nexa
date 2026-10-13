@@ -11729,13 +11729,24 @@
         "dependencies": [],
         "priority": "high",
         "updatedAt": "2026-10-13T12:50:24.723Z"
+      },
+      {
+        "id": "268",
+        "title": "PANEL-FONT-PRESETS [OPUS-HIGH] (Opus 5.5 · efor high) Panelde beş yazı tipi ön ayarı: çalışma alanı varsayılanı (yalnız sahip) + kullanıcı tercihi, en son yapılan kazanır",
+        "description": "Sahibin 2026-10-13 kararı (prompt-panel-font-presets.md): Inter yerleşik kalır; Plus Jakarta Sans, Manrope + DM Sans, Nunito, Figtree ön ayarları. Widget ve mobil kapsam dışı.",
+        "details": "KAPANIŞ (2026-10-13), dal feat/panel-font-presets:\n- types: PANEL_FONT_PRESETS + PANEL_FONT_DESIGNS (panel-font.ts); UiPreferences.font_preset(_set_at).\n- DB: migration 20261013150000_panel_font_presets — workspace_appearance_settings (license PK, RLS, CHECK) + agent_memberships.font_preset/_set_at (CHECK, ikisi birlikte NULL).\n- API: GET/PUT /settings/appearance (PUT yalnız owner, audit settings.appearance_updated); /agents/me/ui-preferences font_preset; /auth/me appearance. Kural: services/appearance/panel-font.ts resolvePanelFontPreset (eşitlikte kullanıcı).\n- Web: tokens.css html[data-font] blokları (Inter varsayılanı birebir aynı), lib/font.ts (tembel import, siyahtus.font + index.html boot, CSP hash), hesap menüsünde FontPicker (fontlar yalnız odakta yüklenir), Ayarlar -> Genel -> Görünüm (admin salt okunur), widget önizlemesi font-preset-reset.\n- Mobil parite sayacı 223 -> 224.\nKapı: build+statik+birim --force OK; entegrasyon --force OK; e2e 387/388 (tek kırmızı ESET kilitli PNG, tekrar koşuda yeşil); req-coverage, db:check-drift, contract:generate temiz.\nVarsayım: Inter değerleri prompt tablosundaki 13.5px/650 değil bugünkü 13px/700 (varsayılan birebir aynı kuralı). Toast yok, satır içi status.",
+        "testStrategy": "panel-font.test.ts (kural 6 senaryo+), panel-appearance.test.ts (entegrasyon), font.test.ts, font-tokens.test.ts, FontPicker.test.tsx, Appearance.test.tsx, e2e appearance.spec.ts.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "updatedAt": "2026-10-13T15:36:55.040Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-13T12:50:24.723Z",
-      "taskCount": 267,
-      "completedCount": 267,
+      "lastModified": "2026-10-13T15:36:55.040Z",
+      "taskCount": 268,
+      "completedCount": 268,
       "tags": [
         "master"
       ]

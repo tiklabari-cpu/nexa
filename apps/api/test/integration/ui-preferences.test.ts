@@ -70,13 +70,13 @@ describe('Settings navigation pin is kept per user and per license (FR-MOD-08.1)
   it('keeps an unpin across a fresh read', async () => {
     const res = await server.put(PATH, { settings_nav_pinned: false }, auth(agentToken));
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ settings_nav_pinned: false });
+    expect(res.json()).toEqual({ ...DEFAULT_UI_PREFERENCES, settings_nav_pinned: false });
 
     const again = await server.get(PATH, auth(agentToken));
-    expect(again.json()).toEqual({ settings_nav_pinned: false });
+    expect(again.json()).toEqual({ ...DEFAULT_UI_PREFERENCES, settings_nav_pinned: false });
 
     const back = await server.put(PATH, { settings_nav_pinned: true }, auth(agentToken));
-    expect(back.json()).toEqual({ settings_nav_pinned: true });
+    expect(back.json()).toEqual({ ...DEFAULT_UI_PREFERENCES, settings_nav_pinned: true });
   });
 
   it('refuses an unknown key, an empty body and a non-boolean value', async () => {
@@ -120,6 +120,7 @@ describe('Settings navigation pin is kept per user and per license (FR-MOD-08.1)
     await server.put(PATH, { settings_nav_pinned: false }, auth(agentToken));
     expect((await server.get(PATH, auth(elsewhere))).json()).toEqual(DEFAULT_UI_PREFERENCES);
     expect((await server.get(PATH, auth(agentToken))).json()).toEqual({
+      ...DEFAULT_UI_PREFERENCES,
       settings_nav_pinned: false,
     });
   });

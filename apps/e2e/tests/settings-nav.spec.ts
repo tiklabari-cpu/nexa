@@ -95,7 +95,7 @@ test.describe('Settings navigation (FR-MOD-08.1)', () => {
       await agentPage.getByRole('button', { name: 'Unpin side navigation' }).click();
       const response = await saved;
       expect(response.status()).toBe(200);
-      expect(await response.json()).toEqual({ settings_nav_pinned: false });
+      expect(await response.json()).toMatchObject({ settings_nav_pinned: false });
       await expect(nav).toHaveAttribute('data-pinned', 'false');
 
       // The server holds it, so a reload — a fresh read — keeps it.
@@ -103,7 +103,7 @@ test.describe('Settings navigation (FR-MOD-08.1)', () => {
       await expect(agentPage.getByRole('region', { name: 'Tags' })).toBeVisible();
       await expect(agentPage.getByTestId('settings-nav')).toHaveAttribute('data-pinned', 'false');
       const stored = await request.get(PREFS, { headers: auth });
-      expect(await stored.json()).toEqual({ settings_nav_pinned: false });
+      expect(await stored.json()).toMatchObject({ settings_nav_pinned: false });
       await agentPage.screenshot({ path: 'kanit/08.1-settings-nav-unpinned.png', fullPage: true });
 
       // Folded away, the sections are still reachable from the strip.

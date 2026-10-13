@@ -898,7 +898,10 @@ describe('module parity matrix — what is still owed', () => {
       // where a live Telegram bot's updates arrive, called by Telegram with a
       // secret header, never by a person. The app manages no channels, so
       // there is nothing to call; nothing here re-scopes.
-      contractEndpoints: 223,
+      // 223 -> 224 with `/settings/appearance` (2026-10-13) — the workspace's
+      // default panel font, a web-panel look the owner sets. The phone paints
+      // its own type and reads no font, so there is nothing to call.
+      contractEndpoints: 224,
       scopeBoundaries: 1,
     });
   });

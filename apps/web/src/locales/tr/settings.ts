@@ -40,6 +40,23 @@ export const settings: Messages = {
   'settings.nav.section.notifications': 'Bildirimler',
   'settings.nav.section.company': 'Şirket bilgileri',
   'settings.nav.section.brands': 'Markalar',
+  'settings.nav.section.appearance': 'Görünüm',
+  'settings.appearance.title': 'Görünüm',
+  'settings.appearance.description':
+    'Bütün üyelerin paneli gördüğü yazı tipi. Üyeler hesap menüsünden kendi seçimini yine yapabilir — en son yapılan seçim geçerlidir.',
+  'settings.appearance.legend': 'Çalışma alanı yazı tipi',
+  'settings.appearance.sample': 'Pijamalı hasta yağız şoföre çabucak güvendi.',
+  'settings.appearance.save': 'Varsayılanı kaydet',
+  'settings.appearance.remove': 'Varsayılanı kaldır',
+  'settings.appearance.saved':
+    'Kaydedildi — üyeler paneli bir sonraki açışta bu yazı tipiyle görür.',
+  'settings.appearance.removed': 'Varsayılan kaldırıldı.',
+  'settings.appearance.ownerOnly': 'Bu ayarı yalnız çalışma alanı sahibi değiştirebilir.',
+  'settings.appearance.current.none':
+    'Çalışma alanı varsayılanı yok: kendi seçimini yapmayan üyeler Inter görür.',
+  'settings.appearance.current.set': 'Şu anki varsayılan: {font} · {date}',
+  'settings.appearance.yours': 'Senin panelin şu an: {source}',
+  'settings.appearance.loadError': 'Görünüm ayarları yüklenemedi.',
   'settings.nav.section.channels': 'Tüm kanallar',
   'settings.nav.section.websiteWidgets': "Web sitesi widget'ları",
   'settings.nav.section.widget': 'Widget görünümü',

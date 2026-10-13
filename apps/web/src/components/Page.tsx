@@ -182,7 +182,10 @@ export function Kpi({
       <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
         {label}
       </span>
-      <span className={`tabular text-2xl font-bold ${valueColour}`}>
+      {/* The face and weight follow the panel font preset (tokens.css). */}
+      <span
+        className={`tabular font-heading text-2xl [font-weight:var(--kpi-weight)] ${valueColour}`}
+      >
         {value ?? <span className="text-content-tertiary">—</span>}
       </span>
       {delta}

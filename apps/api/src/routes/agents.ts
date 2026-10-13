@@ -28,6 +28,7 @@ import {
   DEFAULT_WORK_SCHEDULE,
   GROUP_PRIORITIES,
   NOTIFICATION_CHANNELS,
+  PANEL_FONT_PRESETS,
   ROUTING_STATUSES,
   UI_PREFERENCE_KEYS,
   hasAnyScope,
@@ -176,12 +177,15 @@ const notificationPrefsBody = z
   .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
 /** Same contract as `notificationPrefsBody`: partial, strict, never empty. */
 const uiPrefsBody = z
-  .object(
-    Object.fromEntries(UI_PREFERENCE_KEYS.map((k) => [k, z.boolean().optional()])) as Record<
+  .object({
+    ...(Object.fromEntries(UI_PREFERENCE_KEYS.map((k) => [k, z.boolean().optional()])) as Record<
       UiPreferenceKey,
       z.ZodOptional<z.ZodBoolean>
-    >,
-  )
+    >),
+    // The member's own panel font (owner, 2026-10-13); `null` follows the
+    // workspace default again.
+    font_preset: z.enum(PANEL_FONT_PRESETS).nullable().optional(),
+  })
   .strict()
   .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
 const listAgentsQuery = z.object({
@@ -486,7 +490,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       const parsed = uiPrefsBody.safeParse(request.body);
       if (!parsed.success) {
         throw ApiError.validation(
-          `Send at least one of ${UI_PREFERENCE_KEYS.join(', ')} as a boolean.`,
+          `Send at least one of ${UI_PREFERENCE_KEYS.join(', ')} as a boolean, or font_preset as one of ${PANEL_FONT_PRESETS.join(', ')} or null.`,
         );
       }
 

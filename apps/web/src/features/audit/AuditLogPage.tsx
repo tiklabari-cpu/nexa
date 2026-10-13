@@ -191,6 +191,7 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'settings.chat_timeout_updated',
       'settings.widget_updated',
       'settings.sales_tracker_updated',
+      'settings.appearance_updated',
       'settings.trusted_domain_added',
       'settings.trusted_domain_removed',
       'settings.ip_allowlist_added',

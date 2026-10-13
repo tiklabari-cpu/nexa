@@ -22,6 +22,7 @@ import {
   WIDGET_WELCOME_TITLE_MAX,
   EXPERTISE_NAME_MAX_LENGTH,
   isIanaTimeZone,
+  PANEL_FONT_PRESETS,
   RETENTION_TIERS,
   type RetentionTier,
   retentionTierWindow,
@@ -84,6 +85,7 @@ import {
   saveSiemExportSettings,
   serialiseSiemSettings,
 } from '../services/audit/siem-export.js';
+import { serialiseWorkspaceAppearance } from '../services/appearance/panel-font.js';
 import { MAX_ACTIVE_TOKENS_PER_OWNER } from '../services/auth/token-service.js';
 import {
   createSandbox,
@@ -863,6 +865,11 @@ function serialiseCompany(org: {
     company_size: org.companySize as CompanySize | null,
   };
 }
+
+/** `PUT /settings/appearance`: a preset, or `null` to remove the default. */
+const updateWorkspaceAppearanceBody = z
+  .object({ font_preset: z.enum(PANEL_FONT_PRESETS).nullable() })
+  .strict();
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -2816,6 +2823,58 @@ export default async function settingsRoutes(
       });
 
       return reply.send(serialiseSalesTracker(updated));
+    },
+  );
+
+  // --- Panel appearance (owner, 2026-10-13) ----------------------------------
+  //
+  // The workspace's default panel font. Read by every member — the account menu
+  // and the Appearance section both say where the font a member sees comes
+  // from, and the read reveals nothing beyond a font name. `agents--my:ro` is
+  // the scope every session holds for its own console preferences
+  // (`/agents/me/ui-preferences` reads under it); this is the same kind of
+  // read, one layer up. Written by the owner only: the default repaints every
+  // member's panel, which is the owner's call, not an admin's.
+
+  app.get(
+    '/settings/appearance',
+    { config: { scopes: ['agents--my:ro', 'agents--all:ro'], principals: ['agent'] } },
+    async (request, reply) => {
+      // License-scoped: `findFirst` under RLS is this license's only row. No
+      // row reads as "no default" without materialising one.
+      const row = await request.withTenant((tx) => tx.workspaceAppearanceSettings.findFirst());
+      return reply.send(serialiseWorkspaceAppearance(row));
+    },
+  );
+
+  app.put(
+    '/settings/appearance',
+    { config: { scopes: ['organization--my:rw'], minimumRole: 'owner', principals: ['agent'] } },
+    async (request, reply) => {
+      const body = parse(updateWorkspaceAppearanceBody, request.body);
+      const tenant = request.tenant();
+      // Stamped here: the time of the write is what "latest wins" orders
+      // against each member's own choice. Removing the default removes its
+      // time with it (the CHECK holds the two together).
+      const data = {
+        fontPreset: body.font_preset,
+        fontPresetSetAt: body.font_preset === null ? null : new Date(),
+      };
+
+      const updated = await request.withTenant(async (tx) => {
+        const row = await tx.workspaceAppearanceSettings.upsert({
+          where: { licenseId: tenant.licenseId },
+          create: { licenseId: tenant.licenseId, ...data },
+          update: data,
+        });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.appearance_updated',
+          metadata: { font_preset: body.font_preset },
+        });
+        return row;
+      });
+
+      return reply.send(serialiseWorkspaceAppearance(updated));
     },
   );
 

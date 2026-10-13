@@ -123,6 +123,17 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'CompanyDetails',
     keywords: ['organization', 'address', 'timezone', 'sector'],
   },
+  // The workspace's default panel font (owner, 2026-10-13). Shown to whoever
+  // manages company details; only the owner can save it (the section is
+  // read-only for an admin, and the endpoint refuses one).
+  {
+    slug: 'appearance',
+    group: 'general',
+    labelKey: 'settings.nav.section.appearance',
+    scope: ['organization--my:rw'],
+    file: 'Appearance',
+    keywords: ['font', 'typeface', 'yazı tipi', 'theme'],
+  },
   {
     slug: 'brands',
     group: 'general',

@@ -48,15 +48,10 @@ export default {
         note: 'var(--note)',
       },
       fontFamily: {
-        sans: [
-          'Inter Variable',
-          'Inter var',
-          'Inter',
-          '-apple-system',
-          'Segoe UI',
-          'system-ui',
-          'sans-serif',
-        ],
+        // The panel font preset's stacks (tokens.css · `--font-body`), so a
+        // `font-sans` element follows the preset like the body text does.
+        sans: ['var(--font-body)'],
+        heading: ['var(--font-heading)'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {

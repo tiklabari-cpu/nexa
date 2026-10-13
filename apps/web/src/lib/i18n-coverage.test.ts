@@ -47,6 +47,7 @@ const SCREEN_ROOTS = ['src/features', 'src/components'];
  */
 const TRANSLATED_FILES: readonly string[] = [
   'src/components/AppShell.tsx',
+  'src/components/FontPicker.tsx',
   'src/components/CommandPalette.tsx',
   'src/components/DeploymentGate.tsx',
   'src/components/LoadError.tsx',
@@ -100,6 +101,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/team/TeamEditor.tsx',
   'src/features/team/TeamMembers.tsx',
   'src/features/home/HomePage.tsx',
+  'src/features/settings/Appearance.tsx',
   'src/features/settings/CannedResponses.tsx',
   'src/features/settings/Channels.tsx',
   'src/features/settings/ChatTimeout.tsx',

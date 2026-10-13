@@ -27,6 +27,7 @@ import { liveDataApps } from '../../lib/live-apps.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Brands } from './Brands.js';
 import { CompanyDetails } from './CompanyDetails.js';
+import { Appearance } from './Appearance.js';
 import { McpConnection } from './McpConnection.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
@@ -87,9 +88,11 @@ interface SectionPermissions {
   canManageBrands: boolean;
   canManageScheduledExports: boolean;
   canManageCompany: boolean;
+  /** The workspace's default panel font is the owner's alone (owner, 2026-10-13). */
+  isOwner: boolean;
 }
 
-function permissionsFrom(scopes: readonly string[]): SectionPermissions {
+function permissionsFrom(scopes: readonly string[], role: string | undefined): SectionPermissions {
   return {
     canManageAccess: scopes.includes('access_rules:rw'),
     canManageReplies: scopes.includes('canned_responses--all:rw'),
@@ -100,6 +103,7 @@ function permissionsFrom(scopes: readonly string[]): SectionPermissions {
     // Read and write are the same scope on `/settings/company` — see
     // `CompanyDetails.tsx` for why there is no read-only viewer of this section.
     canManageCompany: scopes.includes('organization--my:rw'),
+    isOwner: role === 'owner',
   };
 }
 
@@ -112,6 +116,7 @@ function permissionsFrom(scopes: readonly string[]): SectionPermissions {
 export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactElement> = {
   notifications: () => <NotificationSettings />,
   company: (p) => <CompanyDetails canManage={p.canManageCompany} />,
+  appearance: (p) => <Appearance canEdit={p.isOwner} />,
   brands: (p) => <Brands canEdit={p.canManageBrands} />,
   channels: () => <ChannelsGrid />,
   'website-widgets': (p) => <WebsiteWidgets canEdit={p.canManageAccess} />,
@@ -175,6 +180,7 @@ export function SettingsIndex(): ReactElement {
 export function SettingsPage(): ReactElement {
   const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  const role = useAuth((s) => s.agent?.role);
   const deployment = useDeployment();
   const { section } = useParams();
   const entry = findSection(section);
@@ -194,7 +200,7 @@ export function SettingsPage(): ReactElement {
       title={t(entry.labelKey)}
       description={t('settings.pageBreadcrumb', { group: t(groupLabelKey(entry)) })}
     >
-      {render(permissionsFrom(scopes))}
+      {render(permissionsFrom(scopes, role))}
     </Page>
   );
 }

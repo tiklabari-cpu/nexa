@@ -13,6 +13,19 @@
 
 ## Task log (newest-first)
 
+## tm 268 — PANEL-FONT-PRESETS: panelde beş yazı tipi ön ayarı (çalışma alanı varsayılanı + kullanıcı tercihi, en son kazanır) — done — 2026-10-13 UTC
+
+- **Yapıldı:** `@siyahtus/types` · `PANEL_FONT_PRESETS` + `PANEL_FONT_DESIGNS` (inter, plus-jakarta, manrope-dm-sans, nunito, figtree). Migration `20261013150000_panel_font_presets`: `workspace_appearance_settings` (license PK, RLS, CHECK) + `agent_memberships.font_preset/_set_at` (CHECK; preset ve zaman birlikte NULL). `GET/PUT /settings/appearance` (PUT yalnız owner, audit `settings.appearance_updated`), `/agents/me/ui-preferences` `font_preset`, `/auth/me` `appearance` — kural tek yerde: `services/appearance/panel-font.ts` · `resolvePanelFontPreset` (eşitlikte kullanıcı). Web: `tokens.css` `html[data-font=…]` blokları, `lib/font.ts` (tembel `import()`, `siyahtus.font` + `index.html` boot, CSP hash güncel), hesap menüsünde `FontPicker`, Ayarlar → Genel → Görünüm (`Appearance.tsx`; admin salt okunur), widget önizlemesi `font-preset-reset`.
+- **Varsayımlar:** Inter'in değerleri prompt tablosundaki 13.5 px / 650 değil, bugünkü 13 px / 700 / −0.011em — "varsayılan bayt-birebir aynı" kuralı tabloya üstün tutuldu. Panelde toast sistemi yok; kayıt bildirimi diğer bölümler gibi satır içi `role="status"`. Görünüm bölümü `organization--my:rw` taşıyanlara görünür (owner + admin).
+- **Doğrulama:** `test:gate --force` build/statik/birim (4m15s) + entegrasyon (10m54s) yeşil; e2e parçalı 387/388, tek kırmızı ESET'in kilitlediği kanıt PNG'si (`persona-answer` tekrar koşuda yeşil); `appearance.spec.ts` (owner Figtree → üye Nunito → owner Manrope → üye yenileyince manrope-dm-sans); 5 ön ayar × 2 tema hesaplanan stil tablosu tarayıcıda.
+- **Ders:** hesap menüsü (`Dropdown`) kapalıyken de çizilir — font seçici altı aileyi her sayfada indiriyordu; artık yalnız odak/tıklamada (`FontPicker`). Panelin dev Vite'ı açıkken e2e koşmak oturumları "Loading…"ta bırakır (paylaşılan `node_modules/.vite`).
+- **Sonraki pencereye not:** Yeni ön ayar = types katalogu + `tokens.css` bloğu + iki CHECK + `index.html` listesi + `FONT_FILES`; `font-tokens.test.ts` ve `font.test.ts` hepsini birbirine bağlar.
+
+## tm 267 — PANEL-WIDGET-RESTYLE: panelin yeni açık/koyu teması, widget referansa göre yeniden giydirildi — done — 2026-10-13 UTC
+
+- **Yapıldı:** panel tema yeniden yazımı (varsayılan light); widget referans "canli-destek-widget_3" görünümünde (Manrope, yumuşak gölge için köşeye yaslı çerçeve, açıkken baloncuk kalır, 30 sn gecikmeli karşılama kartı, 15 sn yanıt önizlemesi, marka karşılama mesajı `welcome_title/welcome_text`). Ayrıntı: tm 267 kaydı.
+- **Doğrulama:** gate yeşil, e2e düzeltilen dosyalar 130/130 (commit `fae87a10`).
+
 ## tm 266 — MAIL-THEME: e-postalar panelin "Graphite + Indigo" temasında — done — 2026-10-12 UTC
 
 - **Yapıldı:** Ortak şablon (`apps/api/src/services/mail/templates/layout.ts`) panelin 2026-10 token değerleriyle yeniden çizildi: kartın üstünde grafit bant + indigo→mor "S" karosu ve kelime işareti (sağda ilgili çalışma alanı), ince marka şeridi; başlığın üstünde e-posta türünü söyleyen ikon karosu (`icon`, SLA uyarısında kırmızı `tone: 'alert'`); tek indigo düğme (Outlook için `mso-padding-alt`); yuvarlak bilgi paneli, kesikli indigo kod kutusu; dökümler panel gibi (ziyaretçi solda, ekip sağda indigo, dahili not kehribar); 2FA "siz değilseniz" uyarısı yeni `callout` bloğunda. Müşteriye gidenler (müşteri dökümü, talep bildirimi) başlıkta çalışma alanının adı + baş harfiyle (`sender`), altta "Sent with SiyahTuş / SiyahTuş ile gönderildi". Koyu mod panelin grafitiyle, dar ekran düzeni, Outlook'ta Segoe UI. Önizlemeye Açık/Koyu ve Masaüstü/Telefon düğmeleri. PLAN §D216.

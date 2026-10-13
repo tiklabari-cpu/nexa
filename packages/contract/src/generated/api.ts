@@ -4965,6 +4965,35 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/appearance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's default panel font
+     * @description Readable by every member (owner, 2026-10-13): the account menu and the
+     *     Appearance section both say where the font comes from. A workspace that
+     *     never set one reads `font_preset: null`, with no side effect.
+     */
+    get: operations['getWorkspaceAppearanceSettings'];
+    /**
+     * Set or remove the workspace's default panel font
+     * @description **Owner only** — admin and vice-owner get `403`. A preset is stamped
+     *     with the time of the write, which is what "latest wins" orders against
+     *     each member's own choice; `null` removes the default and its time.
+     *     Written to the audit log.
+     */
+    put: operations['setWorkspaceAppearanceSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/apps': {
     parameters: {
       query?: never;
@@ -7919,6 +7948,59 @@ export interface components {
      */
     UiPreferences: {
       settings_nav_pinned: boolean;
+      /**
+       * @description The panel font this member chose; `null` follows the workspace
+       *     default. Whether it applies is `GET /auth/me`'s `appearance`: the
+       *     later of this choice and the workspace default wins.
+       */
+      font_preset: components['schemas']['PanelFontPreset'] | null;
+      /**
+       * Format: date-time
+       * @description When `font_preset` was chosen. Read-only; `null` with no choice.
+       */
+      font_preset_set_at: string | null;
+    };
+    /**
+     * @description One of the panel's five font presets (owner, 2026-10-13;
+     *     `@siyahtus/types` · `PANEL_FONT_PRESETS`). `inter` is the panel's
+     *     built-in look.
+     * @enum {string}
+     */
+    PanelFontPreset: 'inter' | 'plus-jakarta' | 'manrope-dm-sans' | 'nunito' | 'figtree';
+    /**
+     * @description The workspace's default panel font (`workspace_appearance_settings`),
+     *     set by the owner only. `null` = no default: members see the built-in
+     *     Inter unless they chose a font of their own. License-scoped, not
+     *     brand-scoped.
+     */
+    WorkspaceAppearanceSettings: {
+      font_preset: components['schemas']['PanelFontPreset'] | null;
+      /**
+       * Format: date-time
+       * @description When the owner last set the default; `null` with none.
+       */
+      font_preset_set_at: string | null;
+    };
+    UpdateWorkspaceAppearanceSettings: {
+      /** @description The new default, or `null` to remove it. */
+      font_preset: components['schemas']['PanelFontPreset'] | null;
+    };
+    /**
+     * @description What the panel paints, resolved on the server: the later of the
+     *     workspace default and the caller's own choice, or the built-in Inter
+     *     when neither exists. Both layers ride along so the account menu can
+     *     say where the font comes from.
+     */
+    PanelAppearance: {
+      effective_font_preset: components['schemas']['PanelFontPreset'];
+      /** @enum {string} */
+      source: 'builtin' | 'workspace' | 'user';
+      workspace_font_preset: components['schemas']['PanelFontPreset'] | null;
+      /** Format: date-time */
+      workspace_font_preset_set_at: string | null;
+      user_font_preset: components['schemas']['PanelFontPreset'] | null;
+      /** Format: date-time */
+      user_font_preset_set_at: string | null;
     };
     /**
      * @description `status` + `service` are always present. Every other field is
@@ -13551,6 +13633,12 @@ export interface operations {
              */
             notification_preferences?: components['schemas']['NotificationPreferences'];
             /**
+             * @description Agent principals only. The panel font to paint — the later of
+             *     the workspace default and the caller's own choice — resolved
+             *     here so the panel never reapplies the rule itself.
+             */
+            appearance?: components['schemas']['PanelAppearance'];
+            /**
              * @description Agent principals only. The caller's own second factor
              *     (NFR-S11 · FR-MOD-00.1). Carried here rather than on an
              *     endpoint of its own: it is a property of the caller, which is
@@ -16784,6 +16872,12 @@ export interface operations {
         'application/json': {
           /** @description Whether the Settings side navigation is shown pinned (`true`) or folded away. */
           settings_nav_pinned?: boolean;
+          /**
+           * @description The caller's own panel font, stamped with the time of the
+           *     write; `null` clears the choice (and its time) so the
+           *     workspace default applies again.
+           */
+          font_preset?: components['schemas']['PanelFontPreset'] | null;
         };
       };
     };
@@ -20716,6 +20810,57 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['SalesTrackerSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getWorkspaceAppearanceSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current default */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WorkspaceAppearanceSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setWorkspaceAppearanceSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateWorkspaceAppearanceSettings'];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WorkspaceAppearanceSettings'];
         };
       };
       400: components['responses']['BadRequest'];

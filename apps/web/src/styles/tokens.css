@@ -6,34 +6,53 @@
  * never as raw values, so a theme change is a one-file change.
  */
 
+/**
+ * The 2026-10 redesign ("Graphite + Indigo").
+ *
+ * The first palette was navy-on-navy with a stock blue: every surface carried
+ * the same blue cast, so nothing separated and the brand had no colour of its
+ * own. Both themes now stand on near-neutral greys with only a trace of cool,
+ * and the one saturated colour on the page is the indigo brand — so a primary
+ * button, a selected row or an agent bubble is the thing the eye lands on.
+ * Dark is a true graphite black, which is also what the name promises.
+ *
+ * `--ai` moved from violet to orchid in the same pass: next to an indigo brand
+ * a violet AI badge read as "another brand button". Every ratio below is
+ * re-derived by `tokens.test.ts`.
+ */
 :root {
   color-scheme: light;
 
   /* Surfaces */
-  --bg-canvas: #f7f8fa;
+  --bg-canvas: #f6f6f8;
   --bg-surface: #ffffff;
-  --bg-surface-2: #f1f3f7;
-  --bg-rail: #111726;
-  --bg-inset: #e9ecf2;
-  --border: #dde1e9;
-  --border-strong: #c3c9d6;
+  --bg-surface-2: #f3f3f6;
+  --bg-rail: #0c0c10;
+  --bg-inset: #ececf1;
+  --border: #e4e4ea;
+  --border-strong: #cfcfd8;
 
   /* Text */
-  --text-primary: #111726;
-  --text-secondary: #4a5468;
-  /* 4.73:1 on the lightest surface it lands on (`--bg-inset`). The previous
-     #6b7488 was 3.96:1 there — under AA (tm 115). */
-  --text-tertiary: #606878;
+  --text-primary: #16161d;
+  --text-secondary: #4b4b5a;
+  /* 5.33:1 on the darkest light surface it lands on (`--bg-inset`). AA is the
+     floor here, not a target — the faintest text the UI ships (tm 115). */
+  --text-tertiary: #5f5f6e;
   --text-inverse: #ffffff;
 
-  /* Brand — a *fill* ramp: every step is chosen to carry white text. */
-  --brand-100: #e4ecff;
-  /* White on this measured 4.49:1 at #2f6bff — a hair under AA, on all 95
-     `bg-brand-500` buttons at once. #2d67fa is 4.74:1 (tm 115). */
-  --brand-500: #2d67fa;
-  --brand-600: #1f52d8;
-  --brand-700: #1740ac;
-  --brand-950: #0f1e42;
+  /* Brand — a *fill* ramp: every step is chosen to carry white text, except
+     the two tints (100, 200) which carry `--text-primary` / `brand-700`. */
+  --brand-100: #eeedfe;
+  --brand-200: #dcd9fd;
+  /* White on this is 5.62:1 — clear of AA on every `bg-brand-500` button
+     (the old stock blue sat at 4.49:1 before tm 115). */
+  --brand-500: #5b4fe9;
+  --brand-600: #4a3fd6;
+  --brand-700: #372cb3;
+  --brand-900: #2a2466;
+  --brand-950: #1e1a4a;
+  /* The second stop of the brand gradient (`.brand-mark`); white is 5.93:1. */
+  --brand-violet: #7a3fd9;
   /**
    * Brand as *text*, which is a different problem from brand as fill.
    *
@@ -43,9 +62,9 @@
    * — so accent text gets its own token, tuned per theme. Consumed as
    * `text-content-brand`, never as a numbered brand step.
    */
-  --brand-text: #1f52d8;
+  --brand-text: #4a3fd6;
   /* Follows the fill so the two never drift; 1.4.11 wants 3:1 for a non-text
-     boundary and this is 4.74:1 on white. */
+     boundary and this is 5.62:1 on white, 3.48:1 on the rail. */
   --focus-ring: var(--brand-500);
 
   /**
@@ -61,33 +80,42 @@
    * Darkened along their own hue, so the palette reads the same. `--note` is
    * pulled slightly olive as well: matching `--warning`'s lightness would have
    * collapsed two semantically distinct amber tokens into the same swatch.
-   * `--danger`, `--info` and `--ai` already cleared it (4.78 · 4.79 · 4.82) and
-   * are untouched.
+   * The 2026-10 palette keeps every one of them at 4.86:1 or better on
+   * `--bg-inset`.
    */
-  --success: #10744f;
-  --warning: #945800;
-  --danger: #c42a2a;
-  --info: #0b6e99;
-  --ai: #7c3aed;
-  --note: #806413;
+  --success: #0f7349;
+  --warning: #925400;
+  --danger: #c4253a;
+  --info: #0a6b94;
+  --ai: #a3218f;
+  --note: #7d6210;
 
   /* Chat bubbles */
   --bubble-agent-bg: var(--brand-500);
   --bubble-agent-text: #ffffff;
-  --bubble-customer-bg: #eff1f5;
+  --bubble-customer-bg: #f0f0f4;
   --bubble-customer-text: var(--text-primary);
-  --bubble-note-bg: #fff6e5;
-  --bubble-ai-bg: #f3edff;
+  --bubble-note-bg: #fff7e6;
+  --bubble-ai-bg: #fbeff9;
 
-  /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* Radius — softer than the first 4/8/12, still tight enough for dense lists. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
 
-  /* Elevation */
-  --shadow-xs: 0 1px 2px rgb(16 24 40 / 0.06);
-  --shadow-sm: 0 2px 6px rgb(16 24 40 / 0.08);
-  --shadow-md: 0 8px 24px rgb(16 24 40 / 0.12);
+  /* Elevation — two layers each: a tight contact shadow and a soft ambient one. */
+  --shadow-xs: 0 1px 2px rgb(20 20 40 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(20 20 40 / 0.04), 0 2px 8px -2px rgb(20 20 40 / 0.08);
+  --shadow-md: 0 2px 4px -2px rgb(20 20 40 / 0.06), 0 12px 32px -8px rgb(20 20 40 / 0.16);
+  --shadow-lg: 0 4px 8px -4px rgb(20 20 40 / 0.08), 0 28px 64px -16px rgb(20 20 40 / 0.28);
+
+  /* The public pages' backdrop glow (`.auth-stage`) — decoration only, never
+     behind text: every form sits on a solid `--bg-surface` card. */
+  --glow-a: rgb(91 79 233 / 0.22);
+  --glow-b: rgb(201 64 185 / 0.14);
+  --glow-c: rgb(56 140 255 / 0.12);
+  --grid-line: rgb(20 20 40 / 0.045);
 
   /* Motion */
   --motion-fast: 120ms;
@@ -99,41 +127,51 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg-canvas: #0b1020;
-  --bg-surface: #121829;
-  --bg-surface-2: #1a2136;
-  --bg-rail: #080c18;
-  --bg-inset: #0e1424;
-  --border: #232c44;
-  --border-strong: #313c58;
+  --bg-canvas: #09090c;
+  --bg-surface: #111116;
+  --bg-surface-2: #18181f;
+  --bg-rail: #050507;
+  --bg-inset: #0d0d12;
+  --border: #24242d;
+  --border-strong: #34343f;
 
-  --text-primary: #edf0f6;
-  --text-secondary: #a6b0c4;
-  /* 4.94:1 on `--bg-surface-2`, the lightest dark surface. #7c879e was 4.42:1
-     there — axe flagged it on the customers table (tm 115). */
-  --text-tertiary: #868fa6;
-  --text-inverse: #0b1020;
+  --text-primary: #f2f2f5;
+  --text-secondary: #a4a4b2;
+  /* 5.19:1 on `--bg-surface-2`, the lightest dark surface (AA floor: tm 115). */
+  --text-tertiary: #8a8a99;
+  --text-inverse: #09090c;
 
-  /* 6.42:1 at worst (on `--bg-surface-2`); the light `--brand-text` is 2.48:1
-     there. Same hue as the focus ring, deliberately. */
-  --brand-text: #7aa2ff;
-  --focus-ring: #7aa2ff;
+  /* 7.63:1 at worst (on `--bg-surface-2`); the light `--brand-text` would be
+     well under AA there. Same hue family as the focus ring, deliberately. */
+  --brand-text: #a5a0ff;
+  --focus-ring: #8f87ff;
 
-  --success: #3dd68c;
+  --success: #3ed68c;
   --warning: #f5b14c;
-  --danger: #ff6b6b;
+  --danger: #ff6b7a;
   --info: #4fc3f7;
-  --ai: #b392f7;
+  --ai: #f08ae0;
   --note: #ffce73;
 
-  --bubble-customer-bg: #1e2740;
-  --bubble-note-bg: #2e2210;
-  --bubble-ai-bg: #241a3d;
+  --bubble-customer-bg: #1c1c24;
+  --bubble-note-bg: #2b2110;
+  --bubble-ai-bg: #2a1328;
 
-  /* Shadows disappear on dark backgrounds — borders carry elevation instead. */
-  --shadow-xs: 0 0 0 1px var(--border);
-  --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 12px 32px rgb(0 0 0 / 0.5);
+  /* Shadows barely read on black, so each one carries a hairline ring — that
+     is what actually draws the edge — plus a faint top highlight. */
+  --shadow-xs: 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-sm: 0 0 0 1px rgb(255 255 255 / 0.04), 0 2px 8px rgb(0 0 0 / 0.45);
+  --shadow-md:
+    0 0 0 1px rgb(255 255 255 / 0.06), inset 0 1px 0 rgb(255 255 255 / 0.04),
+    0 16px 40px -8px rgb(0 0 0 / 0.65);
+  --shadow-lg:
+    0 0 0 1px rgb(255 255 255 / 0.07), inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 32px 72px -12px rgb(0 0 0 / 0.75);
+
+  --glow-a: rgb(91 79 233 / 0.42);
+  --glow-b: rgb(201 64 185 / 0.2);
+  --glow-c: rgb(56 140 255 / 0.12);
+  --grid-line: rgb(255 255 255 / 0.04);
 }
 
 /* Respect the OS preference when the app has not pinned a theme. */
@@ -159,16 +197,47 @@ body {
   margin: 0;
   background: var(--bg-canvas);
   color: var(--text-primary);
+  /* `Inter Variable` is bundled (`@fontsource-variable/inter`, imported in
+     main.tsx) — before the redesign the stack named Inter but nothing loaded
+     it, so Windows rendered every screen in Segoe UI. */
   font-family:
+    'Inter Variable',
     'Inter var',
     Inter,
     -apple-system,
     'Segoe UI',
     system-ui,
     sans-serif;
+  /* cv11: single-storey a · ss03: rounded quotes · cv02: open 4 — Inter's
+     calmer "display" alternates, which is most of what makes it look modern. */
+  font-feature-settings:
+    'cv11' 1,
+    'ss03' 1,
+    'cv02' 1;
   font-size: 0.8125rem;
   line-height: 1.25rem;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings a touch tighter — Inter at 600+ reads loose at default tracking. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.011em;
+}
+
+::selection {
+  background: var(--brand-500);
+  color: #ffffff;
+}
+
+/* Thin, theme-coloured scrollbars — the OS default is a light grey slab that
+   cut through every dark list. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 /* Numeric data must not jitter as values update. */
@@ -205,10 +274,12 @@ body {
  * source order, so an intentional suppression stays possible — but it now has
  * to be written on purpose rather than arrive as a side effect of `outline-none`.
  */
+/* No `border-radius` here any more: it used to reshape whatever took focus, so a
+   round avatar or a pill turned into a square the moment it was tabbed to.
+   Outlines follow the control's own radius in every supported browser. */
 :root :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {

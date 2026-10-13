@@ -1804,6 +1804,8 @@ async function widgetAppearance(
         theme: row.theme as WidgetAppearance['theme'],
         mobile_fullscreen: row.mobileFullscreen,
         powered_by: await poweredByFor(tx, tenant, row.poweredBy),
+        welcome_title: row.welcomeTitle,
+        welcome_text: row.welcomeText,
       };
     });
     return { ...normalizeWidgetAppearance(appearance), ...links };

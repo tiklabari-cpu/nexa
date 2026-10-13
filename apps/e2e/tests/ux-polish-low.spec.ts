@@ -14,7 +14,7 @@
  *         the frame.
  */
 import type { Locator, Page } from '@playwright/test';
-import { DEMO, HOST_PAGE, expect, test, widgetFrame } from './fixtures.js';
+import { DEMO, HOST_PAGE, arriveForGreeting, expect, test, widgetFrame } from './fixtures.js';
 
 interface Box {
   x: number;
@@ -153,7 +153,8 @@ test.describe('Arabic widget corner (D17)', () => {
       page,
       organizationId,
     }) => {
-      await page.goto(
+      await arriveForGreeting(
+        page,
         `${HOST_PAGE}/demo.html?organization_id=${organizationId}&language=${language}`,
       );
       const frame = widgetFrame(page);

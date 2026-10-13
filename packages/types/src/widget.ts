@@ -36,7 +36,19 @@ export interface WidgetAppearance {
   mobile_fullscreen: boolean;
   /** The "Powered by SiyahTuş" footer (FR-MOD-11.5) — removable, shown by default. */
   powered_by: boolean;
+  /**
+   * The workspace's welcome message (owner, 2026-10-13): a bold first line and
+   * the text under it, shown as the team's first bubble when the panel opens.
+   * Null keeps the widget's built-in line. Server-delivered only — never baked
+   * into the install snippet, so editing it needs no re-install.
+   */
+  welcome_title: string | null;
+  welcome_text: string | null;
 }
+
+/** Upper bounds for the welcome message, shared by the API, the DB and the form. */
+export const WIDGET_WELCOME_TITLE_MAX = 120;
+export const WIDGET_WELCOME_TEXT_MAX = 500;
 
 /**
  * What the visitor's token mint carries: the appearance above plus the two
@@ -68,9 +80,11 @@ export const AI_BOT_ID = 'ai-agent';
 export const DEFAULT_WIDGET_APPEARANCE: WidgetAppearance = {
   primary_color: '#2d67fa',
   position: 'bottom-right',
-  theme: 'auto',
+  theme: 'light',
   mobile_fullscreen: true,
   powered_by: true,
+  welcome_title: null,
+  welcome_text: null,
 };
 
 /**
@@ -110,5 +124,18 @@ export function normalizeWidgetAppearance(
         : DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
     powered_by:
       typeof raw.powered_by === 'boolean' ? raw.powered_by : DEFAULT_WIDGET_APPEARANCE.powered_by,
+    welcome_title: normalizeWelcome(raw.welcome_title, WIDGET_WELCOME_TITLE_MAX),
+    welcome_text: normalizeWelcome(raw.welcome_text, WIDGET_WELCOME_TEXT_MAX),
   };
+}
+
+/**
+ * A welcome field as it may be stored: trimmed, at most `max` characters, and
+ * null when there is nothing left — an empty box means "use the built-in line",
+ * never "show an empty bubble".
+ */
+export function normalizeWelcome(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : [...trimmed].slice(0, max).join('');
 }

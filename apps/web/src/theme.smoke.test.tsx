@@ -63,25 +63,26 @@ afterEach(() => {
   globalThis.localStorage.removeItem(THEME_STORAGE_KEY);
 });
 
-it('switches the panel to the light theme from the account menu, and remembers it', async () => {
+it('switches the panel to the dark theme from the account menu, and remembers it', async () => {
   const user = userEvent.setup();
   renderShell();
 
-  expect(document.documentElement.dataset.theme).toBe('dark');
+  // Light is the default since 2026-10-12, so the switch under test is to dark.
+  expect(document.documentElement.dataset.theme).toBe('light');
 
   await user.click(screen.getByRole('button', { name: 'Account' }));
   const switcher = screen.getByLabelText('Theme');
-  expect(switcher).toHaveValue('dark');
-
-  await user.selectOptions(switcher, 'light');
-
-  expect(document.documentElement.dataset.theme).toBe('light');
   expect(switcher).toHaveValue('light');
-  // What survives the reload the E2E half of this task performs.
-  expect(globalThis.localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
 
   await user.selectOptions(switcher, 'dark');
+
   expect(document.documentElement.dataset.theme).toBe('dark');
+  expect(switcher).toHaveValue('dark');
+  // What survives the reload the E2E half of this task performs.
+  expect(globalThis.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+
+  await user.selectOptions(switcher, 'light');
+  expect(document.documentElement.dataset.theme).toBe('light');
 });
 
 it('labels the switcher in the language the agent picked', async () => {

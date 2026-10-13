@@ -14,20 +14,20 @@
  * does not persist the agent's language server-side either, so persisting the
  * theme there would be a heavier mechanism than the neighbouring feature earns.
  *
- * **Dark stays the default.** Not a style choice: every screenshot in
- * `apps/e2e/kanit/` was taken dark, and defaulting to `prefers-color-scheme`
- * would hand the product's appearance to whatever the machine running the suite
- * happens to prefer — the same class of defect as the locale-dependent number
+ * **Light is the default** (owner, 2026-10-12; it was dark until then). A
+ * fixed default, not `prefers-color-scheme`: following the OS would hand the
+ * product's appearance to whatever the machine running the suite happens to
+ * prefer — the same class of defect as the locale-dependent number
  * formatting of §D82 (tm 108), where the gate measured the laptop rather than
  * the code. The OS preference is therefore not consulted at all; only an
- * explicit choice moves the panel off dark.
+ * explicit choice moves the panel off light.
  */
 import { create } from 'zustand';
 
 export type Theme = 'dark' | 'light';
 
-/** The themes offered in the switcher, in display order. Dark leads: it is the default. */
-export const THEMES: readonly Theme[] = ['dark', 'light'];
+/** The themes offered in the switcher, in display order. Light leads: it is the default. */
+export const THEMES: readonly Theme[] = ['light', 'dark'];
 
 /**
  * Catalogue keys rather than literals — unlike `LOCALE_NAMES`, which names each
@@ -50,15 +50,15 @@ export const THEME_NAMES: Record<Theme, string> = {
 export const THEME_STORAGE_KEY = 'siyahtus.theme';
 
 /** What an agent who has never chosen sees, and what any unreadable value falls back to. */
-export const DEFAULT_THEME: Theme = 'dark';
+export const DEFAULT_THEME: Theme = 'light';
 
-/** Narrow anything to a supported theme; only an explicit `light` leaves the default. */
+/** Narrow anything to a supported theme; only an explicit `dark` leaves the default. */
 export function coerceTheme(value: string | null | undefined): Theme {
-  return value === 'light' ? 'light' : DEFAULT_THEME;
+  return value === 'dark' ? 'dark' : DEFAULT_THEME;
 }
 
 /**
- * Initial theme: a remembered choice, otherwise dark. Wrapped because storage
+ * Initial theme: a remembered choice, otherwise light. Wrapped because storage
  * access throws outright in locked-down browsers.
  */
 export function detectTheme(): Theme {
@@ -75,9 +75,18 @@ export function detectTheme(): Theme {
  * one attribute is the whole switch.
  */
 function writeThemeAttribute(theme: Theme): void {
-  if (typeof document !== 'undefined') {
-    document.documentElement.dataset.theme = theme;
-  }
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (root.dataset.theme === theme) return;
+  // `index.css` eases colour changes on every control. Without this pause a
+  // theme switch would ease them too — controls fading across while the panels
+  // around them snap — and anything reading colours in that window (axe, a
+  // screenshot) would measure a half-painted page. `.theme-switching` turns
+  // transitions off for the two frames the repaint takes.
+  root.classList.add('theme-switching');
+  root.dataset.theme = theme;
+  const settle = globalThis.requestAnimationFrame ?? ((cb: () => void) => setTimeout(cb, 16));
+  settle(() => settle(() => root.classList.remove('theme-switching')));
 }
 
 /**

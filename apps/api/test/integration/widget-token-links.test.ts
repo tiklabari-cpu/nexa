@@ -12,7 +12,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { loadOpenApiDocument } from '@siyahtus/contract';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { ownerClient, seedDefaultBrand, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PRIVACY = 'https://legal.example.test/privacy';
@@ -27,6 +27,8 @@ const APPEARANCE_KEYS = [
   'primary_color',
   'privacy_policy_url',
   'theme',
+  'welcome_text',
+  'welcome_title',
 ];
 
 describe('POST /customer/token: widget footer links (FR-MOD-11.5)', () => {
@@ -65,7 +67,7 @@ describe('POST /customer/token: widget footer links (FR-MOD-11.5)', () => {
     await Promise.all([ordinary, withPolicy, pilot].map((s) => clearRateLimits(s.app)));
   });
 
-  it('carries exactly the seven appearance fields the contract names', async () => {
+  it('carries exactly the nine appearance fields the contract names', async () => {
     const widget = await widgetOf(ordinary);
 
     expect(Object.keys(widget).sort()).toEqual(APPEARANCE_KEYS);
@@ -129,9 +131,30 @@ describe('POST /customer/token: widget footer links (FR-MOD-11.5)', () => {
     expect(widget).toMatchObject({
       primary_color: '#2d67fa',
       position: 'bottom-right',
-      theme: 'auto',
+      theme: 'light',
       mobile_fullscreen: true,
       powered_by: true,
+      welcome_title: null,
+      welcome_text: null,
     });
+  });
+
+  // The welcome message rides the mint (owner, 2026-10-13): it is never in the
+  // install snippet, so the server is the only way it reaches a visitor.
+  it('carries the workspace welcome message to the visitor', async () => {
+    const brandId = await seedDefaultBrand(owner, fx.a.licenseId);
+    await owner.widgetSettings.create({
+      data: {
+        licenseId: fx.a.licenseId,
+        brandId,
+        welcomeTitle: 'Hoş geldiniz!',
+        welcomeText: 'Adreslerimiz [burada](https://acme.example/adres).',
+      },
+    });
+
+    const widget = await widgetOf(ordinary);
+
+    expect(widget['welcome_title']).toBe('Hoş geldiniz!');
+    expect(widget['welcome_text']).toBe('Adreslerimiz [burada](https://acme.example/adres).');
   });
 });

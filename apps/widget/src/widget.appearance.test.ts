@@ -112,8 +112,8 @@ describe('widget appearance', () => {
     const root = mountWith('?organization_id=org-1');
 
     expect(brandVar()).toBe('#2d67fa');
-    // `auto` leaves no override, so the prefers-color-scheme media query governs.
-    expect(document.documentElement.hasAttribute('data-nx-theme')).toBe(false);
+    // Light is the default (owner, 2026-10-12): forced, not left to the OS.
+    expect(document.documentElement.getAttribute('data-nx-theme')).toBe('light');
     // Default corner is bottom-right, so no left mirror.
     expect(root.classList.contains('nx-left')).toBe(false);
     // Full screen on mobile is on by default.
@@ -143,8 +143,14 @@ describe('widget appearance', () => {
     expect(document.documentElement.getAttribute('data-nx-theme')).toBe(expected);
   });
 
-  it('treats an unknown theme as auto', () => {
+  it('treats an unknown theme as the light default', () => {
     mountWith('?organization_id=org-1&theme=solarized');
+    expect(document.documentElement.getAttribute('data-nx-theme')).toBe('light');
+  });
+
+  it('leaves the scheme to the visitor OS only when the workspace chose auto', () => {
+    // `auto` leaves no override, so the prefers-color-scheme media query governs.
+    mountWith('?organization_id=org-1&theme=auto');
     expect(document.documentElement.hasAttribute('data-nx-theme')).toBe(false);
   });
 

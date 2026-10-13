@@ -175,7 +175,7 @@ describe('widget loader', () => {
 
   it('honours bottom-left placement', () => {
     boot(setup({ position: 'bottom-left' }));
-    expect(frame()!.style.left).toBe('16px');
+    expect(frame()!.style.left).toBe('0px');
     expect(frame()!.style.right).toBe('');
   });
 
@@ -249,8 +249,8 @@ describe('loader message boundary', () => {
       'https://widget.test',
       el.contentWindow,
     );
-    expect(el.style.height).toBe('720px');
-    expect(el.style.width).toBe('420px');
+    expect(el.style.height).toBe('840px');
+    expect(el.style.width).toBe('520px');
   });
 
   it('ignores non-numeric dimensions', () => {
@@ -350,19 +350,19 @@ describe('the frame follows the widget document’s corner (UX audit D17)', () =
 
   it('keeps the configured corner for a left-to-right language', () => {
     boot(setup({ language: 'en' }));
-    expect(frame()!.style.right).toBe('16px');
+    expect(frame()!.style.right).toBe('0px');
     expect(frame()!.style.left).toBe('');
   });
 
   it('mirrors it for Arabic, because the document lays the launcher out with logical CSS', () => {
     boot(setup({ language: 'ar' }));
-    expect(frame()!.style.left).toBe('16px');
+    expect(frame()!.style.left).toBe('0px');
     expect(frame()!.style.right).toBe('');
   });
 
   it('mirrors an explicit bottom-left back to the right for Arabic, and reads region tags', () => {
     boot(setup({ language: 'ar-SA', position: 'bottom-left' }));
-    expect(frame()!.style.right).toBe('16px');
+    expect(frame()!.style.right).toBe('0px');
     expect(frame()!.style.left).toBe('');
   });
 

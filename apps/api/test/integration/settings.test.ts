@@ -1617,9 +1617,11 @@ describe('settings', () => {
       expect(response.json()).toMatchObject({
         primary_color: '#2d67fa',
         position: 'bottom-right',
-        theme: 'auto',
+        theme: 'light',
         mobile_fullscreen: true,
         powered_by: true,
+        welcome_title: null,
+        welcome_text: null,
         updated_at: null,
       });
 
@@ -1640,7 +1642,7 @@ describe('settings', () => {
         // Normalised to lower case on the way in.
         primary_color: '#e11d48',
         position: 'bottom-right',
-        theme: 'auto',
+        theme: 'light',
         mobile_fullscreen: true,
         powered_by: true,
       });
@@ -1696,6 +1698,53 @@ describe('settings', () => {
     it('rejects an empty body rather than treating it as a reset', async () => {
       const response = await server.put('/settings/widget', {}, auth(adminToken));
       expect(response.statusCode).toBe(400);
+    });
+
+    // The welcome message (owner, 2026-10-13): what a workspace writes is what
+    // the visitor reads — trimmed, and an empty box is "no welcome", not an
+    // empty bubble.
+    it('saves a welcome message, trimmed, and reads it back', async () => {
+      const saved = await server.put(
+        '/settings/widget',
+        {
+          welcome_title: '  Acme canlı destek hattına hoş geldiniz!  ',
+          welcome_text: 'Adreslerimiz için [buraya](https://acme.example/adres) bakın. ',
+        },
+        auth(adminToken),
+      );
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        welcome_title: 'Acme canlı destek hattına hoş geldiniz!',
+        welcome_text: 'Adreslerimiz için [buraya](https://acme.example/adres) bakın.',
+      });
+
+      // Clearing one field leaves the other, and stores null rather than ''.
+      const cleared = await server.put(
+        '/settings/widget',
+        { welcome_title: '   ' },
+        auth(adminToken),
+      );
+      expect(cleared.json()).toMatchObject({
+        welcome_title: null,
+        welcome_text: 'Adreslerimiz için [buraya](https://acme.example/adres) bakın.',
+      });
+      const row = await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) });
+      expect(row?.welcomeTitle).toBeNull();
+    });
+
+    it.each([
+      ['welcome_title', 121],
+      ['welcome_text', 501],
+    ])('rejects a %s longer than its limit and stores nothing', async (field, length) => {
+      const response = await server.put(
+        '/settings/widget',
+        { [field]: 'ş'.repeat(length) },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(400);
+      expect(
+        await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
+      ).toBeNull();
     });
 
     it('requires write scope to change the appearance', async () => {

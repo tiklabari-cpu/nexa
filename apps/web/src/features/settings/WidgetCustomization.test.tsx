@@ -105,6 +105,24 @@ describe('WidgetCustomization', () => {
     expect(putBodies[0]).toEqual({ primary_color: '#123456' });
   });
 
+  it('saves a welcome message — title and text — through PUT /settings/widget', async () => {
+    renderWidget();
+    const title = await screen.findByRole('textbox', { name: 'Title' });
+    const text = screen.getByRole('textbox', { name: 'Message' });
+    // Both boxes say how the message is used; the text box also says how to link.
+    expect(text).toHaveAccessibleDescription(/first message[\s\S]*\[label\]\(https:\/\/address\)/);
+
+    await userEvent.type(title, 'Welcome to Acme!');
+    await userEvent.type(text, 'Our stores are listed here.');
+    await userEvent.click(screen.getByRole('button', { name: 'Save appearance' }));
+
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({
+      welcome_title: 'Welcome to Acme!',
+      welcome_text: 'Our stores are listed here.',
+    });
+  });
+
   it('reflects a toggled setting in the preview', async () => {
     renderWidget();
     const toggle = await screen.findByRole('checkbox', { name: /Powered by SiyahTuş/ });

@@ -30,11 +30,34 @@ import {
   type WidgetTranslate,
 } from './i18n.js';
 
-const LAUNCHER_SIZE = 84;
-const PANEL = { width: 380, height: 620 } as const;
+/**
+ * Frame sizes. The loader pins the frame flush to the screen corner and every
+ * visible part sits 28 px in from it (the reference design's offset), so on
+ * the two screen-edge sides a shadow runs off the screen as it would without
+ * an iframe. The two sides facing the page get room for the whole shadow to
+ * fade out: an iframe clips what it draws, and a shadow cut short there showed
+ * as a hard grey box around the card. Sizes, not logic: the stylesheet places
+ * everything from the same corner.
+ */
+const LAUNCHER_SIZE = 124; // 28 + 60 px launcher + 36 for its hover shadow
+// 28 + 400 + 60 wide; 102 (launcher + 14 px gap) + 660 + 40 tall.
+const PANEL = { width: 488, height: 802 } as const;
 /** Frame size while the proactive greeting card sits above the launcher. */
-const GREETING = { width: 340, height: 250 } as const;
+const GREETING = { width: 384, height: 320 } as const; // 320 px card over the launcher
 const POLL_INTERVAL_MS = 4_000;
+/**
+ * How long a visitor is on the page before the greeting card offers itself
+ * (owner, 2026-10-13). Until then only the launcher shows: a card the instant
+ * the page opens reads as a pop-up, and it covers the page the visitor came
+ * to read before they have read any of it.
+ */
+export const GREETING_DELAY_MS = 30_000;
+/**
+ * How long a reply that arrived while the panel was closed stays previewed
+ * above the launcher (owner, 2026-10-13). Long enough to read two lines; the
+ * unread badge carries the news after it goes.
+ */
+export const PREVIEW_MS = 15_000;
 /**
  * The cadence while the panel is *closed* (FR-MOD-11.1).
  *
@@ -123,16 +146,23 @@ interface Appearance {
   privacyPolicyUrl: string | null;
   /** Where "Powered by" links, or null for the words alone. Server-supplied. */
   poweredByUrl: string | null;
+  /** The workspace's welcome message (owner, 2026-10-13). Server-supplied. */
+  welcomeTitle: string | null;
+  welcomeText: string | null;
 }
 
 const DEFAULT_APPEARANCE: Appearance = {
   primaryColor: '#2d67fa',
-  theme: 'auto',
+  // Light unless the workspace picks otherwise (owner, 2026-10-12). `auto`,
+  // which follows the visitor's OS, is still a choice -- just not the default.
+  theme: 'light',
   position: 'bottom-right',
   mobileFullscreen: true,
   poweredBy: true,
   privacyPolicyUrl: null,
   poweredByUrl: null,
+  welcomeTitle: null,
+  welcomeText: null,
 };
 
 /** A `#rrggbb` colour — the one shape allowed to reach the `--nx-brand` var. */
@@ -312,11 +342,22 @@ export function mount(doc: Document = document, win: Window = window): void {
    */
   let lastRead = lastReadAt(win);
 
+  /**
+   * The reply preview (owner, 2026-10-13). `previewSeen` is every team message
+   * the widget has already accounted for — filled from the transcript the first
+   * time one loads — so the replies a returning visitor was already told about
+   * (that is what the badge is for) do not pop a card on every page they open.
+   * Only a reply that lands while they are on this page is previewed.
+   */
+  let previewSeen: Set<string> | null = null;
+  let previewEvent: WidgetEvent | null = null;
+  let previewTimer: ReturnType<typeof setTimeout> | null = null;
+
   const ui = buildUi(doc, t);
   // Non-null past the guard above; aliased so the appearance closure keeps that
   // narrowing (TypeScript drops it for the captured `root` inside a function).
   const rootEl = root;
-  rootEl.append(ui.panel, ui.greeting, ui.launcher);
+  rootEl.append(ui.panel, ui.greeting, ui.preview, ui.launcher);
 
   // --- Appearance (FR-MOD-11.7) --------------------------------------------
 
@@ -340,6 +381,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     rootEl.classList.toggle('nx-left', appearance.position === 'bottom-left');
     rootEl.classList.toggle('nx-mobile-full', appearance.mobileFullscreen);
     renderFooter(doc, ui, appearance, t);
+    renderWelcome(doc, ui, appearance, t);
   }
 
   applyAppearance();
@@ -373,7 +415,7 @@ export function mount(doc: Document = document, win: Window = window): void {
    */
   function rerenderTranscript(): void {
     renderedCount = 0;
-    ui.transcript.replaceChildren();
+    ui.transcript.replaceChildren(ui.welcome);
     renderEvents();
   }
 
@@ -391,7 +433,10 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.title.textContent = agent?.name ?? t('title.default');
     ui.avatar.replaceChildren();
     ui.avatar.hidden = agent === null;
+    // Nobody named yet: the team, drawn as the reference's overlapping trio.
+    ui.team.hidden = agent !== null;
     if (!agent) return;
+    ui.avatar.dataset['tone'] = avatarTone(agent.name);
 
     if (agent.avatarUrl) {
       const img = doc.createElement('img');
@@ -405,6 +450,11 @@ export function mount(doc: Document = document, win: Window = window): void {
   }
 
   function renderStatus(): void {
+    // Presentation only: the launcher's status dot and offline grey key off
+    // this. Empty until a mint has said whether anyone is available — a
+    // first-time visitor is not dialled before they open the panel, and a
+    // guessed green dot would promise someone who may not be there.
+    rootEl.dataset['presence'] = state.connected ? (state.online ? 'online' : 'offline') : '';
     if (state.error) {
       ui.status.textContent = state.error;
       ui.status.dataset['tone'] = 'error';
@@ -706,7 +756,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   function resize(): void {
     const size = state.open
       ? PANEL
-      : state.greetingOpen
+      : state.greetingOpen || previewEvent !== null
         ? GREETING
         : { width: LAUNCHER_SIZE, height: LAUNCHER_SIZE };
     postToHost(win, { type: 'siyahtus:resize', width: size.width, height: size.height });
@@ -722,11 +772,8 @@ export function mount(doc: Document = document, win: Window = window): void {
    * so the number is announced once, not twice.
    */
   function renderLauncher(): void {
-    // The launcher sits in the same corner as the panel's composer. Left
-    // visible it covers the Send button and swallows the click — the panel
-    // looks fine and simply will not send. The panel's own × is the close
-    // affordance once it is open.
-    ui.launcher.hidden = state.open;
+    // The launcher stays while the panel is open (owner, 2026-10-13): the panel
+    // sits above it, clear of the composer, and the launcher turns into its ×.
     ui.launcher.setAttribute('aria-expanded', String(state.open));
     const unread = state.unread;
     ui.launcher.setAttribute(
@@ -759,6 +806,7 @@ export function mount(doc: Document = document, win: Window = window): void {
    * every poll and on every open/close.
    */
   function syncUnread(): void {
+    const team = state.events.filter(isTeamMessage);
     if (state.open) {
       const newest = newestTeamMessageAt(state.events);
       if (newest && (lastRead === null || newest > lastRead)) {
@@ -767,16 +815,67 @@ export function mount(doc: Document = document, win: Window = window): void {
       }
       state.unread = 0;
     } else {
-      state.unread = state.events.filter(
-        (event) => isTeamMessage(event) && (lastRead === null || event.created_at > lastRead),
-      ).length;
+      const unread = team.filter((event) => lastRead === null || event.created_at > lastRead);
+      state.unread = unread.length;
+      // A reply that arrived since the last look, and that this page has not
+      // already shown, gets the preview card; the badge above has already
+      // counted it either way.
+      const seen = previewSeen;
+      const fresh = seen ? unread.filter((event) => !seen.has(event.id)) : [];
+      const newest = fresh[fresh.length - 1];
+      if (newest) showPreview(newest);
+    }
+    if (state.connected) {
+      previewSeen ??= new Set();
+      for (const event of team) previewSeen.add(event.id);
     }
     renderLauncher();
+  }
+
+  /** Show `event` in the preview card for `PREVIEW_MS`, replacing any shown. */
+  function showPreview(event: WidgetEvent): void {
+    previewEvent = event;
+    const agent = state.agent;
+    ui.previewName.textContent = agent?.name ?? t('title.default');
+    ui.previewAvatar.replaceChildren();
+    ui.previewAvatar.dataset['tone'] = avatarTone(agent?.name ?? t('title.default'));
+    if (agent?.avatarUrl) {
+      const img = doc.createElement('img');
+      img.className = 'nx-avatar-img';
+      img.alt = '';
+      img.src = agent.avatarUrl;
+      ui.previewAvatar.append(img);
+    } else {
+      ui.previewAvatar.textContent = initial(agent?.name ?? t('title.default'));
+    }
+    // The team's formatting, as the transcript would show it — never markup.
+    ui.previewMsg.replaceChildren();
+    if (event.text) appendRichText(doc, ui.previewMsg, event.text);
+    else ui.previewMsg.textContent = t('preview.attachment');
+    ui.preview.hidden = false;
+    // The preview borrows the proactive card's slot and frame while it shows.
+    renderCard();
+    resize();
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(hidePreview, PREVIEW_MS);
+  }
+
+  /** Tuck the preview away; the greeting, if one is due, takes its slot back. */
+  function hidePreview(): void {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = null;
+    if (previewEvent === null) return;
+    previewEvent = null;
+    ui.preview.hidden = true;
+    renderCard();
+    resize();
   }
 
   function setOpen(open: boolean): void {
     state.open = open;
     ui.panel.hidden = !open;
+    // The conversation itself is on screen now; its preview has done its job.
+    if (open) hidePreview();
 
     // Opening supersedes the proactive card, but does not count as dismissing it.
     if (open && state.greetingOpen) {
@@ -828,11 +927,14 @@ export function mount(doc: Document = document, win: Window = window): void {
    * same line for everyone. Showing both, or the generic one first, would
    * bury the targeted message behind a nudge it was built to be better than.
    */
+  /** False until the visitor has been on the page for `GREETING_DELAY_MS`. */
+  let greetingDue = false;
+
   function activeCard(): { kind: 'campaign' | 'greeting'; message: string } | null {
     if (state.campaign && !campaignDismissed(win, state.campaign.id)) {
       return { kind: 'campaign', message: state.campaign.message };
     }
-    if (!greetingDismissed(win)) {
+    if (greetingDue && !greetingDismissed(win)) {
       return { kind: 'greeting', message: t('greeting.msg') };
     }
     return null;
@@ -847,7 +949,7 @@ export function mount(doc: Document = document, win: Window = window): void {
    */
   function renderCard(): void {
     const card = activeCard();
-    if (state.open || !card) {
+    if (state.open || previewEvent !== null || !card) {
       if (state.greetingOpen) {
         state.greetingOpen = false;
         ui.greeting.hidden = true;
@@ -1718,6 +1820,10 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
   // "Just browsing": tuck the card away for the rest of the session.
   ui.greetBrowse.addEventListener('click', () => dismissCard());
+  // The preview opens the conversation exactly as the launcher does; its × only
+  // tucks the card away and leaves the unread badge where it is.
+  ui.previewBody.addEventListener('click', () => setOpen(true));
+  ui.previewClose.addEventListener('click', () => hidePreview());
   ui.prechat.addEventListener('submit', (event) => {
     event.preventDefault();
     submitPrechat();
@@ -1869,10 +1975,13 @@ export function mount(doc: Document = document, win: Window = window): void {
     void connect();
   } else {
     postToHost(win, { type: 'siyahtus:ready' });
-    // The proactive nudge, once the host has wired up its message channel. No
-    // campaign can be owed yet — that needs a poll, and nothing has connected
-    // — so this always resolves to the greeting or nothing.
-    renderCard();
+    // The proactive nudge, once the visitor has been here a while. A campaign
+    // is not held back by this: it is addressed to this visitor and arrives
+    // with a poll, which `renderCard` picks up whenever it lands.
+    win.setTimeout(() => {
+      greetingDue = true;
+      renderCard();
+    }, GREETING_DELAY_MS);
     // A visitor who has a conversation here connects without being asked, so
     // the closed panel can find out an agent answered (FR-MOD-11.1). Before
     // this, the first poll of a page load waited for the panel to be opened —
@@ -1921,8 +2030,45 @@ function renderFormFields(doc: Document, host: HTMLElement, fields: WidgetFormFi
     input.dataset.fieldType = field.type;
     if (field.required) input.required = true;
     if (field.type === 'text') input.maxLength = 5000;
-    host.append(input);
+    host.append(labelledField(doc, input, field.label, field.required));
   }
+}
+
+/** Distinct ids for `labelledField`'s label↔input pairing across every form. */
+let fieldSequence = 0;
+
+/**
+ * An input with a visible label above it — the field row every widget form
+ * shares. A placeholder alone vanishes the moment the visitor starts typing, so
+ * which box is which was only ever on screen while every box was empty.
+ *
+ * Presentation only: the input keeps its own `aria-label`, which still wins
+ * as its accessible name, and the required star is `aria-hidden` because
+ * `required` already says it to assistive technology.
+ */
+function labelledField(
+  doc: Document,
+  input: HTMLInputElement,
+  text: string,
+  required: boolean,
+): HTMLElement {
+  fieldSequence += 1;
+  input.id ||= `nx-field-${fieldSequence}`;
+  const row = doc.createElement('div');
+  row.className = 'nx-field';
+  const label = doc.createElement('label');
+  label.className = 'nx-field-label';
+  label.htmlFor = input.id;
+  label.textContent = text;
+  if (required) {
+    const star = doc.createElement('span');
+    star.className = 'nx-field-required';
+    star.setAttribute('aria-hidden', 'true');
+    star.textContent = '*';
+    label.append(star);
+  }
+  row.append(label, input);
+  return row;
 }
 
 /**
@@ -1962,6 +2108,9 @@ interface Ui {
   badge: HTMLElement;
   panel: HTMLElement;
   transcript: HTMLElement;
+  welcome: HTMLElement;
+  welcomeBubble: HTMLElement;
+  prechatIntro: HTMLElement;
   typing: HTMLElement;
   status: HTMLElement;
   /** "Connection lost, reconnecting…" under the header (tm 259.11); hidden while connected. */
@@ -1978,6 +2127,8 @@ interface Ui {
   send: HTMLButtonElement;
   close: HTMLButtonElement;
   avatar: HTMLElement;
+  /** Stand-in for the avatar until an agent or persona is named. */
+  team: HTMLElement;
   title: HTMLElement;
   /** Header "⋮" dropdown (FR-MOD-07.8-b): early "Rate this chat" access. */
   menuWrap: HTMLElement;
@@ -2024,6 +2175,12 @@ interface Ui {
   ratingDismiss: HTMLButtonElement;
   greeting: HTMLElement;
   greetMsg: HTMLElement;
+  preview: HTMLElement;
+  previewAvatar: HTMLElement;
+  previewBody: HTMLButtonElement;
+  previewName: HTMLElement;
+  previewMsg: HTMLElement;
+  previewClose: HTMLButtonElement;
   greetChat: HTMLButtonElement;
   greetBrowse: HTMLButtonElement;
   prechat: HTMLFormElement;
@@ -2078,7 +2235,15 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   const title = doc.createElement('h1');
   title.className = 'nx-title';
   title.textContent = t('title.default');
-  identity.append(avatar, title);
+  const team = doc.createElement('span');
+  team.className = 'nx-team';
+  team.setAttribute('aria-hidden', 'true');
+  for (const tone of ['0', '1', '2']) {
+    const person = doc.createElement('span');
+    person.dataset['tone'] = tone;
+    team.append(person);
+  }
+  identity.append(avatar, team, title);
 
   // "⋮" menu (FR-MOD-07.8-b / 11.4-b): "Rate this chat" and "End chat". Hidden
   // until a conversation exists — `renderHeader` toggles it.
@@ -2147,6 +2312,16 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   transcript.setAttribute('role', 'log');
   transcript.setAttribute('aria-live', 'polite');
   transcript.setAttribute('aria-label', t('transcript.label'));
+  // The workspace's welcome message, as the team's first bubble at the top of
+  // the conversation (owner, 2026-10-13). Hidden when none is set. Kept as the
+  // transcript's first child across rebuilds — see `rerenderTranscript`.
+  const welcome = doc.createElement('div');
+  welcome.className = 'nx-welcome';
+  welcome.hidden = true;
+  const welcomeBubble = doc.createElement('div');
+  welcomeBubble.className = 'nx-welcome-bubble';
+  welcome.append(welcomeBubble);
+  transcript.append(welcome);
 
   // "…is typing" line. Announced politely so a screen-reader visitor hears it
   // without having their reading of a reply interrupted.
@@ -2254,9 +2429,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   offlineError.textContent = t('offline.error');
   offline.append(
     offlineIntro,
-    offlineSubject,
-    offlineName,
-    offlineEmail,
+    labelledField(doc, offlineSubject, t('offline.subject'), true),
+    labelledField(doc, offlineName, t('offline.name'), false),
+    labelledField(doc, offlineEmail, t('offline.emailLabel'), true),
     offlineProspectFields,
     offlineTicketFields,
     offlineSubmit,
@@ -2395,7 +2570,12 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   send.className = 'nx-send';
   send.textContent = t('send');
 
-  form.append(attach, file, emojiWrap, input, send);
+  // One rounded field holding the composer's controls — a wrapper for layout
+  // only; every control, and the order a keyboard reaches them, is unchanged.
+  const composerField = doc.createElement('div');
+  composerField.className = 'nx-composer-field';
+  composerField.append(attach, file, emojiWrap, input, send);
+  form.append(composerField);
 
   // Pre-chat form — a fixed, minimal one on purpose (FR-MOD-11.2): the visual
   // form builder is a separate v1 feature this must not depend on.
@@ -2428,7 +2608,21 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   prechatSubmit.type = 'submit';
   prechatSubmit.className = 'nx-prechat-submit';
   prechatSubmit.textContent = t('prechat.submit');
-  prechat.append(prechatIntro, prechatName, prechatEmail, prechatFields, prechatSubmit);
+  // The intro reads as the team's first message and the fields sit in a card
+  // under it, on the team's side of the conversation. Layout wrappers only.
+  const prechatCard = doc.createElement('div');
+  prechatCard.className = 'nx-prechat-card';
+  const prechatHint = doc.createElement('p');
+  prechatHint.className = 'nx-prechat-hint';
+  prechatHint.textContent = t('prechat.hint');
+  prechatCard.append(
+    prechatHint,
+    labelledField(doc, prechatName, t('prechat.name'), true),
+    labelledField(doc, prechatEmail, t('prechat.emailLabel'), false),
+    prechatFields,
+    prechatSubmit,
+  );
+  prechat.append(prechatIntro, prechatCard);
 
   // "Powered by SiyahTuş" (FR-MOD-11.5): shown by default, hidden when a workspace
   // removes it. A link, opened in a new tab so it never navigates the panel away
@@ -2498,11 +2692,41 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   greetActions.append(greetChat, greetBrowse);
   greeting.append(greetMsg, greetActions);
 
+  // Reply preview (owner, 2026-10-13): a reply that lands while the panel is
+  // closed shows here for `PREVIEW_MS` — who answered and the first lines of
+  // what they said. A status region, so a screen reader hears it arrive; the
+  // body is one button, so the whole card opens the conversation, and the ×
+  // beside it only tucks the card away (the unread badge stays).
+  const preview = doc.createElement('div');
+  preview.className = 'nx-preview';
+  preview.hidden = true;
+  preview.setAttribute('role', 'status');
+  const previewAvatar = doc.createElement('span');
+  previewAvatar.className = 'nx-preview-avatar';
+  previewAvatar.setAttribute('aria-hidden', 'true');
+  const previewBody = doc.createElement('button');
+  previewBody.type = 'button';
+  previewBody.className = 'nx-preview-body';
+  const previewName = doc.createElement('span');
+  previewName.className = 'nx-preview-name';
+  const previewMsg = doc.createElement('span');
+  previewMsg.className = 'nx-preview-msg';
+  previewBody.append(previewName, previewMsg);
+  const previewClose = doc.createElement('button');
+  previewClose.type = 'button';
+  previewClose.className = 'nx-preview-close';
+  previewClose.setAttribute('aria-label', t('preview.dismiss'));
+  previewClose.textContent = '×';
+  preview.append(previewAvatar, previewBody, previewClose);
+
   return {
     launcher,
     badge,
     panel,
     transcript,
+    welcome,
+    welcomeBubble,
+    prechatIntro,
     typing,
     status,
     connection,
@@ -2517,6 +2741,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     send,
     close,
     avatar,
+    team,
     title,
     menuWrap,
     menuButton,
@@ -2551,6 +2776,12 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     ratingDismiss,
     greeting,
     greetMsg,
+    preview,
+    previewAvatar,
+    previewBody,
+    previewName,
+    previewMsg,
+    previewClose,
     greetChat,
     greetBrowse,
     prechat,
@@ -2572,6 +2803,67 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
  * independent: a white-label workspace hides the brand and keeps the privacy
  * link, and with neither there is no line at all.
  */
+/**
+ * The workspace's welcome message (owner, 2026-10-13), in the two places a
+ * visitor meets the team first: the pre-chat form's opening bubble, and the top
+ * of the conversation for a visitor who goes straight to the composer. With
+ * none set, the pre-chat bubble keeps the widget's own line and the transcript
+ * shows nothing extra.
+ */
+function renderWelcome(doc: Document, ui: Ui, appearance: Appearance, t: WidgetTranslate): void {
+  const { welcomeTitle: title, welcomeText: text } = appearance;
+  const has = title !== null || text !== null;
+  for (const host of [ui.prechatIntro, ui.welcomeBubble]) {
+    host.replaceChildren();
+    if (!has) continue;
+    if (title !== null) {
+      const strong = doc.createElement('strong');
+      strong.className = 'nx-welcome-title';
+      strong.textContent = title;
+      host.append(strong);
+    }
+    if (text !== null) {
+      const body = doc.createElement('span');
+      body.className = 'nx-welcome-text';
+      appendWelcomeText(doc, body, text);
+      host.append(body);
+    }
+  }
+  if (!has) ui.prechatIntro.textContent = t('prechat.intro');
+  ui.welcome.hidden = !has;
+}
+
+/** `[label](https://…)` — the one link form the welcome message accepts. */
+const WELCOME_LINK = /\[([^\]\n]{1,80})\]\(([^)\s]{1,2048})\)/g;
+
+/**
+ * Welcome text as nodes: the composer's bold/italic subset, plus links.
+ *
+ * The workspace wrote this, but it reaches a stranger's browser, so it gets
+ * the transcript's rule — elements and text nodes, never markup. A link target
+ * must be an absolute http(s) URL (`webUrl`); anything else (`javascript:`,
+ * a relative path) is left on screen as the literal text it was typed as.
+ */
+function appendWelcomeText(doc: Document, target: HTMLElement, text: string): void {
+  let last = 0;
+  for (const match of text.matchAll(WELCOME_LINK)) {
+    const [whole, label, url] = match as unknown as [string, string, string];
+    const start = match.index ?? 0;
+    const href = webUrl(url);
+    if (href === null) continue;
+    if (start > last) appendRichText(doc, target, text.slice(last, start));
+    const link = doc.createElement('a');
+    link.className = 'nx-welcome-link';
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = label;
+    target.append(link);
+    last = start + whole.length;
+  }
+  if (last < text.length) appendRichText(doc, target, text.slice(last));
+}
+
 function renderFooter(doc: Document, ui: Ui, appearance: Appearance, t: WidgetTranslate): void {
   const showBrand = appearance.poweredBy;
   const showPrivacy = appearance.privacyPolicyUrl !== null;
@@ -2839,6 +3131,16 @@ function toAgent(agent: WidgetState['agent']): { name: string; avatarUrl: string
 }
 
 /** First letter of a name, for an avatar with no image. */
+/**
+ * One of the stylesheet's five avatar tints, picked from the name so the same
+ * person always gets the same colour — the header and the preview card agree.
+ */
+function avatarTone(name: string): string {
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
+  return String(hash % 5);
+}
+
 function initial(name: string): string {
   return (name.trim()[0] ?? '?').toUpperCase();
 }
@@ -2992,7 +3294,8 @@ function readAppearance(params: URLSearchParams): Appearance {
   return {
     primaryColor:
       color && COLOR_RE.test(color) ? color.toLowerCase() : DEFAULT_APPEARANCE.primaryColor,
-    theme: theme === 'light' || theme === 'dark' ? theme : 'auto',
+    theme:
+      theme === 'light' || theme === 'dark' || theme === 'auto' ? theme : DEFAULT_APPEARANCE.theme,
     position: position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
     mobileFullscreen: params.get('mobile_full') !== '0',
     poweredBy: DEFAULT_APPEARANCE.poweredBy,
@@ -3000,6 +3303,9 @@ function readAppearance(params: URLSearchParams): Appearance {
     // point the footer anywhere.
     privacyPolicyUrl: DEFAULT_APPEARANCE.privacyPolicyUrl,
     poweredByUrl: DEFAULT_APPEARANCE.poweredByUrl,
+    // The welcome message is never in the snippet: the server sends it.
+    welcomeTitle: DEFAULT_APPEARANCE.welcomeTitle,
+    welcomeText: DEFAULT_APPEARANCE.welcomeText,
   };
 }
 
@@ -3015,7 +3321,14 @@ function appearanceFromApi(a: MintedAppearance): Appearance {
     poweredBy: a.powered_by,
     privacyPolicyUrl: webUrl(a.privacy_policy_url),
     poweredByUrl: webUrl(a.powered_by_url),
+    welcomeTitle: welcomeString(a.welcome_title),
+    welcomeText: welcomeString(a.welcome_text),
   };
+}
+
+/** A welcome field off the wire: a non-empty string, else null (an older API sends none). */
+function welcomeString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
 /**
@@ -3079,341 +3392,719 @@ const WIDGET_CSS = `
 /* The elements below carry their own display, which would otherwise beat the
    UA [hidden] rule and leave a "hidden" card or panel on screen. */
 [hidden] { display: none !important; }
+/* The 2026-10 restyle, after the design reference "canli-destek-widget_3".
+   Two groups of colour, deliberately kept apart:
+   A — the workspace's own (Settings -> Widget): --nx-brand and what derives
+       from it. Never touched by the theme.
+   B — the theme (light / dark / auto): surfaces, text, fields, shadows. Never
+       touched by the workspace.
+   Geometry: the loader pins the frame flush to the screen corner and every
+   visible part sits --nx-pad (28 px) in from it. The frame's two page-facing
+   sides leave room for the whole shadow (see the frame sizes in the script),
+   so no shadow is ever cut off into a hard edge. */
 :root {
+  /* --- A. Brand (FR-MOD-11.7). --nx-brand is overwritten inline from the
+     workspace's colour; everything below follows it. */
   --nx-brand: #2d67fa;
+  --nx-on-brand: #ffffff;
+  /* The reference lets the start button and the visitor's bubble take their
+     own colours; this product has one brand colour, so both follow it. */
+  --nx-cta: var(--nx-brand);
+  --nx-bubble-own: var(--nx-brand);
+  --nx-online: #22c55e;
+  --nx-offline: #9ca3af;
+  --nx-badge: #dc2626;
+  --nx-pad: 28px;
+  /* Launcher + the reference's 14 px gap: where the cards and the panel start. */
+  --nx-above: calc(var(--nx-pad) + 74px);
+  --nx-radius: 20px;
+  --nx-icon-chat: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'/%3E%3C/svg%3E");
+  --nx-icon-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --nx-icon-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='5' r='2'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Ccircle cx='12' cy='19' r='2'/%3E%3C/svg%3E");
+  --nx-icon-clip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'/%3E%3C/svg%3E");
+  --nx-icon-smile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01'/%3E%3C/svg%3E");
+  --nx-icon-send: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z'/%3E%3C/svg%3E");
+  --nx-icon-x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E");
+  --nx-icon-user: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21a8 8 0 0 1 16 0'/%3E%3C/svg%3E");
+
+  /* --- B. Theme: light (the default). */
   --nx-surface: #ffffff;
-  --nx-text: #111726;
-  --nx-muted: #4a5468;
-  --nx-border: #dde1e9;
-  --nx-customer: #eff1f5;
-  --nx-radius: 12px;
-  color-scheme: light;
+  --nx-surface-2: #f8f9fb;
+  --nx-field: #f3f4f6;
+  --nx-field-border: #e5e7eb;
+  --nx-bubble: #eaecf0;
+  --nx-pill: #e9ebef;
+  --nx-border: #e5e7eb;
+  --nx-title: #111827;
+  --nx-text: #1f2937;
+  --nx-muted: #4b5563;
+  --nx-ring: #ffffff;
+  --nx-avatar-bg: #c7d2fe;
+  --nx-avatar-text: #312e81;
+  --nx-typing: #6b7280;
+  --nx-launcher-offline: #374151;
+  --nx-danger: #b91c1c;
+  /* Brand as text on a surface: a little darker than the fill, so a link in
+     the team's grey bubble still clears AA (the default brand itself is 4.01:1
+     there). */
+  --nx-link: color-mix(in srgb, var(--nx-brand) 80%, #000);
+  --nx-shadow-launcher: 0 12px 28px rgba(17, 24, 39, .22), 0 2px 6px rgba(17, 24, 39, .10);
+  --nx-shadow-launcher-hover: 0 18px 36px rgba(17, 24, 39, .28), 0 3px 8px rgba(17, 24, 39, .12);
+  --nx-shadow-card: 0 8px 24px rgba(17, 24, 39, .12), 0 1px 2px rgba(17, 24, 39, .06);
+  --nx-shadow-panel: 0 24px 60px rgba(17, 24, 39, .22), 0 2px 8px rgba(17, 24, 39, .10);
+  --nx-shadow-soft: 0 1px 2px rgba(17, 24, 39, .06);
+  --nx-scheme: light;
+  /* Always light here, deliberately — see body below. */
+  color-scheme: normal;
 }
+/* The dark ramp, written once and applied twice: for "auto" when the visitor's
+   OS asks for it, and for a workspace that forces dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --nx-surface: #121829;
-    --nx-text: #edf0f6;
-    --nx-muted: #a6b0c4;
-    --nx-border: #232c44;
-    --nx-customer: #1e2740;
-    color-scheme: dark;
+  :root:not([data-nx-theme="light"]) {
+    --nx-surface: #1b1f2a; --nx-surface-2: #141822; --nx-field: #262b38; --nx-field-border: #3a4055;
+    --nx-bubble: #2a3040; --nx-pill: #262b38; --nx-border: #2e3444;
+    --nx-title: #f3f4f6; --nx-text: #e5e7eb; --nx-muted: #a3a9b8; --nx-ring: #141822;
+    --nx-avatar-bg: #3730a3; --nx-avatar-text: #e0e7ff; --nx-typing: #a3a9b8;
+    --nx-launcher-offline: #4b5563; --nx-danger: #f87171;
+    /* The brand is often too dark to read on a dark surface; a light tint of
+       it is, whatever colour the workspace picked. */
+    --nx-link: color-mix(in srgb, var(--nx-brand) 42%, #fff);
+    --nx-shadow-launcher: 0 12px 28px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .30);
+    --nx-shadow-launcher-hover: 0 18px 36px rgba(0, 0, 0, .55), 0 3px 8px rgba(0, 0, 0, .35);
+    --nx-shadow-card: 0 8px 24px rgba(0, 0, 0, .45), 0 1px 2px rgba(0, 0, 0, .30);
+    --nx-shadow-panel: 0 24px 60px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
+    --nx-shadow-soft: 0 1px 2px rgba(0, 0, 0, .3);
+    --nx-scheme: dark;
   }
 }
-/* Forced colour scheme (FR-MOD-11.7). The attribute selector outweighs the
-   prefers-color-scheme block, so a workspace choice wins over the visitor's OS
-   in both directions. */
-:root[data-nx-theme="light"] {
-  --nx-surface: #ffffff; --nx-text: #111726; --nx-muted: #4a5468;
-  --nx-border: #dde1e9; --nx-customer: #eff1f5; color-scheme: light;
-}
+/* Forced colour scheme (FR-MOD-11.7). A workspace choice wins over the
+   visitor's OS in both directions. */
 :root[data-nx-theme="dark"] {
-  --nx-surface: #121829; --nx-text: #edf0f6; --nx-muted: #a6b0c4;
-  --nx-border: #232c44; --nx-customer: #1e2740; color-scheme: dark;
+  --nx-surface: #1b1f2a; --nx-surface-2: #141822; --nx-field: #262b38; --nx-field-border: #3a4055;
+  --nx-bubble: #2a3040; --nx-pill: #262b38; --nx-border: #2e3444;
+  --nx-title: #f3f4f6; --nx-text: #e5e7eb; --nx-muted: #a3a9b8; --nx-ring: #141822;
+  --nx-avatar-bg: #3730a3; --nx-avatar-text: #e0e7ff; --nx-typing: #a3a9b8;
+  --nx-launcher-offline: #4b5563; --nx-danger: #f87171;
+  --nx-link: color-mix(in srgb, var(--nx-brand) 42%, #fff);
+  --nx-shadow-launcher: 0 12px 28px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .30);
+  --nx-shadow-launcher-hover: 0 18px 36px rgba(0, 0, 0, .55), 0 3px 8px rgba(0, 0, 0, .35);
+  --nx-shadow-card: 0 8px 24px rgba(0, 0, 0, .45), 0 1px 2px rgba(0, 0, 0, .30);
+  --nx-shadow-panel: 0 24px 60px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
+  --nx-shadow-soft: 0 1px 2px rgba(0, 0, 0, .3);
+  --nx-scheme: dark;
 }
 * { box-sizing: border-box; }
+/* The scheme goes on body, never on :root. A browser paints an *opaque* canvas
+   behind a frame whose root scheme differs from the embedding page's, so a dark
+   :root put a black box around the launcher on every light site a dark-mode
+   visitor opened. :root stays "normal" and widget.html's meta pins that to
+   light; chat.html, a top-level page, keeps "light dark" for its own canvas. */
+/* Manrope, the design reference's face, served from the widget's own origin
+   (the frame's CSP is font-src 'self'). Two subsets cut from
+   @fontsource-variable/manrope 5.3 with fontTools — weight axis pinned to
+   500–700, "kern liga calt" only:
+     latin  U+0020-007E, U+00A0-00FF, dashes, quotes, bullet, ellipsis, €, ™
+     tr     U+011E-011F, U+0130-0131, U+015E-015F  (ğ Ğ İ ı ş Ş)
+   A browser fetches the second only when a page has one of those letters, and
+   anything outside both (Arabic, a Polish ł) falls through to the system face.
+   ≈22 KB together; NFR-P3's budget was raised to 60 KB for it (2026-10-13).
+   "swap": the widget paints at once in the fallback and re-renders when the
+   face lands, so the font never holds up the launcher. */
+@font-face {
+  font-family: "Manrope";
+  src: url("/fonts/manrope-latin.woff2") format("woff2");
+  font-weight: 500 700; font-style: normal; font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-00FF, U+2013-2014, U+2018-201D, U+2022, U+2026, U+20AC, U+2122;
+}
+@font-face {
+  font-family: "Manrope";
+  src: url("/fonts/manrope-tr.woff2") format("woff2");
+  font-weight: 500 700; font-style: normal; font-display: swap;
+  unicode-range: U+011E-011F, U+0130-0131, U+015E-015F;
+}
 body {
   margin: 0;
-  font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
-  font-size: 13px;
+  color-scheme: var(--nx-scheme);
+  font-family: Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
   color: var(--nx-text);
+  -webkit-font-smoothing: antialiased;
 }
+button { -webkit-tap-highlight-color: transparent; }
+/* An icon drawn from one of the masks above, in the element's text colour.
+   Its button is a centred flex box at font-size 0: the button's own words stay
+   in the DOM as its accessible name but take no room (a grid would give them
+   a row of their own and push the icon off centre). */
+.nx-launcher::before, .nx-close::before, .nx-menu-btn::before, .nx-attach::before,
+.nx-emoji-btn::before, .nx-send::before, .nx-prechat-submit::after {
+  content: ""; display: block; flex: none; background: currentColor;
+  -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat;
+}
+@keyframes nx-pop {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ===== Closed: the launcher ============================================== */
 .nx-launcher {
   /* Logical, not right/bottom (NFR-I18N1): mirrors to the visual left under
      dir="rtl" instead of staying pinned to the physical right for Arabic. */
-  position: fixed; inset-inline-end: 10px; inset-block-end: 10px;
-  width: 64px; height: 64px; border: 0; border-radius: 9999px;
-  background: var(--nx-brand); color: #fff;
-  font: inherit; font-weight: 600; cursor: pointer;
-  box-shadow: 0 8px 24px rgb(16 24 40 / .24);
+  position: fixed; inset-inline-end: var(--nx-pad); inset-block-end: var(--nx-pad);
+  width: 60px; height: 60px; padding: 0; border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--nx-brand); color: var(--nx-on-brand); cursor: pointer;
+  /* The label stays in the DOM (and in aria-label); the icon is what shows. */
+  font: inherit; font-size: 0; font-weight: 600;
+  box-shadow: var(--nx-shadow-launcher);
+  transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease;
 }
+.nx-launcher::before {
+  width: 28px; height: 28px;
+  -webkit-mask-image: var(--nx-icon-chat); mask-image: var(--nx-icon-chat);
+}
+.nx-launcher:hover { transform: scale(1.06); box-shadow: var(--nx-shadow-launcher-hover); }
+/* Open: the launcher stays under the panel and becomes its close button. */
+.nx-launcher[aria-expanded="true"]::before {
+  width: 24px; height: 24px;
+  -webkit-mask-image: var(--nx-icon-x); mask-image: var(--nx-icon-x);
+}
+.nx-launcher[aria-expanded="true"]::after { display: none; }
+.nx-launcher:focus-visible { outline: 3px solid var(--nx-brand); outline-offset: 3px; }
+/* Status dot: only once a mint has said whether anyone is there — see
+   renderStatus. Offline also greys the launcher itself. */
+[data-presence="online"] .nx-launcher::after,
+[data-presence="offline"] .nx-launcher::after {
+  content: ""; position: absolute; inset-inline-end: 2px; inset-block-end: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--nx-online); border: 2.5px solid var(--nx-ring);
+}
+[data-presence="offline"] .nx-launcher { background: var(--nx-launcher-offline); }
+[data-presence="offline"] .nx-launcher::after { background: var(--nx-offline); }
 /* Unread badge (FR-MOD-11.1). Logical inset like everything else here, so it
-   rides to the launcher's other shoulder under dir="rtl" (NFR-I18N1). The
-   overhang is 4 px into the 10 px the frame leaves around the launcher — a
-   badge outside that would be clipped by the iframe, not by the page. */
+   rides to the launcher's other shoulder under dir="rtl" (NFR-I18N1). */
 .nx-badge {
   position: absolute; inset-block-start: -4px; inset-inline-end: -4px;
-  min-width: 22px; height: 22px; padding: 0 5px;
+  min-width: 22px; height: 22px; padding: 0 6px;
   display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 9999px; border: 2px solid var(--nx-surface);
-  background: #c42a2a; color: #fff;
-  font-size: 12px; font-weight: 700; line-height: 1;
+  border-radius: 11px; border: 2.5px solid var(--nx-ring);
+  background: var(--nx-badge); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1;
 }
 /* The KK's "badge/animation": a ring that breathes, on the launcher's own
    shadow so nothing shifts in layout. The reduced-motion rule at the end of
    this sheet turns it off for anyone who asked for that. */
 .nx-launcher.nx-attention { animation: nx-attention 2s ease-in-out infinite; }
 @keyframes nx-attention {
-  0%, 100% { box-shadow: 0 8px 24px rgb(16 24 40 / .24), 0 0 0 0 rgb(196 42 42 / .45); }
-  50% { box-shadow: 0 8px 24px rgb(16 24 40 / .24), 0 0 0 10px rgb(196 42 42 / 0); }
+  0%, 100% { box-shadow: var(--nx-shadow-launcher), 0 0 0 0 color-mix(in srgb, var(--nx-brand) 50%, transparent); }
+  50% { box-shadow: var(--nx-shadow-launcher), 0 0 0 10px color-mix(in srgb, var(--nx-brand) 0%, transparent); }
 }
-.nx-panel {
-  position: fixed; inset: 8px;
-  display: flex; flex-direction: column;
-  background: var(--nx-surface);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius);
-  overflow: hidden;
-  box-shadow: 0 12px 32px rgb(16 24 40 / .18);
-}
-/* Hosted Chat page: the panel is the whole viewport, no floating card. */
-.nx-page .nx-panel { inset: 0; border: 0; border-radius: 0; box-shadow: none; }
-.nx-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px; background: var(--nx-brand); color: #fff;
-}
-.nx-title { margin: 0; font-size: 15px; font-weight: 600; }
-.nx-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.nx-avatar {
-  flex: none; width: 28px; height: 28px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: rgba(255, 255, 255, .22); color: #fff;
-  font-size: 13px; font-weight: 600; overflow: hidden;
-}
-.nx-avatar-img { width: 100%; height: 100%; object-fit: cover; }
-.nx-close {
-  border: 0; background: transparent; color: #fff;
-  font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;
-}
-.nx-menu-wrap { position: relative; }
-.nx-menu-btn {
-  border: 0; background: transparent; color: #fff;
-  font-size: 18px; line-height: 1; cursor: pointer; padding: 0 6px;
-}
-.nx-menu {
-  position: absolute; inset-inline-end: 0; top: 100%; margin-top: 4px;
-  min-width: 170px; padding: 4px; z-index: 1;
-  background: var(--nx-surface); color: var(--nx-text);
-  border: 1px solid var(--nx-border); border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(16 24 40 / .18);
-}
-.nx-menu-rate {
-  display: block; width: 100%; text-align: start;
-  border: 0; border-radius: 6px; background: transparent; color: inherit;
-  font: inherit; padding: 8px 10px; cursor: pointer;
-}
-.nx-menu-rate:hover, .nx-menu-end:hover { background: var(--nx-customer); }
-.nx-menu-end {
-  display: block; width: 100%; text-align: start;
-  border: 0; border-radius: 6px; background: transparent; color: inherit;
-  font: inherit; padding: 8px 10px; cursor: pointer;
-}
-.nx-end-confirm {
-  position: absolute; inset: 40px 16px auto; z-index: 2;
-  background: var(--nx-surface); color: var(--nx-text);
-  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
-  box-shadow: 0 12px 32px rgb(16 24 40 / .18);
-  padding: 16px; display: flex; flex-direction: column; gap: 12px; text-align: center;
-}
-.nx-end-confirm-msg { margin: 0; font-size: 13px; }
-.nx-end-confirm-actions { display: flex; gap: 8px; }
-.nx-end-confirm-cancel, .nx-end-confirm-confirm {
-  flex: 1; border-radius: 8px; padding: 8px 10px; font: inherit; cursor: pointer;
-}
-.nx-end-confirm-cancel { border: 1px solid var(--nx-border); background: transparent; color: var(--nx-muted); }
-.nx-end-confirm-confirm { border: 0; background: var(--nx-brand); color: #fff; font-weight: 600; }
-.nx-closed {
-  margin: 0 12px 10px; padding: 10px 12px;
-  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  font-size: 12px; color: var(--nx-muted);
-}
-.nx-closed-msg { margin: 0; }
-.nx-closed-restart {
-  border: 0; background: transparent; color: var(--nx-brand);
-  font: inherit; font-weight: 600; cursor: pointer; padding: 0;
-}
-.nx-transcript {
-  flex: 1; overflow-y: auto; padding: 14px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.nx-row { display: flex; flex-direction: column; max-width: 82%; }
-.nx-row--customer { align-self: flex-end; align-items: flex-end; }
-.nx-row--agent, .nx-row--bot { align-self: flex-start; }
-.nx-row--system { align-self: center; max-width: 100%; }
-.nx-bubble {
-  padding: 8px 11px; border-radius: var(--nx-radius);
-  background: var(--nx-customer); white-space: pre-wrap; word-break: break-word;
-}
-.nx-row--customer .nx-bubble { background: var(--nx-brand); color: #fff; }
-.nx-system { margin: 0; font-size: 11px; color: var(--nx-muted); text-align: center; }
-.nx-time { font-size: 11px; color: var(--nx-muted); margin-top: 2px; }
-.nx-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-.nx-meta .nx-time { margin-top: 0; }
-/* The AI mark: small, outlined, same muted colour as the time so it informs
-   without competing with the reply. */
-.nx-ai-label {
-  font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: 0.02em;
-  color: var(--nx-muted); border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px;
-}
-/* The "edited" marker sits under the timestamp and reads like one: same size
-   and colour, italic so the two are not mistaken for a single line. */
-.nx-edited { font-size: 11px; font-style: italic; color: var(--nx-muted); }
-.nx-status { margin: 0; padding: 0 14px 8px; font-size: 12px; color: var(--nx-muted); }
-.nx-status[data-tone="error"] { color: #c42a2a; }
-/* A fixed light band in both colour schemes: it has to read as a warning
-   whatever the host's theme, and dark text on it keeps AA contrast. */
-.nx-connection {
-  margin: 0; padding: 6px 14px; font-size: 12px; text-align: center;
-  background: #fff4e5; color: #6b3a00; border-bottom: 1px solid #f0c27b;
-}
-.nx-typing { margin: 0; padding: 0 14px 6px; font-size: 12px; font-style: italic; color: var(--nx-muted); }
-.nx-rating {
-  margin: 0 12px 10px; padding: 10px 12px;
-  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
-  display: flex; flex-direction: column; gap: 8px;
-}
-.nx-rating-prompt, .nx-rating-thanks { margin: 0; font-size: 12px; color: var(--nx-muted); }
-.nx-rating-actions { display: flex; gap: 8px; }
-.nx-rating-good, .nx-rating-bad {
-  flex: 1; border: 1px solid var(--nx-border); border-radius: 8px; padding: 6px 8px;
-  background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer;
-}
-.nx-rating-good[aria-pressed="true"], .nx-rating-bad[aria-pressed="true"] {
-  border-color: var(--nx-brand); background: var(--nx-customer);
-}
-.nx-rating-good:disabled, .nx-rating-bad:disabled { opacity: .6; cursor: default; }
-.nx-rating-dismiss {
-  align-self: flex-end; border: 0; background: transparent; color: var(--nx-muted);
-  font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; padding: 0;
-}
-.nx-form { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--nx-border); }
-.nx-input {
-  flex: 1; resize: none; font: inherit; color: inherit;
-  padding: 8px 10px; border-radius: 8px;
-  border: 1px solid var(--nx-border); background: transparent;
-}
-.nx-send {
-  border: 0; border-radius: 8px; padding: 0 14px;
-  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
-}
-.nx-send:disabled { opacity: .6; cursor: default; }
-.nx-attach {
-  border: 1px solid var(--nx-border); border-radius: 8px; background: transparent;
-  width: 38px; font-size: 16px; line-height: 1; cursor: pointer; color: inherit;
-}
-.nx-attach:disabled { opacity: .6; cursor: default; }
-.nx-emoji-wrap { position: relative; }
-.nx-emoji-btn {
-  border: 1px solid var(--nx-border); border-radius: 8px; background: transparent;
-  width: 38px; font-size: 16px; line-height: 1; cursor: pointer; color: inherit;
-}
-.nx-emoji-btn:disabled { opacity: .6; cursor: default; }
-.nx-emoji-panel {
-  position: absolute; inset-inline-start: 0; bottom: 100%; margin-bottom: 6px;
-  width: 220px; max-height: 200px; overflow-y: auto; z-index: 1;
-  padding: 8px; display: flex; flex-direction: column; gap: 8px;
-  background: var(--nx-surface); color: var(--nx-text);
-  border: 1px solid var(--nx-border); border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(16 24 40 / .18);
-}
-.nx-emoji-heading {
-  margin: 0 0 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: .02em; color: var(--nx-muted);
-}
-.nx-emoji-group { display: flex; flex-wrap: wrap; gap: 2px; }
-.nx-emoji-item {
-  border: 0; background: transparent; border-radius: 6px; padding: 0;
-  width: 28px; height: 28px; font-size: 16px; line-height: 1; cursor: pointer;
-}
-.nx-emoji-item:hover { background: var(--nx-customer); }
-.nx-chip {
-  display: flex; align-items: center; gap: 8px;
-  margin: 0 12px 8px; padding: 6px 10px;
-  border: 1px solid var(--nx-border); border-radius: 8px; font-size: 12px;
-}
-.nx-chip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nx-chip-x { border: 0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; color: var(--nx-muted); }
-.nx-attachment-img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; }
-.nx-attachment-file { display: inline-block; margin-top: 4px; color: inherit; text-decoration: underline; word-break: break-all; }
-.nx-row--customer .nx-attachment-file { color: #fff; }
+
+/* ===== Closed: the greeting / campaign card ============================== */
 .nx-greeting {
-  /* Logical, same reasoning as .nx-launcher above (NFR-I18N1). */
-  position: fixed; inset-inline-end: 10px; inset-block-end: 82px; width: 300px;
+  /* Logical, same reasoning as .nx-launcher above (NFR-I18N1). 14 px above the
+     60 px launcher. */
+  position: fixed; inset-inline-end: var(--nx-pad); inset-block-end: var(--nx-above);
+  width: 320px;
   background: var(--nx-surface); color: var(--nx-text);
-  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
-  box-shadow: 0 8px 24px rgb(16 24 40 / .18);
-  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  /* The corner nearest the launcher is the sharp one. */
+  border-radius: 18px; border-end-end-radius: 4px;
+  box-shadow: var(--nx-shadow-card);
+  padding: 12px; display: grid; grid-template-columns: 36px 1fr; gap: 10px 12px;
+  transform-origin: 100% 100%;
+  animation: nx-pop .22s ease-out both;
   /* The frame is sized to GREETING regardless of which content fills it
      (03.3.2 reuses the one card slot for a campaign message, up to 2000
      chars, not just the short fixed greeting) — scroll rather than overflow
      the iframe's fixed bounds. */
-  max-height: 234px; overflow-y: auto;
+  max-height: 186px; overflow-y: auto;
+}
+/* The team's avatar, drawn: a tinted circle with a person mark over it. */
+.nx-greeting::before {
+  content: ""; grid-row: 1; width: 36px; height: 36px; margin-top: 2px;
+  border-radius: 50%; background: var(--nx-avatar-bg);
+}
+.nx-greeting::after {
+  content: ""; position: absolute; inset-inline-start: 21px; top: 23px;
+  width: 18px; height: 18px; background: var(--nx-avatar-text);
+  -webkit-mask: var(--nx-icon-user) center / contain no-repeat;
+  mask: var(--nx-icon-user) center / contain no-repeat;
 }
 /* A campaign is addressed to this visitor specifically; a thin brand-colour
    edge is the one visual difference from the generic greeting it shares a
    slot with. */
 .nx-greeting[data-kind="campaign"] { border-inline-start: 3px solid var(--nx-brand); }
-.nx-greet-msg { margin: 0; font-size: 14px; line-height: 1.4; }
-.nx-greet-actions { display: flex; gap: 8px; }
-.nx-greet-chat {
-  flex: 1; border: 0; border-radius: 8px; padding: 8px 10px;
-  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+.nx-greet-msg { grid-column: 2; margin: 3px 0 0; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--nx-text); }
+/* Full width under the avatar row, so two labels fit side by side. */
+.nx-greet-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.nx-greet-actions > button {
+  flex: 1 1 auto; min-height: 44px; padding: 0 12px; border-radius: 12px;
+  font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer;
 }
-.nx-greet-browse {
-  flex: 1; border: 1px solid var(--nx-border); border-radius: 8px; padding: 8px 10px;
-  background: transparent; color: var(--nx-muted); font: inherit; cursor: pointer;
+.nx-greet-chat { border: 0; background: var(--nx-cta); color: var(--nx-on-brand); }
+.nx-greet-chat:hover { filter: brightness(1.07); }
+.nx-greet-browse { border: 0; background: var(--nx-field); color: var(--nx-muted); }
+.nx-greet-browse:hover { color: var(--nx-text); }
+
+/* ===== Closed: the reply preview ========================================= */
+/* The design reference's teaser, as the reply that just landed: avatar with a
+   presence dot, who answered, the first lines of it, and a round ×. Same slot
+   and frame as the greeting card (it takes the slot while it shows). */
+.nx-preview {
+  position: fixed; inset-inline-end: var(--nx-pad); inset-block-end: var(--nx-above);
+  display: flex; align-items: flex-start; gap: 12px; max-width: 320px;
+  padding: 12px; padding-inline-end: 6px;
+  background: var(--nx-surface); color: var(--nx-text);
+  border-radius: 18px; border-end-end-radius: 4px;
+  box-shadow: var(--nx-shadow-card);
+  transform-origin: 100% 100%;
+  animation: nx-pop .22s ease-out both;
 }
-.nx-prechat {
-  flex: 1; display: flex; flex-direction: column; gap: 10px;
-  padding: 16px; overflow-y: auto;
+.nx-preview-avatar {
+  position: relative; flex: none; width: 36px; height: 36px; margin-top: 2px;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--nx-avatar-bg); color: var(--nx-avatar-text);
+  font-size: 14px; font-weight: 700;
 }
-.nx-prechat-intro { margin: 0 0 2px; font-size: 14px; color: var(--nx-muted); }
+.nx-preview-avatar .nx-avatar-img { border-radius: 50%; }
+[data-presence="online"] .nx-preview-avatar::after,
+[data-presence="offline"] .nx-preview-avatar::after {
+  content: ""; position: absolute; inset-inline-end: -1px; inset-block-end: -1px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--nx-online); border: 2px solid var(--nx-surface);
+}
+[data-presence="offline"] .nx-preview-avatar::after { background: var(--nx-offline); }
+.nx-preview-body {
+  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 3px 0 0; border: 0; border-radius: 8px; background: transparent;
+  color: inherit; font: inherit; text-align: start; cursor: pointer;
+}
+.nx-preview-body:focus-visible { outline-offset: 4px; }
+.nx-preview-name { font-size: 13px; font-weight: 700; color: var(--nx-title); }
+.nx-preview-msg {
+  font-size: 13px; line-height: 18px; font-weight: 500; color: var(--nx-text);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* A 44 px target with the reference's 24 px round chip drawn inside it. */
+.nx-preview-close {
+  position: relative; flex: none; width: 44px; height: 44px; margin: -10px -4px -10px -6px;
+  padding: 0; border: 0; border-radius: 50%; background: transparent;
+  color: var(--nx-muted); font-size: 0; cursor: pointer;
+}
+.nx-preview-close::before {
+  content: ""; position: absolute; inset: 10px; border-radius: 50%; background: var(--nx-field);
+}
+.nx-preview-close::after {
+  content: ""; position: absolute; inset: 16px; background: currentColor;
+  -webkit-mask: var(--nx-icon-x) center / contain no-repeat; mask: var(--nx-icon-x) center / contain no-repeat;
+}
+.nx-preview-close:hover { color: var(--nx-text); }
+.nx-preview-close:focus-visible { outline-offset: -8px; }
+.nx-left .nx-preview {
+  inset-inline-start: var(--nx-pad); inset-inline-end: auto; transform-origin: 0 100%;
+  border-end-end-radius: 18px; border-end-start-radius: 4px;
+}
+
+/* ===== Open: the panel and its header ==================================== */
+.nx-panel {
+  /* Anchored to the corner above the launcher; the top and page-facing side
+     give the 60 px shadow its room (PANEL in the script). */
+  position: fixed;
+  inset-inline-end: var(--nx-pad); inset-block-end: var(--nx-above);
+  inset-inline-start: 60px; inset-block-start: 40px;
+  display: flex; flex-direction: column;
+  background: var(--nx-surface-2); color: var(--nx-text);
+  border-radius: var(--nx-radius); overflow: hidden;
+  box-shadow: var(--nx-shadow-panel);
+  transform-origin: 100% 100%;
+  animation: nx-pop .18s ease-out both;
+}
+.nx-left .nx-panel {
+  transform-origin: 0 100%;
+  inset-inline-start: var(--nx-pad); inset-inline-end: 60px;
+}
+/* Hosted Chat page: the panel is the whole viewport, no floating card. */
+.nx-page .nx-panel { inset: 0; border-radius: 0; box-shadow: none; animation: none; }
+.nx-header {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 18px 12px 18px 20px;
+  background: var(--nx-brand); color: var(--nx-on-brand);
+}
+.nx-identity { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* Avatars after the reference's header trio: a soft tint per person (picked
+   from the name, so the header and the preview card agree), a white ring that
+   lifts it off the brand colour, and a presence dot once one is known. */
+.nx-avatar {
+  position: relative; flex: none; width: 38px; height: 38px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid #ffffff; box-shadow: 0 2px 6px rgba(17, 24, 39, .18);
+  font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+}
+.nx-avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+[data-presence="online"] .nx-avatar::after,
+[data-presence="offline"] .nx-avatar::after {
+  content: ""; position: absolute; inset-inline-end: -3px; inset-block-end: -3px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--nx-online); border: 2px solid var(--nx-brand);
+}
+[data-presence="offline"] .nx-avatar::after { background: var(--nx-offline); }
+:where(.nx-avatar, .nx-team > span), [data-tone="0"] { background: #ffffff; color: #312e81; }
+[data-tone="1"] { background: #fde1d3; color: #7c2d12; }
+[data-tone="2"] { background: #d1fae5; color: #065f46; }
+[data-tone="3"] { background: #e0e7ff; color: #3730a3; }
+[data-tone="4"] { background: #fef3c7; color: #92400e; }
+/* On the white card a white tint would vanish; the card's own tint instead. */
+.nx-preview-avatar[data-tone="0"] { background: var(--nx-avatar-bg); color: var(--nx-avatar-text); }
+.nx-team { flex: none; display: flex; align-items: center; }
+.nx-team[hidden] { display: none; }
+.nx-team > span {
+  position: relative; width: 38px; height: 38px; border-radius: 50%;
+  border: 2px solid #ffffff; box-shadow: 0 2px 6px rgba(17, 24, 39, .18);
+}
+.nx-team > span + span { margin-inline-start: -10px; }
+.nx-team > span::before {
+  content: ""; position: absolute; inset: 8px; background: currentColor;
+  -webkit-mask: var(--nx-icon-user) center / contain no-repeat;
+  mask: var(--nx-icon-user) center / contain no-repeat;
+}
+.nx-title {
+  margin: 0; font-size: 18px; line-height: 24px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nx-close, .nx-menu-btn {
+  flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--nx-on-brand); cursor: pointer;
+  font-size: 0; transition: background-color .15s;
+}
+.nx-close::before { width: 22px; height: 22px; -webkit-mask-image: var(--nx-icon-down); mask-image: var(--nx-icon-down); }
+.nx-menu-btn::before { width: 20px; height: 20px; -webkit-mask-image: var(--nx-icon-more); mask-image: var(--nx-icon-more); }
+.nx-close:hover, .nx-menu-btn:hover, .nx-menu-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .14); }
+.nx-menu-wrap { position: relative; }
+.nx-menu {
+  position: absolute; inset-inline-end: 0; top: 100%; margin-top: 6px;
+  min-width: 200px; padding: 6px; z-index: 1;
+  background: var(--nx-surface); color: var(--nx-text);
+  border: 1px solid var(--nx-border); border-radius: 14px;
+  box-shadow: var(--nx-shadow-card);
+  animation: nx-pop .14s ease-out both;
+}
+.nx-menu-rate, .nx-menu-end {
+  display: block; width: 100%; min-height: 44px; text-align: start;
+  border: 0; border-radius: 10px; background: transparent; color: inherit;
+  font: inherit; font-size: 14px; padding: 0 12px; cursor: pointer;
+}
+.nx-menu-end { color: var(--nx-danger); }
+.nx-menu-rate:hover, .nx-menu-end:hover { background: var(--nx-field); }
+.nx-end-confirm {
+  position: absolute; inset: 90px 16px auto; z-index: 2;
+  background: var(--nx-surface); color: var(--nx-text);
+  border-radius: 16px; box-shadow: var(--nx-shadow-panel);
+  padding: 18px; display: flex; flex-direction: column; gap: 14px; text-align: center;
+  animation: nx-pop .16s ease-out both;
+}
+.nx-end-confirm-msg { margin: 0; font-size: 14px; font-weight: 600; color: var(--nx-title); }
+.nx-end-confirm-actions { display: flex; gap: 8px; }
+.nx-end-confirm-cancel, .nx-end-confirm-confirm {
+  flex: 1; min-height: 44px; border-radius: 12px; padding: 0 12px;
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.nx-end-confirm-cancel { border: 0; background: var(--nx-field); color: var(--nx-text); }
+.nx-end-confirm-confirm { border: 0; background: var(--nx-brand); color: var(--nx-on-brand); }
+/* A fixed light band in both colour schemes: it has to read as a warning
+   whatever the host's theme, and dark text on it keeps AA contrast. */
+.nx-connection {
+  flex: none; margin: 0; padding: 8px 16px; font-size: 12px; font-weight: 600; text-align: center;
+  background: #fff4e5; color: #6b3a00; border-bottom: 1px solid #f0c27b;
+}
+
+/* ===== Shared: a message from the team, and the field rows =============== */
+/* The reference's agent bubble: light fill, the corner nearest the team's
+   side is the sharp one. Used by messages, the pre-chat intro and the offline
+   form's intro and thank-you. */
+.nx-row--agent .nx-bubble, .nx-row--bot .nx-bubble, .nx-welcome-bubble,
+.nx-prechat-intro, .nx-offline-intro, .nx-offline-thanks {
+  background: var(--nx-bubble); color: var(--nx-text);
+  border-radius: 16px; border-end-start-radius: 4px;
+  padding: 10px 14px; font-size: 14px; line-height: 20px; font-weight: 500;
+}
+.nx-field { display: flex; flex-direction: column; gap: 4px; }
+.nx-field-label { font-size: 12px; font-weight: 600; color: var(--nx-muted); padding: 0 2px; }
+.nx-field-required { color: var(--nx-danger); margin-inline-start: 2px; }
+.nx-prechat-input, .nx-input {
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--nx-text);
+}
 .nx-prechat-input {
-  font: inherit; color: inherit; padding: 9px 11px; border-radius: 8px;
-  border: 1px solid var(--nx-border); background: transparent;
+  width: 100%; height: 40px; padding: 0 12px;
+  border-radius: 10px; border: 1px solid var(--nx-field-border); background: var(--nx-field);
+  outline: none;
 }
-/* Configurable pre-chat fields (FR-MOD-08.7.7). Collapsed when empty so a
-   workspace with no form builder configured sees the fixed form unchanged. */
+.nx-prechat-input:focus { border-color: var(--nx-brand); box-shadow: 0 0 0 2px var(--nx-brand); }
+/* The label above says what the box is for; the placeholder (kept, for the
+   rare field rendered without a row) would only repeat it. */
+.nx-field .nx-prechat-input::placeholder { color: transparent; }
+.nx-prechat-input::placeholder { color: var(--nx-muted); opacity: .8; }
 .nx-prechat-fields { display: flex; flex-direction: column; gap: 10px; }
+/* Collapsed when empty so a workspace with no form builder configured sees the
+   fixed form unchanged (FR-MOD-08.7.7). */
 .nx-prechat-fields:empty { display: none; }
-.nx-prechat-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--nx-muted); }
-.nx-prechat-submit {
-  border: 0; border-radius: 8px; padding: 9px 12px;
-  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+.nx-prechat-check {
+  display: flex; align-items: center; gap: 10px; min-height: 44px;
+  font-size: 13px; font-weight: 600; color: var(--nx-text);
 }
-/* Post-chat form (FR-MOD-08.7.7). Framed like the rating block it sits above,
-   so the two read as one closing screen rather than two stacked panels; the
-   inputs and checkbox rows are the pre-chat ones, shared by renderFormFields. */
-.nx-postchat {
-  margin: 0 12px 10px; padding: 10px 12px;
-  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
-  display: flex; flex-direction: column; gap: 8px;
+.nx-prechat-check input { accent-color: var(--nx-brand); width: 18px; height: 18px; margin: 0; }
+/* The full-width call to action of every form. */
+.nx-prechat-submit, .nx-offline-submit, .nx-postchat-submit {
+  min-height: 44px; width: 100%; padding: 0 16px; border: 0; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--nx-cta); color: var(--nx-on-brand);
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
 }
-.nx-postchat-intro, .nx-postchat-thanks { margin: 0; font-size: 12px; color: var(--nx-muted); }
-.nx-postchat-error { margin: 0; font-size: 12px; color: #c42a2a; }
-.nx-postchat-submit {
-  align-self: flex-start; border: 0; border-radius: 8px; padding: 6px 10px;
-  background: var(--nx-brand); color: #fff; font: inherit; font-size: 12px;
-  font-weight: 600; cursor: pointer;
+.nx-prechat-submit::after { width: 16px; height: 16px; -webkit-mask-image: var(--nx-icon-send); mask-image: var(--nx-icon-send); }
+.nx-prechat-submit:hover, .nx-offline-submit:hover, .nx-postchat-submit:hover { filter: brightness(1.07); }
+.nx-offline-submit:disabled, .nx-postchat-submit:disabled { opacity: .5; cursor: default; filter: none; }
+
+/* ===== Open, first: the pre-chat form ==================================== */
+/* Lives in the conversation's own well, as the team's first message with a
+   form card under it on the team's side. */
+.nx-prechat {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 18px 16px 16px; background: var(--nx-surface-2);
 }
-.nx-postchat-submit:disabled { opacity: .6; cursor: default; }
-/* Offline form (FR-MOD-08.7.7). Laid out like the pre-chat form because it
-   plays the same part — a stack of inputs filling the body where the composer
-   would be — rather than like the post-chat block, which is a card inside a
-   conversation that is still on screen. */
-.nx-offline { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.nx-offline-intro { margin: 0; font-size: 13px; color: var(--nx-muted); }
-.nx-offline-submit {
-  border: 0; border-radius: 8px; padding: 9px 12px;
-  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+.nx-prechat > :first-child { margin-top: auto; }
+.nx-prechat-intro { margin: 0; max-width: 86%; }
+/* The workspace's welcome message: a bold first line over the text, and
+   links in the brand's text colour, underlined as the reference has them. */
+.nx-welcome { align-self: flex-start; max-width: 86%; }
+.nx-welcome-bubble { overflow-wrap: anywhere; white-space: pre-wrap; }
+.nx-welcome-title { display: block; margin-bottom: 2px; font-weight: 700; color: var(--nx-title); }
+.nx-welcome-link { color: var(--nx-link); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.nx-prechat-card {
+  width: 88%; display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  background: var(--nx-surface); border-radius: 16px; border-end-start-radius: 4px;
+  box-shadow: var(--nx-shadow-soft);
 }
-.nx-offline-submit:disabled { opacity: .6; cursor: default; }
-.nx-offline-thanks { margin: 0; padding: 16px 12px; font-size: 13px; color: var(--nx-muted); }
-.nx-powered { margin: 0; padding: 6px 12px 10px; text-align: center; font-size: 11px; color: var(--nx-muted); }
+.nx-prechat-submit { margin-top: 2px; }
+.nx-prechat-hint { margin: 0; padding: 0 2px; font-size: 12px; font-weight: 600; color: var(--nx-muted); }
+
+/* ===== Open, nobody available: the offline form ========================== */
+.nx-offline {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 18px 16px 16px; background: var(--nx-surface-2);
+}
+.nx-offline > :first-child { margin-top: auto; }
+.nx-offline-intro { margin: 0 0 4px; align-self: flex-start; max-width: 86%; }
+.nx-offline-thanks { margin: auto 16px 16px; align-self: flex-start; max-width: 80%; }
+
+/* ===== Open: the conversation ============================================= */
+.nx-transcript {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 18px 16px 14px; background: var(--nx-surface-2);
+  display: flex; flex-direction: column; gap: 10px;
+  scrollbar-width: thin; scrollbar-color: var(--nx-field-border) transparent;
+}
+/* Messages sit at the bottom of the well, as in a messenger. The first child is
+   the welcome row, hidden when the workspace has none — then the next one
+   takes the margin. */
+.nx-transcript > :first-child:not([hidden]),
+.nx-transcript > [hidden]:first-child + * { margin-top: auto; }
+.nx-row { display: flex; flex-direction: column; gap: 4px; max-width: 86%; }
+.nx-row--customer { align-self: flex-end; align-items: flex-end; }
+.nx-row--agent, .nx-row--bot { align-self: flex-start; align-items: flex-start; }
+.nx-row--system { align-self: center; max-width: 100%; }
+.nx-bubble { overflow-wrap: anywhere; white-space: pre-wrap; }
+.nx-row--customer .nx-bubble {
+  background: var(--nx-bubble-own); color: var(--nx-on-brand);
+  border-radius: 16px; border-end-end-radius: 4px;
+  padding: 10px 14px; font-size: 14px; line-height: 20px; font-weight: 500;
+}
+/* The reference's "Today" pill — here the look of every system notice. */
+.nx-system {
+  margin: 0; padding: 5px 12px; border-radius: 999px; background: var(--nx-pill);
+  font-size: 12px; font-weight: 600; color: var(--nx-muted); text-align: center;
+}
+.nx-time { font-size: 12px; font-weight: 500; color: var(--nx-muted); }
+.nx-meta { display: flex; align-items: center; gap: 6px; }
+/* The AI mark: small, outlined, same muted colour as the time so it informs
+   without competing with the reply. */
+.nx-ai-label {
+  font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: .02em;
+  color: var(--nx-muted); border: 1px solid currentColor; border-radius: 999px; padding: 2px 6px;
+}
+/* The "edited" marker sits under the timestamp and reads like one: same size
+   and colour, italic so the two are not mistaken for a single line. */
+.nx-edited { font-size: 12px; font-style: italic; color: var(--nx-muted); }
+.nx-attachment-img { display: block; max-width: 100%; max-height: 220px; border-radius: 12px; margin-top: 4px; }
+.nx-attachment-file { display: inline-block; margin-top: 4px; color: inherit; text-decoration: underline; overflow-wrap: anywhere; }
+.nx-row--customer .nx-attachment-file { color: var(--nx-on-brand); }
+.nx-bubble a { color: var(--nx-link); font-weight: 600; text-underline-offset: 2px; }
+.nx-row--customer .nx-bubble a { color: inherit; }
+/* "…is typing": the reference's three-dot bubble, with the words beside it so
+   who is typing is still said. */
+.nx-typing {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  margin: 0; padding: 0 16px 10px; background: var(--nx-surface-2);
+  font-size: 12px; font-weight: 500; color: var(--nx-muted);
+}
+.nx-typing::before {
+  content: ""; flex: none; width: 52px; height: 34px;
+  border-radius: 16px; border-end-start-radius: 4px;
+  background:
+    radial-gradient(circle 3.5px, var(--nx-typing) 98%, transparent) 14px 50% / 8px 8px no-repeat,
+    radial-gradient(circle 3.5px, var(--nx-typing) 98%, transparent) 26px 50% / 8px 8px no-repeat,
+    radial-gradient(circle 3.5px, var(--nx-typing) 98%, transparent) 38px 50% / 8px 8px no-repeat,
+    var(--nx-bubble);
+  animation: nx-blink 1.2s infinite;
+}
+@keyframes nx-blink { 0%, 80%, 100% { opacity: .55; } 40% { opacity: 1; } }
+.nx-status { flex: none; margin: 0; padding: 0 16px 10px; background: var(--nx-surface-2); font-size: 12px; color: var(--nx-muted); }
+.nx-status[data-tone="error"] { color: var(--nx-danger); }
+
+/* ===== Cards inside the conversation: post-chat, rating, chat ended ====== */
+.nx-postchat, .nx-rating, .nx-closed {
+  flex: none; margin: 0 16px 10px; padding: 12px;
+  background: var(--nx-surface); color: var(--nx-text);
+  border-radius: 16px; box-shadow: var(--nx-shadow-soft);
+}
+.nx-postchat, .nx-rating { display: flex; flex-direction: column; gap: 10px; }
+.nx-postchat-intro, .nx-postchat-thanks, .nx-rating-prompt, .nx-rating-thanks {
+  margin: 0; font-size: 14px; font-weight: 600; color: var(--nx-title);
+}
+.nx-postchat-error { margin: 0; font-size: 12px; font-weight: 600; color: var(--nx-danger); }
+.nx-rating-actions { display: flex; gap: 8px; }
+.nx-rating-good, .nx-rating-bad {
+  flex: 1; min-height: 44px; padding: 0 10px; border-radius: 12px;
+  border: 1px solid var(--nx-field-border); background: var(--nx-field); color: var(--nx-text);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: border-color .15s, background-color .15s;
+}
+.nx-rating-good:hover, .nx-rating-bad:hover { border-color: var(--nx-brand); }
+.nx-rating-good[aria-pressed="true"], .nx-rating-bad[aria-pressed="true"] {
+  border-color: var(--nx-brand); box-shadow: 0 0 0 1px var(--nx-brand);
+}
+.nx-rating-good:disabled, .nx-rating-bad:disabled { opacity: .6; cursor: default; }
+.nx-rating-dismiss {
+  align-self: center; min-height: 44px; padding: 0 12px; border: 0; background: transparent;
+  color: var(--nx-muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer;
+}
+.nx-closed { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--nx-muted); }
+.nx-closed-msg { margin: 0; }
+.nx-closed-restart {
+  flex: none; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px;
+  background: var(--nx-brand); color: var(--nx-on-brand);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* ===== The composer ======================================================= */
+.nx-chip {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  margin: 0; padding: 10px 16px 0; background: var(--nx-surface);
+  border-top: 1px solid var(--nx-border); font-size: 12px; font-weight: 600;
+}
+.nx-chip + .nx-form { border-top: 0; }
+.nx-chip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-chip-x {
+  width: 44px; height: 44px; margin: -12px -12px -12px 0; border: 0; border-radius: 50%;
+  background: transparent; font-size: 18px; line-height: 1; cursor: pointer; color: var(--nx-muted);
+}
+.nx-form { flex: none; padding: 12px 14px 4px; background: var(--nx-surface); border-top: 1px solid var(--nx-border); }
+.nx-composer-field {
+  display: flex; align-items: center; gap: 2px;
+  padding: 4px; padding-inline-start: 6px; border-radius: 999px; background: var(--nx-field);
+}
+.nx-composer-field:focus-within { box-shadow: 0 0 0 2px var(--nx-brand); }
+.nx-attach, .nx-emoji-btn {
+  flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--nx-muted); font-size: 0; cursor: pointer;
+}
+.nx-attach::before { width: 20px; height: 20px; -webkit-mask-image: var(--nx-icon-clip); mask-image: var(--nx-icon-clip); }
+.nx-emoji-btn::before { width: 20px; height: 20px; -webkit-mask-image: var(--nx-icon-smile); mask-image: var(--nx-icon-smile); }
+.nx-attach:hover, .nx-emoji-btn:hover, .nx-emoji-btn[aria-expanded="true"] { background: var(--nx-bubble); color: var(--nx-text); }
+.nx-attach:disabled, .nx-emoji-btn:disabled { opacity: .5; cursor: default; }
+.nx-input {
+  flex: 1 1 auto; min-width: 0; height: 44px; padding: 12px 6px;
+  border: 0; background: transparent; resize: none; outline: none;
+  line-height: 20px; overflow-y: auto;
+}
+.nx-input::placeholder { color: var(--nx-muted); opacity: 1; }
+/* Icon-only on screen; "Send" stays its text, and so its accessible name. */
+.nx-send {
+  flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--nx-brand); color: var(--nx-on-brand); font-size: 0; cursor: pointer;
+}
+.nx-send::before { width: 19px; height: 19px; -webkit-mask-image: var(--nx-icon-send); mask-image: var(--nx-icon-send); }
+[dir="rtl"] .nx-send::before, [dir="rtl"] .nx-prechat-submit::after { transform: scaleX(-1); }
+.nx-send:hover { filter: brightness(1.08); }
+.nx-send:disabled { opacity: .5; cursor: default; filter: none; }
+.nx-emoji-wrap { position: relative; }
+.nx-emoji-panel {
+  position: absolute; inset-inline-start: 0; bottom: 100%; margin-bottom: 12px;
+  width: 248px; max-height: 220px; overflow-y: auto; z-index: 1;
+  padding: 10px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--nx-surface); color: var(--nx-text);
+  border: 1px solid var(--nx-border); border-radius: 16px;
+  box-shadow: var(--nx-shadow-card);
+  animation: nx-pop .14s ease-out both;
+}
+.nx-emoji-heading {
+  margin: 0 0 2px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--nx-muted);
+}
+.nx-emoji-group { display: flex; flex-wrap: wrap; gap: 2px; }
+.nx-emoji-item {
+  border: 0; background: transparent; border-radius: 8px; padding: 0;
+  width: 32px; height: 32px; font-size: 18px; line-height: 1; cursor: pointer;
+}
+.nx-emoji-item:hover { background: var(--nx-field); }
+
+/* ===== Footer ============================================================= */
+.nx-powered {
+  flex: none; margin: 0; padding: 4px 14px 10px; background: var(--nx-surface);
+  text-align: center; font-size: 11px; font-weight: 500; color: var(--nx-muted);
+}
+/* The brand text in the footer, in the brand's text colour. */
+.nx-powered-text, .nx-powered-brand .nx-powered-link { color: var(--nx-link); font-weight: 700; }
 .nx-powered-link { color: inherit; text-decoration: none; }
 .nx-powered-link:hover { text-decoration: underline; }
+/* The composer above already draws the separating line; with no composer on
+   screen (a form, or the chat ended), the footer draws it. */
+.nx-prechat:not([hidden]) ~ .nx-powered, .nx-offline:not([hidden]) ~ .nx-powered,
+.nx-offline-thanks:not([hidden]) ~ .nx-powered, .nx-form[hidden] ~ .nx-powered {
+  border-top: 1px solid var(--nx-border);
+}
+
+/* ===== Placement and modes ================================================ */
 /* Left-corner placement (FR-MOD-11.7): mirror the launcher and greeting to the
    edge the loader anchored the iframe to. Logical here too, so a workspace's
    explicit corner choice and the visitor's reading direction compose instead
-   of one silently overriding the other. */
-.nx-left .nx-launcher { inset-inline-start: 10px; inset-inline-end: auto; }
-.nx-left .nx-greeting { inset-inline-start: 10px; inset-inline-end: auto; }
+   of one silently overriding the other. The card's sharp corner follows. */
+.nx-left .nx-launcher { inset-inline-start: var(--nx-pad); inset-inline-end: auto; }
+.nx-left .nx-greeting {
+  inset-inline-start: var(--nx-pad); inset-inline-end: auto; transform-origin: 0 100%;
+  border-end-end-radius: 18px; border-end-start-radius: 4px;
+}
 /* Mobile fullscreen: on a phone the loader gives the frame the whole viewport,
-   so the panel drops its floating-card inset and fills it edge-to-edge. */
-@media (max-width: 480px) {
-  .nx-mobile-full .nx-panel { inset: 0; border: 0; border-radius: 0; }
+   so the panel drops its floating-card inset and fills it edge-to-edge. Width
+   alone cannot tell the two apart from in here — the desktop frame is 440 px
+   wide, under the same 480 — so it is gated on a touch pointer as well;
+   width-only, every desktop visitor got a square, edge-to-edge panel too. */
+@media (max-width: 480px) and (pointer: coarse) {
+  .nx-mobile-full .nx-panel { inset: 0; border-radius: 0; }
+  /* Edge-to-edge the panel covers the launcher's corner; its own × closes. */
+  .nx-mobile-full .nx-launcher[aria-expanded="true"] { display: none; }
 }
 :focus-visible { outline: 2px solid var(--nx-brand); outline-offset: 2px; }
+/* On the brand-filled header a brand ring would be invisible. */
+.nx-header :focus-visible { outline-color: #ffffff; }
+/* The text box shows focus through the field's ring; the buttons beside it
+   keep their own. */
+.nx-input:focus-visible { outline: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;
 

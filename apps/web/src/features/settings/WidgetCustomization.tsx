@@ -18,6 +18,8 @@ import { useEffect, useState, type ReactElement } from 'react';
 import {
   DEFAULT_WIDGET_APPEARANCE,
   WIDGET_COLOR_PATTERN,
+  WIDGET_WELCOME_TEXT_MAX,
+  WIDGET_WELCOME_TITLE_MAX,
   type WidgetAppearance,
   type WidgetPosition,
   type WidgetTheme,
@@ -155,6 +157,13 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                   hint={t('settings.widgetCustomization.poweredByHint')}
                   checked={value.powered_by}
                   onChange={(next) => set('powered_by', next)}
+                />
+
+                <WelcomeControl
+                  title={value.welcome_title ?? ''}
+                  text={value.welcome_text ?? ''}
+                  onTitleChange={(next) => set('welcome_title', next)}
+                  onTextChange={(next) => set('welcome_text', next)}
                 />
               </fieldset>
 
@@ -325,6 +334,68 @@ function ToggleControl({
         <span className="block text-2xs text-content-tertiary">{hint}</span>
       </span>
     </label>
+  );
+}
+
+/**
+ * The welcome message (owner, 2026-10-13): a title and the text under it, which
+ * the widget shows as the team's first bubble. An empty box is sent as `''`,
+ * which the API stores as null — "no welcome, use the built-in line". The
+ * hints sit outside the `<label>`s and are wired by `aria-describedby`, so a
+ * field's accessible name stays just "Title" / "Message".
+ */
+function WelcomeControl({
+  title,
+  text,
+  onTitleChange,
+  onTextChange,
+}: {
+  title: string;
+  text: string;
+  onTitleChange: (next: string) => void;
+  onTextChange: (next: string) => void;
+}): ReactElement {
+  const t = useTranslate();
+  return (
+    <fieldset className="flex flex-col gap-3 border-0 p-0">
+      <legend className="mb-1 text-sm font-medium">
+        {t('settings.widgetCustomization.welcomeLegend')}
+      </legend>
+      <p id="widget-welcome-hint" className="-mt-1 text-2xs text-content-tertiary">
+        {t('settings.widgetCustomization.welcomeHint')}
+      </p>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="widget-welcome-title" className="text-xs font-medium">
+          {t('settings.widgetCustomization.welcomeTitleLabel')}
+        </label>
+        <input
+          id="widget-welcome-title"
+          type="text"
+          value={title}
+          maxLength={WIDGET_WELCOME_TITLE_MAX}
+          aria-describedby="widget-welcome-hint"
+          onChange={(event) => onTitleChange(event.target.value)}
+          className="rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="widget-welcome-text" className="text-xs font-medium">
+          {t('settings.widgetCustomization.welcomeTextLabel')}
+        </label>
+        <textarea
+          id="widget-welcome-text"
+          value={text}
+          rows={3}
+          maxLength={WIDGET_WELCOME_TEXT_MAX}
+          aria-describedby="widget-welcome-hint widget-welcome-text-hint"
+          onChange={(event) => onTextChange(event.target.value)}
+          className="resize-y rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <p id="widget-welcome-text-hint" className="text-2xs text-content-tertiary">
+          {t('settings.widgetCustomization.welcomeTextHint')}
+        </p>
+      </div>
+    </fieldset>
   );
 }
 

@@ -453,6 +453,29 @@ export function widgetFrame(page: Page) {
 }
 
 /**
+ * How long the widget waits before it offers its greeting card — a mirror of
+ * `GREETING_DELAY_MS` in `apps/widget/src/widget.ts` (owner, 2026-10-13).
+ */
+export const GREETING_DELAY_MS = 30_000;
+
+/**
+ * Arrive on `url` and bring the greeting card up without sitting through the
+ * half minute a real visitor does.
+ *
+ * Playwright's clock is installed before the page loads, so the widget's
+ * timers in the frame are the fake clock's; it is fast-forwarded only once the
+ * launcher is on screen, because the delay is scheduled when the widget mounts
+ * and a jump taken before that would have nothing to fire. Time otherwise
+ * flows as normal, so polling and sockets behave as they do untouched.
+ */
+export async function arriveForGreeting(page: Page, url: string): Promise<void> {
+  await page.clock.install();
+  await page.goto(url);
+  await expect(widgetFrame(page).locator('.nx-launcher')).toBeVisible();
+  await page.clock.fastForward(GREETING_DELAY_MS);
+}
+
+/**
  * A host origin of this run's own, under the seeded tenant's trusted domain.
  *
  * `acme-bikes.localhost` is registered with `include_subdomains`, so any label

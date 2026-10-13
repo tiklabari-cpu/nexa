@@ -58,7 +58,7 @@ export function AuthCallbackPage(): ReactElement {
   }, [code, state, completeSsoLogin, t]);
 
   return (
-    <main className="flex min-h-full items-center justify-center bg-canvas p-6">
+    <main className="auth-stage flex min-h-full items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-sm text-center">
         {error ? (
           <>

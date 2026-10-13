@@ -45,12 +45,12 @@ function AuthCard({
 }): ReactElement {
   usePageTitle(title);
   return (
-    <main className="flex min-h-full items-center justify-center bg-canvas p-6">
+    <main className="auth-stage flex min-h-full items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-sm">
         <header className="mb-6 flex items-center gap-2.5">
           <span
             aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white"
+            className="brand-mark flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500 text-base font-bold text-white"
           >
             S
           </span>
@@ -59,7 +59,7 @@ function AuthCard({
             <p className="text-xs text-content-secondary">{subtitle}</p>
           </div>
         </header>
-        <div className="rounded-lg border border-border bg-surface p-5">{children}</div>
+        <div className="auth-card rounded-xl border border-border bg-surface p-6">{children}</div>
         {footer && <p className="mt-4 text-center text-xs text-content-tertiary">{footer}</p>}
         {/* Every public screen, the deployment's documents (tm 257.9). */}
         <LegalLinks />

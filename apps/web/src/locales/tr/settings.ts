@@ -505,6 +505,13 @@ export const settings: Messages = {
   'settings.widgetCustomization.poweredByLabel': '“Powered by SiyahTuş” yazısını göster',
   'settings.widgetCustomization.poweredByHint':
     'Widget altbilgisinde küçük bir ibare. Kaldırmak için kapatın.',
+  'settings.widgetCustomization.welcomeLegend': 'Karşılama mesajı',
+  'settings.widgetCustomization.welcomeHint':
+    'Ziyaretçi sohbeti açtığında ekibinizin ilk mesajı olarak görünür. İkisini de boş bırakırsanız varsayılan metin kullanılır.',
+  'settings.widgetCustomization.welcomeTitleLabel': 'Başlık',
+  'settings.widgetCustomization.welcomeTextLabel': 'Mesaj',
+  'settings.widgetCustomization.welcomeTextHint':
+    'Bağlantı için [metin](https://adres) yazın. **kalın** ve *italik* de kullanılabilir.',
   'settings.widgetCustomization.entitlementError':
     'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.saveButton': 'Görünümü kaydet',

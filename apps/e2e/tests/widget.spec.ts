@@ -19,6 +19,8 @@ import {
   HOST_PAGE,
   API_BASE,
   WIDGET_ORIGIN,
+  GREETING_DELAY_MS,
+  arriveForGreeting,
   openWidget,
   ownerAccessToken,
   signIn,
@@ -67,7 +69,7 @@ async function widgetImageRendered(page: Page, index = 0): Promise<void> {
 
 test.describe('widget embedding', () => {
   test('mounts a cross-origin iframe on the host page', async ({ page, organizationId }) => {
-    await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
+    await arriveForGreeting(page, `${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
 
     const frame = page.locator('#siyahtus-widget-frame');
     await expect(frame).toBeAttached();
@@ -256,10 +258,17 @@ test.describe('greeting', () => {
     page,
     organizationId,
   }) => {
+    await page.clock.install();
     await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
     const frame = widgetFrame(page);
 
-    // Appears without the visitor clicking anything.
+    // Only the launcher on arrival (owner, 2026-10-13) — the card is not a
+    // pop-up the visitor meets before they have read anything.
+    await expect(frame.locator('.nx-launcher')).toBeVisible();
+    await expect(frame.getByRole('button', { name: "Let's chat" })).toBeHidden();
+
+    // Then, half a minute in, it appears without the visitor clicking anything.
+    await page.clock.fastForward(GREETING_DELAY_MS);
     await expect(frame.getByRole('button', { name: "Let's chat" })).toBeVisible();
     await page.screenshot({ path: 'kanit/12-greeting-card.png', fullPage: true });
 
@@ -273,7 +282,7 @@ test.describe('greeting', () => {
     page,
     organizationId,
   }) => {
-    await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
+    await arriveForGreeting(page, `${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
     const frame = widgetFrame(page);
 
     await frame.getByRole('button', { name: 'Just browsing' }).click();
@@ -282,9 +291,11 @@ test.describe('greeting', () => {
     // The launcher is still there — dismissing the nudge is not closing the door.
     await expect(frame.getByRole('button', { name: 'Open chat' })).toBeVisible();
 
-    // A reload must not bring the card back (sessionStorage remembers).
+    // A reload must not bring the card back (sessionStorage remembers) — not
+    // even once the delay has passed, which is when it would otherwise show.
     await page.reload();
     await expect(widgetFrame(page).getByRole('button', { name: 'Open chat' })).toBeVisible();
+    await page.clock.fastForward(GREETING_DELAY_MS);
     await expect(widgetFrame(page).getByRole('button', { name: "Let's chat" })).toBeHidden();
   });
 });
@@ -883,14 +894,18 @@ test.describe('unread badge', () => {
       await signIn(agent);
       await agent.getByLabel('Availability').selectOption('accepting_chats');
 
+      // The fake clock is what lets the greeting below arrive on cue.
+      await visitor.clock.install();
       await openWidget(visitor, organizationId, { host: site.origin });
       await visitorSends(visitor, question);
 
       // --- The visitor walks away from an open conversation ----------------
       const frame = widgetFrame(visitor);
       await frame.getByRole('button', { name: 'Close chat' }).click();
-      // Closing re-offers the greeting card; waving it away leaves the bare
-      // launcher, which is the surface this test is about.
+      // The greeting card is offered once the visitor has been on the page
+      // half a minute; waving it away leaves the bare launcher, which is the
+      // surface this test is about.
+      await visitor.clock.fastForward(GREETING_DELAY_MS);
       await frame.getByRole('button', { name: 'Just browsing' }).click();
 
       // Nothing from the team yet, so no badge and no count in the name.

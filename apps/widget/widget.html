@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
+    <!--
+      `light` only, never `light dark`: this document is an iframe, and a browser
+      paints an opaque canvas behind a frame whose colour scheme differs from the
+      embedding page's. With `light dark` every dark-mode visitor saw a black box
+      around the launcher on a light site. The widget's own dark palette is
+      applied by its stylesheet on <body>, which leaves the canvas transparent.
+    -->
+    <meta name="color-scheme" content="light" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Chat</title>
     <style>

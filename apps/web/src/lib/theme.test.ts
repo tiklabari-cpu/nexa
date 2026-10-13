@@ -1,9 +1,8 @@
 /**
  * The theme primitive: detection, the default, persistence, and the attribute.
  *
- * The load-bearing claims are (a) an agent who has never chosen gets dark — the
- * theme every screenshot and every reference in `apps/e2e/kanit/` was taken in —
- * and (b) a choice reaches `<html data-theme>`, which is the single selector
+ * The load-bearing claims are (a) an agent who has never chosen gets light —
+ * the default since 2026-10-12 (owner decision; dark before that) — and (b) a choice reaches `<html data-theme>`, which is the single selector
  * `tokens.css` and every Tailwind `dark:` variant key off.
  *
  * The last block reads `index.html`. That file carries a copy of the storage key
@@ -40,30 +39,30 @@ afterEach(() => {
 });
 
 describe('coerceTheme', () => {
-  it('only an explicit "light" leaves the default', () => {
+  it('only an explicit "dark" leaves the default', () => {
     expect(coerceTheme('light')).toBe('light');
     expect(coerceTheme('dark')).toBe('dark');
   });
 
-  it('falls back to dark for anything unrecognised, absent or empty', () => {
+  it('falls back to light for anything unrecognised, absent or empty', () => {
     // A value written by an older build, a hand-edited storage entry, or a key
     // that was never there must not leave the panel themeless.
-    expect(coerceTheme('solarized')).toBe('dark');
-    expect(coerceTheme(null)).toBe('dark');
-    expect(coerceTheme(undefined)).toBe('dark');
-    expect(coerceTheme('')).toBe('dark');
+    expect(coerceTheme('solarized')).toBe('light');
+    expect(coerceTheme(null)).toBe('light');
+    expect(coerceTheme(undefined)).toBe('light');
+    expect(coerceTheme('')).toBe('light');
   });
 });
 
 describe('detectTheme', () => {
-  it('defaults to dark when nothing has been chosen', () => {
-    expect(detectTheme()).toBe('dark');
-    expect(DEFAULT_THEME).toBe('dark');
+  it('defaults to light when nothing has been chosen', () => {
+    expect(detectTheme()).toBe('light');
+    expect(DEFAULT_THEME).toBe('light');
   });
 
   it('honours a remembered choice', () => {
-    globalThis.localStorage.setItem(THEME_STORAGE_KEY, 'light');
-    expect(detectTheme()).toBe('light');
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    expect(detectTheme()).toBe('dark');
   });
 
   /**
@@ -75,10 +74,10 @@ describe('detectTheme', () => {
    * That is the §D82 (tm 108) failure mode: a gate that measures the machine.
    */
   it('ignores the operating system preference', () => {
-    expect(detectTheme()).toBe('dark');
-    expect(globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches ?? false).toBe(false);
-    globalThis.localStorage.setItem(THEME_STORAGE_KEY, 'light');
     expect(detectTheme()).toBe('light');
+    expect(globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches ?? false).toBe(false);
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    expect(detectTheme()).toBe('dark');
   });
 });
 
@@ -96,23 +95,23 @@ describe('applyTheme', () => {
 
 describe('useThemeStore', () => {
   it('starts on the default and moves the attribute when the switcher changes it', () => {
-    expect(getTheme()).toBe('dark');
-
-    useThemeStore.getState().setTheme('light');
     expect(getTheme()).toBe('light');
-    expect(document.documentElement.dataset.theme).toBe('light');
-    // Persisted, so the choice survives the reload the E2E suite performs.
-    expect(globalThis.localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
 
     useThemeStore.getState().setTheme('dark');
     expect(getTheme()).toBe('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
+    // Persisted, so the choice survives the reload the E2E suite performs.
+    expect(globalThis.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+
+    useThemeStore.getState().setTheme('light');
+    expect(getTheme()).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
   });
 });
 
 describe('the switcher catalogue', () => {
-  it('offers both themes, dark first', () => {
-    expect([...THEMES]).toEqual(['dark', 'light']);
+  it('offers both themes, light first', () => {
+    expect([...THEMES]).toEqual(['light', 'dark']);
   });
 
   it('names every theme in every locale', () => {
@@ -142,8 +141,8 @@ describe('the pre-paint boot script in index.html', () => {
 
   it('reads the same storage key and applies the same default as theme.ts', () => {
     expect(INDEX_HTML).toContain(`localStorage.getItem('${THEME_STORAGE_KEY}')`);
-    expect(INDEX_HTML).toMatch(/=== 'light' \? 'light' : 'dark'/);
-    expect(DEFAULT_THEME).toBe('dark');
+    expect(INDEX_HTML).toMatch(/=== 'dark' \? 'dark' : 'light'/);
+    expect(DEFAULT_THEME).toBe('light');
   });
 
   it('runs before the deferred module bundle', () => {

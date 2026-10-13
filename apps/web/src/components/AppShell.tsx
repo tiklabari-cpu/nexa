@@ -445,7 +445,7 @@ function AppMenu(): ReactElement {
       label={t('shell.menu')}
       triggerTitle={t('shell.menu')}
       trigger="S"
-      triggerClassName="mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white hover:bg-brand-600"
+      triggerClassName="brand-mark mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white"
       panelClassName="left-11 top-0 w-56 p-2"
     >
       {({ close }) => (

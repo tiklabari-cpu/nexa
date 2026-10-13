@@ -380,12 +380,12 @@ export function SignInPage(): ReactElement {
   const codeError = codeForm.errorFor('code');
 
   return (
-    <main className="flex min-h-full items-center justify-center bg-canvas p-6">
+    <main className="auth-stage flex min-h-full items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-sm">
         <header className="mb-6 flex items-center gap-2.5">
           <span
             aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white"
+            className="brand-mark flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500 text-base font-bold text-white"
           >
             S
           </span>
@@ -419,7 +419,7 @@ export function SignInPage(): ReactElement {
         ) : unverifiedEmail ? (
           <section
             aria-label={t('auth.verify.unverifiedTitle')}
-            className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+            className="auth-card rounded-xl border border-border bg-surface p-6 shadow-xs"
           >
             <h2 className="mb-1 text-sm font-medium">{t('auth.verify.unverifiedTitle')}</h2>
             <p className="mb-3 text-xs text-content-secondary">
@@ -458,7 +458,7 @@ export function SignInPage(): ReactElement {
         ) : codeStep ? (
           <section
             aria-label={t('auth.signin.codeTitle')}
-            className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+            className="auth-card rounded-xl border border-border bg-surface p-6 shadow-xs"
           >
             <h2 className="mb-1 text-sm font-medium">{t('auth.signin.codeTitle')}</h2>
             <p className="mb-3 text-xs text-content-secondary">
@@ -536,7 +536,7 @@ export function SignInPage(): ReactElement {
         ) : workspaces ? (
           <section
             aria-label={t('auth.signin.chooseWorkspace')}
-            className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+            className="auth-card rounded-xl border border-border bg-surface p-6 shadow-xs"
           >
             <h2 className="mb-3 text-sm font-medium">{t('auth.signin.chooseWorkspace')}</h2>
             {chooseError && (
@@ -568,7 +568,7 @@ export function SignInPage(): ReactElement {
           <form
             onSubmit={form.handleSubmit}
             noValidate
-            className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 shadow-xs"
+            className="auth-card flex flex-col gap-3 rounded-xl border border-border bg-surface p-6 shadow-xs"
           >
             <div className="flex flex-col gap-1">
               <label htmlFor="email" className="text-xs font-medium">
@@ -752,7 +752,7 @@ function EnrollmentPanel({
   return (
     <section
       aria-label={t('auth.signin.enrollmentRequiredTitle')}
-      className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+      className="auth-card rounded-xl border border-border bg-surface p-6 shadow-xs"
     >
       <h2 className="mb-1 text-sm font-medium">{t('auth.signin.enrollmentRequiredTitle')}</h2>
 

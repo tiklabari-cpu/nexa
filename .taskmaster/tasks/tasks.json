@@ -11728,7 +11728,8 @@
         "status": "done",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-13T12:50:24.723Z"
+        "updatedAt": "2026-10-13T12:50:24.723Z",
+        "subtasks": []
       },
       {
         "id": "268",
@@ -11739,7 +11740,8 @@
         "status": "done",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-13T15:36:55.040Z"
+        "updatedAt": "2026-10-13T15:36:55.040Z",
+        "subtasks": []
       },
       {
         "id": "269",
@@ -11747,10 +11749,11 @@
         "description": "ADR-14 \"tek paradigma = Skill (adım listesi), workflow UI yok\" diyor. AI-03 Skill'i çok turlu prosedüre genişletiyor (adımlar cevabı bekleyebilir, koşul taşıyabilir). Sahip kararı K8 bunu onayladı; kilitli karar sessizce delinmesin diye ek not yazılır. Kaynak: AI-03, AI-28.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: AI-03, AI-28. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 0 — ADR ek notları (kilitli kararlarla çelişen işler için önce yazılır).\n\nNE YAZILACAK:\n- PLAN.md §0 ADR tablosunun ALTINA (satır değiştirmeden) \"ADR-14a — Skill çok turlu olabilir\" eki: Skill `mode: 'single' | 'procedure'`; adım listesi korunur; adımlara koşul (`when`, `check`) ve \"cevap bekle\" (`collect`) eklenir; `workflows` tablosu ve node/edge tuvali YOK; SOP metninden taslak üreten yardımcı (K8) serbest. Araç yuvası (AI-28 `call_tool`/`tool`) da bir Skill adım tipidir, ayrı akış aracı değildir.\n- docs/adr/ altında kısa bir karar dosyası (ör. docs/adr/skill-procedure.md): bağlam (05 §1.0 tablo satırı 1, 04 AI-03), karar, sonuçlar, K8 referansı, tarih.\n- PLAN.md §D bölümüne sapma satırı (CONVENTIONS kanıt disiplini: hücreye kanıt yazılmaz).\nKAPSAM DIŞI: kod değişikliği yok.\n\nKABUL KRİTERLERİ:\n- PLAN.md §0 altında ADR-14a eki var ve K8'e atıf yapıyor; ADR tablosunun mevcut satırları değişmedi.\n- docs/adr/ karar dosyası var.\n- AI-03 (#296) ve AI-28 (#321) görevleri bu göreve bağlı.\n\nKULLANILAN VARSAYIMLAR:\n- Ek not PLAN §0 tablosunun altına paragraf olarak yazılır; tablo satırı eklenmez (tablo \"yeniden tartışılmaz\" listesi).",
         "testStrategy": "Yalnız doküman: `pnpm -w format:check` yeşil; PLAN.md tablo satır uzunluğu denetimi (C-plan-row-length) bozulmaz. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T17:44:01.988Z",
+        "subtasks": []
       },
       {
         "id": "270",
@@ -11761,7 +11764,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "271",
@@ -11772,7 +11776,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "272",
@@ -11783,7 +11788,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "273",
@@ -11794,7 +11800,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "274",
@@ -11805,7 +11812,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "275",
@@ -11816,7 +11824,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "276",
@@ -11827,7 +11836,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "277",
@@ -11877,7 +11887,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "279",
@@ -11890,7 +11901,8 @@
           "278"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "280",
@@ -11901,7 +11913,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "281",
@@ -11912,7 +11925,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "282",
@@ -11923,7 +11937,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "283",
@@ -12003,7 +12018,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "285",
@@ -12014,7 +12030,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "286",
@@ -12305,7 +12322,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "291",
@@ -12316,7 +12334,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "292",
@@ -12504,7 +12523,8 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "295",
@@ -12730,7 +12750,8 @@
           "297"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "299",
@@ -12783,7 +12804,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "301",
@@ -13123,7 +13145,8 @@
           "305"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "307",
@@ -13195,7 +13218,8 @@
           "307"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "309",
@@ -13634,7 +13658,8 @@
           "290"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "316",
@@ -13931,12 +13956,14 @@
         "testStrategy": "Adım doğrulaması, F1'de çalıştırılmama, kartta görünme, simülasyonda dallanma; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
         "status": "pending",
         "dependencies": [
+          "269",
           "296",
           "304",
           "314"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "322",
@@ -13950,7 +13977,8 @@
           "378"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "323",
@@ -14141,7 +14169,8 @@
           "325"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "327",
@@ -14152,7 +14181,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "328",
@@ -14166,7 +14196,8 @@
           "327"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "329",
@@ -14180,7 +14211,8 @@
           "286"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "330",
@@ -14191,7 +14223,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "331",
@@ -14251,7 +14284,8 @@
           "287"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "333",
@@ -14334,7 +14368,8 @@
           "329"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "335",
@@ -14349,7 +14384,8 @@
           "331"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "336",
@@ -14364,7 +14400,8 @@
           "335"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "337",
@@ -14377,7 +14414,8 @@
           "335"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "338",
@@ -14390,7 +14428,8 @@
           "335"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "339",
@@ -14514,7 +14553,8 @@
           "307"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "342",
@@ -14528,7 +14568,8 @@
           "341"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "343",
@@ -14541,7 +14582,8 @@
           "305"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "344",
@@ -14555,7 +14597,8 @@
           "305"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "345",
@@ -14569,7 +14612,8 @@
           "338"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "346",
@@ -14582,7 +14626,8 @@
           "305"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "347",
@@ -14593,7 +14638,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "348",
@@ -14606,7 +14652,8 @@
           "309"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "349",
@@ -14617,7 +14664,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "350",
@@ -14630,7 +14678,8 @@
           "302"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "351",
@@ -14641,7 +14690,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "352",
@@ -14655,7 +14705,8 @@
           "330"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "353",
@@ -14668,7 +14719,8 @@
           "350"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "354",
@@ -14682,7 +14734,8 @@
           "350"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "355",
@@ -14695,7 +14748,8 @@
           "352"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "356",
@@ -14775,7 +14829,8 @@
           "356"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "358",
@@ -14789,7 +14844,8 @@
           "357"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "359",
@@ -14802,7 +14858,8 @@
           "358"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "360",
@@ -14815,7 +14872,8 @@
           "356"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "361",
@@ -14826,7 +14884,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "362",
@@ -14837,7 +14896,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "363",
@@ -14848,7 +14908,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "364",
@@ -14862,7 +14923,8 @@
           "337"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "365",
@@ -14917,7 +14979,8 @@
           "283"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "367",
@@ -14930,7 +14993,8 @@
           "361"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "368",
@@ -14943,7 +15007,8 @@
           "325"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "369",
@@ -14956,7 +15021,8 @@
           "293"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "370",
@@ -14969,7 +15035,8 @@
           "340"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "371",
@@ -14984,7 +15051,8 @@
           "368"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "372",
@@ -14999,7 +15067,8 @@
           "371"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "373",
@@ -15012,7 +15081,8 @@
           "330"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "374",
@@ -15026,7 +15096,8 @@
           "337"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "375",
@@ -15037,7 +15108,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "376",
@@ -15048,7 +15120,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "377",
@@ -15059,7 +15132,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "378",
@@ -15073,7 +15147,8 @@
           "287"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "379",
@@ -15087,7 +15162,8 @@
           "287"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "380",
@@ -15155,7 +15231,8 @@
           "380"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "382",
@@ -15238,7 +15315,8 @@
           "382"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "384",
@@ -15252,7 +15330,8 @@
           "383"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "385",
@@ -15266,7 +15345,8 @@
           "334"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "386",
@@ -15277,7 +15357,8 @@
         "status": "pending",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-10-14T20:30:00.000Z"
+        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "subtasks": []
       },
       {
         "id": "387",
@@ -15291,7 +15372,8 @@
           "301"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "388",
@@ -15304,7 +15386,8 @@
           "287"
         ],
         "priority": "low",
-        "updatedAt": "2026-10-14T16:10:56.526Z"
+        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "subtasks": []
       },
       {
         "id": "389",

@@ -84,6 +84,10 @@ kapanışa (§3) ulaşmadan pencereyi bitirme.
 pencerenin komut tavanı 10 dk ve ön planda koşan kapı orada kilitleniyordu. Log yolunu ilk
 satırdan al, bitince son satırlarını (`Tasks:`, `Failed:`, `exit`) oku. **Ama sonucu AYNI sırada
 bekle** (`TaskOutput` block=true ya da log'da çıkış işaretini bekleyen ön plan `until` döngüsü).
+
+**KURAL:** Ara doğrulamada e2e'nin tamamını değil yalnız ilgili spec'i koş
+(`pnpm test:e2e --shards=1 <spec>`); kapıyı `--force` olmadan koş. Tam e2e + tam kapı kapanışta
+bir kez koşulur ve DoD kanıtı odur. Ayrıntı: CONVENTIONS §1.3.
 Sıranı bitirmek pencerenin sonudur: `-p` oturumu kapanır, arka plandaki koşu onunla ölür, bildirim
 ASLA gelmez, kapanış (§3) çalışmaz ve döngü bunu `blocked` sayar. (Görülen vaka: tm 93.3 — kod
 bitmişti, iki pencere de "bildirim bekleyeyim" deyip sırasını bitirdiği için öldü.)

@@ -99,10 +99,16 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   `birim` → `entegrasyon` → isteğe bağlı `e2e` (`--e2e`). Yalnız bazı başlıklar:
   `pnpm test:gate birim entegrasyon`; önbelleksiz: `--force`. Tam kapı ~11 dk, pencerenin 10 dk
   komut tavanını aşabilir: arka planda koş, log yolu ilk satırda.
-  **Öneri (yapay zekâ için, zorunlu değil):** Tam kapı tek komutta 10 dk'ya yaklaşıyor. Arka planda
-  koşmak yetmezse kapıyı başlıklara böl ve her parçanın exit code'unu ayrı yaz:
-  `pnpm test:gate build statik birim` ardından `pnpm test:gate entegrasyon` (entegrasyon tek başına
-  ~7 dk). `--force` yalnız önbelleğe güvenilmediğinde gerekli; önbellek kullanılırsa süre kısalır.
+  **KURAL — kapı nasıl koşulur:** Tam kapı ~11 dk, tek komutta pencerenin 10 dk tavanını aşar.
+  Kapı (ve tam test/e2e/build) **her zaman `run_in_background` ile** koşulur. Arka planda da
+  sorun çıkarsa kapı başlıklara bölünür ve her parçanın exit code'u ayrı yazılır:
+  `pnpm test:gate build statik birim` ardından `pnpm test:gate entegrasyon` (~7 dk).
+  **`--force` varsayılan DEĞİLDİR**; yalnız önbelleğe güvenmemek için somut bir neden varsa
+  (ör. önbellek bozuk sonuç verdi) kullanılır ve nedeni HANDOFF'a yazılır.
+  **KURAL — ara doğrulama ≠ kapanış:** Görev sırasında e2e'nin TAMAMI koşulmaz; yalnız dokunulan
+  akışın spec'i koşulur (`pnpm test:e2e --shards=1 <spec>`, ~2 dk). e2e'nin tamamı ve tam kapı
+  **kapanışta bir kez** koşulur; DoD kanıtı o koşudur. Gerekçe: son 30 görevde süre %36'sı e2e'nin
+  tamamına gitti (görev başına ~4 tam koşu), kapının 62 koşusunun 44'ü `--force` ileydi.
 - **e2e parçalı koşar (tm 260):** `pnpm -w test:e2e` = `apps/e2e/scripts/run-e2e-sharded.mjs`;
   her parça kendi yığınında ve portlarında. Parça sayısı `--shards=N` / `SIYAHTUS_E2E_SHARDS`.
   Kapı için **son satırlar** okunur: parça satırları, `Tests: …` ve `verdict: GREEN|RED`; exit 1 =

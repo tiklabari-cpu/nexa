@@ -1,6 +1,6 @@
 # Task ID: 359
 
-**Title:** TICKET-AUTO-ACK [SONNET-HIGH] Otomatik "talebiniz alındı" yanıtı: ticket kuralına "Şablon e-postası gönder" eylemi + outside_business_hours koşulu + ticket.expected_response değişkeni; commit sonrası gönderim, backscatter koruması
+**Title:** TICKET-AUTO-ACK [SONNET-HIGH] (Sonnet 5.5) Otomatik "talebiniz alındı" yanıtı: ticket kuralına "Şablon e-postası gönder" eylemi + outside_business_hours koşulu + ticket.expected_response değişkeni; commit sonrası gönderim, backscatter koruması
 
 **Status:** pending
 

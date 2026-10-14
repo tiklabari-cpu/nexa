@@ -1,6 +1,6 @@
 # Task ID: 294
 
-**Title:** AI-DAILY-MEMORY [OPUS-XHIGH] Gün içi hafıza: aynı gün yeni bağlantıda AI önceki bağlantıların özetini (konu, toplanan bilgiler, sonuç) görür; kimlik güvenine göre filtre (K4, K5)
+**Title:** AI-DAILY-MEMORY [OPUS-XHIGH] (Opus 5.5) Gün içi hafıza: aynı gün yeni bağlantıda AI önceki bağlantıların özetini (konu, toplanan bilgiler, sonuç) görür; kimlik güvenine göre filtre (K4, K5)
 
 **Status:** pending
 

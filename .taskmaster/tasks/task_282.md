@@ -1,6 +1,6 @@
 # Task ID: 282
 
-**Title:** INVITE-EMAIL-VERIFY [OPUS-XHIGH] Davet akışının kötüye kullanımını engelle: bağlantıyla açılan yeni hesap e-posta doğrulanmadan giriş yapamasın + günlük davet sınırı
+**Title:** INVITE-EMAIL-VERIFY [OPUS-XHIGH] (Opus 5.5) Davet akışının kötüye kullanımını engelle: bağlantıyla açılan yeni hesap e-posta doğrulanmadan giriş yapamasın + günlük davet sınırı
 
 **Status:** pending
 

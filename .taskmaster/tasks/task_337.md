@@ -1,6 +1,6 @@
 # Task ID: 337
 
-**Title:** RATING-COMMENT [OPUS-HIGH] Puan + yorum: widget'ta puandan sonra isteğe bağlı yorum (yeni satır açmadan), puanın doğru bağlantıya yazılması (thread_id), arşiv/Inbox/raporda gösterim, chat_rated push
+**Title:** RATING-COMMENT [OPUS-HIGH] (Opus 5.5) Puan + yorum: widget'ta puandan sonra isteğe bağlı yorum (yeni satır açmadan), puanın doğru bağlantıya yazılması (thread_id), arşiv/Inbox/raporda gösterim, chat_rated push
 
 **Status:** pending
 

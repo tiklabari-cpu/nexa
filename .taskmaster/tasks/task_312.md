@@ -1,6 +1,6 @@
 # Task ID: 312
 
-**Title:** REAL-WEB-CRAWLER [OPUS-XHIGH] Gerçek web sitesi taraması: tek sayfa / tüm alt sayfalar / sitemap, sayfa sınırı, robots, periyodik yenileme, değişiklik tespiti, iş kuyruğu (knowledge_jobs)
+**Title:** REAL-WEB-CRAWLER [OPUS-XHIGH] (Opus 5.5) Gerçek web sitesi taraması: tek sayfa / tüm alt sayfalar / sitemap, sayfa sınırı, robots, periyodik yenileme, değişiklik tespiti, iş kuyruğu (knowledge_jobs)
 
 **Status:** pending
 

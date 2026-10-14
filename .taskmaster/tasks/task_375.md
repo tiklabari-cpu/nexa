@@ -1,6 +1,6 @@
 # Task ID: 375
 
-**Title:** WEBHOOK-DELIVERY-LOG [SONNET-HIGH] Webhook teslim günlüğü arayüzü: teslim listesi, "Tekrar gönder", imzalı test olayı, aç/kapat (PATCH), temizlenmiş hata metni
+**Title:** WEBHOOK-DELIVERY-LOG [SONNET-HIGH] (Sonnet 5.5) Webhook teslim günlüğü arayüzü: teslim listesi, "Tekrar gönder", imzalı test olayı, aç/kapat (PATCH), temizlenmiş hata metni
 
 **Status:** pending
 

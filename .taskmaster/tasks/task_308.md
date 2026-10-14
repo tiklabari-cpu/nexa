@@ -1,6 +1,6 @@
 # Task ID: 308
 
-**Title:** AI-TRANSPARENCY-HUMAN-BUTTON [OPUS-HIGH] Şeffaflık ve "Temsilciyle görüş" butonu: AI kendini tanıtır (kaldırılamaz), AI konuşurken her zaman görünen buton, mesai dışı açık bilgi
+**Title:** AI-TRANSPARENCY-HUMAN-BUTTON [OPUS-HIGH] (Opus 5.5) Şeffaflık ve "Temsilciyle görüş" butonu: AI kendini tanıtır (kaldırılamaz), AI konuşurken her zaman görünen buton, mesai dışı açık bilgi
 
 **Status:** pending
 

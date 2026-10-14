@@ -1,6 +1,6 @@
 # Task ID: 365
 
-**Title:** SHORTCUTS-PALETTE-SETTINGS [SONNET-HIGH] Klavye kısayolları kaydı + "?" penceresi + Alt+↑/↓ sohbet geçişi (Türkçe Q / AltGr güvenli) ve komut paletinden ayar/rapor alt sayfalarına gitme (Türkçe katlama)
+**Title:** SHORTCUTS-PALETTE-SETTINGS [SONNET-HIGH] (Sonnet 5.5) Klavye kısayolları kaydı + "?" penceresi + Alt+↑/↓ sohbet geçişi (Türkçe Q / AltGr güvenli) ve komut paletinden ayar/rapor alt sayfalarına gitme (Türkçe katlama)
 
 **Status:** pending
 

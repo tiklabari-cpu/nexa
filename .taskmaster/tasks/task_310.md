@@ -1,6 +1,6 @@
 # Task ID: 310
 
-**Title:** KB-STRUCTURED-TABLES [OPUS-HIGH] Yapılandırılmış bilgi tabloları: Ödeme Yöntemleri, Bonuslar, KYC Belgeleri, Limitler ve Kurallar + Erişim bilgisi ayarı (K13); facts.ts kesin hesaplar, eskime uyarısı
+**Title:** KB-STRUCTURED-TABLES [OPUS-HIGH] (Opus 5.5) Yapılandırılmış bilgi tabloları: Ödeme Yöntemleri, Bonuslar, KYC Belgeleri, Limitler ve Kurallar + Erişim bilgisi ayarı (K13); facts.ts kesin hesaplar, eskime uyarısı
 
 **Status:** pending
 

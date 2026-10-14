@@ -1,6 +1,6 @@
 # Task ID: 368
 
-**Title:** REPORT-FILTERS [OPUS-XHIGH] Rapor filtreleri (ajan, ekip, etiket, konu) tek filterClause yardımcısıyla tüm uçlarda + Ekip Lideri kapsam kesişimi sunucuda + derin linkler + filtreli paylaşım/zamanlanmış rapor
+**Title:** REPORT-FILTERS [OPUS-XHIGH] (Opus 5.5) Rapor filtreleri (ajan, ekip, etiket, konu) tek filterClause yardımcısıyla tüm uçlarda + Ekip Lideri kapsam kesişimi sunucuda + derin linkler + filtreli paylaşım/zamanlanmış rapor
 
 **Status:** pending
 

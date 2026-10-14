@@ -1,6 +1,6 @@
 # Task ID: 380
 
-**Title:** WHATSAPP-LIVE [OPUS-XHIGH] Gerçek WhatsApp Cloud API kanalı (K22: pending): gömülü kayıt, uygulama düzeyi webhook (X-Hub-Signature-256), wamid tekilliği, 24 saat penceresi, medya, durumlar; testte taklit
+**Title:** WHATSAPP-LIVE [OPUS-XHIGH] (Opus 5.5) Gerçek WhatsApp Cloud API kanalı (K22: pending): gömülü kayıt, uygulama düzeyi webhook (X-Hub-Signature-256), wamid tekilliği, 24 saat penceresi, medya, durumlar; testte taklit
 
 **Status:** pending
 

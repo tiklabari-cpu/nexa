@@ -1,6 +1,6 @@
 # Task ID: 271
 
-**Title:** ADR-ROUTING-QUEUES [OPUS-HIGH] ADR-08a ek notu: ekip başına kuyruk, öncelik sırası, "önce AI"da devir anında yönlendirme (K18)
+**Title:** ADR-ROUTING-QUEUES [OPUS-HIGH] (Opus 5.5) ADR-08a ek notu: ekip başına kuyruk, öncelik sırası, "önce AI"da devir anında yönlendirme (K18)
 
 **Status:** pending
 

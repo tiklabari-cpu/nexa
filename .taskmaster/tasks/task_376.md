@@ -1,6 +1,6 @@
 # Task ID: 376
 
-**Title:** HOSTED-API-DOCS [SONNET-HIGH] Barındırılan API dokümanı: x-public işaretli operasyonlardan üretilen tek dosya, CSP uyumlu statik görüntüleyici, PAT/webhook imza örnekleri, iç uç sızıntısı CI testi
+**Title:** HOSTED-API-DOCS [SONNET-HIGH] (Sonnet 5.5) Barındırılan API dokümanı: x-public işaretli operasyonlardan üretilen tek dosya, CSP uyumlu statik görüntüleyici, PAT/webhook imza örnekleri, iç uç sızıntısı CI testi
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 274
 
-**Title:** ADR-SINGLE-KB [OPUS-HIGH] Q6 kararının değişmesi: AI Agent ve Copilot bilgileri tek depo + "kim kullanır" bayrağı (K11)
+**Title:** ADR-SINGLE-KB [OPUS-HIGH] (Opus 5.5) Q6 kararının değişmesi: AI Agent ve Copilot bilgileri tek depo + "kim kullanır" bayrağı (K11)
 
 **Status:** pending
 

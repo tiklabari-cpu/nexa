@@ -1,6 +1,6 @@
 # Task ID: 345
 
-**Title:** TRANSCRIPT-ON-REQUEST [OPUS-XHIGH] Sohbet dökümü (K26): oyuncuya OTOMATİK GÖNDERİM YOK, yalnız oyuncu widget'ta tıklarsa; iç kayıt (log/transkript saklama) aynen sürer; iletme adresleri
+**Title:** TRANSCRIPT-ON-REQUEST [OPUS-HIGH] (Opus 5.5) Sohbet dökümü (K26): oyuncuya OTOMATİK GÖNDERİM YOK, yalnız oyuncu widget'ta tıklarsa; iç kayıt (log/transkript saklama) aynen sürer; iletme adresleri
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-XHIGH GEREKÇESİ: (1) veri sızıntısı/KVKK — finansal bilgi içeren döküm yanlış adrese gidebilir.
+EFOR: high — dört xhigh gerekçesinden (güvenlik yüzeyi / para doğruluğu / teslim güvencesi / pencere içi karar) hiçbiri yok; karar önceden verilmiş (2026-10-14 gözden geçirme).
 K26 (sahip kararı): customer_auto_send kavramı AÇILMAZ ya da sabit false; kapanışta oyuncuya döküm e-postası gitmez (mevcut ve yeni tüm kiracılar). Events/transkript/arşiv/zaman çizelgesi kaydı DEĞİŞMEZ — yalnız dışarıya e-posta gönderimi kalkar. Ajana giden kopya ajanın kendi bildirim tercihine göre sürer. Geçiş sürüm notunda ve pilot kiracıya duyurulur.
 KOD: chat-service.ts #emailTranscript (≈:1130-1270), chat-transcript.ts:55 transcriptRecipients, messages.ts:495 customerTranscriptMail, :541 teamTranscriptMail, mail-caps.ts.
 types/contract: TranscriptSettings {forward_to: string[] ≤5, forward_include_notes: boolean}; settings.yaml; customer-chat.yaml POST /customer/chat/transcript.

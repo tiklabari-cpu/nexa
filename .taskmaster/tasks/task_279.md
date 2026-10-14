@@ -1,6 +1,6 @@
 # Task ID: 279
 
-**Title:** WIDGET-PRECHAT-CONFIG [OPUS-HIGH] Widget pre-chat formu: aç/kapa ve yerleşik alanların (ad, kullanıcı adı, e-posta, mesaj) göster/zorunlu ayarı
+**Title:** WIDGET-PRECHAT-CONFIG [OPUS-HIGH] (Opus 5.5) Widget pre-chat formu: aç/kapa ve yerleşik alanların (ad, kullanıcı adı, e-posta, mesaj) göster/zorunlu ayarı
 
 **Status:** pending
 

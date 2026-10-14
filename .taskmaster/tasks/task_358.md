@@ -1,6 +1,6 @@
 # Task ID: 358
 
-**Title:** EMAIL-THREADING [OPUS-XHIGH] E-posta zinciri: HMAC imzalı Reply-To (<org>+t-<ticket>-<imza8>), In-Reply-To/References ve [#ID]+aynı gönderen eşleşmesi, solved→open, closed→ilişkili yeni ticket, otomatik yanıt döngüsü koruması
+**Title:** EMAIL-THREADING [OPUS-XHIGH] (Opus 5.5) E-posta zinciri: HMAC imzalı Reply-To (<org>+t-<ticket>-<imza8>), In-Reply-To/References ve [#ID]+aynı gönderen eşleşmesi, solved→open, closed→ilişkili yeni ticket, otomatik yanıt döngüsü koruması
 
 **Status:** pending
 

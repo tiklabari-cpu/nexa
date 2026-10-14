@@ -1,6 +1,6 @@
 # Task ID: 335
 
-**Title:** ARCHIVE-SCREEN [OPUS-HIGH] Ayrı Arşiv ekranı (/app/archive): satır = bağlantı (Chat ID), salt okunur transkript, oyuncu paneli; 3 kez yazan oyuncu 3 satır
+**Title:** ARCHIVE-SCREEN [OPUS-HIGH] (Opus 5.5) Ayrı Arşiv ekranı (/app/archive): satır = bağlantı (Chat ID), salt okunur transkript, oyuncu paneli; 3 kez yazan oyuncu 3 satır
 
 **Status:** pending
 

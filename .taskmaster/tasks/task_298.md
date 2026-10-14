@@ -1,6 +1,6 @@
 # Task ID: 298
 
-**Title:** AI-KNOWLEDGE-ANSWER [OPUS-HIGH] Bilgi bankasından genel yanıt + "bilmiyorum" davranışı: dayanak kontrollü JSON yazım, sayı uydurma denetimi, sessizlik yasağı
+**Title:** AI-KNOWLEDGE-ANSWER [OPUS-HIGH] (Opus 5.5) Bilgi bankasından genel yanıt + "bilmiyorum" davranışı: dayanak kontrollü JSON yazım, sayı uydurma denetimi, sessizlik yasağı
 
 **Status:** pending
 

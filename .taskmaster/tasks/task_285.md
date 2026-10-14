@@ -1,6 +1,6 @@
 # Task ID: 285
 
-**Title:** DAY-BOUNDARY [SONNET-HIGH] Gün sınırı ve saat dilimi: workspace ayarı (varsayılan Europe/Istanbul 00:00), tek localDayKey fonksiyonu
+**Title:** DAY-BOUNDARY [SONNET-HIGH] (Sonnet 5.5) Gün sınırı ve saat dilimi: workspace ayarı (varsayılan Europe/Istanbul 00:00), tek localDayKey fonksiyonu
 
 **Status:** pending
 

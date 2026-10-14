@@ -1,6 +1,6 @@
 # Task ID: 309
 
-**Title:** KB-SINGLE-STORE [OPUS-MAX] Tek bilgi deposu (K11): audiences (AI Agent / Copilot), marka kapsamı (chats.brand_id), dil, sahip, son gözden geçirme; Genel KB makaleleri AI'a bağlanır
+**Title:** KB-SINGLE-STORE [OPUS-MAX] (Opus 5.5) Tek bilgi deposu (K11): audiences (AI Agent / Copilot), marka kapsamı (chats.brand_id), dil, sahip, son gözden geçirme; Genel KB makaleleri AI'a bağlanır
 
 **Status:** pending
 

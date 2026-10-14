@@ -1,6 +1,6 @@
 # Task ID: 288
 
-**Title:** STRUCTURED-LOGS-AI-DECISIONS [OPUS-HIGH] Yapılandırılmış loglar (license_id, request_id, chat_id, thread_id, customer_id her satırda) + kalıcı AI karar kaydı (ai_decision_logs)
+**Title:** STRUCTURED-LOGS-AI-DECISIONS [OPUS-HIGH] (Opus 5.5) Yapılandırılmış loglar (license_id, request_id, chat_id, thread_id, customer_id her satırda) + kalıcı AI karar kaydı (ai_decision_logs)
 
 **Status:** pending
 

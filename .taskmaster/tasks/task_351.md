@@ -1,6 +1,6 @@
 # Task ID: 351
 
-**Title:** CAMPAIGN-CURRENT-URL-FIX [SONNET-HIGH] Hata düzeltmesi: "geçerli sayfa URL'si" koşulu oturumdaki tüm sayfalara değil yalnız son sayfaya bakar; mint/poll anında host_url sayfa görüntülemesi
+**Title:** CAMPAIGN-CURRENT-URL-FIX [SONNET-HIGH] (Sonnet 5.5) Hata düzeltmesi: "geçerli sayfa URL'si" koşulu oturumdaki tüm sayfalara değil yalnız son sayfaya bakar; mint/poll anında host_url sayfa görüntülemesi
 
 **Status:** pending
 

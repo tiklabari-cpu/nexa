@@ -1,6 +1,6 @@
 # Task ID: 385
 
-**Title:** NARROW-SCREEN-PANEL [SONNET-XHIGH] Panelin dar ekranlarda kullanılabilirliği: kırılım noktaları (≥1280 / 1024–1279 / 768–1023 / <768), Inbox telefon akışı, rota bazlı uyarı bandı, 375 ve 768 Playwright projeleri + axe
+**Title:** NARROW-SCREEN-PANEL [OPUS-MEDIUM] (Opus 5.5) Panelin dar ekranlarda kullanılabilirliği: kırılım noktaları (≥1280 / 1024–1279 / 768–1023 / <768), Inbox telefon akışı, rota bazlı uyarı bandı, 375 ve 768 Playwright projeleri + axe
 
 **Status:** pending
 

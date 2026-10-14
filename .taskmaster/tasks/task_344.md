@@ -1,6 +1,6 @@
 # Task ID: 344
 
-**Title:** WIDGET-PHRASES-ETA [OPUS-HIGH] Widget metinlerini dil başına özelleştirme (kapalı anahtar listesi, yer tutucu doğrulaması) + kuyrukta tahmini bekleme aralığı (RP-04 verisi, ≥20 örnek)
+**Title:** WIDGET-PHRASES-ETA [OPUS-HIGH] (Opus 5.5) Widget metinlerini dil başına özelleştirme (kapalı anahtar listesi, yer tutucu doğrulaması) + kuyrukta tahmini bekleme aralığı (RP-04 verisi, ≥20 örnek)
 
 **Status:** pending
 

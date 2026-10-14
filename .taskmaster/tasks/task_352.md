@@ -1,6 +1,6 @@
 # Task ID: 352
 
-**Title:** CAMPAIGN-MULTI-CONDITIONS [OPUS-HIGH] Çok koşullu kampanya hedefleme: {match all|any, rules[]} (url, oturum url, referrer, ülke, ziyaretçi tipi, sayfada süre, çıkış niyeti, özel değişken), SPA sayfa takibi, iki aşamalı değerlendirme
+**Title:** CAMPAIGN-MULTI-CONDITIONS [OPUS-HIGH] (Opus 5.5) Çok koşullu kampanya hedefleme: {match all|any, rules[]} (url, oturum url, referrer, ülke, ziyaretçi tipi, sayfada süre, çıkış niyeti, özel değişken), SPA sayfa takibi, iki aşamalı değerlendirme
 
 **Status:** pending
 

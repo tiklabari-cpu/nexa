@@ -1,6 +1,6 @@
 # Task ID: 323
 
-**Title:** SETTINGS-SAVE-PATTERN [SONNET-MAX] Tutarlı kaydetme kalıbı + kaydedilmemiş değişiklik uyarısı: SettingsForm/SaveBar, SettingsNav confirmLeave, InstantToggle yalnız kişisel tercih, yüksek riskli ayarda gerekçeli onay
+**Title:** SETTINGS-SAVE-PATTERN [OPUS-HIGH] (Opus 5.5) Tutarlı kaydetme kalıbı + kaydedilmemiş değişiklik uyarısı: SettingsForm/SaveBar, SettingsNav confirmLeave, InstantToggle yalnız kişisel tercih, yüksek riskli ayarda gerekçeli onay
 
 **Status:** pending
 
@@ -33,7 +33,7 @@ KABUL KRİTERLERİ:
 
 KULLANILAN VARSAYIMLAR:
 - GV-06-S1: gerekçe zorunlu yetki matrisi, AI uyum kuralları, veri saklama.
-- SONNET-MAX: mekanik ama geniş yüzey (34 ayar bölümü).
+- OPUS-HIGH (eski etiket SONNET-MAX, 2026-10-14): mekanik ama geniş yüzey (34 ayar bölümü).
 
 **Test Strategy:**
 
@@ -48,7 +48,7 @@ SettingsNav.test.tsx, en az iki form birim testi, kalıp testi, e2e settings.spe
 
 Üst görev 323 ayrıntılarındaki ilgili bölüm.
 
-### 323.2. SAVE-MIGRATE-SECTIONS [SONNET-MAX] Ayar bölümlerinin kalıba geçirilmesi + Tags.tsx + reason alanı
+### 323.2. SAVE-MIGRATE-SECTIONS [OPUS-HIGH] Ayar bölümlerinin kalıba geçirilmesi + Tags.tsx + reason alanı
 
 **Status:** pending  
 **Dependencies:** 323.1  

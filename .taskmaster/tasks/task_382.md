@@ -1,6 +1,6 @@
 # Task ID: 382
 
-**Title:** BILLING-PAYMENT-METHODS [OPUS-XHIGH] Ödeme yöntemleri (K16 + ADR-13a): swift_manual, crypto_manual ("Adres isteyin" talep kuyruğu, TXID ile elle onay), stripe (MOCK/sandbox adaptör, webhook) + durum makinesi ve dunning
+**Title:** BILLING-PAYMENT-METHODS [OPUS-XHIGH] (Opus 5.5) Ödeme yöntemleri (K16 + ADR-13a): swift_manual, crypto_manual ("Adres isteyin" talep kuyruğu, TXID ile elle onay), stripe (MOCK/sandbox adaptör, webhook) + durum makinesi ve dunning
 
 **Status:** pending
 

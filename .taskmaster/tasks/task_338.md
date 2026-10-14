@@ -1,6 +1,6 @@
 # Task ID: 338
 
-**Title:** TRANSCRIPT-EXPORT [OPUS-XHIGH] Transkripti dışa aktarma: TXT indir, yazdırılabilir HTML (Türkçe karakterli PDF tarayıcıdan), e-postayla gönderme (oyuncu kopyası / iç kopya, izinli alan adları, audit, oran sınırı)
+**Title:** TRANSCRIPT-EXPORT [OPUS-HIGH] (Opus 5.5) Transkripti dışa aktarma: TXT indir, yazdırılabilir HTML (Türkçe karakterli PDF tarayıcıdan), e-postayla gönderme (oyuncu kopyası / iç kopya, izinli alan adları, audit, oran sınırı)
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 5 — ajan deneyimi, arama, arşiv.
 
-XHIGH GEREKÇESİ: (1) veri sızdırma yolu — yetki, audit, oran sınırı.
+EFOR: high — dört xhigh gerekçesinden (güvenlik yüzeyi / para doğruluğu / teslim güvencesi / pencere içi karar) hiçbiri yok; karar önceden verilmiş (2026-10-14 gözden geçirme).
 contract: GET /chats/{chatId}/threads/{threadId}/transcript?format=txt|html&audience=customer|internal (Content-Disposition attachment); POST …/transcript/email {to, audience:'customer'} → 202, hata recipient_not_allowed.
 kiracı ayarı: inbox_settings.transcript_allowed_domains text[] (AR-04-S3).
 api: renderTranscript (services/notifications/chat-transcript.ts) yeniden kullanılır; başlıkta kiracı adı, Thread ID (chat_id) ve Chat ID (thread_id), kullanıcı adı, kiracı TZ'de başlangıç/bitiş, ajanlar, dışa aktaran ve zaman; audit chat.transcript_exported / chat.transcript_emailed (kim, hangi konuşma, alıcının alan adı — metin yok); BackgroundMail kind chat_transcript (dış kotaya tabi); RL-02 scope; akış hâlinde üretim; kullanıcı başına dakikada N.

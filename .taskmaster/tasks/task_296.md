@@ -1,6 +1,6 @@
 # Task ID: 296
 
-**Title:** AI-PROCEDURE-ENGINE [OPUS-MAX] Prosedür (konu akışı) motoru: çok turlu Skill (mode=procedure), adım/koşul dili, sürüm sabitleme, konu değişimi, SOP'tan taslak, editör (görsel tuval YOK)
+**Title:** AI-PROCEDURE-ENGINE [OPUS-MAX] (Opus 5.5) Prosedür (konu akışı) motoru: çok turlu Skill (mode=procedure), adım/koşul dili, sürüm sabitleme, konu değişimi, SOP'tan taslak, editör (görsel tuval YOK)
 
 **Status:** pending
 

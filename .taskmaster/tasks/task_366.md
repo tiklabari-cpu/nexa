@@ -1,6 +1,6 @@
 # Task ID: 366
 
-**Title:** COPILOT-DRAWER [OPUS-HIGH] Her ekrandan açılabilen Copilot çekmecesi: POST /copilot/ask (KB / BI sınıflandırma), kaynaklı cevap, reports_read kapısı, kota, oturum içi geçmiş
+**Title:** COPILOT-DRAWER [OPUS-HIGH] (Opus 5.5) Her ekrandan açılabilen Copilot çekmecesi: POST /copilot/ask (KB / BI sınıflandırma), kaynaklı cevap, reports_read kapısı, kota, oturum içi geçmiş
 
 **Status:** pending
 

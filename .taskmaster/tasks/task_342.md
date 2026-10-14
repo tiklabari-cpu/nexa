@@ -1,6 +1,6 @@
 # Task ID: 342
 
-**Title:** ASK-EMAIL [SONNET-HIGH] "E-posta iste": ajan X dk yanıt vermezse ya da çevrimdışıyken satır içi e-posta kartı (bir kez, idempotent; kullanıcı adı/e-posta biliniyorsa yalnız "size buradan dönülecek")
+**Title:** ASK-EMAIL [SONNET-HIGH] (Sonnet 5.5) "E-posta iste": ajan X dk yanıt vermezse ya da çevrimdışıyken satır içi e-posta kartı (bir kez, idempotent; kullanıcı adı/e-posta biliniyorsa yalnız "size buradan dönülecek")
 
 **Status:** pending
 

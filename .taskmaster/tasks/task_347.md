@@ -1,6 +1,6 @@
 # Task ID: 347
 
-**Title:** LAUNCHER-VISIBILITY-LOGO [SONNET-HIGH] Launcher görünürlük modları (always / until_opened / never) + siyahtus('open') + siyahtus:unread olayı + marka logosu
+**Title:** LAUNCHER-VISIBILITY-LOGO [SONNET-HIGH] (Sonnet 5.5) Launcher görünürlük modları (always / until_opened / never) + siyahtus('open') + siyahtus:unread olayı + marka logosu
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 341
 
-**Title:** WIDGET-AVAILABILITY [OPUS-HIGH] Uygunluk ayarı "her zaman" / "yalnız ajan varken": can_start_chat ve answered_by, AI aktifken insan yokken de sohbet açılır, agents_only'de yerleşik alanlı çevrimdışı form
+**Title:** WIDGET-AVAILABILITY [OPUS-HIGH] (Opus 5.5) Uygunluk ayarı "her zaman" / "yalnız ajan varken": can_start_chat ve answered_by, AI aktifken insan yokken de sohbet açılır, agents_only'de yerleşik alanlı çevrimdışı form
 
 **Status:** pending
 

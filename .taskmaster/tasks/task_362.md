@@ -1,6 +1,6 @@
 # Task ID: 362
 
-**Title:** READ-RECEIPTS [SONNET-HIGH] Okundu bilgisi: POST /customer/chat/seen (widget görünürken, 1 sn gecikmeli), markSeen yalnız ileri, customer_seen push, ajan ekranında son okunan ajan mesajının altında "Okundu · saat"
+**Title:** READ-RECEIPTS [SONNET-HIGH] (Sonnet 5.5) Okundu bilgisi: POST /customer/chat/seen (widget görünürken, 1 sn gecikmeli), markSeen yalnız ileri, customer_seen push, ajan ekranında son okunan ajan mesajının altında "Okundu · saat"
 
 **Status:** pending
 

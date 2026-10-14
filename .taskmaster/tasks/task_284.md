@@ -1,6 +1,6 @@
 # Task ID: 284
 
-**Title:** ID-GLOSSARY [SONNET-HIGH] Kimlik sözlüğü: Thread ID (günlük, nexa chat) / Chat ID (bağlantı, nexa thread) tek tanım — types, i18n, contract açıklamaları, ADR
+**Title:** ID-GLOSSARY [SONNET-HIGH] (Sonnet 5.5) Kimlik sözlüğü: Thread ID (günlük, nexa chat) / Chat ID (bağlantı, nexa thread) tek tanım — types, i18n, contract açıklamaları, ADR
 
 **Status:** pending
 

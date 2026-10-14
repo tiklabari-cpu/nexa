@@ -1,6 +1,6 @@
 # Task ID: 364
 
-**Title:** EVENT-SUGGESTED-REPLIES [SONNET-HIGH] Olaya bağlı önerilen yanıtlar (sohbet başladı, aktarıldı, oyuncu sessiz, iyi/kötü puan): istemcide olay tespiti, en fazla 4 çip, otomatik gönderim yok, risk bayraklıya promosyon önerilmez
+**Title:** EVENT-SUGGESTED-REPLIES [SONNET-HIGH] (Sonnet 5.5) Olaya bağlı önerilen yanıtlar (sohbet başladı, aktarıldı, oyuncu sessiz, iyi/kötü puan): istemcide olay tespiti, en fazla 4 çip, otomatik gönderim yok, risk bayraklıya promosyon önerilmez
 
 **Status:** pending
 

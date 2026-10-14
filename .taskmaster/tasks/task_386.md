@@ -1,6 +1,6 @@
 # Task ID: 386
 
-**Title:** NO-PII-IN-URLS [SONNET-XHIGH] Kişisel verinin URL'lerde olmaması: scripts/audit/url-pii.mjs CI kontrolü, log maskesine q/search, referrer politikası, ziyaret sayfa adreslerinin sorgu kısmının maskelenmesi, dışa aktarma POST
+**Title:** NO-PII-IN-URLS [OPUS-MEDIUM] (Opus 5.5) Kişisel verinin URL'lerde olmaması: scripts/audit/url-pii.mjs CI kontrolü, log maskesine q/search, referrer politikası, ziyaret sayfa adreslerinin sorgu kısmının maskelenmesi, dışa aktarma POST
 
 **Status:** pending
 

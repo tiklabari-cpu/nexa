@@ -1,6 +1,6 @@
 # Task ID: 383
 
-**Title:** INVOICE-PDF-PROFILE [OPUS-XHIGH] Fatura profili + bilgi amaçlı fatura PDF'i (K24) + mock e-Fatura sağlayıcısı: ardışık boşluksuz numara, snapshot, ödeme yöntemi ve referansı faturada
+**Title:** INVOICE-PDF-PROFILE [OPUS-XHIGH] (Opus 5.5) Fatura profili + bilgi amaçlı fatura PDF'i (K24) + mock e-Fatura sağlayıcısı: ardışık boşluksuz numara, snapshot, ödeme yöntemi ve referansı faturada
 
 **Status:** pending
 

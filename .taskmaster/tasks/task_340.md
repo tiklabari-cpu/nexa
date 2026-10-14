@@ -1,6 +1,6 @@
 # Task ID: 340
 
-**Title:** UNRESPONSIVE-TRANSFER [OPUS-MAX] Ajan yanıt vermezse aktarma + "inactive" durumu + bağlantı kopunca offline: assigned_at, CAS aktarma, kapasite dışı inactive, ping-pong sınırı
+**Title:** UNRESPONSIVE-TRANSFER [OPUS-MAX] (Opus 5.5) Ajan yanıt vermezse aktarma + "inactive" durumu + bağlantı kopunca offline: assigned_at, CAS aktarma, kapasite dışı inactive, ping-pong sınırı
 
 **Status:** pending
 

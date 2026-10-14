@@ -1,6 +1,6 @@
 # Task ID: 363
 
-**Title:** CANNED-SEARCH-VARS-PRIVATE [OPUS-HIGH] Hazır yanıtlar: içerikte Türkçe katlamalı arama, 6 sonuç sınırının kalkması (sanal liste), değişkenler ({{customer.name}}…), kişisel (private) yanıtlar
+**Title:** CANNED-SEARCH-VARS-PRIVATE [OPUS-HIGH] (Opus 5.5) Hazır yanıtlar: içerikte Türkçe katlamalı arama, 6 sonuç sınırının kalkması (sanal liste), değişkenler ({{customer.name}}…), kişisel (private) yanıtlar
 
 **Status:** pending
 

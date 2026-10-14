@@ -1,6 +1,6 @@
 # Task ID: 313
 
-**Title:** DOCUMENT-SOURCES [OPUS-XHIGH] PDF/DOCX bilgi kaynağı: izole işçi süreçte ayrıştırma, 20 MB / 300 sayfa / 1M karakter, sayfa numaralı parçalar, orijinal dosya saklama
+**Title:** DOCUMENT-SOURCES [OPUS-XHIGH] (Opus 5.5) PDF/DOCX bilgi kaynağı: izole işçi süreçte ayrıştırma, 20 MB / 300 sayfa / 1M karakter, sayfa numaralı parçalar, orijinal dosya saklama
 
 **Status:** pending
 

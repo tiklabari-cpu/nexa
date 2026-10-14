@@ -1,6 +1,6 @@
 # Task ID: 287
 
-**Title:** MEMBER-TOKEN [OPUS-MAX] Üye tanıma (K4): widget'ın ürettiği imzalı üye tokenı (CHIPS çerez + localStorage yedeği), sunucu doğrulaması, iptal/rotasyon, başka cihazda ajan onaylı eşleştirme
+**Title:** MEMBER-TOKEN [OPUS-MAX] (Opus 5.5) Üye tanıma (K4): widget'ın ürettiği imzalı üye tokenı (CHIPS çerez + localStorage yedeği), sunucu doğrulaması, iptal/rotasyon, başka cihazda ajan onaylı eşleştirme
 
 **Status:** pending
 

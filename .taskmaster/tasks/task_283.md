@@ -1,6 +1,6 @@
 # Task ID: 283
 
-**Title:** AI-REAL-LLM-READINESS [OPUS-HIGH] Gerçek LLM ve embedding'e hazırlık: model katmanı + JSON şema çıktısı, kiracı bazlı kota, kullanım defteri, "Yapay zekâ kullanımı" ekranı ve uyarılar
+**Title:** AI-REAL-LLM-READINESS [OPUS-HIGH] (Opus 5.5) Gerçek LLM ve embedding'e hazırlık: model katmanı + JSON şema çıktısı, kiracı bazlı kota, kullanım defteri, "Yapay zekâ kullanımı" ekranı ve uyarılar
 
 **Status:** pending
 

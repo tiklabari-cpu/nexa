@@ -1,6 +1,6 @@
 # Task ID: 295
 
-**Title:** AI-SLOTS [OPUS-HIGH] Bilgi toplama (slot) sistemi: tipler, Türkçe normalizasyon, doğrulayıcılar, izlenebilirlik kalkanı, hassas slot yasağı
+**Title:** AI-SLOTS [OPUS-HIGH] (Opus 5.5) Bilgi toplama (slot) sistemi: tipler, Türkçe normalizasyon, doğrulayıcılar, izlenebilirlik kalkanı, hassas slot yasağı
 
 **Status:** pending
 

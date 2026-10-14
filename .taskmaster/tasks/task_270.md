@@ -1,6 +1,6 @@
 # Task ID: 270
 
-**Title:** ADR-LLM-JSON [OPUS-HIGH] Pilot LLM ADR §6a ek notu: yapılandırılmış JSON çıktı EVET, araç çağırma HAYIR (K17)
+**Title:** ADR-LLM-JSON [OPUS-HIGH] (Opus 5.5) Pilot LLM ADR §6a ek notu: yapılandırılmış JSON çıktı EVET, araç çağırma HAYIR (K17)
 
 **Status:** pending
 

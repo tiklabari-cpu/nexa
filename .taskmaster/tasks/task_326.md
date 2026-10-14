@@ -1,6 +1,6 @@
 # Task ID: 326
 
-**Title:** TEAM-LEAD-CAPABILITIES [OPUS-XHIGH] Ekip Lideri yetenekleri: kendi ekibinin sohbetlerini izleme/devralma/yeniden atama, "Ekibim" görünümü, ekip kapsamlı raporlar (sunucuda zorunlu)
+**Title:** TEAM-LEAD-CAPABILITIES [OPUS-XHIGH] (Opus 5.5) Ekip Lideri yetenekleri: kendi ekibinin sohbetlerini izleme/devralma/yeniden atama, "Ekibim" görünümü, ekip kapsamlı raporlar (sunucuda zorunlu)
 
 **Status:** pending
 

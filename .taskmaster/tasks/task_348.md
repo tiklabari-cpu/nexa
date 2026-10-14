@@ -1,6 +1,6 @@
 # Task ID: 348
 
-**Title:** WIDGET-KB-SEARCH [OPUS-HIGH] Widget içinde bilgi bankası araması: "Yardım" sekmesi, yalnız yayımlanmış makaleler, kiracı tokendan, tsvector arama, tembel modül
+**Title:** WIDGET-KB-SEARCH [OPUS-HIGH] (Opus 5.5) Widget içinde bilgi bankası araması: "Yardım" sekmesi, yalnız yayımlanmış makaleler, kiracı tokendan, tsvector arama, tembel modül
 
 **Status:** pending
 

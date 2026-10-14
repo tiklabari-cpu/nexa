@@ -1,6 +1,6 @@
 # Task ID: 281
 
-**Title:** INVITE-DEFAULT-ROLE [SONNET-HIGH] Davette varsayılan rol en düşük rol (agent) — arayüz ve sunucu
+**Title:** INVITE-DEFAULT-ROLE [SONNET-HIGH] (Sonnet 5.5) Davette varsayılan rol en düşük rol (agent) — arayüz ve sunucu
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 317
 
-**Title:** AI-UNRESOLVED-QUESTIONS [OPUS-HIGH] Çözülemeyen sorular ve bilgi boşluğu raporu: yakalama, maskeli saklama, embedding kümeleme, LLM başlık, ani artış bildirimi, "bilgi ekle / örnek cümle ekle / yok say"
+**Title:** AI-UNRESOLVED-QUESTIONS [OPUS-HIGH] (Opus 5.5) Çözülemeyen sorular ve bilgi boşluğu raporu: yakalama, maskeli saklama, embedding kümeleme, LLM başlık, ani artış bildirimi, "bilgi ekle / örnek cümle ekle / yok say"
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 350
 
-**Title:** PROMO-SUPPRESSION [OPUS-XHIGH] Risk bayraklı oyuncuya kampanya/bonus gösterilmemesi: isPromoSuppressed tek fonksiyon, fail-closed teslim kapısı, kilitli bayraklar, gerekçeli bayrak kaldırma
+**Title:** PROMO-SUPPRESSION [OPUS-HIGH] (Opus 5.5) Risk bayraklı oyuncuya kampanya/bonus gösterilmemesi: isPromoSuppressed tek fonksiyon, fail-closed teslim kapısı, kilitli bayraklar, gerekçeli bayrak kaldırma
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-XHIGH GEREKÇESİ: (1) uyum kapısı (sorumlu oyun), fail-closed.
+EFOR: high — dört xhigh gerekçesinden (güvenlik yüzeyi / para doğruluğu / teslim güvencesi / pencere içi karar) hiçbiri yok; karar önceden verilmiş (2026-10-14 gözden geçirme).
 KOD: campaign-delivery.ts:151-200 deliverPendingCampaign (customer.ts:579-588), campaign-trigger.ts:153-200 fireCampaignsAtVisitor, campaign-service (invited), Campaign schema:1335, CampaignSend :1378.
 types: isPromoSuppressed(activeFlags, policy), LOCKED_PROMO_FLAGS = ['responsible_gambling','underage_suspected','self_exclusion']; bayrak sözlüğü AI-27 (#302) ile ortak tek liste.
 prisma: customer_risk_flags (oyuncu düzeyi; AI-27 #302 şemasıyla birlikte — orada yoksa burada: license_id, customer_id, kind, source ai|agent|import, raised_at/by, cleared_at/by, clear_reason + kısmi indeks + RLS); campaign_sends.suppressed_at, suppressed_reason; uyum ayarları promo_block_fraud DEFAULT true, promo_block_complaint DEFAULT false.

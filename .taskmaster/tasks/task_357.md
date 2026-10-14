@@ -1,6 +1,6 @@
 # Task ID: 357
 
-**Title:** INBOUND-EMAIL-BODY [OPUS-XHIGH] Gelen e-postanın gövdesi ve ekleri: normalize webhook şeması, alıntı/imza ayıklama, HTML temizleme, ek tarama, hassas ek bayrağı ve erişim kaydı
+**Title:** INBOUND-EMAIL-BODY [OPUS-XHIGH] (Opus 5.5) Gelen e-postanın gövdesi ve ekleri: normalize webhook şeması, alıntı/imza ayıklama, HTML temizleme, ek tarama, hassas ek bayrağı ve erişim kaydı
 
 **Status:** pending
 

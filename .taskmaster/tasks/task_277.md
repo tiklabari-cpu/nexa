@@ -1,6 +1,6 @@
 # Task ID: 277
 
-**Title:** INBOX-DRAFT-ISOLATION [OPUS-HIGH] Inbox: yazılan taslağın ve ekin başka oyuncunun sohbetine geçmesini engelle + sohbet başına taslak
+**Title:** INBOX-DRAFT-ISOLATION [OPUS-HIGH] (Opus 5.5) Inbox: yazılan taslağın ve ekin başka oyuncunun sohbetine geçmesini engelle + sohbet başına taslak
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 367
 
-**Title:** EVENT-NOTIFICATIONS-REPEAT [SONNET-HIGH] Olay bazlı bildirim tercihleri (gelen sohbet, bana/ekibime aktarıldı, kuyruk, yeni ticket, ticket yanıtı) + okunana kadar tekrarlayan ses (lider sekme) + ticket RTM push'ları
+**Title:** EVENT-NOTIFICATIONS-REPEAT [SONNET-HIGH] (Sonnet 5.5) Olay bazlı bildirim tercihleri (gelen sohbet, bana/ekibime aktarıldı, kuyruk, yeni ticket, ticket yanıtı) + okunana kadar tekrarlayan ses (lider sekme) + ticket RTM push'ları
 
 **Status:** pending
 

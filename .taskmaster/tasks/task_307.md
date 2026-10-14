@@ -1,6 +1,6 @@
 # Task ID: 307
 
-**Title:** AI-HANDOFF-TARGET-PRIORITY [OPUS-HIGH] Devir hedefi ve öncelik: id tabanlı hedef (ad değil), konu/neden → ekip rotaları, acil öncelik, uzmanlık şartı, mesai dışı davranışı (kuyruk + metin + talep)
+**Title:** AI-HANDOFF-TARGET-PRIORITY [OPUS-HIGH] (Opus 5.5) Devir hedefi ve öncelik: id tabanlı hedef (ad değil), konu/neden → ekip rotaları, acil öncelik, uzmanlık şartı, mesai dışı davranışı (kuyruk + metin + talep)
 
 **Status:** pending
 

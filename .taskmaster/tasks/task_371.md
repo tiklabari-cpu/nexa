@@ -1,6 +1,6 @@
 # Task ID: 371
 
-**Title:** QUEUE-REPORTS [SONNET-HIGH] Kuyruk bekleme ve terk rapor ekranları (veri #291'de yakalanıyor): giriş, ortalama/p80 bekleme, atanma oranı, ısı haritası, ekip kırılımı, terk
+**Title:** QUEUE-REPORTS [SONNET-HIGH] (Sonnet 5.5) Kuyruk bekleme ve terk rapor ekranları (veri #291'de yakalanıyor): giriş, ortalama/p80 bekleme, atanma oranı, ısı haritası, ekip kırılımı, terk
 
 **Status:** pending
 

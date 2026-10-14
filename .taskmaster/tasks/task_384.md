@@ -1,6 +1,6 @@
 # Task ID: 384
 
-**Title:** SUBSCRIPTION-CANCEL [OPUS-HIGH] Abonelik iptali: dönem sonunda iptal, geri alma, salt-okumaya geçiş, 30 gün dışa aktarma ve saklama ayarına göre silme planı; yalnız Kurucu
+**Title:** SUBSCRIPTION-CANCEL [OPUS-HIGH] (Opus 5.5) Abonelik iptali: dönem sonunda iptal, geri alma, salt-okumaya geçiş, 30 gün dışa aktarma ve saklama ayarına göre silme planı; yalnız Kurucu
 
 **Status:** pending
 

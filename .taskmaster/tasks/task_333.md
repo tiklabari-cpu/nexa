@@ -1,6 +1,6 @@
 # Task ID: 333
 
-**Title:** MESSAGE-FULLTEXT-SEARCH [OPUS-MAX] Mesaj içeriğinde serbest metin arama: pg_trgm GIN (bölümlü events), SECURITY DEFINER search_events (kiracı + görünürlük içeride), varsayılan son 90 gün, iç notlar yetkiye göre
+**Title:** MESSAGE-FULLTEXT-SEARCH [OPUS-MAX] (Opus 5.5) Mesaj içeriğinde serbest metin arama: pg_trgm GIN (bölümlü events), SECURITY DEFINER search_events (kiracı + görünürlük içeride), varsayılan son 90 gün, iç notlar yetkiye göre
 
 **Status:** pending
 

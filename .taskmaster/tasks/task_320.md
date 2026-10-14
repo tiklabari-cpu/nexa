@@ -1,6 +1,6 @@
 # Task ID: 320
 
-**Title:** AI-QUALITY-METRICS [OPUS-XHIGH] AI metrikleri: onaylı / varsayılan / yanlış çözüm, containment, devir oranı ve kalitesi, zorunlu devir uyumu, guardrail ihlali, BSAT, tutarlılık — faturalanan AI çözümünden ayrı (ADR-09a)
+**Title:** AI-QUALITY-METRICS [OPUS-HIGH] (Opus 5.5) AI metrikleri: onaylı / varsayılan / yanlış çözüm, containment, devir oranı ve kalitesi, zorunlu devir uyumu, guardrail ihlali, BSAT, tutarlılık — faturalanan AI çözümünden ayrı (ADR-09a)
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3c — AI yönetişimi ve ölçüm.
 
-XHIGH GEREKÇESİ: (2) para doğruluğu — faturalanan sayaç ile yeni metrikler yan yana; ADR-09a regresyonu.
+EFOR: high — dört xhigh gerekçesinden (güvenlik yüzeyi / para doğruluğu / teslim güvencesi / pencere içi karar) hiçbiri yok; karar önceden verilmiş (2026-10-14 gözden geçirme).
 PRİSMA: ai_conversation_outcomes (AI'ın katıldığı her bağlantı için tek satır): kimlik license_id, chat_id (=Thread ID), thread_id (=Chat ID), member_key (geçerli üye tokenı #287 müşterisi), brand_id, team_id, ai_agent_id, config_version_id, language; intent, procedure_id; started_at, ended_at; ai_turns, player_turns, clarification_turns, required_slots_total/filled; outcome confirmed_resolved|assumed_pending|assumed_resolved|false_resolved|handed_off|abandoned|declined, ai_claimed_resolved bool (K9), resolution_confirmation yes|no|null + confirmed_at; handoff_at, handoff_reason, handoff_mandatory_rule, first_human_reply_at, handoff_card_rating, handoff_card_missing, agent_reasked; bsat, csat_after_handoff; guardrail_hits, guardrail_violations_confirmed, flags, mandatory_handoff_violation; repeat_same_intent_72h, repeat_any_72h, repeat_of_id?; qa_result; finalized_at. ratings.subject ai|human. Rollup ai_metrics_daily (gün kiracı TZ, ID-04).
 YAZMA NOKTALARI: ilk AI turu satırı açar; her tur sayaçlar/konu; devirde devir alanları; ilk insan mesajında first_human_reply_at; widget "Çözüldü mü? Evet/Hayır" (AI-25-S2; AI-29 ortak bileşen) onay alanları — "Hayır" yeniden devir (player_said_unresolved); puan → bsat/csat; kart bandı (AI-23) devir kalitesi; kapanışta devir/onay yoksa assumed_pending; AI-08 guardrail_hits; AI-27 flags; AI-24 qa_result.
 ZAMANLAYICI: ai_outcomes_finalize (saatlik: kapanıştan 72 saat geçen satırlarda tekrar temas + kesinleştirme), ai_metrics_rollup (saatlik).
@@ -50,14 +50,14 @@ Her tanım fixture ile birim; kesinleştirme işi; rollup = ham veri; RLS; ADR-0
 
 ## Subtasks
 
-### 320.1. MET-OUTCOMES [OPUS-XHIGH] ai_conversation_outcomes + ratings.subject + yazma noktaları + widget "Çözüldü mü?" butonları
+### 320.1. MET-OUTCOMES [OPUS-HIGH] ai_conversation_outcomes + ratings.subject + yazma noktaları + widget "Çözüldü mü?" butonları
 
 **Status:** pending  
 **Dependencies:** None  
 
 Üst görev 320 ayrıntılarındaki ilgili bölüm.
 
-### 320.2. MET-FINALIZE-ROLLUP [OPUS-XHIGH] Kesinleştirme (72 saat tekrar temas) + rollup + tanımlar (types) + rapor uçları + MCP
+### 320.2. MET-FINALIZE-ROLLUP [OPUS-HIGH] Kesinleştirme (72 saat tekrar temas) + rollup + tanımlar (types) + rapor uçları + MCP
 
 **Status:** pending  
 **Dependencies:** 320.1  

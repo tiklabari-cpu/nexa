@@ -1,6 +1,6 @@
 # Task ID: 332
 
-**Title:** ID-SEARCH [OPUS-XHIGH] ID ile arama: Ctrl+K ve arşivde Thread ID, Chat ID, mesaj ID, üye ID, kullanıcı adı, e-posta ile sunucudan doğrudan bulma (görünürlük süzgeçli, var/yok sızdırmadan)
+**Title:** ID-SEARCH [OPUS-XHIGH] (Opus 5.5) ID ile arama: Ctrl+K ve arşivde Thread ID, Chat ID, mesaj ID, üye ID, kullanıcı adı, e-posta ile sunucudan doğrudan bulma (görünürlük süzgeçli, var/yok sızdırmadan)
 
 **Status:** pending
 

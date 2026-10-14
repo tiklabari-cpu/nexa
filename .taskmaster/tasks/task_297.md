@@ -1,6 +1,6 @@
 # Task ID: 297
 
-**Title:** AI-UNDERSTAND-SELECT [OPUS-HIGH] LLM tabanlı anlama ve prosedür seçimi: tek JSON çağrısı (konu, slot, insan isteği, duygu, risk), deterministik policy, netleştirme, yedek prosedür
+**Title:** AI-UNDERSTAND-SELECT [OPUS-HIGH] (Opus 5.5) LLM tabanlı anlama ve prosedür seçimi: tek JSON çağrısı (konu, slot, insan isteği, duygu, risk), deterministik policy, netleştirme, yedek prosedür
 
 **Status:** pending
 

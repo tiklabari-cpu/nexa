@@ -1,6 +1,6 @@
 # Task ID: 303
 
-**Title:** AI-HANDOFF-TRIGGERS-RULES [OPUS-HIGH] Otomatik insana devir (K9): hazır tetikleyiciler, kiracının yapılandırdığı devir kuralları listesi, AI'ın "çözüldü" kararı için kiracının çözüldü kriterleri
+**Title:** AI-HANDOFF-TRIGGERS-RULES [OPUS-HIGH] (Opus 5.5) Otomatik insana devir (K9): hazır tetikleyiciler, kiracının yapılandırdığı devir kuralları listesi, AI'ın "çözüldü" kararı için kiracının çözüldü kriterleri
 
 **Status:** pending
 

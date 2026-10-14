@@ -1,6 +1,6 @@
 # Task ID: 276
 
-**Title:** ADR-PAYMENT-PROVIDERS [OPUS-HIGH] ADR-13a ek notu: ödeme yolları SWIFT (elle) + kripto "Adres isteyin" (elle, TXID) + Stripe adaptörü yalnız mock/sandbox (K16, K19)
+**Title:** ADR-PAYMENT-PROVIDERS [OPUS-HIGH] (Opus 5.5) ADR-13a ek notu: ödeme yolları SWIFT (elle) + kripto "Adres isteyin" (elle, TXID) + Stripe adaptörü yalnız mock/sandbox (K16, K19)
 
 **Status:** pending
 

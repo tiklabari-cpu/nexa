@@ -1,6 +1,6 @@
 # Task ID: 292
 
-**Title:** AI-CONVERSATION-CORE [OPUS-MAX] Konuşma motoru çekirdeği + sohbet içi hafıza: ai_conversations durumu, yan etkisiz runTurn sözleşmesi, bağlam yükleyici, art arda mesaj birleştirme, iyimser kilit
+**Title:** AI-CONVERSATION-CORE [OPUS-MAX] (Opus 5.5) Konuşma motoru çekirdeği + sohbet içi hafıza: ai_conversations durumu, yan etkisiz runTurn sözleşmesi, bağlam yükleyici, art arda mesaj birleştirme, iyimser kilit
 
 **Status:** pending
 

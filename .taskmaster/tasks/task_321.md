@@ -1,6 +1,6 @@
 # Task ID: 321
 
-**Title:** AI-TOOL-SLOT-F1 [OPUS-HIGH] Araç (entegrasyon) yuvası — F1 pasif kısım: igaming-tools kataloğu, call_tool adım tipi (çalıştırılmaz), pending_checks, devir kartında "Kontrol edilmesi gereken", simülasyonda sahte araç çıktısı
+**Title:** AI-TOOL-SLOT-F1 [OPUS-HIGH] (Opus 5.5) Araç (entegrasyon) yuvası — F1 pasif kısım: igaming-tools kataloğu, call_tool adım tipi (çalıştırılmaz), pending_checks, devir kartında "Kontrol edilmesi gereken", simülasyonda sahte araç çıktısı
 
 **Status:** pending
 

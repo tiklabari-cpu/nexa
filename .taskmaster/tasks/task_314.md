@@ -1,6 +1,6 @@
 # Task ID: 314
 
-**Title:** AI-SIMULATION-LAB [OPUS-HIGH] Çok turlu test ve simülasyon: "oyuncu gibi konuş", kayıtlı senaryolar (scripted/simulated), kesin kontroller + öneri niteliğinde hakem, regresyon, kilitli uyum paketi, ayrı test kotası
+**Title:** AI-SIMULATION-LAB [OPUS-HIGH] (Opus 5.5) Çok turlu test ve simülasyon: "oyuncu gibi konuş", kayıtlı senaryolar (scripted/simulated), kesin kontroller + öneri niteliğinde hakem, regresyon, kilitli uyum paketi, ayrı test kotası
 
 **Status:** pending
 

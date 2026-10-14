@@ -1,6 +1,6 @@
 # Task ID: 346
 
-**Title:** MANUAL-ASSIGNMENT-MODE [OPUS-MAX] Manuel atama modu (ekip bazlı): herkese bildirim, "Al" ile CAS, limit kontrolü; Sorumlu Oyun ekibi manuel yapılamaz
+**Title:** MANUAL-ASSIGNMENT-MODE [OPUS-XHIGH] (Opus 5.5) Manuel atama modu (ekip bazlı): herkese bildirim, "Al" ile CAS, limit kontrolü; Sorumlu Oyun ekibi manuel yapılamaz
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-[MAX] atama eşzamanlılığı.
+XHIGH GEREKÇESİ: (1) yeni yetkili uç (POST /chats/{id}/claim) + eşzamanlı Al/limit yarışı. MAX değil: tek koşullu UPDATE (CAS) kalıbı #305/#340'ta zaten kurulu, tasarım kararı verilmiş (2026-10-14 gözden geçirme).
 KOD: routing-service.ts route :114-171, drainQueue :179-241; DetailsPanel takeover; Group schema:698-711; agents.ts:1006-1040.
 prisma: groups.assignment_mode TEXT DEFAULT 'auto' CHECK auto|manual.
 contract/types: PATCH /groups/{groupId} assignment_mode; GroupAssignmentMode; POST /chats/{id}/claim (ya da takeover'ın kuyruk kullanımı).

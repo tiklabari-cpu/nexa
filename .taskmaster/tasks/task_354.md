@@ -1,6 +1,6 @@
 # Task ID: 354
 
-**Title:** CAMPAIGN-DELETE-REPORT-TEMPLATES [SONNET-HIGH] Kampanya arşivleme (yumuşak silme) + kopyalama + kampanya raporu (gösterim, tıklama, sohbet, dönüşüm, bastırılan; CSV) + TR iGaming şablon galerisi
+**Title:** CAMPAIGN-DELETE-REPORT-TEMPLATES [SONNET-HIGH] (Sonnet 5.5) Kampanya arşivleme (yumuşak silme) + kopyalama + kampanya raporu (gösterim, tıklama, sohbet, dönüşüm, bastırılan; CSV) + TR iGaming şablon galerisi
 
 **Status:** pending
 

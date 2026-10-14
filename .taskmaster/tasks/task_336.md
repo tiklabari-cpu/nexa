@@ -1,6 +1,6 @@
 # Task ID: 336
 
-**Title:** ARCHIVE-FILTERS [OPUS-HIGH] Arşiv filtreleri: tarih (kiracı saat diliminde; P0), ajan, ekip, puan, etiket (any/all/exclude, ≤20), AI/insan, risk bayrağı, kanal, durum; URL'de (yalnız kimlikler)
+**Title:** ARCHIVE-FILTERS [OPUS-HIGH] (Opus 5.5) Arşiv filtreleri: tarih (kiracı saat diliminde; P0), ajan, ekip, puan, etiket (any/all/exclude, ≤20), AI/insan, risk bayrağı, kanal, durum; URL'de (yalnız kimlikler)
 
 **Status:** pending
 

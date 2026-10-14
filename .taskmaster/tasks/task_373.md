@@ -1,6 +1,6 @@
 # Task ID: 373
 
-**Title:** ROUTING-RULES-UI-PARITY [SONNET-HIGH] Yönlendirme kuralları arayüzünün API ile eşitlenmesi: URL içerir/tam eşit çoklu değer, ülke çoklu seçim, URL normalleştirme, widget sohbetine country_code
+**Title:** ROUTING-RULES-UI-PARITY [SONNET-HIGH] (Sonnet 5.5) Yönlendirme kuralları arayüzünün API ile eşitlenmesi: URL içerir/tam eşit çoklu değer, ülke çoklu seçim, URL normalleştirme, widget sohbetine country_code
 
 **Status:** pending
 

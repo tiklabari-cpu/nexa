@@ -1,6 +1,6 @@
 # Task ID: 377
 
-**Title:** IGAMING-CONNECT-PLACEHOLDERS [SONNET-HIGH] iGaming platform kartları F1 (K15): Ayarlar › Entegrasyonlar'da 1–2 platform (ör. BetConstruct, EveryMatrix) pasif "Bağla" düğmesi + "Yakında" etiketi; yalnız katalog kaydı
+**Title:** IGAMING-CONNECT-PLACEHOLDERS [SONNET-HIGH] (Sonnet 5.5) iGaming platform kartları F1 (K15): Ayarlar › Entegrasyonlar'da 1–2 platform (ör. BetConstruct, EveryMatrix) pasif "Bağla" düğmesi + "Yakında" etiketi; yalnız katalog kaydı
 
 **Status:** pending
 

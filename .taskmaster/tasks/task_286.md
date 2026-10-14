@@ -1,6 +1,6 @@
 # Task ID: 286
 
-**Title:** DAILY-THREAD [OPUS-MAX] Günlük thread (K1=A): üyenin o günkü ilk bağlantısı yeni nexa chat (Thread ID) + thread (Chat ID); aynı gün dönüşte aynı chat'e yeni thread; ertesi gün ikisi de yeni
+**Title:** DAILY-THREAD [OPUS-MAX] (Opus 5.5) Günlük thread (K1=A): üyenin o günkü ilk bağlantısı yeni nexa chat (Thread ID) + thread (Chat ID); aynı gün dönüşte aynı chat'e yeni thread; ertesi gün ikisi de yeni
 
 **Status:** pending
 

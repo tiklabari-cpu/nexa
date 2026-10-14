@@ -1,6 +1,6 @@
 # Task ID: 349
 
-**Title:** INSTALL-WIZARD-NOSCRIPT [SONNET-HIGH] Kurulum: sihirbazda kod + kopyala + canlı "bağlandı" göstergesi, rehber bağlantıları; snippet'e <noscript> yedek linki
+**Title:** INSTALL-WIZARD-NOSCRIPT [SONNET-HIGH] (Sonnet 5.5) Kurulum: sihirbazda kod + kopyala + canlı "bağlandı" göstergesi, rehber bağlantıları; snippet'e <noscript> yedek linki
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 360
 
-**Title:** TICKET-FIRST-RESPONSE-SLA [OPUS-HIGH] Ticket ilk yanıt SLA'sı: öncelik bazlı ayrı hedef (varsayılan boş = ölçülmez), sweep adayları, kalan süre rozeti, "SLA'ya en yakın" sıralaması, rapor kartı
+**Title:** TICKET-FIRST-RESPONSE-SLA [OPUS-HIGH] (Opus 5.5) Ticket ilk yanıt SLA'sı: öncelik bazlı ayrı hedef (varsayılan boş = ölçülmez), sweep adayları, kalan süre rozeti, "SLA'ya en yakın" sıralaması, rapor kartı
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 374
 
-**Title:** TRIGGERS-RATED-TICKET-EVENTS [OPUS-HIGH] Tetikleyiciler: chat_rated ve ticket yaşam döngüsü webhook olayları, ticket kurallarına "Ne zaman" (created|updated|status_changed|message_added), kötü puan otomasyonu, döngü koruması
+**Title:** TRIGGERS-RATED-TICKET-EVENTS [OPUS-HIGH] (Opus 5.5) Tetikleyiciler: chat_rated ve ticket yaşam döngüsü webhook olayları, ticket kurallarına "Ne zaman" (created|updated|status_changed|message_added), kötü puan otomasyonu, döngü koruması
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 325
 
-**Title:** PERMISSION-MATRIX [OPUS-MAX] Yapılandırılabilir izin matrisi (K7): rol × yetenek, kiracı geçersiz kılmaları, alt sınırlar, oturumda anlık hesap (≤60 sn), "own" görünürlük düzeyi, Yetkilerim
+**Title:** PERMISSION-MATRIX [OPUS-MAX] (Opus 5.5) Yapılandırılabilir izin matrisi (K7): rol × yetenek, kiracı geçersiz kılmaları, alt sınırlar, oturumda anlık hesap (≤60 sn), "own" görünürlük düzeyi, Yetkilerim
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 278
 
-**Title:** CUSTOMER-USERNAME-CLOSE [OPUS-HIGH] customer_username işini kayıt altına al: DoD kapısı, PLAN/HANDOFF, username_normalized, eksik yerler (K20)
+**Title:** CUSTOMER-USERNAME-CLOSE [OPUS-HIGH] (Opus 5.5) customer_username işini kayıt altına al: DoD kapısı, PLAN/HANDOFF, username_normalized, eksik yerler (K20)
 
 **Status:** pending
 

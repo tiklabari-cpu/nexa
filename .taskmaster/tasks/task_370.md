@@ -1,6 +1,6 @@
 # Task ID: 370
 
-**Title:** AVAILABILITY-ACTIVITY-REPORTS [OPUS-XHIGH] Uygunluk ve ajan aktivitesi raporları: presence source (manual|disconnect|unresponsive|suspension|login), durum başına süre, ajan × saat şeridi, vardiya bindirmesi; EÜ yalnız kendini görür
+**Title:** AVAILABILITY-ACTIVITY-REPORTS [OPUS-HIGH] (Opus 5.5) Uygunluk ve ajan aktivitesi raporları: presence source (manual|disconnect|unresponsive|suspension|login), durum başına süre, ajan × saat şeridi, vardiya bindirmesi; EÜ yalnız kendini görür
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-XHIGH GEREKÇESİ: (1) çalışan izleme verisi — yetki kapsamı.
+EFOR: high — dört xhigh gerekçesinden (güvenlik yüzeyi / para doğruluğu / teslim güvencesi / pencere içi karar) hiçbiri yok; karar önceden verilmiş (2026-10-14 gözden geçirme).
 KOD: AgentPresenceEvent schema:2840-2855; agents.ts:383, membership-service.ts:89; reports.ts:1295-1310 presenceEvents (açılış satırı), presence-coverage.ts, roster-coverage.ts; :1765.
 prisma: agent_presence_events.source TEXT DEFAULT 'manual' + CHECK.
 api: GET /reports/availability, GET /reports/agent-activity?date=&agent_id[]; presenceCoverage tekrar kullanılır; RP-01 filtre/kapsam (#368 hazırsa); gün sınırı kiracı TZ (ID-04); açılış satırı deseni; bellek üst sınırı + sayfalama. WG-03 (#340) disconnect → offline (source disconnect) önkoşul — ikisi aynı sürümde ya da rapor uyarısı.

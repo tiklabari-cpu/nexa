@@ -1,6 +1,6 @@
 # Task ID: 291
 
-**Title:** QUEUE-ENTRIES-CAPTURE [OPUS-HIGH] Kuyruk giriş/çıkış kayıtlarını şimdiden yaz (queue_entries) — geçmiş bekleme süresi kaybolmasın (K21; rapor ekranı #371)
+**Title:** QUEUE-ENTRIES-CAPTURE [OPUS-HIGH] (Opus 5.5) Kuyruk giriş/çıkış kayıtlarını şimdiden yaz (queue_entries) — geçmiş bekleme süresi kaybolmasın (K21; rapor ekranı #371)
 
 **Status:** pending
 

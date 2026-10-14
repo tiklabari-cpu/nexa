@@ -1,6 +1,6 @@
 # Task ID: 319
 
-**Title:** AI-QA-QUEUE [OPUS-HIGH] Kalite kontrol (QA) kuyruğu: deterministik %5 örneklem + risk bayraklı/zorunlu kategorilerin %100'ü, rubrik, LLM ön puan + Ekip Lideri onayı, tutarlılık işi, kalibrasyon
+**Title:** AI-QA-QUEUE [OPUS-HIGH] (Opus 5.5) Kalite kontrol (QA) kuyruğu: deterministik %5 örneklem + risk bayraklı/zorunlu kategorilerin %100'ü, rubrik, LLM ön puan + Ekip Lideri onayı, tutarlılık işi, kalibrasyon
 
 **Status:** pending
 

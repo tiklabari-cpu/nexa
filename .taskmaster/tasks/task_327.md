@@ -1,6 +1,6 @@
 # Task ID: 327
 
-**Title:** PROFILE-NAME-PASSWORD [OPUS-XHIGH] Profilim: görünen ad + isteğe bağlı oyuncuya görünen takma ad, uygulama içinden şifre değiştirme (mevcut şifreyle, diğer oturumlar kapanır)
+**Title:** PROFILE-NAME-PASSWORD [OPUS-XHIGH] (Opus 5.5) Profilim: görünen ad + isteğe bağlı oyuncuya görünen takma ad, uygulama içinden şifre değiştirme (mevcut şifreyle, diğer oturumlar kapanır)
 
 **Status:** pending
 

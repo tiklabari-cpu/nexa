@@ -1,6 +1,6 @@
 # Task ID: 381
 
-**Title:** MESSENGER-INSTAGRAM-LIVE [OPUS-HIGH] Gerçek Messenger / Instagram kanalları (K22: pending): ortak meta-graph istemcisi ve webhook doğrulayıcı, sayfa belirteci, PSID/IGSID, mid tekilliği, 24 saat penceresi
+**Title:** MESSENGER-INSTAGRAM-LIVE [OPUS-HIGH] (Opus 5.5) Gerçek Messenger / Instagram kanalları (K22: pending): ortak meta-graph istemcisi ve webhook doğrulayıcı, sayfa belirteci, PSID/IGSID, mid tekilliği, 24 saat penceresi
 
 **Status:** pending
 

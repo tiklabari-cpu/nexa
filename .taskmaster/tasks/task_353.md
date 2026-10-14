@@ -1,6 +1,6 @@
 # Task ID: 353
 
-**Title:** RICH-CAMPAIGN-CARD [OPUS-HIGH] Zengin kampanya kartı (başlık, görsel, ≤5 buton: send_message / open_url / copy_coupon) + postback + fallback_text; AI kartlarında yalnız send_message ve güvenilir alan adı
+**Title:** RICH-CAMPAIGN-CARD [OPUS-HIGH] (Opus 5.5) Zengin kampanya kartı (başlık, görsel, ≤5 buton: send_message / open_url / copy_coupon) + postback + fallback_text; AI kartlarında yalnız send_message ve güvenilir alan adı
 
 **Status:** pending
 

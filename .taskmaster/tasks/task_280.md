@@ -1,6 +1,6 @@
 # Task ID: 280
 
-**Title:** WIDGET-LANGUAGE [SONNET-HIGH] Widget dili panelden seçilebilir ("Otomatik" = tarayıcı dili) + yedek dil; döküm e-postası oyuncunun dilinde
+**Title:** WIDGET-LANGUAGE [SONNET-HIGH] (Sonnet 5.5) Widget dili panelden seçilebilir ("Otomatik" = tarayıcı dili) + yedek dil; döküm e-postası oyuncunun dilinde
 
 **Status:** pending
 

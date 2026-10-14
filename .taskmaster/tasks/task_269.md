@@ -1,6 +1,6 @@
 # Task ID: 269
 
-**Title:** ADR-SKILL-PROCEDURE [OPUS-HIGH] ADR-14a ek notu: Skill çok turlu prosedür olabilir (görsel akış yine yok)
+**Title:** ADR-SKILL-PROCEDURE [OPUS-HIGH] (Opus 5.5) ADR-14a ek notu: Skill çok turlu prosedür olabilir (görsel akış yine yok)
 
 **Status:** pending
 

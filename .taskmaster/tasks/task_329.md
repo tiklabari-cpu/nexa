@@ -1,6 +1,6 @@
 # Task ID: 329
 
-**Title:** ID-DISPLAY-COPY [SONNET-HIGH] Thread ID ve Chat ID'nin her ekranda görünmesi ve tek tıkla kopyalanması (Inbox, transkript ayırıcısı, arşiv, profil, ticket, çalışma kaydı, audit, widget "Destek numaranız", mobil)
+**Title:** ID-DISPLAY-COPY [SONNET-HIGH] (Sonnet 5.5) Thread ID ve Chat ID'nin her ekranda görünmesi ve tek tıkla kopyalanması (Inbox, transkript ayırıcısı, arşiv, profil, ticket, çalışma kaydı, audit, widget "Destek numaranız", mobil)
 
 **Status:** pending
 

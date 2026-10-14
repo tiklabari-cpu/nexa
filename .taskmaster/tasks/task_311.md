@@ -1,6 +1,6 @@
 # Task ID: 311
 
-**Title:** IGAMING-TEMPLATES [OPUS-HIGH] 20 iGaming prosedür şablonu (Türkçe) + kurulum ucu + paket (igaming_core) + kiracının doldurması gerekenler + kilitli şablonlar
+**Title:** IGAMING-TEMPLATES [OPUS-HIGH] (Opus 5.5) 20 iGaming prosedür şablonu (Türkçe) + kurulum ucu + paket (igaming_core) + kiracının doldurması gerekenler + kilitli şablonlar
 
 **Status:** pending
 
@@ -54,7 +54,7 @@ KULLANILAN VARSAYIMLAR:
 
 Üst görev 311 ayrıntılarındaki ilgili bölüm.
 
-### 311.2. TPL-CONTENT [SONNET-MAX] Kalan 19 şablonun içeriği (TR) + senaryo tohumları + varsayılan kurallar + yasak ifadeler
+### 311.2. TPL-CONTENT [OPUS-HIGH] Kalan 19 şablonun içeriği (TR) + senaryo tohumları + varsayılan kurallar + yasak ifadeler
 
 **Status:** pending  
 **Dependencies:** 311.1  

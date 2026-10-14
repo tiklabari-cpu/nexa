@@ -1,6 +1,6 @@
 # Task ID: 361
 
-**Title:** INBOX-WAITING-TIMER [SONNET-HIGH] Sohbet satırında bekleme süresi: sunucuda threads.awaiting_reply_since, ChatSummary.waiting_since/queued_at, tek paylaşılan saat, eşikler
+**Title:** INBOX-WAITING-TIMER [SONNET-HIGH] (Sonnet 5.5) Sohbet satırında bekleme süresi: sunucuda threads.awaiting_reply_since, ChatSummary.waiting_since/queued_at, tek paylaşılan saat, eşikler
 
 **Status:** pending
 

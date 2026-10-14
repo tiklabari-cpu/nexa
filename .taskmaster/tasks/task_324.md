@@ -1,6 +1,6 @@
 # Task ID: 324
 
-**Title:** ROLE-SET-TEAM-LEAD [OPUS-MAX] Rol seti (K6): Kurucu=owner, Yönetici=admin, Ekip Lideri=team_lead (yeni), Ekip Üyesi=agent; ekip liderliği (group_agents.is_lead); viceowner → admin taşıması; davette team_lead + ekip seçimi
+**Title:** ROLE-SET-TEAM-LEAD [OPUS-MAX] (Opus 5.5) Rol seti (K6): Kurucu=owner, Yönetici=admin, Ekip Lideri=team_lead (yeni), Ekip Üyesi=agent; ekip liderliği (group_agents.is_lead); viceowner → admin taşıması; davette team_lead + ekip seçimi
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 300
 
-**Title:** SENSITIVE-MASKING [OPUS-XHIGH] Sohbet içi hassas veri maskeleme: şifre, OTP, kart, CVV, IBAN (son 4), seed phrase, özel anahtar, internet bankacılığı — yazmadan, loglamadan ve modele göndermeden önce + oyuncuya uyarı
+**Title:** SENSITIVE-MASKING [OPUS-XHIGH] (Opus 5.5) Sohbet içi hassas veri maskeleme: şifre, OTP, kart, CVV, IBAN (son 4), seed phrase, özel anahtar, internet bankacılığı — yazmadan, loglamadan ve modele göndermeden önce + oyuncuya uyarı
 
 **Status:** pending
 

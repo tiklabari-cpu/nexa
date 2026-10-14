@@ -1,6 +1,6 @@
 # Task ID: 339
 
-**Title:** WIDGET-ABUSE-GUARD [OPUS-XHIGH] Widget kötüye kullanım koruması: üye başına günlük AI turu, yalnız riskte doğrulama (Turnstile/mock), kota %80 bildirimi, kota dolunca insana devir
+**Title:** WIDGET-ABUSE-GUARD [OPUS-XHIGH] (Opus 5.5) Widget kötüye kullanım koruması: üye başına günlük AI turu, yalnız riskte doğrulama (Turnstile/mock), kota %80 bildirimi, kota dolunca insana devir
 
 **Status:** pending
 

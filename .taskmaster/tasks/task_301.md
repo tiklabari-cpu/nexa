@@ -1,6 +1,6 @@
 # Task ID: 301
 
-**Title:** AI-GUARDRAILS [OPUS-XHIGH] Uyum korumaları: platformun kilitli G1–G19 kataloğu, kiracı ekleri ve yasaklı ifadeler, giriş taraması, gönderim öncesi çıkış denetimi, hakem, tetiklenme kaydı (G14 = K13)
+**Title:** AI-GUARDRAILS [OPUS-XHIGH] (Opus 5.5) Uyum korumaları: platformun kilitli G1–G19 kataloğu, kiracı ekleri ve yasaklı ifadeler, giriş taraması, gönderim öncesi çıkış denetimi, hakem, tetiklenme kaydı (G14 = K13)
 
 **Status:** pending
 

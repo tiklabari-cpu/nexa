@@ -1,6 +1,6 @@
 # Task ID: 387
 
-**Title:** AI-MULTILINGUAL [OPUS-HIGH] AI çok dilli yanıt: dil algılama AI-05 çıktısında, iki ardışık güvenli mesajla dil değişimi, sadık çeviri + sayı koruma kontrolü, izinli olmayan dilde şablon + devir + AI-22 kaydı; persona dillerine RU/AZ (widget dili DEĞİL — K25)
+**Title:** AI-MULTILINGUAL [OPUS-HIGH] (Opus 5.5) AI çok dilli yanıt: dil algılama AI-05 çıktısında, iki ardışık güvenli mesajla dil değişimi, sadık çeviri + sayı koruma kontrolü, izinli olmayan dilde şablon + devir + AI-22 kaydı; persona dillerine RU/AZ (widget dili DEĞİL — K25)
 
 **Status:** pending
 

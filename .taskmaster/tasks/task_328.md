@@ -1,6 +1,6 @@
 # Task ID: 328
 
-**Title:** OWNERSHIP-TRANSFER [OPUS-MAX] Sahiplik (Kurucu) devri: şifre/2FA ile başlatma, devralanın 72 saat içinde e-posta tokenıyla kabulü, eski Kurucu Yönetici olur
+**Title:** OWNERSHIP-TRANSFER [OPUS-MAX] (Opus 5.5) Sahiplik (Kurucu) devri: şifre/2FA ile başlatma, devralanın 72 saat içinde e-posta tokenıyla kabulü, eski Kurucu Yönetici olur
 
 **Status:** pending
 

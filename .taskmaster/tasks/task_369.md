@@ -1,6 +1,6 @@
 # Task ID: 369
 
-**Title:** MISSED-ENGAGEMENT-REPORTS [OPUS-HIGH] Kaçan sohbetler ve etkileşim (kim başlattı) raporları: threads.initiated_by, needs_human_since, missed_reason kapanışta bir kez yazılır; ısı haritası şirket saat diliminde
+**Title:** MISSED-ENGAGEMENT-REPORTS [OPUS-HIGH] (Opus 5.5) Kaçan sohbetler ve etkileşim (kim başlattı) raporları: threads.initiated_by, needs_human_since, missed_reason kapanışta bir kez yazılır; ısı haritası şirket saat diliminde
 
 **Status:** pending
 

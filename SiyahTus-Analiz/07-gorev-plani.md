@@ -11,7 +11,7 @@
 **Toplam:** 120 görev (#269–#388), 141 alt görev. Öncelik: high 59, medium 49, low 12. Durum: pending 116, deferred 4 (#322, #378, #379, #388).
 
 - **Öncelik eşlemesi:** P0 → high, P1 → medium, P2 → low. **Öncelik devri:** high bir görevin bağımlı olduğu görev de high yapıldı; yoksa otonom döngü önkoşula sıra vermez (ör. #281 RL-04, #291 RP-04 veri yakalama, #323 GV-06/WG-14, #335 AR-01).
-- **Etiketler:** PLAN §5.1.1 matrisi (`[SONNET|OPUS-HIGH|XHIGH|MAX]`). Her XHIGH etiketinin gerekçesi görev ayrıntısında adıyla yazılı; authZ/kripto/kiracı izolasyonu/eşzamanlılık/algoritma işleri `OPUS-MAX`.
+- **Etiketler:** PLAN §5.1.1 matrisi (`[SONNET|OPUS-HIGH|XHIGH|MAX]`). Her XHIGH etiketinin gerekçesi görev ayrıntısında adıyla yazılı; authZ/kripto/kiracı izolasyonu/eşzamanlılık/algoritma işleri `OPUS-MAX`. **Gözden geçirme (2026-10-14, sahip):** #385–#386 `OPUS-MEDIUM` (matriste yok; `run-loop.sh` tanımaz), #320/#323/#338/#345/#350/#370 `OPUS-HIGH`, #346 `OPUS-XHIGH`. Task Master başlıklarında etiketin ardına `(Opus 5.5)` / `(Sonnet 5.5)` yazılıdır; bu tabloda yazılmaz.
 - **Görev biçimi:** başlık `KOD [ETİKET] açıklama`; `description` sonunda "Kaynak: …"; `details` = ortak üst bilgi (kaynak, K1=A, contract-first sıra, protokol, satır numaralarını yeniden doğrulama notu, dalga) + 05 mantığı + **KABUL KRİTERLERİ** + **KULLANILAN VARSAYIMLAR**; `testStrategy` sonunda DoD satırı. L maddeler alt görevlere bölündü; alt görev bağımlılıkları `"<üst>.<n>"` biçiminde.
 - **F2 / deferred:** #322 (AI-28 aktif araç kullanımı), #378 (KN-06 gerçek entegrasyon), #379 (KN-05 iframe SDK), #388 (operatörün imzaladığı kimlik). KN-06'nın F1 pasif "Bağla" kartları (K15) normal görev: #377.
 - **Doğrulama (bu turda koşuldu):** `tasks.json` JSON olarak geçerli; id'ler tekrarsız ve 269–388 ardışık; tüm bağımlılıklar mevcut, döngü yok (alt görevler dahil, alt görev yalnız önceki kardeşe bağlı); aktif hiçbir görev deferred bir göreve bağlı değil; 109 maddenin hepsi en az bir göreve eşli; `git diff` mevcut 268 göreve dokunmuyor (yalnız ekleme + metadata `taskCount` 388, `lastModified`).
@@ -292,7 +292,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 317 | AI-UNRESOLVED-QUESTIONS [OPUS-HIGH] | AI-22 | high | pending | 3 | 288, 297, 298, 303 |
 | 318 | AI-COACHING-SUGGESTIONS [OPUS-HIGH] | AI-23 | medium | pending | 2 | 304, 316, 317 |
 | 319 | AI-QA-QUEUE [OPUS-HIGH] | AI-24 | medium | pending | 3 | 288, 302, 314 |
-| 320 | AI-QUALITY-METRICS [OPUS-XHIGH] | AI-25 | medium | pending | 3 | 303, 304, 316, 319 |
+| 320 | AI-QUALITY-METRICS [OPUS-HIGH] | AI-25 | medium | pending | 3 | 303, 304, 316, 319 |
 | 321 | AI-TOOL-SLOT-F1 [OPUS-HIGH] | AI-28 | low | pending | – | 296, 304, 314 |
 | 322 | AI-TOOL-SLOT-F2 [OPUS-MAX] | AI-28 | low | deferred | – | 321, 378 |
 
@@ -300,7 +300,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 
 | # | Kod [etiket] | Kaynak | Öncelik | Durum | Alt | Bağımlı olduğu |
 |---|---|---|---|---|---|---|
-| 323 | SETTINGS-SAVE-PATTERN [SONNET-MAX] | GV-06, WG-14 | high | pending | 2 | – |
+| 323 | SETTINGS-SAVE-PATTERN [OPUS-HIGH] | GV-06, WG-14 | high | pending | 2 | – |
 | 324 | ROLE-SET-TEAM-LEAD [OPUS-MAX] | RL-01, RL-04 | high | pending | 3 | 281 |
 | 325 | PERMISSION-MATRIX [OPUS-MAX] | RL-02 | high | pending | 5 | 323, 324 |
 | 326 | TEAM-LEAD-CAPABILITIES [OPUS-XHIGH] | RL-03 | medium | pending | – | 325 |
@@ -320,7 +320,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 335 | ARCHIVE-SCREEN [OPUS-HIGH] | AR-01 | high | pending | – | 286, 329, 331 |
 | 336 | ARCHIVE-FILTERS [OPUS-HIGH] | AR-02 | high | pending | – | 285, 293, 335 |
 | 337 | RATING-COMMENT [OPUS-HIGH] | AR-03, WG-11 | medium | pending | – | 335 |
-| 338 | TRANSCRIPT-EXPORT [OPUS-XHIGH] | AR-04 | medium | pending | – | 335 |
+| 338 | TRANSCRIPT-EXPORT [OPUS-HIGH] | AR-04 | medium | pending | – | 335 |
 
 ### Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV
 
@@ -332,12 +332,12 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 342 | ASK-EMAIL [SONNET-HIGH] | WG-08 | medium | pending | – | 340, 341 |
 | 343 | FORM-FIELD-TYPES-TOPIC [OPUS-HIGH] | WG-04 | medium | pending | – | 305 |
 | 344 | WIDGET-PHRASES-ETA [OPUS-HIGH] | WG-05 | medium | pending | – | 291, 305 |
-| 345 | TRANSCRIPT-ON-REQUEST [OPUS-XHIGH] | WG-06 | medium | pending | – | 280, 338 |
-| 346 | MANUAL-ASSIGNMENT-MODE [OPUS-MAX] | WG-07 | medium | pending | – | 305 |
+| 345 | TRANSCRIPT-ON-REQUEST [OPUS-HIGH] | WG-06 | medium | pending | – | 280, 338 |
+| 346 | MANUAL-ASSIGNMENT-MODE [OPUS-XHIGH] | WG-07 | medium | pending | – | 305 |
 | 347 | LAUNCHER-VISIBILITY-LOGO [SONNET-HIGH] | WG-10 | medium | pending | – | – |
 | 348 | WIDGET-KB-SEARCH [OPUS-HIGH] | WG-12 | medium | pending | – | 309 |
 | 349 | INSTALL-WIZARD-NOSCRIPT [SONNET-HIGH] | WG-13, WG-15 | low | pending | – | – |
-| 350 | PROMO-SUPPRESSION [OPUS-XHIGH] | EN-01 | high | pending | – | 302 |
+| 350 | PROMO-SUPPRESSION [OPUS-HIGH] | EN-01 | high | pending | – | 302 |
 | 351 | CAMPAIGN-CURRENT-URL-FIX [SONNET-HIGH] | EN-04 | medium | pending | – | – |
 | 352 | CAMPAIGN-MULTI-CONDITIONS [OPUS-HIGH] | EN-03 | medium | pending | – | 351, 330 |
 | 353 | RICH-CAMPAIGN-CARD [OPUS-HIGH] | EN-02 | medium | pending | – | 350 |
@@ -357,7 +357,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 367 | EVENT-NOTIFICATIONS-REPEAT [SONNET-HIGH] | IN-10 | medium | pending | – | 361 |
 | 368 | REPORT-FILTERS [OPUS-XHIGH] | RP-01 | medium | pending | – | 325 |
 | 369 | MISSED-ENGAGEMENT-REPORTS [OPUS-HIGH] | RP-02 | medium | pending | – | 293 |
-| 370 | AVAILABILITY-ACTIVITY-REPORTS [OPUS-XHIGH] | RP-03 | medium | pending | – | 340 |
+| 370 | AVAILABILITY-ACTIVITY-REPORTS [OPUS-HIGH] | RP-03 | medium | pending | – | 340 |
 | 371 | QUEUE-REPORTS [SONNET-HIGH] | RP-04 | medium | pending | – | 291, 305, 368 |
 | 372 | DIGEST-EMAILS [SONNET-HIGH] | RP-05 | medium | pending | – | 368, 369, 371 |
 | 373 | ROUTING-RULES-UI-PARITY [SONNET-HIGH] | AU-02 | medium | pending | – | 330 |
@@ -372,8 +372,8 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 382 | BILLING-PAYMENT-METHODS [OPUS-XHIGH] | BL-01 | medium | pending | 4 | 276 |
 | 383 | INVOICE-PDF-PROFILE [OPUS-XHIGH] | BL-02 | medium | pending | – | 382 |
 | 384 | SUBSCRIPTION-CANCEL [OPUS-HIGH] | BL-03 | low | pending | – | 382, 383 |
-| 385 | NARROW-SCREEN-PANEL [SONNET-XHIGH] | GV-04 | medium | pending | – | 304, 334 |
-| 386 | NO-PII-IN-URLS [SONNET-XHIGH] | GV-05 | medium | pending | – | – |
+| 385 | NARROW-SCREEN-PANEL [OPUS-MEDIUM] | GV-04 | medium | pending | – | 304, 334 |
+| 386 | NO-PII-IN-URLS [OPUS-MEDIUM] | GV-05 | medium | pending | – | – |
 | 387 | AI-MULTILINGUAL [OPUS-HIGH] | AI-30 | low | pending | – | 297, 301 |
 | 388 | OPERATOR-SIGNED-IDENTITY-F2 [OPUS-MAX] | ID-03 | low | deferred | – | 287 |
 

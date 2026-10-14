@@ -1,6 +1,6 @@
 # Task ID: 356
 
-**Title:** TICKET-REPLY-THREAD [OPUS-XHIGH] Ticket'a yanıt ve yazışma geçmişi + iç not: ticket_messages, POST/GET /tickets/{id}/messages, e-posta gönderimi (Message-ID zinciri), iç not asla e-postaya gitmez; pilot kapısı ayrı ayar (K23)
+**Title:** TICKET-REPLY-THREAD [OPUS-XHIGH] (Opus 5.5) Ticket'a yanıt ve yazışma geçmişi + iç not: ticket_messages, POST/GET /tickets/{id}/messages, e-posta gönderimi (Message-ID zinciri), iç not asla e-postaya gitmez; pilot kapısı ayrı ayar (K23)
 
 **Status:** pending
 

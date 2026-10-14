@@ -1,6 +1,6 @@
 # Task ID: 293
 
-**Title:** AI-FIRST-AND-SILENCE [OPUS-MAX] "Önce AI" (K9) ve devirden sonra AI'ın susması: mod durum makinesi, örtük devralma, AI'a geri ver, bekçi, ADR-09a yüklemi
+**Title:** AI-FIRST-AND-SILENCE [OPUS-MAX] (Opus 5.5) "Önce AI" (K9) ve devirden sonra AI'ın susması: mod durum makinesi, örtük devralma, AI'a geri ver, bekçi, ADR-09a yüklemi
 
 **Status:** pending
 

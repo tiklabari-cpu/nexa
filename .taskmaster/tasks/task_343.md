@@ -1,6 +1,6 @@
 # Task ID: 343
 
-**Title:** FORM-FIELD-TYPES-TOPIC [OPUS-HIGH] Form alan tipleri (select, multiselect, topic) + düzenleme/sıralama + konu seçimiyle ekip kuyruğuna yönlendirme
+**Title:** FORM-FIELD-TYPES-TOPIC [OPUS-HIGH] (Opus 5.5) Form alan tipleri (select, multiselect, topic) + düzenleme/sıralama + konu seçimiyle ekip kuyruğuna yönlendirme
 
 **Status:** pending
 

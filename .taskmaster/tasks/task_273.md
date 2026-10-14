@@ -1,6 +1,6 @@
 # Task ID: 273
 
-**Title:** ADR-DURABLE-AI-QUEUE [OPUS-HIGH] ADR-11a ek notu: kalıcı AI iş kuyruğu Postgres'te (ai_jobs, SKIP LOCKED, LISTEN/NOTIFY) (K18)
+**Title:** ADR-DURABLE-AI-QUEUE [OPUS-HIGH] (Opus 5.5) ADR-11a ek notu: kalıcı AI iş kuyruğu Postgres'te (ai_jobs, SKIP LOCKED, LISTEN/NOTIFY) (K18)
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 330
 
-**Title:** GEOIP-COUNTRY [OPUS-HIGH] IP'den ülke (ortak bileşen): sunucu içinde çevrimdışı veritabanı, IP dışarı gitmez ve saklanmaz, ziyaret ve müşteri kaydına ülke kodu
+**Title:** GEOIP-COUNTRY [OPUS-HIGH] (Opus 5.5) IP'den ülke (ortak bileşen): sunucu içinde çevrimdışı veritabanı, IP dışarı gitmez ve saklanmaz, ziyaret ve müşteri kaydına ülke kodu
 
 **Status:** pending
 

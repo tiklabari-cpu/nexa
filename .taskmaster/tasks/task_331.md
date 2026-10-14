@@ -1,6 +1,6 @@
 # Task ID: 331
 
-**Title:** INBOX-PLAYER-CARD [OPUS-HIGH] Inbox sağ panelinde oyuncu kartı: ad, kullanıcı adı (beyan rozeti), e-posta (yetkiye göre sunucuda maskeli), ülke, pre-chat cevapları, devir kartı, "Bugün" (aynı Thread ID'nin bağlantıları) ve "Geçmiş" (90 gün, kısıtlı konuşmalar)
+**Title:** INBOX-PLAYER-CARD [OPUS-HIGH] (Opus 5.5) Inbox sağ panelinde oyuncu kartı: ad, kullanıcı adı (beyan rozeti), e-posta (yetkiye göre sunucuda maskeli), ülke, pre-chat cevapları, devir kartı, "Bugün" (aynı Thread ID'nin bağlantıları) ve "Geçmiş" (90 gün, kısıtlı konuşmalar)
 
 **Status:** pending
 

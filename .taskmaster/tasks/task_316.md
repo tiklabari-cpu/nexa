@@ -1,6 +1,6 @@
 # Task ID: 316
 
-**Title:** AI-CONFIG-VERSIONING [OPUS-MAX] Taslak → test → onay → yayın: ai_config_versions (snapshot + işaretçi), dört göz, uyum değişikliğinde Kurucu onayı, geri alma, duraklatma, zamanlı yayın
+**Title:** AI-CONFIG-VERSIONING [OPUS-MAX] (Opus 5.5) Taslak → test → onay → yayın: ai_config_versions (snapshot + işaretçi), dört göz, uyum değişikliğinde Kurucu onayı, geri alma, duraklatma, zamanlı yayın
 
 **Status:** pending
 

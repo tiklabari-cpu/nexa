@@ -1,6 +1,6 @@
 # Task ID: 372
 
-**Title:** DIGEST-EMAILS [SONNET-HIGH] Günlük/haftalık özet e-postaları: kişisel tercih, şirket saatiyle 08:00 (haftalık Pazartesi), rol kapsamlı sayılar rapor yardımcılarından, kişisel veri YOK, idempotent
+**Title:** DIGEST-EMAILS [SONNET-HIGH] (Sonnet 5.5) Günlük/haftalık özet e-postaları: kişisel tercih, şirket saatiyle 08:00 (haftalık Pazartesi), rol kapsamlı sayılar rapor yardımcılarından, kişisel veri YOK, idempotent
 
 **Status:** pending
 

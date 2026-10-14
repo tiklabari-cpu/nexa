@@ -1,6 +1,6 @@
 # Task ID: 355
 
-**Title:** GOAL-CUSTOM-EVENT [SONNET-HIGH] Hedeflerde özel sayfa olayı: siyahtus('trackEvent', {name, value?}) → visitor_events → goals.record (tutar alanı yok, ziyaretçi bazında tekil)
+**Title:** GOAL-CUSTOM-EVENT [SONNET-HIGH] (Sonnet 5.5) Hedeflerde özel sayfa olayı: siyahtus('trackEvent', {name, value?}) → visitor_events → goals.record (tutar alanı yok, ziyaretçi bazında tekil)
 
 **Status:** pending
 

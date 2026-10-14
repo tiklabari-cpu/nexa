@@ -1,6 +1,6 @@
 # Task ID: 306
 
-**Title:** INBOX-TRANSFER-TO-TEAM [OPUS-HIGH] Ekibe aktarma: arayüzde "Ekibe aktar" + not; ekipte kimse yoksa reddetmek yerine ekip kuyruğu; AI devri de aynı yol (atanmamış kalma hatası)
+**Title:** INBOX-TRANSFER-TO-TEAM [OPUS-HIGH] (Opus 5.5) Ekibe aktarma: arayüzde "Ekibe aktar" + not; ekipte kimse yoksa reddetmek yerine ekip kuyruğu; AI devri de aynı yol (atanmamış kalma hatası)
 
 **Status:** pending
 

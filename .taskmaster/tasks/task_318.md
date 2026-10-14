@@ -1,6 +1,6 @@
 # Task ID: 318
 
-**Title:** AI-COACHING-SUGGESTIONS [OPUS-HIGH] Koçluk ve öneri kuyruğu: ajan AI mesajını işaretler / kendi yanıtını "AI bilgisine öner"; LLM genellemesi + maskeleme; Ekip Lideri onayı → AI-20 taslağı
+**Title:** AI-COACHING-SUGGESTIONS [OPUS-HIGH] (Opus 5.5) Koçluk ve öneri kuyruğu: ajan AI mesajını işaretler / kendi yanıtını "AI bilgisine öner"; LLM genellemesi + maskeleme; Ekip Lideri onayı → AI-20 taslağı
 
 **Status:** pending
 

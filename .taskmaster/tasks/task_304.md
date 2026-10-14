@@ -1,6 +1,6 @@
 # Task ID: 304
 
-**Title:** AI-HANDOFF-CARD [OPUS-HIGH] Yapılandırılmış devir kartı: konu, oyuncu, toplanan bilgiler, karar dayanağı, AI'ın söyledikleri, nedenler, risk/duygu, önerilen adım; ajan "yeterli/yetersiz" geri bildirimi
+**Title:** AI-HANDOFF-CARD [OPUS-HIGH] (Opus 5.5) Yapılandırılmış devir kartı: konu, oyuncu, toplanan bilgiler, karar dayanağı, AI'ın söyledikleri, nedenler, risk/duygu, önerilen adım; ajan "yeterli/yetersiz" geri bildirimi
 
 **Status:** pending
 

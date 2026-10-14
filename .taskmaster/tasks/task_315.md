@@ -1,6 +1,6 @@
 # Task ID: 315
 
-**Title:** AI-CONFIG-HISTORY [OPUS-HIGH] AI ayar değişiklik geçmişi: ai_config_changes (önce/sonra/fark, yalnız ekleme), audit_log eylemleri, 5 yıl saklama, ekran ve CSV
+**Title:** AI-CONFIG-HISTORY [OPUS-HIGH] (Opus 5.5) AI ayar değişiklik geçmişi: ai_config_changes (önce/sonra/fark, yalnız ekleme), audit_log eylemleri, 5 yıl saklama, ekran ve CSV
 
 **Status:** pending
 

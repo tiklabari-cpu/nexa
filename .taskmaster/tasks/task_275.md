@@ -1,6 +1,6 @@
 # Task ID: 275
 
-**Title:** ADR-TEMPLATE-CATALOG [OPUS-HIGH] task_098 kararına ek: iGaming şablon kataloğu paylaşılan pakette, sunucuda kurulum ucu
+**Title:** ADR-TEMPLATE-CATALOG [OPUS-HIGH] (Opus 5.5) task_098 kararına ek: iGaming şablon kataloğu paylaşılan pakette, sunucuda kurulum ucu
 
 **Status:** pending
 

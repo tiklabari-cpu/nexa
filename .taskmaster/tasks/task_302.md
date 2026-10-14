@@ -1,6 +1,6 @@
 # Task ID: 302
 
-**Title:** AI-RISK-FLAGS [OPUS-XHIGH] Risk bayrakları: sohbet ve üye kapsamlı yapılandırılmış bayraklar, riskPolicy (promosyon/bonus engeli, zorunlu devir), görünürlük, gerekçeli kaldırma, webhook
+**Title:** AI-RISK-FLAGS [OPUS-XHIGH] (Opus 5.5) Risk bayrakları: sohbet ve üye kapsamlı yapılandırılmış bayraklar, riskPolicy (promosyon/bonus engeli, zorunlu devir), görünürlük, gerekçeli kaldırma, webhook
 
 **Status:** pending
 

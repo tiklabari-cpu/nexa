@@ -1,6 +1,6 @@
 # Task ID: 299
 
-**Title:** AI-GUIDANCE-RULES [OPUS-HIGH] Davranış talimatları (Guidance) ekranı: düz yazı kurallar, kapsam/öncelik, prompt katman sırası, çelişki denetimi, instruction alanının taşınması
+**Title:** AI-GUIDANCE-RULES [OPUS-HIGH] (Opus 5.5) Davranış talimatları (Guidance) ekranı: düz yazı kurallar, kapsam/öncelik, prompt katman sırası, çelişki denetimi, instruction alanının taşınması
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 334
 
-**Title:** TIMELINE-VIEWER [OPUS-HIGH] Log / zaman çizelgesi görüntüleyici: bir Chat ID ya da Thread ID için mesaj, iç not, AI kararı, atama, transfer, etiket, puan, SLA, ticket, audit tek ekranda; Ctrl+F dostu; maskeli dışa aktarma
+**Title:** TIMELINE-VIEWER [OPUS-HIGH] (Opus 5.5) Log / zaman çizelgesi görüntüleyici: bir Chat ID ya da Thread ID için mesaj, iç not, AI kararı, atama, transfer, etiket, puan, SLA, ticket, audit tek ekranda; Ctrl+F dostu; maskeli dışa aktarma
 
 **Status:** pending
 

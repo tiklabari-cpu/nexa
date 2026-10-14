@@ -1,6 +1,6 @@
 # Task ID: 272
 
-**Title:** ADR-AI-RESOLUTION [OPUS-HIGH] ADR-09a ek notu: devredilmiş ama ajanın yazmadığı thread "AI çözümü" sayılmaz (K10)
+**Title:** ADR-AI-RESOLUTION [OPUS-HIGH] (Opus 5.5) ADR-09a ek notu: devredilmiş ama ajanın yazmadığı thread "AI çözümü" sayılmaz (K10)
 
 **Status:** pending
 

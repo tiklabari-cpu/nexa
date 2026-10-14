@@ -1,6 +1,6 @@
 # Task ID: 290
 
-**Title:** AI-CONFIG-VERSION-DESIGN [OPUS-HIGH] AI yapılandırma sürüm modeli tasarım notu (K21): "taslak = düzenleme tabloları, çalışma anı = yayınlanmış değişmez paket", sürüm işaretçisi
+**Title:** AI-CONFIG-VERSION-DESIGN [OPUS-HIGH] (Opus 5.5) AI yapılandırma sürüm modeli tasarım notu (K21): "taslak = düzenleme tabloları, çalışma anı = yayınlanmış değişmez paket", sürüm işaretçisi
 
 **Status:** pending
 

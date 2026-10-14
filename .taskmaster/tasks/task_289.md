@@ -1,6 +1,6 @@
 # Task ID: 289
 
-**Title:** DURABLE-AI-QUEUE [OPUS-MAX] Kalıcı AI iş kuyruğu (ai_jobs, outbox, SKIP LOCKED işçi): çökmede yanıt kaybolmaz, aynı mesaja asla iki cevap gitmez
+**Title:** DURABLE-AI-QUEUE [OPUS-MAX] (Opus 5.5) Kalıcı AI iş kuyruğu (ai_jobs, outbox, SKIP LOCKED işçi): çökmede yanıt kaybolmaz, aynı mesaja asla iki cevap gitmez
 
 **Status:** pending
 

@@ -1,6 +1,6 @@
 # Task ID: 305
 
-**Title:** TEAM-TOPIC-QUEUES [OPUS-MAX] Konuya göre ekip kuyrukları (K14): Finans, KYC/Risk, Bonus, Sorumlu Oyun (yalnız eğitimli), Teknik, Şikâyet — ekip başına kuyruk, öncelik, baş-tıkanmasının giderilmesi
+**Title:** TEAM-TOPIC-QUEUES [OPUS-MAX] (Opus 5.5) Konuya göre ekip kuyrukları (K14): Finans, KYC/Risk, Bonus, Sorumlu Oyun (yalnız eğitimli), Teknik, Şikâyet — ekip başına kuyruk, öncelik, baş-tıkanmasının giderilmesi
 
 **Status:** pending
 

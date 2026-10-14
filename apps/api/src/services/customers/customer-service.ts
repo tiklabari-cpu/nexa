@@ -316,7 +316,11 @@ export class CustomerService {
         OR: [
           { name: { contains, mode: 'insensitive' } },
           { email: { contains, mode: 'insensitive' } },
-          { username: { contains, mode: 'insensitive' } },
+          // A handle is typed from its first character, so it is matched as a
+          // prefix of the folded column rather than anywhere inside the raw
+          // one (tm 278). `insensitive` keeps the folding on Postgres's side:
+          // a JS `toLowerCase()` turns "İ" into "i̇", which `lower()` does not.
+          { usernameNormalized: { startsWith: contains, mode: 'insensitive' } },
           { phone: { contains } },
         ],
       });

@@ -1,0 +1,34 @@
+-- The pre-chat username, folded for lookup (tm 278).
+--
+-- `customers.username` (20261014090000_customer_username) is kept exactly as
+-- the visitor typed it, because that is what the agent should see. Finding
+-- someone by it is a different question: "MiraH_92", "mirah_92" and
+-- " mirah_92 " are the same handle to the person searching. This column is
+-- that folded form -- `lower(btrim(username))` -- and the index in the next
+-- migration is built over it.
+--
+-- STILL NOT AN IDENTITY KEY. The username is unverified (the widget cannot
+-- prove it), so this column exists for search and for listing *possible*
+-- matches to an agent (ID-03, tm 287), never to pick, merge or authenticate a
+-- customer. No uniqueness, on purpose: two visitors may type the same handle.
+--
+-- GENERATED, not written by the application -- the same reason as
+-- 20260911170000_events_sequence_column: this is the expand step of
+-- CONVENTIONS 6.3, and a column the application had to fill would be NULL on
+-- every row a replica of the previous release writes. Generated in the
+-- database, every writer fills it (both routes, the seed, a fixture, an old
+-- replica) and it cannot drift from the username it is derived from. Nothing
+-- is dropped or narrowed; `username` stays the column that is read and shown.
+--
+-- `lower` and `btrim` are immutable and total: NULL in, NULL out, never a
+-- raise, so no row the previous release accepted is rejected here.
+--
+-- Adding a STORED generated column rewrites `customers` under ACCESS
+-- EXCLUSIVE. Acceptable at today's size (the pilot); a large tenant base
+-- would want the column added empty and backfilled in batches instead.
+--
+-- No RLS change: `customers` already carries its tenant policy, and a new
+-- column inherits it.
+
+-- AlterTable
+ALTER TABLE "customers" ADD COLUMN "username_normalized" TEXT GENERATED ALWAYS AS (lower(btrim("username"))) STORED;

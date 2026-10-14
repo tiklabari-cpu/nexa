@@ -394,6 +394,12 @@ model Customer {
   /// The username the visitor typed into the widget's pre-chat form — their
   /// handle on the embedding site, unverified, kept as typed.
   username       String?
+  /// `lower(btrim(username))`, for search and possible-match lookups — never
+  /// an identity key. A STORED generated column in the database
+  /// (20261015090000_customer_username_normalized); modelled as a
+  /// `dbgenerated` default only so queries can filter on it. NEVER WRITE IT:
+  /// Postgres rejects any value for a generated column (`428C9`).
+  usernameNormalized String? @default(dbgenerated("lower(btrim(username))")) @map("username_normalized")
   phone          String?
   countryCode    String?   @map("country_code") @db.Char(2)
   country        String?
@@ -422,6 +428,11 @@ model Customer {
   /// keeps this a plain `=` rather than a case-insensitive one no plain btree
   /// index can serve.
   @@index([organizationId, countryCode])
+  /// Not modelled: `customers_organization_id_username_normalized_idx` on
+  /// `(organization_id, username_normalized) WHERE username_normalized IS NOT
+  /// NULL` (20261015090100) — equality on the folded username, reachable under
+  /// RLS. Prisma cannot express the WHERE, so `scripts/check-drift.ts` allows
+  /// it by name.
   @@map("customers")
 }
 

@@ -101,6 +101,17 @@ const KNOWN_UNMODELLABLE = [
       /CREATE INDEX "events_thread_id_event_sequence_idx" ON "public"\."events"\("thread_id" ASC, "event_sequence" ASC\)/,
     reason: 'composite index on a generated column — the column above is not in the datamodel',
   },
+  {
+    // Created as `ON customers(organization_id, username_normalized) WHERE
+    // username_normalized IS NOT NULL` in
+    // 20261015090100_customers_username_normalized_index. The column itself is
+    // modelled (as a `dbgenerated` default, so queries can filter on it); only
+    // the predicate is not expressible.
+    pattern:
+      /CREATE INDEX "customers_organization_id_username_normalized_idx" ON "public"\."customers"/,
+    reason:
+      'partial index (folded pre-chat username lookups, NULLs left out) — Prisma cannot express a WHERE predicate',
+  },
 ];
 
 async function main(): Promise<void> {

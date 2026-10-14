@@ -1,0 +1,22 @@
+-- Alone in this file on purpose (CONVENTIONS 6.3): `CREATE INDEX CONCURRENTLY`
+-- cannot run inside a transaction block, and a second statement beside it
+-- would fail the whole migration with 25001. Concurrently, because
+-- `customers` is read by every open Contacts list and a plain `CREATE INDEX`
+-- holds a lock that blocks writes for the build.
+--
+-- Serves equality on the folded pre-chat username within one organization --
+-- the "possible matches" lookup ID-03 (tm 287) lists for an agent -- and is
+-- reachable under row level security because `texteq` is leakproof, measured
+-- as `siyahtus_app` in `customers.test.ts` ("serves a username lookup out of
+-- an index under row level security (EXPLAIN ANALYZE)"). A lookup aid, not an
+-- identity key: no uniqueness (see 20261015090000).
+--
+-- PARTIAL, and that is measured too. Without the predicate the index leads
+-- with `organization_id` like three others on this table, and on a fresh
+-- table the planner took it for the country filter -- `country_code` fell to
+-- a row filter and "serves the country filter out of an index" went red.
+-- Most visitors leave no username, so the NULL rows are also most of what a
+-- full index would carry. An equality on the column implies the predicate
+-- (`texteq` is strict), so the lookup above still reaches it. Prisma cannot
+-- express the WHERE; `scripts/check-drift.ts` allows it by name.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "customers_organization_id_username_normalized_idx" ON "customers" ("organization_id", "username_normalized") WHERE "username_normalized" IS NOT NULL;

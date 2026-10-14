@@ -948,6 +948,9 @@ function queryFilter(query: string | undefined): Record<string, unknown> {
       { subject: contains },
       { customer: { name: contains } },
       { customer: { email: contains } },
+      // The pre-chat username, as a prefix of its folded form — the same
+      // rule as the Contacts search (`customer-service.ts#where`).
+      { customer: { usernameNormalized: { startsWith: trimmed, mode: 'insensitive' as const } } },
     ],
   };
 }

@@ -44,7 +44,7 @@ tickets:
           default: all
       - name: query
         in: query
-        description: Case-insensitive match against subject and customer name/email.
+        description: Case-insensitive match against subject and customer name/email (anywhere in the text), and the customer's pre-chat username (from its start).
         schema: { type: string, maxLength: 320 }
       - name: sort
         in: query

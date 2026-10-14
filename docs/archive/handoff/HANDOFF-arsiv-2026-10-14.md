@@ -6,6 +6,13 @@
 > newest-first. Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
 ---
+## tm 273 — ADR-DURABLE-AI-QUEUE: ADR-11a eki — kalıcı AI iş kuyruğu Postgres'te (`ai_jobs`, `SKIP LOCKED`, `LISTEN/NOTIFY`) — done — 2026-10-14 UTC
+
+- **Yapıldı:** PLAN §0 "Ek notlar"a ADR-11a (sahip kararı K18, GV-02-S1/S2; ADR-11 satırı değişmedi); karar dosyası `docs/adr/durable-ai-jobs.md`; §D222; K06.4'e `ℹ` maddesi (damga `✅` kaldı). İş `ai_jobs`'ta, ziyaretçi mesajıyla aynı transaction'da; `ai_jobs_claim` (`SKIP LOCKED`, kira, en çok 2 deneme, sohbet başına sıra) + `ai_jobs_settle`; `LISTEN/NOTIFY` + 500 ms yoklama; 120 sn sonra `expired` → iç not + insana devir; idempotens `reply_to_event_id`; Redis rolü ve "Kafka/RabbitMQ yok" aynen. tm 289 zaten `273`'e bağlıydı. Kod değişikliği yok.
+- **Doğrulama:** `pnpm test:gate` exit 0, 8m00s (build/typecheck/birim turbo önbelleğinden — yalnız doküman; format:check 49s ve entegrasyon 7m10s gerçekten koştu). İlk koşu kırmızıydı: `push-notifications.test.ts` "never reaches a device in another workspace" — `resetDatabase` `TRUNCATE`'inde 40P01 deadlock (`fixtures.ts:119`, 808/809), ikinci koşu yeşil. `db:check-drift` temiz; `contract:generate` sonrası değişiklik yok; `audit:req-coverage` exit 0; prettier temiz.
+- **Varsayımlar:** `expired` işin devri otomatik devir sayıldı (ADR-09a → AI çözümü değil); `LISTEN` için işçi Prisma dışında tek bağlantı açar, yoksa yalnız yoklama kabul. 05'teki satır referansları HEAD'de doğru (`customer.ts:342/380`, `ai-responder.ts:48`, `follow-ups.ts:39`, `schema.prisma:2048`), kayma yok.
+- **Sonraki pencereye not:** ADR-11 "Redis Streams" der ama repoda Streams yok (yayılım pub/sub, `realtime/publisher.ts:57`); `pg` sürücüsü bağımlılık değil — tm 289 LISTEN için eklemeli. Biten satırların saklama süresi açık (tm 289). Sahibin efor etiketi "ikinci tur" düzenlemesi (`task_*.md`, `07-gorev-plani.md`, `tasks.json` başlıkları) hâlâ çalışma ağacında commit'lenmemiş; bu commit'lere alınmadı.
+
 ## tm 272 — ADR-AI-RESOLUTION: ADR-09a eki — devredilmiş ama ajanın yazmadığı thread "AI çözümü" sayılmaz — done — 2026-10-14 UTC
 
 - **Yapıldı:** PLAN §0 "Ek notlar"a ADR-09a (sahip kararı K10, AI-25-S1; ADR-09 satırı değişmedi); karar dosyası `docs/adr/ai-resolution-handoff.md`; §D221; K10.1.4'e `ℹ` maddesi (damga `✅` kaldı). Yüklem: ajan olayı yok VE otomatik devir (`ai_handoffs` ya da `chat_transferred` `reason ∈ {ai_handoff, bot_handoff}`) yok; tek tanım, bütün yüzeyler aynı commit'te; yürürlük tm 293.4'ten sonraki ilk fatura döneminin başı (`closed_at`'e göre), geçmiş faturalar değişmez. tm 320, 335, 336'ya doğrudan `272` bağımlılığı (293 zaten bağlıydı). Kod değişikliği yok.

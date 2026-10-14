@@ -787,6 +787,30 @@ describe('tickets', () => {
       };
       expect(body.items.map((t) => t.subject)).toEqual(['Broken widget']);
     });
+
+    it("finds a ticket by the customer's pre-chat username, whatever its case", async () => {
+      await owner.customer.update({
+        where: { id: fx.a.customerId },
+        data: { username: 'MiraH_92' },
+      });
+      const other = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Someone', username: 'xmirah' },
+        select: { id: true },
+      });
+      await createTicket(adminToken, { subject: 'Payout delayed', customer_id: fx.a.customerId });
+      await createTicket(adminToken, { subject: 'Other player', customer_id: other.id });
+
+      for (const query of ['mirah', 'MIRAH_9', '  MiraH_92 ']) {
+        const body = (
+          await server.get(`/tickets?query=${encodeURIComponent(query)}`, auth(adminToken))
+        ).json() as { items: Array<{ subject: string }> };
+        // A prefix of the handle, not a fragment inside one: `xmirah` stays out.
+        expect(
+          body.items.map((t) => t.subject),
+          query,
+        ).toEqual(['Payout delayed']);
+      }
+    });
   });
 
   // =========================================================================

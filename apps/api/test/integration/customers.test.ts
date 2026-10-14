@@ -8,11 +8,12 @@
  * counts are computed, because the stored `chats_count` column has never been
  * written by anything and would report 0 for everyone.
  */
-import type { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { generateShortId } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { withTenant } from '../../src/lib/tenant.js';
 
 /** NFR-P2: reads at p99 < 150 ms. */
 const READ_BUDGET_MS = 150;
@@ -229,6 +230,53 @@ describe('customers', () => {
           query,
         ).toContain('Mira Haddad');
       }
+    });
+
+    it('matches a username as a prefix of its folded form, not a fragment inside it', async () => {
+      await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Handle Owner', username: 'MiraH_92' },
+      });
+
+      const names = async (query: string): Promise<Array<string | null>> => {
+        const response = await server.get(
+          `/customers?query=${encodeURIComponent(query)}`,
+          auth(readToken),
+        );
+        return (response.json() as { items: Array<{ name: string | null }> }).items.map(
+          (c) => c.name,
+        );
+      };
+
+      for (const query of ['MIRAH', 'mirah_92', '  MiraH_9 ']) {
+        expect(await names(query), query).toContain('Handle Owner');
+      }
+      // Inside the handle, not at its start — and not in the name or email
+      // either, so nothing else can bring the row back.
+      expect(await names('h_92')).not.toContain('Handle Owner');
+    });
+
+    it('folds the username in the database: trimmed, lower-cased, never written by a caller', async () => {
+      const created = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, username: '  MiraH_92 ' },
+        select: { id: true, usernameNormalized: true },
+      });
+      expect(created.usernameNormalized).toBe('mirah_92');
+
+      // An edit moves it with the username it is derived from.
+      const edited = await owner.customer.update({
+        where: { id: created.id },
+        data: { username: 'Renamed' },
+        select: { usernameNormalized: true },
+      });
+      expect(edited.usernameNormalized).toBe('renamed');
+
+      // GENERATED ALWAYS: nothing outside Postgres can set it.
+      await expect(
+        owner.customer.update({
+          where: { id: created.id },
+          data: { usernameNormalized: 'someone_else' },
+        }),
+      ).rejects.toThrow(/generated column|username_normalized/i);
     });
 
     it('filters to leads', async () => {
@@ -698,6 +746,52 @@ describe('customers', () => {
       );
       expect(plannedMs as number).toBeLessThan(READ_BUDGET_MS);
       expect(indexedMs as number).toBeLessThan(READ_BUDGET_MS);
+    });
+
+    it('serves a username lookup out of an index under row level security (EXPLAIN ANALYZE)', async () => {
+      await owner.customer.createMany({
+        data: Array.from({ length: 5 }, (_, i) => ({
+          organizationId: fx.a.organizationId,
+          name: `Username Probe ${i}`,
+          username: i === 0 ? 'MiraH_92' : `player_${i}`,
+        })),
+      });
+
+      // As `siyahtus_app` inside the tenant context, because that is where it
+      // can go wrong: under RLS a non-leakproof qual stays out of the index
+      // condition (see 20260911170000_events_sequence_column). `texteq` is
+      // leakproof, and `lower(btrim($2))` folds the parameter, not the column.
+      // A private client, so the `enable_seqscan = off` pin cannot reach
+      // another test through Prisma's plan cache.
+      const appRole = new PrismaClient({ datasourceUrl: process.env['DATABASE_APP_URL'] });
+      try {
+        const plan = await withTenant(
+          appRole,
+          { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+          async (tx) => {
+            await tx.$executeRawUnsafe('SET LOCAL enable_seqscan = off');
+            const [row] = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(
+              `EXPLAIN (ANALYZE, FORMAT JSON)
+               SELECT id FROM customers
+               WHERE organization_id = $1::uuid AND username_normalized = lower(btrim($2))`,
+              fx.a.organizationId,
+              '  MIRAH_92 ',
+            );
+            const raw = row?.['QUERY PLAN'];
+            const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Array<
+              Record<string, unknown>
+            >;
+            return parsed[0] ?? {};
+          },
+        );
+        const text = JSON.stringify(plan['Plan'] ?? {});
+        expect(text).toContain('customers_organization_id_username_normalized_idx');
+        // In the index condition, not a filter applied after reading the org.
+        expect(text).toMatch(/"Index Cond":"[^"]*username_normalized/);
+        expect(text).toContain('"Actual Rows":1');
+      } finally {
+        await appRole.$disconnect();
+      }
     });
 
     it('serves the has_tickets filter out of an index (EXPLAIN ANALYZE)', async () => {

@@ -15630,7 +15630,7 @@ export interface operations {
   listCustomers: {
     parameters: {
       query?: {
-        /** @description Case-insensitive match against name, email, username and phone. */
+        /** @description Case-insensitive match against name, email and phone (anywhere in the text) and the pre-chat username (from its start). */
         query?: string;
         /**
          * @description `all` · `leads` — gave an email · `recent` — active in the last 30 days
@@ -15760,7 +15760,7 @@ export interface operations {
     parameters: {
       query?: {
         view?: 'all' | 'unassigned' | 'my_open' | 'solved';
-        /** @description Case-insensitive match against subject and customer name/email. */
+        /** @description Case-insensitive match against subject and customer name/email (anywhere in the text), and the customer's pre-chat username (from its start). */
         query?: string;
         /**
          * @description The column the whole collection is ordered by. `customer` sorts on the

@@ -80,12 +80,13 @@ kapanışa (§3) ulaşmadan pencereyi bitirme.
 - **Düzeltme.** Kapı kırmızıysa düzelt ve yeniden doğrula; bu pencerede makul sayıda dene.
   Yeşile dönmüyorsa tahmine dayalı "herhalde oldu" DEME.
 
-**Kapı komutlarını ARKA PLANA ATMA — pencereyi öldürür.** Test/build komutlarını daima ÖN PLANDA,
-yeterli `timeout` ile çalıştır (tam suite ~10-15 dk → `timeout: 900000`). `run_in_background`
-kullanırsan komut oturuma bağlıdır: sıranı bitirdiğin anda `-p` oturumu kapanır, arka plandaki
-koşu da onunla birlikte ölür — sonuç bildirimi ASLA gelmez. "Bildirim bekleyeyim" diye sıranı
-bitirmek = pencerenin sonu: kapanış (§3) hiç çalışmaz, JSON sonuç dönmez, döngü bunu `blocked`
-sayar ve DURUR. (Görülen vaka: tm 93.3 — kod bitmişti, iki pencere de tam bu şekilde öldü.)
+**Uzun kapı komutlarını (`pnpm test:gate`, tam test, build) `run_in_background` ile başlat** —
+pencerenin komut tavanı 10 dk ve ön planda koşan kapı orada kilitleniyordu. Log yolunu ilk
+satırdan al, bitince son satırlarını (`Tasks:`, `Failed:`, `exit`) oku. **Ama sonucu AYNI sırada
+bekle** (`TaskOutput` block=true ya da log'da çıkış işaretini bekleyen ön plan `until` döngüsü).
+Sıranı bitirmek pencerenin sonudur: `-p` oturumu kapanır, arka plandaki koşu onunla ölür, bildirim
+ASLA gelmez, kapanış (§3) çalışmaz ve döngü bunu `blocked` sayar. (Görülen vaka: tm 93.3 — kod
+bitmişti, iki pencere de "bildirim bekleyeyim" deyip sırasını bitirdiği için öldü.)
 
 **DB testleri artık izole koşar (tm 105).** `@siyahtus/api` ve `@siyahtus/rtm`'in `test` /
 `test:unit` / `test:integration` script'leri her koşuya KENDİ Postgres veritabanını

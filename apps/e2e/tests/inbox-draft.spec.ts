@@ -1,6 +1,7 @@
 /**
  * What an agent typed for one visitor never follows them into another visitor's
- * conversation (tm 277.1, IN-01).
+ * conversation (tm 277.1, IN-01) — and is waiting for them when they come back
+ * to that visitor (tm 277.2).
  *
  * The inbox renders one `Composer` for whichever conversation is open, and the
  * text, the attachment and the reply/note mode live in that component's state.
@@ -102,12 +103,20 @@ test.describe('inbox composer across conversations', () => {
       expect(sends).toEqual([]);
       await expect(transcript).not.toContainText(draft);
 
-      // Back on A, the file is not waiting there either (the text and mode are
-      // tm 277.2's per-conversation draft store; the attachment never is).
+      // Back on A: the words and the note mode are waiting (tm 277.2's
+      // per-conversation draft store), the file is not (it never is).
       await rowA.click();
       await expect(transcript).toContainText(questionA);
       await expect(box).toBeVisible();
+      await expect(box).toHaveValue(draft);
+      await expect(agentPage.getByRole('radio', { name: 'Internal note' })).toBeChecked();
       await expect(agentPage.getByTestId('composer-attachment')).toHaveCount(0);
+
+      // And B is still clean after the round trip.
+      await rowB.click();
+      await expect(transcript).toContainText(questionB);
+      await expect(box).toHaveValue('');
+      await expect(agentPage.getByRole('radio', { name: 'Reply' })).toBeChecked();
     } finally {
       await visitorA.close();
       await visitorB.close();

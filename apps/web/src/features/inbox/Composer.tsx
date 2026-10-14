@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -18,8 +19,18 @@ import {
 } from './useInbox.js';
 import { useTypingStore } from './typing.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
+import {
+  DRAFT_WRITE_DELAY_MS,
+  discardDraft,
+  draftStorageKey,
+  loadDraft,
+  saveDraft,
+  useRetiredDraftStore,
+  type DraftMode,
+  type DraftScope,
+} from './composerDrafts.js';
 import { AI_DAILY_CAP_MESSAGE_KEY } from '../../lib/api-client.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import {
   uploadAttachment,
   uploadFailureMessage,
@@ -94,8 +105,24 @@ export function Composer({
    */
   tags?: string[];
 }): ReactElement {
-  const [text, setText] = useState('');
-  const [mode, setMode] = useState<'all' | 'agents'>('all');
+  // Whose drafts these are (tm 277.2). Primitives, so the scope object is as
+  // stable as the signed-in account.
+  const licenseId = useAuth((s) => s.agent?.license_id ?? null);
+  const accountId = useAuth((s) => s.agent?.account_id ?? null);
+  const scope = useMemo<DraftScope | null>(
+    () => (licenseId && accountId ? { licenseId, accountId } : null),
+    [licenseId, accountId],
+  );
+  // The draft this chat was left with, read once at mount — the composer is
+  // keyed on the chat (tm 277.1), so every chat switch is a fresh mount. A chat
+  // that cannot be answered gets none, and an attachment is never restored
+  // (see `composerDrafts.ts`).
+  const [restored] = useState(() => (scope && !disabled ? loadDraft(scope, chatId) : null));
+  const [text, setText] = useState(restored?.text ?? '');
+  const [mode, setMode] = useState<DraftMode>(restored?.mode ?? 'all');
+  // A Copilot draft waiting for the agent to say whether it may replace what
+  // they have already written.
+  const [pendingCopilot, setPendingCopilot] = useState<string | null>(null);
   const [shortcut, setShortcut] = useState<{ query: string; from: number } | null>(null);
   const [highlighted, setHighlighted] = useState(0);
   const [attachment, setAttachment] = useState<UploadedAttachment | null>(null);
@@ -178,14 +205,118 @@ export function Composer({
   // always a customer-facing reply, never a note — and the agent edits and
   // sends it. Consumed on arrival so the same draft is not re-applied on the
   // next render.
+  //
+  // Into an empty field it simply fills. Over words the agent has already
+  // written it asks first (tm 277.2): those words may be a half-written note,
+  // and Copilot's arrival is not something the agent typed.
   const copilotDraft = useCopilotDraftStore((state) => state.byChat[chatId]);
+  const textRef = useRef(text);
+  useEffect(() => {
+    textRef.current = text;
+  }, [text]);
+
+  const applyCopilotDraft = (draft: string): void => {
+    setText(draft);
+    setMode('all');
+    setPendingCopilot(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
   useEffect(() => {
     if (copilotDraft === undefined) return;
-    setText(copilotDraft);
-    setMode('all');
     useCopilotDraftStore.getState().clear(chatId);
-    requestAnimationFrame(() => inputRef.current?.focus());
+    if (textRef.current.trim() === '' || textRef.current === copilotDraft) {
+      setText(copilotDraft);
+      setMode('all');
+      setPendingCopilot(null);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } else {
+      setPendingCopilot(copilotDraft);
+    }
   }, [copilotDraft, chatId]);
+
+  // Draft persistence (tm 277.2). Written ~300 ms after the last keystroke and
+  // flushed at once when the composer goes away, so a quick switch to another
+  // chat never loses the tail of a sentence. `savedRef` is what storage holds,
+  // so merely opening a chat does not renew its 24 hours.
+  const savedRef = useRef<{ text: string; mode: DraftMode }>({
+    text: restored?.text ?? '',
+    mode: restored?.mode ?? 'all',
+  });
+  const pendingSave = useRef<{ text: string; mode: DraftMode } | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelSave = useCallback((): void => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    pendingSave.current = null;
+  }, []);
+
+  const flushSave = useCallback((): void => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const pending = pendingSave.current;
+    pendingSave.current = null;
+    if (!pending || !scope) return;
+    saveDraft(scope, chatId, pending);
+    savedRef.current = pending;
+  }, [scope, chatId]);
+
+  useEffect(() => {
+    if (!scope || disabled) return;
+    const saved = savedRef.current;
+    const bothEmpty = text.trim() === '' && saved.text.trim() === '';
+    if (bothEmpty || (text === saved.text && mode === saved.mode)) {
+      cancelSave();
+      return;
+    }
+    pendingSave.current = { text, mode };
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flushSave, DRAFT_WRITE_DELAY_MS);
+  }, [text, mode, scope, disabled, cancelSave, flushSave]);
+
+  useEffect(() => flushSave, [flushSave]);
+
+  // An archived chat keeps no draft. (A chat that merely failed to load passes
+  // a notice and keeps its draft: the words are still wanted.)
+  useEffect(() => {
+    if (scope && disabled && !disabledNotice) discardDraft(scope, chatId);
+  }, [scope, disabled, disabledNotice, chatId]);
+
+  // The server took the conversation away from this agent (closed, handed on,
+  // taken over): empty the box and stop saving what was in it.
+  const retired = useRetiredDraftStore((state) => state.byChat[chatId]);
+  const seenRetired = useRef(retired);
+  useEffect(() => {
+    if (retired === seenRetired.current) return;
+    seenRetired.current = retired;
+    cancelSave();
+    savedRef.current = { text: '', mode: 'all' };
+    setText('');
+    setMode('all');
+    setPendingCopilot(null);
+  }, [retired, cancelSave]);
+
+  // The same chat's draft written from another tab fills an empty box here; a
+  // box with words in it is never overwritten from outside.
+  useEffect(() => {
+    if (!scope || disabled) return;
+    const key = draftStorageKey(scope);
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key !== key || textRef.current.trim() !== '') return;
+      const incoming = loadDraft(scope, chatId);
+      if (!incoming) return;
+      savedRef.current = { text: incoming.text, mode: incoming.mode };
+      setText(incoming.text);
+      setMode(incoming.mode);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [scope, disabled, chatId]);
 
   /**
    * Send, and clear.
@@ -212,6 +343,11 @@ export function Composer({
   const submit = (): void => {
     if (!canSend) return;
     stopTyping();
+    // Sent: the draft goes now, not after the debounce — a refresh in the next
+    // 300 ms must not bring the message back.
+    cancelSave();
+    if (scope) discardDraft(scope, chatId);
+    savedRef.current = { text: '', mode };
     send.mutate({
       text: text.trim(),
       recipients: mode,
@@ -577,6 +713,33 @@ export function Composer({
             className="ml-auto rounded-sm px-1 text-content-tertiary hover:bg-surface-2 hover:text-content"
           >
             ×
+          </button>
+        </div>
+      )}
+
+      {pendingCopilot !== null && (
+        <div
+          role="alert"
+          data-testid="composer-copilot-confirm"
+          className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-brand-500 bg-brand-100 px-3 py-2 text-2xs text-content dark:bg-brand-950"
+        >
+          <span className="min-w-0 flex-1">{t('inbox.composer.copilotOverwrite.message')}</span>
+          <button
+            type="button"
+            onClick={() => applyCopilotDraft(pendingCopilot)}
+            className="rounded-sm bg-brand-500 px-2 py-1 font-medium text-white hover:bg-brand-600"
+          >
+            {t('inbox.composer.copilotOverwrite.replace')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingCopilot(null);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+            className="rounded-sm border border-border px-2 py-1 hover:bg-surface-2"
+          >
+            {t('inbox.composer.copilotOverwrite.keep')}
           </button>
         </div>
       )}

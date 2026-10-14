@@ -36,6 +36,8 @@ const { api } = vi.hoisted(() => ({
 
 vi.mock('../../lib/auth-store.js', () => ({
   useApiClient: () => api,
+  // `applyPush` reads whose drafts a push clears (tm 277.2); nobody is signed in here.
+  useAuth: Object.assign(() => null, { getState: () => ({ agent: null }) }),
 }));
 
 const CHAT = 'TJ1H8CFKRV';

@@ -114,6 +114,10 @@ export const inbox: Messages = {
   'inbox.composer.noteHint': 'Bunu yalnızca ekibiniz görecek.',
   'inbox.composer.replyLabel': 'Müşteriye yanıt ver',
   'inbox.composer.attachment.remove': 'Eki kaldır',
+  'inbox.composer.copilotOverwrite.message':
+    'Copilot bir yanıt önerdi. Yazdığınız metnin yerine geçsin mi?',
+  'inbox.composer.copilotOverwrite.replace': 'Metnimin yerine geç',
+  'inbox.composer.copilotOverwrite.keep': 'Metnimi koru',
   'inbox.composer.suggestions.ariaLabel': 'Yanıt önerileri',
   'inbox.composer.suggestions.dismiss': 'Yanıt önerilerini kapat',
   'inbox.composer.suggestions.copilotPending': 'Copilot taslak hazırlıyor…',

@@ -129,6 +129,10 @@ export const inbox: Messages = {
   'inbox.composer.noteHint': 'Only your team will see this.',
   'inbox.composer.replyLabel': 'Reply to the customer',
   'inbox.composer.attachment.remove': 'Remove attachment',
+  'inbox.composer.copilotOverwrite.message':
+    "Copilot suggested a reply. Replace what you've already written?",
+  'inbox.composer.copilotOverwrite.replace': 'Replace my text',
+  'inbox.composer.copilotOverwrite.keep': 'Keep my text',
   'inbox.composer.suggestions.ariaLabel': 'Reply suggestions',
   'inbox.composer.suggestions.dismiss': 'Dismiss reply suggestions',
   'inbox.composer.suggestions.copilotPending': 'Copilot is drafting…',

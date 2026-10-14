@@ -30,6 +30,7 @@ import {
 import { ApiClient, ApiClientError } from './api-client.js';
 import { AuthFlowError, authFailureCode } from './auth-flow-error.js';
 import { savePrefs } from '../features/notifications/notifications.js';
+import { clearAllDrafts } from '../features/inbox/composerDrafts.js';
 import { useFontStore } from './font.js';
 
 export interface Membership {
@@ -1091,7 +1092,11 @@ export const useAuth = create<AuthState>((set, get) => {
 
     async signOut() {
       const refreshToken = readStored(REFRESH_KEY);
-      const { accessToken } = get();
+      const { accessToken, agent } = get();
+      // Drafts are kept for the agent who wrote them and for no one after they
+      // leave (IN-01-S1) — a shared machine must not show the next person what
+      // was typed to a player. Done first: the revoke below can fail or stall.
+      if (agent) clearAllDrafts({ licenseId: agent.license_id, accountId: agent.account_id });
       // No renewal may fire — or land — while the tokens are being revoked.
       generation += 1;
       stopKeeping();

@@ -25,6 +25,7 @@ import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../
 import { useTypingStore } from './typing.js';
 import { useConflictStore, type ConflictAgent } from './conflict.js';
 import { useFailedSendStore } from './failedSends.js';
+import { retireDraft } from './composerDrafts.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
 import type { ChatDetail, ChatEvent, ChatSummary, InboxView, SendInput } from './types.js';
 
@@ -912,6 +913,9 @@ export function useRealtime(onPush?: PushHandler): void {
         'event_updated',
         'chat_deactivated',
         'chat_transferred',
+        // Taken over by a supervisor: the draft of the agent who lost the chat
+        // has to go with it (tm 277.2).
+        'chat_taken_over',
         'routing_status_set',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
@@ -941,6 +945,12 @@ export function useRealtime(onPush?: PushHandler): void {
       client.disconnect();
     };
   }, [signedIn, organizationId, queryClient]);
+}
+
+/** Whose drafts a push should clear: the signed-in agent's, or none. */
+function currentDraftScope(): { licenseId: string; accountId: string } | null {
+  const agent = useAuth.getState().agent;
+  return agent ? { licenseId: agent.license_id, accountId: agent.account_id } : null;
 }
 
 /** Exported for `useInbox.test.ts` — a push handler has no other way in. */
@@ -1199,13 +1209,29 @@ export function applyPush(
     }
 
     case 'chat_deactivated':
-      // A closed conversation cannot still be "typing" — or conflicted.
+      // A closed conversation cannot still be "typing" — or conflicted — and no
+      // longer has a reply to draft.
       if (typeof payload['chat_id'] === 'string') {
         useTypingStore.getState().clear(payload['chat_id']);
         useConflictStore.getState().clear(payload['chat_id']);
+        retireDraft(currentDraftScope(), payload['chat_id']);
       }
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;
+
+    case 'chat_taken_over': {
+      // A supervisor took the chat: whoever held it loses the right to answer,
+      // and with it the draft they were writing (IN-01-S2).
+      const chatId = payload['chat_id'];
+      if (
+        typeof chatId === 'string' &&
+        payload['previous_assignee_id'] === useAuth.getState().agent?.account_id
+      ) {
+        retireDraft(currentDraftScope(), chatId);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['chats'] });
+      return;
+    }
 
     case 'incoming_chat':
       // A conversation that started just now is the newest row there is, so it
@@ -1215,7 +1241,19 @@ export function applyPush(
       refreshChatHeads();
       return;
 
-    case 'chat_transferred':
+    case 'chat_transferred': {
+      // Handed to someone else (IN-01-S2): the draft was written for the agent
+      // who answered, not for whoever picks it up. A transfer *to* this agent
+      // leaves any draft alone.
+      const chatId = payload['chat_id'];
+      const to = payload['transferred_to'] as { agent_ids?: unknown } | undefined;
+      const me = useAuth.getState().agent?.account_id;
+      const toMe = Array.isArray(to?.agent_ids) && me !== undefined && to.agent_ids.includes(me);
+      if (typeof chatId === 'string' && !toMe) retireDraft(currentDraftScope(), chatId);
+      void queryClient.invalidateQueries({ queryKey: ['chats'] });
+      return;
+    }
+
     case 'chat_unfollowed':
     case 'chat_appeared':
       // These can move a chat into or out of a view at any depth, and the push

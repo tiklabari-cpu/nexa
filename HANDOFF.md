@@ -15,6 +15,13 @@
 
 ## Task log (newest-first)
 
+## tm 274 — ADR-SINGLE-KB: Q6 değişti — AI Agent ve Copilot bilgisi tek depoda, kaynak başına `audiences` — done — 2026-10-14 UTC
+
+- **Yapıldı:** karar dosyası `docs/adr/single-knowledge-store.md` (K11, AI-14-S2/S3); §D223; K12.1-12.3'e `ℹ` maddesi (damga `✅` kaldı). `audiences ⊆ {ai_agent, copilot}`, boş değil; AI Agent yalnız `@> '{ai_agent}'`, Copilot ikisi, `{copilot}` = yalnız ajanlar için. Eski uçlar taşımada aynı öğeleri döner: `/copilot/knowledge` = `audiences = '{copilot}'` (tam eşitlik), `/knowledge-sources` parametresiz = `@> '{ai_agent}'`, birleşik liste `?audience=all`. Gözden geçirme 90 gün, yalnız uyarı; aramadan çıkaran yalnız `valid_until`. tm 309 zaten `274`'e bağlıydı. Kod değişikliği yok.
+- **Doğrulama:** `pnpm test:gate` build/statik/birim yeşil (önbellekten — yalnız doküman; format:check 48s gerçekten koştu); entegrasyon ilk koşuda 3939/3940 kırmızı: `test-datastores.test.ts` "drops an abandoned database but leaves a leased one alone" (`:213`, süpürme kiralı DB'yi de düşürdü — bilinen yük kırmızısı, kod değişmedi); `test:gate entegrasyon` tekrarında exit 0, 8m14s, api 3940/3940. `contract:generate` sonrası değişiklik yok; `db:check-drift` temiz; `audit:req-coverage` exit 0; prettier temiz.
+- **Varsayımlar:** 05'teki kod satırları HEAD'de doğru. Kayma yalnız arşiv HANDOFF'ta: Q6 `:2293/:2393/:3416/:4461` → `:2335/:2435/:3458/:4503` (bu commit tm 269 bloğunu arşive taşıdı, +7 dahil).
+- **Sonraki pencereye not (tm 309):** skill oluşturma ajanın türüne bakmıyor (`playbook.ts:455-460`), bir `ai_agent` skill'i Copilot ajanına bağlanabiliyor; kitle süzgeci bu yolu kapatmalı, testini yaz. `ai_agent_id` `onDelete: Cascade` daraltmaya dek duruyor; `AiAgent` silen uç açma. Sahibin efor etiketi düzenlemesi (`task_*.md`, `07-gorev-plani.md`, `tasks.json` başlıkları) hâlâ commit'lenmemiş; bu commit'e alınmadı.
+
 ## tm 273 — ADR-DURABLE-AI-QUEUE: ADR-11a eki — kalıcı AI iş kuyruğu Postgres'te (`ai_jobs`, `SKIP LOCKED`, `LISTEN/NOTIFY`) — done — 2026-10-14 UTC
 
 - **Yapıldı:** PLAN §0 "Ek notlar"a ADR-11a (sahip kararı K18, GV-02-S1/S2; ADR-11 satırı değişmedi); karar dosyası `docs/adr/durable-ai-jobs.md`; §D222; K06.4'e `ℹ` maddesi (damga `✅` kaldı). İş `ai_jobs`'ta, ziyaretçi mesajıyla aynı transaction'da; `ai_jobs_claim` (`SKIP LOCKED`, kira, en çok 2 deneme, sohbet başına sıra) + `ai_jobs_settle`; `LISTEN/NOTIFY` + 500 ms yoklama; 120 sn sonra `expired` → iç not + insana devir; idempotens `reply_to_event_id`; Redis rolü ve "Kafka/RabbitMQ yok" aynen. tm 289 zaten `273`'e bağlıydı. Kod değişikliği yok.
@@ -42,13 +49,6 @@
 - **Doğrulama:** `pnpm test:gate` exit 0, 8m31s (build/typecheck/birim turbo önbelleğinden — yalnız doküman değişti; format:check 47s ve entegrasyon 7m43s gerçekten koştu); `db:check-drift` temiz; `contract:generate` sonrası çalışma alanında değişiklik yok; `audit:req-coverage` exit 0; değişen .md'lerde prettier temiz; `validate-dependencies` temiz. e2e koşulmadı — yalnız doküman, akış değişmedi.
 - **Varsayımlar:** AI-16-S4/S5 varsayılanları. Arayüz alanının adı (`responseSchema` / `responseFormat`) tm 283'e bırakıldı; AI-23 geçersiz-çıktı yedeği "taslaksız öneri" (05'te yok). 05'teki `llm-provider.ts:45-53` referansı HEAD'de doğru (`LlmCompletionRequest` 45. satır), kayma yok.
 - **Sonraki pencereye not:** tm 283 adaptörü yazarken §6a.3'teki OpenAI ayrıntılarını (strict alt kümesi, `refusal`, desteklemeyen modelin 400'ü) resmi structured-outputs sayfasından doğrulasın ve `llm-provider.ts` / `openai-llm-provider.ts` başlıklarındaki "no response format" cümlesini güncellesin.
-
-## tm 269 — ADR-SKILL-PROCEDURE: ADR-14a eki — Skill çok turlu prosedür olabilir, görsel akış yine yok — done — 2026-10-14 UTC
-
-- **Yapıldı:** PLAN §0 ADR tablosunun altına "Ek notlar" + ADR-14a (K8'e atıf; tablo satırları değişmedi); karar dosyası `docs/adr/skill-procedure.md` (bağlam · karar · sonuçlar · kaynaklar); §D217; K06.2.4'e `ℹ` maddesi (damga `✅` kaldı). Kod değişikliği yok. tm 296 ve tm 321 doğrudan `269`'a bağlı.
-- **Doğrulama:** `pnpm test:gate` (build · statik · birim · entegrasyon) exit 0, 11m19s; `db:check-drift` temiz; `contract:generate` sonrası `generated/` temiz; `audit:req-coverage` exit 0; değişen .md'lerde prettier temiz. e2e koşulmadı — yalnız doküman, akış değişmedi.
-- **Varsayımlar:** araç adımının adı pakette iki türlü (`call_tool` / `tool`); ADR ikisini de anar, adı tm 296 / tm 321 sabitler. 05'teki dosya:satır referansları HEAD'de doğrulandı (`steps.ts:9-16`, `skill-engine.ts:234`, `schema.prisma:1667/1723`), kayma yok.
-- **Sonraki pencereye not:** tm 296 prosedür motorunu bu ADR'nin sınırlarıyla kurar (`workflows` tablosu ölü kalır, tuval yok, `single` varsayılan + tek motor adaptörü). Modelin aracı kendi seçip çağırması yeni ADR eki + sahip kararı ister.
 
 ## Planlama turu — tm 389 PLATFORM-ADMIN (root panel, 22 alt görev) + tm 390 AI-AGENT-CREATE açıldı; #269–#388 için panel yerleşimi karara bağlandı — açık (döngü başlatılmadı) — 2026-10-14 UTC
 

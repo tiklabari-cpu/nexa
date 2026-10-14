@@ -6,6 +6,13 @@
 > newest-first. Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
 ---
+## tm 269 — ADR-SKILL-PROCEDURE: ADR-14a eki — Skill çok turlu prosedür olabilir, görsel akış yine yok — done — 2026-10-14 UTC
+
+- **Yapıldı:** PLAN §0 ADR tablosunun altına "Ek notlar" + ADR-14a (K8'e atıf; tablo satırları değişmedi); karar dosyası `docs/adr/skill-procedure.md` (bağlam · karar · sonuçlar · kaynaklar); §D217; K06.2.4'e `ℹ` maddesi (damga `✅` kaldı). Kod değişikliği yok. tm 296 ve tm 321 doğrudan `269`'a bağlı.
+- **Doğrulama:** `pnpm test:gate` (build · statik · birim · entegrasyon) exit 0, 11m19s; `db:check-drift` temiz; `contract:generate` sonrası `generated/` temiz; `audit:req-coverage` exit 0; değişen .md'lerde prettier temiz. e2e koşulmadı — yalnız doküman, akış değişmedi.
+- **Varsayımlar:** araç adımının adı pakette iki türlü (`call_tool` / `tool`); ADR ikisini de anar, adı tm 296 / tm 321 sabitler. 05'teki dosya:satır referansları HEAD'de doğrulandı (`steps.ts:9-16`, `skill-engine.ts:234`, `schema.prisma:1667/1723`), kayma yok.
+- **Sonraki pencereye not:** tm 296 prosedür motorunu bu ADR'nin sınırlarıyla kurar (`workflows` tablosu ölü kalır, tuval yok, `single` varsayılan + tek motor adaptörü). Modelin aracı kendi seçip çağırması yeni ADR eki + sahip kararı ister.
+
 ## tm 268 — PANEL-FONT-PRESETS: panelde beş yazı tipi ön ayarı (çalışma alanı varsayılanı + kullanıcı tercihi, en son kazanır) — done — 2026-10-13 UTC
 
 - **Yapıldı:** `@siyahtus/types` · `PANEL_FONT_PRESETS` + `PANEL_FONT_DESIGNS` (inter, plus-jakarta, manrope-dm-sans, nunito, figtree). Migration `20261013150000_panel_font_presets`: `workspace_appearance_settings` (license PK, RLS, CHECK) + `agent_memberships.font_preset/_set_at` (CHECK; preset ve zaman birlikte NULL). `GET/PUT /settings/appearance` (PUT yalnız owner, audit `settings.appearance_updated`), `/agents/me/ui-preferences` `font_preset`, `/auth/me` `appearance` — kural tek yerde: `services/appearance/panel-font.ts` · `resolvePanelFontPreset` (eşitlikte kullanıcı). Web: `tokens.css` `html[data-font=…]` blokları, `lib/font.ts` (tembel `import()`, `siyahtus.font` + `index.html` boot, CSP hash güncel), hesap menüsünde `FontPicker`, Ayarlar → Genel → Görünüm (`Appearance.tsx`; admin salt okunur), widget önizlemesi `font-preset-reset`.

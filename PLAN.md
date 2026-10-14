@@ -6780,6 +6780,7 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`##
 #### K02.3.3 — 02.3.3 · Composer (Enter/Shift+Enter)
 
 - ✅ Hata retry kapandı — reddedilen gönderim composer'dan çıkıp transcript'te "Not sent" satırı olarak KALIYOR; metin composer'a geri YAZILMIYOR (tek kaynak = satır; ajan o sırada yeni bir şey yazmış olabilir, üstüne yazılmaz). Karar + çatışma çözümü `Composer.tsx` `submit()` docblock'unda. — `apps/web/src/features/inbox/failedSends.ts` · `Composer.tsx` · `Transcript.tsx` · `useInbox.ts` · `InboxPage.tsx` · test `apps/web/src/features/inbox/Composer.retry.test.tsx` (6) · `failedSends.test.ts` (7) · e2e `apps/e2e/tests/inbox-retry.spec.ts` (1) · tm 189.4
+- ✅ tm 277.1 · composer sohbet kimliğiyle anahtarlandı; önbellekteki sohbete geçişte A'nın metni/eki/not modu B'nin kutusunda kalıyor, Enter B'ye gönderiyordu (IN-01) · `apps/web/src/features/inbox/InboxPage.tsx:883-888` · `InboxPage.composerIsolation.test.tsx` (2) · e2e `apps/e2e/tests/inbox-draft.spec.ts` (1, düzeltmeden önce kırmızı) · `fix(web): …(tm 277.1)`
 
 _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`#### K02.3.3`)_
 

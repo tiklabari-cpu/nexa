@@ -880,7 +880,12 @@ export function InboxPage(): ReactElement {
                   />
                   <ConflictBanner chatId={selectedId} />
 
+                  {/* Keyed on the open chat (tm 277.1): the text, attachment,
+                    mode and chips are this component's state, and without the
+                    key a switch to a chat already in the cache kept them — what
+                    was written to A sat in B's box, one Enter from B. */}
                   <Composer
+                    key={selectedId}
                     chatId={selectedId}
                     disabled={!chat.data.active || transcript.isError}
                     {...(chat.data.active && transcript.isError

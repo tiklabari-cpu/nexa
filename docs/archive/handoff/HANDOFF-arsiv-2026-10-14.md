@@ -6,6 +6,13 @@
 > newest-first. Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
 ---
+## tm 271 — ADR-ROUTING-QUEUES: ADR-08a eki — kuyruk ekip başına, öncelik sırası, "Önce AI"da yönlendirme devir anında — done — 2026-10-14 UTC
+
+- **Yapıldı:** PLAN §0 "Ek notlar"a ADR-08a (sahip kararı K18, dayanakları K9 + K14; ADR-08 satırı değişmedi); karar dosyası `docs/adr/routing-team-queues.md` (bağlam · karar · sonuçlar · kaynaklar); §D220; K08.6.1'e `ℹ` maddesi (damga `✅` kaldı). tm 307'ye doğrudan `271` bağımlılığı eklendi (293 ve 305 zaten bağlıydı). Kod değişikliği yok.
+- **Doğrulama:** `pnpm test:gate` exit 0, 9m04s (build/typecheck/birim turbo önbelleğinden — yalnız doküman değişti; format:check 48s ve entegrasyon 8m13s gerçekten koştu); `db:check-drift` temiz; `contract:generate` sonrası çalışma alanında değişiklik yok; `audit:req-coverage` exit 0; değişen .md'lerde ve tasks.json'da prettier temiz; `validate-dependencies` temiz. e2e koşulmadı — yalnız doküman, akış değişmedi.
+- **Varsayımlar:** konu rolleri tek liste `QUEUE_TOPIC_ROLES` (`responsible_gambling`, `complaint`); 05'in AI-12 bölümü ve tm 307 `responsible_gaming` / `complaints` (+ `trading`, `general`) yazıyor — ADR tek listeye bağladı. Öncelik derece sırasıyla sıralanmalı (metin sözlük sırası `urgent > normal > high` verir); saklama biçimi tm 305'te. 05'teki `routing-service.ts` satır referansları HEAD'de doğru (`:114`, `:179`, `:215`, `:244`, `:261`, `:315`, `:341`, `:407`; uzmanlık yorumu `:201-206`), kayma yok.
+- **Sonraki pencereye not:** tm 305 "ilk eksikte dur"u ekip içine indirirken boşaltmayı ekip başına kısa işlemlere böler; Sorumlu Oyun sohbetinin insan eliyle başka ekibe aktarılması açık bırakıldı (tm 305 / tm 306 karar verir). K10 / ADR-09 faturalama yüklemi bu ekte değil, tm 272. Kapı koşarken başka bir oturum efor etiketi "ikinci tur" gözden geçirmesini çalışma ağacına yazdı (`tasks.json` başlıkları, `task_*.md`, `07-gorev-plani.md`); bu commit'e alınmadı, `tasks.json`'a yalnız tm 271 değişiklikleri HEAD üzerinden işlendi — o iş çalışma ağacında commit'lenmemiş duruyor.
+
 ## tm 270 — ADR-LLM-JSON: pilot LLM ADR §6a eki — yapılandırılmış JSON çıktı EVET, araç çağırma HAYIR — done — 2026-10-14 UTC
 
 - **Yapıldı:** `docs/adr/pilot-llm-embedding-provider.md` §6a (sahip kararı K17): `response_format: json_schema` yalnız sekiz çağrıda (AI-04/05/06/07/08/22/23/24, katmanlarıyla), kararlar `policy.ts`'te, izlenebilirlik kalkanı, düz JSON + doğrulama + 1 yeniden deneme → `ai_failure`, `LLM_MODEL_FAST`, deterministik mock, araç çağırma ve uyumlu uçlar F2. §6 silinmedi ("Değiştirildi: §6a"); §11'e K12 + K17. §D219, K06.4 `ℹ`. tm 298/301/317/318/319'a doğrudan `270` bağımlılığı. Kod değişikliği yok.

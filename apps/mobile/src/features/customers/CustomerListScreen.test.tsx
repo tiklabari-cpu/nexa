@@ -11,6 +11,7 @@ function customer(overrides: Partial<CustomerSummary> & { id: string }): Custome
   return {
     name: 'Ada Lovelace',
     email: 'ada@example.com',
+    username: null,
     phone: null,
     country_code: null,
     country: null,

@@ -391,6 +391,9 @@ model Customer {
   organizationId String    @map("organization_id") @db.Uuid
   name           String?
   email          String?   @db.Citext
+  /// The username the visitor typed into the widget's pre-chat form — their
+  /// handle on the embedding site, unverified, kept as typed.
+  username       String?
   phone          String?
   countryCode    String?   @map("country_code") @db.Char(2)
   country        String?

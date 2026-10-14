@@ -6,7 +6,7 @@
  * read their history and act on it — and whether the page a visitor wrote from
  * survives all the way from the widget to the panel an agent reads.
  */
-import { expect, test, openWidget, visitorSends } from './fixtures.js';
+import { expect, test, openWidget, PRECHAT_VISITOR, visitorSends } from './fixtures.js';
 
 test.describe('customers', () => {
   test('lists people with conversation counts the stored column would get wrong', async ({
@@ -62,7 +62,7 @@ test.describe('customers', () => {
     await agentPage.getByRole('button', { name: /Robin Fields/ }).click();
     await expect(agentPage.getByLabel('Phone')).toHaveValue(newPhone);
     // The name was never sent, so it must be untouched.
-    await expect(agentPage.getByLabel('Name')).toHaveValue('Robin Fields');
+    await expect(agentPage.getByLabel('Name', { exact: true })).toHaveValue('Robin Fields');
   });
 
   test('bans and unbans, keeping the history', async ({ agentPage }) => {
@@ -112,10 +112,10 @@ test.describe('customers', () => {
       await visitorSends(visitor, `Where is my order? ${Date.now().toString().slice(-6)}`);
 
       await agentPage.goto('/app/customers');
-      // The widget visitor is anonymous, which is exactly who this has to work
-      // for: they have no name to search by.
+      // The widget visitor is the one who just introduced themselves through
+      // the pre-chat form, the newest contact at the top of the list.
       await agentPage
-        .getByRole('button', { name: /Unnamed visitor/ })
+        .getByRole('button', { name: new RegExp(PRECHAT_VISITOR.name) })
         .first()
         .click();
 

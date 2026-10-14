@@ -31,6 +31,7 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
     id: 'cust-1',
     name: 'Ada Visitor',
     email: 'ada@example.com',
+    username: null,
     phone: null,
     country_code: 'US',
     country: 'United States',
@@ -53,7 +54,7 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
 
 function renderPanel(
   customer: CustomerDetail,
-  options: { canErase?: boolean; onErased?: (id: string) => void } = {},
+  options: { canEdit?: boolean; canErase?: boolean; onErased?: (id: string) => void } = {},
 ) {
   api.get.mockReset();
   api.get.mockResolvedValue(customer);
@@ -63,7 +64,7 @@ function renderPanel(
       <QueryClientProvider client={queryClient}>
         <CustomerDetailPanel
           customerId={customer.id}
-          canEdit={false}
+          canEdit={options.canEdit ?? false}
           canBan={false}
           canErase={options.canErase ?? false}
           onChanged={() => {}}
@@ -80,6 +81,28 @@ beforeEach(() => {
   api.get.mockReset();
   api.put.mockReset();
   api.patch.mockReset();
+});
+
+describe('CustomerDetailPanel — pre-chat username', () => {
+  it('shows the username the visitor typed into the pre-chat form', async () => {
+    renderPanel(baseCustomer({ username: 'ada_v' }));
+
+    expect(await screen.findByText('Username')).toBeInTheDocument();
+    expect(screen.getByText('ada_v')).toBeInTheDocument();
+  });
+
+  it('saves an edited username, and only that field', async () => {
+    const user = userEvent.setup();
+    api.patch.mockResolvedValue(baseCustomer({ username: 'ada_lovelace' }));
+    renderPanel(baseCustomer({ username: 'ada_v' }), { canEdit: true });
+
+    const field = await screen.findByLabelText('Username');
+    await user.clear(field);
+    await user.type(field, 'ada_lovelace');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(api.patch).toHaveBeenCalledWith('/customers/cust-1', { username: 'ada_lovelace' });
+  });
 });
 
 describe('CustomerDetailPanel — visits summary', () => {

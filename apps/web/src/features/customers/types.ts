@@ -6,6 +6,8 @@ export interface CustomerSummary {
   id: string;
   name: string | null;
   email: string | null;
+  /** Typed into the widget's pre-chat form; unverified. */
+  username: string | null;
   phone: string | null;
   country_code: string | null;
   country: string | null;

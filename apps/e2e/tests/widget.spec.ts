@@ -15,6 +15,7 @@ import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import {
   expect,
+  introduceVisitor,
   test,
   HOST_PAGE,
   API_BASE,
@@ -22,6 +23,7 @@ import {
   GREETING_DELAY_MS,
   arriveForGreeting,
   openWidget,
+  openWidgetAtComposer,
   ownerAccessToken,
   signIn,
   tenantSubdomain,
@@ -107,7 +109,7 @@ test.describe('widget embedding', () => {
     const frame = widgetFrame(page);
 
     await frame.getByRole('button', { name: 'Open chat' }).click();
-    await expect(frame.getByRole('textbox', { name: 'Message' })).toBeVisible();
+    await expect(frame.getByRole('button', { name: 'Start chat' })).toBeVisible();
 
     // The host page grows the frame only on a validated message from the widget.
     await expect.poll(async () => (await frameElement.boundingBox())!.width).toBeGreaterThan(300);
@@ -147,9 +149,10 @@ test.describe('widget embedding', () => {
     // The same character twenty times over opens no chat (`spam-filter.ts`
     // CHAR_RUN_RE); the server answers 403 `message_rejected`.
     const text = 'a'.repeat(30);
-    const box = frame.getByRole('textbox', { name: 'Message' });
-    await box.fill(text);
-    await frame.getByRole('button', { name: 'Send' }).click();
+    // Sent as the opening line from the pre-chat form; a refused one lands in
+    // the composer, for the visitor to reword.
+    await introduceVisitor(frame, text);
+    const box = frame.getByRole('textbox', { name: 'Message', exact: true });
 
     const status = frame.locator('.nx-status');
     await expect(status).toHaveText(
@@ -242,12 +245,11 @@ test.describe('chat page', () => {
       // The widget is the whole page here, addressed directly (not through the
       // `#siyahtus-widget-frame` iframe).
       await visitor.goto(`${WIDGET_ORIGIN}/chat.html?organization_id=${organizationId}`);
-      const composer = visitor.getByRole('textbox', { name: 'Message' });
-      await expect(composer).toBeVisible();
+      // The hosted page asks the same pre-chat questions as the widget.
+      await expect(visitor.getByRole('button', { name: 'Start chat' })).toBeVisible();
 
       const question = `From the hosted chat page — ${Date.now().toString().slice(-6)}`;
-      await composer.fill(question);
-      await visitor.getByRole('button', { name: 'Send' }).click();
+      await introduceVisitor(visitor, question);
       await expect(visitor.getByRole('log', { name: 'Conversation' })).toContainText(question);
       await visitor.screenshot({ path: 'kanit/9-chat-page.png', fullPage: true });
 
@@ -283,7 +285,10 @@ test.describe('greeting', () => {
     await page.screenshot({ path: 'kanit/12-greeting-card.png', fullPage: true });
 
     await frame.getByRole('button', { name: "Let's chat" }).click();
-    await expect(frame.getByRole('textbox', { name: 'Your name' })).toBeVisible();
+    await expect(frame.getByRole('textbox', { name: 'Full name' })).toBeVisible();
+    await expect(frame.getByRole('textbox', { name: 'Username' })).toBeVisible();
+    await expect(frame.getByRole('textbox', { name: 'Email', exact: true })).toBeVisible();
+    await expect(frame.getByRole('textbox', { name: 'Your message' })).toBeVisible();
     await expect(frame.getByRole('button', { name: 'Start chat' })).toBeVisible();
     await page.screenshot({ path: 'kanit/12-prechat-form.png', fullPage: true });
   });
@@ -377,7 +382,7 @@ test.describe('campaign card', () => {
 
       // --- Clicking it opens the chat ---------------------------------------
       await frame.getByRole('button', { name: "Let's chat" }).click();
-      await expect(frame.getByRole('textbox', { name: 'Your name' })).toBeVisible();
+      await expect(frame.getByRole('textbox', { name: 'Full name' })).toBeVisible();
     } finally {
       await visitorContext.close();
     }
@@ -989,9 +994,9 @@ test.describe('emoji picker', () => {
     page,
     organizationId,
   }) => {
-    await openWidget(page, organizationId);
+    await openWidgetAtComposer(page, organizationId);
     const frame = widgetFrame(page);
-    const composer = frame.getByRole('textbox', { name: 'Message' });
+    const composer = frame.getByRole('textbox', { name: 'Message', exact: true });
 
     const stamp = Date.now().toString().slice(-6);
     const before = `Order ${stamp} `;
@@ -1034,7 +1039,7 @@ test.describe('attachments', () => {
       await agent.getByLabel('Availability').selectOption('accepting_chats');
 
       // --- Visitor attaches an image -----------------------------------------
-      await openWidget(visitor, organizationId);
+      await openWidgetAtComposer(visitor, organizationId);
       const frame = widgetFrame(visitor);
 
       // The input is hidden and driven by the paperclip; setInputFiles does not
@@ -1043,7 +1048,7 @@ test.describe('attachments', () => {
       await expect(frame.locator('.nx-chip')).toContainText('sample.png');
 
       const caption = `Here is a screenshot — ${Date.now().toString().slice(-6)}`;
-      await frame.getByRole('textbox', { name: 'Message' }).fill(caption);
+      await frame.getByRole('textbox', { name: 'Message', exact: true }).fill(caption);
       await frame.getByRole('button', { name: 'Send' }).click();
 
       // The visitor sees their own image inline (fetched with their token). Wait

@@ -120,6 +120,7 @@ export const customers: Messages = {
   'customers.detail.field.email': 'E-posta',
   'customers.detail.field.emailError': 'Geçerli bir e-posta adresi girin.',
   'customers.detail.field.phone': 'Telefon',
+  'customers.detail.field.username': 'Kullanıcı adı',
   'customers.detail.saving': 'Kaydediliyor…',
   'customers.detail.saveChanges': 'Değişiklikleri kaydet',
 

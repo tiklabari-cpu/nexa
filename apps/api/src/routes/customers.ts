@@ -64,6 +64,7 @@ const updateBody = z
   .object({
     name: z.string().trim().max(120).nullable().optional(),
     email: z.string().trim().email().max(320).nullable().optional(),
+    username: z.string().trim().max(120).nullable().optional(),
     phone: z.string().trim().max(40).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
@@ -164,6 +165,7 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
           where: { id: customerId },
           data: {
             ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.username !== undefined ? { username: body.username } : {}),
             ...(body.phone !== undefined ? { phone: body.phone } : {}),
             // Recording an email is what makes someone a lead. Clearing it does
             // not un-make them one: they did give it to us, and quietly

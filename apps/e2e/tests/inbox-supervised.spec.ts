@@ -20,7 +20,7 @@
  * same board row slot `Supervise chat` did (`rowActions.ts`), so the same
  * `waitForResponse` pattern applies to the DELETE.
  */
-import { expect, test, openWidget, visitorSends } from './fixtures.js';
+import { expect, test, openWidget, PRECHAT_VISITOR, visitorSends } from './fixtures.js';
 
 test.describe('the inbox Supervised view', () => {
   test('a conversation watched from Traffic turns up in the Supervised list', async ({
@@ -58,7 +58,7 @@ test.describe('the inbox Supervised view', () => {
       // Watch it from the board.
       await agentPage.goto('/app/customers/real-time');
       const board = agentPage.getByRole('table', { name: 'Live visitors' });
-      const visitorRow = board.getByRole('row').filter({ hasText: 'Unnamed visitor' }).first();
+      const visitorRow = board.getByRole('row').filter({ hasText: PRECHAT_VISITOR.name }).first();
       await expect(visitorRow).toBeVisible();
 
       const registered = agentPage.waitForResponse(

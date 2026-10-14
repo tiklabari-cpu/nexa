@@ -73,6 +73,8 @@ const startSchema = z
     referrer: z.string().max(REFERRER_MAX_LENGTH).optional(),
     /** Optional pre-chat form values. */
     name: z.string().trim().max(120).optional(),
+    /** The visitor's username on the embedding site — unverified, kept as typed. */
+    username: z.string().trim().max(120).optional(),
     email: z.string().email().max(320).optional(),
     /**
      * Pre-chat form answers (FR-MOD-08.7.7): a map of contact custom-field id →
@@ -702,7 +704,7 @@ export default async function customerRoutes(
       }
 
       // Pre-chat details, if the visitor gave them.
-      if (body.name || body.email) {
+      if (body.name || body.username || body.email) {
         // Whether this write is what *made* them a lead, read in the same
         // transaction that does it. A lead goal (FR-MOD-13.3) fires on the
         // transition, not on the state: `isLead` stays true for ever after, and
@@ -719,6 +721,7 @@ export default async function customerRoutes(
             where: { id: principal.customerId },
             data: {
               ...(body.name ? { name: body.name } : {}),
+              ...(body.username ? { username: body.username } : {}),
               ...(body.email ? { email: body.email, isLead: true } : {}),
               lastActivityAt: new Date(),
             },

@@ -11,6 +11,7 @@ import {
   confirmDialog,
   DEMO,
   expect,
+  introduceVisitor,
   ownerAccessToken,
   openWidget,
   test,
@@ -63,8 +64,7 @@ test.describe('website widgets', () => {
       await visitor.goto(`http://${domain}:5174/demo.html?organization_id=${organizationId}`);
       const vf = widgetFrame(visitor);
       await vf.getByRole('button', { name: 'Open chat' }).click();
-      await vf.getByRole('textbox', { name: 'Message' }).fill('Testing the widget install');
-      await vf.getByRole('button', { name: 'Send' }).click();
+      await introduceVisitor(vf, 'Testing the widget install');
       await expect(vf.getByRole('log', { name: 'Conversation' })).toContainText(
         'Testing the widget install',
         { timeout: 20_000 },

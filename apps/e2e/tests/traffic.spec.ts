@@ -18,7 +18,9 @@ import {
   expect,
   test,
   API_BASE,
+  introduceVisitor,
   openWidget,
+  PRECHAT_VISITOR,
   ownerAccessToken,
   REFERRING_SITE,
   visitorSends,
@@ -54,9 +56,9 @@ test.describe('real-time traffic', () => {
       await expect(table).toBeVisible();
       await expect(table.getByRole('columnheader', { name: 'Chatting with' })).toBeVisible();
 
-      // The anonymous visitor who just wrote in is on the board with the
-      // conversation actions available on their row.
-      const row = table.getByRole('row').filter({ hasText: 'Unnamed visitor' }).first();
+      // The visitor who just wrote in is on the board, under the name they gave
+      // the pre-chat form, with the conversation actions available on their row.
+      const row = table.getByRole('row').filter({ hasText: PRECHAT_VISITOR.name }).first();
       await expect(row).toBeVisible();
       await expect(row.getByRole('button', { name: 'Supervise chat' })).toBeVisible();
       await expect(row.getByRole('button', { name: 'Assign chat to me' })).toBeVisible();
@@ -90,32 +92,46 @@ test.describe('real-time traffic', () => {
       // opens is closed again from the agent side — leaving a live visit and no
       // chat, which is what `browsing` means.
       await openWidget(visitor, organizationId);
-      await visitorSends(visitor, `Live board ${stamp}`);
+      await introduceVisitor(widgetFrame(visitor), `Live board ${stamp}`, { name: visitorName });
 
-      const newest = await request.get(`${API_BASE}/customers?segment=all&limit=1`, {
-        headers: auth,
-      });
-      expect(newest.ok(), `customers read failed: ${newest.status()}`).toBe(true);
-      const arrival = (
-        (await newest.json()) as { items: Array<{ id: string; name: string | null }> }
-      ).items[0];
-      expect(arrival?.name, 'newest contact is not the anonymous visitor just created').toBeNull();
-      const customerId = arrival!.id;
+      // Named through the pre-chat form, and found by that name: the board is a
+      // shared, seeded workspace, so "the newest contact" could be anybody's.
+      // Polled: the name rides the first message, which may still be in flight.
+      let matches: Array<{ id: string }> = [];
+      await expect
+        .poll(
+          async () => {
+            const found = await request.get(
+              `${API_BASE}/customers?segment=all&limit=2&query=${encodeURIComponent(visitorName)}`,
+              { headers: auth },
+            );
+            if (!found.ok()) return -1;
+            matches = ((await found.json()) as { items: Array<{ id: string }> }).items;
+            return matches.length;
+          },
+          { timeout: 20_000, message: `exactly one contact named "${visitorName}"` },
+        )
+        .toBe(1);
+      const customerId = matches[0]!.id;
 
-      // Named, because every other widget visitor on this shared board also
-      // reads "Unnamed visitor".
-      const named = await request.patch(`${API_BASE}/customers/${customerId}`, {
-        headers: auth,
-        data: { name: visitorName },
-      });
-      expect(named.ok(), `naming failed: ${named.status()}`).toBe(true);
-
-      const detail = await request.get(`${API_BASE}/customers/${customerId}`, { headers: auth });
-      expect(detail.ok()).toBe(true);
-      const openChat = (
-        (await detail.json()) as { chats: Array<{ id: string; active: boolean }> }
-      ).chats.find((chat) => chat.active);
-      expect(openChat, 'the widget message did not open a conversation').toBeDefined();
+      // Polled too: the details are written a moment before the conversation
+      // that the same message opens.
+      let openChat: { id: string; active: boolean } | undefined;
+      await expect
+        .poll(
+          async () => {
+            const detail = await request.get(`${API_BASE}/customers/${customerId}`, {
+              headers: auth,
+            });
+            if (!detail.ok()) return undefined;
+            openChat = (
+              (await detail.json()) as { chats: Array<{ id: string; active: boolean }> }
+            ).chats.find((chat) => chat.active);
+            return openChat?.id;
+          },
+          { timeout: 20_000, message: 'the widget message did not open a conversation' },
+        )
+        .toBeDefined();
       const closed = await request.post(`${API_BASE}/chats/${openChat!.id}/deactivate`, {
         headers: auth,
       });
@@ -192,30 +208,30 @@ test.describe('real-time traffic', () => {
       // (13.2-l). A cross-origin referrer is trimmed by the browser to its
       // origin, which is what the panel and the filter below expect to see.
       await openWidget(visitor, organizationId, { from: REFERRING_SITE });
-      await visitorSends(visitor, `Traffic sweep ${stamp}`);
-
-      // The widget mints an anonymous contact with `last_activity_at` set, and
-      // `GET /customers` orders by exactly that — so the visitor who just
-      // arrived is the newest row. Asserted rather than assumed: picking up a
-      // seeded contact by accident would make every assertion below vacuous.
-      const newest = await request.get(`${API_BASE}/customers?segment=all&limit=1`, {
-        headers: auth,
+      await introduceVisitor(widgetFrame(visitor), `Traffic sweep ${stamp}`, {
+        name: visitorName,
       });
-      expect(newest.ok(), `customers read failed: ${newest.status()}`).toBe(true);
-      const arrival = (
-        (await newest.json()) as { items: Array<{ id: string; name: string | null }> }
-      ).items[0];
-      expect(arrival?.name, 'newest contact is not the anonymous visitor just created').toBeNull();
-      const customerId = arrival!.id;
 
-      // Name them. The board is a shared, seeded workspace where every other
-      // widget visitor also reads "Unnamed visitor"; a name is what lets the
-      // steps below address this one row instead of whichever came first.
-      const named = await request.patch(`${API_BASE}/customers/${customerId}`, {
-        headers: auth,
-        data: { name: visitorName },
-      });
-      expect(named.ok(), `naming failed: ${named.status()} ${await named.text()}`).toBe(true);
+      // Named through the pre-chat form, and found by that name — asserted
+      // rather than assumed: picking up a seeded contact by accident would make
+      // every assertion below vacuous.
+      // Polled: the name rides the first message, which may still be in flight.
+      let matches: Array<{ id: string }> = [];
+      await expect
+        .poll(
+          async () => {
+            const found = await request.get(
+              `${API_BASE}/customers?segment=all&limit=2&query=${encodeURIComponent(visitorName)}`,
+              { headers: auth },
+            );
+            if (!found.ok()) return -1;
+            matches = ((await found.json()) as { items: Array<{ id: string }> }).items;
+            return matches.length;
+          },
+          { timeout: 20_000, message: `exactly one contact named "${visitorName}"` },
+        )
+        .toBe(1);
+      const customerId = matches[0]!.id;
 
       // --- 1b. A pre-chat form answer, for the 360° panel's own card (203.2) --
       // The answer could equally have arrived through the widget's pre-chat
@@ -253,12 +269,24 @@ test.describe('real-time traffic', () => {
       // can only produce the first half: sending is what records the page. So
       // the conversation is closed from the agent side — the same thing an
       // agent does when a chat is finished and the visitor stays on the site.
-      const detail = await request.get(`${API_BASE}/customers/${customerId}`, { headers: auth });
-      expect(detail.ok()).toBe(true);
-      const openChat = (
-        (await detail.json()) as { chats: Array<{ id: string; active: boolean }> }
-      ).chats.find((chat) => chat.active);
-      expect(openChat, 'the widget message did not open a conversation').toBeDefined();
+      // Polled too: the details are written a moment before the conversation
+      // that the same message opens.
+      let openChat: { id: string; active: boolean } | undefined;
+      await expect
+        .poll(
+          async () => {
+            const detail = await request.get(`${API_BASE}/customers/${customerId}`, {
+              headers: auth,
+            });
+            if (!detail.ok()) return undefined;
+            openChat = (
+              (await detail.json()) as { chats: Array<{ id: string; active: boolean }> }
+            ).chats.find((chat) => chat.active);
+            return openChat?.id;
+          },
+          { timeout: 20_000, message: 'the widget message did not open a conversation' },
+        )
+        .toBeDefined();
       const closed = await request.post(`${API_BASE}/chats/${openChat!.id}/deactivate`, {
         headers: auth,
       });

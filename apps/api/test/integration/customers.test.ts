@@ -207,17 +207,18 @@ describe('customers', () => {
       expect(found?.name).toBeNull();
     });
 
-    it('searches across name, email and phone, case-insensitively', async () => {
+    it('searches across name, email, username and phone, case-insensitively', async () => {
       await owner.customer.create({
         data: {
           organizationId: fx.a.organizationId,
           name: 'Mira Haddad',
           email: 'MIRA@example.test',
+          username: 'MiraH_92',
           phone: '+441234567',
         },
       });
 
-      for (const query of ['mira', 'MIRA@example', '441234']) {
+      for (const query of ['mira', 'MIRA@example', 'mirah_9', '441234']) {
         const response = await server.get(
           `/customers?query=${encodeURIComponent(query)}`,
           auth(readToken),
@@ -1216,6 +1217,21 @@ describe('customers', () => {
       const after = await owner.customer.findUnique({ where: { id: fx.a.customerId } });
       expect(after?.phone).toBe('+200');
       expect(after?.name).toBe('Original Name');
+    });
+
+    it('edits the pre-chat username and returns it on the detail', async () => {
+      await owner.customer.update({
+        where: { id: fx.a.customerId },
+        data: { username: 'typo_handle' },
+      });
+
+      const response = await server.patch(
+        `/customers/${fx.a.customerId}`,
+        { username: 'right_handle' },
+        auth(writeToken),
+      );
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { username: string | null }).username).toBe('right_handle');
     });
 
     it('clears a field when null is sent', async () => {

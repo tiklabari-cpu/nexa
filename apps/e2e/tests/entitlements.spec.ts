@@ -194,9 +194,10 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
     await page.goto(target.toString());
 
     await page.getByRole('button', { name: 'Open chat' }).click();
-    // The composer only appears once the token exchange succeeded — so the
-    // appearance below is the server's answer, not the mount-time default.
-    await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
+    // A first-time visitor meets the pre-chat form. The footer below is
+    // asserted with retries, so it is the server's answer once the token
+    // exchange lands, not the mount-time default.
+    await expect(page.getByRole('button', { name: 'Start chat' })).toBeVisible();
     await expect(page.locator('.nx-powered')).toBeVisible();
     await expect(page.locator('.nx-powered')).toContainText('Powered by SiyahTuş');
   });

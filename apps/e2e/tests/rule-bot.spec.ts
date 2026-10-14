@@ -26,6 +26,7 @@ import type { APIRequestContext } from '@playwright/test';
 import {
   API_BASE,
   expect,
+  introduceVisitor,
   ownerAccessToken,
   tenantSubdomain,
   test,
@@ -119,12 +120,12 @@ test.describe('rule bot (FR-MOD-06.6)', () => {
         await visitor.goto(`${site.origin}/demo.html?organization_id=${organizationId}`);
         const frame = widgetFrame(visitor);
         await frame.getByRole('button', { name: 'Open chat' }).click();
-        await expect(frame.getByRole('textbox', { name: 'Message' })).toBeVisible({
+        await expect(frame.getByRole('button', { name: 'Start chat' })).toBeVisible({
           timeout: 20_000,
         });
 
-        await frame.getByRole('textbox', { name: 'Message' }).fill(`hi ${trigger} please`);
-        await frame.getByRole('button', { name: 'Send' }).click();
+        // The trigger phrase is the visitor's opening line, from the pre-chat form.
+        await introduceVisitor(frame, `hi ${trigger} please`);
 
         // The bot's sentence, exactly as it was typed into the editor. An
         // answer shaped by a model could not be this string.

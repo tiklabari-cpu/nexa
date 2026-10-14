@@ -6,7 +6,14 @@
  * use is broken — which is the entire failure mode this suite exists to catch.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { expect, request, test as base, type APIRequestContext, type Page } from '@playwright/test';
+import {
+  expect,
+  request,
+  test as base,
+  type APIRequestContext,
+  type FrameLocator,
+  type Page,
+} from '@playwright/test';
 import { STACK_API } from './stack-ports.js';
 
 export const API_BASE = `${STACK_API}/api/v1`;
@@ -521,16 +528,79 @@ export async function openWidget(
 
   const frame = widgetFrame(page);
   await frame.getByRole('button', { name: 'Open chat' }).click();
-  // The composer only appears once the token exchange has succeeded.
-  await expect(frame.getByRole('textbox', { name: 'Message' })).toBeVisible();
+  // A first-time visitor meets the pre-chat form, a returning one the composer.
+  await expect(
+    frame
+      .getByRole('button', { name: 'Start chat' })
+      .or(frame.getByRole('textbox', { name: 'Message', exact: true })),
+  ).toBeVisible();
 }
 
-/** Send a message as the visitor and wait for it to appear in their transcript. */
+/** What the e2e visitor tells the pre-chat form about themselves. */
+export const PRECHAT_VISITOR = {
+  name: 'E2E Visitor',
+  username: 'e2e_visitor',
+  email: 'visitor@example.test',
+} as const;
+
+/**
+ * Fill in the pre-chat form every first-time visitor meets (owner, 2026-10-14)
+ * and start the chat — `firstMessage` is the "Your message" field, which goes
+ * out as the conversation's opening line.
+ */
+export async function introduceVisitor(
+  frame: FrameLocator | Page,
+  firstMessage: string,
+  details: { name?: string; username?: string; email?: string } = {},
+): Promise<void> {
+  const { name, username, email } = { ...PRECHAT_VISITOR, ...details };
+  await frame.getByRole('textbox', { name: 'Full name' }).fill(name);
+  await frame.getByRole('textbox', { name: 'Username' }).fill(username);
+  await frame.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+  await frame.getByRole('textbox', { name: 'Your message' }).fill(firstMessage);
+  await frame.getByRole('button', { name: 'Start chat' }).click();
+}
+
+/**
+ * Send a message as the visitor and wait for it to appear in their transcript —
+ * through the pre-chat form when it is up (the first message), else the composer.
+ */
 export async function visitorSends(page: Page, text: string): Promise<void> {
   const frame = widgetFrame(page);
-  await frame.getByRole('textbox', { name: 'Message' }).fill(text);
-  await frame.getByRole('button', { name: 'Send' }).click();
+  // The bubble is optimistic — it shows before the server has the message — so
+  // the transcript alone cannot say the send landed. A spec that reloads next
+  // would abort it mid-flight; the response is the proof.
+  const recorded = page.waitForResponse(
+    (response) =>
+      response.url().includes('/customer/chat/events') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  );
+  if (await frame.getByRole('button', { name: 'Start chat' }).isVisible()) {
+    await introduceVisitor(frame, text);
+  } else {
+    await frame.getByRole('textbox', { name: 'Message', exact: true }).fill(text);
+    await frame.getByRole('button', { name: 'Send' }).click();
+  }
+  await recorded;
   await expect(frame.getByRole('log', { name: 'Conversation' })).toContainText(text);
+}
+
+/**
+ * Open the widget and get a first-time visitor past the pre-chat form, so the
+ * composer is on screen — for specs about the composer itself (emoji,
+ * attachments), not about how a conversation starts.
+ */
+export async function openWidgetAtComposer(
+  page: Page,
+  organizationId: string,
+  options: { from?: string; host?: string } = {},
+): Promise<void> {
+  await openWidget(page, organizationId, options);
+  await visitorSends(page, `Hello ${Date.now().toString().slice(-6)}`);
+  await expect(
+    widgetFrame(page).getByRole('textbox', { name: 'Message', exact: true }),
+  ).toBeVisible();
 }
 
 /**
@@ -669,9 +739,12 @@ export async function chatOfAReachableCustomer(request: APIRequestContext): Prom
     headers: auth,
   });
   expect(directory.ok(), `customer directory failed: ${directory.status()}`).toBe(true);
+  // Not the suite's own widget visitors: since the pre-chat form asks for an
+  // e-mail (owner, 2026-10-14) they all carry the fixture one, and whichever
+  // wrote in last — routed to whatever team its spec set up — would be first.
   const people = (
     (await directory.json()) as { items: Array<{ id: string; name: string; email: string | null }> }
-  ).items.filter((person) => person.email);
+  ).items.filter((person) => person.email && person.email !== PRECHAT_VISITOR.email);
   expect(people.length, 'no customer in the directory carries an e-mail address').toBeGreaterThan(
     0,
   );

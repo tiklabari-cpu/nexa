@@ -342,6 +342,7 @@ function EditForm({
     initial: {
       name: customer.name ?? '',
       email: customer.email ?? '',
+      username: customer.username ?? '',
       phone: customer.phone ?? '',
     },
     validators: {
@@ -357,6 +358,8 @@ function EditForm({
       const changes: Record<string, string | null> = {};
       if (values.name !== (customer.name ?? '')) changes['name'] = values.name.trim() || null;
       if (values.email !== (customer.email ?? '')) changes['email'] = values.email.trim() || null;
+      if (values.username !== (customer.username ?? ''))
+        changes['username'] = values.username.trim() || null;
       if (values.phone !== (customer.phone ?? '')) changes['phone'] = values.phone.trim() || null;
       try {
         await save.mutateAsync(changes);
@@ -372,6 +375,8 @@ function EditForm({
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 px-4 py-3 text-sm">
         <dt className="text-content-secondary">{t('customers.detail.field.email')}</dt>
         <dd className="truncate">{customer.email ?? '—'}</dd>
+        <dt className="text-content-secondary">{t('customers.detail.field.username')}</dt>
+        <dd className="truncate">{customer.username ?? '—'}</dd>
         <dt className="text-content-secondary">{t('customers.detail.field.phone')}</dt>
         <dd className="truncate">{customer.phone ?? '—'}</dd>
       </dl>
@@ -394,6 +399,12 @@ function EditForm({
         onBlur={() => form.blur('email')}
         error={emailError}
         type="email"
+      />
+      <Field
+        id="customer-username"
+        label={t('customers.detail.field.username')}
+        value={form.values.username}
+        onChange={(value) => form.setValue('username', value)}
       />
       <Field
         id="customer-phone"

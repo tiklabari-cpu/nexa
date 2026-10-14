@@ -84,6 +84,7 @@ import {
   DEMO,
   expect,
   openWidget,
+  openWidgetAtComposer,
   ownerAccessTokenFor,
   signUpFreshOwner,
   test,
@@ -1405,7 +1406,18 @@ test.describe('WCAG 2.1 AA (axe)', () => {
     page,
     organizationId,
   }, testInfo) => {
+    // The screen a first-time visitor meets: the pre-chat form.
     await openWidget(page, organizationId);
+    await scanReadyScreen(page, 'Widget pre-chat form', testInfo, async () => {
+      await expect(widgetFrame(page).getByRole('button', { name: 'Start chat' })).toBeVisible();
+    });
+  });
+
+  test('customer widget conversation has no serious or critical violations', async ({
+    page,
+    organizationId,
+  }, testInfo) => {
+    await openWidgetAtComposer(page, organizationId);
     await scanReadyScreen(page, 'Widget', testInfo, async () => {
       await expect(widgetFrame(page).getByRole('log', { name: 'Conversation' })).toBeVisible();
     });
@@ -1421,7 +1433,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
     page,
     organizationId,
   }, testInfo) => {
-    await openWidget(page, organizationId);
+    await openWidgetAtComposer(page, organizationId);
     await scanReadyScreen(page, 'Widget composer emoji picker', testInfo, async () => {
       const frame = widgetFrame(page);
       const trigger = frame.getByRole('button', { name: 'Insert emoji' });

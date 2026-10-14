@@ -99,6 +99,10 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   `birim` → `entegrasyon` → isteğe bağlı `e2e` (`--e2e`). Yalnız bazı başlıklar:
   `pnpm test:gate birim entegrasyon`; önbelleksiz: `--force`. Tam kapı ~11 dk, pencerenin 10 dk
   komut tavanını aşabilir: arka planda koş, log yolu ilk satırda.
+  **Öneri (yapay zekâ için, zorunlu değil):** Tam kapı tek komutta 10 dk'ya yaklaşıyor. Arka planda
+  koşmak yetmezse kapıyı başlıklara böl ve her parçanın exit code'unu ayrı yaz:
+  `pnpm test:gate build statik birim` ardından `pnpm test:gate entegrasyon` (entegrasyon tek başına
+  ~7 dk). `--force` yalnız önbelleğe güvenilmediğinde gerekli; önbellek kullanılırsa süre kısalır.
 - **e2e parçalı koşar (tm 260):** `pnpm -w test:e2e` = `apps/e2e/scripts/run-e2e-sharded.mjs`;
   her parça kendi yığınında ve portlarında. Parça sayısı `--shards=N` / `SIYAHTUS_E2E_SHARDS`.
   Kapı için **son satırlar** okunur: parça satırları, `Tests: …` ve `verdict: GREEN|RED`; exit 1 =

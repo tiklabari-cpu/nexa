@@ -170,6 +170,31 @@ describe('customer chat api', () => {
       expect(customer.isLead).toBe(true);
     });
 
+    it('records the pre-chat username on the contact, trimmed', async () => {
+      const { token, customer_id } = await widgetToken();
+      await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', name: 'Robin Fields', username: '  robin_f ', email: 'robin@example.test' },
+        auth(token),
+      );
+
+      const customer = await owner.customer.findUniqueOrThrow({ where: { id: customer_id } });
+      expect(customer.username).toBe('robin_f');
+    });
+
+    it('refuses a username over 120 characters rather than truncating it', async () => {
+      const { token, customer_id } = await widgetToken();
+      const res = await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', username: 'x'.repeat(121) },
+        auth(token),
+      );
+
+      expect(res.statusCode).toBe(400);
+      const customer = await owner.customer.findUniqueOrThrow({ where: { id: customer_id } });
+      expect(customer.username).toBeNull();
+    });
+
     it('rejects an empty message', async () => {
       const { token } = await widgetToken();
       for (const text of ['', '   ']) {

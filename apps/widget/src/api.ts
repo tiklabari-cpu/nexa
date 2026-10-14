@@ -248,6 +248,8 @@ export class WidgetApi {
       /** Where the visitor arrived from — the visit's `came_from` (FR-MOD-13.2). */
       referrer?: string;
       name?: string;
+      /** The visitor's username on the embedding site, from the pre-chat form. */
+      username?: string;
       email?: string;
       attachment_url?: string;
       /** Pre-chat form answers: contact custom-field id → value (FR-MOD-08.7.7). */

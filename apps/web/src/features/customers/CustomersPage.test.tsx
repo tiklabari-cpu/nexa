@@ -96,6 +96,7 @@ function customer(id: string, over: Partial<CustomerSummary> = {}): CustomerSumm
     id,
     name: id,
     email: null,
+    username: null,
     phone: null,
     country_code: null,
     country: null,

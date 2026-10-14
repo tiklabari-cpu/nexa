@@ -3274,7 +3274,16 @@ components:
 
     CustomerSummary:
       type: object
-      required: [id, name, email, is_lead, banned, chats_count, tickets_count, table_custom_fields]
+      required:
+        - id
+        - name
+        - email
+        - username
+        - is_lead
+        - banned
+        - chats_count
+        - tickets_count
+        - table_custom_fields
       properties:
         id: { type: string, format: uuid }
         name:
@@ -3282,6 +3291,10 @@ components:
           nullable: true
           description: Null for a visitor who never introduced themselves.
         email: { type: string, nullable: true }
+        username:
+          type: string
+          nullable: true
+          description: The username the visitor typed into the pre-chat form, unverified.
         phone: { type: string, nullable: true }
         country_code: { type: string, nullable: true, minLength: 2, maxLength: 2 }
         country: { type: string, nullable: true }

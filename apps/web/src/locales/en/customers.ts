@@ -131,6 +131,7 @@ export const customers: Messages = {
   'customers.detail.field.email': 'Email',
   'customers.detail.field.emailError': 'Enter a valid email address.',
   'customers.detail.field.phone': 'Phone',
+  'customers.detail.field.username': 'Username',
   'customers.detail.saving': 'Saving…',
   'customers.detail.saveChanges': 'Save changes',
 

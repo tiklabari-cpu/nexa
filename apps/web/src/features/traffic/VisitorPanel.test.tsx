@@ -22,6 +22,7 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
     id: 'cust-1',
     name: 'Ada Visitor',
     email: 'ada@example.com',
+    username: null,
     phone: null,
     country_code: 'US',
     country: 'United States',

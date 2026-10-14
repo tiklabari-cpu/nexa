@@ -30,6 +30,7 @@ import {
   API_BASE,
   HOST_PAGE,
   arriveForGreeting,
+  introduceVisitor,
   openWidget,
   ownerAccessTokenFor,
   signIn,
@@ -159,11 +160,11 @@ test('an archived conversation asks the visitor the workspace questions, takes a
     await arriveForGreeting(visitor, `${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
     const frame = widgetFrame(visitor);
     await frame.getByRole('button', { name: "Let's chat" }).click();
-    await frame.getByRole('textbox', { name: 'Your name' }).fill(visitorName);
-    await frame.getByRole('button', { name: 'Start chat' }).click();
 
+    // The question is the opening line, sent from the pre-chat form with the name.
     const question = `My chain keeps slipping — ${stamp}`;
-    await visitorSends(visitor, question);
+    await introduceVisitor(frame, question, { name: visitorName });
+    await expect(frame.getByRole('log', { name: 'Conversation' })).toContainText(question);
 
     // --- The agent answers, then archives -----------------------------------
     const list = agent.getByRole('region', { name: 'Conversations' });

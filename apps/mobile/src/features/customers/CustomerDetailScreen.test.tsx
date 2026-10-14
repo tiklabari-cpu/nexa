@@ -12,6 +12,7 @@ function detail(overrides: Partial<CustomerDetail> = {}): CustomerDetail {
     id: 'cust-1',
     name: 'Ada Lovelace',
     email: 'ada@example.com',
+    username: null,
     phone: null,
     country_code: 'GB',
     country: 'United Kingdom',

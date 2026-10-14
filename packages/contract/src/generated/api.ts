@@ -9964,6 +9964,8 @@ export interface components {
       /** @description Null for a visitor who never introduced themselves. */
       name: string | null;
       email: string | null;
+      /** @description The username the visitor typed into the pre-chat form, unverified. */
+      username: string | null;
       phone?: string | null;
       country_code?: string | null;
       country?: string | null;
@@ -15314,6 +15316,12 @@ export interface operations {
           referrer?: string;
           /** @description Pre-chat form value. */
           name?: string;
+          /**
+           * @description Pre-chat form value: the visitor's username on the embedding
+           *     site, stored on the contact as typed. Free text — the widget
+           *     cannot verify it, so it is a hint for the agent, not an identity.
+           */
+          username?: string;
           /** Format: email */
           email?: string;
           /**
@@ -15622,7 +15630,7 @@ export interface operations {
   listCustomers: {
     parameters: {
       query?: {
-        /** @description Case-insensitive match against name, email and phone. */
+        /** @description Case-insensitive match against name, email, username and phone. */
         query?: string;
         /**
          * @description `all` · `leads` — gave an email · `recent` — active in the last 30 days
@@ -15726,6 +15734,7 @@ export interface operations {
           name?: string | null;
           /** Format: email */
           email?: string | null;
+          username?: string | null;
           phone?: string | null;
         };
       };

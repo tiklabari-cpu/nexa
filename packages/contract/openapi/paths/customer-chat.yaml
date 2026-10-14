@@ -91,6 +91,13 @@ events:
                   (NFR-S9). Omit it for a direct arrival; `came_from` then stays
                   null and the agent's panel simply says nothing.
               name: { type: string, maxLength: 120, description: Pre-chat form value. }
+              username:
+                type: string
+                maxLength: 120
+                description: |
+                  Pre-chat form value: the visitor's username on the embedding
+                  site, stored on the contact as typed. Free text — the widget
+                  cannot verify it, so it is a hint for the agent, not an identity.
               email: { type: string, format: email, maxLength: 320 }
               custom_fields:
                 type: object

@@ -29,7 +29,7 @@ customers:
     parameters:
       - name: query
         in: query
-        description: Case-insensitive match against name, email and phone.
+        description: Case-insensitive match against name, email, username and phone.
         schema: { type: string, maxLength: 320 }
       - name: segment
         in: query
@@ -147,6 +147,7 @@ customer:
             properties:
               name: { type: string, maxLength: 120, nullable: true }
               email: { type: string, format: email, maxLength: 320, nullable: true }
+              username: { type: string, maxLength: 120, nullable: true }
               phone: { type: string, maxLength: 40, nullable: true }
     responses:
       "200":

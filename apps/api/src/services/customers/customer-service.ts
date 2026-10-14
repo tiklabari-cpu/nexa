@@ -52,6 +52,8 @@ export interface CustomerSummary {
   id: string;
   name: string | null;
   email: string | null;
+  /** Typed into the widget's pre-chat form; unverified. */
+  username: string | null;
   phone: string | null;
   country_code: string | null;
   country: string | null;
@@ -314,6 +316,7 @@ export class CustomerService {
         OR: [
           { name: { contains, mode: 'insensitive' } },
           { email: { contains, mode: 'insensitive' } },
+          { username: { contains, mode: 'insensitive' } },
           { phone: { contains } },
         ],
       });
@@ -469,6 +472,7 @@ type CustomerRow = {
   id: string;
   name: string | null;
   email: string | null;
+  username: string | null;
   phone: string | null;
   countryCode: string | null;
   country: string | null;
@@ -485,6 +489,7 @@ function toSummary(row: CustomerRow): Omit<CustomerSummary, 'table_custom_fields
     id: row.id,
     name: row.name,
     email: row.email,
+    username: row.username,
     phone: row.phone,
     country_code: row.countryCode,
     country: row.country,

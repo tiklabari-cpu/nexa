@@ -214,7 +214,7 @@ interface State {
   /** The pre-chat form is showing instead of the composer. */
   prechat: boolean;
   /** Pre-chat details to attach to the first message the visitor sends. */
-  pendingDetails: { name?: string; email?: string } | null;
+  pendingDetails: { name?: string; username?: string; email?: string } | null;
   /** The workspace's configurable pre-chat form fields (FR-MOD-08.7.7). */
   preChatFields: WidgetFormField[];
   /** Pre-chat form answers (field id → value) riding the first message. */
@@ -895,6 +895,13 @@ export function mount(doc: Document = document, win: Window = window): void {
     postToHost(win, { type: open ? 'siyahtus:open' : 'siyahtus:close' });
 
     if (open) {
+      // Everybody introduces themselves before a first conversation, however
+      // they opened the panel — the launcher as much as the greeting's "Let's
+      // chat". Not once the pre-chat details are given or a conversation
+      // exists — and not for a returning visitor whose mint is still out: they
+      // may well have a conversation, and the form flashing up before their
+      // transcript replaces it is worse than the mint raising it a moment late.
+      if (needsPrechat() && (state.connected || !returningVisitor(win))) state.prechat = true;
       renderPanelBody();
       (state.prechat ? ui.prechatName : ui.input).focus();
       // First open: this mints, fetches and starts the poll. Every open after
@@ -1021,8 +1028,11 @@ export function mount(doc: Document = document, win: Window = window): void {
    * only shows up in whichever order a future caller happens to pick.
    */
   function renderPanelBody(): void {
-    const showPrechat = state.prechat;
-    const offline = !showPrechat && offlineFormOpen();
+    // The offline form outranks the pre-chat one: nobody is there to take the
+    // conversation the pre-chat form would open, and the offline form asks for
+    // the same details on its own.
+    const offline = offlineFormOpen();
+    const showPrechat = state.prechat && !offline;
     ui.prechat.hidden = !showPrechat;
     // Form and thank-you are the two halves of one panel: exactly one is on
     // screen while the offline form is open, neither when it is not.
@@ -1061,7 +1071,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
     const email = ui.offlineEmail.value.trim();
     if (!email) {
-      // Required here and optional on the pre-chat form, for the reason the
+      // Required here as on the pre-chat form, and for a reason of its own the
       // endpoint gives: this message can only be answered somewhere else.
       ui.offlineEmail.focus();
       return;
@@ -1109,9 +1119,23 @@ export function mount(doc: Document = document, win: Window = window): void {
     renderFormFields(doc, ui.prechatFields, state.preChatFields);
   }
 
+  /** No conversation yet and no pre-chat details given — the form is due. */
+  function needsPrechat(): boolean {
+    return state.chatId === null && state.events.length === 0 && state.pendingDetails === null;
+  }
+
   function submitPrechat(): void {
-    const name = ui.prechatName.value.trim();
-    if (!name) return;
+    // All four fixed fields are required (owner, 2026-10-14). Checked here as
+    // well as by `required`, because a scripted submit skips the browser's own
+    // check; the first empty or malformed one takes focus and nothing is sent.
+    for (const field of [ui.prechatName, ui.prechatUsername, ui.prechatEmail, ui.prechatMessage]) {
+      field.value = field.value.trim();
+      if (!field.value || !field.checkValidity()) {
+        field.reportValidity();
+        field.focus();
+        return;
+      }
+    }
 
     // The configurable fields (FR-MOD-08.7.7). A required one must be answered
     // before the chat can start; types are validated authoritatively server-side
@@ -1119,12 +1143,20 @@ export function mount(doc: Document = document, win: Window = window): void {
     const custom = readFormAnswers(ui.prechatFields);
     if (!custom) return; // a required field was empty and now has focus
 
-    const email = ui.prechatEmail.value.trim();
-    state.pendingDetails = { name, ...(email ? { email } : {}) };
+    state.pendingDetails = {
+      name: ui.prechatName.value,
+      username: ui.prechatUsername.value,
+      email: ui.prechatEmail.value,
+    };
     state.pendingCustomFields = Object.keys(custom).length > 0 ? custom : null;
     state.prechat = false;
     renderPanelBody();
-    ui.input.focus();
+    // "Your message" is the conversation's opening line: it goes out through
+    // the composer's own path, so the details ride it and a failed send leaves
+    // it in the composer to retry rather than losing it.
+    ui.input.value = ui.prechatMessage.value;
+    ui.prechatMessage.value = '';
+    void send();
   }
 
   // --- Data ----------------------------------------------------------------
@@ -1160,7 +1192,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       }
       // …and the pre-chat form (FR-MOD-08.7.7). Rendered here rather than at build
       // time because it is per-workspace and only known once the token is minted;
-      // an empty list leaves the fixed name/email form untouched.
+      // an empty list leaves the fixed pre-chat form untouched.
       state.preChatFields = api.preChatForm;
       renderPreChatFields();
       // …and the post-chat form, held until a conversation ends (FR-MOD-08.7.7).
@@ -1189,9 +1221,12 @@ export function mount(doc: Document = document, win: Window = window): void {
         state.campaign = { id: snapshot.campaign.id, message: snapshot.campaign.message };
       }
       state.error = null;
-      // A returning visitor already in a conversation skips the pre-chat form.
+      // A returning visitor already in a conversation skips the pre-chat form;
+      // one without raises it now, if the panel opened before the mint did.
       if (snapshot.events.length > 0) {
         state.prechat = false;
+      } else if (state.open && needsPrechat()) {
+        state.prechat = true;
       }
       // Unconditional, unlike the line above: this mint is also the first time
       // the widget knows whether anybody is available, which is what decides
@@ -2048,7 +2083,7 @@ let fieldSequence = 0;
  */
 function labelledField(
   doc: Document,
-  input: HTMLInputElement,
+  input: HTMLInputElement | HTMLTextAreaElement,
   text: string,
   required: boolean,
 ): HTMLElement {
@@ -2185,7 +2220,9 @@ interface Ui {
   greetBrowse: HTMLButtonElement;
   prechat: HTMLFormElement;
   prechatName: HTMLInputElement;
+  prechatUsername: HTMLInputElement;
   prechatEmail: HTMLInputElement;
+  prechatMessage: HTMLTextAreaElement;
   /** Holds the workspace's configurable pre-chat fields (FR-MOD-08.7.7). */
   prechatFields: HTMLDivElement;
   prechatSubmit: HTMLButtonElement;
@@ -2402,8 +2439,8 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   offlineName.placeholder = t('offline.name');
   offlineName.setAttribute('aria-label', t('offline.name'));
   offlineName.maxLength = 120;
-  // Required, unlike the pre-chat form's: this message is answered by e-mail or
-  // not at all.
+  // Required — as on the pre-chat form, but for its own reason: this message is
+  // answered by e-mail or not at all.
   const offlineEmail = doc.createElement('input');
   offlineEmail.className = 'nx-prechat-input';
   offlineEmail.type = 'email';
@@ -2588,19 +2625,38 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   const prechatName = doc.createElement('input');
   prechatName.className = 'nx-prechat-input';
   prechatName.type = 'text';
+  prechatName.autocomplete = 'name';
   prechatName.placeholder = t('prechat.name');
   prechatName.setAttribute('aria-label', t('prechat.name'));
   prechatName.required = true;
   prechatName.maxLength = 120;
+  const prechatUsername = doc.createElement('input');
+  prechatUsername.className = 'nx-prechat-input';
+  prechatUsername.type = 'text';
+  prechatUsername.autocomplete = 'username';
+  prechatUsername.placeholder = t('prechat.username');
+  prechatUsername.setAttribute('aria-label', t('prechat.username'));
+  prechatUsername.required = true;
+  prechatUsername.maxLength = 120;
   const prechatEmail = doc.createElement('input');
   prechatEmail.className = 'nx-prechat-input';
   prechatEmail.type = 'email';
+  prechatEmail.autocomplete = 'email';
   prechatEmail.placeholder = t('prechat.email');
   prechatEmail.setAttribute('aria-label', t('prechat.emailLabel'));
+  prechatEmail.required = true;
   prechatEmail.maxLength = 320;
+  // The opening message — sent as the conversation's first line on submit.
+  const prechatMessage = doc.createElement('textarea');
+  prechatMessage.className = 'nx-prechat-input nx-prechat-message';
+  prechatMessage.rows = 3;
+  prechatMessage.placeholder = t('prechat.message');
+  prechatMessage.setAttribute('aria-label', t('prechat.message'));
+  prechatMessage.required = true;
+  prechatMessage.maxLength = 10_000;
   // The workspace's configurable fields (FR-MOD-08.7.7) are appended here after
   // the token mint reports them — empty (and so invisible) when none are set, so
-  // the fixed name/email form above is unchanged for a workspace that has no
+  // the fixed fields around them are unchanged for a workspace that has no
   // form builder configured.
   const prechatFields = doc.createElement('div');
   prechatFields.className = 'nx-prechat-fields';
@@ -2618,8 +2674,10 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   prechatCard.append(
     prechatHint,
     labelledField(doc, prechatName, t('prechat.name'), true),
-    labelledField(doc, prechatEmail, t('prechat.emailLabel'), false),
+    labelledField(doc, prechatUsername, t('prechat.username'), true),
+    labelledField(doc, prechatEmail, t('prechat.emailLabel'), true),
     prechatFields,
+    labelledField(doc, prechatMessage, t('prechat.message'), true),
     prechatSubmit,
   );
   prechat.append(prechatIntro, prechatCard);
@@ -2786,7 +2844,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     greetBrowse,
     prechat,
     prechatName,
+    prechatUsername,
     prechatEmail,
+    prechatMessage,
     prechatFields,
     prechatSubmit,
     poweredBy,
@@ -3842,6 +3902,11 @@ button { -webkit-tap-highlight-color: transparent; }
   outline: none;
 }
 .nx-prechat-input:focus { border-color: var(--nx-brand); box-shadow: 0 0 0 2px var(--nx-brand); }
+/* "Your message": a few lines tall, growing only downwards. */
+.nx-prechat-message {
+  display: block; height: auto; min-height: 76px; max-height: 160px;
+  padding: 10px 12px; resize: vertical; line-height: 1.4;
+}
 /* The label above says what the box is for; the placeholder (kept, for the
    rare field rendered without a row) would only repeat it. */
 .nx-field .nx-prechat-input::placeholder { color: transparent; }

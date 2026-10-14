@@ -72,11 +72,14 @@ async function sendFirstMessage(search: string): Promise<Record<string, unknown>
 
   root.querySelector<HTMLButtonElement>('.nx-greet-chat')!.click();
   await waitFor(() => root.querySelector('.nx-prechat-input') !== null);
-  root.querySelectorAll<HTMLInputElement>('.nx-prechat-input')[0]!.value = 'Jo';
+  // Name, username, e-mail, message — all required; submitting sends the message.
+  const fields = root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    '.nx-prechat-card > .nx-field .nx-prechat-input',
+  );
+  ['Jo', 'jo', 'jo@example.com', 'my order is late'].forEach((value, i) => {
+    fields[i]!.value = value;
+  });
   submit(root.querySelector('.nx-prechat')!);
-
-  root.querySelector<HTMLTextAreaElement>('.nx-input')!.value = 'my order is late';
-  submit(root.querySelector('.nx-form')!);
 
   await waitFor(() => calls.some((c) => c.url.includes('/customer/chat/events')));
   return calls.find((c) => c.url.includes('/customer/chat/events'))!.body as Record<

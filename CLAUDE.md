@@ -19,6 +19,9 @@ Her pencere (interaktif veya `run-loop.sh` ile açılan) aşağıdaki kurallara 
 - Bağlam hafızadan değil, Task Master + git + `HANDOFF.md`'den kurulur.
 - Canlı `HANDOFF.md` / `PLAN.md` §K yalnız son görevlerin ayrıntısını tutar. Eski kayıt/kanıt
   gerekiyorsa `docs/archive/` altında grep ile ara; arşivi baştan okuma (CONVENTIONS §1.2, §3).
+- **Uzun komutlar (kapı, tam test koşusu, build) pencerenin 10 dk komut tavanını aşabilir.**
+  `pnpm test:gate` ve benzeri uzun komutları `run_in_background` ile başlat; log yolunu ilk
+  satırdan al, bitince son satırlarını (`Tasks:`, `Failed:`, `exit`) oku. Ön planda koşturma.
 
 ## Sınırlar
 

@@ -175,13 +175,14 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     await settled();
 
     expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(true);
-    expect(root.querySelector<HTMLElement>('.nx-form')!.hidden).toBe(false);
+    // A first-time visitor's way into a live chat is the pre-chat form.
+    expect(root.querySelector<HTMLElement>('.nx-prechat')!.hidden).toBe(false);
   });
 
   it('stays away when the workspace has built neither form, offline or not', async () => {
     // Opt-in: without questions there is no form, and the widget is exactly the
     // one it was before this existed — an offline visitor still gets the
-    // composer and the "nobody is available" status line.
+    // way into a chat (the pre-chat form, then the composer).
     ticketForm = [];
     prospectForm = [];
     const root = mountWidget();
@@ -189,7 +190,8 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     await settled();
 
     expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(true);
-    expect(root.querySelector<HTMLElement>('.nx-form')!.hidden).toBe(false);
+    // A first-time visitor's way into a live chat is the pre-chat form.
+    expect(root.querySelector<HTMLElement>('.nx-prechat')!.hidden).toBe(false);
   });
 
   it('posts the two forms under their own keys and swaps the panel for a thank-you', async () => {
@@ -291,7 +293,7 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     );
   });
 
-  it('gives the composer back when an agent comes online mid-visit', async () => {
+  it('gives the way into a chat back when an agent comes online mid-visit', async () => {
     const root = mountWidget();
     openPanel(root);
     await vi.waitFor(() =>
@@ -303,7 +305,7 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     await vi.waitFor(
       () => {
         expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(true);
-        expect(root.querySelector<HTMLElement>('.nx-form')!.hidden).toBe(false);
+        expect(root.querySelector<HTMLElement>('.nx-prechat')!.hidden).toBe(false);
       },
       { timeout: 8000 },
     );

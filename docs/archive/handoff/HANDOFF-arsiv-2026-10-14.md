@@ -6,6 +6,11 @@
 > newest-first. Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
 ---
+## tm 267 — PANEL-WIDGET-RESTYLE: panelin yeni açık/koyu teması, widget referansa göre yeniden giydirildi — done — 2026-10-13 UTC
+
+- **Yapıldı:** panel tema yeniden yazımı (varsayılan light); widget referans "canli-destek-widget_3" görünümünde (Manrope, yumuşak gölge için köşeye yaslı çerçeve, açıkken baloncuk kalır, 30 sn gecikmeli karşılama kartı, 15 sn yanıt önizlemesi, marka karşılama mesajı `welcome_title/welcome_text`). Ayrıntı: tm 267 kaydı.
+- **Doğrulama:** gate yeşil, e2e düzeltilen dosyalar 130/130 (commit `fae87a10`).
+
 ## tm 266 — MAIL-THEME: e-postalar panelin "Graphite + Indigo" temasında — done — 2026-10-12 UTC
 
 - **Yapıldı:** Ortak şablon (`apps/api/src/services/mail/templates/layout.ts`) panelin 2026-10 token değerleriyle yeniden çizildi: kartın üstünde grafit bant + indigo→mor "S" karosu ve kelime işareti (sağda ilgili çalışma alanı), ince marka şeridi; başlığın üstünde e-posta türünü söyleyen ikon karosu (`icon`, SLA uyarısında kırmızı `tone: 'alert'`); tek indigo düğme (Outlook için `mso-padding-alt`); yuvarlak bilgi paneli, kesikli indigo kod kutusu; dökümler panel gibi (ziyaretçi solda, ekip sağda indigo, dahili not kehribar); 2FA "siz değilseniz" uyarısı yeni `callout` bloğunda. Müşteriye gidenler (müşteri dökümü, talep bildirimi) başlıkta çalışma alanının adı + baş harfiyle (`sender`), altta "Sent with SiyahTuş / SiyahTuş ile gönderildi". Koyu mod panelin grafitiyle, dar ekran düzeni, Outlook'ta Segoe UI. Önizlemeye Açık/Koyu ve Masaüstü/Telefon düğmeleri. PLAN §D216.

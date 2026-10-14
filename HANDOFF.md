@@ -15,6 +15,13 @@
 
 ## Task log (newest-first)
 
+## tm 272 — ADR-AI-RESOLUTION: ADR-09a eki — devredilmiş ama ajanın yazmadığı thread "AI çözümü" sayılmaz — done — 2026-10-14 UTC
+
+- **Yapıldı:** PLAN §0 "Ek notlar"a ADR-09a (sahip kararı K10, AI-25-S1; ADR-09 satırı değişmedi); karar dosyası `docs/adr/ai-resolution-handoff.md`; §D221; K10.1.4'e `ℹ` maddesi (damga `✅` kaldı). Yüklem: ajan olayı yok VE otomatik devir (`ai_handoffs` ya da `chat_transferred` `reason ∈ {ai_handoff, bot_handoff}`) yok; tek tanım, bütün yüzeyler aynı commit'te; yürürlük tm 293.4'ten sonraki ilk fatura döneminin başı (`closed_at`'e göre), geçmiş faturalar değişmez. tm 320, 335, 336'ya doğrudan `272` bağımlılığı (293 zaten bağlıydı). Kod değişikliği yok.
+- **Doğrulama:** `pnpm test:gate` exit 0, 9m23s (build/typecheck/birim turbo önbelleğinden — yalnız doküman; format:check 45s ve entegrasyon 8m37s gerçekten koştu). İlk koşu kırmızıydı: `test-datastores.test.ts:164` 180 sn zaman aşımı (yük; arşivde iki kez kayıtlı), ikinci koşu yeşil. `db:check-drift` temiz; `contract:generate` sonrası değişiklik yok; `audit:req-coverage` exit 0; prettier temiz; `validate-dependencies` temiz.
+- **Varsayımlar:** kural botu devri (`bot_handoff`) de devir sayıldı (K10 "AI'ın devrettiği" der); bir kez devredilen thread AI'a geri verilse de sayılmaz; 05'in AR-01'indeki `handled_by='ai'` için "en az bir bot olayı" şartı alınmadı (sayaçta yok). 05'teki satır referansları HEAD'de doğru (`chat-service.ts:2389-2417`, `:2408-2417`), kayma yok.
+- **Sonraki pencereye not:** ne ajan ne bot olayı olan thread (AI kapalıyken kuyrukta ayrılan oyuncu) bugün de faturalanıyor — K10 dışında, sahip kararı ister (§D221 "Açık bırakılan"). `task-master add-dependency` bütün görev id'lerini sayıya çeviriyor; `tasks.json` HEAD üzerinden betikle yazıldı. Sahibin efor etiketi "ikinci tur" düzenlemesi (`task_*.md`, `07-gorev-plani.md`, `tasks.json` başlıkları) hâlâ çalışma ağacında commit'lenmemiş; bu commit'lere alınmadı.
+
 ## tm 271 — ADR-ROUTING-QUEUES: ADR-08a eki — kuyruk ekip başına, öncelik sırası, "Önce AI"da yönlendirme devir anında — done — 2026-10-14 UTC
 
 - **Yapıldı:** PLAN §0 "Ek notlar"a ADR-08a (sahip kararı K18, dayanakları K9 + K14; ADR-08 satırı değişmedi); karar dosyası `docs/adr/routing-team-queues.md` (bağlam · karar · sonuçlar · kaynaklar); §D220; K08.6.1'e `ℹ` maddesi (damga `✅` kaldı). tm 307'ye doğrudan `271` bağımlılığı eklendi (293 ve 305 zaten bağlıydı). Kod değişikliği yok.
@@ -51,8 +58,3 @@
 - **Doğrulama:** `test:gate --force` build/statik/birim (4m15s) + entegrasyon (10m54s) yeşil; e2e parçalı 387/388, tek kırmızı ESET'in kilitlediği kanıt PNG'si (`persona-answer` tekrar koşuda yeşil); `appearance.spec.ts` (owner Figtree → üye Nunito → owner Manrope → üye yenileyince manrope-dm-sans); 5 ön ayar × 2 tema hesaplanan stil tablosu tarayıcıda.
 - **Ders:** hesap menüsü (`Dropdown`) kapalıyken de çizilir — font seçici altı aileyi her sayfada indiriyordu; artık yalnız odak/tıklamada (`FontPicker`). Panelin dev Vite'ı açıkken e2e koşmak oturumları "Loading…"ta bırakır (paylaşılan `node_modules/.vite`).
 - **Sonraki pencereye not:** Yeni ön ayar = types katalogu + `tokens.css` bloğu + iki CHECK + `index.html` listesi + `FONT_FILES`; `font-tokens.test.ts` ve `font.test.ts` hepsini birbirine bağlar.
-
-## tm 267 — PANEL-WIDGET-RESTYLE: panelin yeni açık/koyu teması, widget referansa göre yeniden giydirildi — done — 2026-10-13 UTC
-
-- **Yapıldı:** panel tema yeniden yazımı (varsayılan light); widget referans "canli-destek-widget_3" görünümünde (Manrope, yumuşak gölge için köşeye yaslı çerçeve, açıkken baloncuk kalır, 30 sn gecikmeli karşılama kartı, 15 sn yanıt önizlemesi, marka karşılama mesajı `welcome_title/welcome_text`). Ayrıntı: tm 267 kaydı.
-- **Doğrulama:** gate yeşil, e2e düzeltilen dosyalar 130/130 (commit `fae87a10`).

@@ -63,3 +63,8 @@ infra/helm/siyahtus/templates/
 # Per-user Claude Code permissions: never committed (globally gitignored),
 # rewritten by the tool itself as approvals accumulate (tm 263).
 .claude/settings.local.json
+
+# Archives of PLAN.md / HANDOFF.md (and the tasks.json backup), moved out verbatim on
+# 2026-10-14 so windows stop reading megabytes of history. Same reason as the two state files:
+# prettier would rewrite the moved text, and the archive must stay byte-for-byte the original.
+docs/archive/

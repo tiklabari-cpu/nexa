@@ -1,6 +1,8 @@
 # CONVENTIONS — Definition of Done, Git ve Handoff Kuralları
 
 Bu dosya otonom döngünün "objektif kapısı"dır. Her task bunlara uymadan **done** sayılmaz.
+Kuralların gerekçeleri, ölçümleri ve eski yöntemler: `docs/conventions-gerekce.md` (aynı bölüm
+numaralarıyla; baştan okuma, `grep -n '^### 1.3' docs/conventions-gerekce.md` ile aç).
 
 ## 1) Definition of Done (DoD) kapısı
 
@@ -42,182 +44,90 @@ Gereksinim tablosunun durum hücresi **yalnız** şu biçimdedir — başka hiç
 ✅ → K07.7        ◐ → K09.3        ⬜
 ```
 
-Kanıt (`ne yapıldı — dosya · test (n) · tm <id>`) `## K. Kanıt Geçmişi` bölümündeki
-`#### K<kod>` bloğuna **madde olarak eklenir**; var olan maddeler silinmez.
+Kanıt `## K. Kanıt Geçmişi` bölümündeki `#### K<kod>` bloğuna **madde olarak eklenir**; madde
+silinmez, üstüne yazılmaz (eskisi arşive taşınır, aşağıda). Blok yoksa `## K.` bölümünün sonuna
+`#### K<kod> — <PRD kodu> · <kısa başlık>` diye aç. Panel tablo satırı uzunluğunu denetler
+(`C-plan-row-length`).
 
-Neden: her alt-görev aynı hücreye kanıt ekliyor, kimse silmiyordu. Ölçüldü (2026-08-09):
-tek satır **32.480 karakter** (~10k token), 16 ayrı `tm` kanıtı iç içe. Çıplak bir `grep -n`
-o satıra denk geldiğinde pencerenin bağlamının onda birini tek komutta yakıyordu; tm 65.8
-satırı okuyabilmek için `sed`/`awk`/`grep -o`/`substr` sırayla denedi — dördü de boşa tur.
-Kanıt metnindeki kaçırılmamış `|` karakterleri ayrıca 8 satırı 5 sütunluk tabloda 6-10 hücreye
-bölüyordu, yani **panel o satırların durumunu yanlış okuyordu**. Taşıma sonrası en uzun tablo
-satırı 526 karakter, hücre uyuşmazlığı 0.
+**Madde biçimi (2026-10-14'ten itibaren) — tek satır:**
+`- ✅ tm <id> · <ne yapıldı, bir cümle> · <dosya:satır> · <test dosyası (n)> · <commit> · §D<n>`.
+Ayrıntı, ölçüm ve hikâye maddeye değil HANDOFF bloğuna ya da §D'ye yazılır. Eski maddeler
+yeniden yazılmaz.
 
-Bu kuralı panelin sağlık taraması denetler (`C-plan-row-length`): eşiği aşan tablo satırı
-bulunursa bulgu açılır. Yani kural yalnız iyi niyete bırakılmadı.
+**Canlı blokta en fazla son 3 madde kalır.** Yeni madde eklenince fazlası (en eskiler) **aynı
+commit'te** `docs/archive/plan-kanit/PLAN-kanit-arsiv-<YYYY-MM>.md` dosyasına (yoksa oluştur)
+aynı `#### K<kod> — <başlık>` başlığının altına birebir taşınır; canlı blokta maddelerin altında
+`_Önceki maddeler: docs/archive/plan-kanit/… (#### K<kod>)_` satırı durur. Taşınan bir madde
+bir "**Kalan** …" / "henüz yapılmadı" notunu kapatıyorsa, canlıda o notu kapanışsız bırakma —
+✅ satırda panel bunu `suspicious-done` sayar; gerekirse kalan maddelerin üstüne tek satır
+`Durum: KAPANDI (tm <id>)` yaz.
 
 İstisna: **faz özet tablosu** (`| Faz | PRD | Genel durum | Must sayacı | Kapanış |`) bu
 kuralın dışındadır — oradaki hücre bir sayım kaynağıdır (`54 ✅ · 0 ◐`), panel `statedCounts`
 olarak okur. Ona dokunma.
 
+Eski kanıt, §D sapmaları ve tarihçe `docs/archive/` altındadır:
+`grep -rn 'K07.7\|tm <id>\|D167\b' docs/archive` — arşivi baştan okuma.
+
 ### 1.1 Kapının objektifliği: test veri depoları koşu başına izole (tm 105)
 
-`@siyahtus/api` ve `@siyahtus/rtm` gerçek Postgres + Redis'e karşı koşar ve her süit TRUNCATE ile
-başlar. Eskiden aynı anda açık iki pencere aynı `siyahtus` veritabanını paylaştığı için birbirinin
-fixture'ını siliyordu; sonuç, o pencerenin HİÇ DOKUNMADIĞI dosyalarda yüzlerce kırmızıydı
-(ölçüldü: art arda iki koşuda 889 → 982). Kapı bu durumda objektif değildi.
+`@siyahtus/api` ve `@siyahtus/rtm`'in `test` / `test:unit` / `test:integration` script'leri
+`apps/api/scripts/with-test-datastores.ts` üzerinden koşar: her koşu kendi `siyahtus_test_<id>`
+veritabanını ve kendi Redis mantıksal veritabanını (1-15) alır. Sonuçları:
 
-Artık bu iki paketin `test` / `test:unit` / `test:integration` script'leri
-`apps/api/scripts/with-test-datastores.ts` üzerinden geçer: her koşu kendi `siyahtus_test_<id>`
-veritabanını (oluştur → `migrate deploy` → koşu sonunda düşür) ve kendi Redis mantıksal
-veritabanını (1-15) alır. Koşu başına ~3 sn. Test/fixture tarafında değişiklik gerekmez —
-harness yalnız `DATABASE_URL` / `DATABASE_APP_URL` / `REDIS_URL`'i yeniden yönlendirir.
+- `pnpm -w test` `--concurrency=1` istemez; turbo paralelliği güvenlidir.
+- **Bir kırmızıyı "başka pencere yazıyordur" diye açıklama.** Kırmızı ya senin değişikliğindendir
+  ya da HANDOFF/Task Master'da kayıtlı bilinen bir kusurdur; ikisi de değilse gerçek regresyondur.
+- e2e de izoledir (tm 260, §1.3). Eski tek yığın (`--legacy`) paylaşılan veritabanını sıfırlar —
+  onunla iki pencere aynı anda koşamaz. Paylaşılan veritabanına karşı koşmak için:
+  `SIYAHTUS_TEST_ISOLATION=off`.
 
-Pencere için iki sonuç:
-
-- `pnpm -w test` artık `--concurrency=1` istemez; turbo paralelliği güvenlidir.
-- **Bir kırmızıyı "başka pencere yazıyordur" diye açıklama.** İzolasyon açıkken kırmızı ya
-  senin değişikliğindendir ya da HANDOFF/Task Master'da kayıtlı bilinen bir kusurdur; ikisi de
-  değilse gerçek bir regresyondur.
-
-e2e de izoledir (tm 260): `pnpm -w test:e2e` her parçayı kendi portlarında, kendi veritabanı ve
-Redis indeksiyle ayrı bir yığında koşar; çalışan dev yığınına ve `siyahtus` veritabanına dokunmaz
-(ayrıntı §1.3). Eski tek yığın (`--legacy`) sabit portlarda paylaşılan veritabanını sıfırlar —
-onunla iki pencere aynı anda koşamaz. Paylaşılan veritabanına karşı koşmak (bir testin bıraktığı
-veriyi elle incelemek) için: `SIYAHTUS_TEST_ISOLATION=off`.
+Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
 
 ### 1.3 Kapıyı KOŞMAK da objektif olmalı: `--force` ve parçalama (tm 129)
 
-§1.1 test veri depolarını izole ederek kapının _sonucunu_ objektif yaptı. tm 129 kapının
-_determinizmini_ kapattı (mobil jest artık `NODE_ENV`'i pinliyor, kendi `testTimeout`/
-`asyncUtilTimeout`'unu ve `maxWorkers`'ını taşıyor — §D112-ÇÖZÜM). Geriye iki **koşma** toleransı
-kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
-
-- **turbo `test` görevini önbelleğe alır.** Girdiler değişmediyse `pnpm -w test` yeniden koşmaz,
-  `FULL TURBO` deyip son sonucu döndürür (ölçüldü: 49 ms). Bu normal ve istenen — ama "kapıyı üç kez
-  koşturdum, üçü de yeşil" demenin hiçbir anlamı yok demektir. Bir kırmızıyı kovalarken ya da bir
+- **turbo `test` görevini önbelleğe alır** (`FULL TURBO`). Bir kırmızıyı kovalarken ya da bir
   flake düzeltmesini kanıtlarken **`--force` şart**:
-  `npx turbo run test --force --filter=!@siyahtus/e2e`. Normal DoD kapısında `--force` gerekmez.
-- **Paralel parçalar ve başlıklı kapı (2026-10-02) — aşağıdaki elle parçalamanın yerini alır.**
-  `@siyahtus/api`'nin `test` ve `test:integration` script'leri artık
-  `apps/api/scripts/run-sharded.ts` üzerinden koşar: süiti parçalara bölebilir (tavan 6;
-  `SIYAHTUS_TEST_JOBS=<n>` ya da `--jobs=<n>` ile değişir). **Sahip kararı 2026-10-07: varsayılan
-  PARALEL — CPU/4 parça, tavan 6 (20 çekirdekli dev makinesinde 5); hız önemli, makinenin kaynağı
-  sonuna kadar kullanılabilir.** Bu karar 2026-10-03'ün "varsayılan 1 = seri" kararının yerini
-  alır; görev notlarında hâlâ "testler SERİ, paralel açma" yazıyorsa bu satır geçerlidir. Bayrak
-  vermeden koş; `--jobs=1` yalnız tek bir dosyanın kırmızısını yalıtırken. Zaman aşımı kırmızısında
-  önce bir kez daha aynı varsayılanla koş, sonra `--jobs=3` ile — kırmızı yine de çıkarsa gerçek.
-  Ölçüm: 5 parça 269 dosya ~5 dk; seri ~20–25 dk. Parçalar **aynı anda** koşar. Her
-  parça kendi izole veritabanını alır (§1.1), yani iki pencerenin aynı anda test koşmasından farkı
-  yoktur. Dosyalar bir önceki koşunun dosya sürelerine göre dağıtılır
-  (`apps/api/node_modules/.cache/run-sharded/timings.json`; yoksa vitest `--shard`). Ölçüldü:
-  api unit + integration **269 dosya / 5729 test, 5 dk 14 sn** (eskiden tek sırada ~25 dk);
-  integration tek başına ~6 dk. Özet satırı (`Test Files … (269)`) tüm parçaların toplamıdır —
-  sayı eşleştirmesi için onu kullan. CPU sayısı 4'ün altındaysa (CI) eskisi gibi tek süreç koşar.
-  Kökte `pnpm test:gate` kapının test kısmını **başlıklar** halinde koşar ve sonunda tek tablo
-  basar: `build` → `statik` (typecheck+lint, format:check) ∥ `birim` (`test:unit`) →
-  `entegrasyon` (`test:integration`, `--concurrency=1`) → isteğe bağlı `e2e` (`--e2e`, kök
-  `.env` yüklenir). Yalnız bazı başlıklar: `pnpm test:gate birim entegrasyon`; önbelleksiz:
-  `--force`. Ölçüldü (`--force`): build 1:08, statik ∥ birim 2:39, entegrasyon 6:56 — toplam
-  10:43. Pencerenin 10 dk tavanını aşabilir; arka planda koş, logların yolu ilk satırda.
-  **e2e parçalı koşar (tm 260, sahip kararı 2026-10-07):** `pnpm -w test:e2e` =
-  `apps/e2e/scripts/run-e2e-sharded.mjs`. Dosyalar N parçaya süre dengeli dağıtılır (bir dosya
-  asla bölünmez; `zz-suite-state` her parçanın sonunda koşar); her parça kendi yığınında
-  (portlar olağan + 1000 × (parça + 1), `with-test-datastores` veritabanı + Redis indeksi) ve
-  kendi içinde yine `workers: 1` ile sırayla koşar. N varsayılanı başlangıçtaki boş bellekten
-  türer (parça başına ~1,25 GB, en çok 3); `--shards=N` / `SIYAHTUS_E2E_SHARDS` ile verilir.
-  Ölçüldü (20 çekirdek, 15,6 GB): taban tek yığın 23,5 dk → 1 parça 25 dk, 2 parça 12 dk,
-  3 parça 10 dk. Kapı için **son satırlar** okunur: parça başına bir satır, toplam için
-  `Tests: …` satırı ve `verdict: GREEN|RED`; exit code 1 = bir parça kırmızı ya da eksik koştu.
-  **Yalnız parçalıyken düşen kırmızı bir sıra bağımlılığıdır** — "paralel yüzünden" denip
-  geçilmez. O parçada kendinden önce koşan dosyayla birlikte iki dosyayla yeniden üret
-  (`pnpm test:e2e --shards=1 <önceki> <düşen>`) ve testin başka bir dosyanın bıraktığı duruma
-  yaslandığı yeri düzelt (tm 260'ta `tickets.spec` "listedeki ilk sohbet"e yaslanıyordu).
-  CI'da bayraksız `--legacy` koşar (tek yığın, olağan portlar).
-- **(Tarihçe — paralel parçalardan önce)** **Tek komut olarak kapı, bir pencerenin komut tavanını aşar.** `@siyahtus/api`'nin `test` script'i unit
-  **ve** integration'ı birlikte koşar, `fileParallelism: false` ile sırayla: tek başına ~858 s, yani
-  `pnpm -w test` ~15 dk. Pencerenin komut tavanı 10 dk. `pnpm -w test:integration` için zaten
-  kullanılan çözüm burada da geçerli — **parçala ve her parçanın exit code'unu yaz**; içerik aynı
-  kaldığı sürece kapı geçilmiş sayılır:
+  `npx turbo run test --force --filter=!@siyahtus/e2e`. Normal DoD kapısında gerekmez.
+- **api testleri paralel parçalar halinde koşar** (`apps/api/scripts/run-sharded.ts`). **Sahip
+  kararı 2026-10-07: varsayılan PARALEL — CPU/4 parça, tavan 6; görev notlarında "testler SERİ"
+  yazıyorsa bu satır geçerlidir.** Bayrak vermeden koş; `--jobs=1` yalnız tek bir dosyanın
+  kırmızısını yalıtırken. Zaman aşımı kırmızısında önce bir kez aynı varsayılanla, sonra
+  `--jobs=3` ile koş — yine çıkarsa gerçek. Özet satırı (`Test Files … (n)`) tüm parçaların
+  toplamıdır.
+- **Başlıklı kapı:** `pnpm test:gate` = `build` → `statik` (typecheck+lint, format:check) ∥
+  `birim` → `entegrasyon` → isteğe bağlı `e2e` (`--e2e`). Yalnız bazı başlıklar:
+  `pnpm test:gate birim entegrasyon`; önbelleksiz: `--force`. Tam kapı ~11 dk, pencerenin 10 dk
+  komut tavanını aşabilir: arka planda koş, log yolu ilk satırda.
+- **e2e parçalı koşar (tm 260):** `pnpm -w test:e2e` = `apps/e2e/scripts/run-e2e-sharded.mjs`;
+  her parça kendi yığınında ve portlarında. Parça sayısı `--shards=N` / `SIYAHTUS_E2E_SHARDS`.
+  Kapı için **son satırlar** okunur: parça satırları, `Tests: …` ve `verdict: GREEN|RED`; exit 1 =
+  bir parça kırmızı ya da eksik. **Yalnız parçalıyken düşen kırmızı bir sıra bağımlılığıdır** —
+  `pnpm test:e2e --shards=1 <önceki> <düşen>` ile üret ve düzelt. CI'da `--legacy` koşar.
+- **`apps/web` kendi süitini `--maxWorkers=4` ile ister** — yüklü makinede
+  `Test timed out in 5000ms` CPU çekişmesidir; sınırlıyken yeniden koşmadan kırmızı yazma.
 
-  ```
-  npx turbo run test --force --filter=!@siyahtus/e2e --filter=!@siyahtus/api   # ~1 dk
-  npx turbo run test:unit --force --filter=@siyahtus/api                   # ~1 dk (91 dosya)
-  # ×3 (shard 1/3, 2/3, 3/3) — ~5 / 4 / 2,5 dk
-  cd apps/api
-  npx tsx scripts/with-test-datastores.ts vitest run --dir test/integration --shard=1/3
-  ```
-
-  Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
-  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **92 + 140 = 232**; aynı gün
-  tm 254 bir birim ve bir entegrasyon dosyası ekledi — `src/services/ai/knowledge-service.test.ts`
-  · `test/integration/knowledge-retrieval-scale.test.ts` — ve unit shard'ı 92 dosya, integration
-  47 + 47 + 46 ölçüldü. Önce "91 + 139 = 230" tm 234'ündü: iki denetim testi ekledi —
-  `src/config/schema-consumers-audit.test.ts` · `sweep-audit.test.ts` — ve unit shard'ı 91 dosya,
-  integration 47 + 47 + 45 ölçüldü. Önce
-  "89 + 139 = 228" 2026-09-13'te GL-17 · tm 253 turunda yeniden ölçülmüştü — metin "89 + 138 = 227" ile bir dosya
-  bayattı, tm 252'nin `knowledge-retrieval-recall.test.ts`'i; GL-16 aynı gün 227'yi taze bulmuştu.
-  Ondan önce 2026-09-12'de GL-15 · tm 210 "80 + 129 = 209"u düzeltti, Faz-8 (tm 213–246) arayı
-  doldurmuştu; ondan önce 2026-09-07'de GL-13 · tm 208 "70 + 110 = 180"i,
-  2026-08-30'da GL-11 · tm 158 "54 + 90 = 144"ü düzeltmişti. **Bu satır her kapanış turunda
-  bayat çıkıyor — sayıyı ölçmeden devralma.**). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
-  eşleştirebilsin.
-
-  **`apps/web` kendi süitini `--maxWorkers=4` ile ister.** Ölçüldü (GL-13): varsayılan işçi
-  sayısında yüklü bir makinede `userEvent` testleri `Test timed out in 5000ms` veriyor —
-  regresyon değil, CPU çekişmesi; aynı dosya tek başına 1,3 sn'de yeşil. Kırmızıyı sınırlıyken
-  yeniden koşmadan bu tura yazma.
+Gerekçe/ölçümler ve eski yöntem ("Tarihçe — paralel parçalardan önce", elle shard komutları):
+`docs/conventions-gerekce.md` §1.3.
 
 ### 1.4 Kapının önkoşulları: iki sessiz tuzak (2026-08-31)
 
-İkisi de kapıyı kırmızı yapmaz — **hiç cevap vermez**, o yüzden yavaş süit ya da gerçek regresyon
-sanılır. Ölçüldü, kaybedilen tur sayısıyla birlikte.
+- **Docker kapalıyken entegrasyon testleri ASILIR** (0 bayt çıktı). Kapıdan önce `docker info`.
+  Kapalıysa exe `%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`, sonra
+  `docker compose up -d` (`siyahtus-db` 5433, `siyahtus-redis` 6380; psql kullanıcısı `siyahtus`;
+  container'a yol geçerken `MSYS_NO_PATHCONV=1`).
+- **`pnpm -w test:e2e --legacy` ve `pnpm db:migrate` kök `.env`'i kendiliğinden ALMAZ:**
+  `set -a && . ./.env && set +a && <komut>`. Parçalı varsayılan `.env`'i kendisi yükler. Bir e2e
+  turu `apps/e2e/kanit/*.png` dosyalarını yeniden yazar — beklenen churn.
 
-- **Docker kapalıyken entegrasyon testleri ASILIR.** `with-test-datastores.ts` hızlı düşmez:
-  10+ dakika boyunca **0 bayt çıktı** verir. Kapıyı koşmadan önce `docker info` ile bak. Kapalıysa
-  exe **`%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`** — `C:\Program Files\...`
-  altında DEĞİL, kullanıcı kurulumu. Sonra `docker compose up -d`; `siyahtus-db` host portu **5433**,
-  `siyahtus-redis` **6380**. psql kullanıcısı **`siyahtus`** (`-U postgres` → "role does not exist"),
-  container'a komut geçerken `MSYS_NO_PATHCONV=1` gerekir. Volume'lar restart'ta korunur, yani
-  e2e'nin beklediği tohumlu `siyahtus` veritabanı yerinde kalır.
-
-- **`pnpm -w test:e2e --legacy` kök `.env`'i kendiliğinden ALMAZ.** Playwright'ın kaldırdığı RTM
-  sunucusu 60 saniyede `DATABASE_URL: Required` ile düşer ve bütün süit "webServer timeout" verir.
-  Doğrusu: `set -a && . ./.env && set +a && pnpm -w test:e2e --legacy`. Parçalı varsayılan
-  `.env`'i `with-test-datastores` üzerinden kendisi yükler. Aynı tuzak `pnpm db:migrate` için de
-  geçerli. Bir e2e turu ~84 `apps/e2e/kanit/*.png` yeniden yazar — beklenen churn, geri alma.
+Ayrıntı: `docs/conventions-gerekce.md` §1.4.
 
 ### 1.5 Gereksinim kapsama kapısı CI'a bağlı — kademeli tasarım, borç değil tutarsızlık kırmızı yapar (tm 184.3)
 
-`.github/workflows/ci.yml`'in `verify` işi artık "Requirement coverage" adımında
-`pnpm audit:req-coverage` koşuyor (Format check'ten sonra, Build'den önce — build çıktısına
-ihtiyacı yok, statik kontroller grubunda duruyor). §7.5'in "kademeli olmalı" şartı **ayrı bir
-mekanizma istemedi**: `req-coverage.cjs` (tm 184.2) zaten bu sözleşmeyle yazılmıştı — kapsama
-borcu (`untagged`) hiçbir zaman `errors`'a girmez, exit code yalnız raporun **kendi hakkında**
-yalan söylediği dört durumda 1 döner (katalogda olmayan ID'yi anan etiket, artık var olmayan bir
-maddeye muafiyet, gerekçesiz muafiyet, `EXPECTED_ROWS`'tan sapan ayrıştırma). Bunun pratik
-sonucu tam olarak görevin istediği şey: **bugünkü 163 etiketsiz madde CI'ı hiç kırmızı yapmaz**
-(mevcut borç ayrı raporlanır, `pnpm audit:req-coverage`'ın metin çıktısında), ama **yeni/değişen
-bir teste yazılan yanlış etiket** (katalogda olmayan bir ID, ya da §7.3'ün yasakladığı bir kalıp
-`errors`'a düşecek şekilde) kapıyı aynı turda kırar — çünkü önceki turda 0 hata vardı ve bir
-hata yalnız o turun değişikliğinden gelebilir.
-
-**Kapının gerçekten kırmızı verdiği kanıtlandı** (elle, bu turda): `WAIVERS` listesine
-`source` alanı boş bırakılmış bir kayıt eklenip `pnpm audit:req-coverage` koşuldu →
-`ERRORS = 1`, `waiver: ... has no reason or no source` mesajıyla **exit 1**; kayıt geri alınınca
-aynı komut **exit 0**'a döndü. İkinci kanıt zaten depoda çalışıyor:
-`apps/api/src/config/req-coverage-audit.test.ts`'in "reports no integrity error against the repo
-as it stands" testi aynı `errors === []` iddiasını `pnpm -w test`'in `test:unit` shard'ında da
-tutuyor — CI'daki yeni adım script'i **doğrudan** (CLI/exit-code yoluyla) koşan tek yer, testteki
-`analyse()` çağrısının bir yedeği değil ikinci, bağımsız bir kanıt hattı.
-
-**Görev tanımının işaret ettiği bilinen CI boşluğu** ("unit-tests-before-build bundle bütçesini
-sessizce atlıyor") bu turda **zaten kapalı bulundu** — `git log -- .github/workflows/ci.yml`
-`6404a2e` (tm 156.1, M-GUARD-a) "Build runs before Unit tests, widget bundle guard stops skipping
-silently" diyor ve `ci.yml`'de "Build" adımı fiilen "Unit tests"ten önce duruyor;
-`apps/widget/test/bundle-size.test.ts` artık `describe.skipIf` değil, `existsSync` üzerinden
-**assert** ediyor (dist yoksa "run \`pnpm --filter @siyahtus/widget build\` first" mesajıyla kırmızı
-verir, sessizce atlamaz). Ayrı bir düzeltme commit'i bu yüzden gerekmedi.
+CI `verify` işi "Requirement coverage" adımında `pnpm audit:req-coverage` koşar. Kapsama borcu
+(`untagged`) kapıyı kırmızı yapmaz; exit 1 yalnız raporun kendi hakkında yalan söylediğinde
+(katalogda olmayan ID'yi anan etiket, var olmayan maddeye muafiyet, gerekçesiz muafiyet,
+`EXPECTED_ROWS`'tan sapan ayrıştırma). Gerekçe ve kanıt: `docs/conventions-gerekce.md` §1.5.
 
 ## 2) Git kuralları
 
@@ -231,6 +141,7 @@ verir, sessizce atlamaz). Ayrı bir düzeltme commit'i bu yüzden gerekmedi.
 ## 3) Handoff notu formatı (`HANDOFF.md`'ye eklenir)
 
 Her task kapanışında en üste (newest-first) şu blok eklenir:
+(`## Task log (newest-first)` başlığının hemen altına; **kısa**, 4 madde)
 
 ```
 ## <TASK-ID> — <başlık> — <done|blocked> — <UTC tarih>
@@ -243,23 +154,30 @@ Her task kapanışında en üste (newest-first) şu blok eklenir:
 Bu blok bir sonraki temiz pencerenin bağlamı doğru kurmasını sağlar — bağlam kaybını önleyen
 mekanizmanın kalbi budur.
 
+**Canlı `HANDOFF.md` en fazla son 5 görev bloğu + açık (pending / in-progress / blocked /
+review) görevlerin bloklarını tutar.** Yeni blok eklenince en alttaki fazla blok **aynı
+commit'te** `docs/archive/handoff/HANDOFF-arsiv-<YYYY-MM>.md` dosyasına (ayın arşiv dosyası;
+yoksa oluştur) başlığının hemen altına, newest-first sırası korunarak birebir taşınır. Eski
+kayıt: `grep -rn 'tm <id>' docs/archive/handoff` — arşivi baştan okuma.
+
 ## 4) Task Master durum akışı
 
 - Başlarken: task `in-progress`.
 - DoD yeşil + commit + push sonrası: `done`.
 - Geçemezse: `blocked` (veya `review`), asla `done` değil.
 - Alt-görevler (subtasks) kendi başına aynı kapıdan geçer; hepsi done olunca üst task done.
+- Görev SİLİNMEZ (bağımlılıklar eski görevlere işaret eder). Eski done görevlerin `details` /
+  `testStrategy` alanları tek satır özete indirilmiş olabilir; tam metin
+  `docs/archive/tasks/tasks-<tarih>.json` yedeğindedir.
 
 ### 4.1 Öncelik seviyeleri — `critical` rezervedir
 
 Planlama sırasında açılan HER görev yalnız şu üçünden birini alır (BUILD-BLUEPRINT K7):
 `high` (Faz-0 · v1 Must) · `medium` (v1 Should) · `low` (v2/v3).
 
-Dördüncü seviye `critical` **planlamaya kapalıdır**. Yalnız panelin "düzeltmeye gönder"
-akışıyla açılan pencere, sağlık taramasının bulgusundan doğan düzeltme görevine atar.
-PRD aktarımı, `parse-prd`, PLAN §G aktarımı ve elle görev açma sırasında ASLA kullanılmaz —
-`critical` normal backlog'un tamamının önüne geçtiği için (run-loop `pick_next`) planlamada
-dağıtılırsa gerçek düzeltmelerin önünü keser ve öncelik sırası anlamını yitirir.
+Dördüncü seviye `critical` **planlamaya kapalıdır**: yalnız panelin "düzeltmeye gönder" akışıyla
+açılan pencere, sağlık bulgusundan doğan düzeltme görevine atar. PRD aktarımı, `parse-prd`,
+PLAN §G aktarımı ve elle görev açmada ASLA kullanılmaz. Gerekçe: `docs/conventions-gerekce.md` §4.1.
 
 ## 5) Kapsam disiplini
 
@@ -268,260 +186,62 @@ dağıtılırsa gerçek düzeltmelerin önünü keser ve öncelik sırası anlam
 
 ## 6) Şema göçü (migration) politikası — çok replikalı dağıtımda güvenli değişiklik (tm 164.3)
 
-Bu bölüm bir **karar** ve onun gerekçesidir. Üç sorunun cevabı; hepsi ölçüldü, varsayılmadı
+Ölçümler ve "neden entrypoint / init-container değil": `docs/conventions-gerekce.md` §6
 (yeniden koşulabilir: `pnpm --filter @siyahtus/api measure:concurrent-migrate 3`).
 
 ### 6.1 Migration NEREDE koşar
 
-| Ortam                                                        | Migration'ı kim koşar           | Nasıl                                                                                                                                          |
-| ------------------------------------------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Yerel (`make dev`, tek konteyner, `docker-compose.full.yml`) | api imajının kendi entrypoint'i | `apps/api/docker-entrypoint.sh` → `prisma migrate deploy` (varsayılan **değişmedi**)                                                           |
-| Dağıtım (Helm, replika > 1)                                  | **tek atımlık hook Job**        | `infra/helm/siyahtus/templates/migrate-job.yaml` (`helm.sh/hook: pre-install,pre-upgrade`) + ConfigMap'te `SIYAHTUS_MIGRATE_ON_START: "false"` |
-
-**Neden entrypoint DEĞİL (replika > 1 iken).** `prisma migrate deploy` gerçekten sıraya
-giriyor — üç süreç aynı anda boş bir veritabanına saldırdığında biri 72 migration'ı uyguladı,
-diğer ikisi `pg_advisory_lock(72707369)` üzerinde bekleyip "uygulanacak bir şey yok" dedi,
-üçü de exit 0. **Ama bekleme sınırlı: 10 000 ms.** Kilit bundan uzun tutulduğunda `migrate
-deploy` P1002 ile vazgeçip **exit 1** veriyor (ölçüm: ~15 s sonra). Entrypoint'te bu exit
-uygulamanın exit'idir: süreç hiç başlamaz, pod CrashLoopBackOff'a girer — hem de tam şemayı
-değiştiren rollout sırasında. 10 sn'yi aşan migration hayali değil: dolu bir tabloda tek bir
-index build'i yeter. Yarış her iki durumda da var; değişen, **kaybetmenin bedeli**.
-
-**Neden init-container DEĞİL.** Aynı N-yollu yarışı başka bir konteynere taşır, ortadan
-kaldırmaz — üstelik her scale-up'ta ve şema değişikliğiyle hiç ilgisi olmayan her pod
-yeniden başlatmasında tekrarlar. Job, migration'ı **sürüm başına bir kez**, şema fiilen
-değiştiğinde koşar; başarısız olursa Helm sürümü bloklar (yarım rollout yerine durmuş
-rollout).
-
-**seed dağıtımda KOŞMAZ.** `docker-compose.full.yml`'in `init` servisi migrate + seed
-koşar, çünkü boş bir demo yığını işe yaramaz. Dağıtımın veritabanı demo değildir: seed
-kurgu organizasyon/agent/chat yazar; gerçek veriye karşı koşması bir veri bütünlüğü olayıdır.
-Job yalnız `prisma migrate deploy` çalıştırır.
+Yerel: api entrypoint'i (`apps/api/docker-entrypoint.sh` → `prisma migrate deploy`). Dağıtım
+(Helm, replika > 1): tek atımlık hook Job (`infra/helm/siyahtus/templates/migrate-job.yaml`) +
+`SIYAHTUS_MIGRATE_ON_START: "false"`. **seed dağıtımda KOŞMAZ.**
 
 ### 6.2 Yarış — ölçülen davranış
 
-| Senaryo                             | Sonuç (ölçüldü)                                                                               |
-| ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| 3 süreç, boş veritabanı             | 1 süreç 72 migration uyguladı · 2 süreç no-op · **hepsi exit 0** · ~1,7 s                     |
-| 3 süreç, zaten göç etmiş veritabanı | 3 no-op · hepsi exit 0 · ~1,0 s                                                               |
-| Kilit dışarıdan 15 s tutuluyor      | **exit 1**, `P1002 — Timed out trying to acquire a postgres advisory lock … Timeout: 10000ms` |
-
-Her migration **tam olarak bir kez** uygulandı (72 bulundu, yarışan süreçlerin toplamı 72).
-Yani veri açısından yarış güvenli; tehlike süreçlerin **exit code'u**, sonuç değil.
-
-**Yarıda kalan migration atomiktir ama serbest değildir** (ölçüldü): bir migration dosyasının
-ikinci ifadesi patladığında birinci ifadenin etkisi de geri alınır (Postgres, çok ifadeli
-basit sorguyu örtük transaction'a sarar), fakat `_prisma_migrations` tablosunda
-`finished_at IS NULL` bir satır kalır ve **sonraki her `migrate deploy` P3009 ile reddeder**.
-Kurtarma elle yapılır: `prisma migrate resolve --rolled-back <migration_adı>` (düzeltip
-yeniden uygulamak için) ya da `--applied` (etki fiilen yerindeyse). Bu yüzden Job'ın
-`activeDeadlineSeconds` değeri bir zamanlama bütçesi değil, **askıda kalmaya karşı emniyet
-freni**dir: en yavaş migration'ın çok üstünde tutulur, yakınında değil.
+Eşzamanlı `migrate deploy` veri açısından güvenli; kilit 10 sn'yi aşarsa P1002 + exit 1. Yarıda
+kalan migration `finished_at IS NULL` bırakır → sonraki deploy P3009; kurtarma
+`prisma migrate resolve --rolled-back|--applied <ad>`.
 
 ### 6.3 Geri alınamaz migration politikası — genişlet, sonra daralt
 
-Rollout sırasında **eski sürüm pod'lar hâlâ trafiğe cevap veriyor** ve hook Job şemayı
-onlardan ÖNCE değiştiriyor. Dolayısıyla kural:
-
-> Bir migration, o sırada koşan **eski** kodla da **yeni** kodla da uyumlu olmak zorundadır.
-
-Tek sürümde YASAK (her biri iki sürüm ister):
-
-- Hâlâ okunan bir kolonu/tabloyu **düşürmek**.
-- **Yeniden adlandırmak** (düşür + ekle demektir).
-- Tipi **daraltmak**, ya da `DEFAULT` vermeden `NOT NULL` eklemek.
-- Eski kodun hâlâ ihlal edebileceği veriye **unique/check kısıtı** eklemek.
-
-Doğru sıra (üç sürüm, "expand → migrate → contract"):
-
-1. **Genişlet** — yeni kolonu nullable/`DEFAULT`'lu ekle. Kod eskiyi okur, **ikisine de yazar**.
-2. **Taşı** — geri dolduran migration + kod yeniyi okumaya geçer. Eski kolon hâlâ duruyor.
-3. **Daralt** — 2. sürüm her yerde ayakta olduğuna göre eski kolonu düşür.
-
-Ek kural — **uzun kilit**: `ALTER TABLE`/`CREATE INDEX` dolu bir tabloda ACCESS EXCLUSIVE
-kilidi alır ve o süre boyunca **eski pod'ların sorguları bloklanır**. `CREATE INDEX
-CONCURRENTLY` bunu önler ve bu depoda **kullanılabilir** (ölçüldü) — ama yalnız migration
-dosyasındaki **tek ifade** olduğunda. Yanına bir ifade daha koyulduğunda Postgres'in çok
-ifadeli sorgu için açtığı örtük transaction devreye girer ve migration
-`25001 — CREATE INDEX CONCURRENTLY cannot run inside a transaction block` ile düşer.
-Yani: eşzamanlı index'in kendi migration dosyası olur.
+Bir migration hem **eski** hem **yeni** kodla uyumlu olmak zorundadır. Tek sürümde YASAK: okunan
+kolonu/tabloyu düşürmek, yeniden adlandırmak, tipi daraltmak / `DEFAULT`'suz `NOT NULL`, eski
+kodun ihlal edebileceği unique/check kısıtı. Sıra: **genişlet → taşı → daralt**.
+`CREATE INDEX CONCURRENTLY` yalnız migration dosyasındaki **tek ifade** olarak (yoksa `25001`).
 
 ## 7) Test ↔ gereksinim izlenebilirliği — etiket nerede yaşar (tm 184.1)
 
-Bu bölüm bir **karar** ve onun gerekçesidir. Denetimin (`prd-uyum-denetimi.md` §8) şu
-eleştirisinin cevabı: mevcut DoD kapısı "kod var + testler yeşil"i ölçüyor, PRD'nin istediği
-"kabul kriterinin **kendisi** test ediliyor mu"yu ölçmüyor.
-
-Bu bölüm **yalnız etiketi** kurar. Kapsama raporunu üreten script (tm 184.2) ve kapıyı CI'a
-bağlayan adım (tm 184.3) bunun üstüne gelir; ikisi de burada tanımlanan biçimi okur.
+Kararın gerekçesi ve ölçümleri (neden yorum / `covers()` değil, etiket sayımları, elle grep
+komutunun kusurları): `docs/conventions-gerekce.md` §7.
 
 ### 7.1 Karar: etiket test başlığında, parantez içinde yaşar
 
-```ts
-describe('white_label — widget markası (FR-MOD-11.5)', () => {
-  it('growth üzerinde powered_by=false reddediliyor', async () => { … });
-});
-
-it('BAA imzasını enterprise üzerinde kaydediyor (NFR-C4)', async () => { … });
-```
-
-Kural **yeni bir şey icat etmiyor** — depoda zaten baskın olan biçimi düzenliyor. Ölçüldü
-(2026-09-04, `git ls-files` ile izlenen 472 test dosyası; §7.6'nın komutlarıyla yeniden
-üretilebilir — parantez içindeki sayı bu kuralın YAZILMASINDAN ÖNCEKİ durumdur, aradaki fark
-§7.6'daki örnek dosyanın etiketlenmesidir):
-
-| Ölçüm                                                               |         Değer |
-| ------------------------------------------------------------------- | ------------: |
-| Herhangi bir katalog ID'si **anan** test dosyası                    |       **322** |
-| Başlık düzeyinde **iddia taşıyan** test dosyası                     | **141** (140) |
-| Başlık düzeyindeki iddia satırı                                     | **202** (196) |
-| Bu satırlarda geçen **farklı** katalog ID'si (247 maddenin içinden) |   **74** (73) |
-| Yalnız yorumda geçen ID satırı                                      |       **587** |
-
-Yani 140 dosya bu kuralı kimse söylemeden zaten uyguluyordu, üstelik **üç koşucunun üçünde de**:
-vitest (`apps/api` 43 · `apps/web` 66 · `apps/widget` 11 · `apps/rtm` 2 · `packages/types` 2 ·
-`apps/load` 1), Playwright (`apps/e2e` 15) ve jest (`apps/mobile` 1). Kuralın taşıdığı yük bu
-yüzden küçük: biçim değil, **biçimin anlamı** (§7.2) ve nereye yazılacağı (§7.4) sabitleniyor.
-
-**Neden yorum DEĞİL.** Yorum en yaygın biçim (586 satır) ama iddia taşıyamaz. İki nedenle:
-(1) dosya başlığındaki bir docblock **dosyanın konusunu** söyler, hangi `it`in o kriteri
-düşürdüğünü değil — 28 testlik bir dosyada "bu dosya FR-MOD-11.5'i kapsıyor" cümlesi
-doğrulanamaz; (2) yorum ile onun altındaki `expect` arasında hiçbir bağ yok, yorum yerinde
-kalırken assertion boşaltılabilir. Yorumdaki ID'ler **köken bilgisi** olarak yerinde kalır
-("bu kod şu maddeyi uyguluyor") ve kapsama iddiası SAYILMAZ.
-
-**Neden `covers()` yardımcısı DEĞİL.** Cazip tarafı gerçek: ID'yi üretilmiş bir union tipine
-bağlarsan yazım hatası `typecheck`te düşer. Bedeli daha büyük: üç koşucu (vitest · jest ·
-Playwright) için üç uyarlama, her test dosyasına bir import, ve `describe`in içinde mi dışında
-mı çağrıldığına bağlı bir yaşam döngüsü. Başlık ise **hiçbir koşucu API'sine dokunmuyor** —
-düz metin, yukarıdaki tabloda üç koşucuda da çalıştığı ölçülmüş durumda. Yazım hatası riski
-tm 184.2'nin script'inde katalogla eşleştirilerek karşılanır; kaçınılmak istenen bağlanma
-maliyetinden ucuzdur.
-
-**Başlığın üçüncü faydası:** etiket test çıktısına düşer. Kırmızı bir test artık hangi
-gereksinimi düşürdüğünü kendi adında söylüyor — yorum bunu yapamaz.
+`it('BAA imzasını enterprise üzerinde kaydediyor (NFR-C4)', …)`. Yorumdaki ID köken bilgisidir,
+iddia sayılmaz.
 
 ### 7.2 Etiketin anlamı — bu bir iddiadır, konu başlığı değil
 
-> Bir etiket şu cümlenin taahhüdüdür: **bu blok bu gereksinim bozulursa KIRMIZI verir.**
-
-"Bu test o maddenin civarında" yeterli değildir. Kriteri değil dönüş kodunu ölçen bir test
-(denetim §3/D7: `FR-MOD-07.4` fixture'ı `reason`suz olay yazdığı için hatayı yakalayamıyordu)
-etiketi **hak etmez** — yeşil raporu yanlış güvene çevirir. Şüphedeysen etiketleme.
+Etiket = "bu blok bu gereksinim bozulursa KIRMIZI verir". Şüphedeysen etiketleme.
 
 ### 7.3 ID uzayı — yalnız katalog maddeleri
 
-Etikete girecek ID **`prd-uyum-denetimi.md` Ek A'daki 247 maddeden biri** olmalıdır. Dört ad alanı:
-
-| Ad alanı                 | Örnek                              |
-| ------------------------ | ---------------------------------- |
-| `FR-MOD-<n>[.<n>…]`      | `FR-MOD-11.5` · `FR-MOD-08.5.4`    |
-| `FR-<bölüm>.<madde>`     | `FR-00-01.A` · `FR-EK-B.1`         |
-| `NFR-<harf><sayı>`       | `NFR-C4` · `NFR-S11` · `NFR-A11Y3` |
-| `SEMA-MIMARI.<n>[.<n>…]` | `SEMA-MIMARI.8.4c`                 |
-
-Katalog maddesi OLMAYAN iki şey etikete girmez — ikisi de yorumda serbesttir:
-
-- **PLAN iş kalemi kimliği** (`11.5-b`, `02.9-a`, `M-TRACE-a`): bir işin adı, bir gereksinim
-  değil. Katalog ID'siyle birlikte ayrıntı olarak yazılabilir — `(FR-MOD-11.5 · 11.5-b)` —
-  çıkarıcı yalnız `FR-MOD-11.5`'i alır, `11.5-b`'yi görmezden gelir.
-- **ADR numarası** (`ADR-09`): mimari karar, kabul kriteri değil.
-
-**Eğik çizgi kısaltması YASAK.** Depoda yorumlarda `NFR-C5/S9` ve `NFR-S4/S5` gibi kısaltmalar
-var; çıkarıcı bunu genişletemez, yalnız ilk ID'yi görür ve ikincisi **sessizce kaybolur**.
-Etikette her ID tam yazılır: `(NFR-C5 · NFR-S9)`.
-
-**Aralık kısaltması da YASAK, aynı sebeple** (tm 234). `(FR-MOD-08.5.4-.6)` yalnız `08.5.4`'ü
-talep eder; ölçüldü, sekiz başlık bunu yapıyordu ve `08.5.5` · `08.5.6` · `10.1.2` · `10.1.3`
-bu yüzden etiketsiz görünüyordu. Aralık çoğu zaman PLAN satır kodundan (`03.3.1–.3`) gelir
-— o bir iş adıdır, iddia değil. Doğrusu, bloğun kriterini gerçekten ölçtüğü maddeleri tek tek
-yazmaktır (§7.2): `(FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)`. Tek istisna, katalogun
-**kendisinin** tek madde olarak listelediği aralıktır (`FR-MOD-02.4.1–.6`, §7.6).
+Yalnız `prd-uyum-denetimi.md` Ek A maddeleri: `FR-MOD-<n>[.<n>…]` · `FR-<bölüm>.<madde>` ·
+`NFR-<harf><sayı>` · `SEMA-MIMARI.<n>[.<n>…]`. İş kalemi kimliği (`11.5-b`) ve ADR etikete girmez.
+**Eğik çizgi (`NFR-C5/S9`) ve aralık (`FR-MOD-08.5.4-.6`) kısaltması YASAK** — her ID tam:
+`(NFR-C5 · NFR-S9)`. Tek istisna katalogun kendi maddesi `FR-MOD-02.4.1–.6`.
 
 ### 7.4 Çoktan-çoğa
 
-- **Bir test → birden çok madde:** aynı parantezde `·` ile ayır — `(FR-MOD-08.9.5 · NFR-C5)`.
-  Ayırıcı depodaki mevcut yorum deyimidir (`(FR-MOD-04.5 · NFR-S11 · M-TEAM-e)`), yeni değil.
-- **Bir madde → birden çok test:** kendiliğinden çalışır; çıkarıcı bir küme toplar, sayı
-  tutmaz. Aynı ID'yi kaç blok isterse etiketleyebilir.
-- **Yuvalama:** `describe` üzerindeki etiket **içindeki her `it`e dağılır**. Bu yüzden etiket
-  **iddianın gerçekten doğru olduğu en dar bloğa** yazılır. Dosyanın en üstündeki `describe`e
-  koyulan geniş bir etiket, o dosyadaki ilgisiz her testi de o maddeyi koruyor gibi gösterir —
-  tam olarak kaçınılmak istenen sahte kapsama budur.
-
-Konum, parantezin başlıkta nerede durduğu değildir: sonda olması okunaklıdır ve mevcut 101
-`FR-MOD` başlığının 94'ü öyle, ama zorunlu değil — `'hedef kayıtları (FR-MOD-13.3) — dönüşüm
-kaydı'` geçerli. Zorunlu olan tek şey ID'nin **parantez içinde** olması; düz metne gömülü bir
-anma (`'FR-MOD-13.7'nin adlandırdığı dört yüzeyi sayar'`) iddia sayılmaz ve çıkarılmaz.
+Birden çok madde aynı parantezde `·` ile ayrılır. `describe` etiketi içindeki her `it`e dağılır —
+etiketi iddianın doğru olduğu **en dar** bloğa yaz.
 
 ### 7.5 Kademeli benimseme — geriye dönük uygulanmaz
 
-472 dosya / ~7.100 test geriye dönük etiketlenmez; bunu denemek ya turlarca sürer ya da
-gözden geçirilmemiş, dolayısıyla §7.2'yi ihlal eden etiketler üretir. Kural şu şekilde yürür:
-
-- **Zorunlu:** yeni yazılan ya da değişen bir test, bir PRD kabul kriterini koruyorsa
-  etiketlenir. Kapı bunu tm 184.3'te ölçer.
-- **Gönüllü:** mevcut 141 dosyanın dışındaki her şey. Bir dosyaya başka bir iş için
-  dokunuluyorsa etiket eklemek teşvik edilir, şart değildir.
-- **Borç ayrı raporlanır:** etiketsiz maddelerin listesi tm 184.2'nin çıktısıdır ve kapıyı
-  kırmızı yapmaz. Bugün 247 maddenin 74'ü etiketli; kalan 173'ü "kapsanmıyor" DEĞİL,
-  "etiketlenmemiş" demektir — ikisini karıştırmak kuralın ilk yanlış kullanımı olur.
+Yeni/değişen ve PRD kriterini koruyan test etiketlenir; eski dosyalar gönüllü.
 
 ### 7.6 Etiketler makineyle çıkarılabilir — örnek komut
 
-Aşağıdaki iki komut depo kökünden koşar (Git Bash). tm 184.2 bunları script'e çevirecek;
-buradaki amaç biçimin **bugün** çıkarılabilir olduğunu göstermek.
-
-```bash
-# Dış parantezler ŞART: alternasyon gruplanmazsa `\($SIYAHTUS_REQ_ID` yalnız ilk
-# seçeneğe bağlanır, kalan üçü `describe(` çıpasından da parantez şartından da
-# bağımsız eşleşir ve yorum satırları sonuca sızar (bu turda ölçüldü: 73 yerine
-# 149 ID, aralarında hiç etiketlenmemiş dosyaların yorumları).
-SIYAHTUS_REQ_ID='(FR-MOD-[0-9][0-9.]*|FR-[0-9A-Z][0-9A-Z-]*\.[0-9A-Za-z]+|NFR-[A-Z0-9]+|SEMA-MIMARI\.[0-9A-Za-z][0-9A-Za-z.-]*)'
-
-# 1) Her kapsama iddiası, yeriyle birlikte (dosya:satır)
-git ls-files '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' \
-  | xargs grep -nE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($SIYAHTUS_REQ_ID"
-
-# 2) İddia edilen maddelerin kümesi (247'nin içinden bugün 74)
-git ls-files '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' \
-  | xargs grep -hE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($SIYAHTUS_REQ_ID" \
-  | grep -oE "\($SIYAHTUS_REQ_ID[^)]*\)" | grep -oE "$SIYAHTUS_REQ_ID" | sort -u
-```
-
-Regex katalogun 247 ID'sinin 246'sını eşliyor; eşleşmeyen tek satır `FR-MOD-02.4.1–.6`, bir
-aralık gösterimi (kısa çizgi değil **en-dash**) — ondan yalnız `FR-MOD-02.4.1` çıkar. tm 184.2
-katalog ayrıştırıcısını yazarken bu tek kaleme özel davranmalı.
-
-Uygulanmış örnek: `apps/api/test/integration/entitlements.test.ts` — dosya başlığındaki
-köken yorumu yerinde bırakıldı, iddialar dört iç `describe`e dar biçimde dağıtıldı
-(`FR-MOD-11.5` · `NFR-S11` · `NFR-C4` · `NFR-S12`), üst `describe` yalnız hepsinde doğru olan
-maddeyi (`FR-MOD-10.1.1`, plan geçişi / downgrade kısıtları) taşıyor.
-
-**Bu iki komut artık betik: `pnpm audit:req-coverage`** (`scripts/audit/req-coverage.cjs`,
-tm 184.2 · `--json` ile makine biçimi). Betiği yazarken yukarıdaki komutun **iki kusuru**
-ölçümle çıktı; ikisi de betikte düzeltildi, ama komutu elle koşan biri bilmeli:
-
-- **Çıkarma adımı, katalog ID'sinin parantezin BAŞINDA olmasını şart koşuyor.** Kalıp
-  `\(<ID>[^)]*\)` olduğu için `(400, NFR-S8)`, `(un-enumerable, NFR-S5)` ve
-  `(M-LOAD-CAP · NFR-R2)` komuta hiç görünmüyor — oysa §7.4 böyle bir sıra dayatmıyor,
-  aksine iş kalemi kimliğinin ayrıntı olarak yanına yazılabileceğini söylüyor. Ölçüldü:
-  **8 iddia satırı ve bir bütün madde (`NFR-R2`)** bu yüzden sayılmıyor. Betik 75 madde /
-  146 dosya diyor; §7.1'in tablosundaki 74 / 141 bu kusurun sonucudur.
-- **JS alternasyonu leftmost-_first_, POSIX ERE leftmost-_longest_.** Regex birebir
-  JavaScript'e taşınırsa `FR-MOD-04.RBAC` → `FR-MOD-04.` olur (ilk dal önek eşliyor ve JS
-  orada duruyor). Betik `FR-MOD-` dalını `[0-9]+(?:\.[0-9A-Za-z]+)*` yaparak kapattı.
-
-Üçüncü kusur düzeltilebilir değil, **raporlanıyor**: §7.3'ün yasakladığı eğik çizgi kısaltması
-(tm 234'e kadar iki başlıkta `NFR-S4/S5`) hiçbir çıkarıcı tarafından genişletilemez, ikinci ID her
-hâlükârda kayboluyor — betik bu başlıkları ayrı bir kovada listeliyor. tm 234 aralık
-kısaltmasını ikinci bir kovaya aldı; iki kova da o turdan beri **0** ve
-`req-coverage-audit.test.ts` onları sıfırda tutuyor (CLI'ın çıkış kodu §1.5'teki gibi kaldı).
+`pnpm audit:req-coverage` (`scripts/audit/req-coverage.cjs`, `--json`).
 
 ### 7.7 Bu kuralın SATIN ALMADIĞI şey
 
-Etiket, testin o kriteri **doğru** ölçtüğünü kanıtlamaz — yalnız birinin öyle iddia ettiğini
-kaydeder. `FR-MOD-07.4` etiketli olsaydı bile fixture'ı kör olduğu için yeşil kalacaktı.
-Yani bu bölüm kapsama **raporunu** mümkün kılar, kapsamanın **kalitesini** garanti etmez;
-sınır tm 184.2'de açıkça belgelenir. Etiketli bir maddenin yeşil görünmesi, gözden geçirmenin
-yerine geçmez.
+Etiket, testin kriteri doğru ölçtüğünü kanıtlamaz; gözden geçirmenin yerine geçmez.

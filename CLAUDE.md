@@ -17,6 +17,8 @@ Her pencere (interaktif veya `run-loop.sh` ile açılan) aşağıdaki kurallara 
 - Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → build → verify → fix → close).
 - Yalnız hedef task yapılır; done ancak DoD kapısı yeşilse + commit + push + Task Master done.
 - Bağlam hafızadan değil, Task Master + git + `HANDOFF.md`'den kurulur.
+- Canlı `HANDOFF.md` / `PLAN.md` §K yalnız son görevlerin ayrıntısını tutar. Eski kayıt/kanıt
+  gerekiyorsa `docs/archive/` altında grep ile ara; arşivi baştan okuma (CONVENTIONS §1.2, §3).
 
 ## Sınırlar
 

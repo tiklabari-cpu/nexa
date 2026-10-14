@@ -12,7 +12,7 @@ Sırayla oku:
 2. `CONVENTIONS.md` — Definition of Done (DoD) kapısı, git kuralları, handoff formatı.
 3. Task Master'dan HEDEF TASK'ı çek (get_task / show): başlık, detay, test stratejisi, kabul
    kriteri, bağımlılıklar, alt-görevler.
-4. `PLAN.md` — **baştan sona OKUMA** (~1.4 MB / ~6.150 satır, bağlamı boşa harcar). Şu iki adımı yap:
+4. `PLAN.md` — **baştan sona OKUMA** (~1 MB / ~7.100 satır, bağlamı boşa harcar). Şu iki adımı yap:
    a. Task başlığındaki iş kalemi kimliğini (ör. `11.7-a`) `### Düz tablo (aktarım kaynağı)`
    bölümünde ara → `PRD` sütunu sana gereksinim kodunu verir (`11.7`). Eşleme burada
    yazılıdır, tahmin etme.
@@ -25,6 +25,13 @@ Sırayla oku:
    yalnız damga + referans taşır: `| 07.7 | … | Should | ★ | ✅ → K07.7 |`. O kalemin
    geçmişi lazımsa: `grep -n '^#### K07.7' PLAN.md` → bulduğun satırdan itibaren oku
    (`Read` ile dar `offset`/`limit`). Kanıt gerekmiyorsa **hiç açma** — damga yeter.
+
+   d. **Eski kayıt/kanıt gerekiyorsa `docs/archive/` altında grep ile ara; arşivi baştan okuma.**
+   Canlı dosyalarda yalnız son görevlerin ayrıntısı durur. Eski K maddeleri
+   `docs/archive/plan-kanit/`, eski §D sapmaları ve §A/§B tarihçe `docs/archive/plan/`, eski
+   HANDOFF blokları `docs/archive/handoff/`, eski görevlerin tam `details` metni
+   `docs/archive/tasks/tasks-<tarih>.json`'dadır: `grep -rn 'tm <id>\|^#### K07.7\|D167\b' docs/archive`.
+   Kuralların gerekçesi/ölçümleri `docs/conventions-gerekce.md`'de (aynı § numaraları).
 
    ⚠ Bu düzen 2026-08-09'da kuruldu, sebebi ölçümdür: kanıt hücrede birikince satır 32.480
    karaktere çıkmıştı (tek başına ~10k token) ve çıplak bir `grep` pencerenin tur bütçesini
@@ -41,10 +48,10 @@ Bu task daha önce yarım kalmış olabilir. ÖNCE mevcut durumu tespit et: ilgi
 var mı, testler ne durumda, `git status` ne diyor, `HANDOFF.md`'de bu task için not var mı.
 **Sıfırdan yapma** — kaldığı yerden devam et veya hatayı düzelt.
 
-`HANDOFF.md`'yi **tam okuma** (~1.3 MB, ~25 blok). Bloklar newest-first sıralı ve `## Task log`
-başlığı 14. satırdadır — sana gereken yalnız en üstteki birkaç blok. Kalıp: `head -60 HANDOFF.md`
-veya `Read(limit: 60)`. Daha eski bir işi arıyorsan tam metin yerine hedefli ara:
-`grep -n 'tm <id>' HANDOFF.md | head -5` → dönen satır numarası çevresini dar bir aralıkla oku.
+`HANDOFF.md` küçüktür (~13 KB): yalnız son 5 görevin + açık görevlerin blokları, newest-first,
+`## Task log` başlığı ~16. satırda. Kalıp: `head -60 HANDOFF.md` veya `Read(limit: 60)`. Daha
+eski bir işi arıyorsan arşivde hedefli ara: `grep -rn 'tm <id>' docs/archive/handoff | head -5`
+→ dönen satır numarası çevresini dar bir aralıkla oku (arşiv ~2,7 MB, baştan okuma).
 
 Tespit biter bitmez task'ı Task Master'da **in-progress** işaretle (CONVENTIONS §4 — "Task Master
 durum akışı"; handoff biçimi ORASI DEĞİL, §3'tür). Bu adım opsiyonel DEĞİL: pencere beklenmedik
@@ -117,10 +124,12 @@ dalını çalıştırarak kapat — ama MUTLAKA kapat.
      kodunu PRD kodundan türet (`07.7` → `K07.7`) ve (ii)'de bloğunu aç.
 
      **(ii) `## K. Kanıt Geçmişi` — kanıt buraya.** İlgili `#### K<kod>` bloğunu bul
-     (`grep -n '^#### K07.7' PLAN.md`) ve **bloğun sonuna bir madde ekle**, mevcut biçimde:
-     ``- ✅ <ne yapıldı> — `<dosya>` · test `<dosya>` (n) · tm <id>``
+     (`grep -n '^#### K07.7' PLAN.md`) ve **maddelerin sonuna tek satırlık bir madde ekle**
+     (CONVENTIONS §1.2): `- ✅ tm <id> · <ne yapıldı> · <dosya:satır> · <test dosyası (n)> · <commit>`
      Blok yoksa `## K.` bölümünün sonuna `#### K<kod> — <PRD kodu> · <kısa başlık>` diye aç.
-     Var olan maddeleri SİLME, üstüne yazma — bu bir geçmiş kaydıdır, ekleyerek büyür.
+     Var olan maddeleri SİLME, üstüne yazma. Blokta canlı en fazla **3 madde** kalır: fazlası
+     (en eskiler) aynı commit'te `docs/archive/plan-kanit/PLAN-kanit-arsiv-<YYYY-MM>.md`'ye aynı
+     `#### K<kod>` başlığı altına birebir taşınır (CONVENTIONS §1.2).
 
      Task'ın kapattığı **her** satırı güncelle. Gereksinimi yalnız kısmen karşıladıysan `◐`
      bırak ve eksiği (ii)'deki maddeye yaz — kapanış uğruna `✅` UYDURMA.
@@ -129,6 +138,8 @@ dalını çalıştırarak kapat — ama MUTLAKA kapat.
      pencere için notlar. Ekleme noktası **`## Task log (newest-first)` başlığının hemen altı**;
      `Edit`'in `old_string`'i o başlık + bir sonraki bloğun ilk satırı olsun. Dosyayı yeniden
      okumana gerek yok (bu noktayı §1'de zaten gördün) ve blok **kısa** olsun — 4 madde yeter.
+     Canlı dosyada son 5 görev + açık görevler kalır: en alttaki fazla blok aynı commit'te
+     `docs/archive/handoff/HANDOFF-arsiv-<YYYY-MM>.md`'ye taşınır (CONVENTIONS §3).
   3. `git add -A` → Conventional Commit (`feat(<alan>): ...` / `fix: ...`), CONVENTIONS'a uygun.
      PLAN.md ve HANDOFF.md düzenlemeleri **bu commit'in içinde** olmalı — ayrı commit'e bırakma,
      çalışma alanını kirli BIRAKMA.

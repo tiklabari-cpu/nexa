@@ -4,7 +4,7 @@ argument-hint: '[görev id — boş bırakılırsa next]'
 allowed-tools: Bash(task-master *), Read, Grep, Glob, Edit, Write, Bash(pnpm *), Bash(make *), Bash(git *)
 ---
 
-Bir oturum = bir iş. `PLAN.md`'yi (89 KB) **okuma** — görevin kendisi zaten plana çivili.
+Bir oturum = bir iş. `PLAN.md`'yi (~1 MB) **okuma** — görevin kendisi zaten plana çivili.
 
 ## 1. İşi al
 

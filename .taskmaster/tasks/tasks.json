@@ -11848,7 +11848,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-14T21:00:22.700Z",
+        "updatedAt": "2026-10-14T21:33:47.201Z",
         "subtasks": [
           {
             "id": 1,
@@ -11856,11 +11856,11 @@
             "description": "Composer'ı sohbet kimliğiyle anahtarla + hatayı üreten e2e",
             "details": "Güvenlik düzeltmesi: key={selectedId}; e2e önce kırmızı (hata üretimi), sonra yeşil. Tek başına commit/merge edilebilir.",
             "testStrategy": "inbox-draft.spec.ts (A→B geçiş, Enter boş kutuda göndermez), Composer birim testleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "277",
             "priority": "high",
-            "updatedAt": "2026-10-14T21:00:22.700Z"
+            "updatedAt": "2026-10-14T21:33:47.201Z"
           },
           {
             "id": 2,
@@ -15760,9 +15760,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-14T21:00:22.701Z",
+      "lastModified": "2026-10-14T21:33:47.201Z",
       "taskCount": 390,
-      "completedCount": 274,
+      "completedCount": 275,
       "tags": [
         "master"
       ]

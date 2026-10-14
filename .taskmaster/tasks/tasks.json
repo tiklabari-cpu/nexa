@@ -11868,7 +11868,7 @@
             "description": "Sohbet başına taslak deposu (localStorage, 24 saat, çıkışta silme)",
             "details": "composerDrafts.ts (copilotDraft.ts deseni), RTM ile silme, iç not modu geri yükleme, Copilot üzerine yazma onayı.",
             "testStrategy": "Composer.draft.test.tsx: TTL, çıkışta silme, aktarımda silme, mod geri yükleme.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "277.1"
             ],

@@ -38,8 +38,19 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 | K14 | **Ekip kuyrukları:** Finans, KYC/Risk, Bonus, Sorumlu Oyun, Teknik, Şikâyet. Sabit mi, şirket tanımlı mı? | AU-01 | 6 hazır şablon gelir. Şirket bunları yeniden adlandırıp yenisini ekleyebilir. "Sorumlu Oyun" kuyruğu silinemez; buna yalnızca eğitimli ajanlar üye olabilir || ✅ Varsayılan onaylandı |
 | K15 | **İlk iGaming platform entegrasyonu hangisi olsun?** (F2) | KN-06 | Pilot operatörün kullandığı platform. İlk sürüm yalnızca okuma yapar || ✅ **Şimdilik 1–2 platform yalnızca "Bağla" butonu olarak görünsün, buton tıklanamaz** (pasif, "yakında") |
 | K16 | **Ödeme sağlayıcısı ve fatura kesen şirketin ülkesi** | BL-01 | Pilotta havale/SWIFT ile devam edilir. Yüksek riskli sektörü kabul eden bir sağlayıcıyla görüşülür; şirketin ülkesi önce netleşmeli | ✅ **Şimdilik SWIFT + kripto + Stripe:** SWIFT/banka havalesi; kripto ödeme seçilince müşteri "Adres isteyin" bölümüne yönlendirilir (cüzdan adresi talep üzerine verilir); Stripe da bağlanabilir |
+| K17 | **LLM ADR §6 (tools/response_format yok) ile AI maddelerinin çelişkisi:** ek not yazılsın mı? | AI-16, AI-04–08, AI-22–24 | Evet: §6a eki — yapılandırılmış çıktı istemde JSON + sunucuda şema doğrulaması; araç çağırma modelde değil prosedür motorunda | ✅ Evet, ek yazılsın |
+| K18 | **ADR-08 (yönlendirme) ve ADR-11 (Redis Streams, Kafka yok) ek notları** (ekip kuyruğu, AI devri; kalıcı AI iş kuyruğu Postgres'te) | AI-11, AI-12, AU-01, GV-02 | ADR-08a ve ADR-11a ekleri | ✅ Hepsi onaylı |
+| K19 | **ADR-13 (Stripe MOCK) ek notu** (K16'daki SWIFT + kripto + Stripe adaptörü) | BL-01–BL-03 | ADR-13a eki; gerçek anahtar ve canlı ödeme yine insan kararı | ✅ Evet |
+| K20 | **customer_username değişikliği** (repoda commit'lenmemiş çalışma; analiz bu kopyaya göre yazıldı) | WG-01, ID-03, IN-02 | Ayrı bir ön görevle kapatılsın (doğrula, test et, commit) | ✅ Ayrı ön görev |
+| K21 | **AI-20 tasarım notu ve RP-04 veri yakalama öne alınsın mı?** (sürüm paketi ve kuyruk kaydı geç gelirse geçmiş veri kaybolur) | AI-20, RP-04 | Evet, ikisi Dalga 2'ye | ✅ İkisi de öne alınsın |
+| K22 | **Gerçek WhatsApp / Messenger / Instagram** (Meta kumar/bahis politikası belirsiz) | KN-01, KN-02 | Ertelensin (deferred) | ✅ **İkisi de pending** (ertelenmez; testte taklit, canlı bağlama insan kararı) |
+| K23 | **HelpDesk e-posta gönderimi pilot kapısı** (04 HD-01 S3) | HD-01, HD-04 | Kodlansın; pilotta ayrı bir ayarla açılsın | ✅ Kodla, kapı ayrı ayar |
+| K24 | **Fatura PDF'i ve e-Fatura** (şirketin ülkesi henüz net değil) | BL-02 | Bilgi amaçlı PDF + mock e-Fatura arayüzü | ✅ Bilgi amaçlı PDF + mock e-Fatura |
+| K25 | **Widget'a Rusça ve Azerice eklensin mi?** (WG-02 S2 ile AI-30 S2 çelişkisi) | WG-02, AI-30 | Ekle | ✅ **Eklenmesin:** widget 8 dilde kalır; AI yine RU/AZ cevap verebilir |
+| K26 | **Sohbet dökümü oyuncuya otomatik gitsin mi?** | WG-06 | Varsayılan kapalı, şirket açabilir | ✅ **Otomatik gönderilmesin, yalnız oyuncu isterse tıklasın;** loglama/içeride kaydetme aynen sürer |
+| K27 | **ADR ek notları nasıl görevlendirilsin?** | Dalga 0 | ADR başına bir görev | ✅ ADR başına bir görev |
 
-> **Karar kaydı durumu (2026-10-14):** K1–K16'nın hepsi cevaplandı. K4, K9, K13, K15 ve K16 varsayılandan farklı ya da daha geniş cevaplandı. Bunların hangi maddeleri nasıl değiştirdiği hemen aşağıdaki "Kararların maddelere etkisi" bölümünde yazıyor. Uygulayıcı, maddelerin içindeki varsayılanlar yerine bu bölümü esas alır.
+> **Karar kaydı durumu (2026-10-14):** K1–K27'nin hepsi cevaplandı (K17–K27 görev planlama turunda eklendi; görev eşlemesi [07-gorev-plani.md](07-gorev-plani.md)). K4, K9, K13, K15, K16, K22, K25 ve K26 varsayılandan farklı ya da daha geniş cevaplandı. Bunların hangi maddeleri nasıl değiştirdiği hemen aşağıdaki "Kararların maddelere etkisi" bölümünde yazıyor. Uygulayıcı, maddelerin içindeki varsayılanlar yerine bu bölümü esas alır.
 
 ### Kararların maddelere etkisi
 
@@ -104,6 +115,18 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 - **Sağlayıcı yapısı:** Her yöntem bir "ödeme sağlayıcısı" kaydı olarak ele alınır: `swift_manual`, `crypto_manual`, `stripe`. Hangilerinin görüneceğini platform yöneticisi açıp kapatabilir.
 - **Faturalar:** Faturada ödeme yöntemi ve referans (SWIFT referansı, TXID, Stripe ödeme ID'si) yer alır (BL-02).
 - **Not:** Stripe, iGaming'e yazılım satan işletmelerde ek inceleme isteyebilir ya da hesabı reddedebilir. Bu yüzden SWIFT ve kripto yolları Stripe'a bağımlı olmadan çalışacak şekilde tasarlanır.
+
+**K25: Widget'a Rusça ve Azerice eklenmez**
+- **Etkilediği maddeler:** WG-02, AI-30
+- Widget arayüz dilleri bugünkü 8 dilde kalır (ar, de, en, es, fr, it, pt, tr). WG-02 S2 ve AI-30'daki "WG-02 ile `ru` ve `az` locale dosyaları eklenir" satırı uygulanmaz.
+- AI yine Rusça ve Azerice cevap verebilir: `PERSONA_LANGUAGES` listesine `ru` ve `az` eklenir (AI-30).
+
+**K26: Sohbet dökümü otomatik gönderilmez**
+- **Etkilediği maddeler:** WG-06 (AR-04 şablonunu kullanır)
+- Kapanışta oyuncuya döküm e-postası gitmez (mevcut ve yeni tüm şirketler). Oyuncu isterse widget'taki "Dökümü e-postama gönder" ile alır.
+- Bu karar loglamayı etkilemez: konuşmanın içeride kaydedilmesi (transkript, arşiv, zaman çizelgesi, denetim kaydı) aynen sürer. Yalnız dışarıya giden otomatik e-posta kalkar.
+
+**K17–K27'nin görev karşılıkları:** [07-gorev-plani.md](07-gorev-plani.md) (Task Master #269–#388).
 
 Maddelerin içinde bunların dışında daha ayrıntılı sorular da var. Onların hepsinin önerilen varsayılanı yazılı.
 

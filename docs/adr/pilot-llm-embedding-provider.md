@@ -3,6 +3,7 @@
 - **Görev:** tm 255.1 (PILOT-LLM-DECIDE) · PLAN.md §D176
 - **Tarih:** 2026-09-22
 - **Durum:** Kabul edildi (pencere kararı). Kod ve testler (255.5–255.9) bu karara göre hemen ilerleyebilir; **pilotun canlıya çıkması** için §11'deki iki sahip kararı 2026-10-02'de verildi (OpenAI, bölge `us`); kalan iş hesap ve anahtardır.
+- **Ek (2026-10-14, tm 270, sahip kararı K17):** §6a — yapılandırılmış JSON çıktı EVET (yalnız §6a.1'deki çağrılarda), araç çağırma HAYIR. §0 satır 6 ve §6 metni değişmedi; §6'nın `response_format` cümlesinin yerini §6a alır.
 - **Yöntem:** Yalnız resmi dokümantasyon okundu (URL'ler her satırda ve §12'de). Hiçbir sağlayıcıya istek atılmadı, hesap açılmadı, anahtar edinilmedi ya da girilmedi. Bu dosyada hiçbir sır değeri yoktur; yalnız anahtar ADLARI vardır.
 - **PRD:** NFR-C4 (bölge/HIPAA kapısı korunur) · FR-MOD-06.3.2 (embedding + index sözleşmesi) · FR-05-06.EK1 (skill motoru çalışma zamanı).
 
@@ -110,6 +111,69 @@ Embedding sağlayıcısı sohbetten **ayrı** bir karar ve ayrı bir yapılandı
 
 Skill adımları admin tarafından yazılır ve `@siyahtus/ai-mock` `validateSteps` kapısından geçer; model araç çağırmıyor, çağırması da istenmiyor. Pilotta modelin tek işi, geri getirilmiş pasajlardan ve persona kurallarından **müşteriye gidecek yanıt metnini yazmak**. Transfer / etiket / bilgi isteme kararları bugünkü deterministik adımlarda kalır. `tools`, `tool_choice`, `response_format` gönderilmez.
 
+> **Değiştirildi: §6a (2026-10-14, sahip kararı K17).** Bu bölümün metni tarihçe olarak aynen duruyor. `response_format` cümlesinin yerini §6a alır: yapılandırılmış JSON çıktı yalnız §6a.1'deki çağrılarda açılır. `tools` / `tool_choice` yasağı ve "kararlar deterministik kodda" ilkesi değişmez.
+
+## 6a. 2026-10 eki — yapılandırılmış JSON çıktı EVET, araç çağırma HAYIR
+
+- **Görev:** tm 270 (ADR-LLM-JSON) · PLAN.md §D219 · **Tarih:** 2026-10-14 · **Sahip kararı:** K17 ("ek yazılsın"), K12 (§11).
+- **Neden:** SiyahTuş analiz paketinin AI maddeleri (`SiyahTus-Analiz/05-uygulama-rehberi.md`: AI-04, AI-05, AI-06, AI-07, AI-08, AI-22, AI-23, AI-24) modelden serbest metin değil, şemaya uyan bir nesne ister: aday prosedür ve güven, slot aday değeri, dayanak bilgisi olan yanıt, ihlal listesi. §6'nın "`response_format` gönderilmez" cümlesi bunların hepsini bloke ediyordu. Analiz paketinin kuralı açık: kilitli bir karar sessizce delinmez, ek not yazılır (05 "Ortak çerçeve" 4).
+- **Değişmeyen:** model hâlâ hiçbir aracı çağırmıyor ve hiçbir karar vermiyor. §6'nın amacı aynen geçerli: model **aday değer** üretir, **karar** deterministik koddadır.
+
+### 6a.1 `response_format: { type: 'json_schema' }` hangi çağrılarda gönderilir
+
+Yalnız aşağıdaki çağrılarda. Listede olmayan her çağrı bugünkü gibi düz metin döner. Listeye yeni çağrı eklemek bu eki güncellemeyi gerektirir.
+
+| Çağrı                                    | Madde | Görev  | Çıktı (05'e göre, özet)                                                  | Model katmanı |
+| ---------------------------------------- | ----- | ------ | ------------------------------------------------------------------------ | ------------- |
+| Anlama / konu tespiti ve prosedür seçimi | AI-05 | tm 297 | aday prosedür(ler) + güven, `wants_human`, dil                           | `fast`        |
+| Slot (bilgi toplama) çıkarımı            | AI-04 | tm 295 | slot başına aday değer + `raw_text`                                      | `fast`        |
+| Dayanaklı yanıt yazımı (grounded/cited)  | AI-06 | tm 298 | `{ reply, grounded: 'full' \| 'partial' \| 'none', cited_ids: [] }`      | `default`     |
+| Davranış kuralı çelişki denetimi         | AI-07 | tm 299 | `{ conflicts: [{ rule_id, explanation, severity }], duplicates, vague }` | `fast`        |
+| Hakem (kilitli kurallara karşı taslak)   | AI-08 | tm 301 | `{ ok, violations: [{ rule_id, quote }] }`                               | `fast`        |
+| Çözülemeyen soru kümesinin başlığı       | AI-22 | tm 317 | ≤ 8 kelimelik başlık + önerilen eylem türü                               | `fast`        |
+| Öneri taslağı                            | AI-23 | tm 318 | `{ title, body, applies_to_intent, removed_specifics[] }`                | `fast`        |
+| QA ön puanı                              | AI-24 | tm 319 | `{ criteria: [{ key, value, evidence_event_ids[], rationale }], … }`     | `default`     |
+
+Şemanın kesin biçimi çağrıyı yazan görevindir. Bu ek yalnız mekanizmayı ve sınırları sabitler. Katman sütunu 05'in söylediğidir: oyuncuya giden metin `default` ile yazılır, sınıflandırma, özet, hakem ve küme başlığı `fast` ile (05 AI-16 "Model katmanı"). QA ön puanını 05 AI-24 açıkça `default` + sıcaklık 0 ile ister.
+
+### 6a.2 Kararlar kodda kalır — model yalnız aday üretir
+
+- Devir, etiket, netleştirme sorusu, prosedür adımına geçiş deterministik kodda (`policy.ts`, yeni; 05 "Ortak çerçeve" ve AI-05, tm 296/297) verilir. Model çıktısı bu koda **girdi** olur, komut olmaz. JSON'daki bir alan doğrudan bir yan etki (olay yazma, devir, etiket) tetiklemez.
+- **İzlenebilirlik kalkanı (AI-04, genelleştirildi):** model çıktısındaki her kimlik ya da alıntı girdide gerçekten var olmalı. Yoksa o değer atılır. Slotta `raw_text` oyuncunun işlenen mesajlarında geçmiyorsa değer kaydedilmez. `cited_ids` istemde verilen pasajların dışındaysa atılır. Hakemin `rule_id`'si kilitli kural listesinde yoksa atılır. QA `evidence_event_ids` bu sohbete ait değilse ön puan atılır.
+- `strict` şema bile sunucu tarafı doğrulamanın yerini tutmaz. Her yanıt şemayla sunucuda yeniden doğrulanır: mock, şemayı uygulamayan bir model ve kesilmiş çıktı aynı kapıdan geçer.
+
+### 6a.3 İstek ve arayüz
+
+- `LlmCompletionRequest` (`apps/api/src/services/ai/provider/llm-provider.ts:45`) iki isteğe bağlı alanla genişler: yapılandırılmış çıktı şeması (ad + JSON Schema) ve `tier: 'default' | 'fast'`. Alanın adı 05'te iki türlü geçiyor (AI-05 `responseSchema`, AI-16 `responseFormat`); tek adı tm 283 sabitler.
+- OpenAI adaptörü şema varken gövdeye `response_format: { type: 'json_schema', json_schema: { name, schema, strict: true } }` ekler. Gövdenin geri kalanı §10'daki gibidir (`model`, `messages`, `max_completion_tokens`). `strict: true` OpenAI'ın şema alt kümesini ister: her alan `required`, `additionalProperties: false`, isteğe bağlı alan `null` alabilen tip olarak yazılır.
+- **Doğrulama notu:** bu ekteki OpenAI ayrıntıları (`json_schema` gövdesi, `strict` alt kümesi, `message.refusal`, desteklemeyen modelin 400 yanıtı) bu turda resmi sayfadan yeniden okunmadı; §12'deki sohbet referansı ile structured outputs kılavuzu (https://developers.openai.com/api/docs/guides/structured-outputs) tm 283'te adaptör yazılırken doğrulanır. Ayrışma olursa bu ek düzeltilir, karar (EVET / HAYIR) değişmez.
+- `tools` ve `tool_choice` **F1'de gönderilmez**. `stream` de arayüze girmez (§5 aynen geçerli).
+- Bu dosyanın ve `llm-provider.ts` / `openai-llm-provider.ts` başlıklarının "no response format" cümlesi, alan arayüze girene kadar koda göre doğrudur. Cümleleri alanı ekleyen görev (tm 283) günceller.
+
+### 6a.4 Şema desteklenmezse ya da çıktı geçersizse
+
+1. Model `json_schema` desteklemiyorsa (OpenAI'ın 400 yanıtında `param` = `response_format`), çağrı **düz JSON** yoluna düşer: `response_format` gönderilmez, şema istemde metin olarak verilir. Desteklenmeme bilgisi süreç ömrü boyunca o model için hatırlanır. Yeni env anahtarı yok.
+2. Her iki yolda da çıktı sunucuda şemayla doğrulanır. Aşağıdakiler **geçersiz** sayılır: JSON olarak ayrışmayan metin, şemaya uymayan nesne, `message.refusal` dolu yanıt ve `finish_reason: 'length'` ile kesilmiş çıktı.
+3. Geçersiz çıktıda **tek** yeniden deneme yapılır (doğrulama hatası istemde kısaca belirtilir). Bu deneme §10 255.6'daki taşıma katmanı yeniden denemelerinden ayrıdır ve token'ı aynı sayaca yazılır.
+4. İkinci çıktı da geçersizse:
+   - Sohbet yolundaki çağrılarda (anlama, slot, yanıt yazımı, hakem) bu bir **sağlayıcı hatasıdır**: AI-09 `ai_failure` → LLM'siz sabit metin + devir (tm 303).
+   - Arka plan çağrılarında maddenin kendi yedeği çalışır: küme başlığı → sözcüksel etiket (`topics.ts`), QA → ön puansız `ready`, çelişki denetimi → uyarı yok (kaydetmeyi zaten engellemez), öneri taslağı → öneri taslaksız kalır (05 bu durumu yazmıyor; varsayım, tm 318 netleştirir).
+
+### 6a.5 Model katmanı (AI-16-S4 varsayılanı)
+
+- `LLM_MODEL`: oyuncuya giden metin (`tier: 'default'`).
+- `LLM_MODEL_FAST`: sınıflandırma, özet, hakem, küme başlığı (`tier: 'fast'`). **Boşsa `LLM_MODEL` kullanılır.** Bu yüzden zorunlu değildir ve production'da açılışı durdurmaz. Sır değildir. §9.1'e eklenir, dört kaynak paritesine (env.ts · `.env.example` · turbo.json globalEnv · `.env.production.example`) tm 283 ile girer.
+- İki katman aynı sağlayıcı, aynı taban adres, aynı bölge ve aynı anahtardır. §7'nin bölge kapısı ikisine de aynen uygulanır.
+
+### 6a.6 Mock sağlayıcı
+
+`LLM_PROVIDER=mock` (dev/test/demo/e2e varsayılanı) şemaya uygun, **deterministik** JSON üretir: aynı girdi → aynı çıktı (MASTER-PROMPT "LLM için deterministik stub" ve PLAN A3 korunur). Geçersiz çıktı, ret ve kesilme yolları gerçek modele bağlı kalmasın diye testler bunları enjekte edilen bir sağlayıcıyla sınar.
+
+### 6a.7 Kapsam dışı (F2)
+
+- **Araç çağırma:** modelin aracı kendisinin seçip çağırması F2'dedir ve yeni bir ADR eki + sahip kararı ister. AI-28'in araç yuvası bir Skill adım tipidir ve onu **prosedür motoru** deterministik olarak çağırır (ADR-14a, `docs/adr/skill-procedure.md`). Bu ek onu değiştirmez.
+- **Uyumlu uçlar (Azure OpenAI vb.):** F2'de, ayrı adaptör göreviyle (AI-16-S5 varsayılanı). §10 255.6'daki "başka satıcının uyumluluk katmanı desteklenmez" cümlesi aynen geçerli.
+
 ## 7. Bölge ve veri yerleşimi (soru 7) — NFR-C4 kapısı korunur
 
 - `assertInferenceAllowed` değişmez; gerçek sağlayıcıda da çağrıdan **önce** koşar.
@@ -146,6 +210,8 @@ Skill adımları admin tarafından yazılır ve `@siyahtus/ai-mock` `validateSte
 | `LLM_MAX_OUTPUT_TOKENS` | İstek başına çıktı tavanı; `max_completion_tokens` olarak gönderilir.                                                                                                                                     | Hayır    | Varsayılanlı                       |
 | `LLM_MAX_PROMPT_CHARS`  | **Yeni (taslakta yoktu).** İstem uzunluğu tavanı; aşan istem sağlayıcıya gitmeden reddedilir (255.9). Karakter, çünkü sunucuda tokenizer bağımlılığı yok ve karakter token'ın muhafazakâr bir üst sınırı. | Hayır    | Varsayılanlı                       |
 
+**Ek (§6a.5, 2026-10-14):** `LLM_MODEL_FAST` sınıflandırma/özet/hakem/küme başlığı modelidir. Boşsa `LLM_MODEL` kullanılır. Sır değildir, zorunlu değildir.
+
 ### 9.2 Embedding
 
 | Anahtar                     | Anlam                                                                                                                                                                                       | Sır      | Zorunluluk                               |
@@ -174,19 +240,21 @@ PrivateEmail resmi ayarları: sunucu `mail.privateemail.com`; **465 = SSL/TLS** 
 
 ## 10. Alt görevlerin kapsamını daraltan cümleler
 
-- **255.5 (seam):** `LlmProvider` arayüzü **tek bir akışsız, araçsız** çağrıdır: `complete({ system, messages, maxOutputTokens, timeoutMs }) → { text, usage: { inputTokens, outputTokens } }`. `stream`, `tools`, `response_format` arayüze GİRMEZ (§5, §6). Enum `['mock','openai']`. Production'da `LLM_PROVIDER ≠ mock` iken `LLM_PROVIDER_REGION` zorunlu ve host ↔ bölge eşlemesi `productionProblems()`'a girer (§7). Sahip onayı (§11) bu görevi **bloklamaz**: teslimatı ağsızdır.
+- **255.5 (seam):** `LlmProvider` arayüzü **tek bir akışsız, araçsız** çağrıdır: `complete({ system, messages, maxOutputTokens, timeoutMs }) → { text, usage: { inputTokens, outputTokens } }`. `stream`, `tools`, `response_format` arayüze GİRMEZ (§5, §6). _Değiştirildi: §6a.3 — yapılandırılmış çıktı şeması ve `tier` isteğe bağlı alan olarak girer (tm 283). `stream` ve `tools` yine girmez._ Enum `['mock','openai']`. Production'da `LLM_PROVIDER ≠ mock` iken `LLM_PROVIDER_REGION` zorunlu ve host ↔ bölge eşlemesi `productionProblems()`'a girer (§7). Sahip onayı (§11) bu görevi **bloklamaz**: teslimatı ağsızdır.
 - **255.6 (sohbet adaptörü):** yalnız OpenAI `POST {LLM_API_BASE_URL}/chat/completions`; gövdede yalnız `model`, `messages`, `max_completion_tokens`. 429'da gövdedeki `error.code` §3.1'deki dört kota/harcama kodundan biriyse **kalıcı** (yeniden deneme yok, devre kesiciye hata sayılır); diğer 429'lar, 500 ve 503 **geçici**, `Retry-After` alt sınır. 401/403/400/404 kalıcı. Başka bir satıcının uyumluluk katmanına bu adaptörle bağlanmak **desteklenmez**.
 - **255.7 (embedding):** OpenAI `POST {EMBEDDING_API_BASE_URL}/embeddings`, `model` + `input: string[]`; toplu istek ≤ 2048 girdi ve ≤ 300 000 token ile bölünür. `dimensions` parametresi GÖNDERİLMEZ (model native 1536); dönen vektör 1536 değilse açık hata. **Migration dalı koşmaz** (§4.2). Yeniden gömme yolu **zorunlu** (§4.3 — sahte → gerçek geçişi). NFR-C4 kapısı gömme çağrısından önce de koşar (`EMBEDDING_PROVIDER_REGION`).
 - **255.8 (recall):** `RETRIEVAL_THRESHOLD = 0.25` sahte uzayda seçildi; gerçek modelin kosinüs dağılımı farklıdır, bu yüzden eşik gerçek uzayda **yeniden kalibre edilmek zorunda** — kapı sahte sağlayıcıyla deterministik, elle koşulan gerçek komut aynı altın kümeyi kullanır.
 - **255.9 (limit/maliyet):** kayıt birimi **token** (`usage.prompt_tokens` / `completion_tokens` ya da arayüzdeki `inputTokens`/`outputTokens`); para karşılığı koda gömülmez. Tavan anahtarları `LLM_MAX_OUTPUT_TOKENS` + `LLM_MAX_PROMPT_CHARS`. Redaction listesi: `LLM_API_KEY`, `EMBEDDING_API_KEY`, `SMTP_USERNAME`, `SMTP_PASSWORD`.
 - **255.15 (Docker prod):** `.env.production.example` §9'daki adları yorumlu ve **değersiz** taşır; dört kaynak paritesi (env.ts · .env.example · turbo.json globalEnv · .env.production.example) bu adlarla yeşil kalır.
 
-## 11. Sahip kararları (2026-10-02'de verildi)
+## 11. Sahip kararları (2026-10-02'de verildi; 2026-10-14 ekleri)
 
 Aşağıdakiler pencerenin veremeyeceği kararlardı (hesap, sözleşme, veri işleme). **Kod ve testler (255.5–255.9) bunları beklemedi** — hepsi ağsız, sahte sağlayıcı ya da enjekte edilen `fetch` ile koşar. İki karar da sahip tarafından 2026-10-02'de verildi (tm 257, PLAN §D203); gerçek anahtarla açılış `docs/production-checklist.md` §9'daki sıradır:
 
 1. **Karar verildi (2026-10-02): satıcı OpenAI.** Hesap ve faturalama kabul. Sohbet ve embedding aynı hesaptan çalışır; sağlayıcı tarafı bütçe sınırı projede tanımlanır, uygulamanın günlük token tavanlarına ek olarak. (Reddedilseydi bu ADR yeniden açılır ve §3'ün sıradaki adayı için ayrı bir adaptör görevi açılırdı.)
 2. **Karar verildi (2026-10-02): pilotun bölgesi `us`.** `SIYAHTUS_REGION`, `LLM_PROVIDER_REGION` ve `EMBEDDING_PROVIDER_REGION` üçü de `us`; taban adres `us.api.openai.com`. `us` için OpenAI onayı gerekmez; `eu` AB veri yerleşimi başvurusu ayrı bir iş olurdu. Bölge ile taban adres birlikte değişir.
+3. **K12 (2026-10-14, analiz paketi karar kaydı, AI-16): dil modeli sağlayıcısı ve veri bölgesi.** 1. ve 2. maddeyi teyit eder: pilotta OpenAI, bölge `us`. İki koşul ekler: kiracı sözleşmesine yurt dışı aktarım maddesi girer (sözleşme işi, kod işi değil), ve hassas veri maskelemesi (AI-26) çağrıdan **önce** çalışır, yani modele maskelenmiş metin gider.
+4. **K17 (2026-10-14, AI-16, AI-04–08, AI-22–24): §6 ile AI maddelerinin çelişkisi.** Karar: ek yazılsın. Yapılandırılmış çıktı istemde JSON ve sunucuda şema doğrulamasıyla yapılır. Araç çağırma modelde değil prosedür motorundadır. Uygulaması §6a.
 
 ## 12. Kaynaklar (erişim 2026-09-22, yalnız resmi dokümantasyon)
 

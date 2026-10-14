@@ -15,6 +15,13 @@
 
 ## Task log (newest-first)
 
+## tm 270 — ADR-LLM-JSON: pilot LLM ADR §6a eki — yapılandırılmış JSON çıktı EVET, araç çağırma HAYIR — done — 2026-10-14 UTC
+
+- **Yapıldı:** `docs/adr/pilot-llm-embedding-provider.md` §6a (sahip kararı K17): `response_format: json_schema` yalnız sekiz çağrıda (AI-04/05/06/07/08/22/23/24, katmanlarıyla), kararlar `policy.ts`'te, izlenebilirlik kalkanı, düz JSON + doğrulama + 1 yeniden deneme → `ai_failure`, `LLM_MODEL_FAST`, deterministik mock, araç çağırma ve uyumlu uçlar F2. §6 silinmedi ("Değiştirildi: §6a"); §11'e K12 + K17. §D219, K06.4 `ℹ`. tm 298/301/317/318/319'a doğrudan `270` bağımlılığı. Kod değişikliği yok.
+- **Doğrulama:** `pnpm test:gate` exit 0, 8m31s (build/typecheck/birim turbo önbelleğinden — yalnız doküman değişti; format:check 47s ve entegrasyon 7m43s gerçekten koştu); `db:check-drift` temiz; `contract:generate` sonrası çalışma alanında değişiklik yok; `audit:req-coverage` exit 0; değişen .md'lerde prettier temiz; `validate-dependencies` temiz. e2e koşulmadı — yalnız doküman, akış değişmedi.
+- **Varsayımlar:** AI-16-S4/S5 varsayılanları. Arayüz alanının adı (`responseSchema` / `responseFormat`) tm 283'e bırakıldı; AI-23 geçersiz-çıktı yedeği "taslaksız öneri" (05'te yok). 05'teki `llm-provider.ts:45-53` referansı HEAD'de doğru (`LlmCompletionRequest` 45. satır), kayma yok.
+- **Sonraki pencereye not:** tm 283 adaptörü yazarken §6a.3'teki OpenAI ayrıntılarını (strict alt kümesi, `refusal`, desteklemeyen modelin 400'ü) resmi structured-outputs sayfasından doğrulasın ve `llm-provider.ts` / `openai-llm-provider.ts` başlıklarındaki "no response format" cümlesini güncellesin.
+
 ## tm 269 — ADR-SKILL-PROCEDURE: ADR-14a eki — Skill çok turlu prosedür olabilir, görsel akış yine yok — done — 2026-10-14 UTC
 
 - **Yapıldı:** PLAN §0 ADR tablosunun altına "Ek notlar" + ADR-14a (K8'e atıf; tablo satırları değişmedi); karar dosyası `docs/adr/skill-procedure.md` (bağlam · karar · sonuçlar · kaynaklar); §D217; K06.2.4'e `ℹ` maddesi (damga `✅` kaldı). Kod değişikliği yok. tm 296 ve tm 321 doğrudan `269`'a bağlı.

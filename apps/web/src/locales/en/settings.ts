@@ -565,6 +565,16 @@ export const settings: Messages = {
   'settings.widgetCustomization.welcomeTextLabel': 'Message',
   'settings.widgetCustomization.welcomeTextHint':
     'For a link, write [label](https://address). **bold** and *italic* work too.',
+  'settings.widgetCustomization.languageLegend': 'Language',
+  'settings.widgetCustomization.languageLabel': 'Widget language',
+  'settings.widgetCustomization.language.auto': 'Automatic (visitor’s browser)',
+  'settings.widgetCustomization.languageHint':
+    'Automatic opens the widget in each visitor’s browser language. It ships in eight languages.',
+  'settings.widgetCustomization.fallbackLanguageLabel': 'Fallback language',
+  'settings.widgetCustomization.fallbackLanguageHint':
+    'Used when Automatic finds none of the eight languages in the visitor’s browser.',
+  'settings.widgetCustomization.languageSnippetNote':
+    'A language written into your install snippet (data-language) overrides this setting on that page.',
   'settings.widgetCustomization.entitlementError':
     'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.saveButton': 'Save appearance',
@@ -574,6 +584,8 @@ export const settings: Messages = {
   'settings.widgetCustomization.previewGreeting': 'Hi! How can we help?',
   'settings.widgetCustomization.previewCustomerMessage': 'I have a question',
   'settings.widgetCustomization.previewPoweredBy': 'Powered by SiyahTuş',
+  'settings.widgetCustomization.previewLanguageNote':
+    'The preview text is in your panel’s language; visitors see the widget in the language above.',
   'settings.widgetCustomization.previewAutoNote':
     "Auto shows light or dark to match each visitor's device — light shown here.",
   'settings.widgetCustomization.previewFullscreenNote': 'On phones the panel opens full screen.',

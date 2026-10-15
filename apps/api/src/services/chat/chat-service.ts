@@ -1135,7 +1135,7 @@ export class ChatService {
       const data = await withTenant(this.db, tenant, async (tx) => {
         const chat = await tx.chat.findUnique({
           where: { id: chatId },
-          select: { customer: { select: { name: true, email: true } } },
+          select: { customer: { select: { name: true, email: true, locale: true } } },
         });
         if (!chat) return null;
 
@@ -1211,6 +1211,12 @@ export class ChatService {
 
         return {
           customer: chat.customer,
+          // The visitor's copy is written in the language their widget showed
+          // (WG-02). The mail templates have two languages; a visitor on any
+          // other widget language reads English, as every visitor did before.
+          customerLocale: (isMailLocale(chat.customer?.locale)
+            ? chat.customer.locale
+            : 'en') as MailLocale,
           assignee,
           assigneeLocale,
           events,
@@ -1246,10 +1252,9 @@ export class ChatService {
           frame: {
             workspaceName: data.workspaceName,
             timeZone: data.timeZone,
-            // The team's copy reads in the assignee's panel language; the
-            // visitor's language is not known to the server, so theirs is
-            // English (tm 265 — a follow-up records the widget's language).
-            locale: recipient.party === 'team' ? data.assigneeLocale : 'en',
+            // The team's copy reads in the assignee's panel language, the
+            // visitor's in the language their widget showed (WG-02).
+            locale: recipient.party === 'team' ? data.assigneeLocale : data.customerLocale,
           },
         });
         // Nothing worth sending this party (e.g. a chat of only system events).

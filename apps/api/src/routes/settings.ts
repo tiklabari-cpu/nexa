@@ -34,6 +34,7 @@ import {
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
+  WIDGET_UI_LOCALES,
 } from '@siyahtus/types';
 import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@siyahtus/types';
 import type {
@@ -555,6 +556,9 @@ const updateWidgetBody = z
     // clears it back to the widget's built-in line.
     welcome_title: welcomeField(WIDGET_WELCOME_TITLE_MAX),
     welcome_text: welcomeField(WIDGET_WELCOME_TEXT_MAX),
+    // The widget's language (WG-02) and what `auto` falls back to.
+    language: z.enum(['auto', ...WIDGET_UI_LOCALES] as [string, ...string[]]).optional(),
+    fallback_language: z.enum(WIDGET_UI_LOCALES as unknown as [string, ...string[]]).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -2745,6 +2749,10 @@ export default async function settingsRoutes(
         ...(body.powered_by !== undefined ? { poweredBy: body.powered_by } : {}),
         ...(body.welcome_title !== undefined ? { welcomeTitle: body.welcome_title } : {}),
         ...(body.welcome_text !== undefined ? { welcomeText: body.welcome_text } : {}),
+        ...(body.language !== undefined ? { language: body.language } : {}),
+        ...(body.fallback_language !== undefined
+          ? { fallbackLanguage: body.fallback_language }
+          : {}),
       };
 
       // Upsert because signup leaves no row: a workspace customising the widget
@@ -2771,6 +2779,8 @@ export default async function settingsRoutes(
             theme: DEFAULT_WIDGET_APPEARANCE.theme,
             mobileFullscreen: DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
             poweredBy: DEFAULT_WIDGET_APPEARANCE.powered_by,
+            language: DEFAULT_WIDGET_APPEARANCE.language,
+            fallbackLanguage: DEFAULT_WIDGET_APPEARANCE.fallback_language,
             ...data,
           },
           update: data,
@@ -3514,6 +3524,8 @@ function serialiseWidget(
     mobileFullscreen: boolean;
     welcomeTitle: string | null;
     welcomeText: string | null;
+    language: string;
+    fallbackLanguage: string;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3528,6 +3540,8 @@ function serialiseWidget(
     powered_by: poweredBy,
     welcome_title: row?.welcomeTitle ?? DEFAULT_WIDGET_APPEARANCE.welcome_title,
     welcome_text: row?.welcomeText ?? DEFAULT_WIDGET_APPEARANCE.welcome_text,
+    language: row?.language ?? DEFAULT_WIDGET_APPEARANCE.language,
+    fallback_language: row?.fallbackLanguage ?? DEFAULT_WIDGET_APPEARANCE.fallback_language,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

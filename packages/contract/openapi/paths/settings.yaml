@@ -1559,6 +1559,17 @@ widgetSettings:
                 nullable: true
                 maxLength: 500
                 description: Trimmed; an empty string clears it (stored as null).
+              language:
+                type: string
+                enum: [auto, en, tr, de, fr, es, it, pt, ar]
+                description: |
+                  The widget's language (WG-02). `auto` follows the visitor's
+                  browser; any other value pins it. A `language` written into
+                  the install snippet still wins over this.
+              fallback_language:
+                type: string
+                enum: [en, tr, de, fr, es, it, pt, ar]
+                description: What `auto` falls back to when the browser speaks none of the eight.
     responses:
       "200":
         description: Updated

@@ -7,7 +7,15 @@
  * must surface the key itself rather than crash, mirroring the panel (I18N1).
  */
 import { describe, expect, it } from 'vitest';
-import { createTranslator, isRtlLocale, resolveWidgetLocale } from './i18n.js';
+import { WIDGET_UI_LOCALES } from '@siyahtus/types';
+import {
+  browserLanguages,
+  createTranslator,
+  isRtlLocale,
+  pickWidgetLocale,
+  resolveWidgetLocale,
+} from './i18n.js';
+import { CATALOGS } from './locales/index.js';
 
 describe('resolveWidgetLocale', () => {
   it('maps each supported BCP-47 primary tag to its locale', () => {
@@ -85,5 +93,53 @@ describe('createTranslator', () => {
   it('falls back to English chrome for an unrecognised language', () => {
     expect(createTranslator('ja')('send')).toBe('Send');
     expect(createTranslator('ja')('launcher.text')).toBe('Chat');
+  });
+});
+
+describe('pickWidgetLocale (WG-02)', () => {
+  it('lets the snippet beat the panel, the browser and the fallback', () => {
+    expect(
+      pickWidgetLocale({ snippet: 'de', panel: 'en', browser: ['tr-TR'], fallback: 'fr' }),
+    ).toBe('de');
+  });
+
+  it('uses the panel language over the browser unless it is auto', () => {
+    expect(pickWidgetLocale({ panel: 'en', browser: ['tr-TR'], fallback: 'tr' })).toBe('en');
+    expect(pickWidgetLocale({ panel: 'auto', browser: ['tr-TR'], fallback: 'en' })).toBe('tr');
+  });
+
+  it('reads auto from the first browser language it ships, by primary subtag', () => {
+    expect(pickWidgetLocale({ panel: 'auto', browser: ['ja', 'PT-br', 'de'] })).toBe('pt');
+    expect(pickWidgetLocale({ panel: 'auto', browser: ['ar-EG'] })).toBe('ar');
+  });
+
+  it('falls to the panel fallback when the browser speaks none of them', () => {
+    expect(pickWidgetLocale({ panel: 'auto', browser: ['ja', 'zh-CN'], fallback: 'tr' })).toBe(
+      'tr',
+    );
+    expect(pickWidgetLocale({ panel: 'auto', browser: [], fallback: 'de' })).toBe('de');
+  });
+
+  it('ends in English when nothing is known, as it did before the setting', () => {
+    expect(pickWidgetLocale({})).toBe('en');
+    expect(pickWidgetLocale({ browser: ['ja'], fallback: 'xx' })).toBe('en');
+  });
+
+  it('passes over a snippet language it does not ship', () => {
+    expect(pickWidgetLocale({ snippet: 'ru', browser: ['tr'] })).toBe('tr');
+    expect(pickWidgetLocale({ snippet: 'ru', panel: 'de', browser: ['tr'] })).toBe('de');
+  });
+
+  it('reads navigator.languages, else navigator.language', () => {
+    expect(browserLanguages({ language: 'en-US', languages: ['tr-TR', 'en'] })).toEqual([
+      'tr-TR',
+      'en',
+    ]);
+    expect(browserLanguages({ language: 'de-DE', languages: [] })).toEqual(['de-DE']);
+    expect(browserLanguages({ language: '', languages: [] })).toEqual([]);
+  });
+
+  it('is built on the same eight languages the panel and the database allow', () => {
+    expect([...WIDGET_UI_LOCALES].sort()).toEqual(Object.keys(CATALOGS).sort());
   });
 });

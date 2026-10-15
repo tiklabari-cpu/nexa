@@ -559,6 +559,16 @@ export const settings: Messages = {
   'settings.widgetCustomization.welcomeTextLabel': 'Mesaj',
   'settings.widgetCustomization.welcomeTextHint':
     'Bağlantı için [metin](https://adres) yazın. **kalın** ve *italik* de kullanılabilir.',
+  'settings.widgetCustomization.languageLegend': 'Dil',
+  'settings.widgetCustomization.languageLabel': 'Widget dili',
+  'settings.widgetCustomization.language.auto': 'Otomatik (ziyaretçinin tarayıcısı)',
+  'settings.widgetCustomization.languageHint':
+    'Otomatik, widget’ı her ziyaretçinin tarayıcı dilinde açar. Sekiz dilde gelir.',
+  'settings.widgetCustomization.fallbackLanguageLabel': 'Yedek dil',
+  'settings.widgetCustomization.fallbackLanguageHint':
+    'Otomatik, ziyaretçinin tarayıcısında bu sekiz dilden hiçbirini bulamazsa kullanılır.',
+  'settings.widgetCustomization.languageSnippetNote':
+    'Kurulum kodunuza yazılmış bir dil (data-language), o sayfada bu ayarı geçersiz kılar.',
   'settings.widgetCustomization.entitlementError':
     'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.saveButton': 'Görünümü kaydet',
@@ -568,6 +578,8 @@ export const settings: Messages = {
   'settings.widgetCustomization.previewGreeting': 'Merhaba! Nasıl yardımcı olabiliriz?',
   'settings.widgetCustomization.previewCustomerMessage': 'Bir sorum var',
   'settings.widgetCustomization.previewPoweredBy': 'Powered by SiyahTuş',
+  'settings.widgetCustomization.previewLanguageNote':
+    'Önizleme metni panelinizin dilindedir; ziyaretçiler widget’ı yukarıda seçilen dilde görür.',
   'settings.widgetCustomization.previewAutoNote':
     'Otomatik, her ziyaretçinin cihazına uyacak şekilde açık veya koyu gösterir — burada açık gösteriliyor.',
   'settings.widgetCustomization.previewFullscreenNote': 'Telefonlarda panel tam ekran açılır.',

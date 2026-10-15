@@ -400,6 +400,10 @@ model Customer {
   /// `dbgenerated` default only so queries can filter on it. NEVER WRITE IT:
   /// Postgres rejects any value for a generated column (`428C9`).
   usernameNormalized String? @default(dbgenerated("lower(btrim(username))")) @map("username_normalized")
+  /// The language of the widget this visitor last opened a chat from (WG-02) —
+  /// what the transcript e-mail is written in. Null = unknown (never the
+  /// widget). `customers_locale_check` holds it to the eight widget languages.
+  locale         String?
   phone          String?
   countryCode    String?   @map("country_code") @db.Char(2)
   country        String?
@@ -2184,6 +2188,12 @@ model WidgetSettings {
   /// Shape is the `widget_settings_prechat_fields_shape` check.
   prechatEnabled   Boolean  @default(true) @map("prechat_enabled")
   prechatFields    Json?    @map("prechat_fields")
+  /// The widget's language (WG-02): `auto` (the visitor's browser) or one of
+  /// the eight UI languages — `widget_settings_language_check`.
+  language         String   @default("auto")
+  /// What `auto` falls back to; the column default `en` keeps rows that existed
+  /// before WG-02 as they were, new rows are written `tr` by the application.
+  fallbackLanguage String   @default("en") @map("fallback_language")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

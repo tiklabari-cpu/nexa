@@ -9730,6 +9730,16 @@ export interface components {
       welcome_title: string | null;
       /** @description The workspace's own welcome message, shown as the team's first bubble when the panel opens; null keeps the widget's built-in line. `**bold**`, `*italic*` and `[label](https://…)` links render; any other text is shown as typed. */
       welcome_text: string | null;
+      /**
+       * @description The widget's language (WG-02): `auto` follows the visitor's browser, anything else pins it. A language in the install snippet still wins.
+       * @enum {string}
+       */
+      language: 'auto' | 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      /**
+       * @description What `auto` falls back to when the browser speaks none of the eight.
+       * @enum {string}
+       */
+      fallback_language: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -9789,6 +9799,16 @@ export interface components {
       welcome_title: string | null;
       /** @description The workspace's welcome message (see `WidgetSettings`), or null for the widget's built-in line. */
       welcome_text: string | null;
+      /**
+       * @description The widget's language (WG-02): `auto` follows the visitor's browser, anything else pins it. A language in the install snippet still wins.
+       * @enum {string}
+       */
+      language: 'auto' | 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      /**
+       * @description What `auto` falls back to when the browser speaks none of the eight.
+       * @enum {string}
+       */
+      fallback_language: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
       /**
        * Format: uri
        * @description The deployment's privacy policy (`PRIVACY_POLICY_URL`). The widget links it from its footer; null when the deployment publishes none.
@@ -15416,6 +15436,14 @@ export interface operations {
           /** Format: email */
           email?: string;
           /**
+           * @description The language the widget is showing (WG-02). Recorded on the
+           *     contact when this message opens a conversation, and used for
+           *     the visitor's transcript e-mail. Optional: an older widget
+           *     omits it and the e-mail reads in English.
+           * @enum {string}
+           */
+          locale?: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+          /**
            * @description Answers to the workspace's pre-chat form (FR-MOD-08.7.7):
            *     contact custom-field id → value, as delivered in the token
            *     response's `pre_chat_form`. Each is validated against its
@@ -20848,6 +20876,18 @@ export interface operations {
           welcome_title?: string | null;
           /** @description Trimmed; an empty string clears it (stored as null). */
           welcome_text?: string | null;
+          /**
+           * @description The widget's language (WG-02). `auto` follows the visitor's
+           *     browser; any other value pins it. A `language` written into
+           *     the install snippet still wins over this.
+           * @enum {string}
+           */
+          language?: 'auto' | 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+          /**
+           * @description What `auto` falls back to when the browser speaks none of the eight.
+           * @enum {string}
+           */
+          fallback_language?: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
         };
       };
     };

@@ -24,6 +24,31 @@ export type WidgetTheme = 'auto' | 'light' | 'dark';
 export const WIDGET_THEMES: readonly WidgetTheme[] = ['auto', 'light', 'dark'];
 
 /**
+ * The languages the widget UI ships in (WG-02, K25: eight, no more). Mirrors the
+ * catalogue keys in `apps/widget/src/locales/index.ts` — a widget test holds
+ * the two lists together — and is what the `widget_settings` CHECKs, the
+ * settings endpoint and the panel's picker all draw from.
+ */
+export type WidgetUiLocale = 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+export const WIDGET_UI_LOCALES: readonly WidgetUiLocale[] = [
+  'en',
+  'tr',
+  'de',
+  'fr',
+  'es',
+  'it',
+  'pt',
+  'ar',
+];
+
+/** The panel's "Language" choice: a fixed language, or `auto` = the visitor's browser. */
+export type WidgetLanguage = 'auto' | WidgetUiLocale;
+
+export function isWidgetUiLocale(value: unknown): value is WidgetUiLocale {
+  return typeof value === 'string' && WIDGET_UI_LOCALES.includes(value as WidgetUiLocale);
+}
+
+/**
  * The whole customisable surface of the widget. `snake_case` because it travels
  * over the API and rides in the install snippet's `window.__siyahtus`.
  */
@@ -44,6 +69,15 @@ export interface WidgetAppearance {
    */
   welcome_title: string | null;
   welcome_text: string | null;
+  /**
+   * The widget's language (WG-02): `auto` follows the visitor's browser, any
+   * other value pins it. A language written into the install snippet still
+   * wins over this. Server-delivered only — never baked into the snippet, so
+   * the snippet cannot freeze the panel's choice.
+   */
+  language: WidgetLanguage;
+  /** What `auto` falls back to when the browser speaks none of the eight. */
+  fallback_language: WidgetUiLocale;
 }
 
 /** Upper bounds for the welcome message, shared by the API, the DB and the form. */
@@ -85,6 +119,10 @@ export const DEFAULT_WIDGET_APPEARANCE: WidgetAppearance = {
   powered_by: true,
   welcome_title: null,
   welcome_text: null,
+  language: 'auto',
+  // New workspaces fall back to Turkish (04 default); rows that existed before
+  // WG-02 keep the column default `en` and so read exactly as they used to.
+  fallback_language: 'tr',
 };
 
 /**
@@ -126,6 +164,13 @@ export function normalizeWidgetAppearance(
       typeof raw.powered_by === 'boolean' ? raw.powered_by : DEFAULT_WIDGET_APPEARANCE.powered_by,
     welcome_title: normalizeWelcome(raw.welcome_title, WIDGET_WELCOME_TITLE_MAX),
     welcome_text: normalizeWelcome(raw.welcome_text, WIDGET_WELCOME_TEXT_MAX),
+    language:
+      raw.language === 'auto' || isWidgetUiLocale(raw.language)
+        ? raw.language
+        : DEFAULT_WIDGET_APPEARANCE.language,
+    fallback_language: isWidgetUiLocale(raw.fallback_language)
+      ? raw.fallback_language
+      : DEFAULT_WIDGET_APPEARANCE.fallback_language,
   };
 }
 

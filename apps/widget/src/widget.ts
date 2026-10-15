@@ -32,9 +32,10 @@ import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import { appendRichText } from './rich-text.js';
 import { WidgetSocket } from './socket.js';
 import {
+  browserLanguages,
   createTranslator,
   isRtlLocale,
-  resolveWidgetLocale,
+  pickWidgetLocale,
   type WidgetLocale,
   type WidgetTranslate,
 } from './i18n.js';
@@ -180,7 +181,12 @@ const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 interface WidgetConfig {
   organizationId: string;
   apiBaseUrl: string;
-  language: string;
+  /**
+   * A language the embedding page's snippet named, or null when it named none —
+   * the common case, where the panel's setting and the visitor's browser decide
+   * (WG-02).
+   */
+  language: string | null;
   /** Origin of the embedding page, supplied by the loader. */
   hostOrigin: string | null;
   /**
@@ -296,21 +302,30 @@ export function mount(doc: Document = document, win: Window = window): void {
   if (!root) return;
 
   const config = readConfig(win);
-  // The visitor's locale is fixed for the page load — the embedding site chose it
-  // via `data-language` and the loader forwarded it. Bind one translator now and
-  // thread it through every string the widget writes to the DOM (I18N1).
-  const locale = resolveWidgetLocale(config.language);
-  const t = createTranslator(config.language);
+  // The language is chosen in order (WG-02, `pickWidgetLocale`): the snippet's
+  // `data-language`, the panel's setting, the visitor's browser, the panel's
+  // fallback. The panel's half arrives with the token mint, so the first draw
+  // uses what is known now — snippet, then browser, then English — and the mint
+  // redraws once if it names another language (`adoptMintedLanguage`). `t` is a
+  // stable wrapper over whichever translator is current, so every string the
+  // widget writes to the DOM follows the swap (I18N1).
+  const browser = browserLanguages(win.navigator);
+  let locale: WidgetLocale = pickWidgetLocale({ snippet: config.language, browser });
+  let translate = createTranslator(locale);
+  const t: WidgetTranslate = (key, params) => translate(key, params);
   // Send held after a 429 (`pauseSending`); declared up here because
   // `renderClosed` reads it and runs long before the first send.
   let sendPaused = false;
   let sendPauseTimer: ReturnType<typeof setTimeout> | undefined;
-  // NFR-I18N1: direction is as fixed as the locale it comes from. Set once on
-  // the document element so the whole panel — laid out with logical CSS
-  // (`inset-inline-*`, flexbox `flex-start`/`flex-end`), not `left`/`right` —
-  // mirrors correctly for Arabic instead of staying pinned to its LTR corner.
-  doc.documentElement.lang = locale;
-  doc.documentElement.dir = isRtlLocale(locale) ? 'rtl' : 'ltr';
+  // NFR-I18N1: direction follows the locale. Set on the document element so the
+  // whole panel — laid out with logical CSS (`inset-inline-*`, flexbox
+  // `flex-start`/`flex-end`), not `left`/`right` — mirrors correctly for Arabic
+  // instead of staying pinned to its LTR corner.
+  function applyDocumentLocale(): void {
+    doc.documentElement.lang = locale;
+    doc.documentElement.dir = isRtlLocale(locale) ? 'rtl' : 'ltr';
+  }
+  applyDocumentLocale();
   const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
 
   const state: State = {
@@ -369,7 +384,9 @@ export function mount(doc: Document = document, win: Window = window): void {
   let previewEvent: WidgetEvent | null = null;
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const ui = buildUi(doc, t);
+  // `let`: the one language swap after the mint builds a fresh set of elements
+  // (`rebuildUi`), and every handler reads `ui` when it runs, not when it was set.
+  let ui = buildUi(doc, t);
   // Non-null past the guard above; aliased so the appearance closure keeps that
   // narrowing (TypeScript drops it for the captured `root` inside a function).
   const rootEl = root;
@@ -401,6 +418,83 @@ export function mount(doc: Document = document, win: Window = window): void {
   }
 
   applyAppearance();
+
+  // --- Language (WG-02) ----------------------------------------------------
+
+  /**
+   * What the shell around the panel looks like for this kind of page: the hosted
+   * Chat page is all conversation (no launcher, no close, always open), anywhere
+   * else the panel follows `state.open`. Separate from `setOpen` so a rebuilt
+   * set of elements can be put back the way the old one was.
+   */
+  function applyShell(): void {
+    if (config.chatPage) {
+      ui.launcher.hidden = true;
+      ui.close.hidden = true;
+      ui.panel.hidden = false;
+    } else {
+      ui.panel.hidden = !state.open;
+    }
+  }
+
+  /**
+   * The mint named the panel's language: if that changes what the visitor reads,
+   * switch to it. Nothing happens in the common case — a browser language we
+   * ship and the panel on `auto` was already the first draw — and a snippet's
+   * explicit language is never overridden, so the chain stays that of
+   * `pickWidgetLocale`. A given mint can only move the widget once.
+   */
+  function adoptMintedLanguage(panel: string, fallback: string): void {
+    const next = pickWidgetLocale({ snippet: config.language, panel, fallback, browser });
+    if (next === locale) return;
+    locale = next;
+    translate = createTranslator(next);
+    applyDocumentLocale();
+    rebuildUi();
+  }
+
+  /**
+   * Draw the widget's elements again in the new language. The strings of the
+   * static shell are written when it is built, so a swap means a new shell; what
+   * the visitor already typed is carried over, and the mint that called this
+   * goes on to fill in the transcript, the forms and the header from state.
+   */
+  function rebuildUi(): void {
+    const old = ui;
+    const carried = [
+      'input',
+      'prechatName',
+      'prechatUsername',
+      'prechatEmail',
+      'prechatMessage',
+      'offlineSubject',
+      'offlineName',
+      'offlineEmail',
+    ] as const;
+    const typed = carried.map((key) => old[key].value);
+    const focusInside = old.panel.contains(doc.activeElement);
+
+    old.style.remove();
+    old.panel.remove();
+    old.greeting.remove();
+    old.preview.remove();
+    old.launcher.remove();
+
+    ui = buildUi(doc, t);
+    rootEl.append(ui.panel, ui.greeting, ui.preview, ui.launcher);
+    wireUi();
+    applyShell();
+    carried.forEach((key, index) => {
+      ui[key].value = typed[index] ?? '';
+    });
+    // The new transcript starts empty; `renderEvents` appends only what it has
+    // not drawn yet.
+    renderedCount = 0;
+    applyAppearance();
+    renderConnection();
+    resize();
+    if (state.open && focusInside) (state.prechat ? firstPrechatInput() : ui.input).focus();
+  }
 
   // --- Rendering -----------------------------------------------------------
 
@@ -775,7 +869,14 @@ export function mount(doc: Document = document, win: Window = window): void {
       : state.greetingOpen || previewEvent !== null
         ? GREETING
         : { width: LAUNCHER_SIZE, height: LAUNCHER_SIZE };
-    postToHost(win, { type: 'siyahtus:resize', width: size.width, height: size.height });
+    postToHost(win, {
+      type: 'siyahtus:resize',
+      width: size.width,
+      height: size.height,
+      // So the loader can keep the frame in the corner the launcher started in
+      // when the language (and so the direction) is only settled after the mint.
+      rtl: isRtlLocale(locale),
+    });
   }
 
   /**
@@ -1270,6 +1371,9 @@ export function mount(doc: Document = document, win: Window = window): void {
       // The token mint carried the workspace's appearance; the server wins over
       // whatever the snippet baked, so a colour changed after install still takes.
       if (api.appearance) {
+        // Before the appearance is applied: a language change rebuilds the
+        // elements, and the footer and welcome text are drawn into the new ones.
+        adoptMintedLanguage(api.appearance.language, api.appearance.fallback_language);
         appearance = appearanceFromApi(api.appearance);
         applyAppearance();
       }
@@ -1478,6 +1582,9 @@ export function mount(doc: Document = document, win: Window = window): void {
         // that is (a visit expires after 30 minutes of quiet).
         ...(referrer ? { referrer } : {}),
         ...(attachment ? { attachment_url: attachment.fileUrl } : {}),
+        // The language on screen, for the visitor's transcript e-mail (WG-02).
+        // Every message carries it; the server only keeps the one that opens a chat.
+        locale,
         ...(details ?? {}),
         ...(customFields ? { custom_fields: customFields } : {}),
       });
@@ -1932,112 +2039,120 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
   });
 
-  ui.launcher.addEventListener('click', () => setOpen(!state.open));
-  ui.close.addEventListener('click', () => {
-    setOpen(false);
-    ui.launcher.focus();
-  });
-  // "Let's chat": open into the pre-chat form (unless a conversation resumes).
-  ui.greetChat.addEventListener('click', () => {
-    if (prechatActive()) state.prechat = true;
-    setOpen(true);
-  });
-  // "Just browsing": tuck the card away for the rest of the session.
-  ui.greetBrowse.addEventListener('click', () => dismissCard());
-  // The preview opens the conversation exactly as the launcher does; its × only
-  // tucks the card away and leaves the unread badge where it is.
-  ui.previewBody.addEventListener('click', () => setOpen(true));
-  ui.previewClose.addEventListener('click', () => hidePreview());
-  ui.prechat.addEventListener('submit', (event) => {
-    event.preventDefault();
-    submitPrechat();
-  });
-  ui.form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void send();
-  });
-  ui.attach.addEventListener('click', () => ui.file.click());
-  ui.file.addEventListener('change', () => void onPickFile());
-  ui.emojiButton.addEventListener('click', () => {
-    emojiOpen = !emojiOpen;
-    renderEmojiPicker();
-  });
-  // Delegated: the panel holds 24 static glyph buttons built once in `buildUi`.
-  ui.emojiPanel.addEventListener('click', (event) => {
-    const glyph = (event.target as HTMLElement).closest<HTMLButtonElement>('.nx-emoji-item')
-      ?.dataset.emoji;
-    if (!glyph) return;
-    insertEmoji(glyph);
-    emojiOpen = false;
-    renderEmojiPicker();
-  });
-  ui.input.addEventListener('keydown', (event) => {
-    // Enter sends, Shift+Enter breaks the line — the convention every chat uses.
-    if (event.key === 'Enter' && !event.shiftKey) {
+  // The listeners on the widget's own elements, in one function so a rebuilt
+  // set of elements (`rebuildUi`) gets exactly the ones the first set had. The
+  // `doc`/`win` listeners around it are set once and read `ui` live.
+  function wireUi(): void {
+    ui.launcher.addEventListener('click', () => setOpen(!state.open));
+    ui.close.addEventListener('click', () => {
+      setOpen(false);
+      ui.launcher.focus();
+    });
+    // "Let's chat": open into the pre-chat form (unless a conversation resumes).
+    ui.greetChat.addEventListener('click', () => {
+      if (prechatActive()) state.prechat = true;
+      setOpen(true);
+    });
+    // "Just browsing": tuck the card away for the rest of the session.
+    ui.greetBrowse.addEventListener('click', () => dismissCard());
+    // The preview opens the conversation exactly as the launcher does; its × only
+    // tucks the card away and leaves the unread badge where it is.
+    ui.previewBody.addEventListener('click', () => setOpen(true));
+    ui.previewClose.addEventListener('click', () => hidePreview());
+    ui.prechat.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitPrechat();
+    });
+    ui.form.addEventListener('submit', (event) => {
       event.preventDefault();
       void send();
-    }
-  });
-  // Live typing preview: tell the agent as the visitor types (FR-MOD-11.8).
-  ui.input.addEventListener('input', () => notifyTyping());
-  // Leaving the field ends the draft-in-progress the agent was previewing.
-  ui.input.addEventListener('blur', () => stopTyping());
+    });
+    ui.attach.addEventListener('click', () => ui.file.click());
+    ui.file.addEventListener('change', () => void onPickFile());
+    ui.emojiButton.addEventListener('click', () => {
+      emojiOpen = !emojiOpen;
+      renderEmojiPicker();
+    });
+    // Delegated: the panel holds 24 static glyph buttons built once in `buildUi`.
+    ui.emojiPanel.addEventListener('click', (event) => {
+      const glyph = (event.target as HTMLElement).closest<HTMLButtonElement>('.nx-emoji-item')
+        ?.dataset.emoji;
+      if (!glyph) return;
+      insertEmoji(glyph);
+      emojiOpen = false;
+      renderEmojiPicker();
+    });
+    ui.input.addEventListener('keydown', (event) => {
+      // Enter sends, Shift+Enter breaks the line — the convention every chat uses.
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        void send();
+      }
+    });
+    // Live typing preview: tell the agent as the visitor types (FR-MOD-11.8).
+    ui.input.addEventListener('input', () => notifyTyping());
+    // Leaving the field ends the draft-in-progress the agent was previewing.
+    ui.input.addEventListener('blur', () => stopTyping());
 
-  // Header "⋮" menu → "Rate this chat" (FR-MOD-07.8-b): an optional early vote
-  // on a conversation that is still open, alongside the automatic prompt
-  // `refresh` raises once one closes.
-  ui.menuButton.addEventListener('click', () => {
-    menuOpen = !menuOpen;
-    renderMenu();
-  });
-  ui.menuRate.addEventListener('click', () => {
-    menuOpen = false;
-    renderMenu();
-    if (!state.chatId) return;
-    // Reopen for the current chat without discarding an existing vote for it.
-    state.rating =
-      state.rating?.chatId === state.chatId ? state.rating : { chatId: state.chatId, value: null };
-    renderRating();
-  });
-  ui.postchat.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void submitPostChat();
-  });
-  ui.offline.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void submitOffline();
-  });
-  ui.ratingGood.addEventListener('click', () => void vote('good'));
-  ui.ratingBad.addEventListener('click', () => void vote('bad'));
-  ui.ratingDismiss.addEventListener('click', () => {
-    state.rating = null;
-    renderRating();
-  });
+    // Header "⋮" menu → "Rate this chat" (FR-MOD-07.8-b): an optional early vote
+    // on a conversation that is still open, alongside the automatic prompt
+    // `refresh` raises once one closes.
+    ui.menuButton.addEventListener('click', () => {
+      menuOpen = !menuOpen;
+      renderMenu();
+    });
+    ui.menuRate.addEventListener('click', () => {
+      menuOpen = false;
+      renderMenu();
+      if (!state.chatId) return;
+      // Reopen for the current chat without discarding an existing vote for it.
+      state.rating =
+        state.rating?.chatId === state.chatId
+          ? state.rating
+          : { chatId: state.chatId, value: null };
+      renderRating();
+    });
+    ui.postchat.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void submitPostChat();
+    });
+    ui.offline.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void submitOffline();
+    });
+    ui.ratingGood.addEventListener('click', () => void vote('good'));
+    ui.ratingBad.addEventListener('click', () => void vote('bad'));
+    ui.ratingDismiss.addEventListener('click', () => {
+      state.rating = null;
+      renderRating();
+    });
 
-  // Header "⋮" menu → "End chat" (FR-MOD-11.4-b): menu → confirm → request.
-  // Cancelling closes the dialog without sending anything.
-  ui.menuEnd.addEventListener('click', () => {
-    menuOpen = false;
-    renderMenu();
-    if (!state.chatId) return;
-    endConfirmOpen = true;
-    renderEndConfirm();
-  });
-  ui.endConfirmCancel.addEventListener('click', () => {
-    endConfirmOpen = false;
-    renderEndConfirm();
-    ui.menuButton.focus();
-  });
-  ui.endConfirmConfirm.addEventListener('click', () => {
-    endConfirmOpen = false;
-    renderEndConfirm();
-    void endChat();
-  });
-  ui.closedRestart.addEventListener('click', () => {
-    state.closed = false;
-    renderClosed();
-    ui.input.focus();
-  });
+    // Header "⋮" menu → "End chat" (FR-MOD-11.4-b): menu → confirm → request.
+    // Cancelling closes the dialog without sending anything.
+    ui.menuEnd.addEventListener('click', () => {
+      menuOpen = false;
+      renderMenu();
+      if (!state.chatId) return;
+      endConfirmOpen = true;
+      renderEndConfirm();
+    });
+    ui.endConfirmCancel.addEventListener('click', () => {
+      endConfirmOpen = false;
+      renderEndConfirm();
+      ui.menuButton.focus();
+    });
+    ui.endConfirmConfirm.addEventListener('click', () => {
+      endConfirmOpen = false;
+      renderEndConfirm();
+      void endChat();
+    });
+    ui.closedRestart.addEventListener('click', () => {
+      state.closed = false;
+      renderClosed();
+      ui.input.focus();
+    });
+  }
+  wireUi();
 
   doc.addEventListener('click', (event) => {
     if (menuOpen && !ui.menuWrap.contains(event.target as Node)) {
@@ -2090,15 +2205,13 @@ export function mount(doc: Document = document, win: Window = window): void {
     // The whole page is the conversation: no launcher, no host to message, open
     // from the start.
     root.classList.add('nx-page');
-    ui.launcher.hidden = true;
-    ui.close.hidden = true;
-    ui.panel.hidden = false;
+    applyShell();
     state.open = true;
     renderPanelBody();
     ui.input.focus();
     void connect();
   } else {
-    postToHost(win, { type: 'siyahtus:ready' });
+    postToHost(win, { type: 'siyahtus:ready', rtl: isRtlLocale(locale) });
     // The proactive nudge, once the visitor has been here a while. A campaign
     // is not held back by this: it is addressed to this visitor and arrives
     // with a poll, which `renderCard` picks up whenever it lands.
@@ -2227,6 +2340,8 @@ function readFormAnswers(host: HTMLElement): Record<string, string> | null {
 }
 
 interface Ui {
+  /** The injected stylesheet — removed with the rest when the elements are rebuilt. */
+  style: HTMLStyleElement;
   launcher: HTMLButtonElement;
   /** Unread count on the launcher (FR-MOD-11.1); hidden at zero. */
   badge: HTMLElement;
@@ -2867,6 +2982,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   preview.append(previewAvatar, previewBody, previewClose);
 
   return {
+    style,
     launcher,
     badge,
     panel,
@@ -3414,7 +3530,7 @@ function readConfig(win: Window): WidgetConfig {
     // The fallback is the demo stack's published api port; `?api=` overrides
     // either for local dev.
     apiBaseUrl: params.get('api') ?? defaultApiBaseUrl(),
-    language: params.get('language') ?? 'en',
+    language: params.get('language') || null,
     // On the Chat page the widget is served from our own origin and speaks for
     // it; elsewhere the loader passes the embedding page's origin, falling back
     // to the referrer when the widget document is opened directly.

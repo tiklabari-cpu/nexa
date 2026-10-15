@@ -58,7 +58,7 @@
     </main>
 
     <script>
-      // Test hooks: `?language=ar` opens the widget in another language, and
+      // Test hooks: `?language=ar` pins the widget to another language, and
       // `?organization_id=…` targets a specific tenant. Falls back to
       // nothing so a misconfigured page fails visibly rather than silently
       // talking to whichever tenant happens to be first.
@@ -72,7 +72,10 @@
         // http://localhost:5174; one Vite server answers both.
         widgetOrigin: params.get('widget_origin') ?? 'http://localhost:5174',
         position: 'bottom-right',
-        language: params.get('language') ?? 'en',
+        // Only when asked for: a language written into the snippet beats the
+        // panel's setting and the browser's (WG-02), so a default here would
+        // pin every test visitor to English and hide both.
+        ...(params.get('language') ? { language: params.get('language') } : {}),
       };
     </script>
     <script type="module" src="/src/loader.ts"></script>

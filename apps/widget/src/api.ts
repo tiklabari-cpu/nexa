@@ -272,6 +272,8 @@ export class WidgetApi {
       /** The visitor's username on the embedding site, from the pre-chat form. */
       username?: string;
       email?: string;
+      /** The language the widget is showing — for the visitor's transcript e-mail (WG-02). */
+      locale?: string;
       attachment_url?: string;
       /** Pre-chat form answers: contact custom-field id → value (FR-MOD-08.7.7). */
       custom_fields?: Record<string, string>;

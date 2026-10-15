@@ -123,6 +123,42 @@ describe('WidgetCustomization', () => {
     });
   });
 
+  it('picks the widget language and its fallback, saving both (WG-02)', async () => {
+    renderWidget();
+    const language = await screen.findByRole('combobox', { name: 'Widget language' });
+    const fallback = screen.getByRole('combobox', { name: 'Fallback language' });
+
+    // Automatic is the starting point; the eight languages follow in their own names.
+    expect(language).toHaveValue('auto');
+    expect(within(language).getAllByRole('option')).toHaveLength(9);
+    expect(within(language).getByRole('option', { name: 'Türkçe' })).toBeInTheDocument();
+    expect(fallback).toHaveValue('tr');
+
+    await userEvent.selectOptions(fallback, 'de');
+    await userEvent.selectOptions(language, 'en');
+    // A pinned language makes the fallback moot: it is shown, not editable.
+    expect(fallback).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save appearance' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({ language: 'en', fallback_language: 'de' });
+  });
+
+  it('says a language in the install snippet beats the panel setting (WG-02)', async () => {
+    renderWidget();
+    expect(await screen.findByText(/install snippet \(data-language\) overrides/)).toBeVisible();
+  });
+
+  it('does not submit the form when Enter is pressed in the language picker (WG-02)', async () => {
+    renderWidget();
+    const language = await screen.findByRole('combobox', { name: 'Widget language' });
+    await userEvent.selectOptions(language, 'ar');
+    language.focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(putBodies).toHaveLength(0);
+  });
+
   it('reflects a toggled setting in the preview', async () => {
     renderWidget();
     const toggle = await screen.findByRole('checkbox', { name: /Powered by SiyahTuş/ });

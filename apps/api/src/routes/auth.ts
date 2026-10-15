@@ -1756,12 +1756,18 @@ export default async function authRoutes(
     // All best-effort — the widget falls back to the shipped look and no extra
     // fields, so a read failure must never deny a token.
     const [widget, forms, fileSharingEnabled, prechat] = await Promise.all([
-      widgetAppearance(app.db, tenant, request, {
-        privacy_policy_url: env.PRIVACY_POLICY_URL ?? null,
-        // The public pilot has no brand page to link to yet, so it shows the
-        // words without a link; every other deployment keeps today's address.
-        powered_by_url: env.PILOT_MODE ? null : POWERED_BY_PLACEHOLDER_URL,
-      }),
+      widgetAppearance(
+        app.db,
+        tenant,
+        request,
+        {
+          privacy_policy_url: env.PRIVACY_POLICY_URL ?? null,
+          // The public pilot has no brand page to link to yet, so it shows the
+          // words without a link; every other deployment keeps today's address.
+          powered_by_url: env.PILOT_MODE ? null : POWERED_BY_PLACEHOLDER_URL,
+        },
+        brandId,
+      ),
       readWidgetForms(app.db, tenant, request),
       fileSharingEnabledFor(app.db, tenant, request),
       prechatFor(app.db, tenant, request, brandId),
@@ -1826,10 +1832,14 @@ async function widgetAppearance(
   tenant: TenantContext,
   request: FastifyRequest,
   links: Pick<WidgetTokenAppearance, 'privacy_policy_url' | 'powered_by_url'>,
+  brandId?: string,
 ): Promise<WidgetTokenAppearance> {
   try {
     const appearance = await withTenant(db, tenant, async (tx) => {
-      const row = await tx.widgetSettings.findFirst();
+      // The brand whose website minted the token (WG-02): a second brand's
+      // language must not leak onto the first brand's widget. No brand
+      // resolved (a failed lookup) reads the licence's first row, as before.
+      const row = await tx.widgetSettings.findFirst(brandId ? { where: { brandId } } : undefined);
       if (!row) return null;
       return {
         primary_color: row.primaryColor,
@@ -1839,6 +1849,8 @@ async function widgetAppearance(
         powered_by: await poweredByFor(tx, tenant, row.poweredBy),
         welcome_title: row.welcomeTitle,
         welcome_text: row.welcomeText,
+        language: row.language as WidgetAppearance['language'],
+        fallback_language: row.fallbackLanguage as WidgetAppearance['fallback_language'],
       };
     });
     return { ...normalizeWidgetAppearance(appearance), ...links };

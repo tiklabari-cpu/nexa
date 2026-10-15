@@ -77,6 +77,8 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     assigneeId?: string | null;
     internalNote?: boolean;
     at?: Date;
+    /** The widget language recorded when the chat opened (WG-02). */
+    customerLocale?: string | null;
   }
 
   // Seeds as the owner (RLS-exempt) so a scenario can place a chat, its assignee
@@ -91,6 +93,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
         organizationId: t.organizationId,
         name: 'Vic',
         email: options.customerEmail === undefined ? 'visitor@example.test' : options.customerEmail,
+        locale: options.customerLocale ?? null,
       },
       select: { id: true },
     });
@@ -225,6 +228,36 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     // The team copy carries everything, including the note.
     expect(toTeam!.body).toContain('refund pre-approved');
   });
+
+  it('writes the visitor copy in the language their widget showed (WG-02)', async () => {
+    const { chatId } = await seedChat(fx.a, {
+      assigneeId: fx.a.agentAccountId,
+      customerLocale: 'tr',
+    });
+
+    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
+
+    const mails = await notifications();
+    const toCustomer = mails.find((m) => m.to === 'visitor@example.test');
+    expect(toCustomer!.subject).toMatch(/görüşmenizin kopyası$/);
+    // The team's copy follows the assignee's panel language, not the visitor's.
+    expect(mails.find((m) => m.to === fx.a.agentEmail)!.subject).not.toMatch(/kopyası/);
+  });
+
+  it.each([null, 'de'])(
+    'reads English for a visitor with no recorded language, or one the mails do not speak (%s)',
+    async (locale) => {
+      const { chatId } = await seedChat(fx.a, {
+        assigneeId: fx.a.agentAccountId,
+        customerLocale: locale,
+      });
+
+      await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
+
+      const toCustomer = (await notifications()).find((m) => m.to === 'visitor@example.test');
+      expect(toCustomer!.subject).toMatch(/^your conversation with /i);
+    },
+  );
 
   it("still mails the assignee when the visitor's copy is refused, and still closes (tm 255.4)", async () => {
     // The visitor is mailed first. Before tm 255.4 a refusal there was thrown

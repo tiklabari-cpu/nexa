@@ -22,6 +22,7 @@ import {
   SALES_TRACKER_MAX_AMOUNT_CENTS,
   SNEAK_PEEK_MAX_LENGTH,
   typingStateKey,
+  WIDGET_UI_LOCALES,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
@@ -77,6 +78,11 @@ const startSchema = z
     /** The visitor's username on the embedding site — unverified, kept as typed. */
     username: z.string().trim().max(120).optional(),
     email: z.string().email().max(320).optional(),
+    /**
+     * The language the widget is showing (WG-02), recorded on the contact when
+     * this message opens a chat and used for the visitor's transcript e-mail.
+     */
+    locale: z.enum(WIDGET_UI_LOCALES as unknown as [string, ...string[]]).optional(),
     /**
      * Pre-chat form answers (FR-MOD-08.7.7): a map of contact custom-field id →
      * value, validated against each field's definition (type + required) and
@@ -757,6 +763,20 @@ export default async function customerRoutes(
         // After the transaction commits: `evaluate` reads `is_lead` back, so it
         // has to see the write that set it.
         if (becameLead) await goals.record(tenant, principal.customerId);
+      }
+
+      // The widget's language (WG-02), kept on the contact when this message
+      // opens a conversation — the visitor's transcript e-mail is written in it.
+      // After every refusal above, so a refused chat-start leaves no trace; not
+      // on later messages, which would spend a write on a value that is already
+      // there. A later chat from a different widget language updates it.
+      if (!existing && body.locale) {
+        await request.withTenant((tx) =>
+          tx.customer.update({
+            where: { id: principal.customerId },
+            data: { locale: body.locale },
+          }),
+        );
       }
 
       // Pre-chat form answers (FR-MOD-08.7.7): validated against their contact

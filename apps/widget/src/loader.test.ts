@@ -217,6 +217,39 @@ describe('loader message boundary', () => {
     expect(el.style.width).toBe('380px');
   });
 
+  it('moves the frame to the mirrored corner when the document reports a right-to-left language (WG-02)', () => {
+    // No language in the snippet: the panel or the browser chose Arabic, which
+    // only the document knows.
+    boot(setup({}));
+    const el = frame()!;
+    expect(el.style.right).toBe('0px');
+    dispatch(
+      { type: 'siyahtus:resize', width: 124, height: 124, rtl: true },
+      'https://widget.test',
+      el.contentWindow,
+    );
+    expect(el.style.left).toBe('0px');
+    expect(el.style.right).toBe('');
+    dispatch(
+      { type: 'siyahtus:resize', width: 124, height: 124, rtl: false },
+      'https://widget.test',
+      el.contentWindow,
+    );
+    expect(el.style.right).toBe('0px');
+    expect(el.style.left).toBe('');
+  });
+
+  it('keeps the corner when the message does not say', () => {
+    boot(setup({ language: 'ar' }));
+    const el = frame()!;
+    dispatch(
+      { type: 'siyahtus:resize', width: 200, height: 200 },
+      'https://widget.test',
+      el.contentWindow,
+    );
+    expect(el.style.left).toBe('0px');
+  });
+
   it('ignores messages from any other origin', () => {
     boot(setup({}));
     const el = frame()!;

@@ -31,6 +31,60 @@ export function resolveWidgetLocale(language: string | null | undefined): Widget
   return SUPPORTED_LOCALES.includes(primary as WidgetLocale) ? (primary as WidgetLocale) : 'en';
 }
 
+/** A BCP-47 tag's primary subtag, when it is one of the supported languages. */
+function supportedLocale(tag: string | null | undefined): WidgetLocale | null {
+  const primary = (tag ?? '').toLowerCase().split(/[-_]/)[0];
+  return SUPPORTED_LOCALES.includes(primary as WidgetLocale) ? (primary as WidgetLocale) : null;
+}
+
+/** The languages the visitor's browser prefers, most preferred first. */
+export function browserLanguages(nav: Pick<Navigator, 'language' | 'languages'>): string[] {
+  const list = nav.languages?.length ? nav.languages : [nav.language];
+  return list.filter((tag): tag is string => typeof tag === 'string' && tag !== '');
+}
+
+export interface WidgetLanguageSources {
+  /** A `language` the embedding page wrote into its install snippet. */
+  snippet?: string | null;
+  /** The panel's choice from the token mint — absent until the mint lands. */
+  panel?: string | null;
+  /** The panel's fallback from the token mint. */
+  fallback?: string | null;
+  /** `navigator.languages`. */
+  browser?: readonly string[];
+}
+
+/**
+ * Which language the widget shows (WG-02), in this order:
+ *
+ * 1. a language the embedding page's snippet names — the site owner's explicit
+ *    word beats the panel (the panel says so beside the picker);
+ * 2. the panel's language, unless it is `auto`;
+ * 3. `auto`: the first of the browser's languages we ship (primary subtag, so
+ *    `tr-TR` is Turkish);
+ * 4. the panel's fallback language.
+ *
+ * A snippet language we do not ship (`ru`) is no choice at all and falls
+ * through, instead of pinning English the way the old single-value lookup did.
+ * Before the mint the panel's half is unknown, so `panel` and `fallback` are
+ * absent: the answer is then snippet → browser → English, which for the common
+ * case (a browser language we ship, panel on auto) is already the final answer
+ * and nothing is redrawn when the mint lands.
+ */
+export function pickWidgetLocale(sources: WidgetLanguageSources): WidgetLocale {
+  const fromSnippet = supportedLocale(sources.snippet);
+  if (fromSnippet) return fromSnippet;
+  if (sources.panel && sources.panel !== 'auto') {
+    const pinned = supportedLocale(sources.panel);
+    if (pinned) return pinned;
+  }
+  for (const tag of sources.browser ?? []) {
+    const match = supportedLocale(tag);
+    if (match) return match;
+  }
+  return supportedLocale(sources.fallback) ?? 'en';
+}
+
 /** Whether `locale` reads right-to-left (NFR-I18N1) — Arabic today. */
 export function isRtlLocale(locale: WidgetLocale): boolean {
   return RTL_LOCALES.has(locale);

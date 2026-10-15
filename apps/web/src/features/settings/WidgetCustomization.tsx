@@ -18,10 +18,13 @@ import { useEffect, useState, type ReactElement } from 'react';
 import {
   DEFAULT_WIDGET_APPEARANCE,
   WIDGET_COLOR_PATTERN,
+  WIDGET_UI_LOCALES,
   WIDGET_WELCOME_TEXT_MAX,
   WIDGET_WELCOME_TITLE_MAX,
   type WidgetAppearance,
+  type WidgetLanguage,
   type WidgetPosition,
+  type WidgetUiLocale,
   type WidgetTheme,
 } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
@@ -145,6 +148,13 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                   onChange={(next) => set('theme', next)}
                 />
 
+                <LanguageControl
+                  language={value.language}
+                  fallback={value.fallback_language}
+                  onLanguageChange={(next) => set('language', next)}
+                  onFallbackChange={(next) => set('fallback_language', next)}
+                />
+
                 <ToggleControl
                   label={t('settings.widgetCustomization.mobileFullscreenLabel')}
                   hint={t('settings.widgetCustomization.mobileFullscreenHint')}
@@ -212,6 +222,18 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
     </Section>
   );
 }
+
+/** Each language in its own name — a picker reads the same in every panel language. */
+const LANGUAGE_NAMES: Record<WidgetUiLocale, string> = {
+  en: 'English',
+  tr: 'Türkçe',
+  de: 'Deutsch',
+  fr: 'Français',
+  es: 'Español',
+  it: 'Italiano',
+  pt: 'Português',
+  ar: 'العربية',
+};
 
 const POSITIONS: readonly WidgetPosition[] = ['bottom-right', 'bottom-left'];
 const THEMES: readonly WidgetTheme[] = ['auto', 'light', 'dark'];
@@ -334,6 +356,81 @@ function ToggleControl({
         <span className="block text-2xs text-content-tertiary">{hint}</span>
       </span>
     </label>
+  );
+}
+
+/**
+ * The widget's language (WG-02): Automatic, or one of the eight, and what
+ * Automatic falls back to. Two native `<select>`s: Enter inside one does not
+ * submit the surrounding form, which a text field would. The snippet note is
+ * always shown — a language written into the install snippet beats this
+ * setting, and the admin is the one who can find that line.
+ */
+function LanguageControl({
+  language,
+  fallback,
+  onLanguageChange,
+  onFallbackChange,
+}: {
+  language: WidgetLanguage;
+  fallback: WidgetUiLocale;
+  onLanguageChange: (next: WidgetLanguage) => void;
+  onFallbackChange: (next: WidgetUiLocale) => void;
+}): ReactElement {
+  const t = useTranslate();
+  return (
+    <fieldset className="flex flex-col gap-3 border-0 p-0">
+      <legend className="mb-1 text-sm font-medium">
+        {t('settings.widgetCustomization.languageLegend')}
+      </legend>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="widget-language" className="text-xs font-medium">
+          {t('settings.widgetCustomization.languageLabel')}
+        </label>
+        <select
+          id="widget-language"
+          value={language}
+          aria-describedby="widget-language-hint widget-language-snippet-note"
+          onChange={(event) => onLanguageChange(event.target.value as WidgetLanguage)}
+          className="rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        >
+          <option value="auto">{t('settings.widgetCustomization.language.auto')}</option>
+          {WIDGET_UI_LOCALES.map((code) => (
+            <option key={code} value={code}>
+              {LANGUAGE_NAMES[code]}
+            </option>
+          ))}
+        </select>
+        <p id="widget-language-hint" className="text-2xs text-content-tertiary">
+          {t('settings.widgetCustomization.languageHint')}
+        </p>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="widget-fallback-language" className="text-xs font-medium">
+          {t('settings.widgetCustomization.fallbackLanguageLabel')}
+        </label>
+        <select
+          id="widget-fallback-language"
+          value={fallback}
+          disabled={language !== 'auto'}
+          aria-describedby="widget-fallback-language-hint"
+          onChange={(event) => onFallbackChange(event.target.value as WidgetUiLocale)}
+          className="rounded-md border border-border bg-inset px-3 py-2 text-sm disabled:opacity-50"
+        >
+          {WIDGET_UI_LOCALES.map((code) => (
+            <option key={code} value={code}>
+              {LANGUAGE_NAMES[code]}
+            </option>
+          ))}
+        </select>
+        <p id="widget-fallback-language-hint" className="text-2xs text-content-tertiary">
+          {t('settings.widgetCustomization.fallbackLanguageHint')}
+        </p>
+      </div>
+      <p id="widget-language-snippet-note" className="text-2xs text-content-tertiary">
+        {t('settings.widgetCustomization.languageSnippetNote')}
+      </p>
+    </fieldset>
   );
 }
 
@@ -481,6 +578,9 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
           <span className="text-lg leading-none">💬</span>
         </button>
       </div>
+      <p className="text-2xs text-content-tertiary">
+        {t('settings.widgetCustomization.previewLanguageNote')}
+      </p>
       <p className="text-2xs text-content-tertiary">
         {appearance.theme === 'auto'
           ? t('settings.widgetCustomization.previewAutoNote')

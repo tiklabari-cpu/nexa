@@ -90,10 +90,18 @@ export function frameEdge(
   position: string | undefined,
   language: string | undefined,
 ): 'left' | 'right' {
-  const configuredLeft = position === 'bottom-left';
   const primary = (language ?? '').toLowerCase().split(/[-_]/)[0] ?? '';
-  const mirrored = RTL_LANGUAGES.has(primary);
-  return configuredLeft !== mirrored ? 'left' : 'right';
+  return edgeFor(position, RTL_LANGUAGES.has(primary));
+}
+
+/**
+ * The same rule once the direction is known outright. The widget document
+ * reports it (`rtl` on `siyahtus:ready` / `siyahtus:resize`) because with the
+ * language chosen in the panel or by the visitor's browser (WG-02) the snippet
+ * does not say, and the loader cannot know until the document does.
+ */
+function edgeFor(position: string | undefined, rtl: boolean): 'left' | 'right' {
+  return (position === 'bottom-left') !== rtl ? 'left' : 'right';
 }
 
 /** Opaque here — the widget document (not this script) validates the shape. */
@@ -162,7 +170,7 @@ export function boot(
   frame.setAttribute('allowtransparency', 'true');
   frame.src = buildFrameUrl(widgetOrigin, config, hostPageUrl(win));
 
-  const corner = frameEdge(config.position, config.language);
+  let corner = frameEdge(config.position, config.language);
 
   Object.assign(frame.style, {
     position: 'fixed',
@@ -219,8 +227,16 @@ export function boot(
     if (event.origin !== widgetOrigin) return;
     if (event.source !== frame.contentWindow) return;
 
-    const data = event.data as { type?: unknown; height?: unknown; width?: unknown };
+    const data = event.data as {
+      type?: unknown;
+      height?: unknown;
+      width?: unknown;
+      rtl?: unknown;
+    };
     if (typeof data?.type !== 'string' || !ALLOWED_INBOUND.has(data.type)) return;
+
+    // The document's own word on its direction, when it gives one (WG-02).
+    if (typeof data.rtl === 'boolean') corner = edgeFor(config.position, data.rtl);
 
     if (data.type === 'siyahtus:open') open = true;
     if (data.type === 'siyahtus:close') open = false;

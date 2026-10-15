@@ -24,6 +24,11 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
  * The events a webhook can subscribe to. A closed vocabulary so an unknown
  * action is refused at registration rather than stored as a subscription that
  * can never fire.
+ *
+ * `thread_started` (ID-02 · tm 286): a further connection under an existing
+ * chat — the member back the same day. The contract's `WebhookAction` enum and
+ * `INTEGRATION_TRIGGERS` carry the same list; `webhooks.test.ts` compares all
+ * three.
  */
 export const WEBHOOK_ACTIONS = [
   'chat_started',
@@ -31,6 +36,7 @@ export const WEBHOOK_ACTIONS = [
   'chat_transferred',
   'event_created',
   'ticket_created',
+  'thread_started',
 ] as const;
 export type WebhookAction = (typeof WEBHOOK_ACTIONS)[number];
 

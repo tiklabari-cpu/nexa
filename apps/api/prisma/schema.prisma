@@ -801,22 +801,37 @@ model AgentExpertise {
 // Conversation core: chat → thread → event
 // ===========================================================================
 
-/// A continuing relationship with one customer. Threads come and go inside it;
-/// the chat itself persists, which is what makes "resume" meaningful.
+/// The member's conversation container ("Thread ID" in the panel). Threads
+/// ("Chat ID", one connection each) come and go inside it; the chat itself
+/// persists, which is what makes "resume" meaningful.
 ///
 /// A partial unique index (in the migration) enforces at most one *active* chat
 /// per license+customer — the invariant the whole inbox model rests on.
+///
+/// ID-02 (tm 286) files a chat under one conversation day: `localDay` +
+/// `dayTz`, written together once when the chat opens and never recomputed.
+/// Not modelled here: `uq_chat_customer_day` on `(license_id, customer_id,
+/// local_day) WHERE local_day IS NOT NULL` — one chat per member per day
+/// (20261015160100_chats_customer_day_index; Prisma cannot express the WHERE)
+/// — and the CHECKs `chats_local_day_tz_pair` / `chats_day_tz_check`
+/// (20261015160000_conversation_day). A chat opened before ID-02 has neither
+/// column and spans the whole relationship, as every chat did before.
 model Chat {
-  id          String   @id @db.VarChar(12)
-  licenseId   BigInt   @map("license_id")
-  customerId  String   @map("customer_id") @db.Uuid
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id          String    @id @db.VarChar(12)
+  licenseId   BigInt    @map("license_id")
+  customerId  String    @map("customer_id") @db.Uuid
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   /// When this conversation last moved — the `created_at` of its newest event,
   /// or its own creation time while it has none. This is the inbox list's sort
   /// key (FR-MOD-02.2.2 "RTM'de yukarı taşınır"), maintained on the write path
   /// rather than derived per read so the order is one index range scan.
-  lastEventAt DateTime @default(now()) @map("last_event_at") @db.Timestamptz(6)
+  lastEventAt DateTime  @default(now()) @map("last_event_at") @db.Timestamptz(6)
+  /// The conversation day (`localDayKey`, `@siyahtus/types`) in the workspace's
+  /// day boundary at opening. Null = filed under no day (opened before ID-02).
+  localDay    DateTime? @map("local_day") @db.Date
+  /// The IANA zone `localDay` was counted in — the boundary may change later.
+  dayTz       String?   @map("day_tz")
 
   license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -859,6 +874,10 @@ model Thread {
   firstResponseAt  DateTime? @map("first_response_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   closedAt         DateTime? @map("closed_at") @db.Timestamptz(6)
+  /// How this connection came to exist (ID-02): one of `CONNECTION_OPENED_VIA`
+  /// (`@siyahtus/types`), enforced by the CHECK `threads_opened_via_check`.
+  /// Null on a thread opened before ID-02.
+  openedVia        String?   @map("opened_via")
 
   chat   Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags   ThreadTag[]

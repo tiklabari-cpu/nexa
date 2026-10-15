@@ -299,6 +299,47 @@ describe('workspace event → zap (FR-MOD-09.4)', () => {
     expect(body.data.ticket_id).toBe((ticket.json() as { id: string }).id);
   });
 
+  // ID-02 (tm 286.1): a chat holds every connection of the member's day, so the
+  // chat id alone no longer says which conversation started or ended.
+  it('names the connection on chat_started and chat_deactivated, as the manifest samples do (FR-MOD-09.4)', async () => {
+    await connectZapier();
+    await subscribe({ url: RECEIVER, action: 'chat_started', app_id: ZAPIER });
+    await subscribe({ url: RECEIVER, action: 'chat_deactivated', app_id: ZAPIER });
+
+    const chatId = await startChat();
+    const thread = await owner.thread.findFirstOrThrow({
+      where: { chatId },
+      select: { id: true },
+    });
+    const closed = await server.post(`/chats/${chatId}/deactivate`, undefined, auth());
+    expect(closed.statusCode).toBe(200);
+
+    const bodies = received.map(
+      (r) =>
+        JSON.parse(r.request.body) as {
+          action: string;
+          data: { chat_id: string; thread_id: string };
+        },
+    );
+    expect(bodies.map((b) => b.action)).toEqual(['chat_started', 'chat_deactivated']);
+    for (const body of bodies) {
+      expect(body.data.chat_id).toBe(chatId);
+      expect(body.data.thread_id).toBe(thread.id);
+    }
+
+    // The field the integrator was promised is the field that arrives.
+    const manifest = await server.get('/integrations/manifest', auth());
+    const triggers = (
+      manifest.json() as {
+        triggers: Array<{ action: string; sample_payload: { data: Record<string, unknown> } }>;
+      }
+    ).triggers;
+    for (const action of ['chat_started', 'chat_deactivated']) {
+      const sample = triggers.find((t) => t.action === action)?.sample_payload.data ?? {};
+      expect(Object.keys(sample)).toContain('thread_id');
+    }
+  });
+
   it('gives the api_key card (Make) the same path as the OAuth one (FR-MOD-09.4)', async () => {
     await connectMake();
     const registration = await subscribe({

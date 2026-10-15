@@ -4,10 +4,13 @@
 # sub-path under the chat they act on, rather than as `/action/<verb>` calls.
 #
 # The model is chat → thread → event:
-#   chat   a continuing relationship with one customer; at most one active per
-#          license+customer, enforced by a partial unique index
-#   thread one continuous exchange; closing it archives the conversation, and
-#          the customer returning opens a new thread on the same chat
+#   chat   the member's conversation container ("Thread ID" in the panel). At
+#          most one active per license+customer, and one per member per
+#          conversation day once filed under a day (`local_day`, ID-02) — both
+#          enforced by partial unique indexes
+#   thread one connection ("Chat ID" in the panel); closing it archives the
+#          conversation, and reopening it opens a new thread on the same chat
+#          (`Chat.connections` lists a day's threads)
 #   event  everything that happened — messages, system notices, internal notes
 
 chats:
@@ -150,6 +153,10 @@ chat:
     tags: [Chats]
     operationId: getChat
     summary: Fetch one conversation with its current thread
+    description: |
+      `thread` is the newest connection; `connections` lists the day's
+      connections oldest first (ID-02) so a reader can draw the whole day and
+      fetch each transcript by `thread_id`.
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"
     responses:
@@ -187,7 +194,10 @@ events:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"
       - name: thread_id
         in: query
-        description: "Defaults to the most recent thread. Panelde: Chat ID (bağlantı)."
+        description: |
+          Which connection's transcript to read — any id `Chat.connections`
+          lists (Panelde: Chat ID, bağlantı). Defaults to the most recent
+          thread. A thread of another chat is `404`, never a way into it.
         schema: { type: string }
       - name: after_event_id
         in: query

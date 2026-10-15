@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { loadOpenApiDocument } from '@siyahtus/contract';
 import { generateShortId, licenseChannel } from '@siyahtus/types';
 import {
   grantToken,
@@ -2704,6 +2705,146 @@ describe('agent chat api', () => {
       expect(response.json().visitor).toBeNull();
       expect(response.body).not.toContain('other-workspace.example/leak');
       expect(response.body).not.toContain('198.51.100.5');
+    });
+  });
+
+  // =========================================================================
+  // The conversation day, read side (ID-02 · tm 286.1): a chat ("Thread ID")
+  // is the member's day and its threads ("Chat ID") the day's connections.
+  // Nothing writes a day yet — tm 286.2 does — so a day is filed here the way
+  // that writer will leave it.
+  // =========================================================================
+
+  describe('conversation day (ID-02)', () => {
+    interface Connection {
+      id: string;
+      active: boolean;
+      created_at: string;
+      closed_at: string | null;
+      assignee_id: string | null;
+      opened_via: string | null;
+    }
+    interface DayChat {
+      id: string;
+      local_day: string | null;
+      connections: Connection[];
+      thread: { id: string; opened_via: string | null } | null;
+    }
+
+    /** A chat with two connections: the first closed, the second open (a reopen). */
+    async function twoConnections() {
+      const chat = await startChat(acmeAdminToken, { text: 'Morning question' });
+      const first = chat.thread!.id;
+      await server.post(`/chats/${chat.id}/deactivate`, undefined, auth(acmeAdminToken));
+      const resumed = await server.post(
+        `/chats/${chat.id}/resume`,
+        undefined,
+        auth(acmeAdminToken),
+      );
+      expect(resumed.statusCode).toBe(200);
+      return { chatId: chat.id, first, second: (resumed.json() as DayChat).thread!.id };
+    }
+
+    /** File the chat under a day, as `openOrContinueConnection` (tm 286.2) will. */
+    async function fileUnderDay(chatId: string, first: string, second: string) {
+      await owner.chat.update({
+        where: { id: chatId },
+        data: { localDay: new Date('2026-10-15T00:00:00.000Z'), dayTz: 'Europe/Istanbul' },
+      });
+      await owner.thread.update({ where: { id: first }, data: { openedVia: 'first_of_day' } });
+      await owner.thread.update({ where: { id: second }, data: { openedVia: 'same_day_return' } });
+    }
+
+    async function listRow(chatId: string) {
+      const list = await server.get('/chats?limit=50', auth(acmeAdminToken));
+      expect(list.statusCode).toBe(200);
+      return (list.json() as { items: Array<{ id: string; connection_count: number }> }).items.find(
+        (item) => item.id === chatId,
+      );
+    }
+
+    it('lists only the newest connection of a chat filed under no day — the model before ID-02', async () => {
+      const { chatId, second } = await twoConnections();
+
+      const detail = (await server.get(`/chats/${chatId}`, auth(acmeAdminToken))).json() as DayChat;
+      expect(detail.local_day).toBeNull();
+      // Its older thread is an earlier visit, not one of "today's" connections.
+      expect(detail.connections.map((c) => c.id)).toEqual([second]);
+      expect(detail.connections[0]).toMatchObject({
+        active: true,
+        closed_at: null,
+        opened_via: null,
+      });
+      expect(detail.thread?.opened_via).toBeNull();
+      expect((await listRow(chatId))?.connection_count).toBe(1);
+    });
+
+    it("lists a day's connections oldest first, each with how it opened and readable by its id", async () => {
+      const { chatId, first, second } = await twoConnections();
+      await fileUnderDay(chatId, first, second);
+
+      const response = await server.get(`/chats/${chatId}`, auth(acmeAdminToken));
+      expect(response.statusCode).toBe(200);
+      const detail = response.json() as DayChat;
+      expect(detail.local_day).toBe('2026-10-15');
+      expect(detail.connections.map((c) => [c.id, c.opened_via, c.active])).toEqual([
+        [first, 'first_of_day', false],
+        [second, 'same_day_return', true],
+      ]);
+      expect(detail.connections[0]?.closed_at).not.toBeNull();
+      expect(detail.connections[1]?.closed_at).toBeNull();
+      // `thread` stays the newest connection.
+      expect(detail.thread).toMatchObject({ id: second, opened_via: 'same_day_return' });
+
+      // The morning's transcript is one `thread_id` away.
+      const morning = await server.get(
+        `/chats/${chatId}/events?thread_id=${first}`,
+        auth(acmeAdminToken),
+      );
+      expect(morning.statusCode).toBe(200);
+      expect(morning.json().items.map((e: { text: string | null }) => e.text)).toContain(
+        'Morning question',
+      );
+
+      expect((await listRow(chatId))?.connection_count).toBe(2);
+    });
+
+    it('serves a connection with exactly the fields the contract names', async () => {
+      const { chatId, first, second } = await twoConnections();
+      await fileUnderDay(chatId, first, second);
+      const detail = (await server.get(`/chats/${chatId}`, auth(acmeAdminToken))).json() as Record<
+        string,
+        unknown
+      >;
+
+      const document = loadOpenApiDocument() as unknown as {
+        components: { schemas: Record<string, { properties: Record<string, unknown> }> };
+      };
+      const schemas = document.components.schemas;
+      expect(Object.keys(schemas['Chat']!.properties)).toEqual(
+        expect.arrayContaining(['local_day', 'connections']),
+      );
+      for (const connection of detail['connections'] as Connection[]) {
+        expect(Object.keys(connection).sort()).toEqual(
+          Object.keys(schemas['ChatConnection']!.properties).sort(),
+        );
+      }
+    });
+
+    it('gives another workspace neither the day chat nor any of its connections (NFR-S4 · NFR-S5)', async () => {
+      const { chatId, first, second } = await twoConnections();
+      await fileUnderDay(chatId, first, second);
+
+      expect((await server.get(`/chats/${chatId}`, auth(northwindToken))).statusCode).toBe(404);
+      for (const threadId of [first, second]) {
+        const events = await server.get(
+          `/chats/${chatId}/events?thread_id=${threadId}`,
+          auth(northwindToken),
+        );
+        expect(events.statusCode).toBe(404);
+      }
+      const theirs = await server.get('/chats?limit=50', auth(northwindToken));
+      expect(theirs.body).not.toContain(chatId);
     });
   });
 

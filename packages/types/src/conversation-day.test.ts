@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONNECTION_OPENED_VIA,
   DEFAULT_DAY_BOUNDARY,
+  isConnectionOpenedVia,
   isDayBoundaryHour,
   isDayBoundaryTimeZone,
   localDayKey,
@@ -122,6 +124,26 @@ describe('day boundary validators (ID-04)', () => {
     }
     for (const zone of ['Mars/Olympus', '', '   ', 'PST', 42, null]) {
       expect(isDayBoundaryTimeZone(zone)).toBe(false);
+    }
+  });
+});
+
+describe('connection opened-via vocabulary (ID-02)', () => {
+  it('names the five ways a connection opens, each once', () => {
+    expect([...CONNECTION_OPENED_VIA]).toEqual([
+      'first_of_day',
+      'same_day_return',
+      'agent_start',
+      'agent_reopen',
+      'day_rollover',
+    ]);
+    expect(new Set(CONNECTION_OPENED_VIA).size).toBe(CONNECTION_OPENED_VIA.length);
+  });
+
+  it('accepts exactly those values — no case folding, no close reasons', () => {
+    for (const value of CONNECTION_OPENED_VIA) expect(isConnectionOpenedVia(value)).toBe(true);
+    for (const value of ['First_Of_Day', 'resume', 'timeout', '', ' first_of_day', null, 1]) {
+      expect(isConnectionOpenedVia(value)).toBe(false);
     }
   });
 });

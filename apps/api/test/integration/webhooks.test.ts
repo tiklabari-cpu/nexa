@@ -18,6 +18,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { loadOpenApiDocument } from '@siyahtus/contract';
 import { isScope, type IntegrationAction, type IntegrationTrigger } from '@siyahtus/types';
 import type { PublicHttpTarget } from '../../src/lib/ssrf.js';
 import { withTenant } from '../../src/lib/tenant.js';
@@ -193,6 +194,34 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
     // Nor is the stored key ever the empty string — it really was persisted.
     const row = await owner.webhook.findUnique({ where: { id: body.id } });
     expect(row?.secretKey).toBe(body.secret);
+  });
+
+  // ID-02 (tm 286.1): a further connection under an existing chat is its own
+  // event, so an integrator can tell a same-day return from a new chat.
+  it('accepts a thread_started subscription and still refuses an unknown action (FR-MOD-08.8.4)', async () => {
+    const res = await register({
+      url: 'https://hooks.example.test/connections',
+      action: 'thread_started',
+    });
+    expect(res.statusCode).toBe(201);
+    expect((res.json() as WebhookRegistration).action).toBe('thread_started');
+
+    const typo = await register({
+      url: 'https://hooks.example.test/connections',
+      action: 'thread_opened',
+    });
+    expect(typo.statusCode).toBe(400);
+  });
+
+  // Three statements of one vocabulary — the contract's enum, the registry's
+  // closed list and the manifest (the next block) — and a subscriber reads the
+  // first, so it must not drift from what registration accepts.
+  it("lists the same actions in the contract's WebhookAction enum as registration accepts", () => {
+    const document = loadOpenApiDocument() as unknown as {
+      components: { schemas: Record<string, { enum?: string[] }> };
+    };
+    const contractActions = document.components.schemas['WebhookAction']?.enum ?? [];
+    expect([...contractActions].sort()).toEqual([...WEBHOOK_ACTIONS].sort());
   });
 
   it('lists webhooks oldest-first and unregisters one', async () => {

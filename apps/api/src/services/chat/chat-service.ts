@@ -347,8 +347,12 @@ export class ChatService {
       // Only a chat that was actually created (FR-MOD-09.4): `start` is
       // idempotent on an existing active chat, and a subscriber that received
       // `chat_started` twice for one conversation would open two tickets.
+      // `thread_id` names the chat's first connection (ID-02): a later one is
+      // announced by `thread_started` instead, so the pair covers every
+      // connection exactly once.
       await this.automations?.emit(tenant, 'chat_started', {
         chat_id: result.chat.id,
+        thread_id: result.chat.thread?.id ?? null,
         customer_id: result.raw.customerId,
         active: true,
         created_at: result.raw.createdAt.toISOString(),
@@ -1098,7 +1102,9 @@ export class ChatService {
    *
    * The body matches the manifest's `chat_deactivated` sample
    * (`INTEGRATION_TRIGGERS`), which is what an integrator built their zap
-   * against.
+   * against. `thread_id` is the connection that just closed (ID-02) — with
+   * several connections under one chat a day, the chat id alone no longer
+   * says which conversation ended.
    */
   async #emitDeactivation(
     tenant: TenantContext,
@@ -1107,6 +1113,7 @@ export class ChatService {
   ): Promise<void> {
     await this.automations?.emit(tenant, 'chat_deactivated', {
       chat_id: chatId,
+      thread_id: result.threadId,
       active: false,
       created_at: result.detail.created_at,
     });
@@ -2160,6 +2167,13 @@ export async function listChatsInTenant(
     tx,
     page.map((c) => c.id),
   );
+  // The row's "N connections" (ID-02). Only a chat filed under a day needs a
+  // count; one filed under none shows at most its newest thread, which the
+  // page already loaded.
+  const threadCounts = await threadCountPerChat(
+    tx,
+    page.filter((c) => c.localDay !== null).map((c) => c.id),
+  );
 
   const items = page.map((chat) => {
     const thread = chat.threads[0];
@@ -2177,6 +2191,10 @@ export async function listChatsInTenant(
       assignee_id: thread?.assigneeId ?? null,
       queue_position: thread?.queuePosition ?? null,
       unread_count: countUnread(lastEvents.get(chat.id), seenUpTo),
+      connection_count: connectionCount(
+        chat.localDay,
+        chat.localDay ? (threadCounts.get(chat.id) ?? 0) : chat.threads.length,
+      ),
       last_event: lastEvents.get(chat.id) ?? null,
       tags: thread?.tags.map((t) => t.tag.name) ?? [],
     } satisfies ChatSummary;
@@ -2244,7 +2262,32 @@ async function chatIdsOnChannel(
   return rows.map((row) => row.chat_id);
 }
 
-/** The most recent event per chat, keyed by chat id — `listChatsInTenant`'s only per-row read. */
+/**
+ * How many threads each of the given chats holds, keyed by chat id — the list
+ * row's "N connections" for a chat filed under a day (ID-02).
+ *
+ * One read bounded by the page, over `threads(chat_id, created_at)`, rather than
+ * Prisma's include-level `_count`: that one is a LEFT JOIN onto `SELECT chat_id,
+ * COUNT(*) FROM threads GROUP BY chat_id` with no filter but row level security
+ * (seen in the client's query log), i.e. it aggregates the workspace's whole
+ * history on every inbox page and grows with it.
+ */
+async function threadCountPerChat(
+  tx: TenantClient,
+  chatIds: string[],
+): Promise<Map<string, number>> {
+  if (chatIds.length === 0) return new Map();
+
+  const rows = await tx.$queryRaw<Array<{ chat_id: string; count: number }>>`
+    SELECT chat_id, count(*)::int AS count
+    FROM threads
+    WHERE chat_id = ANY(${chatIds}::text[])
+    GROUP BY chat_id
+  `;
+  return new Map(rows.map((row) => [row.chat_id, row.count]));
+}
+
+/** The most recent event per chat, keyed by chat id — read once per page by `listChatsInTenant`. */
 async function lastEventPerChat(
   tx: TenantClient,
   chatIds: string[],
@@ -2565,8 +2608,24 @@ export interface ChatSummary {
   assignee_id: string | null;
   queue_position: number | null;
   unread_count: number;
+  /** How many connections `ChatDetail.connections` lists for the chat (ID-02). */
+  connection_count: number;
   last_event: SerialisedEvent | null;
   tags: string[];
+}
+
+/**
+ * One connection of a chat's day (ID-02 · K1 = A): a thread, "Chat ID" in the
+ * panel. A summary, not the transcript — read that with `listEvents` and the
+ * connection's id.
+ */
+export interface ChatConnection {
+  id: string;
+  active: boolean;
+  created_at: string;
+  closed_at: string | null;
+  assignee_id: string | null;
+  opened_via: string | null;
 }
 
 /** The customer's most recent visit, projected onto the chat (FR-MOD-02.4). */
@@ -2610,13 +2669,34 @@ export interface ChatDetail {
     summary: string | null;
     created_at: string;
     closed_at: string | null;
+    opened_via: string | null;
     tags: string[];
   } | null;
+  /**
+   * The conversation day the chat is filed under, `YYYY-MM-DD` (ID-02), or null
+   * for a chat opened before the daily model.
+   */
+  local_day: string | null;
+  /** The day's connections, oldest first — see `connectionsOf`. */
+  connections: ChatConnection[];
   /**
    * Populated only on `get`, and only for agent/bot principals. Undefined on
    * other responses (start/resume/…) and on the customer's own view.
    */
   visitor?: ChatVisitor | null;
+}
+
+interface ThreadRow {
+  id: string;
+  chatId: string;
+  active: boolean;
+  assigneeId: string | null;
+  queuePosition: number | null;
+  summary: string | null;
+  createdAt: Date;
+  closedAt: Date | null;
+  openedVia: string | null;
+  tags: Array<{ tag: { name: string } }>;
 }
 
 interface ChatRow {
@@ -2625,19 +2705,12 @@ interface ChatRow {
   customerId: string;
   active: boolean;
   createdAt: Date;
+  /** `@db.Date`: Prisma hands it back as midnight UTC of that calendar day. */
+  localDay: Date | null;
   access: Array<{ groupId: bigint }>;
   users: Array<{ userId: string; userType: string; present: boolean; seenUpTo: Date | null }>;
-  threads: Array<{
-    id: string;
-    chatId: string;
-    active: boolean;
-    assigneeId: string | null;
-    queuePosition: number | null;
-    summary: string | null;
-    createdAt: Date;
-    closedAt: Date | null;
-    tags: Array<{ tag: { name: string } }>;
-  }>;
+  /** Every thread of the chat, newest first (`chatInclude`). */
+  threads: ThreadRow[];
 }
 
 function serialiseChat(chat: ChatRow): ChatDetail {
@@ -2665,10 +2738,47 @@ function serialiseChat(chat: ChatRow): ChatDetail {
           summary: thread.summary,
           created_at: thread.createdAt.toISOString(),
           closed_at: thread.closedAt?.toISOString() ?? null,
+          opened_via: thread.openedVia,
           tags: thread.tags.map((t) => t.tag.name).sort(),
         }
       : null,
+    local_day: localDayOf(chat.localDay),
+    connections: connectionsOf(chat),
   };
+}
+
+/** A `DATE` column as the contract's `YYYY-MM-DD`; Prisma reads it as UTC midnight. */
+function localDayOf(day: Date | null): string | null {
+  return day ? day.toISOString().slice(0, 10) : null;
+}
+
+/**
+ * The connections a chat holds for its day (ID-02), oldest first.
+ *
+ * A chat filed under a day (`local_day`) is that day, so every one of its
+ * threads is one of the day's connections. A chat opened before the daily model
+ * is not a day: its threads are visits spread over its whole history, and
+ * listing them as "today's connections" would draw weeks of transcripts as one
+ * day — so it lists only its newest, which is what the inbox has always shown
+ * for it. `connectionCount` is the same rule for the list row.
+ */
+function connectionsOf(chat: ChatRow): ChatConnection[] {
+  const threads = chat.localDay ? [...chat.threads] : chat.threads.slice(0, 1);
+  return threads
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+    .map((t) => ({
+      id: t.id,
+      active: t.active,
+      created_at: t.createdAt.toISOString(),
+      closed_at: t.closedAt?.toISOString() ?? null,
+      assignee_id: t.assigneeId,
+      opened_via: t.openedVia,
+    }));
+}
+
+/** `connectionsOf(chat).length`, from a thread count rather than the threads. */
+function connectionCount(localDay: Date | null, threads: number): number {
+  return localDay ? threads : Math.min(threads, 1);
 }
 
 /** "Chrome on macOS" when both are known; whichever is present otherwise. */

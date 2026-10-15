@@ -1,0 +1,25 @@
+-- Alone in this file on purpose (CONVENTIONS 6.3): `CREATE INDEX CONCURRENTLY`
+-- cannot run inside a transaction block, and a second statement beside it
+-- would fail the whole migration with 25001. Concurrently, because every
+-- conversation that starts writes `chats`, and a plain build would block those
+-- writes for as long as it runs.
+--
+-- One chat per member per conversation day (ID-02 · tm 286.1): "the same day is
+-- the same Thread ID" held by the database rather than by a read-then-write,
+-- which two browser tabs sending a first message together would both pass. The
+-- losing insert gets 23505 (Prisma P2002) and can re-read the winner's chat.
+--
+-- Unlike `uq_one_active_chat` (20260722154008_domain_model) it does not look at
+-- `active`: a member's day has one chat whether or not a connection is open in
+-- it. PARTIAL: a chat filed under no day (`local_day IS NULL`, opened before
+-- ID-02) is left out — its threads span many days, and two of them for one
+-- member are the old model, not a violation.
+--
+-- Also the lookup index for "this member's chat for that day": an equality on
+-- `local_day` implies the predicate (`date_eq` is strict), and `uuid_eq` and
+-- `date_eq` are leakproof, so under row level security the lookup stays in the
+-- index condition — measured as `siyahtus_app` in `data-model.test.ts`
+-- ("finds a member's day chat out of uq_chat_customer_day under row level
+-- security"). Prisma cannot express the WHERE; `scripts/check-drift.ts`
+-- allows it by name.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_chat_customer_day ON chats (license_id, customer_id, local_day) WHERE local_day IS NOT NULL;

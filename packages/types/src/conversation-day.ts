@@ -39,6 +39,38 @@ export const DEFAULT_DAY_BOUNDARY: DayBoundary = Object.freeze({
   hour: 0,
 });
 
+/**
+ * How a connection came to exist (ID-02 · tm 286) — `threads.opened_via`, the
+ * contract's `ConnectionOpenedVia`. A chat ("Thread ID") is the member's day; a
+ * thread ("Chat ID") is one connection inside it:
+ *
+ *   - `first_of_day`    the member's first connection of the day — it opens the
+ *                       day's chat;
+ *   - `same_day_return` the member came back the same day: a new connection
+ *                       under the same chat;
+ *   - `agent_start`     an agent started the conversation (`POST /chats`);
+ *   - `agent_reopen`    an agent reopened an archived conversation;
+ *   - `day_rollover`    opened as yesterday's silent connection was closed at
+ *                       the turn of the day.
+ *
+ * A thread opened before ID-02 carries none (NULL). The database CHECK
+ * `threads_opened_via_check` and the contract enum list exactly these values;
+ * `data-model.test.ts` reads both back and compares them with this list.
+ */
+export const CONNECTION_OPENED_VIA = [
+  'first_of_day',
+  'same_day_return',
+  'agent_start',
+  'agent_reopen',
+  'day_rollover',
+] as const;
+
+export type ConnectionOpenedVia = (typeof CONNECTION_OPENED_VIA)[number];
+
+export function isConnectionOpenedVia(value: unknown): value is ConnectionOpenedVia {
+  return typeof value === 'string' && (CONNECTION_OPENED_VIA as readonly string[]).includes(value);
+}
+
 /** True for a whole number 0-23 — the only start hours the setting accepts. */
 export function isDayBoundaryHour(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 23;

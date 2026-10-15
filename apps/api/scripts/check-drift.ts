@@ -112,6 +112,16 @@ const KNOWN_UNMODELLABLE = [
     reason:
       'partial index (folded pre-chat username lookups, NULLs left out) — Prisma cannot express a WHERE predicate',
   },
+  {
+    // Created as `ON chats(license_id, customer_id, local_day) WHERE local_day
+    // IS NOT NULL` in 20261015160100_chats_customer_day_index — one chat per
+    // member per conversation day (ID-02). Prisma 6 does not report it today;
+    // named here like the other partial indexes so a Prisma that starts to
+    // cannot turn it into unexplained drift.
+    pattern: /CREATE UNIQUE INDEX "uq_chat_customer_day" ON "public"\."chats"/,
+    reason:
+      'partial unique index (one chat per member per conversation day) — Prisma cannot express a WHERE predicate',
+  },
 ];
 
 async function main(): Promise<void> {

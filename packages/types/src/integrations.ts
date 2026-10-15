@@ -40,11 +40,12 @@ export const INTEGRATION_TRIGGERS: readonly IntegrationTrigger[] = [
   {
     action: 'chat_started',
     label: 'Chat started',
-    description: 'Fires when a new chat begins.',
+    description: 'Fires when a new chat begins, carrying its first connection (thread_id).',
     sample_payload: {
       action: 'chat_started',
       data: {
         chat_id: 'CH1H8CFKRV',
+        thread_id: 'TH1H8CFKRV',
         customer_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
         active: true,
         created_at: '2026-01-15T10:30:00.000Z',
@@ -54,11 +55,13 @@ export const INTEGRATION_TRIGGERS: readonly IntegrationTrigger[] = [
   {
     action: 'chat_deactivated',
     label: 'Chat deactivated',
-    description: 'Fires when a chat is archived (agent close or timeout).',
+    description:
+      'Fires when a chat is archived (agent close or timeout), naming the connection that closed (thread_id).',
     sample_payload: {
       action: 'chat_deactivated',
       data: {
         chat_id: 'CH1H8CFKRV',
+        thread_id: 'TH1H8CFKRV',
         active: false,
         created_at: '2026-01-15T10:30:00.000Z',
       },
@@ -108,6 +111,26 @@ export const INTEGRATION_TRIGGERS: readonly IntegrationTrigger[] = [
         priority: 3,
         customer_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
         created_at: '2026-01-15T10:35:00.000Z',
+      },
+    },
+  },
+  {
+    // ID-02: a chat is the member's day and a thread one connection inside it,
+    // so "the member came back" no longer always means a new chat. The second
+    // and later connections of a day are announced here; the first one rides on
+    // `chat_started` — never both for one opening.
+    action: 'thread_started',
+    label: 'Connection started',
+    description:
+      'Fires when a further connection (thread) opens under an existing chat — the member back the same day.',
+    sample_payload: {
+      action: 'thread_started',
+      data: {
+        chat_id: 'CH1H8CFKRV',
+        thread_id: 'TH2K9DXQ4M',
+        customer_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        reason: 'same_day_return',
+        created_at: '2026-01-15T14:00:00.000Z',
       },
     },
   },

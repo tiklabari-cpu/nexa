@@ -11,7 +11,13 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId, buildEventId, DEFAULT_WORK_SCHEDULE } from '@siyahtus/types';
+import { loadOpenApiDocument } from '@siyahtus/contract';
+import {
+  generateShortId,
+  buildEventId,
+  CONNECTION_OPENED_VIA,
+  DEFAULT_WORK_SCHEDULE,
+} from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
@@ -157,10 +163,208 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // One chat per member per conversation day (ID-02 · tm 286.1)
+  // =========================================================================
+
+  describe('one chat per member per conversation day (ID-02)', () => {
+    /** `localDayKey` output, as the column stores it (`@db.Date` = UTC midnight). */
+    const DAY = new Date('2026-10-15T00:00:00.000Z');
+    const NEXT_DAY = new Date('2026-10-16T00:00:00.000Z');
+
+    function dayChat(
+      overrides: Partial<{
+        licenseId: bigint;
+        customerId: string;
+        active: boolean;
+        localDay: Date | null;
+        dayTz: string | null;
+      }> = {},
+    ) {
+      return owner.chat.create({
+        data: {
+          id: generateShortId(),
+          licenseId: overrides.licenseId ?? fx.a.licenseId,
+          customerId: overrides.customerId ?? fx.a.customerId,
+          // Closed by default, so `uq_one_active_chat` stays out of the way and
+          // only the day rule can refuse.
+          active: overrides.active ?? false,
+          localDay: overrides.localDay === undefined ? DAY : overrides.localDay,
+          dayTz: overrides.dayTz === undefined ? 'Europe/Istanbul' : overrides.dayTz,
+        },
+      });
+    }
+
+    const prismaCode = (error: unknown) => (error as { code?: string }).code;
+
+    it('refuses a second chat for the same member and day, whether or not one is open', async () => {
+      await dayChat();
+      // P2002 is what the visitor path (tm 286.2) catches to re-read the winner.
+      const open = await dayChat({ active: true }).catch((error: unknown) => error);
+      expect(prismaCode(open)).toBe('P2002');
+      await expect(dayChat()).rejects.toThrow(/uq_chat_customer_day|Unique constraint/i);
+    });
+
+    it('holds against two tabs sending the first message of the day at once', async () => {
+      const attempts = Array.from({ length: 8 }, () =>
+        dayChat().then(
+          () => 'created' as const,
+          (error: unknown) => prismaCode(error) ?? 'other',
+        ),
+      );
+      const results = await Promise.all(attempts);
+      expect(results.filter((r) => r === 'created')).toHaveLength(1);
+      expect(results.filter((r) => r !== 'created').every((r) => r === 'P2002')).toBe(true);
+    });
+
+    it('leaves chats filed under no day alone — the model before ID-02', async () => {
+      for (let i = 0; i < 3; i++) await dayChat({ localDay: null, dayTz: null });
+      // ...and they do not stop the member's day chat either.
+      await expect(dayChat()).resolves.toBeDefined();
+      expect(await owner.chat.count({ where: { customerId: fx.a.customerId } })).toBe(4);
+    });
+
+    it('files the next day, another member and another workspace separately', async () => {
+      await dayChat();
+      await expect(dayChat({ localDay: NEXT_DAY })).resolves.toBeDefined();
+
+      const other = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Other member' },
+        select: { id: true },
+      });
+      await expect(dayChat({ customerId: other.id })).resolves.toBeDefined();
+
+      // The same person in a second workspace of the organization has a day
+      // there too: the rule is per licence.
+      const otherLicense = await owner.license.create({
+        data: { organizationId: fx.a.organizationId },
+        select: { id: true },
+      });
+      await expect(dayChat({ licenseId: otherLicense.id })).resolves.toBeDefined();
+    });
+
+    it('refuses a day without its zone, a zone without its day, and a blank zone', async () => {
+      await expect(dayChat({ dayTz: null })).rejects.toThrow(/chats_local_day_tz_pair/i);
+      await expect(dayChat({ localDay: null })).rejects.toThrow(/chats_local_day_tz_pair/i);
+      await expect(dayChat({ dayTz: '   ' })).rejects.toThrow(/chats_day_tz_check/i);
+    });
+
+    // The lookup tm 286.2 makes on every first message of a visit. Measured as
+    // `siyahtus_app` inside the tenant context, where it can go wrong: under
+    // RLS a non-leakproof qual stays out of the index condition (see
+    // 20260911170000_events_sequence_column). A private client, so the
+    // `enable_seqscan = off` pin cannot reach another test through Prisma's
+    // plan cache.
+    it("finds a member's day chat out of uq_chat_customer_day under row level security (EXPLAIN ANALYZE)", async () => {
+      await dayChat();
+      await dayChat({ localDay: NEXT_DAY });
+      for (let i = 0; i < 3; i++) await dayChat({ localDay: null, dayTz: null });
+
+      const appRole = new PrismaClient({ datasourceUrl: APP_URL });
+      try {
+        const plan = await withTenant(
+          appRole,
+          { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+          async (tx) => {
+            await tx.$executeRawUnsafe('SET LOCAL enable_seqscan = off');
+            const [row] = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(
+              `EXPLAIN (ANALYZE, FORMAT JSON)
+               SELECT id FROM chats WHERE customer_id = $1::uuid AND local_day = $2::date`,
+              fx.a.customerId,
+              '2026-10-15',
+            );
+            const raw = row?.['QUERY PLAN'];
+            const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Array<
+              Record<string, unknown>
+            >;
+            return parsed[0] ?? {};
+          },
+        );
+        const text = JSON.stringify(plan['Plan'] ?? {});
+        expect(text).toContain('uq_chat_customer_day');
+        // The day is in the index condition, not a filter applied afterwards.
+        expect(text).toMatch(/"Index Cond":"[^"]*local_day/);
+        expect(text).toContain('"Actual Rows":1');
+      } finally {
+        await appRole.$disconnect();
+      }
+    });
+
+    it("never shows one workspace another's day chat (NFR-S4)", async () => {
+      await dayChat();
+      const seenFromB = await withTenant(
+        app,
+        { licenseId: fx.b.licenseId, organizationId: fx.b.organizationId },
+        (tx) => tx.chat.findMany({ where: { customerId: fx.a.customerId, localDay: DAY } }),
+      );
+      expect(seenFromB).toEqual([]);
+
+      const seenFromA = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        (tx) => tx.chat.findMany({ where: { customerId: fx.a.customerId, localDay: DAY } }),
+      );
+      expect(seenFromA).toHaveLength(1);
+      expect(seenFromA[0]?.dayTz).toBe('Europe/Istanbul');
+    });
+  });
+
+  // =========================================================================
   // Thread invariants
   // =========================================================================
 
   describe('threads', () => {
+    it('records how a connection opened, and only in the ID-02 vocabulary', async () => {
+      const { chatId, threadId } = await openChat();
+      await owner.thread.update({
+        where: { id: threadId },
+        data: { active: false, closedAt: new Date() },
+      });
+      for (const openedVia of CONNECTION_OPENED_VIA) {
+        await expect(
+          owner.thread.create({
+            data: {
+              id: generateShortId(),
+              chatId,
+              licenseId: fx.a.licenseId,
+              active: false,
+              closedAt: new Date(),
+              openedVia,
+            },
+          }),
+        ).resolves.toBeDefined();
+      }
+      // A close reason is not a way of opening, and the vocabulary is exact.
+      for (const openedVia of ['timeout', 'resume', 'First_Of_Day']) {
+        await expect(
+          owner.thread.create({
+            data: {
+              id: generateShortId(),
+              chatId,
+              licenseId: fx.a.licenseId,
+              active: false,
+              closedAt: new Date(),
+              openedVia,
+            },
+          }),
+        ).rejects.toThrow(/threads_opened_via_check/i);
+      }
+    });
+
+    it('keeps the CHECK, the contract enum and CONNECTION_OPENED_VIA one list', async () => {
+      const [row] = await owner.$queryRaw<Array<{ def: string }>>`
+        SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+        WHERE conname = 'threads_opened_via_check'
+      `;
+      const inCheck = [...(row?.def ?? '').matchAll(/'([a-z_]+)'::text/g)].map((m) => m[1]);
+      expect([...inCheck].sort()).toEqual([...CONNECTION_OPENED_VIA].sort());
+
+      const document = loadOpenApiDocument() as unknown as {
+        components: { schemas: Record<string, { enum?: string[] }> };
+      };
+      const inContract = document.components.schemas['ConnectionOpenedVia']?.enum ?? [];
+      expect([...inContract].sort()).toEqual([...CONNECTION_OPENED_VIA].sort());
+    });
+
     it('refuses a second active thread on one chat', async () => {
       const { chatId } = await openChat();
       await expect(

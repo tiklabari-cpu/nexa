@@ -1074,7 +1074,33 @@ components:
         users:
           type: array
           items: { $ref: "#/components/schemas/ChatUser" }
-        thread: { $ref: "#/components/schemas/Thread" }
+        thread:
+          description: The newest connection — the open one while the chat is active.
+          allOf:
+            - $ref: "#/components/schemas/Thread"
+        local_day:
+          type: string
+          format: date
+          nullable: true
+          description: |
+            The conversation day this chat is filed under (`YYYY-MM-DD`, ID-02):
+            one chat per member per day, counted in the workspace's day
+            boundary (`day_boundary_timezone` / `day_boundary_hour` of
+            `/settings/chat-timeout`) as it stood when the chat opened. Written
+            once and never recomputed, so a later change of the setting does
+            not move it. Null for a chat that is not filed under a day — every
+            chat opened before the daily model; such a chat spans the whole
+            relationship rather than one day.
+        connections:
+          type: array
+          items: { $ref: "#/components/schemas/ChatConnection" }
+          description: |
+            The connections (`Thread`s, "Panelde: Chat ID") this chat holds
+            for its day, oldest first; read any one's transcript with
+            `GET /chats/{chatId}/events?thread_id=`. A chat with a `local_day`
+            lists every connection of that day. A chat without one lists only
+            its newest connection: it is not a day, and its older threads are
+            earlier visits rather than today's connections.
         visitor:
           description: |
             The customer's most recent visit for this license, projected onto
@@ -1104,6 +1130,13 @@ components:
         assignee_id: { type: string, format: uuid, nullable: true }
         queue_position: { type: integer, nullable: true }
         unread_count: { type: integer }
+        connection_count:
+          type: integer
+          minimum: 0
+          description: |
+            How many connections `Chat.connections` lists for this chat — the
+            day's connections when the chat has a `local_day`, otherwise at most
+            one (its newest). The list row's "N connections".
         last_event:
           allOf:
             - $ref: "#/components/schemas/Event"
@@ -1140,9 +1173,47 @@ components:
         summary: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         closed_at: { type: string, format: date-time, nullable: true }
+        opened_via:
+          description: How this connection came to exist; null on a thread opened before ID-02.
+          allOf:
+            - $ref: "#/components/schemas/ConnectionOpenedVia"
+          nullable: true
         tags:
           type: array
           items: { type: string }
+
+    ChatConnection:
+      type: object
+      required: [id, active, created_at, closed_at, assignee_id, opened_via]
+      description: |
+        One connection of a chat's day (ID-02), as `Chat.connections` lists it —
+        enough to draw the separators between connections and to fetch each
+        transcript, without the transcript itself.
+      properties:
+        id:
+          type: string
+          description: "Panelde: Chat ID (bağlantı) — the `thread_id` to read its events with."
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+        assignee_id: { type: string, format: uuid, nullable: true }
+        opened_via:
+          allOf:
+            - $ref: "#/components/schemas/ConnectionOpenedVia"
+          nullable: true
+
+    ConnectionOpenedVia:
+      type: string
+      description: |
+        How a connection (`thread`) came to exist (ID-02):
+        `first_of_day` — the member's first connection of the day, which opens
+        the day's chat · `same_day_return` — the member came back the same day,
+        a new connection under the same chat · `agent_start` — an agent started
+        the conversation · `agent_reopen` — an agent reopened an archived
+        conversation · `day_rollover` — opened as yesterday's silent connection
+        was closed at the turn of the day. Null (on `Thread` and
+        `ChatConnection`) for a connection opened before ID-02.
+      enum: [first_of_day, same_day_return, agent_start, agent_reopen, day_rollover]
 
     ChatVisitor:
       type: object
@@ -2235,12 +2306,20 @@ components:
       description: |
         The workspace event that triggers a delivery. A closed vocabulary so a
         typo is rejected at registration rather than silently never firing.
+
+        `chat_started` announces a new chat together with its first connection
+        (`thread_id`); `thread_started` announces a further connection opening
+        under a chat that already exists — the member back the same day
+        (`reason: same_day_return`, ID-02). One opening is announced by one of
+        the two, never both. `chat_deactivated` names the connection that
+        closed (`thread_id`).
       enum:
         - chat_started
         - chat_deactivated
         - chat_transferred
         - event_created
         - ticket_created
+        - thread_started
 
     Webhook:
       type: object

@@ -1027,7 +1027,12 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Fetch one conversation with its current thread */
+    /**
+     * Fetch one conversation with its current thread
+     * @description `thread` is the newest connection; `connections` lists the day's
+     *     connections oldest first (ID-02) so a reader can draw the whole day and
+     *     fetch each transcript by `thread_id`.
+     */
     get: operations['getChat'];
     put?: never;
     post?: never;
@@ -8389,7 +8394,29 @@ export interface components {
         group_ids?: number[];
       };
       users: components['schemas']['ChatUser'][];
+      /** @description The newest connection — the open one while the chat is active. */
       thread?: components['schemas']['Thread'];
+      /**
+       * Format: date
+       * @description The conversation day this chat is filed under (`YYYY-MM-DD`, ID-02):
+       *     one chat per member per day, counted in the workspace's day
+       *     boundary (`day_boundary_timezone` / `day_boundary_hour` of
+       *     `/settings/chat-timeout`) as it stood when the chat opened. Written
+       *     once and never recomputed, so a later change of the setting does
+       *     not move it. Null for a chat that is not filed under a day — every
+       *     chat opened before the daily model; such a chat spans the whole
+       *     relationship rather than one day.
+       */
+      local_day?: string | null;
+      /**
+       * @description The connections (`Thread`s, "Panelde: Chat ID") this chat holds
+       *     for its day, oldest first; read any one's transcript with
+       *     `GET /chats/{chatId}/events?thread_id=`. A chat with a `local_day`
+       *     lists every connection of that day. A chat without one lists only
+       *     its newest connection: it is not a day, and its older threads are
+       *     earlier visits rather than today's connections.
+       */
+      connections?: components['schemas']['ChatConnection'][];
       /**
        * @description The customer's most recent visit for this license, projected onto
        *     the chat so the Details panel can show where the visitor came from
@@ -8414,6 +8441,12 @@ export interface components {
       assignee_id?: string | null;
       queue_position?: number | null;
       unread_count?: number;
+      /**
+       * @description How many connections `Chat.connections` lists for this chat — the
+       *     day's connections when the chat has a `local_day`, otherwise at most
+       *     one (its newest). The list row's "N connections".
+       */
+      connection_count?: number;
       last_event?: components['schemas']['Event'] | null;
       tags?: string[];
     };
@@ -8442,8 +8475,40 @@ export interface components {
       created_at: string;
       /** Format: date-time */
       closed_at?: string | null;
+      /** @description How this connection came to exist; null on a thread opened before ID-02. */
+      opened_via?: components['schemas']['ConnectionOpenedVia'] | null;
       tags?: string[];
     };
+    /**
+     * @description One connection of a chat's day (ID-02), as `Chat.connections` lists it —
+     *     enough to draw the separators between connections and to fetch each
+     *     transcript, without the transcript itself.
+     */
+    ChatConnection: {
+      /** @description Panelde: Chat ID (bağlantı) — the `thread_id` to read its events with. */
+      id: string;
+      active: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      closed_at: string | null;
+      /** Format: uuid */
+      assignee_id: string | null;
+      opened_via: components['schemas']['ConnectionOpenedVia'] | null;
+    };
+    /**
+     * @description How a connection (`thread`) came to exist (ID-02):
+     *     `first_of_day` — the member's first connection of the day, which opens
+     *     the day's chat · `same_day_return` — the member came back the same day,
+     *     a new connection under the same chat · `agent_start` — an agent started
+     *     the conversation · `agent_reopen` — an agent reopened an archived
+     *     conversation · `day_rollover` — opened as yesterday's silent connection
+     *     was closed at the turn of the day. Null (on `Thread` and
+     *     `ChatConnection`) for a connection opened before ID-02.
+     * @enum {string}
+     */
+    ConnectionOpenedVia:
+      'first_of_day' | 'same_day_return' | 'agent_start' | 'agent_reopen' | 'day_rollover';
     /**
      * @description A visit projected onto the chat surface (FR-MOD-02.4.1-.6): the pages the
      *     visitor saw and a short summary of the session.
@@ -9332,10 +9397,22 @@ export interface components {
     /**
      * @description The workspace event that triggers a delivery. A closed vocabulary so a
      *     typo is rejected at registration rather than silently never firing.
+     *
+     *     `chat_started` announces a new chat together with its first connection
+     *     (`thread_id`); `thread_started` announces a further connection opening
+     *     under a chat that already exists — the member back the same day
+     *     (`reason: same_day_return`, ID-02). One opening is announced by one of
+     *     the two, never both. `chat_deactivated` names the connection that
+     *     closed (`thread_id`).
      * @enum {string}
      */
     WebhookAction:
-      'chat_started' | 'chat_deactivated' | 'chat_transferred' | 'event_created' | 'ticket_created';
+      | 'chat_started'
+      | 'chat_deactivated'
+      | 'chat_transferred'
+      | 'event_created'
+      | 'ticket_created'
+      | 'thread_started';
     /**
      * @description A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
      *     deliberately absent — it is returned only once, by the register call
@@ -15228,7 +15305,11 @@ export interface operations {
   listEvents: {
     parameters: {
       query?: {
-        /** @description Defaults to the most recent thread. Panelde: Chat ID (bağlantı). */
+        /**
+         * @description Which connection's transcript to read — any id `Chat.connections`
+         *     lists (Panelde: Chat ID, bağlantı). Defaults to the most recent
+         *     thread. A thread of another chat is `404`, never a way into it.
+         */
         thread_id?: string;
         /** @description Return only events following this one, in the same thread. */
         after_event_id?: string;

@@ -31,7 +31,9 @@ import {
   LLM_SECRET_LOG_PATHS,
   OPENAI_QUOTA_CODES,
   OpenAiLlmProvider,
+  chatCompletionBody,
   chatCompletionsUrl,
+  jsonSchemaInstruction,
   llmRetryBackoffMs,
   retryAfterMs,
   type OpenAiLlmProviderOptions,
@@ -180,6 +182,159 @@ describe('the request and the reply (FR-05-06.EK1)', () => {
       inputTokens: 120,
       outputTokens: 12,
     });
+  });
+});
+
+// --- tier and structured output (tm 283.1 · ADR §6a) ----------------------------
+
+const STRUCTURED: LlmCompletionRequest = {
+  ...REQUEST,
+  tier: 'fast',
+  responseFormat: {
+    name: 'topic_detection',
+    schema: {
+      type: 'object',
+      properties: {
+        procedure: { type: ['string', 'null'] },
+        confidence: { type: 'number', minimum: 0, maximum: 1 },
+      },
+      required: ['procedure', 'confidence'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/** OpenAI's answer to `json_schema` from a model that has no structured outputs. */
+const NO_JSON_SCHEMA = json(400, {
+  error: {
+    message:
+      "Invalid parameter: 'response_format' of type 'json_schema' is not supported with this model.",
+    type: 'invalid_request_error',
+    param: 'response_format',
+    code: null,
+  },
+});
+
+const bodyOf = (call: { init: RequestInit }) =>
+  JSON.parse(String(call.init.body)) as Record<string, unknown> & {
+    messages: Array<{ role: string; content: string }>;
+  };
+
+describe('tier and structured output (FR-05-06.EK1)', () => {
+  it('sends the schema as response_format json_schema, strict, to the fast model', async () => {
+    const net = fakeFetch(completion('{"procedure":null,"confidence":0.2}'));
+    const { instance, log } = adapter(net.impl, {}, { ...SETTINGS, fastModel: 'test-model-fast' });
+
+    const result = await instance.complete(STRUCTURED);
+
+    // The adapter delivers the text; parsing and validating it is the gate's job.
+    expect(result.text).toBe('{"procedure":null,"confidence":0.2}');
+    const body = bodyOf(net.calls[0]!);
+    expect(Object.keys(body).sort()).toEqual([
+      'max_completion_tokens',
+      'messages',
+      'model',
+      'response_format',
+    ]);
+    expect(body['model']).toBe('test-model-fast');
+    expect(body['response_format']).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'topic_detection',
+        schema: STRUCTURED.responseFormat!.schema,
+        strict: true,
+      },
+    });
+    // The prompt is the caller's, unchanged: strict mode needs no instruction.
+    expect(body.messages[0]).toEqual({ role: 'system', content: REQUEST.system });
+    expect(
+      log.lines.find((line) => line.details['event'] === 'llm.completed')?.details,
+    ).toMatchObject({
+      model: 'test-model-fast',
+      tier: 'fast',
+      format: 'topic_detection',
+    });
+  });
+
+  it('answers the fast tier with LLM_MODEL when LLM_MODEL_FAST is unset, and the default tier with LLM_MODEL always', async () => {
+    const net = fakeFetch(completion(ANSWER));
+    const { instance } = adapter(net.impl);
+    await instance.complete({ ...REQUEST, tier: 'fast' });
+    expect(bodyOf(net.calls[0]!)['model']).toBe('test-model');
+
+    const both = fakeFetch(completion(ANSWER));
+    const configured = adapter(both.impl, {}, { ...SETTINGS, fastModel: 'test-model-fast' });
+    await configured.instance.complete(REQUEST);
+    await configured.instance.complete({ ...REQUEST, tier: 'default' });
+    expect(both.calls.map((call) => bodyOf(call)['model'])).toEqual(['test-model', 'test-model']);
+  });
+
+  it('falls back to plain JSON when the model refuses json_schema, and remembers that model', async () => {
+    const net = fakeFetch(NO_JSON_SCHEMA, completion('{"procedure":"refund","confidence":0.9}'));
+    const { instance, log, sleeps } = adapter(
+      net.impl,
+      {},
+      { ...SETTINGS, fastModel: 'old-model' },
+    );
+
+    const result = await instance.complete(STRUCTURED);
+
+    expect(result.text).toBe('{"procedure":"refund","confidence":0.9}');
+    expect(net.calls).toHaveLength(2);
+    expect(sleeps).toEqual([]); // not a transient failure: no backoff
+    const fallback = bodyOf(net.calls[1]!);
+    expect(fallback).not.toHaveProperty('response_format');
+    expect(fallback.messages[0]!.content).toBe(
+      `${REQUEST.system}\n\n${jsonSchemaInstruction(STRUCTURED.responseFormat!.schema)}`,
+    );
+    expect(fallback.messages.slice(1)).toEqual(REQUEST.messages);
+    expect(instance.structuredOutputsRefusedBy('old-model')).toBe(true);
+    const warned = log.lines.find(
+      (line) => line.details['event'] === 'llm.json_schema_unsupported',
+    );
+    expect(warned?.level).toBe('warn');
+    expect(JSON.stringify(warned)).not.toContain('not supported with this model');
+
+    // The next structured call for that model goes straight to the prompt path…
+    await instance.complete(STRUCTURED);
+    expect(net.calls).toHaveLength(3);
+    expect(bodyOf(net.calls[2]!)).not.toHaveProperty('response_format');
+    // …and the default model, which never refused, still gets json_schema.
+    await instance.complete({ ...STRUCTURED, tier: 'default' });
+    expect(bodyOf(net.calls[3]!)['response_format']).toBeDefined();
+    expect(instance.structuredOutputsRefusedBy('test-model')).toBe(false);
+  });
+
+  it('treats any other 400 on a structured call as the bad request it is — no fallback', async () => {
+    const net = fakeFetch(problem(400, 'invalid_value'));
+    const { instance } = adapter(net.impl);
+    const error = await failure(instance.complete(STRUCTURED));
+    expect(error.kind).toBe('bad_request');
+    expect(net.calls).toHaveLength(1);
+    expect(instance.structuredOutputsRefusedBy('test-model')).toBe(false);
+  });
+
+  it('leaves a prose call exactly as it was: no response_format, no instruction', async () => {
+    const net = fakeFetch(completion(ANSWER));
+    const { instance } = adapter(net.impl);
+    await instance.complete(REQUEST);
+    const body = bodyOf(net.calls[0]!);
+    expect(body).not.toHaveProperty('response_format');
+    expect(body.messages[0]!.content).toBe(REQUEST.system);
+    expect(chatCompletionBody(REQUEST, 'test-model', null)).toBe(String(net.calls[0]!.init.body));
+  });
+
+  it('reports a refused or cut-off structured reply as no_answer, for the gate to retry', async () => {
+    const refusedReply = fakeFetch(
+      completion(null, {
+        message: { role: 'assistant', content: null, refusal: 'I cannot help with that.' },
+      }),
+    );
+    expect((await failure(adapter(refusedReply.impl).instance.complete(STRUCTURED))).reason).toBe(
+      'refusal',
+    );
+    const cut = fakeFetch(completion('{"procedure":"ref', { finish_reason: 'length' }));
+    expect((await failure(adapter(cut.impl).instance.complete(STRUCTURED))).reason).toBe('length');
   });
 });
 

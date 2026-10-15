@@ -132,20 +132,26 @@ export const SAFE_REQUEST_ID = /^[A-Za-z0-9_-]{1,128}$/;
 /** Visible ASCII: what an HTTP header value can carry without fetch refusing it. */
 export const HEADER_SAFE = /^[\x21-\x7e]+$/;
 
-/** `error.code` and `error.type` from an error body, when present and safe to keep. */
+/**
+ * `error.code`, `error.type` and `error.param` from an error body, when
+ * present and safe to keep. `param` names the request field the provider
+ * objected to — the chat adapter reads it to tell "this model has no
+ * structured outputs" (`response_format`) from any other 400 (tm 283.1).
+ */
 export async function readProblem(
   response: Response,
   limit: number,
-): Promise<{ code: string | null; type: string | null }> {
+): Promise<{ code: string | null; type: string | null; param: string | null }> {
   try {
     const parsed: unknown = JSON.parse(await readCapped(response, limit));
     const error = isRecord(parsed) && isRecord(parsed['error']) ? parsed['error'] : null;
     return {
       code: safeToken(error?.['code'], SAFE_CODE),
       type: safeToken(error?.['type'], SAFE_CODE),
+      param: safeToken(error?.['param'], SAFE_CODE),
     };
   } catch {
-    return { code: null, type: null };
+    return { code: null, type: null, param: null };
   }
 }
 

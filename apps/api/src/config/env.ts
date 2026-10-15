@@ -701,6 +701,17 @@ export const envSchema = z.object({
   /** The model id. The operator's choice; the code names none. */
   LLM_MODEL: z.string().min(1).optional(),
   /**
+   * The model a `tier: 'fast'` call uses — classifying, summarising, judging,
+   * naming a cluster (tm 283.1 · ADR §6a.5). Unset means `LLM_MODEL` answers
+   * every tier, so it is never required and never stops a boot — an empty
+   * `LLM_MODEL_FAST=` line included, which reads as unset. Same host, region
+   * and key as `LLM_MODEL`. Not a secret.
+   */
+  LLM_MODEL_FAST: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
+  /**
    * Bearer key for `LLM_PROVIDER≠mock`. A credential the provider issues, not
    * key material this process mints — so not a `secret()`, for `SMTP_PASSWORD`'s
    * reason. Its value is never logged, echoed or written anywhere but `.env`.
@@ -1567,7 +1578,14 @@ function llmOptions(env: z.infer<typeof envSchema>): LlmProviderOptions {
   if (env.LLM_PROVIDER !== 'openai' || !LLM_API_BASE_URL || !LLM_MODEL || !LLM_API_KEY) {
     return { openai: null };
   }
-  return { openai: { baseUrl: LLM_API_BASE_URL, model: LLM_MODEL, apiKey: LLM_API_KEY } };
+  return {
+    openai: {
+      baseUrl: LLM_API_BASE_URL,
+      model: LLM_MODEL,
+      fastModel: env.LLM_MODEL_FAST ?? null,
+      apiKey: LLM_API_KEY,
+    },
+  };
 }
 
 /**

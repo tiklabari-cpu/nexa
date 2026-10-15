@@ -1195,6 +1195,7 @@ describe('production configuration', () => {
       expect(env.llm.openai).toEqual({
         baseUrl: 'https://eu.api.openai.com/v1',
         model: 'a-model-id',
+        fastModel: null,
         apiKey: OPENAI.LLM_API_KEY,
       });
       expect(
@@ -1205,6 +1206,20 @@ describe('production configuration', () => {
           LLM_API_BASE_URL: 'https://us.api.openai.com/v1',
         }).LLM_PROVIDER_REGION,
       ).toBe('us');
+    });
+
+    it('carries LLM_MODEL_FAST to the adapter, and boots without it — it is never required (FR-05-06.EK1)', () => {
+      // ADR §6a.5: the fast tier falls back to LLM_MODEL, so production does
+      // not ask for it and a pilot that never sets it is a complete one.
+      expect(parseEnv({ ...PROD_BASE, ...OPENAI }).llm.openai?.fastModel).toBeNull();
+      expect(problemsOf({ ...PROD_BASE, ...OPENAI })).not.toMatch(/LLM_MODEL_FAST/);
+      const env = parseEnv({ ...PROD_BASE, ...OPENAI, LLM_MODEL_FAST: 'a-small-model' });
+      expect(env.LLM_MODEL_FAST).toBe('a-small-model');
+      expect(env.llm.openai?.fastModel).toBe('a-small-model');
+      // An empty line in the env file is "unset", not a boot failure.
+      expect(
+        parseEnv({ ...PROD_BASE, ...OPENAI, LLM_MODEL_FAST: ' ' }).llm.openai?.fastModel,
+      ).toBeNull();
     });
 
     it.each(['LLM_API_BASE_URL', 'LLM_MODEL', 'LLM_API_KEY', 'LLM_PROVIDER_REGION'])(

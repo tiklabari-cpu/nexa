@@ -13,9 +13,17 @@
  * `docs/adr/pilot-llm-embedding-provider.md` §5 and §6 answered both questions
  * "no" for the pilot: the answer travels to the widget as one event, so there
  * is nothing to stream into, and the skill's steps are written by an admin, so
- * there is nothing for a model to call. `stream`, `tools` and `response_format`
- * are absent from this interface rather than optional in it — an option nobody
- * implements is a promise the adapter would silently break.
+ * there is nothing for a model to call. `stream` and `tools` are absent from
+ * this interface rather than optional in it — an option nobody implements is a
+ * promise the adapter would silently break.
+ *
+ * **Two optional fields since tm 283.1 (ADR §6a).** `responseFormat` asks for
+ * one JSON object that matches a schema — a *candidate* the caller's own code
+ * decides on, never a command (§6a.2); call it through `completeStructured`
+ * (`structured-output.ts`), which validates every reply and retries a bad one
+ * once. `tier` picks the model: `default` writes what a customer reads,
+ * `fast` classifies and summarises (`LLM_MODEL_FAST`, §6a.5). Both adapters
+ * implement both, so neither is a promise of the kind above.
  *
  * **Where it may run is not decided here.** The NFR-C4 residency gate
  * (`services/ai/inference.ts`, enforced by `plugins/ai-residency.ts`) runs
@@ -23,6 +31,7 @@
  * no workspace to check it against, and a second copy of the rule is a copy
  * that can disagree.
  */
+import type { JsonSchema } from './json-schema.js';
 import { LlmProviderError } from './llm-error.js';
 import { MockLlmProvider } from './mock-llm-provider.js';
 import { OpenAiLlmProvider, type LlmLogger } from './openai-llm-provider.js';
@@ -42,6 +51,27 @@ export interface LlmMessage {
   content: string;
 }
 
+/**
+ * Which model answers (ADR §6a.5 · AI-16-S4). `default` is `LLM_MODEL` and
+ * writes the text a customer reads; `fast` is `LLM_MODEL_FAST` — classifying,
+ * summarising, judging, naming a cluster — and falls back to `LLM_MODEL` when
+ * that is unset. Same provider, host, region and key either way, so the NFR-C4
+ * gate in front of the call does not depend on the tier.
+ */
+export const LLM_TIERS = ['default', 'fast'] as const;
+export type LlmTier = (typeof LLM_TIERS)[number];
+
+/**
+ * Structured output (ADR §6a.3): the reply is one JSON object matching
+ * `schema`. `name` travels as `response_format.json_schema.name`; it is also
+ * what a log line calls the call. The schema is the strict subset
+ * `json-schema.ts` accepts — checked before anything is sent.
+ */
+export interface LlmResponseFormat {
+  name: string;
+  schema: JsonSchema;
+}
+
 export interface LlmCompletionRequest {
   /** Instructions and grounding — everything that is not the conversation. */
   system: string;
@@ -50,6 +80,10 @@ export interface LlmCompletionRequest {
   maxOutputTokens: number;
   /** How long the call may take before it is abandoned (`LLM_TIMEOUT_MS`). */
   timeoutMs: number;
+  /** Ask for a JSON object instead of prose. Use `completeStructured`, which checks the reply. */
+  responseFormat?: LlmResponseFormat;
+  /** Which model writes the reply; `default` when absent. */
+  tier?: LlmTier;
 }
 
 /**
@@ -119,6 +153,11 @@ export interface LlmProvider {
 export interface OpenAiSettings {
   baseUrl: string;
   model: string;
+  /**
+   * `LLM_MODEL_FAST`: the model a `tier: 'fast'` call uses. Absent or `null`
+   * means `model` answers every tier (ADR §6a.5) — not a configuration error.
+   */
+  fastModel?: string | null;
   /** A secret. Never logged, never echoed into an error message. */
   apiKey: string;
 }
@@ -139,6 +178,11 @@ export interface LlmProviderRuntime {
 
 /**
  * Build the provider `LLM_PROVIDER` names.
+ *
+ * A pure function of its arguments: it reads no environment and keeps no
+ * instance, so the server builds its one provider from `env.llm` at boot and
+ * anything that later holds different settings (tm 389.17's root-panel AI
+ * settings) can build another from those.
  *
  * `openai` without its three keys throws the way `createMailer('smtp')` does
  * — a deployment that asked for a model and quietly got the stub would answer

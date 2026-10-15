@@ -3,11 +3,25 @@
  * docs/adr/pilot-llm-embedding-provider.md §3.1 and §10).
  *
  * One request shape: `POST {LLM_API_BASE_URL}/chat/completions` carrying
- * `model`, `messages` and `max_completion_tokens` and nothing else — no
- * streaming, no tools, no response format (ADR §5, §6). The answer is
- * `choices[0].message.content`, the bill is `usage`. The network is a
- * constructor argument (`fetchImpl`, as in `s3-store.ts`), so
- * every test of this file runs without a provider and without a key.
+ * `model`, `messages` and `max_completion_tokens` — no streaming, no tools
+ * (ADR §5, §6). The answer is `choices[0].message.content`, the bill is
+ * `usage`. The network is a constructor argument (`fetchImpl`, as in
+ * `s3-store.ts`), so every test of this file runs without a provider and
+ * without a key.
+ *
+ * ## Tier and structured output (tm 283.1 · ADR §6a)
+ *
+ * - `model` is `LLM_MODEL` for `tier: 'default'` and `LLM_MODEL_FAST` for
+ *   `tier: 'fast'`, or `LLM_MODEL` again when that is unset (§6a.5).
+ * - A request with a `responseFormat` adds
+ *   `response_format: { type: 'json_schema', json_schema: { name, schema, strict: true } }`.
+ *   A model without structured outputs answers that with a 400 whose `param`
+ *   is `response_format`. The adapter then remembers the model for the life
+ *   of the process and sends the same call on the plain-JSON path — no
+ *   `response_format`, the schema written into the system prompt (§6a.4.1) —
+ *   as its next attempt, at once. It does not validate the reply: that is
+ *   `completeStructured`'s gate (`structured-output.ts`), which every
+ *   provider's reply passes.
  *
  * ## When it fails
  *
@@ -54,6 +68,7 @@ import type {
   LlmCompletion,
   LlmCompletionRequest,
   LlmProvider,
+  LlmTier,
   LlmUsage,
   OpenAiSettings,
 } from './llm-provider.js';
@@ -174,7 +189,54 @@ export function chatCompletionsUrl(baseUrl: string): string {
 
 type AttemptResult =
   | { ok: true; completion: LlmCompletion }
-  | { ok: false; error: LlmProviderError; retryAfterMs: number | null };
+  | {
+      ok: false;
+      error: LlmProviderError;
+      retryAfterMs: number | null;
+      /** The request field the provider objected to (`error.param`), when it said. */
+      param?: string | null;
+    };
+
+/**
+ * How a structured request is sent: with `response_format` (`json_schema`),
+ * or on the plain-JSON path with the schema in the prompt (`prompt`).
+ */
+export type StructuredMode = 'json_schema' | 'prompt';
+
+/**
+ * The plain-JSON path's instruction (ADR §6a.4.1), appended to the system
+ * prompt. The schema is the caller's, so it is safe to send; it says nothing
+ * about the conversation.
+ */
+export function jsonSchemaInstruction(schema: unknown): string {
+  return `Reply with exactly one JSON object and nothing else — no prose, no code fence. It must match this JSON Schema:\n${JSON.stringify(schema)}`;
+}
+
+/** The request body for one mode. Serialised once per mode: every attempt in it sends the same bytes. */
+export function chatCompletionBody(
+  request: LlmCompletionRequest,
+  model: string,
+  mode: StructuredMode | null,
+): string {
+  const format = request.responseFormat;
+  const system =
+    format && mode === 'prompt'
+      ? `${request.system}\n\n${jsonSchemaInstruction(format.schema)}`
+      : request.system;
+  return JSON.stringify({
+    model,
+    messages: [{ role: 'system', content: system }, ...request.messages],
+    max_completion_tokens: request.maxOutputTokens,
+    ...(format && mode === 'json_schema'
+      ? {
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: format.name, schema: format.schema, strict: true },
+          },
+        }
+      : {}),
+  });
+}
 
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -183,6 +245,13 @@ export class OpenAiLlmProvider implements LlmProvider {
   readonly id = 'openai' as const;
   readonly #endpoint: string;
   readonly #model: string;
+  readonly #fastModel: string;
+  /**
+   * Models that refused `response_format: json_schema` (ADR §6a.4.1). Per
+   * instance, which is per process: a model gains the feature on the provider's
+   * side, and a restart is when this process would find out.
+   */
+  readonly #noJsonSchema = new Set<string>();
   readonly #apiKey: string;
   readonly #fetch: typeof fetch;
   readonly #log: LlmLogger;
@@ -203,6 +272,7 @@ export class OpenAiLlmProvider implements LlmProvider {
       throw new Error('LLM_API_KEY contains whitespace or characters an HTTP header cannot carry.');
     }
     this.#model = settings.model;
+    this.#fastModel = settings.fastModel || settings.model;
     this.#apiKey = settings.apiKey;
     this.#fetch = options.fetchImpl ?? fetch;
     this.#log = options.logger ?? defaultLlmLogger();
@@ -229,7 +299,7 @@ export class OpenAiLlmProvider implements LlmProvider {
       // Debug, not warn: the opening was logged once as an error, and a line per
       // refused call while the window lasts would bury it.
       this.#log.debug(
-        { ...this.#where(), event: 'llm.short_circuited' },
+        { ...this.#where(this.modelFor(request.tier), request), event: 'llm.short_circuited' },
         'llm circuit open, provider not called',
       );
       throw new LlmProviderError('circuit_open');
@@ -246,7 +316,19 @@ export class OpenAiLlmProvider implements LlmProvider {
     }
   }
 
+  /** The model a tier is answered by (ADR §6a.5). */
+  modelFor(tier: LlmTier = 'default'): string {
+    return tier === 'fast' ? this.#fastModel : this.#model;
+  }
+
+  /** Whether `model` has been seen refusing `json_schema` — for tests and an operator's question. */
+  structuredOutputsRefusedBy(model: string): boolean {
+    return this.#noJsonSchema.has(model);
+  }
+
   async #call(request: LlmCompletionRequest): Promise<LlmCompletion> {
+    const model = this.modelFor(request.tier);
+    const where = this.#where(model, request);
     const started = this.#now();
     const deadline = started + request.timeoutMs;
     const controller = new AbortController();
@@ -256,23 +338,20 @@ export class OpenAiLlmProvider implements LlmProvider {
       controller.abort();
     }, request.timeoutMs);
 
-    // Serialised once: every attempt sends the same bytes.
-    const body = JSON.stringify({
-      model: this.#model,
-      messages: [{ role: 'system', content: request.system }, ...request.messages],
-      max_completion_tokens: request.maxOutputTokens,
-    });
+    let mode: StructuredMode | null = null;
+    if (request.responseFormat) mode = this.#noJsonSchema.has(model) ? 'prompt' : 'json_schema';
+    let body = chatCompletionBody(request, model, mode);
 
     try {
       for (let attempt = 1; ; attempt += 1) {
-        this.#log.debug({ ...this.#where(), event: 'llm.attempt', attempt }, 'llm request');
+        this.#log.debug({ ...where, event: 'llm.attempt', attempt }, 'llm request');
         const result = await this.#attempt(body, controller.signal, () => expired);
 
         if (result.ok) {
           const { usage } = result.completion;
           this.#log.info(
             {
-              ...this.#where(),
+              ...where,
               event: 'llm.completed',
               attempts: attempt,
               durationMs: this.#now() - started,
@@ -286,7 +365,26 @@ export class OpenAiLlmProvider implements LlmProvider {
 
         const failure = result.error;
         failure.attempts = attempt;
-        const fields = { ...this.#where(), attempt, ...failureFields(failure) };
+        const fields = { ...where, attempt, ...failureFields(failure) };
+
+        if (
+          mode === 'json_schema' &&
+          failure.kind === 'bad_request' &&
+          result.param === 'response_format'
+        ) {
+          // Remembered whether or not there is time to try again: the next call
+          // for this model goes straight to the plain-JSON path either way.
+          this.#noJsonSchema.add(model);
+          mode = 'prompt';
+          body = chatCompletionBody(request, model, mode);
+          const retrying =
+            attempt < this.#maxAttempts && this.#now() + LLM_MIN_ATTEMPT_MS <= deadline;
+          this.#log.warn(
+            { ...fields, event: 'llm.json_schema_unsupported', retrying },
+            'the model refused response_format json_schema; its schema goes in the prompt from now on',
+          );
+          if (retrying) continue;
+        }
         const delayMs = this.#retryDelay(failure, attempt, result.retryAfterMs, deadline);
         if (delayMs !== null) {
           this.#log.warn(
@@ -378,6 +476,7 @@ export class OpenAiLlmProvider implements LlmProvider {
     const kind = classifyHttpFailure(status, problem);
     return {
       ok: false,
+      param: problem.param,
       error: new LlmProviderError(kind, {
         status,
         requestId,
@@ -395,7 +494,7 @@ export class OpenAiLlmProvider implements LlmProvider {
     if (transition === 'opened') {
       this.#log.error(
         {
-          ...this.#where(),
+          ...this.#where(this.#model),
           event: 'llm.circuit_opened',
           probe: permit.probe,
           consecutiveFailures: this.#breaker.consecutiveFailures,
@@ -405,14 +504,24 @@ export class OpenAiLlmProvider implements LlmProvider {
       );
     } else if (transition === 'closed') {
       this.#log.info(
-        { ...this.#where(), event: 'llm.circuit_closed' },
+        { ...this.#where(this.#model), event: 'llm.circuit_closed' },
         'llm circuit closed: the probe was answered',
       );
     }
   }
 
-  #where(): Record<string, unknown> {
-    return { provider: this.id, model: this.#model };
+  /**
+   * What every line about a call carries: the model and, for a call that is not
+   * a plain default one, its tier and the structured output it asked for — by
+   * name; the schema is the caller's and the reply is never logged.
+   */
+  #where(model: string, request?: LlmCompletionRequest): Record<string, unknown> {
+    return {
+      provider: this.id,
+      model,
+      ...(request?.tier === 'fast' ? { tier: 'fast' } : {}),
+      ...(request?.responseFormat ? { format: request.responseFormat.name } : {}),
+    };
   }
 }
 

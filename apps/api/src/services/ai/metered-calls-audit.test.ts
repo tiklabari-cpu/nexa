@@ -70,6 +70,10 @@ const ALLOWED: Readonly<Record<string, Allowance>> = {
     calls: 1,
     why: 'calls the provider it is handed — only ever MeteredLlm.forTenant(...) (checked below)',
   },
+  'services/ai/provider/structured-output.ts': {
+    calls: 1,
+    why: 'completeStructured calls the provider it is handed (tm 283.1) — in production only ever MeteredLlm.forTenant(...) (checked below), so each try is counted',
+  },
   'routes/onboarding.ts': {
     calls: 1,
     why: 'onboarding.complete(): the setup checklist, not a model',
@@ -151,6 +155,25 @@ describe('every model and embedding call goes through the daily AI caps (tm 257.
       for (const call of calls) {
         expect(call.args, `${call.path}: ${writer}${call.args}`).toMatch(/^\(\s*\w+\.forTenant\(/);
       }
+    }
+  });
+
+  it('hands completeStructured nothing but a metered provider bound to a workspace (tm 283.1)', () => {
+    // No production caller yet (the AI tasks that ask for JSON come later);
+    // the first one must pass `<metered>.forTenant(...)`, like the writers above.
+    // Its own file declares it and shows a call in its header comment.
+    const callers = files.filter(
+      (file) => file.path !== 'services/ai/provider/structured-output.ts',
+    );
+    const calls = callers.flatMap((file) =>
+      callsOf(file.source, 'completeStructured')
+        .filter((args) => !/^\(\s*\w+:/.test(args))
+        .map((args) => ({ path: file.path, args })),
+    );
+    for (const call of calls) {
+      expect(call.args, `${call.path}: completeStructured${call.args}`).toMatch(
+        /^\(\s*\w+\.forTenant\(/,
+      );
     }
   });
 

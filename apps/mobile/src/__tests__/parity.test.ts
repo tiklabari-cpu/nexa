@@ -901,7 +901,11 @@ describe('module parity matrix — what is still owed', () => {
       // 223 -> 224 with `/settings/appearance` (2026-10-13) — the workspace's
       // default panel font, a web-panel look the owner sets. The phone paints
       // its own type and reads no font, so there is nothing to call.
-      contractEndpoints: 224,
+      // 224 -> 225 with `/settings/prechat` (tm 279) — the widget's built-in
+      // pre-chat form, per brand, set in the web panel. The app configures no
+      // widget, so there is nothing to call; nothing here re-scopes. (Bumped in
+      // tm 283.1: a turbo cache replay had kept this test green since tm 279.)
+      contractEndpoints: 225,
       scopeBoundaries: 1,
     });
   });

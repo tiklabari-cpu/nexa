@@ -59,6 +59,16 @@ events:
       A message must carry text, an `attachment_url`, or both — an attachment may
       stand alone (FR-MOD-11.4). The attachment must be a file this workspace
       uploaded through `/uploads`; any other value is refused.
+
+      **Pre-chat requirements (WG-01).** A message that would *open* a
+      conversation is refused with 400 `validation_error` — nothing written,
+      not even the other pre-chat values — when the brand's saved pre-chat form
+      (`/settings/prechat`) is on and requires `name`, `username` or `email`
+      and the request neither carries it nor finds it already on the contact.
+      `details.fields` names each missing one. The brand is the one whose
+      website minted the token. A workspace that has never saved the setting
+      is not checked here, and a message into an existing conversation never
+      is.
     requestBody:
       required: true
       content:

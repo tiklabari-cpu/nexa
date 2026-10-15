@@ -51,6 +51,7 @@ import { constantTimeEqual, generateToken, hashToken } from '../lib/crypto.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { inHipaaScope } from '../lib/hipaa.js';
 import { resolveBrandId } from '../lib/brand.js';
+import { prechatFromRow, type BrandPrechat } from '../services/websites/prechat.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
 import { hasEntitlement, poweredByFor, requireEntitlement } from '../lib/entitlements.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
@@ -556,6 +557,32 @@ const updateWidgetBody = z
     welcome_text: welcomeField(WIDGET_WELCOME_TEXT_MAX),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
+ * One built-in pre-chat field (WG-01). A hidden field may not be required —
+ * refused here rather than quietly normalised, so an admin's save never means
+ * something other than what the screen showed. The DB's
+ * `widget_settings_prechat_fields_shape` check holds the same line.
+ */
+const prechatFieldRule = z
+  .object({ visible: z.boolean(), required: z.boolean() })
+  .strict()
+  .refine((rule) => rule.visible || !rule.required, 'a hidden field cannot be required');
+
+/** The whole built-in pre-chat form — replaced as one, never patched field by field. */
+const updatePrechatBody = z
+  .object({
+    enabled: z.boolean(),
+    fields: z
+      .object({
+        name: prechatFieldRule,
+        username: prechatFieldRule,
+        email: prechatFieldRule,
+        message: prechatFieldRule,
+      })
+      .strict(),
+  })
+  .strict();
 
 function welcomeField(max: number) {
   return z
@@ -2765,6 +2792,71 @@ export default async function settingsRoutes(
     },
   );
 
+  // --- Built-in pre-chat form (WG-01) ----------------------------------------
+  //
+  // Stored on the brand's `widget_settings` row beside the appearance, but its
+  // own pair of endpoints: it is edited on Settings › Chat forms, not on the
+  // appearance screen, and a save there must not race an appearance draft.
+  // Same scopes and role floor as the appearance — Owner/Admin write, a Team
+  // Lead with `access_rules:ro` reads.
+
+  app.get(
+    '/settings/prechat',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      const { prechat, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
+        const row = await tx.widgetSettings.findFirst({
+          where: { brandId },
+          select: { prechatEnabled: true, prechatFields: true },
+        });
+        return { prechat: prechatFromRow(row), brandId };
+      });
+      return reply.send(serialisePrechat(prechat, brandId));
+    },
+  );
+
+  app.put(
+    '/settings/prechat',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(updatePrechatBody, request.body);
+      const tenant = request.tenant();
+
+      // Upsert like the appearance: signup leaves no row, and a first save
+      // here lays the rest of the row down at the appearance defaults.
+      const { prechat, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
+        const data = { prechatEnabled: body.enabled, prechatFields: body.fields };
+        const row = await tx.widgetSettings.upsert({
+          where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId } },
+          create: {
+            licenseId: tenant.licenseId,
+            brandId,
+            primaryColor: DEFAULT_WIDGET_APPEARANCE.primary_color,
+            position: DEFAULT_WIDGET_APPEARANCE.position,
+            theme: DEFAULT_WIDGET_APPEARANCE.theme,
+            mobileFullscreen: DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
+            poweredBy: DEFAULT_WIDGET_APPEARANCE.powered_by,
+            ...data,
+          },
+          update: data,
+          select: { prechatEnabled: true, prechatFields: true },
+        });
+        // The whole form is small and is configuration, not personal data, so
+        // the trail keeps the values — "who made username optional, and when"
+        // is the question this entry exists to answer.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.prechat_updated',
+          metadata: { brand_id: brandId, enabled: body.enabled, fields: body.fields },
+        });
+        return { prechat: prechatFromRow(row), brandId };
+      });
+
+      return reply.send(serialisePrechat(prechat, brandId));
+    },
+  );
+
   // --- Sales tracker (FR-MOD-13.5) -------------------------------------------
 
   app.get(
@@ -3438,6 +3530,11 @@ function serialiseWidget(
     welcome_text: row?.welcomeText ?? DEFAULT_WIDGET_APPEARANCE.welcome_text,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
+}
+
+/** The brand's built-in pre-chat form, as `/settings/prechat` answers it. */
+function serialisePrechat(prechat: BrandPrechat, brandId: string) {
+  return { brand_id: brandId, configured: prechat.configured, ...prechat.config };
 }
 
 /**

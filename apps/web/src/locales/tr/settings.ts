@@ -306,6 +306,36 @@ export const settings: Messages = {
   'settings.chatForms.deleteConfirmTitle': 'Alan {label} silinsin mi?',
   'settings.chatForms.deleteConfirmDescription':
     'Alan bu formdan kalkar; ziyaretçilerden artık istenmez. Bu işlem geri alınamaz.',
+  'settings.chatForms.builtIn.title': 'Yerleşik alanlar',
+  'settings.chatForms.builtIn.description':
+    'Ziyaretçinin ilk sohbetinden önce doldurduğu form. Açılıp açılmayacağını ve dört alandan hangilerinin gösterilip zorunlu olacağını seçin.',
+  'settings.chatForms.builtIn.loadError': 'Sohbet öncesi form yüklenemedi.',
+  'settings.chatForms.builtIn.enabledLabel': 'Sohbet başlamadan önce sor',
+  'settings.chatForms.builtIn.enabledHint':
+    'Kapalıyken ziyaretçi hemen yazar; ilk mesajı sohbeti açar.',
+  'settings.chatForms.builtIn.customHidden': 'Form kapalıyken özel sorularınız da sorulmaz.',
+  'settings.chatForms.builtIn.fieldColumn': 'Alan',
+  'settings.chatForms.builtIn.showColumn': 'Göster',
+  'settings.chatForms.builtIn.requiredColumn': 'Zorunlu',
+  'settings.chatForms.builtIn.field.name': 'Ad soyad',
+  'settings.chatForms.builtIn.field.username': 'Kullanıcı adı',
+  'settings.chatForms.builtIn.field.email': 'E-posta',
+  'settings.chatForms.builtIn.field.message': 'İlk mesaj',
+  'settings.chatForms.builtIn.showAria': '{field} alanını göster',
+  'settings.chatForms.builtIn.requireAria': '{field} alanını zorunlu yap',
+  'settings.chatForms.builtIn.usernameWarning':
+    'Üye tanıma ve gün içi hafıza bu alan olmadan zayıflar.',
+  'settings.chatForms.builtIn.messageHint':
+    'Bu alan yokken ziyaretçinin sohbete yazdığı ilk satır sohbeti açar.',
+  'settings.chatForms.builtIn.notSaved':
+    'Bunlar varsayılan değerler, henüz kaydedilmedi. Kaydedince zorunlu alanlar sunucuda da denetlenir.',
+  'settings.chatForms.builtIn.save': 'Formu kaydet',
+  'settings.chatForms.builtIn.reset': 'Değişiklikleri at',
+  'settings.chatForms.builtIn.leaveMessage':
+    'Sohbet öncesi formdaki kaydedilmemiş değişiklikler silinsin mi?',
+  'settings.chatForms.builtIn.preview': 'Önizleme',
+  'settings.chatForms.builtIn.previewSubmit': 'Sohbeti başlat',
+  'settings.chatForms.builtIn.previewOff': 'Form yok: ziyaretçi doğrudan sohbete geçer.',
 
   // Kanallar — Channels.tsx
   'settings.channels.title': 'Kanallar',

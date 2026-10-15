@@ -315,6 +315,36 @@ export const settings: Messages = {
   'settings.chatForms.deleteConfirmTitle': 'Delete field {label}?',
   'settings.chatForms.deleteConfirmDescription':
     'The field is removed from this form, so visitors are no longer asked for it. This cannot be undone.',
+  'settings.chatForms.builtIn.title': 'Built-in fields',
+  'settings.chatForms.builtIn.description':
+    'The form a visitor fills in before their first conversation. Choose whether it opens, and which of its four fields it shows and requires.',
+  'settings.chatForms.builtIn.loadError': 'Could not load the pre-chat form.',
+  'settings.chatForms.builtIn.enabledLabel': 'Ask before the chat starts',
+  'settings.chatForms.builtIn.enabledHint':
+    'When off, visitors write straight away and their first message opens the chat.',
+  'settings.chatForms.builtIn.customHidden':
+    'Your own pre-chat questions will not be asked either while the form is off.',
+  'settings.chatForms.builtIn.fieldColumn': 'Field',
+  'settings.chatForms.builtIn.showColumn': 'Show',
+  'settings.chatForms.builtIn.requiredColumn': 'Required',
+  'settings.chatForms.builtIn.field.name': 'Full name',
+  'settings.chatForms.builtIn.field.username': 'Username',
+  'settings.chatForms.builtIn.field.email': 'Email',
+  'settings.chatForms.builtIn.field.message': 'Opening message',
+  'settings.chatForms.builtIn.showAria': 'Show {field}',
+  'settings.chatForms.builtIn.requireAria': 'Require {field}',
+  'settings.chatForms.builtIn.usernameWarning':
+    'Without the username, member recognition and same-day conversation memory are weaker.',
+  'settings.chatForms.builtIn.messageHint':
+    "Without it, the visitor's first line in the chat opens the conversation.",
+  'settings.chatForms.builtIn.notSaved':
+    'These are the defaults and have not been saved. Once saved, required fields are also checked by the server.',
+  'settings.chatForms.builtIn.save': 'Save form',
+  'settings.chatForms.builtIn.reset': 'Discard changes',
+  'settings.chatForms.builtIn.leaveMessage': 'Discard your unsaved pre-chat form changes?',
+  'settings.chatForms.builtIn.preview': 'Preview',
+  'settings.chatForms.builtIn.previewSubmit': 'Start the chat',
+  'settings.chatForms.builtIn.previewOff': 'No form: the visitor goes straight to the chat.',
 
   // Channels — Channels.tsx
   'settings.channels.title': 'Channels',

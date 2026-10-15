@@ -10,7 +10,16 @@
  * place a message becomes more than a single text node is `appendRichText`
  * (`rich-text.ts`), which still builds elements rather than parsing markup.
  */
-import { AI_BOT_ID, readEditedAt, type WidgetFormField } from '@siyahtus/types';
+import {
+  AI_BOT_ID,
+  DEFAULT_PRECHAT_CONFIG,
+  PRECHAT_FIELD_KEYS,
+  prechatAsksAnything,
+  readEditedAt,
+  type PrechatConfig,
+  type PrechatFieldKey,
+  type WidgetFormField,
+} from '@siyahtus/types';
 import {
   WidgetApi,
   WidgetApiError,
@@ -215,6 +224,12 @@ interface State {
   prechat: boolean;
   /** Pre-chat details to attach to the first message the visitor sends. */
   pendingDetails: { name?: string; username?: string; email?: string } | null;
+  /**
+   * The brand's built-in pre-chat form (WG-01): whether it opens, and which of
+   * the four fixed fields it shows and requires. Today's form until the mint
+   * says otherwise.
+   */
+  prechatConfig: PrechatConfig;
   /** The workspace's configurable pre-chat form fields (FR-MOD-08.7.7). */
   preChatFields: WidgetFormField[];
   /** Pre-chat form answers (field id → value) riding the first message. */
@@ -312,6 +327,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     campaign: null,
     prechat: false,
     pendingDetails: null,
+    prechatConfig: DEFAULT_PRECHAT_CONFIG,
     preChatFields: [],
     pendingCustomFields: null,
     postChatFields: [],
@@ -903,7 +919,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // transcript replaces it is worse than the mint raising it a moment late.
       if (needsPrechat() && (state.connected || !returningVisitor(win))) state.prechat = true;
       renderPanelBody();
-      (state.prechat ? ui.prechatName : ui.input).focus();
+      (state.prechat ? firstPrechatInput() : ui.input).focus();
       // First open: this mints, fetches and starts the poll. Every open after
       // that it returns immediately — so the panel would otherwise sit on
       // whatever the last slow poll left until the next one, up to half a
@@ -1119,18 +1135,76 @@ export function mount(doc: Document = document, win: Window = window): void {
     renderFormFields(doc, ui.prechatFields, state.preChatFields);
   }
 
-  /** No conversation yet and no pre-chat details given — the form is due. */
+  /** The four built-in inputs, by the key the brand's form names them with. */
+  function prechatInputs(): Record<PrechatFieldKey, HTMLInputElement | HTMLTextAreaElement> {
+    return {
+      name: ui.prechatName,
+      username: ui.prechatUsername,
+      email: ui.prechatEmail,
+      message: ui.prechatMessage,
+    };
+  }
+
+  /**
+   * Lay the brand's form (WG-01) over the built-in fields: a hidden one leaves
+   * the form, and only a required one carries `required` and its star. Called
+   * at every mint, so a change saved in the panel reaches the next visitor.
+   */
+  function applyPrechatConfig(): void {
+    const inputs = prechatInputs();
+    for (const key of PRECHAT_FIELD_KEYS) {
+      const rule = state.prechatConfig.fields[key];
+      const input = inputs[key];
+      const row = input.closest<HTMLElement>('.nx-field');
+      if (row) row.hidden = !rule.visible;
+      input.required = rule.required;
+      const star = row?.querySelector<HTMLElement>('.nx-field-required');
+      if (star) star.hidden = !rule.required;
+    }
+  }
+
+  /** Does this brand's form ask the visitor anything at all? */
+  function prechatActive(): boolean {
+    return prechatAsksAnything(state.prechatConfig, state.preChatFields.length);
+  }
+
+  /** Where the keyboard lands when the form opens: its first visible field. */
+  function firstPrechatInput(): HTMLElement {
+    const inputs = prechatInputs();
+    const key = PRECHAT_FIELD_KEYS.find((k) => state.prechatConfig.fields[k].visible);
+    return key
+      ? inputs[key]
+      : (ui.prechatFields.querySelector<HTMLElement>('input, textarea, select') ??
+          ui.prechatSubmit);
+  }
+
+  /**
+   * No conversation yet, no pre-chat details given, and a form that asks
+   * something — the form is due. A brand that switched it off (WG-01) goes
+   * straight to the composer.
+   */
   function needsPrechat(): boolean {
-    return state.chatId === null && state.events.length === 0 && state.pendingDetails === null;
+    return (
+      state.chatId === null &&
+      state.events.length === 0 &&
+      state.pendingDetails === null &&
+      prechatActive()
+    );
   }
 
   function submitPrechat(): void {
-    // All four fixed fields are required (owner, 2026-10-14). Checked here as
-    // well as by `required`, because a scripted submit skips the browser's own
-    // check; the first empty or malformed one takes focus and nothing is sent.
-    for (const field of [ui.prechatName, ui.prechatUsername, ui.prechatEmail, ui.prechatMessage]) {
+    // The brand decides which fixed fields are asked and which must be
+    // answered (WG-01; today's default is all four, owner 2026-10-14).
+    // Checked here as well as by `required`, because a scripted submit skips
+    // the browser's own check; the first empty-but-required or malformed one
+    // takes focus and nothing is sent. Hidden fields are not read at all.
+    const inputs = prechatInputs();
+    const asked = PRECHAT_FIELD_KEYS.filter((key) => state.prechatConfig.fields[key].visible);
+    for (const key of asked) {
+      const field = inputs[key];
       field.value = field.value.trim();
-      if (!field.value || !field.checkValidity()) {
+      const missing = !field.value && state.prechatConfig.fields[key].required;
+      if (missing || (field.value && !field.checkValidity())) {
         field.reportValidity();
         field.focus();
         return;
@@ -1143,19 +1217,28 @@ export function mount(doc: Document = document, win: Window = window): void {
     const custom = readFormAnswers(ui.prechatFields);
     if (!custom) return; // a required field was empty and now has focus
 
-    state.pendingDetails = {
-      name: ui.prechatName.value,
-      username: ui.prechatUsername.value,
-      email: ui.prechatEmail.value,
-    };
+    // Only what was asked and answered: an optional field left empty is not
+    // sent blank, and the object itself — even empty — marks the form done.
+    const details: NonNullable<State['pendingDetails']> = {};
+    for (const key of ['name', 'username', 'email'] as const) {
+      if (asked.includes(key) && inputs[key].value) details[key] = inputs[key].value;
+    }
+    state.pendingDetails = details;
     state.pendingCustomFields = Object.keys(custom).length > 0 ? custom : null;
     state.prechat = false;
     renderPanelBody();
     // "Your message" is the conversation's opening line: it goes out through
     // the composer's own path, so the details ride it and a failed send leaves
-    // it in the composer to retry rather than losing it.
-    ui.input.value = ui.prechatMessage.value;
+    // it in the composer to retry rather than losing it. Without one — hidden,
+    // or optional and left empty — the composer opens and the visitor's first
+    // line there opens the conversation, details riding it the same way.
+    const message = asked.includes('message') ? ui.prechatMessage.value : '';
     ui.prechatMessage.value = '';
+    if (!message) {
+      ui.input.focus();
+      return;
+    }
+    ui.input.value = message;
     void send();
   }
 
@@ -1195,6 +1278,10 @@ export function mount(doc: Document = document, win: Window = window): void {
       // an empty list leaves the fixed pre-chat form untouched.
       state.preChatFields = api.preChatForm;
       renderPreChatFields();
+      // …and the brand's built-in form (WG-01): which fixed fields it asks,
+      // and whether it opens at all.
+      state.prechatConfig = api.prechat;
+      applyPrechatConfig();
       // …and the post-chat form, held until a conversation ends (FR-MOD-08.7.7).
       state.postChatFields = api.postChatForm;
       renderPostChatFields();
@@ -1222,8 +1309,10 @@ export function mount(doc: Document = document, win: Window = window): void {
       }
       state.error = null;
       // A returning visitor already in a conversation skips the pre-chat form;
-      // one without raises it now, if the panel opened before the mint did.
-      if (snapshot.events.length > 0) {
+      // one without raises it now, if the panel opened before the mint did. A
+      // brand whose form asks nothing (WG-01) takes down the default one the
+      // panel may have raised while the mint was out.
+      if (snapshot.events.length > 0 || !prechatActive()) {
         state.prechat = false;
       } else if (state.open && needsPrechat()) {
         state.prechat = true;
@@ -1850,7 +1939,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
   // "Let's chat": open into the pre-chat form (unless a conversation resumes).
   ui.greetChat.addEventListener('click', () => {
-    state.prechat = true;
+    if (prechatActive()) state.prechat = true;
     setOpen(true);
   });
   // "Just browsing": tuck the card away for the rest of the session.

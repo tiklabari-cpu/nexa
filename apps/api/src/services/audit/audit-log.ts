@@ -232,6 +232,9 @@ export const AUDIT_ACTIONS = [
   'settings.routing_rule_deleted',
   'settings.chat_timeout_updated',
   'settings.widget_updated',
+  // The built-in pre-chat form (WG-01), with its values: whether the widget asks
+  // for a username before a conversation decides what an agent can verify.
+  'settings.prechat_updated',
   // Sales tracking (FR-MOD-13.5). Recorded because this configuration decides
   // what the Ecommerce report claims: turning tracking on, changing the currency
   // revenue is recorded in, or widening the attribution window all move the

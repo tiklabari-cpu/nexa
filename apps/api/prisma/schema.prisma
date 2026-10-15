@@ -2178,6 +2178,12 @@ model WidgetSettings {
   /// `widget_settings_welcome_*_length` checks.
   welcomeTitle     String?  @map("welcome_title")
   welcomeText      String?  @map("welcome_text")
+  /// The built-in pre-chat form (WG-01): whether it opens, and the four fields'
+  /// `{visible, required}` as `PrechatConfig['fields']`. Null fields = never
+  /// saved: reads as `DEFAULT_PRECHAT_CONFIG` and is not enforced server-side.
+  /// Shape is the `widget_settings_prechat_fields_shape` check.
+  prechatEnabled   Boolean  @default(true) @map("prechat_enabled")
+  prechatFields    Json?    @map("prechat_fields")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

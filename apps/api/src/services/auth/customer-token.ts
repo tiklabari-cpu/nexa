@@ -35,6 +35,13 @@ interface CustomerTokenPayload {
    * region is read from the database anyway.
    */
   rgn: Region;
+  /**
+   * The brand whose website minted this token (WG-01) — the site the visitor
+   * is on, so the chat-open check enforces the same pre-chat form the widget
+   * was handed. Not a tenant scope: customer requests never set the brand
+   * context. Absent on tokens minted before it; those read the default brand.
+   */
+  brd?: string;
   /** Issued at / expires at, seconds since epoch. */
   iat: number;
   exp: number;
@@ -73,6 +80,8 @@ export class CustomerTokenService {
     licenseId: bigint;
     /** The workspace's own region, read from `organizations.region` at mint. */
     region: Region;
+    /** The brand the embedding website belongs to (`resolveWidgetBrandId`). */
+    brandId?: string;
   }): {
     token: string;
     expiresIn: number;
@@ -83,6 +92,7 @@ export class CustomerTokenService {
       org: input.organizationId,
       lic: input.licenseId.toString(),
       rgn: input.region,
+      ...(input.brandId ? { brd: input.brandId } : {}),
       iat: now,
       exp: now + this.ttlSeconds,
     };
@@ -129,6 +139,9 @@ export class CustomerTokenService {
     if (!REGIONS.includes(payload.rgn as Region)) {
       return { ok: false, reason: 'malformed' };
     }
+    if (payload.brd !== undefined && typeof payload.brd !== 'string') {
+      return { ok: false, reason: 'malformed' };
+    }
     if (payload.exp * 1000 <= Date.now()) {
       return { ok: false, reason: 'expired' };
     }
@@ -148,6 +161,7 @@ export class CustomerTokenService {
         customerId: payload.sub,
         organizationId: payload.org,
         licenseId,
+        ...(payload.brd ? { brandId: payload.brd } : {}),
       },
     };
   }

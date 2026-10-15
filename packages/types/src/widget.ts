@@ -139,3 +139,91 @@ export function normalizeWelcome(value: unknown, max: number): string | null {
   const trimmed = value.trim();
   return trimmed === '' ? null : [...trimmed].slice(0, max).join('');
 }
+
+// --- Pre-chat form: the four built-in fields (WG-01, tm 279) ----------------
+
+/**
+ * The fields the widget's own pre-chat form is built from, in the order it
+ * shows them. Fixed by the widget, unlike the workspace's custom questions
+ * (`pre_chat` custom fields, FR-MOD-08.7.7), which ride alongside them.
+ */
+export type PrechatFieldKey = 'name' | 'username' | 'email' | 'message';
+export const PRECHAT_FIELD_KEYS: readonly PrechatFieldKey[] = [
+  'name',
+  'username',
+  'email',
+  'message',
+];
+
+/** Whether a built-in field is asked at all, and whether it must be answered. */
+export interface PrechatFieldRule {
+  visible: boolean;
+  /** Only meaningful while `visible` — a hidden field is never required. */
+  required: boolean;
+}
+
+/**
+ * A brand's pre-chat form (WG-01): whether it opens at all, and how each of
+ * the four built-in fields behaves. Stored on `widget_settings`, edited on
+ * Settings › Chat forms, handed to the widget at token mint.
+ */
+export interface PrechatConfig {
+  enabled: boolean;
+  fields: Record<PrechatFieldKey, PrechatFieldRule>;
+}
+
+/**
+ * Today's behaviour (owner, 2026-10-14): the form opens and all four fields
+ * are shown and required. A workspace that has never saved the setting gets
+ * exactly this, so nobody's widget changes until they change it.
+ */
+export const DEFAULT_PRECHAT_CONFIG: PrechatConfig = {
+  enabled: true,
+  fields: {
+    name: { visible: true, required: true },
+    username: { visible: true, required: true },
+    email: { visible: true, required: true },
+    message: { visible: true, required: true },
+  },
+};
+
+/**
+ * Coerce anything into a valid `PrechatConfig`. A missing or malformed field
+ * falls back to its default; `required ⇒ visible` is enforced by dropping the
+ * requirement of a hidden field, never by showing it — hiding is the explicit
+ * choice. Used on every read path (token mint, settings read, widget) so a
+ * stored value or a wire value of an older shape can never reach a form raw.
+ */
+export function normalizePrechatConfig(input: unknown): PrechatConfig {
+  const raw = (typeof input === 'object' && input !== null ? input : {}) as {
+    enabled?: unknown;
+    fields?: unknown;
+  };
+  const rawFields = (
+    typeof raw.fields === 'object' && raw.fields !== null ? raw.fields : {}
+  ) as Partial<Record<PrechatFieldKey, unknown>>;
+  const fields = {} as Record<PrechatFieldKey, PrechatFieldRule>;
+  for (const key of PRECHAT_FIELD_KEYS) {
+    const fallback = DEFAULT_PRECHAT_CONFIG.fields[key];
+    const rule = (
+      typeof rawFields[key] === 'object' && rawFields[key] !== null ? rawFields[key] : {}
+    ) as { visible?: unknown; required?: unknown };
+    const visible = typeof rule.visible === 'boolean' ? rule.visible : fallback.visible;
+    const required = typeof rule.required === 'boolean' ? rule.required : fallback.required;
+    fields[key] = { visible, required: visible && required };
+  }
+  return {
+    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : DEFAULT_PRECHAT_CONFIG.enabled,
+    fields,
+  };
+}
+
+/**
+ * Whether a `PrechatConfig` asks anything of the visitor: the form is on and
+ * at least one built-in field is shown, or the workspace has custom pre-chat
+ * questions. A form with nothing to fill in is, in effect, off.
+ */
+export function prechatAsksAnything(config: PrechatConfig, customFieldCount: number): boolean {
+  if (!config.enabled) return false;
+  return customFieldCount > 0 || PRECHAT_FIELD_KEYS.some((key) => config.fields[key].visible);
+}

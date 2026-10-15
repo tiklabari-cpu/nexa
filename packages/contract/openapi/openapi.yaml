@@ -437,6 +437,8 @@ paths:
     $ref: "./paths/settings.yaml#/chatTimeout"
   /settings/widget:
     $ref: "./paths/settings.yaml#/widgetSettings"
+  /settings/prechat:
+    $ref: "./paths/settings.yaml#/prechatSettings"
   /settings/sales-tracker:
     $ref: "./paths/settings.yaml#/salesTracker"
   /settings/appearance:
@@ -2940,6 +2942,52 @@ components:
             `**bold**`, `*italic*` and `[label](https://…)` links render; any
             other text is shown as typed.
         updated_at: { type: string, format: date-time, nullable: true }
+
+    PrechatFieldRule:
+      type: object
+      description: |
+        One built-in pre-chat field (WG-01): whether the widget asks it, and
+        whether it must be answered. `required` implies `visible`.
+      required: [visible, required]
+      properties:
+        visible: { type: boolean }
+        required: { type: boolean }
+
+    PrechatConfig:
+      type: object
+      description: |
+        The widget's built-in pre-chat form (WG-01): whether it opens before a
+        first conversation, and how each of its four fixed fields behaves. The
+        workspace's own questions (`pre_chat` custom fields) are separate and
+        are not asked when `enabled` is false.
+      required: [enabled, fields]
+      properties:
+        enabled: { type: boolean }
+        fields:
+          type: object
+          required: [name, username, email, message]
+          properties:
+            name: { $ref: "#/components/schemas/PrechatFieldRule" }
+            username: { $ref: "#/components/schemas/PrechatFieldRule" }
+            email: { $ref: "#/components/schemas/PrechatFieldRule" }
+            message: { $ref: "#/components/schemas/PrechatFieldRule" }
+
+    PrechatSettings:
+      allOf:
+        - $ref: "#/components/schemas/PrechatConfig"
+        - type: object
+          required: [brand_id, configured]
+          properties:
+            brand_id:
+              type: string
+              format: uuid
+              description: The brand this form belongs to (Multibrand, PRD §5.3).
+            configured:
+              type: boolean
+              description: |
+                Whether this brand has saved the form. False reads today's
+                defaults; only a saved form is also enforced by the server on
+                `/customer/chat/events`.
 
     WidgetAppearance:
       type: object

@@ -6,7 +6,14 @@
  * retry policy and typed routes it will never use.
  */
 
-import type { WidgetFormField, WidgetAppearance, WidgetTokenAppearance } from '@siyahtus/types';
+import {
+  DEFAULT_PRECHAT_CONFIG,
+  normalizePrechatConfig,
+  type PrechatConfig,
+  type WidgetFormField,
+  type WidgetAppearance,
+  type WidgetTokenAppearance,
+} from '@siyahtus/types';
 
 /**
  * The appearance off a token mint. The two footer links are optional on the
@@ -88,6 +95,12 @@ export class WidgetApi {
    * only ever narrows once the real value is known.
    */
   #fileSharingEnabled = true;
+  /**
+   * The built-in pre-chat form (WG-01) from the last mint. Starts as today's
+   * form — open, all four required — which is also what a server predating
+   * the setting means by sending nothing.
+   */
+  #prechat: PrechatConfig = DEFAULT_PRECHAT_CONFIG;
   #preChatForm: WidgetFormField[] = [];
   #postChatForm: WidgetFormField[] = [];
   #ticketForm: WidgetFormField[] = [];
@@ -129,6 +142,11 @@ export class WidgetApi {
   /** The last token mint's file-sharing switch (FR-MOD-08.9.4). */
   get fileSharingEnabled(): boolean {
     return this.#fileSharingEnabled;
+  }
+
+  /** The brand's built-in pre-chat form from the last token mint (WG-01). */
+  get prechat(): PrechatConfig {
+    return this.#prechat;
   }
 
   /**
@@ -209,6 +227,7 @@ export class WidgetApi {
       rtm_url,
       widget,
       file_sharing_enabled,
+      prechat,
       pre_chat_form,
       post_chat_form,
       ticket_form,
@@ -219,6 +238,7 @@ export class WidgetApi {
       rtm_url?: string;
       widget?: MintedAppearance;
       file_sharing_enabled?: boolean;
+      prechat?: unknown;
       pre_chat_form?: WidgetFormField[];
       post_chat_form?: WidgetFormField[];
       ticket_form?: WidgetFormField[];
@@ -228,6 +248,7 @@ export class WidgetApi {
     this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
     if (widget) this.#appearance = widget;
     if (typeof file_sharing_enabled === 'boolean') this.#fileSharingEnabled = file_sharing_enabled;
+    this.#prechat = normalizePrechatConfig(prechat);
     this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
     this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];

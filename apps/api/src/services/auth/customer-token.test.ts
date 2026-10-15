@@ -270,4 +270,40 @@ describe('CustomerTokenService', () => {
     });
     expect(first.token).not.toBe(second.token);
   });
+
+  // WG-01: the brand whose website minted the token, so the chat-open check
+  // enforces the pre-chat form the widget was handed.
+  it('carries the minting brand when given one, and none otherwise', () => {
+    const svc = service();
+    const BRAND = '55555555-5555-4555-8555-555555555555';
+    const branded = svc.verify(
+      svc.issue({
+        customerId: CUSTOMER,
+        organizationId: ORG,
+        licenseId: 1n,
+        region: 'eu',
+        brandId: BRAND,
+      }).token,
+    );
+    expect(branded.ok && branded.principal.brandId).toBe(BRAND);
+
+    const plain = svc.verify(
+      svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' }).token,
+    );
+    expect(plain.ok && 'brandId' in plain.principal).toBe(false);
+  });
+
+  it('refuses a correctly signed brand claim that is not a string', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = resign({
+      sub: CUSTOMER,
+      org: ORG,
+      lic: '1',
+      rgn: 'eu',
+      brd: 42,
+      iat: now,
+      exp: now + 60,
+    });
+    expect(service().verify(token)).toEqual({ ok: false, reason: 'malformed' });
+  });
 });

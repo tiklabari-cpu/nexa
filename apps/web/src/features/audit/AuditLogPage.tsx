@@ -190,6 +190,7 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'settings.routing_rule_deleted',
       'settings.chat_timeout_updated',
       'settings.widget_updated',
+      'settings.prechat_updated',
       'settings.sales_tracker_updated',
       'settings.appearance_updated',
       'settings.trusted_domain_added',

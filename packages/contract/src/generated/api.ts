@@ -1331,6 +1331,16 @@ export interface paths {
      *     A message must carry text, an `attachment_url`, or both — an attachment may
      *     stand alone (FR-MOD-11.4). The attachment must be a file this workspace
      *     uploaded through `/uploads`; any other value is refused.
+     *
+     *     **Pre-chat requirements (WG-01).** A message that would *open* a
+     *     conversation is refused with 400 `validation_error` — nothing written,
+     *     not even the other pre-chat values — when the brand's saved pre-chat form
+     *     (`/settings/prechat`) is on and requires `name`, `username` or `email`
+     *     and the request neither carries it nor finds it already on the contact.
+     *     `details.fields` names each missing one. The brand is the one whose
+     *     website minted the token. A workspace that has never saved the setting
+     *     is not checked here, and a message into an existing conversation never
+     *     is.
      */
     post: operations['sendCustomerMessage'];
     delete?: never;
@@ -4924,6 +4934,39 @@ export interface paths {
      *     until the plan includes `white_label` again.
      */
     put: operations['setWidgetSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/prechat': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Built-in pre-chat form
+     * @description The widget's built-in pre-chat form for the active brand (WG-01): whether
+     *     it opens, and whether each of name, username, e-mail and message is
+     *     shown and required. A brand that has never saved it reads today's form —
+     *     open, all four required — with `configured: false`.
+     */
+    get: operations['getPrechatSettings'];
+    /**
+     * Change the built-in pre-chat form
+     * @description Replaces the whole form — all four fields are sent every time. A field
+     *     may not be required while hidden (400). Takes effect on each visitor's
+     *     next token mint; nothing needs reinstalling.
+     *
+     *     Once saved, the server enforces it too: a message that would open a
+     *     conversation without a required name, username or e-mail (sent or
+     *     already on the contact) is refused on `/customer/chat/events`.
+     */
+    put: operations['setPrechatSettings'];
     post?: never;
     delete?: never;
     options?: never;
@@ -9689,6 +9732,42 @@ export interface components {
       welcome_text: string | null;
       /** Format: date-time */
       updated_at: string | null;
+    };
+    /**
+     * @description One built-in pre-chat field (WG-01): whether the widget asks it, and
+     *     whether it must be answered. `required` implies `visible`.
+     */
+    PrechatFieldRule: {
+      visible: boolean;
+      required: boolean;
+    };
+    /**
+     * @description The widget's built-in pre-chat form (WG-01): whether it opens before a
+     *     first conversation, and how each of its four fixed fields behaves. The
+     *     workspace's own questions (`pre_chat` custom fields) are separate and
+     *     are not asked when `enabled` is false.
+     */
+    PrechatConfig: {
+      enabled: boolean;
+      fields: {
+        name: components['schemas']['PrechatFieldRule'];
+        username: components['schemas']['PrechatFieldRule'];
+        email: components['schemas']['PrechatFieldRule'];
+        message: components['schemas']['PrechatFieldRule'];
+      };
+    };
+    PrechatSettings: components['schemas']['PrechatConfig'] & {
+      /**
+       * Format: uuid
+       * @description The brand this form belongs to (Multibrand, PRD §5.3).
+       */
+      brand_id: string;
+      /**
+       * @description Whether this brand has saved the form. False reads today's
+       *     defaults; only a saved form is also enforced by the server on
+       *     `/customer/chat/events`.
+       */
+      configured: boolean;
     };
     /**
      * @description The look the visitor's widget renders, as the token mint delivers it
@@ -14646,6 +14725,18 @@ export interface operations {
              *     precondition for it.
              */
             rtm_url?: string;
+            /**
+             * @description The built-in pre-chat form (WG-01) for the brand whose
+             *     website the widget is on — the `websites` row matching the
+             *     embedding host, else the licence's default brand: whether
+             *     the form opens, and which of name, username, e-mail and
+             *     message it shows and requires. A workspace that never
+             *     saved it gets today's form (open, all four required). Read
+             *     at every mint, so a change takes effect on the visitor's
+             *     next token without reinstalling. A client that does not
+             *     recognise it keeps the all-required form.
+             */
+            prechat?: components['schemas']['PrechatConfig'];
             /**
              * @description The workspace's pre-chat form (FR-MOD-08.7.7) — the fields
              *     the widget asks before the conversation starts. Empty when
@@ -20768,6 +20859,75 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['WidgetSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPrechatSettings: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current form */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrechatSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setPrechatSettings: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrechatConfig'];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrechatSettings'];
         };
       };
       400: components['responses']['BadRequest'];

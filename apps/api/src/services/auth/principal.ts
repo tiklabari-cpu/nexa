@@ -37,6 +37,11 @@ export interface CustomerPrincipal {
   organizationId: string;
   /** Which license's widget minted this token. */
   licenseId: bigint;
+  /**
+   * The brand of the website that minted the token (WG-01), for the per-brand
+   * widget settings the chat path enforces. Never a tenant/RLS scope.
+   */
+  brandId?: string;
 }
 
 /**

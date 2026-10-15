@@ -6,8 +6,11 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import {
   isScope,
+  DEFAULT_PRECHAT_CONFIG,
+  normalizePrechatConfig,
   normalizeWidgetAppearance,
   RTM_PATHS,
+  type PrechatConfig,
   servesRegion,
   type WidgetFormField,
   type Region,
@@ -39,6 +42,7 @@ import {
 } from '../services/notifications/preferences.js';
 import { trialState } from '../services/billing/metering.js';
 import { markWebsiteConnected } from '../services/websites/website-service.js';
+import { readPrechat, resolveWidgetBrandId } from '../services/websites/prechat.js';
 import {
   defaultScopesForRole,
   selfAccountId,
@@ -1705,6 +1709,20 @@ export default async function authRoutes(
       customerId = created.id;
     }
 
+    // Which brand this widget speaks for (WG-01): the website registered for
+    // the embedding host, else the licence default. Signed into the token so
+    // the chat-open check enforces the same pre-chat form handed out below.
+    // Best-effort like the reads at the end — a failure leaves the token
+    // brandless, which reads as the default brand everywhere downstream.
+    let brandId: string | undefined;
+    try {
+      brandId = await withTenant(app.db, tenant, (tx) =>
+        resolveWidgetBrandId(tx, host, isChatPage),
+      );
+    } catch (error) {
+      request.log.warn({ err: error, host }, 'failed to resolve the widget brand');
+    }
+
     const { token, expiresIn } = app.customerTokens.issue({
       customerId,
       organizationId: match.organization_id,
@@ -1713,6 +1731,7 @@ export default async function authRoutes(
       // makes it true, and `region.test.ts` reads that constraint back against
       // `REGIONS` so the two cannot drift apart unnoticed.
       region: region as Region,
+      ...(brandId ? { brandId } : {}),
     });
 
     // The widget just proved it is live on this origin, so a website added for
@@ -1736,7 +1755,7 @@ export default async function authRoutes(
     // round-trip is least welcome.
     // All best-effort — the widget falls back to the shipped look and no extra
     // fields, so a read failure must never deny a token.
-    const [widget, forms, fileSharingEnabled] = await Promise.all([
+    const [widget, forms, fileSharingEnabled, prechat] = await Promise.all([
       widgetAppearance(app.db, tenant, request, {
         privacy_policy_url: env.PRIVACY_POLICY_URL ?? null,
         // The public pilot has no brand page to link to yet, so it shows the
@@ -1745,6 +1764,7 @@ export default async function authRoutes(
       }),
       readWidgetForms(app.db, tenant, request),
       fileSharingEnabledFor(app.db, tenant, request),
+      prechatFor(app.db, tenant, request, brandId),
     ]);
 
     reply.header('Cache-Control', 'no-store');
@@ -1765,6 +1785,7 @@ export default async function authRoutes(
       rtm_url: `${env.RTM_BASE_URL}${RTM_PATHS.customer}`,
       widget,
       file_sharing_enabled: fileSharingEnabled,
+      prechat,
       pre_chat_form: forms.pre_chat,
       post_chat_form: forms.post_chat,
       ticket_form: forms.ticket,
@@ -1848,6 +1869,30 @@ async function fileSharingEnabledFor(
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read file-sharing policy');
     return true;
+  }
+}
+
+/**
+ * The brand's built-in pre-chat form (WG-01) — read on every mint, so a saved
+ * change reaches each visitor on their next token. Guarded like the reads
+ * around it; the fallback is today's form (open, all four required), the one
+ * every widget showed before the setting existed.
+ */
+async function prechatFor(
+  db: PrismaClient,
+  tenant: TenantContext,
+  request: FastifyRequest,
+  brandId: string | undefined,
+): Promise<PrechatConfig> {
+  try {
+    return await withTenant(db, tenant, async (tx) =>
+      brandId
+        ? (await readPrechat(tx, brandId)).config
+        : normalizePrechatConfig(DEFAULT_PRECHAT_CONFIG),
+    );
+  } catch (error) {
+    request.log.warn({ err: error }, 'failed to read the pre-chat form');
+    return normalizePrechatConfig(DEFAULT_PRECHAT_CONFIG);
   }
 }
 

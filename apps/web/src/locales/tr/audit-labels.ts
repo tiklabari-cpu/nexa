@@ -46,6 +46,7 @@ export const auditLabels: Messages = {
   'audit.action.settings.routing_rule_deleted': 'Yönlendirme kuralı silindi',
   'audit.action.settings.chat_timeout_updated': 'Sohbet zaman aşımı güncellendi',
   'audit.action.settings.widget_updated': 'Sohbet widget’ı güncellendi',
+  'audit.action.settings.prechat_updated': 'Sohbet öncesi form güncellendi',
   'audit.action.settings.sales_tracker_updated': 'Satış takibi güncellendi',
   'audit.action.settings.appearance_updated': 'Panel yazı tipi varsayılanı değişti',
   'audit.action.settings.sla_updated': 'Yanıt hedefleri güncellendi',

@@ -880,6 +880,19 @@ customerToken:
                     that does not publish a reachable gateway, keeps polling;
                     the socket is an optimisation over that path, never a
                     precondition for it.
+                prechat:
+                  allOf:
+                    - $ref: "../openapi.yaml#/components/schemas/PrechatConfig"
+                  description: |
+                    The built-in pre-chat form (WG-01) for the brand whose
+                    website the widget is on — the `websites` row matching the
+                    embedding host, else the licence's default brand: whether
+                    the form opens, and which of name, username, e-mail and
+                    message it shows and requires. A workspace that never
+                    saved it gets today's form (open, all four required). Read
+                    at every mint, so a change takes effect on the visitor's
+                    next token without reinstalling. A client that does not
+                    recognise it keeps the all-required form.
                 pre_chat_form:
                   type: array
                   description: |

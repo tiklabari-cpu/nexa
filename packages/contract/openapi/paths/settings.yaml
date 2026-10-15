@@ -1570,6 +1570,58 @@ widgetSettings:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+prechatSettings:
+  get:
+    tags: [Settings]
+    operationId: getPrechatSettings
+    summary: Built-in pre-chat form
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
+    description: |
+      The widget's built-in pre-chat form for the active brand (WG-01): whether
+      it opens, and whether each of name, username, e-mail and message is
+      shown and required. A brand that has never saved it reads today's form —
+      open, all four required — with `configured: false`.
+    responses:
+      "200":
+        description: The current form
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PrechatSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: setPrechatSettings
+    summary: Change the built-in pre-chat form
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
+    description: |
+      Replaces the whole form — all four fields are sent every time. A field
+      may not be required while hidden (400). Takes effect on each visitor's
+      next token mint; nothing needs reinstalling.
+
+      Once saved, the server enforces it too: a message that would open a
+      conversation without a required name, username or e-mail (sent or
+      already on the contact) is refused on `/customer/chat/events`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PrechatConfig" }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PrechatSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 salesTracker:
   get:
     tags: [Settings]

@@ -54,6 +54,7 @@ import {
 import { pushToAgentDevices } from '../services/notifications/push.js';
 import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { missingPrechatFields, readCustomerPrechat } from '../services/websites/prechat.js';
 
 const startSchema = z
   .object({
@@ -700,6 +701,30 @@ export default async function customerRoutes(
           // on purpose — it names no rule, so the filter cannot be probed — and
           // nothing (no chat, no customer field write) is persisted.
           throw new ApiError('message_rejected', 'This message could not be sent.');
+        }
+      }
+
+      // The brand's saved pre-chat form (WG-01), enforced on the message that
+      // would open a conversation — the widget checks it too, but a scripted
+      // request skips the widget. Refused before any write, like the spam
+      // filter above, so a 400 leaves no trace. A detail already on the
+      // contact counts: a returning visitor is not asked twice. The brand is
+      // the one signed into the token at mint, i.e. the form the widget was
+      // handed; an unsaved form is not enforced at all.
+      if (!existing) {
+        const missing = await request.withTenant(async (tx) => {
+          const prechat = await readCustomerPrechat(tx, principal.brandId);
+          if (!prechat.configured || !prechat.config.enabled) return [];
+          const stored = await tx.customer.findFirst({
+            where: { id: principal.customerId },
+            select: { name: true, username: true, email: true },
+          });
+          return missingPrechatFields(prechat, body, stored);
+        });
+        if (missing.length > 0) {
+          throw ApiError.validation(`${missing.join(', ')}: required by the pre-chat form.`, {
+            fields: missing.map((field) => ({ field, message: 'Required.' })),
+          });
         }
       }
 

@@ -2754,6 +2754,113 @@ components:
             back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).
         updated_at: { type: string, format: date-time, nullable: true }
 
+    # --- Member recognition (ID-03 · decision K4 · tm 287) ---------------------
+    #
+    # The shapes of Settings › Security › Member recognition and of a
+    # customer's possible matches and links. Defined ahead of the paths that
+    # return them: `paths/settings.yaml` and `paths/customers.yaml` hold those
+    # path items, and each is mounted under `paths:` by the subtask that serves
+    # it — `contract-parity.test.ts` refuses a documented operation nothing
+    # serves (docs/adr/member-recognition.md §3).
+
+    MemberTokenKeyInfo:
+      type: object
+      description: |
+        The licence's member-token signing key, described — never the key
+        itself, which no response carries (ID-03 · K4). `version` signs new
+        tokens; a rotation keeps the key it replaced as `previous_version`
+        until `previous_valid_until`, so the members it signed are still
+        recognised, and re-signed under the new key, while that lasts.
+      required: [version, created_at, previous_version, previous_valid_until]
+      properties:
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        previous_version: { type: integer, minimum: 1, nullable: true }
+        previous_valid_until: { type: string, format: date-time, nullable: true }
+
+    MemberRecognitionSettings:
+      type: object
+      description: |
+        Settings › Security › Member recognition (ID-03 · decision K4). One set
+        per licence, not per brand: the member token and the key that signs it
+        are the licence's, and a member is the same person on every brand's
+        site. A workspace that never saved these reads the defaults (30 days,
+        matches shown); reading creates nothing — not even a key.
+      required:
+        [token_ttl_seconds, possible_matches_enabled, key, tokens_revoked_before, updated_at]
+      properties:
+        token_ttl_seconds:
+          type: integer
+          minimum: 86400
+          maximum: 31536000
+          description: |
+            How long a member token lives without a visit. Sliding — every
+            visit re-signs it — so this is how long a member who stays away is
+            still recognised. At least a day, so a member stays the same member
+            for the rest of the day (ID-02); a year at most.
+        possible_matches_enabled:
+          type: boolean
+          description: |
+            Whether agents see possible matches: other customers of the
+            organization with the same pre-chat username or e-mail, marked
+            unverified. Off, the list comes back empty.
+        key:
+          allOf: [{ $ref: "#/components/schemas/MemberTokenKeyInfo" }]
+          nullable: true
+          description: Null until the widget first mints a member token, or an admin rotates.
+        tokens_revoked_before:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            The latest bulk revocation: every member token this licence issued
+            before it is refused, and its browser starts again as a new
+            visitor. Null when there has been none.
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null when the settings were never saved.
+
+    MemberRecognitionSettingsInput:
+      type: object
+      minProperties: 1
+      description: Only the fields sent change.
+      properties:
+        token_ttl_seconds: { type: integer, minimum: 86400, maximum: 31536000 }
+        possible_matches_enabled: { type: boolean }
+
+    MemberKeyRotationInput:
+      type: object
+      properties:
+        grace_period_seconds:
+          type: integer
+          minimum: 0
+          maximum: 2592000
+          default: 604800
+          description: |
+            How long the replaced key is still accepted. A member who visits
+            within it is re-signed under the new key and never notices; `0`
+            retires the old key at once — the emergency rotation, after which
+            every member starts again as a new visitor. Default 7 days.
+
+    MemberTokenRevocation:
+      type: object
+      description: |
+        A revocation (ID-03 · K4). Member tokens are signed, not stored, so a
+        revocation refuses by issue time: every token this licence issued
+        before `revoked_at` — for `customer_id`, or for every member when that
+        is null — is refused, and that browser's next visit is a new anonymous
+        customer. Not undone; a later visit simply earns a new token.
+      required: [customer_id, revoked_at]
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The member whose tokens are refused, or null for every member.
+        revoked_at: { type: string, format: date-time }
+
     RetentionTier:
       type: string
       enum: ["30d", "60d", "365d", "unlimited"]
@@ -3551,6 +3658,103 @@ components:
             returns as `custom_fields`; this is only what the Contacts table
             renders as a column.
           items: { $ref: "#/components/schemas/CustomFieldValue" }
+
+    PossibleMatchField:
+      type: string
+      enum: [username, email]
+      description: |
+        What a possible match shares with the customer being looked at: the
+        pre-chat username (compared trimmed and case-folded) or the e-mail.
+        Neither is proof — the visitor typed both (ID-03 · K4).
+
+    CustomerMatchSummary:
+      type: object
+      description: |
+        Just enough of another customer record to tell an agent who it is,
+        for a possible match or a link (ID-03). The full record is
+        `GET /customers/{customerId}`.
+      required: [id, name, username, email, last_activity_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        username: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        last_activity_at: { type: string, format: date-time, nullable: true }
+
+    PossibleMatch:
+      type: object
+      description: |
+        Another customer of this organization who typed the same pre-chat
+        username or e-mail (ID-03 · K4). **Unverified, and never joined on its
+        own:** a username is whatever the visitor typed, so treating it as
+        identity would hand one member's conversation to anyone who types
+        their name. It is shown so an agent can ask, and link if satisfied.
+      required: [customer, matched_on, linked]
+      properties:
+        customer: { $ref: "#/components/schemas/CustomerMatchSummary" }
+        matched_on:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/PossibleMatchField" }
+        linked:
+          type: boolean
+          description: An agent has already confirmed this record as the same person.
+
+    PossibleMatchList:
+      type: object
+      required: [items, enabled]
+      properties:
+        items:
+          type: array
+          maxItems: 10
+          description: Most recently active first, at most ten.
+          items: { $ref: "#/components/schemas/PossibleMatch" }
+        enabled:
+          type: boolean
+          description: |
+            False when the workspace turned possible matches off (Settings ›
+            Security › Member recognition); `items` is then empty.
+
+    CustomerIdentityLink:
+      type: object
+      description: |
+        An agent's confirmation that two customer records are the same person
+        (ID-03 · K4) — how a member who arrived from another device, or from a
+        browser that lost its member token, joins their earlier record. It
+        joins the **agent's history view only**: the day's conversation
+        (ID-02) and the AI's memory stay with each record's own customer
+        number, so a linked record's conversations never reach the AI.
+        Symmetric: the link reads the same from either record.
+      required: [customer_id, linked_customer, linked_at, linked_by]
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: The customer the request named.
+        linked_customer: { $ref: "#/components/schemas/CustomerMatchSummary" }
+        linked_at: { type: string, format: date-time }
+        linked_by:
+          type: string
+          format: uuid
+          description: The account that confirmed it (kept when the account is deleted).
+
+    CustomerIdentityLinkInput:
+      type: object
+      required: [customer_id]
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: The other record — a customer of the same organization.
+
+    CustomerIdentityLinkList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerIdentityLink" }
 
     AiUsageMeter:
       type: string

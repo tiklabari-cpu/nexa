@@ -981,6 +981,27 @@ export interface paths {
      *     elsewhere gains no rows here. The issued token carries its workspace's
      *     region, so presenting it to another deployment, or to that deployment's
      *     realtime gateway, is refused the same way.
+     *
+     *     **Member recognition (ID-03 · decision K4).** A returning visitor is
+     *     recognised by the *member token* this endpoint gave their browser, not by
+     *     a `customer_id`: an id identifies, it does not authenticate, and whoever
+     *     learns a member's id must not be able to open their conversation. The
+     *     token comes back in the `siyahtus_member` cookie this endpoint sets —
+     *     `HttpOnly` and `Partitioned`, so page scripts cannot read it and no other
+     *     site sees it — or, from a browser that will not keep that cookie, as
+     *     `member_token` in the body, out of the widget's localStorage. The cookie
+     *     wins when both arrive.
+     *
+     *     The token is checked in order: signature, expiry, licence (it must be the
+     *     one the embedding origin resolved to), then the revocation list. A token
+     *     that passes means the same customer — and therefore the same conversation
+     *     day (ID-02) — and is re-signed for the workspace's token lifetime, so the
+     *     lifetime counts from the last visit. Anything else (no token, an altered,
+     *     expired, revoked or other licence's one) gets a new anonymous customer,
+     *     answered exactly like a first visit: neither the status nor the shape of
+     *     the body says which it was. A username or e-mail typed into the pre-chat
+     *     form never selects a customer; another device is a new customer until an
+     *     agent confirms the link.
      */
     post: operations['issueCustomerToken'];
     delete?: never;
@@ -9787,6 +9808,88 @@ export interface components {
       updated_at?: string | null;
     };
     /**
+     * @description The licence's member-token signing key, described — never the key
+     *     itself, which no response carries (ID-03 · K4). `version` signs new
+     *     tokens; a rotation keeps the key it replaced as `previous_version`
+     *     until `previous_valid_until`, so the members it signed are still
+     *     recognised, and re-signed under the new key, while that lasts.
+     */
+    MemberTokenKeyInfo: {
+      version: number;
+      /** Format: date-time */
+      created_at: string;
+      previous_version: number | null;
+      /** Format: date-time */
+      previous_valid_until: string | null;
+    };
+    /**
+     * @description Settings › Security › Member recognition (ID-03 · decision K4). One set
+     *     per licence, not per brand: the member token and the key that signs it
+     *     are the licence's, and a member is the same person on every brand's
+     *     site. A workspace that never saved these reads the defaults (30 days,
+     *     matches shown); reading creates nothing — not even a key.
+     */
+    MemberRecognitionSettings: {
+      /**
+       * @description How long a member token lives without a visit. Sliding — every
+       *     visit re-signs it — so this is how long a member who stays away is
+       *     still recognised. At least a day, so a member stays the same member
+       *     for the rest of the day (ID-02); a year at most.
+       */
+      token_ttl_seconds: number;
+      /**
+       * @description Whether agents see possible matches: other customers of the
+       *     organization with the same pre-chat username or e-mail, marked
+       *     unverified. Off, the list comes back empty.
+       */
+      possible_matches_enabled: boolean;
+      /** @description Null until the widget first mints a member token, or an admin rotates. */
+      key: components['schemas']['MemberTokenKeyInfo'] | null;
+      /**
+       * Format: date-time
+       * @description The latest bulk revocation: every member token this licence issued
+       *     before it is refused, and its browser starts again as a new
+       *     visitor. Null when there has been none.
+       */
+      tokens_revoked_before: string | null;
+      /**
+       * Format: date-time
+       * @description Null when the settings were never saved.
+       */
+      updated_at: string | null;
+    };
+    /** @description Only the fields sent change. */
+    MemberRecognitionSettingsInput: {
+      token_ttl_seconds?: number;
+      possible_matches_enabled?: boolean;
+    };
+    MemberKeyRotationInput: {
+      /**
+       * @description How long the replaced key is still accepted. A member who visits
+       *     within it is re-signed under the new key and never notices; `0`
+       *     retires the old key at once — the emergency rotation, after which
+       *     every member starts again as a new visitor. Default 7 days.
+       * @default 604800
+       */
+      grace_period_seconds: number;
+    };
+    /**
+     * @description A revocation (ID-03 · K4). Member tokens are signed, not stored, so a
+     *     revocation refuses by issue time: every token this licence issued
+     *     before `revoked_at` — for `customer_id`, or for every member when that
+     *     is null — is refused, and that browser's next visit is a new anonymous
+     *     customer. Not undone; a later visit simply earns a new token.
+     */
+    MemberTokenRevocation: {
+      /**
+       * Format: uuid
+       * @description The member whose tokens are refused, or null for every member.
+       */
+      customer_id: string | null;
+      /** Format: date-time */
+      revoked_at: string;
+    };
+    /**
      * @description One of the four windows NFR-C8 enumerates. A tier, not a day count, so `unlimited` cannot arrive as the number `0` — which is the one value the sweep's own guard refuses, because a zero window puts the cutoff at "now" and matches every row.
      * @enum {string}
      */
@@ -10370,6 +10473,83 @@ export interface components {
        *     renders as a column.
        */
       table_custom_fields: components['schemas']['CustomFieldValue'][];
+    };
+    /**
+     * @description What a possible match shares with the customer being looked at: the
+     *     pre-chat username (compared trimmed and case-folded) or the e-mail.
+     *     Neither is proof — the visitor typed both (ID-03 · K4).
+     * @enum {string}
+     */
+    PossibleMatchField: 'username' | 'email';
+    /**
+     * @description Just enough of another customer record to tell an agent who it is,
+     *     for a possible match or a link (ID-03). The full record is
+     *     `GET /customers/{customerId}`.
+     */
+    CustomerMatchSummary: {
+      /** Format: uuid */
+      id: string;
+      name: string | null;
+      username: string | null;
+      email: string | null;
+      /** Format: date-time */
+      last_activity_at: string | null;
+    };
+    /**
+     * @description Another customer of this organization who typed the same pre-chat
+     *     username or e-mail (ID-03 · K4). **Unverified, and never joined on its
+     *     own:** a username is whatever the visitor typed, so treating it as
+     *     identity would hand one member's conversation to anyone who types
+     *     their name. It is shown so an agent can ask, and link if satisfied.
+     */
+    PossibleMatch: {
+      customer: components['schemas']['CustomerMatchSummary'];
+      matched_on: components['schemas']['PossibleMatchField'][];
+      /** @description An agent has already confirmed this record as the same person. */
+      linked: boolean;
+    };
+    PossibleMatchList: {
+      /** @description Most recently active first, at most ten. */
+      items: components['schemas']['PossibleMatch'][];
+      /**
+       * @description False when the workspace turned possible matches off (Settings ›
+       *     Security › Member recognition); `items` is then empty.
+       */
+      enabled: boolean;
+    };
+    /**
+     * @description An agent's confirmation that two customer records are the same person
+     *     (ID-03 · K4) — how a member who arrived from another device, or from a
+     *     browser that lost its member token, joins their earlier record. It
+     *     joins the **agent's history view only**: the day's conversation
+     *     (ID-02) and the AI's memory stay with each record's own customer
+     *     number, so a linked record's conversations never reach the AI.
+     *     Symmetric: the link reads the same from either record.
+     */
+    CustomerIdentityLink: {
+      /**
+       * Format: uuid
+       * @description The customer the request named.
+       */
+      customer_id: string;
+      linked_customer: components['schemas']['CustomerMatchSummary'];
+      /** Format: date-time */
+      linked_at: string;
+      /**
+       * Format: uuid
+       * @description The account that confirmed it (kept when the account is deleted).
+       */
+      linked_by: string;
+    };
+    CustomerIdentityLinkInput: {
+      /**
+       * Format: uuid
+       * @description The other record — a customer of the same organization.
+       */
+      customer_id: string;
+    };
+    CustomerIdentityLinkList: {
+      items: components['schemas']['CustomerIdentityLink'][];
     };
     /** @enum {string} */
     AiUsageMeter: 'llm' | 'embedding' | 'llm_test' | 'embedding_test';
@@ -15098,7 +15278,14 @@ export interface operations {
       query?: never;
       header?: never;
       path?: never;
-      cookie?: never;
+      cookie?: {
+        /**
+         * @description The member token as this endpoint set it (ID-03 · K4). The browser
+         *     sends it on its own when the widget's request carries credentials;
+         *     page scripts can neither read nor write it.
+         */
+        siyahtus_member?: string;
+      };
     };
     requestBody: {
       content: {
@@ -15106,8 +15293,21 @@ export interface operations {
           /** Format: uuid */
           organization_id: string;
           /**
+           * @description The member token from the widget's localStorage, sent only by
+           *     a browser that would not keep the `siyahtus_member` cookie
+           *     (ID-03 · K4); ignored when the cookie arrives too. An invalid
+           *     one is not an error: the visitor is treated as new, exactly as
+           *     with none.
+           */
+          member_token?: string;
+          /**
            * Format: uuid
-           * @description Returning visitor. A new customer is created when omitted.
+           * @description The id a widget from before member tokens kept in
+           *     localStorage. It identifies, it does not authenticate: a
+           *     customer who holds a member token is reached only through that
+           *     token, and a `customer_id` without one gets a new anonymous
+           *     customer. A visitor from before member tokens is moved onto
+           *     one once, during a transition period.
            */
           customer_id?: string;
           /**
@@ -15122,6 +15322,14 @@ export interface operations {
       /** @description Customer token issued */
       200: {
         headers: {
+          /**
+           * @description `siyahtus_member=<member token>; Max-Age=<token lifetime>; Secure;
+           *     HttpOnly; SameSite=None; Partitioned`, its `Path` limited to this
+           *     endpoint — on every 200, carrying the token just re-signed
+           *     (ID-03 · K4). Partitioned (CHIPS): the browser keeps a separate
+           *     one per embedding site and never sends one site's to another.
+           */
+          'Set-Cookie'?: string;
           [name: string]: unknown;
         };
         content: {
@@ -15132,6 +15340,25 @@ export interface operations {
             customer_id: string;
             /** Format: uuid */
             organization_id: string;
+            /**
+             * @description The member token this response re-signed (ID-03 · K4), for
+             *     a browser that has to keep it itself: present whenever the
+             *     request did not arrive with a valid `siyahtus_member`
+             *     cookie, a first visit included. The widget stores it in its
+             *     localStorage and sends it back as `member_token`. Absent
+             *     when the cookie carried the token — the widget then deletes
+             *     its own copy, so the token lives only where page scripts
+             *     cannot read it. Opaque; its format is the server's.
+             */
+            member_token?: string;
+            /**
+             * Format: date-time
+             * @description When the member token this response issued expires unless
+             *     the member comes back first — every visit re-signs it for
+             *     the workspace's token lifetime (`token_ttl_seconds` in
+             *     Settings › Security › Member recognition).
+             */
+            member_token_expires_at?: string;
             /**
              * @description The workspace's widget appearance (FR-MOD-11.7) and the two
              *     footer links (FR-MOD-11.5): the server is the source of

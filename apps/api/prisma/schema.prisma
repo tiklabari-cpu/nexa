@@ -219,6 +219,10 @@ model License {
   botRules               BotRule[]
   botGroups              BotGroup[]
 
+  memberTokenKey            MemberTokenKey?
+  memberTokenRevocations    MemberTokenRevocation[]
+  memberRecognitionSettings MemberRecognitionSettings?
+
   invitations Invitation[]
 
   @@index([organizationId])
@@ -436,6 +440,10 @@ model Customer {
   goalAchievements  GoalAchievement[]
   trackedSales      TrackedSale[]
 
+  memberTokenRevocations MemberTokenRevocation[]
+  identityLinksAsA       CustomerIdentityLink[]  @relation("IdentityLinkA")
+  identityLinksAsB       CustomerIdentityLink[]  @relation("IdentityLinkB")
+
   @@index([organizationId, lastActivityAt(sort: Desc)])
   @@index([organizationId, email])
   /// Serves the Contacts filter panel's country condition (FR-MOD-03.2.1) —
@@ -471,6 +479,102 @@ model TrustedDomain {
   @@unique([organizationId, domain])
   @@index([licenseId])
   @@map("trusted_domains")
+}
+
+// ---------------------------------------------------------------------------
+// Member recognition (SiyahTuş analysis ID-03 · owner decision K4 · tm 287.1).
+// A returning visitor is recognised by a member token the server signs and the
+// widget keeps, never by the bare `customer_id` — see
+// docs/adr/member-recognition.md. The CHECKs and RLS policies live in
+// 20261015180000_member_recognition; Prisma models none of them.
+// ---------------------------------------------------------------------------
+
+/// A licence's member-token signing key. One row per licence, created by the
+/// first mint. `keyCiphertext` is AES-256-GCM (`lib/credential-cipher.ts`
+/// format), bound to this licence and version by its additional data, under a
+/// key-encryption key from the deployment's environment — the database alone
+/// signs nothing. A rotation keeps the replaced key in `previous*` until
+/// `previousKeyValidUntil` (all three or none; one slot). Never deleted by the
+/// application role.
+model MemberTokenKey {
+  licenseId             BigInt    @id @map("license_id")
+  /// The version a token names as its signer; 1 for the first key.
+  keyVersion            Int       @map("key_version")
+  keyCiphertext         String    @map("key_ciphertext")
+  keyCreatedAt          DateTime  @default(now()) @map("key_created_at") @db.Timestamptz(6)
+  previousKeyVersion    Int?      @map("previous_key_version")
+  previousKeyCiphertext String?   @map("previous_key_ciphertext")
+  previousKeyValidUntil DateTime? @map("previous_key_valid_until") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("member_token_keys")
+}
+
+/// The member-token revocation list. Tokens are signed, not stored, so a row
+/// revokes by issue time: every token this licence issued before `revokedAt`
+/// for `customerId` — or for every member when `customerId` is null (bulk) —
+/// is refused. Append-only for the application role.
+model MemberTokenRevocation {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  customerId String?  @map("customer_id") @db.Uuid
+  revokedAt  DateTime @default(now()) @map("revoked_at") @db.Timestamptz(6)
+  /// The account that revoked, null for the system. No FK: the audit trail is
+  /// the record of who did what.
+  revokedBy  String?  @map("revoked_by") @db.Uuid
+
+  license  License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, customerId, revokedAt])
+  @@map("member_token_revocations")
+}
+
+/// Settings › Security › "Member recognition". A licence singleton, not a brand
+/// one: the token and its key are the licence's, and a member is the same
+/// person on every brand's site. No row until the first save; a read with no
+/// row gets these defaults (`@siyahtus/types` `MEMBER_TOKEN_TTL`).
+model MemberRecognitionSettings {
+  licenseId              BigInt   @id @map("license_id")
+  /// How long a token lives without a visit — sliding, every mint re-signs it.
+  /// 1–365 days (`member_recognition_settings_ttl_check`).
+  tokenTtlSeconds        Int      @default(2592000) @map("token_ttl_seconds")
+  /// Whether agents see possible matches: other customers with the same
+  /// pre-chat username or e-mail, unverified.
+  possibleMatchesEnabled Boolean  @default(true) @map("possible_matches_enabled")
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("member_recognition_settings")
+}
+
+/// An agent's confirmation that two customer records are the same person —
+/// how a member from another device is joined to their earlier record. Joins
+/// the agent's history view only: the day's conversation and the AI's memory
+/// stay keyed by the customer number. Organization-scoped like `Customer`; one
+/// row per pair in canonical order (`customerAId < customerBId`, which also
+/// refuses a self-link); unlinking stamps `unlinkedAt` + `unlinkedBy` (both or
+/// neither) and a relink clears them. The RLS policy refuses a row whose two
+/// customers are not both in the caller's organization.
+model CustomerIdentityLink {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  customerAId    String    @map("customer_a_id") @db.Uuid
+  customerBId    String    @map("customer_b_id") @db.Uuid
+  /// Account ids, no FK — the audit trail records who did what.
+  linkedBy       String    @map("linked_by") @db.Uuid
+  linkedAt       DateTime  @default(now()) @map("linked_at") @db.Timestamptz(6)
+  unlinkedBy     String?   @map("unlinked_by") @db.Uuid
+  unlinkedAt     DateTime? @map("unlinked_at") @db.Timestamptz(6)
+
+  customerA Customer @relation("IdentityLinkA", fields: [customerAId], references: [id], onDelete: Cascade)
+  customerB Customer @relation("IdentityLinkB", fields: [customerBId], references: [id], onDelete: Cascade)
+
+  @@unique([customerAId, customerBId])
+  @@index([customerBId])
+  @@map("customer_identity_links")
 }
 
 /// IP addresses and CIDR ranges permitted to reach the agent/admin panel

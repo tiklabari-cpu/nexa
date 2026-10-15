@@ -16,6 +16,7 @@ export * from './rtm.js';
 export * from './ids.js';
 export * from './id-glossary.js';
 export * from './conversation-day.js';
+export * from './member-recognition.js';
 export * from './realtime-bus.js';
 export * from './widget.js';
 export * from './sales-tracker.js';

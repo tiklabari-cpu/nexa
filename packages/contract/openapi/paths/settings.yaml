@@ -2236,3 +2236,122 @@ sandboxReset:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# --- Member recognition (ID-03 · decision K4 · tm 287) -----------------------
+#
+# Settings › Security › Member recognition: how a returning visitor is
+# recognised by the member token the widget keeps (docs/adr/member-recognition.md).
+#
+# NOT MOUNTED YET. tm 287.1 wrote these path items ahead of their routes;
+# `openapi.yaml` `paths:` gains each one together with the route that serves it
+# (tm 287.2), because `contract-parity.test.ts` refuses an operation the
+# document promises and nothing serves.
+#
+# Licence-scoped, not brand-scoped — no `X-SiyahTus-Brand`: the member token and
+# its key are the licence's, and a member is the same person on every brand's
+# site.
+
+memberRecognition:
+  get:
+    tags: [Settings]
+    operationId: getMemberRecognitionSettings
+    summary: How returning visitors are recognised
+    description: |
+      The member-token lifetime, whether agents see possible matches, the
+      signing key's version and rotation state (never the key itself) and the
+      latest bulk revocation (ID-03 · decision K4). A workspace that never saved
+      these reads the defaults; reading creates nothing.
+
+      `access_rules:ro` (or `:rw`) plus `minimumRole: admin`, like the other
+      Security settings.
+    responses:
+      "200":
+        description: The current settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MemberRecognitionSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Settings]
+    operationId: updateMemberRecognitionSettings
+    summary: Change the token lifetime or the possible-match switch
+    description: |
+      Creates the row on first write; only the fields sent change. A new
+      lifetime applies to the tokens signed from then on — every visit
+      re-signs, so a returning member picks it up on their next visit — and
+      does not cut short a token already issued.
+
+      `access_rules:rw` plus `minimumRole: admin`. Writes an audit entry naming
+      the fields changed and their old and new values.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/MemberRecognitionSettingsInput" }
+    responses:
+      "200":
+        description: The settings after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MemberRecognitionSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+memberRecognitionRotateKey:
+  post:
+    tags: [Settings]
+    operationId: rotateMemberTokenKey
+    summary: Replace the member-token signing key
+    description: |
+      Generates a new signing key. The replaced key stays accepted for
+      `grace_period_seconds` (default 7 days): a member who visits in that time
+      is re-signed under the new key and notices nothing, and a token the old
+      key signed is refused once the window closes — that browser starts again
+      as a new visitor. `0` retires the old key at once, the rotation for a key
+      that may have leaked. One previous key at a time: rotating again inside
+      the window drops the oldest key immediately.
+
+      The key is never returned, by this or any endpoint. `access_rules:rw`
+      plus `minimumRole: admin`; audited.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/MemberKeyRotationInput" }
+    responses:
+      "200":
+        description: The settings, with the new key's version
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MemberRecognitionSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+memberRecognitionRevokeAll:
+  post:
+    tags: [Settings]
+    operationId: revokeAllMemberTokens
+    summary: Forget every returning visitor at once
+    description: |
+      Refuses every member token this licence has issued so far: each browser's
+      next visit is a new anonymous customer, and nobody is recognised until
+      they come back and are given a new token. Earlier conversations stay with
+      their customer records, and agents can still link a member to them.
+
+      `access_rules:rw` plus `minimumRole: admin`; audited.
+    responses:
+      "200":
+        description: The settings, `tokens_revoked_before` now this moment
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MemberRecognitionSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

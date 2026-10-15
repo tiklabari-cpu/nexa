@@ -299,3 +299,171 @@ erase:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# --- Member recognition (ID-03 · decision K4 · tm 287) -----------------------
+#
+# A returning visitor is recognised by the member token the widget keeps, never
+# by a typed username or e-mail (docs/adr/member-recognition.md). These are the
+# customer-side doors: forgetting one member's browsers, the unverified
+# possible matches an agent is shown, and the links an agent confirms.
+#
+# NOT MOUNTED YET. tm 287.1 wrote these path items ahead of their routes;
+# `openapi.yaml` `paths:` gains each one together with the route that serves it
+# — `revokeMemberTokens` with tm 287.2, the possible matches and links with
+# tm 287.4 — because `contract-parity.test.ts` refuses an operation the
+# document promises and nothing serves.
+
+revokeMemberTokens:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Customers]
+    operationId: revokeCustomerMemberTokens
+    summary: Forget this member's browsers
+    description: |
+      Refuses every member token this licence has issued to this customer so
+      far (ID-03 · K4): each of their browsers is a new anonymous visitor on
+      its next visit, and a copied token stops working. The record and its
+      conversations stay — this forgets browsers, it does not ban or erase.
+
+      `customers:rw`, so admins and above today; the Agent role reaches it when
+      the RL-02 permission matrix grants it. Audited. A customer of another
+      organization is a 404.
+    responses:
+      "200":
+        description: Revoked
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MemberTokenRevocation" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+possibleMatches:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Customers]
+    operationId: listCustomerPossibleMatches
+    summary: Other records that may be the same person
+    description: |
+      Other customers of this organization with the same pre-chat username
+      (trimmed and case-folded) or the same e-mail as this one — at most ten,
+      most recently active first (ID-03 · K4).
+
+      **Unverified.** The visitor typed both, so a match is a question for the
+      agent, never an answer: nothing here joins two records, and the AI never
+      sees this list. When the workspace turned possible matches off,
+      `enabled` is false and the list is empty.
+
+      `customers:ro` — every agent sees them; linking needs more.
+    responses:
+      "200":
+        description: The possible matches
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PossibleMatchList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+identityLinks:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Customers]
+    operationId: listCustomerIdentityLinks
+    summary: Records confirmed as the same person
+    description: |
+      The records an agent has linked to this one, most recently linked first —
+      what the agent's merged history view reads (ID-03 · K4). A link that was
+      undone is not listed. `customers:ro`.
+    responses:
+      "200":
+        description: The linked records
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerIdentityLinkList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Customers]
+    operationId: linkCustomerIdentity
+    summary: Confirm that another record is the same person
+    description: |
+      Links the two records for the agent's history view only. The day's
+      conversation (ID-02) and the AI's memory stay with each record's own
+      customer number, so nothing from the linked record reaches the AI
+      (ID-03 · K4).
+
+      A new link answers 201; linking a pair that is already linked changes
+      nothing and answers 200. Linking a record to itself is a 400; a customer
+      of another organization is a 404, whichever of the two it is.
+
+      Team lead and above: `customers:rw` plus `minimumRole: admin` until the
+      RL-01 role set adds the team lead. Writes `customer.identity_linked` to
+      the audit trail.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CustomerIdentityLinkInput" }
+    responses:
+      "200":
+        description: Already linked
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerIdentityLink" }
+      "201":
+        description: Linked
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerIdentityLink" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+identityLink:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: linkedCustomerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Customers]
+    operationId: unlinkCustomerIdentity
+    summary: Undo a link
+    description: |
+      Undoes the confirmation; the two records' histories show apart again.
+      Either record may be named first. Same permission as linking; writes
+      `customer.identity_unlinked`. A 404 when the two are not linked.
+    responses:
+      "204": { description: Unlinked }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

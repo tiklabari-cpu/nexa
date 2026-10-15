@@ -814,7 +814,37 @@ customerToken:
       elsewhere gains no rows here. The issued token carries its workspace's
       region, so presenting it to another deployment, or to that deployment's
       realtime gateway, is refused the same way.
+
+      **Member recognition (ID-03 · decision K4).** A returning visitor is
+      recognised by the *member token* this endpoint gave their browser, not by
+      a `customer_id`: an id identifies, it does not authenticate, and whoever
+      learns a member's id must not be able to open their conversation. The
+      token comes back in the `siyahtus_member` cookie this endpoint sets —
+      `HttpOnly` and `Partitioned`, so page scripts cannot read it and no other
+      site sees it — or, from a browser that will not keep that cookie, as
+      `member_token` in the body, out of the widget's localStorage. The cookie
+      wins when both arrive.
+
+      The token is checked in order: signature, expiry, licence (it must be the
+      one the embedding origin resolved to), then the revocation list. A token
+      that passes means the same customer — and therefore the same conversation
+      day (ID-02) — and is re-signed for the workspace's token lifetime, so the
+      lifetime counts from the last visit. Anything else (no token, an altered,
+      expired, revoked or other licence's one) gets a new anonymous customer,
+      answered exactly like a first visit: neither the status nor the shape of
+      the body says which it was. A username or e-mail typed into the pre-chat
+      form never selects a customer; another device is a new customer until an
+      agent confirms the link.
     security: []
+    parameters:
+      - name: siyahtus_member
+        in: cookie
+        required: false
+        description: |
+          The member token as this endpoint set it (ID-03 · K4). The browser
+          sends it on its own when the widget's request carries credentials;
+          page scripts can neither read nor write it.
+        schema: { type: string, maxLength: 4096 }
     requestBody:
       required: true
       content:
@@ -824,10 +854,25 @@ customerToken:
             required: [organization_id]
             properties:
               organization_id: { type: string, format: uuid }
+              member_token:
+                type: string
+                maxLength: 4096
+                description: |
+                  The member token from the widget's localStorage, sent only by
+                  a browser that would not keep the `siyahtus_member` cookie
+                  (ID-03 · K4); ignored when the cookie arrives too. An invalid
+                  one is not an error: the visitor is treated as new, exactly as
+                  with none.
               customer_id:
                 type: string
                 format: uuid
-                description: Returning visitor. A new customer is created when omitted.
+                description: |
+                  The id a widget from before member tokens kept in
+                  localStorage. It identifies, it does not authenticate: a
+                  customer who holds a member token is reached only through that
+                  token, and a `customer_id` without one gets a new anonymous
+                  customer. A visitor from before member tokens is moved onto
+                  one once, during a transition period.
               host_origin:
                 type: string
                 maxLength: 2048
@@ -837,6 +882,15 @@ customerToken:
     responses:
       "200":
         description: Customer token issued
+        headers:
+          Set-Cookie:
+            description: |
+              `siyahtus_member=<member token>; Max-Age=<token lifetime>; Secure;
+              HttpOnly; SameSite=None; Partitioned`, its `Path` limited to this
+              endpoint — on every 200, carrying the token just re-signed
+              (ID-03 · K4). Partitioned (CHIPS): the browser keeps a separate
+              one per embedding site and never sends one site's to another.
+            schema: { type: string }
         content:
           application/json:
             schema:
@@ -847,6 +901,25 @@ customerToken:
                 expires_in: { type: integer }
                 customer_id: { type: string, format: uuid }
                 organization_id: { type: string, format: uuid }
+                member_token:
+                  type: string
+                  description: |
+                    The member token this response re-signed (ID-03 · K4), for
+                    a browser that has to keep it itself: present whenever the
+                    request did not arrive with a valid `siyahtus_member`
+                    cookie, a first visit included. The widget stores it in its
+                    localStorage and sends it back as `member_token`. Absent
+                    when the cookie carried the token — the widget then deletes
+                    its own copy, so the token lives only where page scripts
+                    cannot read it. Opaque; its format is the server's.
+                member_token_expires_at:
+                  type: string
+                  format: date-time
+                  description: |
+                    When the member token this response issued expires unless
+                    the member comes back first — every visit re-signs it for
+                    the workspace's token lifetime (`token_ttl_seconds` in
+                    Settings › Security › Member recognition).
                 widget:
                   allOf:
                     - $ref: "../openapi.yaml#/components/schemas/WidgetAppearance"

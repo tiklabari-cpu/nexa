@@ -926,6 +926,13 @@ export function InboxPage(): ReactElement {
                   chat={chat.data}
                   chatId={selectedId}
                   onCollapse={() => rightPanel.setExpanded(true)}
+                  // Where a Reopen landed when it was another chat (ID-02-S6) —
+                  // opened under "All", as a deep link is, so the selection
+                  // check finds it whichever view the agent reopened from.
+                  onOpenChat={(id) => {
+                    setSelection({ kind: 'chat', view: 'all' });
+                    setSelectedId(id);
+                  }}
                 />
               ))}
           </>

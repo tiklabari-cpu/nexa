@@ -21,11 +21,18 @@
  *     (`day_rollover`). A live conversation that crosses midnight is never
  *     split — it stays under the day it started on (K3).
  *
+ * The agent paths (tm 286.3) decide with the same facts: `POST /chats` opens a
+ * connection in the member's day exactly as a visitor's message would, and
+ * `reopensInPlace` says whether an agent's "Reopen" continues the chat itself
+ * or — for a chat filed under an earlier day — today's (ID-02-S6). Which team a
+ * connection went to is `connectionGroup`; `listDayConnections` is the read the
+ * day's later readers (AI-02's "earlier today") are built on.
+ *
  * The clock is the caller's (`ChatService`'s injectable `now`), so a test can
  * move the day without waiting for one.
  */
 import { Prisma } from '@prisma/client';
-import { localDayKey, type ConnectionOpenedVia } from '@siyahtus/types';
+import { isConnectionOpenedVia, localDayKey, type ConnectionOpenedVia } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { readDayBoundary } from './day-boundary.js';
 
@@ -98,6 +105,38 @@ export async function connectionIdleSeconds(tx: TenantClient): Promise<number> {
 }
 
 /**
+ * Whether a conversation arrived over a messaging channel (WhatsApp, Telegram,
+ * …): it has an inbound `channel_messages` row — the fact the idle sweep, the
+ * inbox's channel views and Reports' channel split all read.
+ */
+export async function arrivedOverChannel(tx: TenantClient, chatId: string): Promise<boolean> {
+  const rows = await tx.$queryRaw<Array<{ on_channel: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1 FROM channel_messages WHERE chat_id = ${chatId} AND direction = 'inbound'
+    ) AS on_channel`;
+  return rows[0]?.on_channel === true;
+}
+
+/**
+ * How long an open connection filed under an earlier day may stay silent and
+ * still take the next message (tm 286.3): exactly the window the idle sweep
+ * would have closed it on (`chat-timeout.ts`) — the workspace's own timeout,
+ * else K2's 30 minutes for a widget conversation — so "rolled over at the turn
+ * of the day" and "closed by the sweep" can never disagree about whether a
+ * connection is over. Null when nothing ends it by silence: a conversation that
+ * arrived over a messaging channel, in a workspace that set no timeout, stays
+ * open (K2 is a widget rule), and the turn of the day does not split it either.
+ */
+export async function rolloverIdleSeconds(
+  tx: TenantClient,
+  chatId: string,
+): Promise<number | null> {
+  const configured = await readChatTimeoutSeconds(tx);
+  if (typeof configured === 'number' && configured > 0) return configured;
+  return (await arrivedOverChannel(tx, chatId)) ? null : DEFAULT_CONNECTION_IDLE_SECONDS;
+}
+
+/**
  * Whether a visitor message arriving `now` continues the member's open
  * connection (05 ID-02, coding logic 2a).
  *
@@ -107,7 +146,9 @@ export async function connectionIdleSeconds(tx: TenantClient): Promise<number> {
  *     yes — a conversation that crosses midnight is not split (K3; scenario 5);
  *   - a chat filed under an earlier day and silent for longer: no — the
  *     connection is closed as a `day_rollover` and the message opens today's
- *     (scenario 6).
+ *     (scenario 6);
+ *   - no window at all (`idleSeconds` null — `rolloverIdleSeconds`): yes,
+ *     however long the silence.
  *
  * Keys compare as strings: `YYYY-MM-DD` sorts as dates do. A chat filed under a
  * *later* key than today's (the boundary moved east since it opened) counts as
@@ -119,10 +160,102 @@ export function continuesConnection(input: {
   today: string;
   lastActivityAt: Date;
   now: Date;
-  idleSeconds: number;
+  idleSeconds: number | null;
 }): boolean {
   if (input.chatDay === null || input.chatDay >= input.today) return true;
+  if (input.idleSeconds === null) return true;
   return input.now.getTime() - input.lastActivityAt.getTime() <= input.idleSeconds * 1000;
+}
+
+/**
+ * Whether an agent's "Reopen" continues the conversation in the chat itself
+ * (05 ID-02 coding logic 3; ID-02-S6 · tm 286.3). Yes for a chat filed under
+ * today (or a later key — the boundary moved east), and for a chat filed under
+ * no day: opened before the daily model, it keeps the model it was opened in,
+ * the same rule its open half follows (`continuesConnection`). No for a chat
+ * filed under an earlier day — a day that has ended gains no connection; the
+ * conversation continues under the member's chat for today.
+ */
+export function reopensInPlace(input: { chatDay: string | null; today: string }): boolean {
+  return input.chatDay === null || input.chatDay >= input.today;
+}
+
+/**
+ * The team a connection went to (`threads.group_id`, tm 286.3): the one team
+ * it was routed or opened to, or null when there was none — or several named
+ * at once, where picking one would invent a fact the chat's `access` already
+ * records as a set.
+ */
+export function connectionGroup(groupIds: readonly bigint[]): bigint | null {
+  return groupIds.length === 1 ? groupIds[0]! : null;
+}
+
+/** One earlier connection of a member's day, as `listDayConnections` returns it. */
+export interface DayConnection {
+  /** The connection — "Chat ID" in the panel (`threads.id`). */
+  id: string;
+  createdAt: Date;
+  closedAt: Date | null;
+  openedVia: ConnectionOpenedVia | null;
+  assigneeId: string | null;
+  groupId: bigint | null;
+  /** The connection's summary, when one was written (`threads.summary`). */
+  summary: string | null;
+  /** Tag names, sorted. */
+  tags: string[];
+}
+
+/**
+ * The member's other connections of the day (05 ID-02 api; the AI-02 hook —
+ * "you wrote earlier today about …"): every connection of `chatId`'s day except
+ * `excludeThreadId` (the one being answered), oldest first, with what an
+ * assistant may recall about each — when it was, its summary, its tags — and
+ * never its transcript (read that with `ChatService.listEvents` and the id).
+ *
+ * A chat filed under no day is not a day: its older threads are earlier visits
+ * spread over its whole history, so — the rule `Chat.connections` follows — it
+ * offers only its newest connection, and nothing once that one is excluded.
+ * Runs on the caller's tenant transaction, so RLS decides what exists: another
+ * workspace's chat id reads as an empty day, never as an error that confirms it.
+ */
+export async function listDayConnections(
+  tx: TenantClient,
+  chatId: string,
+  options: { excludeThreadId?: string } = {},
+): Promise<DayConnection[]> {
+  const chat = await tx.chat.findUnique({
+    where: { id: chatId },
+    select: {
+      localDay: true,
+      threads: {
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          createdAt: true,
+          closedAt: true,
+          openedVia: true,
+          assigneeId: true,
+          groupId: true,
+          summary: true,
+          tags: { select: { tag: { select: { name: true } } } },
+        },
+      },
+    },
+  });
+  if (!chat) return [];
+  const threads = chat.localDay ? chat.threads : chat.threads.slice(-1);
+  return threads
+    .filter((thread) => thread.id !== options.excludeThreadId)
+    .map((thread) => ({
+      id: thread.id,
+      createdAt: thread.createdAt,
+      closedAt: thread.closedAt,
+      openedVia: isConnectionOpenedVia(thread.openedVia) ? thread.openedVia : null,
+      assigneeId: thread.assigneeId,
+      groupId: thread.groupId,
+      summary: thread.summary,
+      tags: thread.tags.map((t) => t.tag.name).sort(),
+    }));
 }
 
 /**

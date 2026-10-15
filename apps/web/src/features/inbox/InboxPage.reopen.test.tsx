@@ -10,7 +10,7 @@
  * from the server test alone; both are wiring `InboxPage` owns.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -176,5 +176,116 @@ describe('reopening an archived chat from the Details panel (FR-MOD-02.6)', () =
       screen.queryByText('This conversation is archived. Reopen it to reply.'),
     ).not.toBeInTheDocument();
     expect(await screen.findByPlaceholderText(/Type your reply/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * A chat filed under an earlier day is not reopened in place (ID-02-S6 · tm
+ * 286.3): the conversation continues under the member's chat for today, and
+ * `POST /resume` answers with *that* chat. The console has to follow it there —
+ * otherwise the agent is left on yesterday's archived transcript while the
+ * conversation they just reopened lives somewhere else.
+ */
+describe("reopening an earlier day's chat (ID-02-S6)", () => {
+  const OLD = 'CHAT-YESTERDAY';
+  const TODAY = 'CHAT-TODAY';
+  let reopened = false;
+
+  const summary = (id: string, isActive: boolean, text: string) => ({
+    id,
+    customer_id: 'cust-1',
+    customer_name: 'Ada Visitor',
+    active: isActive,
+    created_at: '2026-10-15T09:00:00.000Z',
+    thread_id: `${id}-T`,
+    assignee_id: null,
+    queue_position: null,
+    unread_count: 0,
+    connection_count: 1,
+    last_event: { ...FIRST_MESSAGE, id: `${id}-T_1`, chat_id: id, text },
+    tags: [],
+  });
+
+  const detail = (id: string, isActive: boolean) => ({
+    id,
+    license_id: '1',
+    customer_id: 'cust-1',
+    active: isActive,
+    created_at: '2026-10-15T09:00:00.000Z',
+    access: { group_ids: [] },
+    users: [],
+    thread: {
+      id: `${id}-T`,
+      chat_id: id,
+      active: isActive,
+      assignee_id: null,
+      queue_position: null,
+      summary: null,
+      created_at: '2026-10-15T09:00:00.000Z',
+      closed_at: isActive ? null : '2026-10-15T10:30:00.000Z',
+      tags: [],
+    },
+    local_day: id === OLD ? '2026-10-15' : '2026-10-16',
+    connections: [],
+  });
+
+  beforeEach(() => {
+    reopened = false;
+    api.get.mockImplementation((url: string) => {
+      if (url.startsWith('/chats?')) {
+        const items =
+          viewOf(url) === 'all'
+            ? [
+                ...(reopened ? [summary(TODAY, true, 'Chat reopened')] : []),
+                summary(OLD, false, 'Still waiting on my order'),
+              ]
+            : [];
+        return Promise.resolve({ items, total: items.length });
+      }
+      if (url === `/chats/${OLD}`) return Promise.resolve(detail(OLD, false));
+      if (url === `/chats/${TODAY}`) return Promise.resolve(detail(TODAY, true));
+      if (url.startsWith(`/chats/${OLD}/events`)) {
+        return Promise.resolve({ items: [{ ...FIRST_MESSAGE, chat_id: OLD }] });
+      }
+      if (url.startsWith(`/chats/${TODAY}/events`)) {
+        return Promise.resolve({
+          items: [
+            {
+              ...RESUMED_EVENT,
+              id: `${TODAY}-T_1`,
+              chat_id: TODAY,
+              thread_id: `${TODAY}-T`,
+              text: 'Chat reopened',
+              properties: { system_event: 'chat_resumed', continued_from_chat_id: OLD },
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ items: [], total: 0 });
+    });
+    api.post.mockImplementation((url: string) => {
+      if (url === `/chats/${OLD}/resume`) {
+        reopened = true;
+        return Promise.resolve(detail(TODAY, true));
+      }
+      return Promise.resolve({});
+    });
+  });
+
+  it("moves the console to today's chat, where the reopened conversation now lives", async () => {
+    const user = userEvent.setup();
+    renderInbox();
+
+    await user.click(await screen.findByRole('button', { name: 'Reopen conversation' }));
+
+    expect(api.post).toHaveBeenCalledWith(`/chats/${OLD}/resume`);
+    // Today's chat is the one open: its transcript, and a composer that writes.
+    const transcript = await screen.findByRole('log', { name: 'Conversation transcript' });
+    expect(await within(transcript).findByText('Chat reopened')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/Type your reply/)).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith(`/chats/${TODAY}`);
+    expect(
+      screen.queryByText('This conversation is archived. Reopen it to reply.'),
+    ).not.toBeInTheDocument();
   });
 });

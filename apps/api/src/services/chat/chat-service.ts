@@ -21,6 +21,7 @@ import {
   AGENT_COMPOSING_TTL_SECONDS,
   buildEventId,
   composerStateKey,
+  CONTINUED_FROM_CHAT_PROPERTY,
   EDITED_AT_PROPERTY,
   EDITED_BY_PROPERTY,
   generateShortId,
@@ -71,10 +72,12 @@ import {
 } from './access.js';
 import {
   ConnectionRaceLost,
-  connectionIdleSeconds,
+  connectionGroup,
   continuesConnection,
   isConnectionRace,
+  reopensInPlace,
   resolveLocalDay,
+  rolloverIdleSeconds,
   visitorOpenedVia,
   type ConversationDay,
 } from './conversation-day.js';
@@ -183,8 +186,57 @@ type ConnectionOutcome =
       openedVia: ConnectionOpenedVia;
       event: SerialisedEvent;
       /** Yesterday's silent connection, closed under the member on the way in. */
-      rolledOver: { chatId: string; close: CloseResult } | null;
+      rolledOver: RolledOver | null;
     };
+
+/** Yesterday's silent connection, closed at the turn of the day (`day_rollover`). */
+interface RolledOver {
+  chatId: string;
+  close: CloseResult;
+}
+
+/**
+ * Who a connection goes to (ID-02 · tm 286.3) — the routing decision, the
+ * team(s) named by the caller, or an agent taking it themselves.
+ */
+interface ConnectionRoute {
+  /** Teams the chat's access gains. Added, never replacing (ID-02-S7). */
+  groupIds: bigint[];
+  assigneeId: string | null;
+  queuePosition: number | null;
+  /** The one team the connection went to — `threads.group_id` (`connectionGroup`). */
+  groupId: bigint | null;
+}
+
+/** The line a further connection opens with, if any — how the transcript marks where it begins. */
+interface ConnectionMarker {
+  authorId: string | null;
+  text: string;
+  recipients: EventRecipients;
+  properties: Record<string, unknown>;
+}
+
+/** `start`'s transaction answer, before anything is announced (tm 286.3). */
+type StartOutcome =
+  | { kind: 'existing'; chat: ChatRow }
+  | {
+      kind: 'opened';
+      chat: ChatRow;
+      /** True when the day's chat was created by this start, false for a further connection. */
+      createdChat: boolean;
+      threadId: string;
+      rolledOver: RolledOver | null;
+      /** The initial event's idempotency key, registered once the transaction commits. */
+      registration: { key: string; eventId: string } | null;
+    };
+
+/** `resume`'s transaction answer: the chat the conversation continues in, and the connection. */
+interface ResumeOutcome {
+  chat: ChatRow;
+  /** True when the reopening opened the member's chat for today. */
+  createdChat: boolean;
+  threadId: string;
+}
 
 /**
  * Delivers an agent's reply out through the channel a conversation arrived on.
@@ -389,6 +441,26 @@ export class ChatService {
   // Writes
   // -------------------------------------------------------------------------
 
+  /**
+   * An agent (or bot) starts a conversation with a customer — `POST /chats`
+   * (ID-02 · tm 286.3, 05 coding logic 3).
+   *
+   * The customer's open conversation is reused when there is one, by the
+   * visitor's own rule (`openOrContinueConnection` 2a), so an agent and the
+   * member can never disagree about whether yesterday's connection is still
+   * going: it is reused unless it is filed under an earlier day and has been
+   * silent past the idle window, in which case it is closed as a
+   * `day_rollover` first. Otherwise the conversation opens in the member's day
+   * — a further connection under the day's chat when the member already has
+   * one (its team(s) added to the chat's access, `chat.connection_opened` in
+   * the trail), the day's chat itself when not — opened as `agent_start`
+   * either way: what opened it is the agent, even when yesterday's connection
+   * had to be closed on the way in. A race (another tab, the member writing at
+   * the same moment) is retried once, the visitor path's rule.
+   *
+   * `created` is true whenever a connection was opened, so the route answers
+   * 201 for a further connection under an existing chat as well.
+   */
   async start(
     tenant: TenantContext,
     principal: Principal,
@@ -398,17 +470,50 @@ export class ChatService {
       assignToMe: boolean;
       initialEvent?: NewEventInput;
       routing?: RoutingContext;
+      /**
+       * The request's audit context: a further connection under the day's
+       * archived chat is recorded against it (`chat.connection_opened`), and a
+       * rollover close as the system's, built from it with the person removed.
+       */
+      audit: AuditContext;
     },
   ): Promise<{ chat: ChatDetail; created: boolean }> {
-    const result = await this.#startInTransaction(tenant, principal, input);
-
-    // Only on an actual creation: `start` is idempotent on an existing active
-    // chat, and re-announcing one moves nobody.
-    if (result.created && result.raw) {
-      await this.#announceOpenedConnection(tenant, principal, result.raw, result.chat, null);
+    // One instant for both attempts, as on the visitor's path.
+    const now = this.now();
+    let outcome: StartOutcome;
+    try {
+      outcome = await this.#startInTransaction(tenant, principal, input, now);
+    } catch (error) {
+      if (!isConnectionRace(error)) throw error;
+      outcome = await this.#startInTransaction(tenant, principal, input, now);
     }
 
-    return { chat: result.chat, created: result.created };
+    // Reusing an open conversation creates nothing, and re-announcing one
+    // moves nobody.
+    if (outcome.kind === 'existing') return { chat: serialiseChat(outcome.chat), created: false };
+
+    // After commit: a key pointing at an event that was rolled back would make
+    // the retry replay something that does not exist.
+    if (outcome.registration) {
+      await this.redis.set(
+        outcome.registration.key,
+        outcome.registration.eventId,
+        'EX',
+        IDEMPOTENCY_TTL_SECONDS,
+        'NX',
+      );
+    }
+    if (outcome.rolledOver) await this.#announceRollover(tenant, outcome.rolledOver);
+
+    const detail = serialiseChat(outcome.chat);
+    await this.#announceOpenedConnection(
+      tenant,
+      principal,
+      outcome.chat,
+      detail,
+      outcome.createdChat ? null : { threadId: outcome.threadId, openedVia: 'agent_start' },
+    );
+    return { chat: detail, created: true };
   }
 
   /**
@@ -471,14 +576,13 @@ export class ChatService {
       assignToMe: boolean;
       initialEvent?: NewEventInput;
       routing?: RoutingContext;
+      audit: AuditContext;
     },
-  ): Promise<{ chat: ChatDetail; created: boolean; raw?: ChatRow }> {
+    now: Date,
+  ): Promise<StartOutcome> {
     const actorId = actorOf(principal);
-    // A holder rather than a plain `let`: the assignment happens inside the
-    // transaction callback, and TypeScript cannot see that the callback ran.
-    const registration: { value?: { key: string; eventId: string } } = {};
 
-    const result = await withTenant(this.db, tenant, async (tx) => {
+    return withTenant(this.db, tenant, async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: input.customerId },
         select: { id: true, bannedAt: true },
@@ -486,26 +590,72 @@ export class ChatService {
       if (!customer) throw ApiError.notFound('Customer not found.');
       if (customer.bannedAt) throw new ApiError('customer_banned', 'This customer is banned.');
 
+      const day = await resolveLocalDay(tx, now);
+
       // Reusing an existing active chat is not just convenience: the database
       // refuses a second one, so the alternative is an error the caller can do
       // nothing useful with.
-      const existing = await tx.chat.findFirst({
+      const open = await tx.chat.findFirst({
         where: { customerId: input.customerId, active: true },
         include: chatInclude,
       });
-      if (existing) return { chat: serialiseChat(existing), created: false };
+      let rolledOver: RolledOver | null = null;
+      if (open) {
+        const openThread = open.threads.find((t) => t.active);
+        // An active chat with no active thread is a broken record, not a day
+        // boundary; it is handed back as it always was.
+        if (!openThread) return { kind: 'existing', chat: open };
+        // Locked before the activity is read, for `#connectInTransaction`'s
+        // reason: a chat from an earlier day may be about to be closed here.
+        const chatDay = localDayOf(open.localDay);
+        if (chatDay !== null && chatDay < day.key && !(await lockActiveChat(tx, open.id))) {
+          throw new ConnectionRaceLost('the open chat closed');
+        }
+        if (await openChatTakesMessage(tx, open, openThread, now, day)) {
+          return { kind: 'existing', chat: open };
+        }
+        rolledOver = await this.#rollOver(tx, tenant, open, openThread, input.audit);
+      }
 
-      const chat = await this.#createChatWithThread(tx, {
-        licenseId: tenant.licenseId,
-        customerId: input.customerId,
-        ...(await this.#routeNewChat(tx, tenant, { ...input, actorId })),
+      const route = () => this.#routeNewChat(tx, tenant, { ...input, actorId });
+      const dayChat = await tx.chat.findFirst({
+        where: { customerId: input.customerId, localDay: day.date },
+        include: chatInclude,
       });
+      let chatId: string;
+      let threadId: string;
+      if (dayChat) {
+        chatId = dayChat.id;
+        ({ threadId } = await this.#openFurtherConnection(tx, tenant, dayChat, {
+          openedVia: 'agent_start',
+          route,
+          // No marker: the agent's own opening line, when there is one, is
+          // where the connection visibly begins.
+          marker: null,
+          audit: {
+            context: input.audit,
+            action: 'chat.connection_opened',
+            metadata: { opened_via: 'agent_start' },
+          },
+        }));
+      } else {
+        const created = await this.#createChatWithThread(tx, {
+          licenseId: tenant.licenseId,
+          customerId: input.customerId,
+          ...(await route()),
+          day,
+          openedVia: 'agent_start',
+        });
+        chatId = created.id;
+        threadId = created.threads[0]!.id;
+      }
 
+      let registration: { key: string; eventId: string } | null = null;
       if (input.initialEvent) {
         const initial = await this.#appendEvent(tx, {
           licenseId: tenant.licenseId,
-          chatId: chat.id,
-          threadId: chat.threads[0]!.id,
+          chatId,
+          threadId,
           authorId: actorId,
           authorType: authorTypeOf(principal),
           input: {
@@ -516,38 +666,66 @@ export class ChatService {
 
         // Registered under the same key `sendEvent` checks.
         //
-        // A widget retrying a timed-out first message finds the chat already
-        // created and takes the `sendEvent` path instead of this one. Without
-        // this the key would be unknown there, and the visitor's opening line
-        // would be posted twice.
+        // A client retrying a timed-out start finds the conversation open and
+        // takes the `sendEvent` path instead of this one. Without this the key
+        // would be unknown there, and the opening line would be posted twice.
         if (input.initialEvent.idempotencyKey) {
-          registration.value = {
-            key: idempotencyRedisKey(tenant, chat.id, input.initialEvent.idempotencyKey),
+          registration = {
+            key: idempotencyRedisKey(tenant, chatId, input.initialEvent.idempotencyKey),
             eventId: initial.id,
           };
         }
       }
 
-      const reloaded = await tx.chat.findUniqueOrThrow({
-        where: { id: chat.id },
-        include: chatInclude,
-      });
-      return { chat: serialiseChat(reloaded), created: true, raw: reloaded };
+      const chat = await tx.chat.findUniqueOrThrow({ where: { id: chatId }, include: chatInclude });
+      return {
+        kind: 'opened',
+        chat,
+        createdChat: dayChat === null,
+        threadId,
+        rolledOver,
+        registration,
+      };
     });
+  }
 
-    // After commit: a key pointing at an event that was rolled back would make
-    // the retry replay something that does not exist.
-    if (registration.value) {
-      await this.redis.set(
-        registration.value.key,
-        registration.value.eventId,
-        'EX',
-        IDEMPOTENCY_TTL_SECONDS,
-        'NX',
-      );
-    }
+  /**
+   * Close the member's open connection at the turn of the day (`day_rollover`,
+   * 05 ID-02 2a): filed under an earlier day and silent past the idle window.
+   * Nobody closed it — the day turned while it was silent — so the trail names
+   * the system; the request that noticed is kept for correlation, the person
+   * is not (the timeout sweep's rule, `chat-timeout.ts`).
+   */
+  async #rollOver(
+    tx: TenantClient,
+    tenant: TenantContext,
+    open: ChatRow,
+    openThread: { id: string; createdAt: Date; firstResponseAt: Date | null },
+    audit: AuditContext,
+  ): Promise<RolledOver> {
+    return {
+      chatId: open.id,
+      close: await this.#closeConversation(tx, tenant, open, openThread, {
+        authorId: null,
+        text: 'Chat closed at the end of the day',
+        properties: { system_event: 'chat_deactivated', reason: 'day_rollover' },
+        audit: { ...audit, actorId: null, actorType: 'system', ip: null },
+      }),
+    };
+  }
 
-    return result;
+  /**
+   * Announce a rollover close once it has committed, before the connection
+   * that replaced it — in the order they happened. It is closed exactly as the
+   * idle sweep would have closed it, so it is announced, counted and mailed
+   * the same way.
+   */
+  async #announceRollover(tenant: TenantContext, rolledOver: RolledOver): Promise<void> {
+    const { chatId, close } = rolledOver;
+    await this.#publishDeactivation(tenant, chatId, close, null);
+    await this.#emitDeactivation(tenant, chatId, close);
+    await this.#recordConversions(tenant, close);
+    await this.#emailTranscript(tenant, chatId, close.threadId);
   }
 
   /**
@@ -564,17 +742,19 @@ export class ChatService {
       actorId: string;
       routing?: RoutingContext;
     },
-  ): Promise<{ groupIds: bigint[]; assigneeId: string | null; queuePosition: number | null }> {
+  ): Promise<ConnectionRoute> {
     const decision = input.groupIds?.length
       ? null
       : await this.routing.route(tx, tenant.licenseId, input.routing ?? {});
 
+    const groupIds = input.groupIds?.length
+      ? input.groupIds
+      : (decision?.groupIds ?? (await defaultGroupIds(tx, tenant.licenseId)));
     return {
-      groupIds: input.groupIds?.length
-        ? input.groupIds
-        : (decision?.groupIds ?? (await defaultGroupIds(tx, tenant.licenseId))),
+      groupIds,
       assigneeId: input.assignToMe ? input.actorId : (decision?.assigneeId ?? null),
       queuePosition: input.assignToMe ? null : (decision?.queuePosition ?? null),
+      groupId: connectionGroup(groupIds),
     };
   }
 
@@ -590,20 +770,30 @@ export class ChatService {
     tenant: TenantContext,
     dayChat: ChatRow,
     routing: RoutingContext | undefined,
-  ): Promise<{ groupIds: bigint[]; assigneeId: string | null; queuePosition: number | null }> {
+  ): Promise<ConnectionRoute> {
     // Newest first (`chatInclude`), so this is the most recent agent the
     // member actually had today — a connection that ended unassigned (queued,
     // or answered by the AI alone) is skipped rather than ending the search.
-    const previous = dayChat.threads.find((t) => t.assigneeId !== null)?.assigneeId ?? null;
-    if (previous && (await this.routing.assignIfAvailable(tx, tenant.licenseId, previous))) {
-      // The day's chat already carries the team that agent took it in.
-      return { groupIds: [], assigneeId: previous, queuePosition: null };
+    const previous = dayChat.threads.find((t) => t.assigneeId !== null) ?? null;
+    if (
+      previous?.assigneeId &&
+      (await this.routing.assignIfAvailable(tx, tenant.licenseId, previous.assigneeId))
+    ) {
+      // The day's chat already carries the team that agent took it in, and the
+      // connection goes to that same team.
+      return {
+        groupIds: [],
+        assigneeId: previous.assigneeId,
+        queuePosition: null,
+        groupId: previous.groupId,
+      };
     }
     const decision = await this.routing.route(tx, tenant.licenseId, routing ?? {});
     return {
       groupIds: decision.groupIds,
       assigneeId: decision.assigneeId,
       queuePosition: decision.queuePosition,
+      groupId: connectionGroup(decision.groupIds),
     };
   }
 
@@ -622,6 +812,7 @@ export class ChatService {
       const open = await tx.chat.findFirst({
         where: { customerId, active: true },
         select: {
+          id: true,
           localDay: true,
           threads: { where: { active: true }, select: { id: true, createdAt: true }, take: 1 },
         },
@@ -714,15 +905,8 @@ export class ChatService {
     }
 
     // Yesterday's connection is announced closed before today's opens, in the
-    // order they happened; it is closed exactly as the idle sweep would have
-    // closed it, so it is announced, counted and mailed the same way.
-    if (outcome.rolledOver) {
-      const { chatId, close } = outcome.rolledOver;
-      await this.#publishDeactivation(tenant, chatId, close, null);
-      await this.#emitDeactivation(tenant, chatId, close);
-      await this.#recordConversions(tenant, close);
-      await this.#emailTranscript(tenant, chatId, close.threadId);
-    }
+    // order they happened.
+    if (outcome.rolledOver) await this.#announceRollover(tenant, outcome.rolledOver);
 
     const detail = serialiseChat(outcome.chat);
     await this.#announceOpenedConnection(
@@ -813,34 +997,43 @@ export class ChatService {
       );
       if (replay) return { kind: 'replayed', chat: dayChat ?? open!, event: replay };
 
-      let rolledOver: { chatId: string; close: CloseResult } | null = null;
-      if (open && openThread) {
-        rolledOver = {
-          chatId: open.id,
-          close: await this.#closeConversation(tx, tenant, open, openThread, {
-            authorId: null,
-            text: 'Chat closed at the end of the day',
-            properties: { system_event: 'chat_deactivated', reason: 'day_rollover' },
-            // Nobody closed it: the day turned while it was silent. The
-            // request that noticed is kept for correlation, the person is not —
-            // the timeout sweep's rule (`chat-timeout.ts`).
-            audit: { ...input.audit, actorId: null, actorType: 'system', ip: null },
-          }),
-        };
-      }
+      const rolledOver =
+        open && openThread ? await this.#rollOver(tx, tenant, open, openThread, input.audit) : null;
       const openedVia = visitorOpenedVia({
         rolledOver: rolledOver !== null,
         dayChatExists: dayChat !== null,
       });
 
       if (dayChat) {
-        return {
-          kind: 'opened',
-          createdChat: false,
+        const { threadId } = await this.#openFurtherConnection(tx, tenant, dayChat, {
           openedVia,
-          rolledOver,
-          ...(await this.#openFurtherConnection(tx, tenant, dayChat, openedVia, input, append)),
-        };
+          route: () => this.#routeReturn(tx, tenant, dayChat, input.routing),
+          // For the agents only: the visitor is simply talking, and a line
+          // telling them they came back would be the product narrating them to
+          // themselves. Before the message, so the connection reads in the
+          // order it happened.
+          marker: {
+            authorId: null,
+            text:
+              openedVia === 'day_rollover'
+                ? 'Customer is back for the new day'
+                : 'Customer reconnected the same day',
+            recipients: 'agents',
+            properties: { system_event: 'connection_opened', opened_via: openedVia },
+          },
+          // What the visitor's message did, in the trail.
+          audit: {
+            context: input.audit,
+            action: 'chat.connection_opened',
+            metadata: { opened_via: openedVia },
+          },
+        });
+        const event = await append(tx, dayChat.id, threadId);
+        const chat = await tx.chat.findUniqueOrThrow({
+          where: { id: dayChat.id },
+          include: chatInclude,
+        });
+        return { kind: 'opened', chat, createdChat: false, threadId, openedVia, event, rolledOver };
       }
 
       const created = await this.#createChatWithThread(tx, {
@@ -873,18 +1066,38 @@ export class ChatService {
   }
 
   /**
-   * The member back the same day (05 ID-02 2b): the day's chat is reopened and
-   * a further connection opened under it — no new chat, so the day keeps one
-   * Thread ID.
+   * A further connection under the member's chat for today (05 ID-02 2b and
+   * 3): the day's chat is reopened and a connection opened under it — no new
+   * chat, so the day keeps one Thread ID.
+   *
+   * Shared by the three ways a day gains a connection after its first: the
+   * member coming back (`same_day_return`, or `day_rollover` once yesterday's
+   * was closed on the way in), an agent starting a conversation
+   * (`agent_start`), and an agent reopening an earlier day's conversation
+   * (`agent_reopen`, ID-02-S6). They differ in who the connection goes to
+   * (`route`), the line that marks where it begins (`marker`), and what the
+   * trail calls the opening (`audit`); the rest — the conditional reopen, the
+   * additive access, who is present, the thread itself — is one rule. The
+   * caller appends whatever the connection opens with (the visitor's message,
+   * the agent's first line) and reloads the chat.
    */
   async #openFurtherConnection(
     tx: TenantClient,
     tenant: TenantContext,
     dayChat: ChatRow,
-    openedVia: ConnectionOpenedVia,
-    input: ConnectionInput,
-    append: (tx: TenantClient, chatId: string, threadId: string) => Promise<SerialisedEvent>,
-  ): Promise<{ chat: ChatRow; threadId: string; event: SerialisedEvent }> {
+    opening: {
+      openedVia: ConnectionOpenedVia;
+      /** Who the connection goes to — asked once the reopen has won its race. */
+      route: () => Promise<ConnectionRoute>;
+      marker: ConnectionMarker | null;
+      audit: {
+        context: AuditContext;
+        action: 'chat.connection_opened' | 'chat.reopened';
+        /** Beside the new connection's `thread_id`. */
+        metadata: Record<string, unknown>;
+      };
+    },
+  ): Promise<{ threadId: string }> {
     // Conditional, so a second tab reopening the same chat at the same moment
     // waits on this row, finds it already open, and retries into the
     // connection this one opened rather than opening a second.
@@ -894,7 +1107,7 @@ export class ChatService {
     });
     if (reopened.count === 0) throw new ConnectionRaceLost('the day chat was reopened');
 
-    const route = await this.#routeReturn(tx, tenant, dayChat, input.routing);
+    const route = await opening.route();
     // ID-02-S7: the team this connection was routed to joins the chat's
     // access, and the teams of the day's earlier connections keep theirs — a
     // returning member's whole day stays readable to everyone who handled part
@@ -925,47 +1138,25 @@ export class ChatService {
         licenseId: tenant.licenseId,
         active: true,
         assigneeId: route.assigneeId,
-        openedVia,
+        groupId: route.groupId,
+        openedVia: opening.openedVia,
         ...(route.queuePosition != null
           ? { queuePosition: route.queuePosition, queuedAt: new Date() }
           : {}),
       },
     });
 
-    // For the agents only: the visitor is simply talking, and a line telling
-    // them they came back would be the product narrating them to themselves.
-    // Before the message, so the connection reads in the order it happened.
-    await this.#appendEvent(tx, {
-      licenseId: tenant.licenseId,
-      chatId: dayChat.id,
-      threadId,
-      authorId: null,
-      authorType: 'system',
-      input: {
-        type: 'system_message',
-        text:
-          openedVia === 'day_rollover'
-            ? 'Customer is back for the new day'
-            : 'Customer reconnected the same day',
-        recipients: 'agents',
-        properties: { system_event: 'connection_opened', opened_via: openedVia },
-      },
-    });
-    const event = await append(tx, dayChat.id, threadId);
+    if (opening.marker) await this.#appendMarker(tx, tenant, dayChat.id, threadId, opening.marker);
 
     // The opening, in the trail: same transaction, so an opening that rolled
     // back leaves no line. PII-minimal — which connection, and why it opened.
-    await writeAuditEntry(tx, input.audit, {
-      action: 'chat.connection_opened',
+    await writeAuditEntry(tx, opening.audit.context, {
+      action: opening.audit.action,
       target: `chat:${dayChat.id}`,
-      metadata: { thread_id: threadId, opened_via: openedVia },
+      metadata: { thread_id: threadId, ...opening.audit.metadata },
     });
 
-    const chat = await tx.chat.findUniqueOrThrow({
-      where: { id: dayChat.id },
-      include: chatInclude,
-    });
-    return { chat, threadId, event };
+    return { threadId };
   }
 
   /**
@@ -1829,7 +2020,27 @@ export class ChatService {
   }
 
   /**
-   * Reopen an archived conversation (FR-MOD-02.8).
+   * Reopen an archived conversation (FR-MOD-02.8), with a new connection
+   * (`agent_reopen`) assigned to whoever reopened it.
+   *
+   * Where that connection goes is the conversation's day (ID-02 · tm 286.3,
+   * 05 coding logic 3; ID-02-S6 — `reopensInPlace`):
+   *
+   *   - a chat filed under today, or under no day (opened before the daily
+   *     model, so it keeps that model), is reopened in place — as every reopen
+   *     was before ID-02;
+   *   - a chat filed under an earlier day is not: a day that has ended gains no
+   *     connection. The conversation continues under the member's chat for
+   *     today — reopened with a further connection if the member has one,
+   *     opened if not — its "Chat reopened" line naming the chat it came from
+   *     (`continued_from_chat_id`), and the reopened chat's teams joining
+   *     today's access (ID-02-S7). The answer is today's chat, a different id
+   *     the caller moves to.
+   *
+   * Either way the member has one open conversation at most: a reopen while
+   * another is open is refused, as it always was. Announced like any opening —
+   * an arrival to the inboxes and the board, and outside as `thread_started`,
+   * or `chat_started` when it opened the day.
    *
    * `audit` is required for the same reason `deactivate`'s is: this is the
    * transition that makes a read-only transcript writable again, and it is half
@@ -1842,7 +2053,38 @@ export class ChatService {
     chatId: string,
     audit: AuditContext,
   ): Promise<ChatDetail> {
-    const result = await withTenant(this.db, tenant, async (tx) => {
+    const now = this.now();
+    let outcome: ResumeOutcome;
+    try {
+      outcome = await this.#resumeInTransaction(tenant, principal, chatId, audit, now);
+    } catch (error) {
+      // Two agents reopening at once: the loser runs once more and is told the
+      // conversation is already open — a 409 it can act on, not a 500.
+      if (!isConnectionRace(error)) throw error;
+      outcome = await this.#resumeInTransaction(tenant, principal, chatId, audit, now);
+    }
+
+    const detail = serialiseChat(outcome.chat);
+    await this.#announceOpenedConnection(
+      tenant,
+      principal,
+      outcome.chat,
+      detail,
+      outcome.createdChat ? null : { threadId: outcome.threadId, openedVia: 'agent_reopen' },
+    );
+    return detail;
+  }
+
+  async #resumeInTransaction(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    audit: AuditContext,
+    now: Date,
+  ): Promise<ResumeOutcome> {
+    const actorId = actorOf(principal);
+
+    return withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
 
@@ -1859,63 +2101,142 @@ export class ChatService {
         throw ApiError.chatInactive(`Customer already has an active chat (${otherActive.id}).`);
       }
 
-      const threadId = await this.#allocateThreadId(tx);
-      await tx.chat.update({ where: { id: chat.id }, data: { active: true } });
-      await tx.thread.create({
-        data: {
-          id: threadId,
-          chatId: chat.id,
-          licenseId: tenant.licenseId,
-          active: true,
-          assigneeId: actorOf(principal),
-        },
-      });
-      await tx.chatUser.updateMany({
-        where: { chatId: chat.id, userType: 'customer' },
-        data: { present: true },
-      });
+      // The new connection continues the conversation that was reopened, so it
+      // goes to that conversation's team: its latest connection's, or its only
+      // team when none was recorded.
+      const groupId =
+        chat.threads[0]?.groupId ?? connectionGroup(chat.access.map((a) => a.groupId));
+      const reopenedLine: ConnectionMarker = {
+        authorId: actorId,
+        text: 'Chat reopened',
+        recipients: 'all',
+        properties: { system_event: 'chat_resumed' },
+      };
+      const day = await resolveLocalDay(tx, now);
 
-      await this.#appendEvent(tx, {
-        licenseId: tenant.licenseId,
-        chatId: chat.id,
-        threadId,
-        authorId: actorOf(principal),
-        authorType: 'system',
-        input: {
-          type: 'system_message',
-          text: 'Chat reopened',
-          recipients: 'all',
-          properties: { system_event: 'chat_resumed' },
-        },
-      });
+      if (reopensInPlace({ chatDay: localDayOf(chat.localDay), today: day.key })) {
+        // Conditional, so a second agent reopening at the same moment loses
+        // here and is answered "already active" on the retry.
+        const reopened = await tx.chat.updateMany({
+          where: { id: chat.id, active: false },
+          data: { active: true },
+        });
+        if (reopened.count === 0) throw new ConnectionRaceLost('the chat was reopened');
 
-      // The other half of the lifecycle record (FR-MOD-02.8 · NFR-S12), on the
-      // same terms as the archive: inside the transaction that reopens, past the
-      // guard that refuses an already-active chat, and carrying the *new*
-      // thread — the one the transcript can be written to again — since that is
-      // what separates this reopening from any earlier one of the same chat.
-      await writeAuditEntry(tx, audit, {
-        action: 'chat.reopened',
-        target: `chat:${chat.id}`,
-        metadata: { thread_id: threadId },
-      });
+        const threadId = await this.#allocateThreadId(tx);
+        await tx.thread.create({
+          data: {
+            id: threadId,
+            chatId: chat.id,
+            licenseId: tenant.licenseId,
+            active: true,
+            assigneeId: actorId,
+            groupId,
+            openedVia: 'agent_reopen',
+          },
+        });
+        await tx.chatUser.updateMany({
+          where: { chatId: chat.id, userType: 'customer' },
+          data: { present: true },
+        });
+        await this.#appendMarker(tx, tenant, chat.id, threadId, reopenedLine);
 
-      const reloaded = await tx.chat.findUniqueOrThrow({
-        where: { id: chat.id },
+        // The other half of the lifecycle record (FR-MOD-02.8 · NFR-S12), on
+        // the same terms as the archive: inside the transaction that reopens,
+        // past the guard that refuses an already-active chat, and carrying the
+        // *new* thread — the one the transcript can be written to again — since
+        // that is what separates this reopening from any earlier one of the
+        // same chat.
+        await writeAuditEntry(tx, audit, {
+          action: 'chat.reopened',
+          target: `chat:${chat.id}`,
+          metadata: { thread_id: threadId },
+        });
+
+        const reloaded = await tx.chat.findUniqueOrThrow({
+          where: { id: chat.id },
+          include: chatInclude,
+        });
+        return { chat: reloaded, createdChat: false, threadId };
+      }
+
+      // An earlier day (ID-02-S6): continued under today's chat. The line that
+      // opens the new connection says where it came from, and so does the
+      // trail — the entry is today's chat's (that is the transcript that
+      // became writable), naming the chat that was reopened.
+      const route: ConnectionRoute = {
+        groupIds: chat.access.map((a) => a.groupId),
+        assigneeId: actorId,
+        queuePosition: null,
+        groupId,
+      };
+      const continued = { [CONTINUED_FROM_CHAT_PROPERTY]: chat.id };
+      const marker: ConnectionMarker = {
+        ...reopenedLine,
+        properties: { ...reopenedLine.properties, ...continued },
+      };
+      const dayChat = await tx.chat.findFirst({
+        where: { customerId: chat.customerId, localDay: day.date },
         include: chatInclude,
       });
-      return { detail: serialiseChat(reloaded), audience: this.#audienceFor(reloaded) };
-    });
 
-    // Reopening looks like a new arrival to every inbox watching it.
-    await this.publisher?.publish(tenant, 'incoming_chat', result.audience, {
-      requester_id: actorOf(principal),
-      chat: result.detail,
+      let todayId: string;
+      let threadId: string;
+      if (dayChat) {
+        todayId = dayChat.id;
+        ({ threadId } = await this.#openFurtherConnection(tx, tenant, dayChat, {
+          openedVia: 'agent_reopen',
+          route: async () => route,
+          marker,
+          audit: { context: audit, action: 'chat.reopened', metadata: continued },
+        }));
+      } else {
+        const created = await this.#createChatWithThread(tx, {
+          licenseId: tenant.licenseId,
+          customerId: chat.customerId,
+          ...route,
+          day,
+          openedVia: 'agent_reopen',
+        });
+        todayId = created.id;
+        threadId = created.threads[0]!.id;
+        await this.#appendMarker(tx, tenant, todayId, threadId, marker);
+        await writeAuditEntry(tx, audit, {
+          action: 'chat.reopened',
+          target: `chat:${todayId}`,
+          metadata: { thread_id: threadId, ...continued },
+        });
+      }
+
+      const today = await tx.chat.findUniqueOrThrow({
+        where: { id: todayId },
+        include: chatInclude,
+      });
+      return { chat: today, createdChat: dayChat === null, threadId };
     });
-    // ...and to the traffic board, where the visitor goes back into a
-    // conversation bucket (FR-MOD-03.1.1).
-    await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
-    return result.detail;
+  }
+
+  /** Append a connection's opening line (`ConnectionMarker`) as a system event. */
+  async #appendMarker(
+    tx: TenantClient,
+    tenant: TenantContext,
+    chatId: string,
+    threadId: string,
+    marker: ConnectionMarker,
+  ): Promise<void> {
+    await this.#appendEvent(tx, {
+      licenseId: tenant.licenseId,
+      chatId,
+      threadId,
+      authorId: marker.authorId,
+      authorType: 'system',
+      input: {
+        type: 'system_message',
+        text: marker.text,
+        recipients: marker.recipients,
+        properties: marker.properties,
+      },
+    });
   }
 
   async transfer(
@@ -1963,8 +2284,13 @@ export class ChatService {
 
         await tx.chatAccess.deleteMany({ where: { chatId: chat.id } });
         await tx.chatAccess.create({ data: { chatId: chat.id, groupId: group.id } });
-        // Unassign: the receiving team routes it (slice 8).
-        await tx.thread.update({ where: { id: thread.id }, data: { assigneeId: null } });
+        // Unassign: the receiving team routes it (slice 8). The open connection
+        // now belongs to that team (`threads.group_id`, ID-02 · tm 286.3); an
+        // agent hand-off below leaves the team as it was.
+        await tx.thread.update({
+          where: { id: thread.id },
+          data: { assigneeId: null, groupId: group.id },
+        });
       } else {
         const membership = await tx.agentMembership.findUnique({
           where: {
@@ -2509,22 +2835,23 @@ export class ChatService {
     return serialiseRawEvent(rows[0]!);
   }
 
+  /**
+   * Open the member's chat for a day, with its first connection (ID-02).
+   *
+   * Every chat opens filed under a day since tm 286.3 — the visitor's message,
+   * an agent's start and an agent's reopen of an earlier day all come here —
+   * and `uq_chat_customer_day` refuses a second one for the same member and
+   * day, which the callers' race retry turns into "join the winner's".
+   */
   async #createChatWithThread(
     tx: TenantClient,
-    input: {
+    input: ConnectionRoute & {
       licenseId: bigint;
       customerId: string;
-      groupIds: bigint[];
-      assigneeId: string | null;
-      queuePosition?: number | null;
-      /**
-       * The conversation day to file the chat under (ID-02), written once and
-       * never recomputed. Absent, the chat is filed under no day — the model
-       * every path but the visitor's still opens chats in until tm 286.3.
-       */
-      day?: ConversationDay;
+      /** The conversation day to file the chat under, written once and never recomputed. */
+      day: ConversationDay;
       /** How the chat's first connection opened (`threads.opened_via`). */
-      openedVia?: ConnectionOpenedVia;
+      openedVia: ConnectionOpenedVia;
     },
   ) {
     const chatId = await this.#allocateChatId(tx);
@@ -2538,7 +2865,8 @@ export class ChatService {
         active: true,
         // The day and the zone it was counted in are one fact: both or neither
         // (`chats_local_day_tz_pair`).
-        ...(input.day ? { localDay: input.day.date, dayTz: input.day.timezone } : {}),
+        localDay: input.day.date,
+        dayTz: input.day.timezone,
       },
     });
 
@@ -2565,7 +2893,8 @@ export class ChatService {
         licenseId: input.licenseId,
         active: true,
         assigneeId: input.assigneeId,
-        ...(input.openedVia ? { openedVia: input.openedVia } : {}),
+        groupId: input.groupId,
+        openedVia: input.openedVia,
         ...(input.queuePosition != null
           ? { queuePosition: input.queuePosition, queuedAt: new Date() }
           : {}),
@@ -3065,11 +3394,14 @@ async function lockActiveChat(tx: TenantClient, chatId: string): Promise<boolean
 /**
  * Whether the member's open chat takes a message arriving `now`
  * (`continuesConnection`), reading the activity and the idle window only for a
- * chat filed under an earlier day — the only one the answer can be no for.
+ * chat filed under an earlier day — the only one the answer can be no for. The
+ * window is the one the idle sweep would close this chat on
+ * (`rolloverIdleSeconds`), so a conversation that arrived over a messaging
+ * channel in a workspace with no timeout is never split at midnight (tm 286.3).
  */
 async function openChatTakesMessage(
   tx: TenantClient,
-  chat: { localDay: Date | null },
+  chat: { id: string; localDay: Date | null },
   thread: { id: string; createdAt: Date },
   now: Date,
   day?: ConversationDay,
@@ -3083,7 +3415,7 @@ async function openChatTakesMessage(
     today,
     lastActivityAt: await lastActivityAt(tx, thread.id, thread.createdAt),
     now,
-    idleSeconds: await connectionIdleSeconds(tx),
+    idleSeconds: await rolloverIdleSeconds(tx, chat.id),
   });
 }
 
@@ -3231,6 +3563,8 @@ export interface ChatConnection {
   closed_at: string | null;
   assignee_id: string | null;
   opened_via: string | null;
+  /** The team the connection went to (`threads.group_id`), or null. */
+  group_id: number | null;
 }
 
 /** The customer's most recent visit, projected onto the chat (FR-MOD-02.4). */
@@ -3301,6 +3635,7 @@ interface ThreadRow {
   createdAt: Date;
   closedAt: Date | null;
   openedVia: string | null;
+  groupId: bigint | null;
   tags: Array<{ tag: { name: string } }>;
 }
 
@@ -3378,6 +3713,7 @@ function connectionsOf(chat: ChatRow): ChatConnection[] {
       closed_at: t.closedAt?.toISOString() ?? null,
       assignee_id: t.assigneeId,
       opened_via: t.openedVia,
+      group_id: t.groupId === null ? null : Number(t.groupId),
     }));
 }
 

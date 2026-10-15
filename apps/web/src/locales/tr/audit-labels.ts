@@ -78,7 +78,7 @@ export const auditLabels: Messages = {
   'audit.action.chat.taken_over': 'Sohbet devralındı',
   'audit.action.chat.archived': 'Sohbet arşivlendi',
   'audit.action.chat.reopened': 'Sohbet yeniden açıldı',
-  'audit.action.chat.connection_opened': 'Üye aynı gün tekrar bağlandı',
+  'audit.action.chat.connection_opened': 'Sohbete yeni bağlantı açıldı',
   'audit.action.chat.message_edited': 'Sohbet mesajı düzenlendi',
   'audit.action.customer.banned': 'Müşteri engellendi',
   'audit.action.customer.unbanned': 'Müşterinin engeli kaldırıldı',

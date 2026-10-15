@@ -39,6 +39,7 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
     banned: false,
     banned_at: null,
     chats_count: 2,
+    connections_count: 3,
     tickets_count: 0,
     last_activity_at: '2026-07-20T10:00:00.000Z',
     created_at: '2026-07-01T10:00:00.000Z',
@@ -102,6 +103,22 @@ describe('CustomerDetailPanel — pre-chat username', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(api.patch).toHaveBeenCalledWith('/customers/cust-1', { username: 'ada_lovelace' });
+  });
+});
+
+/**
+ * A chat is the member's day and a thread one visit in it (ID-02 · K1 = A), so
+ * one number can no longer say how often someone wrote in: the profile shows
+ * the days and the connections they held, and the second is the one Reports,
+ * SLA and CSAT agree with.
+ */
+describe('CustomerDetailPanel — days and connections (ID-02)', () => {
+  it("counts the member's conversation days and the connections they held, side by side", async () => {
+    renderPanel(baseCustomer({ chats_count: 2, connections_count: 5 }));
+
+    const days = await screen.findByText('Conversation days');
+    expect(days.nextElementSibling).toHaveTextContent('2');
+    expect(screen.getByText('Connections').nextElementSibling).toHaveTextContent('5');
   });
 });
 

@@ -130,8 +130,12 @@ export function CustomerDetailPanel({
         />
 
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border px-4 py-3 text-sm">
-          <dt className="text-content-secondary">{t('customers.detail.conversations')}</dt>
+          {/* A chat is the member's day and a thread one visit in it (ID-02),
+              so the count is a pair: days, and the connections they held. */}
+          <dt className="text-content-secondary">{t('customers.detail.conversationDays')}</dt>
           <dd className="tabular text-right">{customer.chats_count}</dd>
+          <dt className="text-content-secondary">{t('customers.detail.connections')}</dt>
+          <dd className="tabular text-right">{customer.connections_count}</dd>
           <dt className="text-content-secondary">{t('customers.detail.tickets')}</dt>
           <dd className="tabular text-right">{customer.tickets_count}</dd>
           <dt className="text-content-secondary">{t('customers.detail.visits')}</dt>

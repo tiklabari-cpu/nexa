@@ -9,9 +9,11 @@
  * Inbound reuses the chat core rather than re-implementing it. The external
  * sender is resolved to a customer (reused on return via `channel_identities`),
  * a `CustomerPrincipal` is built for them, and the message goes through the same
- * `ChatService.start` / `sendEvent` the widget uses — so routing, the one-active
- * -chat invariant, realtime delivery and AI-resolution accounting all apply for
- * free, exactly as they do for a Website chat.
+ * `ChatService.openOrContinueConnection` the widget uses — so routing, the
+ * one-active-chat invariant, the member's day (ID-02: one chat per member per
+ * day, a further connection on a same-day return), realtime delivery and
+ * AI-resolution accounting all apply for free, exactly as they do for a Website
+ * chat.
  *
  * Isolation is enforced by RLS: every write below runs inside `withTenant`, so a
  * channel, identity or message-log row belongs to exactly one licence and
@@ -36,6 +38,7 @@ import {
 } from '../../lib/credential-cipher.js';
 import { maskCardNumbers } from '../../lib/cc-mask.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
+import type { AuditContext } from '../audit/audit-log.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { CustomerPrincipal } from '../auth/principal.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../security/spam-filter.js';
@@ -117,6 +120,14 @@ export interface TelegramLiveTarget {
  * provider did nothing wrong and must not retry a message that was dropped on
  * purpose, so the call still succeeds.
  */
+/**
+ * The audit context an inbound message writes under, once its workspace and
+ * sender are known (ID-02): a same-day return is recorded as the sender's
+ * (`chat.connection_opened`), a rollover close as the system's. A factory,
+ * because the webhook reaches this service before either is resolved.
+ */
+export type InboundAudit = (tenant: TenantContext, customerId: string) => AuditContext;
+
 export type InboundOutcome =
   | { status: 'accepted'; chat_id: string; customer_id: string }
   | { status: 'ignored'; reason: 'spam' };
@@ -402,6 +413,7 @@ export class ChannelService {
     channelId: string,
     secretHeader: string | undefined,
     body: unknown,
+    audit: InboundAudit,
   ): Promise<InboundOutcome | { status: 'ignored'; reason: 'unsupported_update' }> {
     const telegram = this.requireLiveTelegram();
     const rows = /^[0-9a-f-]{36}$/i.test(channelId)
@@ -429,7 +441,7 @@ export class ChannelService {
     }
     const normalized = telegram.live.parseUpdate(body, target.address);
     if (!normalized) return { status: 'ignored', reason: 'unsupported_update' };
-    return this.ingestNormalized(db, chats, 'telegram', normalized);
+    return this.ingestNormalized(db, chats, 'telegram', normalized, audit);
   }
 
   private requireLiveTelegram(): LiveTelegramOptions {
@@ -458,8 +470,9 @@ export class ChannelService {
     chats: ChatService,
     type: ChannelType,
     payload: unknown,
+    audit: InboundAudit,
   ): Promise<InboundOutcome> {
-    return this.ingestNormalized(db, chats, type, getAdapter(type).parseInbound(payload));
+    return this.ingestNormalized(db, chats, type, getAdapter(type).parseInbound(payload), audit);
   }
 
   /** The provider-agnostic half of {@link ingestInbound}, shared with the live Telegram webhook. */
@@ -468,6 +481,7 @@ export class ChannelService {
     chats: ChatService,
     type: ChannelType,
     normalized: NormalizedInbound,
+    audit: InboundAudit,
   ): Promise<InboundOutcome> {
     const tenant = await this.resolveLicense(db, type, normalized.address);
 
@@ -484,21 +498,18 @@ export class ChannelService {
       this.findCustomerByIdentity(tx, tenant, type, normalized.externalId),
     );
 
-    const existing = knownCustomerId
-      ? await withTenant(db, tenant, (tx) =>
-          tx.chat.findFirst({
-            where: { customerId: knownCustomerId, active: true },
-            select: { id: true },
-          }),
-        )
-      : null;
+    // Whether this message opens a connection rather than continuing one — the
+    // widget's own question (`opensConnection`, ID-02): a stranger always
+    // does; a known sender does when there is no open conversation (a same-day
+    // return included) or the open one is over.
+    const opens = knownCustomerId ? await chats.opensConnection(tenant, knownCustomerId) : true;
 
     // Spam filter (FR-MOD-08.9.3) — the same engine, and deliberately the same
-    // scope the widget uses: screen only the message that would OPEN a chat.
-    // Screening every message of an established conversation would put the
-    // false-positive cost on a legitimate customer mid-thread, who may well
-    // paste several links at their agent's request.
-    if (!existing && maskedText) {
+    // scope the widget uses: screen only the message that would OPEN a
+    // connection. Screening every message of an established conversation would
+    // put the false-positive cost on a legitimate customer mid-thread, who may
+    // well paste several links at their agent's request.
+    if (opens && maskedText) {
       const spamFilterOn = await withTenant(db, tenant, (tx) => isSpamFilterEnabled(tx));
       if (evaluateSpam({ filterEnabled: spamFilterOn, text: maskedText }).spam) {
         return { status: 'ignored', reason: 'spam' };
@@ -518,25 +529,18 @@ export class ChannelService {
       licenseId: tenant.licenseId,
     };
 
-    // Same two paths the widget's single send endpoint takes: continue the open
-    // conversation, or open one. `start` reuses an existing active chat too, so
-    // the check is an optimisation, not the safety net.
-    let chatId: string;
-    if (existing) {
-      await chats.sendEvent(tenant, principal, existing.id, {
-        type: 'message',
-        text: maskedText,
-        recipients: 'all',
-      });
-      chatId = existing.id;
-    } else {
-      const { chat } = await chats.start(tenant, principal, {
-        customerId,
-        assignToMe: false,
-        initialEvent: { type: 'message', text: maskedText, recipients: 'all' },
-      });
-      chatId = chat.id;
-    }
+    // The widget's single send path (ID-02 · tm 286.3): continue the open
+    // connection, or open one in the member's day — the day's first opens its
+    // chat, a return the same day is a further connection under it. Decided
+    // and written in one transaction, so a burst of messages cannot open two.
+    // A conversation that arrived here stays open across midnight unless the
+    // workspace set a timeout, the idle sweep's rule (`rolloverIdleSeconds`).
+    const { chat } = await chats.openOrContinueConnection(tenant, principal, {
+      customerId,
+      event: { type: 'message', text: maskedText, recipients: 'all' },
+      audit: audit(tenant, customerId),
+    });
+    const chatId = chat.id;
 
     await withTenant(db, tenant, (tx) =>
       this.record(tx, tenant, {

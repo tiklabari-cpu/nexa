@@ -878,6 +878,12 @@ model Thread {
   /// (`@siyahtus/types`), enforced by the CHECK `threads_opened_via_check`.
   /// Null on a thread opened before ID-02.
   openedVia        String?   @map("opened_via")
+  /// The team this connection went to (ID-02 · tm 286.3): routing's choice,
+  /// the team it was opened in, or the one a transfer handed it to. Null for
+  /// no single team, and on threads opened before it was recorded. No relation
+  /// on purpose — the `chat_access.group_id` rule: a deleted team must not
+  /// erase the record of what it handled (20261015170000_thread_group).
+  groupId          BigInt?   @map("group_id")
 
   chat   Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags   ThreadTag[]

@@ -4,7 +4,8 @@
 # schema (PRD §8.4) but nothing has ever written to them, so reading them back
 # would report 0 for everyone. These endpoints count the related rows instead. A
 # denormalised counter that no write path maintains is worse than no counter:
-# it looks authoritative and is silently wrong.
+# it looks authoritative and is silently wrong. `connections_count` (ID-02) is
+# counted the same way, from the threads under those chats.
 
 customers:
   get:

@@ -364,14 +364,18 @@ export const AUDIT_ACTIONS = [
   // that already, and this table outlives every retention window that governs
   // the content it would otherwise copy.
   'chat.archived',
+  // A reopening of a chat filed under an earlier day continues under the
+  // member's chat for today (ID-02-S6 · tm 286.3): the entry is today's chat's
+  // — the transcript that became writable — and its metadata also names the
+  // chat that was reopened (`continued_from_chat_id`).
   'chat.reopened',
-  // A member back the same day (ID-02 · tm 286): their day's archived chat
-  // opened again with a further connection under it. The third lifecycle
-  // transition beside the two above — the transcript becomes writable again —
-  // reached without anyone pressing "Reopen", so it is recorded as what the
-  // visitor's message did. Metadata is the new thread and how it opened
-  // (`same_day_return`, or `day_rollover` when yesterday's silent connection
-  // was closed on the way in); never the message.
+  // The member's day archived and opened again with a further connection under
+  // it (ID-02 · tm 286): the third lifecycle transition beside the two above —
+  // the transcript becomes writable again — reached without anyone pressing
+  // "Reopen". Recorded as what did it: the member's message (`same_day_return`,
+  // or `day_rollover` when yesterday's silent connection was closed on the way
+  // in), or an agent starting a conversation with them (`agent_start`, tm
+  // 286.3). Metadata is the new thread and how it opened; never a message.
   'chat.connection_opened',
   // An agent corrected a message they had already sent (FR-MOD-02.3.7). It
   // belongs beside the two lines above by their own reasoning: those are

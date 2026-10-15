@@ -12,7 +12,7 @@
  */
 import { Buffer } from 'node:buffer';
 import { timingSafeEqual } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
@@ -24,7 +24,7 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { TicketService } from '../services/tickets/ticket-service.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
-import { ChannelService } from '../services/channels/channel-service.js';
+import { ChannelService, type InboundAudit } from '../services/channels/channel-service.js';
 import { createLiveTelegram } from '../services/channels/telegram-live.js';
 import { createSafeHttp, type SafeHttp } from '../lib/safe-fetch.js';
 import {
@@ -354,7 +354,13 @@ export default async function channelRoutes(
       // The outcome carries its own status now: a message the spam filter drops
       // is `ignored`, and — like the e-mail path — still a 200, so the provider
       // does not retry something that was refused on purpose.
-      const result = await channels.ingestInbound(app.db, chats, type, request.body);
+      const result = await channels.ingestInbound(
+        app.db,
+        chats,
+        type,
+        request.body,
+        inboundAudit(request),
+      );
       return reply.send(result);
     },
   );
@@ -380,6 +386,7 @@ export default async function channelRoutes(
         request.params.channelId,
         Array.isArray(header) ? header[0] : header,
         request.body,
+        inboundAudit(request),
       );
       return reply.send(result);
     },
@@ -550,4 +557,19 @@ export default async function channelRoutes(
       return reply.send(result);
     },
   );
+}
+
+/**
+ * The audit context an inbound channel message writes under (ID-02 · tm 286.3):
+ * the sender, once the workspace and customer are resolved. No address — the
+ * request comes from the provider's servers, not from the person.
+ */
+function inboundAudit(request: FastifyRequest): InboundAudit {
+  return (tenant, customerId) =>
+    request.auditContext({
+      licenseId: tenant.licenseId,
+      actorId: customerId,
+      actorType: 'customer',
+      ip: null,
+    });
 }

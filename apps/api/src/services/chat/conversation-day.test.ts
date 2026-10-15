@@ -4,11 +4,13 @@ import { localDayKey } from '@siyahtus/types';
 import {
   ConnectionRaceLost,
   DEFAULT_CONNECTION_IDLE_SECONDS,
+  connectionGroup,
   continuesConnection,
   dayDate,
   dayKeyOf,
   idleSecondsFrom,
   isConnectionRace,
+  reopensInPlace,
   visitorOpenedVia,
 } from './conversation-day.js';
 
@@ -115,6 +117,19 @@ describe('continuesConnection — does the open chat take the message? (ID-02, 0
     ).toBe(true);
   });
 
+  it('never rolls over a conversation nothing closes by silence (a channel one with no workspace timeout)', () => {
+    const now = at('2026-10-16T06:00:00Z');
+    expect(
+      continuesConnection({
+        chatDay: '2026-10-15',
+        today: '2026-10-16',
+        lastActivityAt: new Date(now.getTime() - 3 * 24 * 60 * MINUTE),
+        now,
+        idleSeconds: null,
+      }),
+    ).toBe(true);
+  });
+
   it('treats a chat filed under a later key than today as today’s (the boundary moved east)', () => {
     expect(
       continuesConnection({
@@ -137,6 +152,33 @@ describe('visitorOpenedVia — how the opened connection came to exist', () => {
   it('day_rollover whenever yesterday’s connection was closed on the way in', () => {
     expect(visitorOpenedVia({ rolledOver: true, dayChatExists: false })).toBe('day_rollover');
     expect(visitorOpenedVia({ rolledOver: true, dayChatExists: true })).toBe('day_rollover');
+  });
+});
+
+describe("reopensInPlace — where an agent's Reopen continues (ID-02-S6)", () => {
+  it("reopens today's chat in place, and one filed under a later key (the boundary moved east)", () => {
+    expect(reopensInPlace({ chatDay: '2026-10-16', today: '2026-10-16' })).toBe(true);
+    expect(reopensInPlace({ chatDay: '2026-10-17', today: '2026-10-16' })).toBe(true);
+  });
+
+  it('reopens a chat filed under no day in place — it keeps the model it was opened in', () => {
+    expect(reopensInPlace({ chatDay: null, today: '2026-10-16' })).toBe(true);
+  });
+
+  it('does not add a connection to a day that has ended, however recent (scenario 9)', () => {
+    expect(reopensInPlace({ chatDay: '2026-10-15', today: '2026-10-16' })).toBe(false);
+    expect(reopensInPlace({ chatDay: '2025-12-31', today: '2026-01-01' })).toBe(false);
+  });
+});
+
+describe('connectionGroup — the one team a connection went to', () => {
+  it('is that team when there was exactly one', () => {
+    expect(connectionGroup([7n])).toBe(7n);
+  });
+
+  it('is null for none, and for several named at once rather than an invented pick', () => {
+    expect(connectionGroup([])).toBeNull();
+    expect(connectionGroup([3n, 7n])).toBeNull();
   });
 });
 

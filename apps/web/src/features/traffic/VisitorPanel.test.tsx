@@ -30,6 +30,7 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
     banned: false,
     banned_at: null,
     chats_count: 1,
+    connections_count: 1,
     tickets_count: 0,
     last_activity_at: '2026-07-20T10:00:00.000Z',
     created_at: '2026-07-01T10:00:00.000Z',

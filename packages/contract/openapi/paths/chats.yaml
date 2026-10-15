@@ -117,6 +117,15 @@ chats:
       Reuses the customer's existing active chat if there is one — a second
       active chat for the same person is refused by the database, and silently
       returning the existing one is what the caller almost always wants.
+
+      Otherwise the conversation opens in the customer's day (ID-02): a chat
+      is one customer's day, so if the customer already has a chat for today
+      it gains a further connection (`opened_via: agent_start`) and is
+      returned with the same `id`; only the day's first connection creates a
+      chat. The connection's team joins the chat's `access` without removing
+      any. An active chat left over from an earlier day and silent for longer
+      than the workspace's idle window is closed at the turn of the day
+      (`day_rollover`), exactly as the visitor's next message would close it.
     requestBody:
       required: true
       content:
@@ -135,7 +144,9 @@ chats:
                 $ref: "../openapi.yaml#/components/schemas/NewEvent"
     responses:
       "201":
-        description: Chat created
+        description: |
+          A connection was opened — a new chat for the customer's day, or a
+          further connection under the day's existing chat (same `id`).
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
@@ -360,19 +371,32 @@ resume:
     operationId: resumeChat
     summary: Reopen an archived conversation
     description: |
-      Opens a **new thread** on the same chat rather than reviving the closed
-      one, so the archived exchange stays exactly as it was.
+      Opens a **new thread** (`opened_via: agent_reopen`), assigned to the
+      caller, rather than reviving the closed one, so the archived exchange
+      stays exactly as it was.
+
+      Where the new thread goes depends on the conversation's day (ID-02 ·
+      ID-02-S6). A chat filed under today — or under no day, a chat opened
+      before the daily model — is reopened in place. A chat filed under an
+      **earlier day** is not: a day that has ended gains no connection, so the
+      conversation continues under the customer's chat for today (found, or
+      opened), and the response is **that** chat — a different `id` the
+      caller should move to. The new thread's opening event ("Chat reopened")
+      carries `properties.continued_from_chat_id` naming the chat that was
+      reopened, and the reopened chat's teams join today's `access`.
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"
     responses:
       "200":
-        description: Reopened, with a new active thread
+        description: |
+          Reopened, with a new active thread — the requested chat, or, for an
+          earlier day's chat, the customer's chat for today.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "409":
-        description: Already active
+        description: Already active, or the customer already has another active chat
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
@@ -382,6 +406,11 @@ transfer:
     tags: [Chats]
     operationId: transferChat
     summary: Hand the conversation to another team or agent
+    description: |
+      A hand-off to a team replaces the chat's `access` with that team and
+      records it as the open connection's `group_id`; a hand-off to an agent
+      changes neither. (A customer returning the same day adds a team instead
+      — ID-02-S7 — because a return is not a hand-off.)
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"
     requestBody:

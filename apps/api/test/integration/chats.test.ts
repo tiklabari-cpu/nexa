@@ -391,7 +391,15 @@ describe('agent chat api', () => {
     it('refuses to resume when the customer already has another open chat', async () => {
       const first = await startChat(acmeAdminToken, { customerId: fx.a.customerId });
       await server.post(`/chats/${first.id}/deactivate`, undefined, auth(acmeAdminToken));
-      await startChat(acmeAdminToken, { customerId: fx.a.customerId });
+      // Filed under the day before: a start today opens a chat of its own
+      // rather than a further connection under this one (ID-02).
+      const filed = await owner.chat.findUniqueOrThrow({ where: { id: first.id } });
+      await owner.chat.update({
+        where: { id: first.id },
+        data: { localDay: new Date(filed.localDay!.getTime() - 24 * 60 * 60 * 1000) },
+      });
+      const second = await startChat(acmeAdminToken, { customerId: fx.a.customerId });
+      expect(second.id).not.toBe(first.id);
 
       // Resuming would create a second active chat for one customer, which the
       // database refuses — report something actionable instead of a raw error.
@@ -2711,8 +2719,9 @@ describe('agent chat api', () => {
   // =========================================================================
   // The conversation day, read side (ID-02 · tm 286.1): a chat ("Thread ID")
   // is the member's day and its threads ("Chat ID") the day's connections.
-  // Nothing writes a day yet — tm 286.2 does — so a day is filed here the way
-  // that writer will leave it.
+  // Every path files a chat under its day since tm 286.3, so the two shapes
+  // the reader must handle are set up by hand: a day with known keys, and a
+  // chat from before the daily model (no day, no `opened_via`).
   // =========================================================================
 
   describe('conversation day (ID-02)', () => {
@@ -2745,7 +2754,13 @@ describe('agent chat api', () => {
       return { chatId: chat.id, first, second: (resumed.json() as DayChat).thread!.id };
     }
 
-    /** File the chat under a day, as `openOrContinueConnection` (tm 286.2) will. */
+    /** A chat as the model before ID-02 left it: under no day, its threads with no `opened_via`. */
+    async function fileUnderNoDay(chatId: string) {
+      await owner.chat.update({ where: { id: chatId }, data: { localDay: null, dayTz: null } });
+      await owner.thread.updateMany({ where: { chatId }, data: { openedVia: null } });
+    }
+
+    /** File the chat under a known day, with the connections a visitor would have opened. */
     async function fileUnderDay(chatId: string, first: string, second: string) {
       await owner.chat.update({
         where: { id: chatId },
@@ -2765,6 +2780,7 @@ describe('agent chat api', () => {
 
     it('lists only the newest connection of a chat filed under no day — the model before ID-02', async () => {
       const { chatId, second } = await twoConnections();
+      await fileUnderNoDay(chatId);
 
       const detail = (await server.get(`/chats/${chatId}`, auth(acmeAdminToken))).json() as DayChat;
       expect(detail.local_day).toBeNull();

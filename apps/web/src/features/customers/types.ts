@@ -13,8 +13,13 @@ export interface CustomerSummary {
   country: string | null;
   is_lead: boolean;
   banned: boolean;
-  /** Counted from conversations by the API, not read from a stored total. */
+  /**
+   * Conversation days — chats, one per member per day (ID-02). Counted from
+   * conversations by the API, not read from a stored total.
+   */
   chats_count: number;
+  /** The connections (visits) those days held — threads, what reports count. */
+  connections_count: number;
   tickets_count: number;
   last_activity_at: string | null;
   created_at: string;

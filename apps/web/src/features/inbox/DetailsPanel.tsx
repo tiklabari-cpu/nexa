@@ -46,11 +46,17 @@ export function DetailsPanel({
   chat,
   chatId,
   onCollapse,
+  onOpenChat,
 }: {
   chat: ChatDetail;
   chatId: string;
   /** When present, the header shows a control that hides this panel (FR-MOD-01.3). */
   onCollapse?: () => void;
+  /**
+   * Move the console to another chat — where a Reopen landed when it was not
+   * this one (an earlier day's conversation continues under today's, ID-02-S6).
+   */
+  onOpenChat?: (chatId: string) => void;
 }): ReactElement {
   const [newTag, setNewTag] = useState('');
   const [takeoverOpen, setTakeoverOpen] = useState(false);
@@ -412,7 +418,15 @@ export function DetailsPanel({
           ) : (
             <button
               type="button"
-              onClick={() => actions.reopen.mutate()}
+              onClick={() =>
+                actions.reopen.mutate(undefined, {
+                  // An earlier day's conversation continues under the member's
+                  // chat for today (ID-02-S6): follow it there.
+                  onSuccess: (resumed) => {
+                    if (resumed.id !== chatId) onOpenChat?.(resumed.id);
+                  },
+                })
+              }
               disabled={actions.reopen.isPending}
               className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >

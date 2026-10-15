@@ -75,6 +75,8 @@ export const customers: Messages = {
   'customers.detail.firstSeen': 'İlk görülme {date}',
   'customers.detail.bannedAt': 'Engellendi {date}',
   'customers.detail.conversations': 'Sohbetler',
+  'customers.detail.conversationDays': 'Sohbet günleri',
+  'customers.detail.connections': 'Bağlantılar',
   'customers.detail.tickets': 'Talepler',
   'customers.detail.visits': 'Ziyaretler',
   'customers.detail.returningVisitor': 'Geri dönen ziyaretçi',

@@ -1,0 +1,28 @@
+-- The team each connection went to (tm 286.3 · SiyahTuş analysis ID-02,
+-- owner decision K1 = A; the column §D236 and §D237 left open).
+--
+-- K1 = A: a chat ("Thread ID" in the panel) is the member's day and a thread
+-- ("Chat ID") one connection inside it. `chat_access` says which teams may read
+-- the chat, and since ID-02-S7 it is the union over the day — a team that
+-- handled one connection reads them all — so it can no longer say which team a
+-- given connection went to. `threads.group_id` does: the team routing chose,
+-- the one the connection was opened in, or the one a transfer handed it to.
+-- The panel draws it on the separator between connections ("C2 · 14:02 ·
+-- Bonus").
+--
+-- Expand-only (CONVENTIONS §6.3): one nullable column the previous release
+-- neither reads nor writes. NULL means "no single team" — none, or several
+-- named at once — and is what every existing thread keeps: not backfilled,
+-- because a chat's access today is the union of every team that ever saw it,
+-- and picking one of them would invent a fact.
+--
+-- No foreign key, deliberately, on `chat_access.group_id`'s terms
+-- (`group-service.ts` deleteGroup): the column records who handled a
+-- connection, group ids come from a sequence and are never reused, and a team
+-- deleted later must not erase or block the record of what it did. No index:
+-- the column is read with its thread, never searched.
+--
+-- No RLS change: `threads` carries its tenant policy, and a new column
+-- inherits it.
+
+ALTER TABLE threads ADD COLUMN group_id BIGINT;

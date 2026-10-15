@@ -86,6 +86,8 @@ export const customers: Messages = {
   'customers.detail.firstSeen': 'First seen {date}',
   'customers.detail.bannedAt': 'Banned {date}',
   'customers.detail.conversations': 'Conversations',
+  'customers.detail.conversationDays': 'Conversation days',
+  'customers.detail.connections': 'Connections',
   'customers.detail.tickets': 'Tickets',
   'customers.detail.visits': 'Visits',
   'customers.detail.returningVisitor': 'Returning visitor',

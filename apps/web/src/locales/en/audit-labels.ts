@@ -85,7 +85,7 @@ export const auditLabels: Messages = {
   'audit.action.chat.taken_over': 'Chat taken over',
   'audit.action.chat.archived': 'Chat archived',
   'audit.action.chat.reopened': 'Chat reopened',
-  'audit.action.chat.connection_opened': 'Customer reconnected the same day',
+  'audit.action.chat.connection_opened': 'Chat connection opened',
   'audit.action.chat.message_edited': 'Chat message edited',
   'audit.action.customer.banned': 'Customer banned',
   'audit.action.customer.unbanned': 'Customer unbanned',

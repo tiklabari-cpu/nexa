@@ -103,6 +103,7 @@ function customer(id: string, over: Partial<CustomerSummary> = {}): CustomerSumm
     is_lead: false,
     banned: false,
     chats_count: 0,
+    connections_count: 0,
     tickets_count: 0,
     last_activity_at: null,
     created_at: '2026-01-01T00:00:00.000Z',

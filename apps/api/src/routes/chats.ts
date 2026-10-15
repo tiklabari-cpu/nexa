@@ -244,6 +244,7 @@ export default async function chatRoutes(
       const { chat, created } = await chats.start(request.tenant(), principal, {
         customerId: body.customer_id,
         assignToMe: body.assign_to_me,
+        audit: request.auditContext(),
         ...(body.group_ids !== undefined ? { groupIds: body.group_ids } : {}),
         ...(body.initial_event !== undefined
           ? { initialEvent: normaliseEvent(body.initial_event) }
@@ -263,6 +264,8 @@ export default async function chatRoutes(
           : {}),
       });
 
+      // 201 whenever a connection opened — a new day, or a further connection
+      // under the member's chat for today (same id); 200 for the open one.
       return reply.status(created ? 201 : 200).send(chat);
     },
   );

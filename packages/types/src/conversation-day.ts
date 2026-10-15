@@ -71,6 +71,16 @@ export function isConnectionOpenedVia(value: unknown): value is ConnectionOpened
   return typeof value === 'string' && (CONNECTION_OPENED_VIA as readonly string[]).includes(value);
 }
 
+/**
+ * The event property naming the chat a reopened conversation came from
+ * (ID-02-S6 · tm 286.3). An agent reopening a chat filed under an earlier day
+ * does not add a connection to that day: the conversation continues under the
+ * member's chat for today, and the new connection's opening "Chat reopened"
+ * event carries this property with the old chat's id — what a panel follows to
+ * offer "continued from that conversation".
+ */
+export const CONTINUED_FROM_CHAT_PROPERTY = 'continued_from_chat_id';
+
 /** True for a whole number 0-23 — the only start hours the setting accepts. */
 export function isDayBoundaryHour(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 23;

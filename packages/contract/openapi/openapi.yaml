@@ -1184,7 +1184,7 @@ components:
 
     ChatConnection:
       type: object
-      required: [id, active, created_at, closed_at, assignee_id, opened_via]
+      required: [id, active, created_at, closed_at, assignee_id, opened_via, group_id]
       description: |
         One connection of a chat's day (ID-02), as `Chat.connections` lists it —
         enough to draw the separators between connections and to fetch each
@@ -1201,6 +1201,17 @@ components:
           allOf:
             - $ref: "#/components/schemas/ConnectionOpenedVia"
           nullable: true
+        group_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            The team this connection went to: the one routing chose, the one
+            it was opened in, or the one a transfer handed it to. Null when it
+            went to no single team (none, or several named at once) and on a
+            connection opened before the team was recorded. The chat's
+            `access` is the union over its connections — a team that handled
+            one connection of the day reads the whole day (ID-02-S7).
 
     ConnectionOpenedVia:
       type: string
@@ -3490,6 +3501,7 @@ components:
         - is_lead
         - banned
         - chats_count
+        - connections_count
         - tickets_count
         - table_custom_fields
       properties:
@@ -3512,7 +3524,20 @@ components:
         banned: { type: boolean }
         chats_count:
           type: integer
-          description: Counted from conversations, not read from a stored total.
+          description: |
+            The customer's conversation days in this workspace — chats, "Thread
+            ID" in the panel (ID-02). A chat opened before the daily model spans
+            several visits and counts once. Counted from conversations, not
+            read from a stored total.
+        connections_count:
+          type: integer
+          minimum: 0
+          description: |
+            The connections those days held — threads, "Chat ID" in the panel:
+            one per visit, so a member who came back twice in one day counts one
+            day and two connections. Reports, SLA, AI resolutions and ratings
+            are all counted per connection, so this is the figure they agree
+            with.
         tickets_count: { type: integer }
         last_activity_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }

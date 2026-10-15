@@ -796,9 +796,20 @@ export function useChatAction(chatId: string | null) {
       mutationFn: () => api.post(`/chats/${chatId}/deactivate`),
       onSuccess: invalidate,
     }),
+    // The answer is the chat the conversation now continues in — this one, or,
+    // for a chat filed under an earlier day, the member's chat for today
+    // (ID-02-S6), a different id the caller moves to. The refresh is awaited
+    // so that, by the time the caller moves, the list already holds that chat
+    // and the inbox's selection check does not take it for a vanished row.
     reopen: useMutation({
-      mutationFn: () => api.post(`/chats/${chatId}/resume`),
-      onSuccess: invalidate,
+      mutationFn: () => api.post<ChatDetail>(`/chats/${chatId}/resume`),
+      onSuccess: async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['chats'] }),
+          queryClient.invalidateQueries({ queryKey: ['chat', chatId] }),
+          ...(chatId ? [queryClient.invalidateQueries({ queryKey: eventsKey(chatId) })] : []),
+        ]);
+      },
     }),
     tag: useMutation({
       mutationFn: (tag: string) => api.post(`/chats/${chatId}/tags`, { tag }),

@@ -1012,6 +1012,15 @@ export interface paths {
      * @description Reuses the customer's existing active chat if there is one — a second
      *     active chat for the same person is refused by the database, and silently
      *     returning the existing one is what the caller almost always wants.
+     *
+     *     Otherwise the conversation opens in the customer's day (ID-02): a chat
+     *     is one customer's day, so if the customer already has a chat for today
+     *     it gains a further connection (`opened_via: agent_start`) and is
+     *     returned with the same `id`; only the day's first connection creates a
+     *     chat. The connection's team joins the chat's `access` without removing
+     *     any. An active chat left over from an earlier day and silent for longer
+     *     than the workspace's idle window is closed at the turn of the day
+     *     (`day_rollover`), exactly as the visitor's next message would close it.
      */
     post: operations['startChat'];
     delete?: never;
@@ -1162,8 +1171,19 @@ export interface paths {
     put?: never;
     /**
      * Reopen an archived conversation
-     * @description Opens a **new thread** on the same chat rather than reviving the closed
-     *     one, so the archived exchange stays exactly as it was.
+     * @description Opens a **new thread** (`opened_via: agent_reopen`), assigned to the
+     *     caller, rather than reviving the closed one, so the archived exchange
+     *     stays exactly as it was.
+     *
+     *     Where the new thread goes depends on the conversation's day (ID-02 ·
+     *     ID-02-S6). A chat filed under today — or under no day, a chat opened
+     *     before the daily model — is reopened in place. A chat filed under an
+     *     **earlier day** is not: a day that has ended gains no connection, so the
+     *     conversation continues under the customer's chat for today (found, or
+     *     opened), and the response is **that** chat — a different `id` the
+     *     caller should move to. The new thread's opening event ("Chat reopened")
+     *     carries `properties.continued_from_chat_id` naming the chat that was
+     *     reopened, and the reopened chat's teams join today's `access`.
      */
     post: operations['resumeChat'];
     delete?: never;
@@ -1181,7 +1201,13 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Hand the conversation to another team or agent */
+    /**
+     * Hand the conversation to another team or agent
+     * @description A hand-off to a team replaces the chat's `access` with that team and
+     *     records it as the open connection's `group_id`; a hand-off to an agent
+     *     changes neither. (A customer returning the same day adds a team instead
+     *     — ID-02-S7 — because a return is not a hand-off.)
+     */
     post: operations['transferChat'];
     delete?: never;
     options?: never;
@@ -8512,6 +8538,16 @@ export interface components {
       /** Format: uuid */
       assignee_id: string | null;
       opened_via: components['schemas']['ConnectionOpenedVia'] | null;
+      /**
+       * Format: int64
+       * @description The team this connection went to: the one routing chose, the one
+       *     it was opened in, or the one a transfer handed it to. Null when it
+       *     went to no single team (none, or several named at once) and on a
+       *     connection opened before the team was recorded. The chat's
+       *     `access` is the union over its connections — a team that handled
+       *     one connection of the day reads the whole day (ID-02-S7).
+       */
+      group_id: number | null;
     };
     /**
      * @description How a connection (`thread`) came to exist (ID-02):
@@ -10305,8 +10341,21 @@ export interface components {
       /** @description Left an email address. */
       is_lead: boolean;
       banned: boolean;
-      /** @description Counted from conversations, not read from a stored total. */
+      /**
+       * @description The customer's conversation days in this workspace — chats, "Thread
+       *     ID" in the panel (ID-02). A chat opened before the daily model spans
+       *     several visits and counts once. Counted from conversations, not
+       *     read from a stored total.
+       */
       chats_count: number;
+      /**
+       * @description The connections those days held — threads, "Chat ID" in the panel:
+       *     one per visit, so a member who came back twice in one day counts one
+       *     day and two connections. Reports, SLA, AI resolutions and ratings
+       *     are all counted per connection, so this is the figure they agree
+       *     with.
+       */
+      connections_count: number;
       tickets_count: number;
       /** Format: date-time */
       last_activity_at?: string | null;
@@ -15284,7 +15333,10 @@ export interface operations {
           'application/json': components['schemas']['Chat'];
         };
       };
-      /** @description Chat created */
+      /**
+       * @description A connection was opened — a new chat for the customer's day, or a
+       *     further connection under the day's existing chat (same `id`).
+       */
       201: {
         headers: {
           [name: string]: unknown;
@@ -15502,7 +15554,10 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Reopened, with a new active thread */
+      /**
+       * @description Reopened, with a new active thread — the requested chat, or, for an
+       *     earlier day's chat, the customer's chat for today.
+       */
       200: {
         headers: {
           [name: string]: unknown;
@@ -15512,7 +15567,7 @@ export interface operations {
         };
       };
       404: components['responses']['NotFound'];
-      /** @description Already active */
+      /** @description Already active, or the customer already has another active chat */
       409: {
         headers: {
           [name: string]: unknown;

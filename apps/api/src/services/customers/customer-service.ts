@@ -8,6 +8,12 @@
  * for every customer, forever, and look authoritative doing it. These queries
  * count the related rows instead. It costs a join; it is not wrong.
  *
+ * Since the member's day (ID-02 · K1 = A) a chat is one customer's day and a
+ * thread one visit inside it, so the conversation count comes as a pair:
+ * `chats_count` (days — "Thread ID" in the panel) and `connections_count`
+ * (visits — "Chat ID"). Reports, SLA, AI resolutions and ratings all count
+ * per connection; the pair is what keeps the profile agreeing with them.
+ *
  * Customers belong to an *organization*, while almost everything else in the
  * product is scoped to a *license*. A customer who wrote to two workspaces of
  * the same company is one person, and the chat/ticket counts here are therefore
@@ -59,7 +65,10 @@ export interface CustomerSummary {
   country: string | null;
   is_lead: boolean;
   banned: boolean;
+  /** Conversation days in this licence — chats ("Thread ID"). */
   chats_count: number;
+  /** The connections those days held — threads ("Chat ID"), one per visit. */
+  connections_count: number;
   tickets_count: number;
   last_activity_at: string | null;
   created_at: string;
@@ -143,15 +152,13 @@ export class CustomerService {
     const page = hasMore ? rows.slice(0, options.limit) : rows;
     const last = page.at(-1);
 
-    const tableFields = await this.#tableCustomFields(
-      tx,
-      tenant,
-      page.map((row) => row.id),
-    );
+    const pageIds = page.map((row) => row.id);
+    const tableFields = await this.#tableCustomFields(tx, tenant, pageIds);
+    const connections = await connectionCounts(tx, tenant, pageIds);
 
     return {
       items: page.map((row) => ({
-        ...toSummary(row),
+        ...toSummary(row, connections.get(row.id) ?? 0),
         table_custom_fields: tableFields.get(row.id) ?? [],
       })),
       total,
@@ -189,14 +196,15 @@ export class CustomerService {
     });
     if (!customer) return null;
 
-    const [customFields, visitsCount, groups] = await Promise.all([
+    const [customFields, visitsCount, groups, connections] = await Promise.all([
       readCustomFieldValues(tx, tenant.licenseId, 'contact', customer.id),
       tx.visit.count({ where: { customerId, licenseId: tenant.licenseId } }),
       this.#groups(tx, tenant, customerId),
+      connectionCounts(tx, tenant, [customer.id]),
     ]);
 
     return {
-      ...toSummary(customer),
+      ...toSummary(customer, connections.get(customer.id) ?? 0),
       banned_at: customer.bannedAt?.toISOString() ?? null,
       custom_fields: customFields,
       // The same subset `list()` returns, derived here rather than a second
@@ -487,8 +495,35 @@ type CustomerRow = {
   _count: { chats: number; tickets: number };
 };
 
+/**
+ * How many connections (threads — "Chat ID") each customer's conversations in
+ * this licence hold, keyed by customer id: one grouped count for the whole
+ * page, never one per row. Scoped to the licence like `#counts` (the note at
+ * the top) — a customer of the same organisation writing to a sibling
+ * workspace must not count here.
+ */
+async function connectionCounts(
+  tx: TenantClient,
+  tenant: TenantContext,
+  customerIds: string[],
+): Promise<Map<string, number>> {
+  if (customerIds.length === 0) return new Map();
+  const rows = await tx.$queryRaw<Array<{ customer_id: string; count: number }>>`
+    SELECT c.customer_id::text AS customer_id, count(t.id)::int AS count
+    FROM chats c
+    JOIN threads t ON t.chat_id = c.id
+    WHERE c.license_id = ${tenant.licenseId}
+      AND c.customer_id = ANY(${customerIds}::uuid[])
+    GROUP BY c.customer_id
+  `;
+  return new Map(rows.map((row) => [row.customer_id, row.count]));
+}
+
 /** Everything but `table_custom_fields` — every caller attaches that separately. */
-function toSummary(row: CustomerRow): Omit<CustomerSummary, 'table_custom_fields'> {
+function toSummary(
+  row: CustomerRow,
+  connections: number,
+): Omit<CustomerSummary, 'table_custom_fields'> {
   return {
     id: row.id,
     name: row.name,
@@ -500,6 +535,7 @@ function toSummary(row: CustomerRow): Omit<CustomerSummary, 'table_custom_fields
     is_lead: row.isLead,
     banned: row.bannedAt !== null,
     chats_count: row._count.chats,
+    connections_count: connections,
     tickets_count: row._count.tickets,
     last_activity_at: row.lastActivityAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),

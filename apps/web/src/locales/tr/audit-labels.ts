@@ -49,6 +49,7 @@ export const auditLabels: Messages = {
   'audit.action.settings.prechat_updated': 'Sohbet öncesi form güncellendi',
   'audit.action.settings.sales_tracker_updated': 'Satış takibi güncellendi',
   'audit.action.settings.appearance_updated': 'Panel yazı tipi varsayılanı değişti',
+  'audit.action.settings.ai_usage_alerts_updated': 'Yapay zekâ kullanım uyarısı alıcıları değişti',
   'audit.action.settings.sla_updated': 'Yanıt hedefleri güncellendi',
   'audit.action.sale.tracked': 'Satış kaydedildi',
   'audit.action.settings.sandbox_created': 'Deneme çalışma alanı oluşturuldu',

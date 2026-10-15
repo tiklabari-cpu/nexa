@@ -10,6 +10,7 @@ import { composeMessage } from '../mime.js';
 import { escapeHtml, renderEmail, safeUrl, type MailLocale, type RenderedEmail } from './layout.js';
 import {
   accountExistsMail,
+  aiUsageAlertMail,
   customerTranscriptMail,
   duration,
   invitationMail,
@@ -116,14 +117,23 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       { locale },
       { workspaceName: 'Acme', subject: 'Solved', body: 'Hi,\nIt is solved.' },
     ),
+    aiUsage: aiUsageAlertMail(ctx, {
+      workspaceName: 'Acme',
+      meter: 'llm',
+      threshold: 80,
+      used: 160_000,
+      cap: 200_000,
+      resetsAt: new Date('2026-10-16T00:00:00Z'),
+      usageUrl: `${APP}/app/settings/ai-usage`,
+    }),
   };
 }
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all thirteen in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all fourteen in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(13);
+      expect(Object.keys(mails)).toHaveLength(14);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();

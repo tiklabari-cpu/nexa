@@ -243,6 +243,10 @@ export const AUDIT_ACTIONS = [
   // The workspace's default panel font (owner, 2026-10-13): it repaints every
   // member's panel, so who changed it and to what is worth a line.
   'settings.appearance_updated',
+  // Who besides the owner hears that the AI allowance is running out (tm
+  // 283.3). The ids before and after — choosing who is told is the owner's
+  // decision, and "why did nobody hear?" is the question this answers.
+  'settings.ai_usage_alerts_updated',
   // SLA targets (FR-MOD-11.5 · 11.5-d). Recorded with the *values*, not just the
   // changed field names — unlike most settings entries. A target is a promise
   // the workspace made about response time, and the question asked after an

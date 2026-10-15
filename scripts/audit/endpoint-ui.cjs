@@ -317,7 +317,22 @@ const INDIRECT = [
  * collection endpoint has a screen and one verb on the item does not, so a
  * thing can be made but not changed, or made but not removed.
  */
-const TRACKED = [];
+const TRACKED = [
+  {
+    op: 'GET /ai/usage',
+    owner: 'tm 283',
+    reason:
+      'the API half of the AI usage screen lands first (283.3); Settings › Usage and limits › ' +
+      'AI usage, which reads it, is 283.4.',
+  },
+  {
+    op: 'PUT /ai/usage/alert-recipients',
+    owner: 'tm 283',
+    reason:
+      "the owner's choice of who else hears the 80%/100% alerts; its picker is on the AI usage " +
+      'screen, 283.4.',
+  },
+];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
 function pathMatcher(path) {

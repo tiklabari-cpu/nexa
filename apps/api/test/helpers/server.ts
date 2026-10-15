@@ -45,6 +45,10 @@ export async function startTestServer(
   const request = async (options: InjectOptions): Promise<LightMyRequestResponse> => {
     const response = await app.inject(options);
     await app.followUps.settled();
+    // A counted model call tells the AI usage alerts after it settles, and they
+    // run beside the response (tm 283.3); a suite that resets the database
+    // next must not TRUNCATE under their transaction.
+    await app.aiUsageAlerts.idle();
     return response;
   };
 

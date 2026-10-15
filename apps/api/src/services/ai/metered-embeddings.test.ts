@@ -53,6 +53,7 @@ class RecordingBudget {
       meter,
       day: '20261003',
       estimate,
+      cap: 1_000_000,
       ledger: {
         surface: attribution.surface,
         modelTier: null,
@@ -65,7 +66,7 @@ class RecordingBudget {
   async reserveDeployment(meter: 'embedding', estimate: number): Promise<AiReservation> {
     this.events.push(`reserveDeployment ${meter} ${estimate}`);
     if (this.refuse) throw this.refuse;
-    return { tenant: null, meter, day: '20261003', estimate, ledger: null };
+    return { tenant: null, meter, day: '20261003', estimate, ledger: null, cap: null };
   }
 
   async settle(reservation: AiReservation, usage: AiTokenUsage): Promise<void> {

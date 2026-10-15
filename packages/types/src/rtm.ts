@@ -162,6 +162,9 @@ export const RTM_PUSH_ACTIONS = [
   'customer_updated',
   'incoming_customers',
   'traffic_visitor_updated',
+  // Workspace notices — a share of today's AI allowance used (tm 283.3), to
+  // the owner and the alert's recipients only.
+  'ai_usage_alert',
   // Errors
   'incoming_error',
 ] as const;

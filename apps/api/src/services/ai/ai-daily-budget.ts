@@ -65,6 +65,7 @@ import {
   AiCapResolver,
   prismaCapInputs,
   type AiDailyCaps,
+  type ResolvedAiCaps,
   type WorkspaceCapInputs,
 } from './ai-caps.js';
 
@@ -187,6 +188,30 @@ export interface AiReservation {
   readonly estimate: number;
   /** The ledger row's attribution; null on operator work. */
   readonly ledger: AiLedgerAttribution | null;
+  /** The workspace's cap on `meter` the reservation was checked against; null on operator work. */
+  readonly cap: number | null;
+}
+
+/**
+ * Where a workspace's counter stands after a settle, or that its cap refused a
+ * call (tm 283.3) — what the usage alerts (`ai-usage-alerts.ts`) listen for.
+ * `cap` is the workspace's on `meter`, as the call was checked against it.
+ */
+export interface AiUsageObservation {
+  tenant: TenantContext;
+  meter: AiMeter;
+  day: string;
+  cap: number;
+}
+
+/**
+ * Told after every workspace settle and every workspace-scope refusal. Called
+ * without being awaited and must not throw: whatever it does happens beside
+ * the model call, never in its way.
+ */
+export interface AiUsageObserver {
+  settled(observation: AiUsageObservation): void;
+  refused(observation: AiUsageObservation): void;
 }
 
 export interface AiBudgetLogger {
@@ -214,6 +239,7 @@ export class AiDailyBudget {
   readonly #caps: AiCapResolver;
   readonly #log: AiBudgetLogger;
   readonly #now: () => Date;
+  #observer: AiUsageObserver | null = null;
 
   /** `caps` is the deployment's defaults; a workspace's own come from its licence and plan (`ai-caps.ts`). */
   constructor(db: PrismaClient, caps: AiDailyCaps, options: AiDailyBudgetOptions) {
@@ -237,6 +263,23 @@ export class AiDailyBudget {
   }
 
   /**
+   * The caps `tenant`'s calls are checked against right now — the usage
+   * screen's denominators (tm 283.3), from the same 60-second cache.
+   */
+  async capsFor(tenant: TenantContext): Promise<ResolvedAiCaps> {
+    return this.#caps.capsFor(tenant);
+  }
+
+  /**
+   * Who hears where a workspace's counters stand (tm 283.3): the usage alerts.
+   * Set once the server has built them — they need the mailer, which is built
+   * after this budget.
+   */
+  observe(observer: AiUsageObserver | null): void {
+    this.#observer = observer;
+  }
+
+  /**
    * Refuse now if not even `minimum` tokens would fit on `meter` — before any
    * work is done for the call. `minimum` must be no more than any real call's
    * estimate, so this never refuses a call `reserve` would have let through.
@@ -253,7 +296,7 @@ export class AiDailyBudget {
           ${BigInt(caps.workspace[meter])}, ${BigInt(caps.global[aiLiveMeterOf(meter)])}) AS scope`,
     );
     const scope = rows[0]?.scope ?? null;
-    if (scope) throw this.#refuse(tenant, meter, scope, at);
+    if (scope) throw this.#refuse(tenant, meter, scope, at, caps.workspace[meter]);
   }
 
   /**
@@ -284,12 +327,13 @@ export class AiDailyBudget {
           ${BigInt(caps.workspace[counted])}, ${BigInt(caps.global[meter])}) AS scope`,
     );
     const scope = rows[0]?.scope ?? null;
-    if (scope) throw this.#refuse(tenant, counted, scope, at);
+    if (scope) throw this.#refuse(tenant, counted, scope, at, caps.workspace[counted]);
     return {
       tenant,
       meter: counted,
       day,
       estimate: amount,
+      cap: caps.workspace[counted],
       ledger: {
         surface: attribution.surface,
         // A completion always has a tier (the request's, else `default`); an
@@ -321,8 +365,8 @@ export class AiDailyBudget {
       SELECT ai_budget_reserve_deployment(${day}, ${meter}, ${BigInt(amount)},
         ${BigInt(deployment[meter].global)}) AS scope`;
     const scope = rows[0]?.scope ?? null;
-    if (scope) throw this.#refuse(null, meter, scope, at);
-    return { tenant: null, meter, day, estimate: amount, ledger: null };
+    if (scope) throw this.#refuse(null, meter, scope, at, null);
+    return { tenant: null, meter, day, estimate: amount, ledger: null, cap: null };
   }
 
   /**
@@ -337,7 +381,7 @@ export class AiDailyBudget {
   async settle(reservation: AiReservation, usage: AiTokenUsage): Promise<void> {
     const input = Math.max(0, Math.ceil(usage.inputTokens));
     const output = Math.max(0, Math.ceil(usage.outputTokens));
-    const { tenant, day, meter, estimate, ledger } = reservation;
+    const { tenant, day, meter, estimate, ledger, cap } = reservation;
     try {
       if (tenant === null || ledger === null) {
         await this.#db.$executeRaw`
@@ -355,6 +399,7 @@ export class AiDailyBudget {
             ${ledger.configVersionId}::uuid) AS refused`,
       );
       const refused = rows[0]?.refused ?? null;
+      if (cap !== null) this.#observe('settled', { tenant, meter, day, cap });
       if (refused) {
         this.#log.error(
           {
@@ -384,11 +429,24 @@ export class AiDailyBudget {
     }
   }
 
+  /** Tell the observer, which never gets to fail the call it is told about. */
+  #observe(kind: 'settled' | 'refused', observation: AiUsageObservation): void {
+    try {
+      this.#observer?.[kind](observation);
+    } catch (error) {
+      this.#log.error(
+        { err: error, event: 'ai.usage_observer_failed', kind },
+        'AI usage observer threw; the call is unaffected',
+      );
+    }
+  }
+
   #refuse(
     tenant: TenantContext | null,
     meter: AiMeter,
     scope: AiCapScope,
     at: Date,
+    cap: number | null,
   ): AiDailyCapError {
     this.#log.warn(
       {
@@ -399,6 +457,11 @@ export class AiDailyBudget {
       },
       'daily AI cap reached; the provider was not called',
     );
+    // The workspace's own allowance is used up — its owner hears (tm 283.3).
+    // The deployment's is the operator's, and no workspace's notice.
+    if (tenant && scope === 'workspace' && cap !== null) {
+      this.#observe('refused', { tenant, meter, day: utcDayKey(at), cap });
+    }
     return new AiDailyCapError(meter, scope, secondsUntilUtcMidnight(at));
   }
 }

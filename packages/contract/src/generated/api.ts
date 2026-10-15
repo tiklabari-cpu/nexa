@@ -7666,6 +7666,70 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai/usage': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read today's AI usage, the last 30 days and the alerts
+     * @description Today's use of each meter against the workspace's daily cap, the last 30
+     *     **UTC** days, which feature spent the tokens, and today's alerts. Owner,
+     *     vice-owner and admin (`reports_read` + admin role); an agent gets 403.
+     *
+     *     - **Meters.** `llm` (model tokens, input + output) and `embedding`
+     *       (embedding input tokens) are the live allowance; `llm_test` and
+     *       `embedding_test` are a simulation's own, smaller one (AI-19-S2). `cap`
+     *       is the cap calls are checked against right now (`override ?? plan ??
+     *       deployment default`); `used` is what the counter has settled, `reserved`
+     *       what calls in flight are holding.
+     *     - **Days are UTC.** The cap renews at `resets_at` (00:00 UTC); `daily`
+     *       has one entry per UTC day, oldest first, today last, zeros on a day
+     *       with no use — the workspace's own time zone is deliberately not used.
+     *     - **Breakdown.** `surfaces` sums the usage ledger over the same window
+     *       per feature and meter. It matches `daily` unless a ledger row failed to
+     *       write (best-effort); the counter is the authority.
+     *     - **Money is an estimate.** `cost_usd` and `pricing` appear only when the
+     *       operator configured unit prices (`AI_PRICE_*`), per meter; computed at
+     *       read time from today's prices and never stored. Provider discounts
+     *       (cached input) and price changes mean it will not match an invoice.
+     */
+    get: operations['getAiUsage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/usage/alert-recipients': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Choose who receives the AI usage alerts
+     * @description Replaces the list of people who, besides the owner, receive the 80% and
+     *     100% alerts (e-mail, if their e-mail notifications are on, and an in-app
+     *     notice). Owner only. Each id must be an active owner, vice-owner or admin
+     *     of the workspace — the people the usage screen is open to; anything
+     *     else is a 400 and nothing is changed. An empty list leaves the owner as
+     *     the only recipient. Audited (`settings.ai_usage_alerts_updated`).
+     */
+    put: operations['setAiUsageAlertRecipients'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/kb-articles': {
     parameters: {
       query?: never;
@@ -10119,6 +10183,91 @@ export interface components {
        *     renders as a column.
        */
       table_custom_fields: components['schemas']['CustomFieldValue'][];
+    };
+    /** @enum {string} */
+    AiUsageMeter: 'llm' | 'embedding' | 'llm_test' | 'embedding_test';
+    AiUsage: {
+      /**
+       * Format: date
+       * @description Today, as a UTC date.
+       */
+      day: string;
+      /**
+       * @description The zone every day here is counted in.
+       * @enum {string}
+       */
+      time_zone: 'UTC';
+      /**
+       * Format: date-time
+       * @description The next 00:00 UTC, when today's allowance renews.
+       */
+      resets_at: string;
+      /** @description How many days `daily` covers, today included (30). */
+      window_days: number;
+      /** @description One entry per meter, live meters first. */
+      meters: {
+        meter: components['schemas']['AiUsageMeter'];
+        /** Format: int64 */
+        used: number;
+        /** Format: int64 */
+        reserved: number;
+        /** Format: int64 */
+        cap: number;
+        /** @description `used` as a share of `cap`, in percent, to one decimal. May exceed 100. */
+        percent: number;
+        /** @description Today's estimated cost; absent when this meter has no configured price. */
+        cost_usd?: number;
+      }[];
+      /** @description One entry per UTC day, oldest first; tokens settled on each meter. */
+      daily: {
+        /** Format: date */
+        day: string;
+        /** Format: int64 */
+        llm: number;
+        /** Format: int64 */
+        embedding: number;
+        /** Format: int64 */
+        llm_test: number;
+        /** Format: int64 */
+        embedding_test: number;
+      }[];
+      /** @description The window's tokens per feature and meter, largest first. */
+      surfaces: {
+        /** @enum {string} */
+        surface: 'ai_agent' | 'copilot' | 'knowledge_index' | 'simulation' | 'qa' | 'cluster';
+        meter: components['schemas']['AiUsageMeter'];
+        /** Format: int64 */
+        input_tokens: number;
+        /** Format: int64 */
+        output_tokens: number;
+        /** @description Estimated; absent when this meter has no configured price. */
+        cost_usd?: number;
+      }[];
+      /** @description The unit prices the estimates use. Absent when none is configured. */
+      pricing?: {
+        /** @enum {string} */
+        currency: 'USD';
+        /** @enum {boolean} */
+        estimated: true;
+        llm_input_usd_per_mtok?: number;
+        llm_output_usd_per_mtok?: number;
+        embedding_usd_per_mtok?: number;
+      };
+      /** @description The alerts sent today, oldest first. */
+      alerts: {
+        /** @enum {string} */
+        meter: 'llm' | 'embedding';
+        /** @enum {integer} */
+        threshold: 80 | 100;
+        /** Format: int64 */
+        used: number;
+        /** Format: int64 */
+        cap: number;
+        /** Format: date-time */
+        created_at: string;
+      }[];
+      /** @description Account ids that receive the alerts besides the owner. */
+      alert_recipients: string[];
     };
     /**
      * @description One append-only entry in the workspace's security trail (NFR-S12). The
@@ -24571,6 +24720,61 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiUsage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's AI usage. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUsage'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setAiUsageAlertRecipients: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          account_ids: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description The recipients now on the list. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            alert_recipients: string[];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

@@ -5,6 +5,7 @@ import {
   AI_USAGE_SURFACES,
   aiLiveMeterOf,
   aiUsageMeterFor,
+  aiUsageThresholdsReached,
 } from './ai-usage.js';
 
 describe('aiUsageMeterFor', () => {
@@ -16,6 +17,21 @@ describe('aiUsageMeterFor', () => {
         );
       }
     }
+  });
+});
+
+describe('aiUsageThresholdsReached', () => {
+  it('reaches 80% and 100% at the exact token, never a token early', () => {
+    expect(aiUsageThresholdsReached(159_999, 200_000)).toEqual([]);
+    expect(aiUsageThresholdsReached(160_000, 200_000)).toEqual([80]);
+    expect(aiUsageThresholdsReached(199_999, 200_000)).toEqual([80]);
+    expect(aiUsageThresholdsReached(200_000, 200_000)).toEqual([80, 100]);
+    expect(aiUsageThresholdsReached(250_000, 200_000)).toEqual([80, 100]);
+  });
+
+  it('reaches nothing against a cap that is not one', () => {
+    expect(aiUsageThresholdsReached(10, 0)).toEqual([]);
+    expect(aiUsageThresholdsReached(10, Number.NaN)).toEqual([]);
   });
 });
 

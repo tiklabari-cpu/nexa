@@ -1,0 +1,89 @@
+# AI usage — the workspace's daily AI allowance, made visible (tm 283.3 ·
+# SiyahTuş analysis AI-16, AI-16-S2/S3).
+#
+# The allowance itself is the platform's (per-workspace override, plan default,
+# deployment default — tm 283.2); nothing here changes it. What the workspace
+# gets is the number, the history, the breakdown and the warning: an 80% and a
+# 100% notice, once per UTC day and live meter, to the owner and the recipients
+# the owner chose.
+#
+# Numbers only. No conversation, prompt or reply text ever appears here.
+
+aiUsage:
+  get:
+    tags: [Billing]
+    operationId: getAiUsage
+    summary: Read today's AI usage, the last 30 days and the alerts
+    description: |
+      Today's use of each meter against the workspace's daily cap, the last 30
+      **UTC** days, which feature spent the tokens, and today's alerts. Owner,
+      vice-owner and admin (`reports_read` + admin role); an agent gets 403.
+
+      - **Meters.** `llm` (model tokens, input + output) and `embedding`
+        (embedding input tokens) are the live allowance; `llm_test` and
+        `embedding_test` are a simulation's own, smaller one (AI-19-S2). `cap`
+        is the cap calls are checked against right now (`override ?? plan ??
+        deployment default`); `used` is what the counter has settled, `reserved`
+        what calls in flight are holding.
+      - **Days are UTC.** The cap renews at `resets_at` (00:00 UTC); `daily`
+        has one entry per UTC day, oldest first, today last, zeros on a day
+        with no use — the workspace's own time zone is deliberately not used.
+      - **Breakdown.** `surfaces` sums the usage ledger over the same window
+        per feature and meter. It matches `daily` unless a ledger row failed to
+        write (best-effort); the counter is the authority.
+      - **Money is an estimate.** `cost_usd` and `pricing` appear only when the
+        operator configured unit prices (`AI_PRICE_*`), per meter; computed at
+        read time from today's prices and never stored. Provider discounts
+        (cached input) and price changes mean it will not match an invoice.
+    responses:
+      "200":
+        description: The workspace's AI usage.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUsage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiUsageAlertRecipients:
+  put:
+    tags: [Billing]
+    operationId: setAiUsageAlertRecipients
+    summary: Choose who receives the AI usage alerts
+    description: |
+      Replaces the list of people who, besides the owner, receive the 80% and
+      100% alerts (e-mail, if their e-mail notifications are on, and an in-app
+      notice). Owner only. Each id must be an active owner, vice-owner or admin
+      of the workspace — the people the usage screen is open to; anything
+      else is a 400 and nothing is changed. An empty list leaves the owner as
+      the only recipient. Audited (`settings.ai_usage_alerts_updated`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [account_ids]
+            properties:
+              account_ids:
+                type: array
+                maxItems: 20
+                uniqueItems: true
+                items: { type: string, format: uuid }
+    responses:
+      "200":
+        description: The recipients now on the list.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alert_recipients]
+              properties:
+                alert_recipients:
+                  type: array
+                  items: { type: string, format: uuid }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

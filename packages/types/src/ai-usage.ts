@@ -71,6 +71,39 @@ export function aiLiveMeterOf(meter: AiUsageMeter): AiLiveMeter {
 export const AI_TEST_CAP_PERCENT = 20;
 
 /**
+ * The shares of a workspace's daily allowance that warn its owner, in percent
+ * (tm 283.3 · AI-16-S2): once each per workspace, UTC day and live meter. 100
+ * is also sent when the cap first refuses a call — a refusal can come a little
+ * before the counter reads 100%, since a call reserves its estimate first.
+ */
+export const AI_USAGE_ALERT_THRESHOLDS = [80, 100] as const;
+export type AiUsageAlertThreshold = (typeof AI_USAGE_ALERT_THRESHOLDS)[number];
+
+/**
+ * The thresholds `used` of `cap` has reached, lowest first. A cap is at least
+ * one token, so the share is defined; integers only, so 80% of 200 000 is
+ * reached at exactly 160 000 and not at a rounding of it.
+ */
+export function aiUsageThresholdsReached(used: number, cap: number): AiUsageAlertThreshold[] {
+  if (!(cap >= 1)) return [];
+  return AI_USAGE_ALERT_THRESHOLDS.filter((threshold) => used * 100 >= threshold * cap);
+}
+
+/**
+ * The realtime push an alert is announced with to the people it is for (tm
+ * 283.3) — `RTM_PUSH_ACTIONS` `ai_usage_alert`. Numbers only, like the usage
+ * screen: no conversation, no text.
+ */
+export interface AiUsageAlertPush {
+  meter: AiLiveMeter;
+  threshold: AiUsageAlertThreshold;
+  /** `yyyy-mm-dd`, UTC — the day the allowance belongs to. */
+  day: string;
+  used: number;
+  cap: number;
+}
+
+/**
  * The Redis channel a change to a workspace's AI caps is announced on (tm 389
  * §D218 decision 5). The message is the licence id, or `*` for every
  * workspace (a plan or deployment default changed); the tenant API drops its

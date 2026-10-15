@@ -62,6 +62,7 @@ class RecordingBudget {
       meter,
       day: '20261002',
       estimate,
+      cap: 1_000_000,
       ledger: {
         surface: attribution.surface,
         modelTier,

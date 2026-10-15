@@ -905,7 +905,11 @@ describe('module parity matrix — what is still owed', () => {
       // pre-chat form, per brand, set in the web panel. The app configures no
       // widget, so there is nothing to call; nothing here re-scopes. (Bumped in
       // tm 283.1: a turbo cache replay had kept this test green since tm 279.)
-      contractEndpoints: 225,
+      // 225 -> 227 with `/ai/usage` and `/ai/usage/alert-recipients` (tm 283.3)
+      // — the workspace's daily AI allowance, its history and its 80%/100%
+      // alerts, read and configured in the web panel's Settings by the owner
+      // and admins. The app has no settings screens; nothing here re-scopes.
+      contractEndpoints: 227,
       scopeBoundaries: 1,
     });
   });

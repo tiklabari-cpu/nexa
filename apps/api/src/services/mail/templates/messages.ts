@@ -794,6 +794,114 @@ export function slaBreachMail(
 }
 
 /**
+ * A share of a workspace's daily AI allowance is used (tm 283.3 · AI-16-S2):
+ * 80% as a warning, 100% when the AI has stopped answering for the day. Sent
+ * to the owner and the recipients the owner chose; numbers only — no
+ * conversation, no text a visitor wrote.
+ */
+export function aiUsageAlertMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    meter: 'llm' | 'embedding';
+    threshold: 80 | 100;
+    used: number;
+    cap: number;
+    /** The next 00:00 UTC, when the allowance renews. */
+    resetsAt: Date;
+    usageUrl: string | null;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const number = (value: number): string =>
+    new Intl.NumberFormat(t ? 'tr-TR' : 'en-US').format(value);
+  const full = input.threshold === 100;
+  const what =
+    input.meter === 'llm'
+      ? t
+        ? 'Yapay zekâ yanıtları (dil modeli)'
+        : 'AI replies (language model)'
+      : t
+        ? 'Bilgi arama (embedding)'
+        : 'Knowledge search (embedding)';
+  const renews = `${formatDateTime(input.resetsAt, ctx.locale, 'UTC')} UTC`;
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: full
+        ? t
+          ? `${input.workspaceName} çalışma alanının bugünkü yapay zekâ kotası doldu. Kota yenilenene kadar yapay zekâ yeni mesajlara yanıt vermez; mesajlar insan temsilcilere kalır.`
+          : `Today's AI allowance for ${input.workspaceName} is used up. Until it renews the AI does not answer new messages; they wait for a human agent.`
+        : t
+          ? `${input.workspaceName} çalışma alanı bugünkü yapay zekâ kotasının %${input.threshold}'ini kullandı. Kota dolarsa yapay zekâ gün sonuna kadar yanıt vermez.`
+          : `${input.workspaceName} has used ${input.threshold}% of today's AI allowance. If it runs out, the AI stops answering until the day ends.`,
+    },
+    {
+      type: 'facts',
+      rows: [
+        [t ? 'Kullanım' : 'Usage', what],
+        [
+          t ? 'Bugün' : 'Today',
+          t
+            ? `${number(input.used)} / ${number(input.cap)} token`
+            : `${number(input.used)} / ${number(input.cap)} tokens`,
+        ],
+        [t ? 'Yenilenme' : 'Renews', renews],
+      ],
+    },
+  ];
+  if (input.usageUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Kullanımı gör' : 'See usage',
+      url: input.usageUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  blocks.push({
+    type: 'note',
+    text: t
+      ? 'Günler UTC saatine göre sayılır. Kotayı SiyahTuş ekibi belirler; artırmak için bizimle iletişime geçin.'
+      : 'Days are counted in UTC. The allowance is set by the SiyahTuş team; contact us to raise it.',
+  });
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: full
+      ? t
+        ? 'SiyahTuş: bugünkü yapay zekâ kotası doldu'
+        : "SiyahTuş: today's AI allowance is used up"
+      : t
+        ? `SiyahTuş: bugünkü yapay zekâ kotasının %${input.threshold}'i kullanıldı`
+        : `SiyahTuş: ${input.threshold}% of today's AI allowance used`,
+    preheader: full
+      ? t
+        ? `Yapay zekâ ${renews} saatine kadar yanıt vermiyor.`
+        : `The AI is not answering until ${renews}.`
+      : t
+        ? 'Kullanımı panelden izleyebilirsiniz.'
+        : 'You can follow usage in the panel.',
+    icon: full ? ICON.alarm : ICON.chart,
+    tone: full ? 'alert' : 'brand',
+    heading: full
+      ? t
+        ? 'Yapay zekâ kotası doldu'
+        : 'AI allowance used up'
+      : t
+        ? `Yapay zekâ kotasının %${input.threshold}'i kullanıldı`
+        : `${input.threshold}% of the AI allowance used`,
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının sahibi ya da yapay zekâ kullanım uyarılarının alıcısı olduğunuz için aldınız.'
+        : 'You received this email because you own this workspace or receive its AI usage alerts.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
  * A ticket update a workspace wrote itself (FR-MOD-08.7.5): its subject and
  * its text, untouched, inside the shared frame. The workspace's words are the
  * whole message: the HTML puts them in the frame (escaped like everything

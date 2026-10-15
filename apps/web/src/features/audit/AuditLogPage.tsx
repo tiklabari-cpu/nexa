@@ -193,6 +193,7 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'settings.prechat_updated',
       'settings.sales_tracker_updated',
       'settings.appearance_updated',
+      'settings.ai_usage_alerts_updated',
       'settings.trusted_domain_added',
       'settings.trusted_domain_removed',
       'settings.ip_allowlist_added',

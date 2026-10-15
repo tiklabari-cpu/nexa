@@ -42,6 +42,16 @@ const secret = (minLength: number) =>
     .min(minLength, `must be at least ${minLength} characters`)
     .refine((v) => !/^(changeme|secret|password)$/i.test(v), 'must not be a placeholder value');
 
+/**
+ * A unit price in US dollars per million tokens (tm 283.3), or unset — an
+ * empty line included. Zero is a price (a free model), negative is a typo.
+ */
+const optionalPrice = () =>
+  z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().finite().min(0).max(1_000_000).optional(),
+  );
+
 /** An absolute `https://` address (the legal links, tm 257.9). */
 const httpsUrl = z
   .string()
@@ -823,6 +833,18 @@ export const envSchema = z.object({
   AI_DAILY_LLM_TOKENS_GLOBAL: z.coerce.number().int().min(1).default(2_000_000),
   AI_DAILY_EMBEDDING_TOKENS_PER_WORKSPACE: z.coerce.number().int().min(1).default(2_000_000),
   AI_DAILY_EMBEDDING_TOKENS_GLOBAL: z.coerce.number().int().min(1).default(20_000_000),
+  /**
+   * Unit prices, in US dollars per million tokens, that the AI usage screen
+   * turns tokens into an *estimated* cost with (tm 283.3 · AI-16-S3). Read at
+   * the moment the screen is read — never stored, so a price change re-prices
+   * history, and never compiled in (ADR pilot-llm-embedding-provider §8: the
+   * provider's price list is the provider's). Unset, or an empty line, means no
+   * money figure for that meter at all — not a zero: a cost the operator never
+   * gave is unknown, not free. The LLM needs both of its prices. Not a secret.
+   */
+  AI_PRICE_LLM_INPUT_USD_PER_MTOK: optionalPrice(),
+  AI_PRICE_LLM_OUTPUT_USD_PER_MTOK: optionalPrice(),
+  AI_PRICE_EMBEDDING_USD_PER_MTOK: optionalPrice(),
   /**
    * Outgoing mail (M-PROV-a). `file` writes each message under `MAIL_DIR`
    * instead of sending it (PLAN A4); `null` discards, which is what the test

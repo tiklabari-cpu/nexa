@@ -52,6 +52,8 @@ import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
 import { listenForAiCapsChanges } from './services/ai/ai-caps-events.js';
+import { AiUsageAlerts } from './services/ai/ai-usage-alerts.js';
+import { RealtimePublisher } from './services/realtime/publisher.js';
 import { MeteredEmbeddings } from './services/ai/metered-embeddings.js';
 import { MeteredLlm } from './services/ai/metered-llm.js';
 import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
@@ -79,6 +81,7 @@ import copilotRoutes from './routes/copilot.js';
 import commandPaletteRoutes from './routes/command-palette.js';
 import appRoutes from './routes/apps.js';
 import auditLogRoutes from './routes/audit-log.js';
+import aiUsageRoutes from './routes/ai-usage.js';
 import healthRoutes from './routes/health.js';
 import deploymentRoutes from './routes/deployment.js';
 
@@ -432,6 +435,22 @@ export async function buildServer({
   const mailer = new CappedMailer(carrier, app.db, mailDailyCaps(env), {
     logger: app.log.child({ component: 'mailer' }),
   });
+  // The 80%/100% notices of a workspace's AI allowance (tm 283.3): told by
+  // the budget after every settle and every refusal, beside the call and never
+  // in its way. Built here because it mails; drained on close so a notice that
+  // was claimed is not abandoned mid-send.
+  const aiUsageAlerts = new AiUsageAlerts(app.db, {
+    mailer,
+    publisher: new RealtimePublisher(app.redis, app.log),
+    appUrl: env.WEB_APP_URL.replace(/\/+$/, ''),
+    logger: app.log.child({ component: 'ai-usage-alerts' }),
+  });
+  aiDailyBudget.observe(aiUsageAlerts);
+  app.decorate('aiUsageAlerts', aiUsageAlerts);
+  app.addHook('onClose', async () => {
+    aiDailyBudget.observe(null);
+    await aiUsageAlerts.idle();
+  });
   // One emitter for the whole server: the caller the webhook stack never had
   // (FR-MOD-09.4). Built here, once `database` has decorated `app.db`, and
   // handed both to the sweeps and to every route that commits an event
@@ -584,6 +603,7 @@ export async function buildServer({
         ...(appsEndpoints ? { appsEndpoints } : {}),
       });
       await api.register(auditLogRoutes, { env });
+      await api.register(aiUsageRoutes, { env, budget: aiDailyBudget });
     },
     { prefix: API_PREFIX },
   );

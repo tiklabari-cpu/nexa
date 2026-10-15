@@ -1222,6 +1222,23 @@ describe('production configuration', () => {
       ).toBeNull();
     });
 
+    it('reads the AI unit prices as optional numbers — an empty line is unset, a negative refuses to boot (tm 283.3)', () => {
+      const env = parseEnv({
+        ...PROD_BASE,
+        ...OPENAI,
+        AI_PRICE_LLM_INPUT_USD_PER_MTOK: '2.5',
+        AI_PRICE_LLM_OUTPUT_USD_PER_MTOK: '10',
+        AI_PRICE_EMBEDDING_USD_PER_MTOK: '',
+      });
+      expect(env.AI_PRICE_LLM_INPUT_USD_PER_MTOK).toBe(2.5);
+      expect(env.AI_PRICE_LLM_OUTPUT_USD_PER_MTOK).toBe(10);
+      expect(env.AI_PRICE_EMBEDDING_USD_PER_MTOK).toBeUndefined();
+      expect(problemsOf({ ...PROD_BASE, ...OPENAI })).not.toMatch(/AI_PRICE_/);
+      expect(() =>
+        parseEnv({ ...PROD_BASE, ...OPENAI, AI_PRICE_LLM_INPUT_USD_PER_MTOK: '-1' }),
+      ).toThrow(/AI_PRICE_LLM_INPUT_USD_PER_MTOK/);
+    });
+
     it.each(['LLM_API_BASE_URL', 'LLM_MODEL', 'LLM_API_KEY', 'LLM_PROVIDER_REGION'])(
       'refuses to boot without %s, naming the key',
       (missing) => {

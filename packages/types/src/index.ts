@@ -15,6 +15,7 @@ export * from './access-review.js';
 export * from './rtm.js';
 export * from './ids.js';
 export * from './id-glossary.js';
+export * from './conversation-day.js';
 export * from './realtime-bus.js';
 export * from './widget.js';
 export * from './sales-tracker.js';

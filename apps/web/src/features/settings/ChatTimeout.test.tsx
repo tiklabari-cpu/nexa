@@ -6,14 +6,19 @@
  * agent cannot touch it at all.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatTimeout } from './ChatTimeout.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
-const DEFAULTS = { chat_timeout_seconds: null as number | null, updated_at: null as string | null };
+const DEFAULTS = {
+  chat_timeout_seconds: null as number | null,
+  day_boundary_timezone: 'Europe/Istanbul',
+  day_boundary_hour: 0,
+  updated_at: null as string | null,
+};
 
 function okJson(body: unknown): Response {
   return {
@@ -89,7 +94,7 @@ describe('ChatTimeout', () => {
   });
 
   it('loads a saved window into the form, converted to whole hours', async () => {
-    stubFetch({ chat_timeout_seconds: 7200, updated_at: '2026-08-01T00:00:00.000Z' });
+    stubFetch({ ...DEFAULTS, chat_timeout_seconds: 7200, updated_at: '2026-08-01T00:00:00.000Z' });
     renderChatTimeout();
 
     expect(
@@ -123,7 +128,7 @@ describe('ChatTimeout', () => {
   });
 
   it('saves null when turned off, regardless of the (disabled) amount field', async () => {
-    stubFetch({ chat_timeout_seconds: 3600, updated_at: '2026-08-01T00:00:00.000Z' });
+    stubFetch({ ...DEFAULTS, chat_timeout_seconds: 3600, updated_at: '2026-08-01T00:00:00.000Z' });
     renderChatTimeout();
 
     const toggle = await screen.findByRole('checkbox', { name: /Automatically close idle chats/ });
@@ -190,8 +195,115 @@ describe('ChatTimeout', () => {
     ).toBeDisabled();
     expect(screen.getByLabelText('Idle for')).toBeDisabled();
     expect(screen.getByLabelText('Unit')).toBeDisabled();
+    expect(screen.getByLabelText('Time zone')).toBeDisabled();
+    expect(screen.getByLabelText('Day starts at')).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(putBodies).toHaveLength(0);
+  });
+});
+
+describe('ChatTimeout day boundary (ID-04)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 21:30 UTC on 14 October is 00:30 on the 15th in Istanbul.
+    vi.setSystemTime(new Date('2026-10-14T21:30:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows the shipped default — Europe/Istanbul, 00:00 — for a workspace that never set it', async () => {
+    renderChatTimeout();
+
+    expect(await screen.findByLabelText('Time zone')).toHaveValue('Europe/Istanbul');
+    expect(screen.getByLabelText('Day starts at')).toHaveValue('0');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('reads a server that predates the setting as the default rather than blank', async () => {
+    stubFetch({ chat_timeout_seconds: null, updated_at: null } as typeof DEFAULTS);
+    renderChatTimeout();
+
+    expect(await screen.findByLabelText('Time zone')).toHaveValue('Europe/Istanbul');
+    expect(screen.getByLabelText('Day starts at')).toHaveValue('0');
+  });
+
+  it('shows a live example built from the chosen zone and hour', async () => {
+    renderChatTimeout();
+    const example = await screen.findByRole('note', { name: 'Day boundary example' });
+
+    // 00:30 in Istanbul — already the 15th although it is still the 14th in UTC.
+    expect(example).toHaveTextContent('Right now it is 00:30 in Europe/Istanbul');
+    expect(example).toHaveTextContent('belongs to 2026-10-15');
+    expect(example).toHaveTextContent('Each day runs from 00:00 to 23:59.');
+
+    await userEvent.selectOptions(screen.getByLabelText('Day starts at'), '6');
+    expect(example).toHaveTextContent('belongs to 2026-10-14');
+    expect(example).toHaveTextContent('05:59 still belongs to the previous day');
+    expect(example).toHaveTextContent('one at 06:00 to the new day');
+
+    await userEvent.selectOptions(screen.getByLabelText('Time zone'), 'America/New_York');
+    expect(example).toHaveTextContent('Right now it is 17:30 in America/New_York');
+    expect(example).toHaveTextContent('belongs to 2026-10-14');
+  });
+
+  it('narrows the zone list as you type and keeps the selected zone listed', async () => {
+    renderChatTimeout();
+    await screen.findByLabelText('Time zone');
+
+    await userEvent.type(screen.getByLabelText('Search time zones'), 'new york');
+    const options = within(screen.getByLabelText('Time zone')).getAllByRole('option');
+    const names = options.map((option) => option.getAttribute('value'));
+    expect(names).toContain('America/New_York');
+    expect(names).not.toContain('Asia/Tokyo');
+    // The saved zone stays visible so the picker never shows an empty selection.
+    expect(names).toContain('Europe/Istanbul');
+    expect(screen.getByLabelText('Time zone')).toHaveValue('Europe/Istanbul');
+  });
+
+  it('says so when no zone matches the search', async () => {
+    renderChatTimeout();
+    await screen.findByLabelText('Time zone');
+
+    const search = screen.getByLabelText('Search time zones');
+    await userEvent.type(search, 'istanbul');
+    expect(screen.queryByText('No time zone matches that search.')).not.toBeInTheDocument();
+
+    await userEvent.clear(search);
+    await userEvent.type(search, 'zzzz-not-a-zone');
+    expect(screen.getByText('No time zone matches that search.')).toBeInTheDocument();
+  });
+
+  it('saves a changed zone and hour through PUT, next to the timeout', async () => {
+    renderChatTimeout();
+    await userEvent.selectOptions(await screen.findByLabelText('Time zone'), 'America/New_York');
+    await userEvent.selectOptions(screen.getByLabelText('Day starts at'), '6');
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({
+      chat_timeout_seconds: null,
+      day_boundary_timezone: 'America/New_York',
+      day_boundary_hour: 6,
+    });
+  });
+
+  it('sends only the boundary field that changed', async () => {
+    renderChatTimeout();
+    await userEvent.selectOptions(await screen.findByLabelText('Day starts at'), '23');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({ chat_timeout_seconds: null, day_boundary_hour: 23 });
+  });
+
+  it('typing in the search box alone does not make the form dirty', async () => {
+    renderChatTimeout();
+    await screen.findByLabelText('Time zone');
+    await userEvent.type(screen.getByLabelText('Search time zones'), 'tokyo');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 });
 
@@ -201,7 +313,7 @@ describe('ChatTimeout localisation (NFR-I18N2)', () => {
     resetLocale();
   });
 
-  it('paints Chat timeout in Turkish when that is the active locale', async () => {
+  it('paints Chat timeout and day boundary in Turkish when that is the active locale', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithLocale(
       <QueryClientProvider client={queryClient}>
@@ -210,6 +322,8 @@ describe('ChatTimeout localisation (NFR-I18N2)', () => {
       'tr',
     );
 
-    expect(await screen.findByRole('region', { name: 'Sohbet zaman aşımı' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('region', { name: 'Sohbet süresi ve gün sınırı' }),
+    ).toBeInTheDocument();
   });
 });

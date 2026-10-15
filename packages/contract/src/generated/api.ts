@@ -4922,6 +4922,14 @@ export interface paths {
      * @description Creates the row on first write. `chat_timeout_seconds` must be a positive
      *     integer (up to 30 days) or null to disable — a zero or negative window is
      *     rejected, since reaching the sweep it would close every live chat at once.
+     *
+     *     The conversation day boundary (ID-04) is saved here too, and is optional:
+     *     leave a field out and the stored value stays. `day_boundary_timezone` must
+     *     be a real IANA zone (`Mars/Olympus` → 400) and `day_boundary_hour` a whole
+     *     number 0-23 (`24` → 400). Changing either affects only connections that
+     *     start afterwards — chats already filed under a day keep it — and writes an
+     *     audit entry (`settings.chat_timeout_updated`) carrying the old and new
+     *     boundary.
      */
     put: operations['setChatTimeout'];
     post?: never;
@@ -9794,6 +9802,14 @@ export interface components {
      *     `chat_timeout_seconds` is null when auto-close is off — which is also
      *     what a workspace that has never saved it reads, since no row exists yet.
      *     A stored value is always a positive integer.
+     *
+     *     The same row carries the conversation **day boundary** (ID-04, decision
+     *     K3): which calendar day a conversation belongs to is counted in
+     *     `day_boundary_timezone`, with the day starting at `day_boundary_hour`
+     *     local time. A workspace with no row reads the defaults — Europe/Istanbul,
+     *     00:00. Changing it affects only connections that start afterwards; a chat
+     *     already filed under a day keeps it. The AI daily quota and report day
+     *     buckets stay on the UTC day.
      */
     ChatTimeoutSettings: {
       /**
@@ -9806,6 +9822,16 @@ export interface components {
        * @description Seconds of inactivity before auto-close, or null when disabled.
        */
       chat_timeout_seconds: number | null;
+      /**
+       * @description IANA zone the conversation day is counted in. Defaults to `Europe/Istanbul` when never set.
+       * @example Europe/Istanbul
+       */
+      day_boundary_timezone: string;
+      /**
+       * Format: int32
+       * @description The local hour a conversation day starts at (`0` = midnight, `6` = 05:59 still belongs to the previous day). Defaults to `0`.
+       */
+      day_boundary_hour: number;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -21042,6 +21068,16 @@ export interface operations {
            * @description Seconds of inactivity before auto-close; null disables it.
            */
           chat_timeout_seconds: number | null;
+          /**
+           * @description IANA zone the conversation day is counted in.
+           * @example Europe/Istanbul
+           */
+          day_boundary_timezone?: string;
+          /**
+           * Format: int32
+           * @description The local hour a conversation day starts at.
+           */
+          day_boundary_hour?: number;
         };
       };
     };

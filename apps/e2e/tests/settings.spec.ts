@@ -1067,6 +1067,68 @@ test.describe('settings', () => {
       expect(restored.ok(), `could not restore chat timeout: ${restored.status()}`).toBe(true);
     }
   });
+
+  /**
+   * Conversation day boundary (ID-04 · tm 285, K3). The zone is found through
+   * the search box, the hour through its picker, and the claim is the round
+   * trip through the server after a reload — plus that a zone the engine does
+   * not know is refused by the endpoint rather than stored. The seeded
+   * workspace runs on the default (Europe/Istanbul 00:00), so it is restored no
+   * matter how the test ends.
+   */
+  test('saves the day-boundary zone and hour through the search picker and survives a reload (ID-04)', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const putBoundary = (data: Record<string, unknown>) =>
+      request.put(`${API_BASE}/settings/chat-timeout`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: { chat_timeout_seconds: null, ...data },
+      });
+
+    try {
+      await agentPage.goto('/app/settings/chat-timeout');
+      const section = agentPage.getByRole('region', { name: 'Chat timeout and day boundary' });
+      await expect(section).toBeVisible();
+      await expect(section.getByLabel('Time zone', { exact: true })).toHaveValue('Europe/Istanbul');
+      await expect(section.getByLabel('Day starts at')).toHaveValue('0');
+
+      await section.getByLabel('Search time zones').fill('new york');
+      await section.getByLabel('Time zone', { exact: true }).selectOption('America/New_York');
+      await section.getByLabel('Day starts at').selectOption('6');
+      await expect(section.getByRole('note', { name: 'Day boundary example' })).toContainText(
+        'America/New_York',
+      );
+
+      const saved = agentPage.waitForResponse(
+        (response) =>
+          response.url().endsWith('/settings/chat-timeout') &&
+          response.request().method() === 'PUT',
+      );
+      await section.getByRole('button', { name: 'Save' }).click();
+      expect((await saved).status()).toBe(200);
+
+      await agentPage.reload();
+      const reloaded = agentPage.getByRole('region', { name: 'Chat timeout and day boundary' });
+      await expect(reloaded.getByLabel('Time zone', { exact: true })).toHaveValue(
+        'America/New_York',
+      );
+      await expect(reloaded.getByLabel('Day starts at')).toHaveValue('6');
+
+      // The endpoint, not only the form, refuses a zone that does not exist.
+      const bad = await putBoundary({ day_boundary_timezone: 'Mars/Olympus' });
+      expect(bad.status()).toBe(400);
+      const badHour = await putBoundary({ day_boundary_hour: 24 });
+      expect(badHour.status()).toBe(400);
+    } finally {
+      const restored = await putBoundary({
+        day_boundary_timezone: 'Europe/Istanbul',
+        day_boundary_hour: 0,
+      });
+      expect(restored.ok(), `could not restore day boundary: ${restored.status()}`).toBe(true);
+    }
+  });
 });
 
 /**

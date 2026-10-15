@@ -2166,6 +2166,12 @@ model InboxSettings {
   /// settings endpoint and re-checked by the sweep, so a zero or negative window
   /// (which would close every live chat at once) can never take effect.
   chatTimeoutSeconds Int?     @map("chat_timeout_seconds")
+  /// The IANA zone a conversation's day is counted in (ID-04 · K3). Defaults to
+  /// `DEFAULT_DAY_BOUNDARY.timezone`; the endpoint checks it against `Intl`.
+  dayBoundaryTz      String   @default("Europe/Istanbul") @map("day_boundary_tz")
+  /// The local hour a conversation day starts at, 0-23 (CHECK in the migration).
+  /// Defaults to `DEFAULT_DAY_BOUNDARY.hour`.
+  dayBoundaryHour    Int      @default(0) @map("day_boundary_hour") @db.SmallInt
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

@@ -81,7 +81,7 @@ export const settings: Messages = {
   'settings.nav.section.sla': 'SLA',
   'settings.nav.section.cannedResponses': 'Saved replies',
   'settings.nav.section.tags': 'Tags',
-  'settings.nav.section.chatTimeout': 'Chat timeout',
+  'settings.nav.section.chatTimeout': 'Chat timeout and day boundary',
   'settings.nav.section.ticketEmailTemplates': 'Ticket email templates',
   'settings.nav.section.customFields': 'Custom fields',
   'settings.nav.section.chatForms': 'Chat forms',
@@ -231,9 +231,9 @@ export const settings: Messages = {
   'settings.tags.editTeamsAriaLabel': 'Edit teams for tag {name}',
 
   // Chat timeout — ChatTimeout.tsx
-  'settings.chatTimeout.title': 'Chat timeout',
+  'settings.chatTimeout.title': 'Chat timeout and day boundary',
   'settings.chatTimeout.description':
-    'Automatically close conversations that have gone quiet for a while.',
+    'Automatically close conversations that have gone quiet for a while, and choose where one conversation day ends and the next begins.',
   'settings.chatTimeout.loadError': 'Could not load the chat timeout setting.',
   'settings.chatTimeout.enableLabel': 'Automatically close idle chats',
   'settings.chatTimeout.enableHint':
@@ -243,6 +243,24 @@ export const settings: Messages = {
   'settings.chatTimeout.unitMinutes': 'Minutes',
   'settings.chatTimeout.unitHours': 'Hours',
   'settings.chatTimeout.amountError': 'Enter a whole number greater than 0, up to 30 days total.',
+
+  // Conversation day boundary — ChatTimeout.tsx (ID-04)
+  'settings.dayBoundary.heading': 'Day boundary',
+  'settings.dayBoundary.description':
+    'A conversation belongs to one day. Pick the time zone that day is counted in and the hour it starts, so a player writing just after midnight is filed under the right day.',
+  'settings.dayBoundary.searchLabel': 'Search time zones',
+  'settings.dayBoundary.searchPlaceholder': 'e.g. istanbul, new york, utc+3',
+  'settings.dayBoundary.zoneLabel': 'Time zone',
+  'settings.dayBoundary.noMatch': 'No time zone matches that search.',
+  'settings.dayBoundary.hourLabel': 'Day starts at',
+  'settings.dayBoundary.exampleLabel': 'Day boundary example',
+  'settings.dayBoundary.exampleNow':
+    'Right now it is {time} in {zone}: a chat started now belongs to {day}.',
+  'settings.dayBoundary.exampleSpanMidnight': 'Each day runs from 00:00 to 23:59.',
+  'settings.dayBoundary.exampleSpan':
+    'The day starts at {start}: a chat at {before} still belongs to the previous day, one at {start} to the new day.',
+  'settings.dayBoundary.scopeNote':
+    'A change applies to connections that start afterwards; a chat already filed under a day keeps it. Reports and the AI daily quota keep counting days in UTC.',
 
   // Ticket email templates — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Ticket email templates',

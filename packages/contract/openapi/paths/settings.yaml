@@ -1459,6 +1459,14 @@ chatTimeout:
       Creates the row on first write. `chat_timeout_seconds` must be a positive
       integer (up to 30 days) or null to disable — a zero or negative window is
       rejected, since reaching the sweep it would close every live chat at once.
+
+      The conversation day boundary (ID-04) is saved here too, and is optional:
+      leave a field out and the stored value stays. `day_boundary_timezone` must
+      be a real IANA zone (`Mars/Olympus` → 400) and `day_boundary_hour` a whole
+      number 0-23 (`24` → 400). Changing either affects only connections that
+      start afterwards — chats already filed under a day keep it — and writes an
+      audit entry (`settings.chat_timeout_updated`) carrying the old and new
+      boundary.
     requestBody:
       required: true
       content:
@@ -1474,6 +1482,16 @@ chatTimeout:
                 maximum: 2592000
                 nullable: true
                 description: Seconds of inactivity before auto-close; null disables it.
+              day_boundary_timezone:
+                type: string
+                example: Europe/Istanbul
+                description: IANA zone the conversation day is counted in.
+              day_boundary_hour:
+                type: integer
+                format: int32
+                minimum: 0
+                maximum: 23
+                description: The local hour a conversation day starts at.
     responses:
       "200":
         description: Updated

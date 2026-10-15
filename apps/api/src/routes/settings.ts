@@ -21,6 +21,8 @@ import {
   WIDGET_WELCOME_TEXT_MAX,
   WIDGET_WELCOME_TITLE_MAX,
   EXPERTISE_NAME_MAX_LENGTH,
+  isDayBoundaryHour,
+  isDayBoundaryTimeZone,
   isIanaTimeZone,
   PANEL_FONT_PRESETS,
   RETENTION_TIERS,
@@ -78,6 +80,7 @@ import {
   type CertificateFacts,
 } from '../lib/sso-connection.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
+import { dayBoundaryFromRow, type DayBoundaryRow } from '../services/chat/day-boundary.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
 import { secondsUntilUtcMidnight } from '../services/ai/ai-daily-budget.js';
@@ -522,6 +525,21 @@ const CHAT_TIMEOUT_MAX_SECONDS = 2_592_000;
  */
 const updateChatTimeoutBody = z.object({
   chat_timeout_seconds: z.number().int().positive().max(CHAT_TIMEOUT_MAX_SECONDS).nullable(),
+  // The conversation day boundary (ID-04 · K3) rides on the same row. Both are
+  // optional — leaving one out keeps what is stored — and both are checked here
+  // because the database holds a bare TEXT/SMALLINT: the zone against the
+  // engine's closed IANA list (`Mars/Olympus` is a 400), the hour as a whole
+  // number 0-23 (`24` is a 400, never "midnight").
+  day_boundary_timezone: z
+    .string()
+    .refine(isDayBoundaryTimeZone, {
+      message: 'must be a real IANA time zone, e.g. Europe/Istanbul',
+    })
+    .optional(),
+  day_boundary_hour: z
+    .number()
+    .refine(isDayBoundaryHour, { message: 'must be a whole number from 0 to 23' })
+    .optional(),
 });
 
 /**
@@ -2672,18 +2690,47 @@ export default async function settingsRoutes(
       // Keyed by `(license, brand)`, so a save under one brand leaves another's.
       const { updated, brandId } = await request.withTenant(async (tx) => {
         const brandId = await resolveBrandId(tx, request.brandId);
+        const where = { licenseId_brandId: { licenseId: tenant.licenseId, brandId } };
+        // What the day boundary was, to say in the audit entry what it became.
+        // Read before the write so the entry shows the real previous value, and
+        // a workspace with no row shows the default it was running on.
+        const before = dayBoundaryFromRow(await tx.inboxSettings.findUnique({ where }));
+        const dayBoundary = {
+          ...(body.day_boundary_timezone === undefined
+            ? {}
+            : { dayBoundaryTz: body.day_boundary_timezone }),
+          ...(body.day_boundary_hour === undefined
+            ? {}
+            : { dayBoundaryHour: body.day_boundary_hour }),
+        };
         const row = await tx.inboxSettings.upsert({
-          where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId } },
+          where,
           create: {
             licenseId: tenant.licenseId,
             brandId,
             chatTimeoutSeconds: body.chat_timeout_seconds,
+            ...dayBoundary,
           },
-          update: { chatTimeoutSeconds: body.chat_timeout_seconds },
+          update: { chatTimeoutSeconds: body.chat_timeout_seconds, ...dayBoundary },
         });
+        const after = dayBoundaryFromRow(row);
+        const boundaryChanged = after.timezone !== before.timezone || after.hour !== before.hour;
         await writeAuditEntry(tx, request.auditContext(), {
           action: 'settings.chat_timeout_updated',
-          metadata: { chat_timeout_seconds: body.chat_timeout_seconds },
+          metadata: {
+            chat_timeout_seconds: body.chat_timeout_seconds,
+            day_boundary_timezone: after.timezone,
+            day_boundary_hour: after.hour,
+            // Only when it moved: a timeout-only save is not a boundary change,
+            // and the entry should not read like one. The previous values are
+            // what makes "which day did this chat get filed under, and why" answerable.
+            ...(boundaryChanged
+              ? {
+                  previous_day_boundary_timezone: before.timezone,
+                  previous_day_boundary_hour: before.hour,
+                }
+              : {}),
+          },
         });
         return { updated: row, brandId };
       });
@@ -3495,12 +3542,17 @@ function serialiseSecurity(
 }
 
 function serialiseInbox(
-  row: { chatTimeoutSeconds: number | null; updatedAt: Date } | null,
+  row: (DayBoundaryRow & { chatTimeoutSeconds: number | null; updatedAt: Date }) | null,
   brandId: string,
 ) {
+  // No row = the shipped boundary (`DEFAULT_DAY_BOUNDARY`), the same fallback the
+  // columns' defaults and `readDayBoundary` encode.
+  const boundary = dayBoundaryFromRow(row);
   return {
     brand_id: brandId,
     chat_timeout_seconds: row?.chatTimeoutSeconds ?? null,
+    day_boundary_timezone: boundary.timezone,
+    day_boundary_hour: boundary.hour,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

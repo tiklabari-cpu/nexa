@@ -68,7 +68,7 @@ export const settings: Messages = {
   'settings.nav.section.sla': 'SLA',
   'settings.nav.section.cannedResponses': 'Kayıtlı yanıtlar',
   'settings.nav.section.tags': 'Etiketler',
-  'settings.nav.section.chatTimeout': 'Sohbet zaman aşımı',
+  'settings.nav.section.chatTimeout': 'Sohbet süresi ve gün sınırı',
   'settings.nav.section.ticketEmailTemplates': 'Talep e-posta şablonları',
   'settings.nav.section.customFields': 'Özel alanlar',
   'settings.nav.section.chatForms': 'Sohbet formları',
@@ -221,9 +221,9 @@ export const settings: Messages = {
   'settings.tags.editTeamsAriaLabel': '{name} etiketinin ekiplerini düzenle',
 
   // Sohbet zaman aşımı — ChatTimeout.tsx
-  'settings.chatTimeout.title': 'Sohbet zaman aşımı',
+  'settings.chatTimeout.title': 'Sohbet süresi ve gün sınırı',
   'settings.chatTimeout.description':
-    'Bir süredir sessiz kalan sohbetleri otomatik olarak kapatır.',
+    'Bir süredir sessiz kalan sohbetleri otomatik olarak kapatır ve bir konuşma gününün nerede bitip yenisinin nerede başladığını belirler.',
   'settings.chatTimeout.loadError': 'Sohbet zaman aşımı ayarı yüklenemedi.',
   'settings.chatTimeout.enableLabel': 'Boşta kalan sohbetleri otomatik kapat',
   'settings.chatTimeout.enableHint':
@@ -234,6 +234,24 @@ export const settings: Messages = {
   'settings.chatTimeout.unitHours': 'Saat',
   'settings.chatTimeout.amountError':
     "0'dan büyük, toplam en fazla 30 gün olan tam bir sayı girin.",
+
+  // Konuşma günü sınırı — ChatTimeout.tsx (ID-04)
+  'settings.dayBoundary.heading': 'Gün sınırı',
+  'settings.dayBoundary.description':
+    'Bir konuşma tek bir güne aittir. Günün hangi saat diliminde sayılacağını ve kaçta başlayacağını seçin; böylece gece yarısından hemen sonra yazan oyuncu doğru güne bağlanır.',
+  'settings.dayBoundary.searchLabel': 'Saat dilimi ara',
+  'settings.dayBoundary.searchPlaceholder': 'ör. istanbul, new york, utc+3',
+  'settings.dayBoundary.zoneLabel': 'Saat dilimi',
+  'settings.dayBoundary.noMatch': 'Bu aramayla eşleşen saat dilimi yok.',
+  'settings.dayBoundary.hourLabel': 'Gün başlangıcı',
+  'settings.dayBoundary.exampleLabel': 'Gün sınırı örneği',
+  'settings.dayBoundary.exampleNow':
+    'Şu an {zone} diliminde saat {time}: şimdi başlayan bir sohbet {day} gününe ait olur.',
+  'settings.dayBoundary.exampleSpanMidnight': 'Her gün 00:00 ile 23:59 arasındadır.',
+  'settings.dayBoundary.exampleSpan':
+    'Gün {start} saatinde başlar: {before} saatindeki sohbet hâlâ önceki güne, {start} saatindeki sohbet yeni güne aittir.',
+  'settings.dayBoundary.scopeNote':
+    'Değişiklik yalnız bundan sonra başlayan bağlantılara uygulanır; bir güne bağlanmış sohbet o günde kalır. Raporlar ve yapay zekâ günlük kotası günleri UTC olarak saymaya devam eder.',
 
   // Talep e-posta şablonları — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Talep e-posta şablonları',

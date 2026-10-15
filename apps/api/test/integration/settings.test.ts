@@ -11,6 +11,8 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@siyahtus/types';
+import { withTenant } from '../../src/lib/tenant.js';
+import { workspaceLocalDayKey } from '../../src/services/chat/day-boundary.js';
 import {
   grantToken,
   ownerClient,
@@ -1599,6 +1601,185 @@ describe('settings', () => {
         where: key(fx.b.licenseId, brandB),
       });
       expect(theirs?.chatTimeoutSeconds).toBe(120);
+    });
+  });
+
+  describe('conversation day boundary', () => {
+    // ID-04 (K3): which day a conversation belongs to is the workspace's zone and
+    // start hour, not the server's UTC. The setting rides on the chat-timeout row
+    // and endpoint. What matters: a workspace that never saved it runs on
+    // Europe/Istanbul 00:00, nothing but a real zone and a whole hour 0-23 can be
+    // stored, and a change is written to the audit trail with what it replaced.
+
+    const dayRow = () =>
+      owner.inboxSettings.findUnique({
+        where: key(fx.a.licenseId, brandA),
+        select: { dayBoundaryTz: true, dayBoundaryHour: true, chatTimeoutSeconds: true },
+      });
+    const tenantA = () => ({
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+    });
+    const put = (body: Record<string, unknown>, token = adminToken) =>
+      server.put('/settings/chat-timeout', body, auth(token));
+
+    it('is Europe/Istanbul 00:00 for a workspace with no settings row', async () => {
+      expect(await dayRow()).toBeNull();
+
+      const response = await server.get('/settings/chat-timeout', auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        day_boundary_timezone: 'Europe/Istanbul',
+        day_boundary_hour: 0,
+      });
+
+      // The code reads the same fallback, and 00:30 Istanbul is the new local day
+      // although it is still the previous day in UTC.
+      const dayKey = await withTenant(owner, tenantA(), (tx) =>
+        workspaceLocalDayKey(tx, new Date('2026-10-14T21:30:00Z')),
+      );
+      expect(dayKey).toBe('2026-10-15');
+      expect(await dayRow()).toBeNull();
+    });
+
+    it('stores a zone and an hour and reads them back, and the day key follows them', async () => {
+      const saved = await put({
+        chat_timeout_seconds: null,
+        day_boundary_timezone: 'America/New_York',
+        day_boundary_hour: 6,
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        day_boundary_timezone: 'America/New_York',
+        day_boundary_hour: 6,
+      });
+      expect(await dayRow()).toMatchObject({
+        dayBoundaryTz: 'America/New_York',
+        dayBoundaryHour: 6,
+      });
+
+      const read = await server.get('/settings/chat-timeout', auth(readToken));
+      expect(read.json()).toMatchObject({
+        day_boundary_timezone: 'America/New_York',
+        day_boundary_hour: 6,
+      });
+
+      // With a 06:00 boundary in New York (EDT, UTC-4): 05:59 is the previous day.
+      const dayKeys = await withTenant(owner, tenantA(), async (tx) => [
+        await workspaceLocalDayKey(tx, new Date('2026-10-15T09:59:59Z')),
+        await workspaceLocalDayKey(tx, new Date('2026-10-15T10:00:00Z')),
+      ]);
+      expect(dayKeys).toEqual(['2026-10-14', '2026-10-15']);
+    });
+
+    it('keeps the stored boundary when a save leaves the fields out', async () => {
+      await put({
+        chat_timeout_seconds: null,
+        day_boundary_timezone: 'Asia/Tokyo',
+        day_boundary_hour: 4,
+      });
+      const timeoutOnly = await put({ chat_timeout_seconds: 1800 });
+      expect(timeoutOnly.statusCode).toBe(200);
+      expect(timeoutOnly.json()).toMatchObject({
+        chat_timeout_seconds: 1800,
+        day_boundary_timezone: 'Asia/Tokyo',
+        day_boundary_hour: 4,
+      });
+      expect(await dayRow()).toMatchObject({
+        chatTimeoutSeconds: 1800,
+        dayBoundaryTz: 'Asia/Tokyo',
+        dayBoundaryHour: 4,
+      });
+    });
+
+    it('rejects a zone that does not exist, with nothing stored', async () => {
+      const response = await put({
+        chat_timeout_seconds: null,
+        day_boundary_timezone: 'Mars/Olympus',
+      });
+      expect(response.statusCode).toBe(400);
+      expect((response.json() as ErrorBody).error.type).toBe('validation');
+      expect(await dayRow()).toBeNull();
+    });
+
+    it.each([24, -1, 1.5, '6', null])('rejects the boundary hour %j', async (hour) => {
+      const response = await put({ chat_timeout_seconds: null, day_boundary_hour: hour });
+      expect(response.statusCode, `${JSON.stringify(hour)} should be rejected`).toBe(400);
+      expect(await dayRow()).toBeNull();
+    });
+
+    it.each(['', '   ', 'PST', 42])('rejects the zone %j', async (zone) => {
+      const response = await put({ chat_timeout_seconds: null, day_boundary_timezone: zone });
+      expect(response.statusCode, `${JSON.stringify(zone)} should be rejected`).toBe(400);
+      expect(await dayRow()).toBeNull();
+    });
+
+    it('accepts the first and last hour of the day', async () => {
+      for (const hour of [0, 23]) {
+        const response = await put({ chat_timeout_seconds: null, day_boundary_hour: hour });
+        expect(response.statusCode).toBe(200);
+        expect(await dayRow()).toMatchObject({ dayBoundaryHour: hour });
+      }
+    });
+
+    it('requires a write scope to change the boundary', async () => {
+      const response = await put(
+        { chat_timeout_seconds: null, day_boundary_timezone: 'Asia/Tokyo' },
+        readToken,
+      );
+      expect(response.statusCode).toBe(403);
+      expect(await dayRow()).toBeNull();
+    });
+
+    it('audits a boundary change with the values it replaced, and a timeout-only save does not claim one', async () => {
+      const auditWhere = { licenseId: fx.a.licenseId, action: 'settings.chat_timeout_updated' };
+      const latest = () =>
+        owner.auditLogEntry.findFirst({ where: auditWhere, orderBy: { createdAt: 'desc' } });
+      const before = await owner.auditLogEntry.count({ where: auditWhere });
+
+      await put({
+        chat_timeout_seconds: null,
+        day_boundary_timezone: 'America/New_York',
+        day_boundary_hour: 6,
+      });
+      expect(await owner.auditLogEntry.count({ where: auditWhere })).toBe(before + 1);
+      // The first change replaces the shipped default, not nothing.
+      expect((await latest())?.metadata).toMatchObject({
+        day_boundary_timezone: 'America/New_York',
+        day_boundary_hour: 6,
+        previous_day_boundary_timezone: 'Europe/Istanbul',
+        previous_day_boundary_hour: 0,
+      });
+
+      await put({ chat_timeout_seconds: 600 });
+      expect(await owner.auditLogEntry.count({ where: auditWhere })).toBe(before + 2);
+      const unchanged = (await latest())?.metadata as Record<string, unknown>;
+      expect(unchanged).toMatchObject({ day_boundary_timezone: 'America/New_York' });
+      expect(unchanged).not.toHaveProperty('previous_day_boundary_timezone');
+    });
+
+    it("never reads another tenant's boundary", async () => {
+      await owner.inboxSettings.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          brandId: brandB,
+          dayBoundaryTz: 'Asia/Tokyo',
+          dayBoundaryHour: 9,
+        },
+      });
+      const read = await server.get('/settings/chat-timeout', auth(readToken));
+      expect(read.json()).toMatchObject({
+        day_boundary_timezone: 'Europe/Istanbul',
+        day_boundary_hour: 0,
+      });
+    });
+
+    it('refuses an hour outside 0-23 at the database too (the CHECK)', async () => {
+      await expect(
+        owner.inboxSettings.create({
+          data: { licenseId: fx.a.licenseId, brandId: brandA, dayBoundaryHour: 24 },
+        }),
+      ).rejects.toThrow();
     });
   });
 

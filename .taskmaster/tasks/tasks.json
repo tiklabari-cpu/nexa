@@ -11946,12 +11946,12 @@
         "description": "Konuşma hafızası, prosedür ve konu tespiti gerçek model olmadan kurulamaz; adaptörler hazır (openai-*-provider.ts), varsayılan mock. Kiracı kotasını ve maliyetini göremiyor; kota akşam bittiğinde AI sessizce susuyor. K12: pilotta OpenAI, bölge us; maskeleme (AI-26) modelden önce. Kaynak: AI-16.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: AI-16. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 1 — hızlı güvenlik/temel düzeltmeler.\n\nKOD: env.ts:685 LLM_PROVIDER mock, :700-735, :746-760, :791-793 RETRIEVAL_THRESHOLD, :811-814 günlük tavanlar, :1250-1300 üretim kontrolleri, :1376-1385 PILOT_MODE mock reddi; provider/llm-provider.ts (responseSchema yok), metered-llm.ts, ai-daily-budget.ts (ai_budget_* SECURITY DEFINER), SkillRun token sütunları, routes/reports.ts:829-869.\nSINIR: gerçek anahtar/secret YOK (CLAUDE.md). Kod varsayılanı mock kalır; testler ağsız. Pilot geçişi (anahtar, `pnpm knowledge:reembed`, `measure:knowledge-recall` → RETRIEVAL_THRESHOLD) yalnız runbook olarak yazılır, otonom döngüde KOŞULMAZ.\nMANTIK: tavan `override ?? plan ?? env` (60 sn önbellek, ai_budget_reserve'e parametre); ai_usage_events (best-effort defter: surface ai_agent|copilot|knowledge_index|simulation|qa|cluster, meter, model_tier, token, chat_id?, config_version_id?); maliyet okuma anında env fiyatlarıyla, \"tahmini\" etiketi, fiyat yoksa para alanı dönmez (AI-16-S3); %80/%100 uyarısı license+UTC gün+meter+eşik tekil; kota dolunca zaman çizelgesine ai.cap_reached (ID-08 hazırsa); gün UTC (ekranda yazılır, ID-04'e çevrilmez); LLM_MODEL_FAST (S4); test meter'ları llm_test/embedding_test (AI-19-S2).\n\nKABUL KRİTERLERİ:\n- PILOT_MODE=true production'da LLM_PROVIDER=mock açılmaz (korunur).\n- Kurucu kullanım yüzdesini, 30 günlük grafiği, yüzey kırılımını görür; Ekip Üyesi 403.\n- X lisansına 500.000 override → X 200.000'i aşar, diğerleri durur.\n- %80 eşiğinde gün+meter başına tam 1 bildirim.\n- Fiyat env'de yoksa para alanı yok.\n- responseFormat çağrısında geçersiz JSON → sağlayıcı hatası, sohbet insana kalır.\n- Simülasyon token'ları llm_test meter'ına yazılır.\n\nKULLANILAN VARSAYIMLAR:\n- K12: OpenAI us; KVKK yurt dışı aktarım maddesi sözleşme işi (kod dışı).\n- AI-16-S2: plan varsayılanı + SiyahTuş ekibi elle yükseltir; Kurucu/Yönetici görür, yükseltemez.\n- AI-16-S3, S4, S5 varsayılanları.\n\nPANEL YERLEŞİMİ (tm 389 root panel · docs/platform-admin/gorev-yerlesimi.md · 2026-10-14): W+R. Workspace paneli: 283.4 \"Yapay zekâ kullanımı\" ekranı YALNIZ gösterir (AI-16-S2 \"Kurucu/Yönetici görür, yükseltemez\" aynen). ROOT panel: kota override (`licenses.ai_daily_*_cap`, 283.2 kolonları — TEK kaynak; `license_overrides`'a AI alanı konmaz) ve plan varsayılanları 389.12'den yazılır; LLM sağlayıcı/model/bölge/API anahtarı 389.17'den (DB → env yedek; `ai.settings_changed` ile hot-swap). Bu görev için iki kural: (a) 283.1 `createLlmProvider(config)` SAF fonksiyon olsun (boot'taki tek örneğe bağlı kalmasın) — 389.17 registry'si yeniden kurabilsin; (b) 283.2 tavan okuması `override ?? plan ?? env`'de \"plan\" değerini `platform_ai_settings().caps` (varsa) → env sırasıyla alsın; `ai.caps_changed` Redis olayı gelirse 60 sn önbelleği düşürsün (olay yoksa 60 sn). 283.4 pilot geçiş runbook'u \"anahtar env'de\" yerine \"anahtar root panel Settings › AI'da (389.17) ya da env\" der. SiyahTuş ekibinin \"elle yükseltme\"si 389.12 gelene kadar runbook/psql, sonra panel.",
         "testStrategy": "Birim (tavan önceliği, maliyet), entegrasyon ai-usage.test.ts (RLS, toplamlar ai_daily_usage ile eşit), e2e (Kurucu görür, Ekip Üyesi 403); `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "270"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-15T08:29:12.598Z",
+        "updatedAt": "2026-10-15T09:43:28.006Z",
         "subtasks": [
           {
             "id": 1,
@@ -11977,7 +11977,7 @@
             ],
             "parentId": "283",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-15T07:03:24.265Z"
           },
           {
             "id": 3,
@@ -11999,13 +11999,13 @@
             "description": "Ayarlar › Kullanım ve kotalar › Yapay zekâ kullanımı ekranı + Performans kartı + pilot geçiş runbook'u",
             "details": "AiUsage.tsx + settings-sections kaydı; AiPerformance.tsx token/tahmini maliyet kartı; docs/runbooks altında pilot geçiş adımları (reembed, eşik ölçümü, uyum senaryoları) — koşulmaz, yalnız yazılır.",
             "testStrategy": "Web birim + e2e (Kurucu görür, Ekip Üyesi göremez).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "283.3"
             ],
             "parentId": "283",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-15T09:43:28.006Z"
           }
         ]
       },

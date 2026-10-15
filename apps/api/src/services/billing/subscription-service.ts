@@ -36,6 +36,18 @@ export interface PlanSpec {
   aiResolutionsIncluded: number | null;
   /** What this tier unlocks. Everything not listed is denied (§C-A25). */
   entitlements: readonly Entitlement[];
+  /**
+   * The tier's daily AI token allowance per workspace (tm 283.2 · AI-16-S2) —
+   * the middle of `override ?? plan ?? deployment` (`services/ai/ai-caps.ts`).
+   * `null` inherits the deployment's `AI_DAILY_*_PER_WORKSPACE`.
+   */
+  aiDailyTokens: PlanAiDailyTokens;
+}
+
+/** A daily AI token allowance per live meter; `null` inherits the next layer. */
+export interface PlanAiDailyTokens {
+  llm: number | null;
+  embedding: number | null;
 }
 
 /**
@@ -60,12 +72,19 @@ export const PLANS = {
     // Self-serve buys the product, not the Enterprise controls. Every key here
     // would be a leak of exactly the kind 11.5 exists to close.
     entitlements: [],
+    // The deployment's per-workspace default *is* the self-serve allowance:
+    // the operator tunes it in one place (`AI_DAILY_*_PER_WORKSPACE`, later the
+    // root panel), and a number here would silently outrank that setting.
+    aiDailyTokens: { llm: null, embedding: null },
   },
   enterprise: {
     pricing: 'quoted',
     unitPriceCents: null,
     aiResolutionsIncluded: null,
     entitlements: [...ENTITLEMENTS],
+    // A contract term, like the price: set per workspace as the licence's
+    // override (`licenses.ai_daily_*_tokens_cap`), not invented here.
+    aiDailyTokens: { llm: null, embedding: null },
   },
 } as const satisfies Record<string, PlanSpec>;
 
@@ -89,6 +108,14 @@ export function isPlanId(value: unknown): value is PlanId {
  */
 export function entitlementsForPlan(plan: string | null | undefined): EntitlementMap {
   return entitlementMap(isPlanId(plan) ? PLANS[plan].entitlements : []);
+}
+
+/**
+ * A plan's daily AI allowance (tm 283.2). An unknown plan inherits — the
+ * deployment's default, never "unlimited".
+ */
+export function aiDailyTokensForPlan(plan: string | null | undefined): PlanAiDailyTokens {
+  return isPlanId(plan) ? PLANS[plan].aiDailyTokens : { llm: null, embedding: null };
 }
 
 /** How the plan on a subscription row is priced; an unknown plan reads as listed. */

@@ -560,6 +560,17 @@ value left at its default is a decision too, and the defaults are deliberately c
       `SELECT day, license_id, meter, reserved, used FROM ai_daily_usage ORDER BY day DESC, meter, used DESC`
       and `SELECT day, license_id, meter, sent FROM mail_daily_usage WHERE meter <> 'recipient' ORDER BY day DESC, sent DESC`.
       Read both after the first day and after the first week, then set the global caps.
+- [ ] One workspace that needs more AI than `AI_DAILY_*_PER_WORKSPACE` gets its own allowance on
+      its licence; nothing else changes and the workspace cannot set it itself (tm 283.2). Until
+      the back office's billing screen (tm 389.12) does it, as the owner:
+      `UPDATE licenses SET ai_daily_llm_tokens_cap = 500000 WHERE id = <licence id>` (`NULL` goes
+      back to the default; `ai_daily_embedding_tokens_cap` likewise), then
+      `docker compose -f docker-compose.pilot.yml exec redis redis-cli PUBLISH ai.caps_changed <licence id>`
+      so the API reads it at once — without it the change lands within a minute. The order of
+      precedence is that override, then the plan's default (none today), then the environment.
+      A simulation (the AI test lab) spends a fifth of whatever the workspace's live allowance is,
+      on `llm_test` / `embedding_test` rows. What spent the tokens, per feature:
+      `SELECT day, license_id, surface, meter, sum(input_tokens) AS input, sum(output_tokens) AS output FROM ai_usage_events GROUP BY 1, 2, 3, 4 ORDER BY 1 DESC, 2, 3`.
 - [ ] `RTM_MAX_CONNECTIONS` is set to what one rtm process actually holds on this host. Unset it is
       unlimited, which is the gateway's old behaviour and not a decision. The repository measured at
       least 8000 sockets on one laptop core, with the fan-out budget holding to about 6000

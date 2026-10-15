@@ -137,6 +137,14 @@ model License {
   /// slice exists to make impossible. Only a sandbox may carry a value —
   /// `licenses_sandbox_reset_requires_sandbox` enforces that.
   sandboxResetAt        DateTime? @map("sandbox_reset_at") @db.Timestamptz(6)
+  /// The platform's override of this workspace's daily AI token caps (tm 283.2
+  /// · AI-16-S2), or null to inherit the plan's and then the deployment's
+  /// (`services/ai/ai-caps.ts`: `override ?? plan ?? deployment`). At least 1
+  /// when set (`licenses_ai_daily_caps_check`). Written by the platform only:
+  /// `licenses_ai_caps_platform_only` refuses the tenant API's role, which
+  /// Prisma cannot model, so this comment is where the schema says so.
+  aiDailyLlmTokensCap       BigInt? @map("ai_daily_llm_tokens_cap")
+  aiDailyEmbeddingTokensCap BigInt? @map("ai_daily_embedding_tokens_cap")
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -173,6 +181,7 @@ model License {
   subscriptions          Subscription[]
   usageRecords           UsageRecord[]
   aiDailyUsage           AiDailyUsage[]
+  aiUsageEvents          AiUsageEvent[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -2295,7 +2304,9 @@ model AiDailyUsage {
   licenseId BigInt?  @map("license_id")
   /// `yyyymmdd`, UTC.
   day       String   @db.Char(8)
-  /// `llm` (input + output tokens) or `embedding` (input tokens).
+  /// `llm` (input + output tokens) or `embedding` (input tokens); `llm_test` /
+  /// `embedding_test` for a simulation's spend (tm 283.2 · AI-19-S2) — on the
+  /// workspace's row only, the deployment's row counts it on the live meter.
   meter     String
   reserved  BigInt   @default(0)
   used      BigInt   @default(0)
@@ -2305,6 +2316,38 @@ model AiDailyUsage {
 
   @@unique([licenseId, day, meter])
   @@map("ai_daily_usage")
+}
+
+/// The AI usage ledger (tm 283.2 · AI-16): one row per settled call that cost
+/// at least one token — which feature spent it, on which meter and model tier.
+/// Written only by `ai_budget_settle_usage`, in the statement that settles
+/// `ai_daily_usage`, so for a (workspace, day, meter) the rows add up to the
+/// counter's `used`. A breakdown for the usage screen, never the cap. The
+/// application role reads its own workspace's rows and writes none.
+model AiUsageEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  licenseId       BigInt   @map("license_id")
+  /// The reservation's UTC day (`yyyymmdd`) — the counter's key, not `at`'s.
+  day             String   @db.Char(8)
+  at              DateTime @db.Timestamptz(6)
+  /// `@siyahtus/types` `AI_USAGE_SURFACES`; `ai_usage_events_surface_check`.
+  surface         String
+  /// `@siyahtus/types` `AI_USAGE_METERS`.
+  meter           String
+  /// `default` | `fast` on a completion, null on an embedding.
+  modelTier       String?  @map("model_tier")
+  inputTokens     BigInt   @map("input_tokens")
+  outputTokens    BigInt   @map("output_tokens")
+  /// The conversation the call was for, when it was for one. No foreign key:
+  /// the ledger outlives the conversation's retention.
+  chatId          String?  @map("chat_id") @db.VarChar(12)
+  /// The AI configuration version that answered (tm 290), once versions exist.
+  configVersionId String?  @map("config_version_id") @db.Uuid
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, at(sort: Desc)])
+  @@map("ai_usage_events")
 }
 
 /// Today's outgoing mail against the daily caps (tm 257.14 · ADR

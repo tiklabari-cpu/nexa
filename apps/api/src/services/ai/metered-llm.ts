@@ -37,9 +37,16 @@
  * provider answered with an error status (`rate_limited`, `auth`,
  * `bad_request`…) or one refused in this process (`circuit_open`,
  * `prompt_too_long`) cost nothing.
+ *
+ * **Who it was for (tm 283.2).** Every call names its feature
+ * (`AiAttribution.surface`, and the conversation when there is one); the
+ * settle writes it to the usage ledger with the call's cost split into input
+ * and output — an estimate kept for an unknown bill is split as the prompt's
+ * characters and the reply's ceiling — and the tier the request asked for.
+ * A `simulation` is counted on the `llm_test` meter.
  */
 import type { TenantContext } from '../../lib/tenant.js';
-import type { AiDailyBudget } from './ai-daily-budget.js';
+import type { AiAttribution, AiDailyBudget, AiTokenUsage } from './ai-daily-budget.js';
 import { LlmProviderError, type LlmFailureKind } from './provider/llm-error.js';
 import {
   promptLength,
@@ -61,11 +68,18 @@ export function llmEstimate(request: LlmCompletionRequest): number {
   return promptLength(request) + request.maxOutputTokens;
 }
 
+/** {@link llmEstimate} split as the ledger stores a cost: the prompt as input, the reply's ceiling as output. */
+export function llmEstimateUsage(request: LlmCompletionRequest): AiTokenUsage {
+  return { inputTokens: promptLength(request), outputTokens: request.maxOutputTokens };
+}
+
+const NOTHING: AiTokenUsage = { inputTokens: 0, outputTokens: 0 };
+
 /** What a failed call is counted as — the table in the file header. */
-export function billedOnFailure(error: unknown, estimate: number): number {
+export function billedOnFailure(error: unknown, estimate: AiTokenUsage): AiTokenUsage {
   if (!(error instanceof LlmProviderError)) return estimate;
-  if (error.usage) return error.usage.inputTokens + error.usage.outputTokens;
-  return BILLING_UNKNOWN.has(error.kind) ? estimate : 0;
+  if (error.usage) return error.usage;
+  return BILLING_UNKNOWN.has(error.kind) ? estimate : NOTHING;
 }
 
 export class MeteredLlm {
@@ -96,17 +110,27 @@ export class MeteredLlm {
     return this.#budget !== null && this.#llm.id !== 'mock';
   }
 
-  async complete(tenant: TenantContext, request: LlmCompletionRequest): Promise<LlmCompletion> {
+  async complete(
+    tenant: TenantContext,
+    request: LlmCompletionRequest,
+    attribution: AiAttribution,
+  ): Promise<LlmCompletion> {
     const budget = this.#budget;
     if (!budget || this.#llm.id === 'mock') return this.#llm.complete(request);
 
-    const estimate = llmEstimate(request);
+    const estimate = llmEstimateUsage(request);
     // Throws `AiDailyCapError` with nothing reserved; the provider is not reached.
-    const reservation = await budget.reserve(tenant, 'llm', estimate);
+    const reservation = await budget.reserve(
+      tenant,
+      'llm',
+      estimate.inputTokens + estimate.outputTokens,
+      attribution,
+      request.tier ?? 'default',
+    );
     let used = estimate;
     try {
       const completion = await this.#llm.complete(request);
-      used = completion.usage.inputTokens + completion.usage.outputTokens;
+      used = completion.usage;
       return completion;
     } catch (error) {
       used = billedOnFailure(error, estimate);
@@ -117,14 +141,14 @@ export class MeteredLlm {
   }
 
   /**
-   * This instance as a plain `LlmProvider` bound to one workspace — for the
-   * Copilot writers (`copilot-summary.ts`, `copilot-enhance.ts`), which take a
-   * provider and branch on its `id`.
+   * This instance as a plain `LlmProvider` bound to one workspace and feature
+   * — for the Copilot writers (`copilot-summary.ts`, `copilot-enhance.ts`) and
+   * `completeStructured`, which take a provider and branch on its `id`.
    */
-  forTenant(tenant: TenantContext): LlmProvider {
+  forTenant(tenant: TenantContext, attribution: AiAttribution): LlmProvider {
     return {
       id: this.#llm.id,
-      complete: (request) => this.complete(tenant, request),
+      complete: (request) => this.complete(tenant, request, attribution),
     };
   }
 }

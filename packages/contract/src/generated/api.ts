@@ -13171,9 +13171,12 @@ export interface components {
      *     AI allowance is used up (`limit_reached`, tm 257.8):
      *     `error.details.reason` is `ai_daily_cap`, `error.details.meter` the
      *     counter (`llm` for a model's writing, `embedding` for indexing and
-     *     searching text — tm 257.20) and `error.details.scope` whose allowance
-     *     it was — `workspace` (this workspace's) or `global` (the whole
-     *     deployment's). No provider was called and nothing was written.
+     *     searching text — tm 257.20; `llm_test` / `embedding_test` for a
+     *     simulation's, a fifth of the live allowance — tm 283.2) and
+     *     `error.details.scope` whose allowance it was — `workspace` (this
+     *     workspace's: its own when the platform set one, else the
+     *     deployment's default) or `global` (the whole deployment's). No
+     *     provider was called and nothing was written.
      *     Allowances are counted in provider tokens per UTC day and renew at
      *     00:00 UTC, which `Retry-After` counts down to; retrying sooner gets the
      *     same answer. Only a deployment with a real model counts; the

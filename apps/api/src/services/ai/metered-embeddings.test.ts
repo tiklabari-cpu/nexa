@@ -7,7 +7,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { TenantContext } from '../../lib/tenant.js';
-import { AiDailyCapError, type AiDailyBudget, type AiReservation } from './ai-daily-budget.js';
+import {
+  AiDailyCapError,
+  type AiAttribution,
+  type AiDailyBudget,
+  type AiReservation,
+  type AiTokenUsage,
+} from './ai-daily-budget.js';
 import {
   embeddingBilledOnFailure,
   embeddingEstimate,
@@ -25,30 +31,48 @@ const TENANT: TenantContext = {
   licenseId: 42n,
   organizationId: '00000000-0000-4000-8000-000000000042',
 };
+/** A visitor's question — who an un-held call is for (tm 283.2). */
+const ASKED: AiAttribution = { surface: 'ai_agent', chatId: 'CHAT0000042' };
 
 class RecordingBudget {
   readonly events: string[] = [];
+  readonly ledgers: Array<AiReservation['ledger']> = [];
+  readonly usages: AiTokenUsage[] = [];
   refuse: AiDailyCapError | null = null;
 
   async reserve(
     tenant: TenantContext,
     meter: 'embedding',
     estimate: number,
+    attribution: AiAttribution,
   ): Promise<AiReservation> {
     this.events.push(`reserve ${tenant.licenseId} ${meter} ${estimate}`);
     if (this.refuse) throw this.refuse;
-    return { tenant, meter, day: '20261003', estimate };
+    return {
+      tenant,
+      meter,
+      day: '20261003',
+      estimate,
+      ledger: {
+        surface: attribution.surface,
+        modelTier: null,
+        chatId: attribution.chatId ?? null,
+        configVersionId: null,
+      },
+    };
   }
 
   async reserveDeployment(meter: 'embedding', estimate: number): Promise<AiReservation> {
     this.events.push(`reserveDeployment ${meter} ${estimate}`);
     if (this.refuse) throw this.refuse;
-    return { tenant: null, meter, day: '20261003', estimate };
+    return { tenant: null, meter, day: '20261003', estimate, ledger: null };
   }
 
-  async settle(reservation: AiReservation, used: number): Promise<void> {
+  async settle(reservation: AiReservation, usage: AiTokenUsage): Promise<void> {
     const who = reservation.tenant ? String(reservation.tenant.licenseId) : 'deployment';
-    this.events.push(`settle ${who} ${reservation.estimate} ${used}`);
+    this.events.push(`settle ${who} ${reservation.estimate} ${usage.inputTokens}`);
+    this.ledgers.push(reservation.ledger);
+    this.usages.push(usage);
   }
 }
 
@@ -130,7 +154,7 @@ describe('embeddingBilledOnFailure', () => {
 describe('MeteredEmbeddings — a workspace pays per call', () => {
   it('reserves the estimate, asks the provider, and settles what it billed', async () => {
     const { budget, embeddings } = metered();
-    const result = await embeddings.embed(['abcd', 'ef'], TENANT);
+    const result = await embeddings.embed(['abcd', 'ef'], TENANT, ASKED);
 
     expect(result.usage).toEqual({ inputTokens: 6 });
     expect(budget.events).toEqual(['reserve 42 embedding 6', 'provider 2', 'settle 42 6 6']);
@@ -140,13 +164,13 @@ describe('MeteredEmbeddings — a workspace pays per call', () => {
     const { budget, embeddings } = metered();
     budget.refuse = new AiDailyCapError('embedding', 'workspace', 60);
 
-    await expect(embeddings.embed(['abcd'], TENANT)).rejects.toBe(budget.refuse);
+    await expect(embeddings.embed(['abcd'], TENANT, ASKED)).rejects.toBe(budget.refuse);
     expect(budget.events).toEqual(['reserve 42 embedding 4']);
   });
 
   it('settles a failed call with what it may have cost, and rethrows the failure', async () => {
     const timeout = metered({ fail: new EmbeddingProviderError('timeout') });
-    await expect(timeout.embeddings.embed(['abcd'], TENANT)).rejects.toMatchObject({
+    await expect(timeout.embeddings.embed(['abcd'], TENANT, ASKED)).rejects.toMatchObject({
       kind: 'timeout',
     });
     expect(timeout.budget.events).toEqual([
@@ -156,7 +180,7 @@ describe('MeteredEmbeddings — a workspace pays per call', () => {
     ]);
 
     const refused = metered({ fail: new EmbeddingProviderError('auth') });
-    await expect(refused.embeddings.embed(['abcd'], TENANT)).rejects.toMatchObject({
+    await expect(refused.embeddings.embed(['abcd'], TENANT, ASKED)).rejects.toMatchObject({
       kind: 'auth',
     });
     expect(refused.budget.events.at(-1)).toBe('settle 42 4 0');
@@ -166,6 +190,21 @@ describe('MeteredEmbeddings — a workspace pays per call', () => {
     const { budget, embeddings } = metered();
     await expect(embeddings.embed(['abcd'])).rejects.toThrow(/needs the workspace/);
     expect(budget.events).toEqual([]);
+  });
+
+  it('refuses a workspace’s counted call that names no feature, before anything is reserved (tm 283.2)', async () => {
+    const { budget, embeddings } = metered();
+    await expect(embeddings.embed(['abcd'], TENANT)).rejects.toThrow(/needs the feature/);
+    expect(budget.events).toEqual([]);
+  });
+
+  it('settles with the caller’s attribution and the whole cost as input (tm 283.2)', async () => {
+    const { budget, embeddings } = metered();
+    await embeddings.embed(['abcd', 'ef'], TENANT, ASKED);
+    expect(budget.ledgers).toEqual([
+      { surface: 'ai_agent', modelTier: null, chatId: 'CHAT0000042', configVersionId: null },
+    ]);
+    expect(budget.usages).toEqual([{ inputTokens: 6, outputTokens: 0 }]);
   });
 
   it('counts nothing for the stub, for an unmetered instance, or for no texts', async () => {
@@ -182,7 +221,7 @@ describe('MeteredEmbeddings — a workspace pays per call', () => {
     expect(MeteredEmbeddings.wrap(bare)).toBe(bare);
 
     const empty = metered();
-    await empty.embeddings.embed([], TENANT);
+    await empty.embeddings.embed([], TENANT, ASKED);
     expect(empty.budget.events).toEqual(['provider 0']);
   });
 });
@@ -203,6 +242,9 @@ describe('MeteredEmbeddings — a hold pays for many calls (the bulk import)', (
       'provider 1',
       'settle 42 10 6',
     ]);
+    // An import indexes knowledge: that is the hold's feature, for every call it pays for.
+    expect(hold.attribution).toEqual({ surface: 'knowledge_index' });
+    expect(budget.ledgers.map((ledger) => ledger?.surface)).toEqual(['knowledge_index']);
   });
 
   it('reserves the shortfall when a call does not fit what is held, and refuses it when the day cannot', async () => {
@@ -265,6 +307,8 @@ describe('MeteredEmbeddings — the operator pays on the deployment’s row (kno
       'provider 1',
       'settle deployment 4 3',
     ]);
+    // No workspace spent it, so nothing for any workspace's ledger (tm 283.2).
+    expect(budget.ledgers).toEqual([null]);
   });
 
   it('asks nothing when the deployment’s cap refuses', async () => {

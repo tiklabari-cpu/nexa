@@ -300,12 +300,16 @@ export default async function copilotRoutes(
       // and passes the catch below untouched, as its own 429.
       let written: ConversationSummary;
       try {
-        written = await writeConversationSummary(llm.forTenant(tenant), turns, {
-          language,
-          maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
-          maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
-          timeoutMs: env.LLM_TIMEOUT_MS,
-        });
+        written = await writeConversationSummary(
+          llm.forTenant(tenant, { surface: 'copilot', chatId }),
+          turns,
+          {
+            language,
+            maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+            maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+            timeoutMs: env.LLM_TIMEOUT_MS,
+          },
+        );
       } catch (error) {
         if (!(error instanceof LlmProviderError)) throw error;
         logLlmFailure(request, 'copilot.summary.failed', chatId, error, {
@@ -412,11 +416,16 @@ export default async function copilotRoutes(
       // does not answer — as the summary does.
       let written: EnhancedText;
       try {
-        written = await writeEnhancedText(llm.forTenant(tenant), body.text, body.mode, {
-          maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
-          maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
-          timeoutMs: env.LLM_TIMEOUT_MS,
-        });
+        written = await writeEnhancedText(
+          llm.forTenant(tenant, { surface: 'copilot', chatId }),
+          body.text,
+          body.mode,
+          {
+            maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+            maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+            timeoutMs: env.LLM_TIMEOUT_MS,
+          },
+        );
       } catch (error) {
         if (!(error instanceof LlmProviderError)) throw error;
         logLlmFailure(request, 'copilot.enhance.failed', chatId, error, {

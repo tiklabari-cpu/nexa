@@ -285,7 +285,10 @@ export class CopilotService {
 
     let question: QueryEmbedding;
     try {
-      question = await this.knowledge.embedQuery(lastCustomer.text, tenant);
+      question = await this.knowledge.embedQuery(lastCustomer.text, tenant, {
+        surface: 'copilot',
+        chatId,
+      });
     } catch (error) {
       if (error instanceof AiDailyCapError) return { draft: '', sources: [], capped: error };
       if (!(error instanceof EmbeddingProviderError)) throw error;

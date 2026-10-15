@@ -51,6 +51,7 @@ import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
+import { listenForAiCapsChanges } from './services/ai/ai-caps-events.js';
 import { MeteredEmbeddings } from './services/ai/metered-embeddings.js';
 import { MeteredLlm } from './services/ai/metered-llm.js';
 import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
@@ -396,6 +397,23 @@ export async function buildServer({
   // allowance. On `mock` nothing is counted.
   const aiDailyBudget = new AiDailyBudget(app.db, aiDailyCaps(env), {
     logger: app.log.child({ component: 'ai-budget' }),
+  });
+  // A workspace's caps are its licence's override, its plan's and then the
+  // deployment's (tm 283.2), cached for a minute; a change announced on
+  // `ai.caps_changed` drops the cache at once. Its own connection — a
+  // subscribed client can do nothing else — and never a reason not to boot:
+  // without it a change still lands within the cache's minute.
+  const capsEvents = app.redis.duplicate({ connectionName: 'siyahtus-api-ai-caps' });
+  capsEvents.on('error', (error) => {
+    app.log.error({ err: error }, 'redis ai.caps_changed subscriber error');
+  });
+  await listenForAiCapsChanges(capsEvents, (licenseId) =>
+    aiDailyBudget.invalidateCaps(licenseId),
+  ).catch((error: unknown) => {
+    app.log.warn({ err: error }, 'ai.caps_changed not subscribed; caps refresh every minute');
+  });
+  app.addHook('onClose', async () => {
+    await capsEvents.quit().catch(() => capsEvents.disconnect());
   });
   const meteredLlm = new MeteredLlm(llm, aiDailyBudget);
   const meteredCopilotLlm = new MeteredLlm(copilotLlm, aiDailyBudget);

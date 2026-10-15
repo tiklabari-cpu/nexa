@@ -286,6 +286,7 @@ export class SkillEngine {
             gateLog: gate.log,
             persona,
             answerIn: language.answerIn,
+            chatId: input.chatId,
           });
 
       await this.#record(db, tenant, skill.id, input.chatId, result);
@@ -354,6 +355,8 @@ export class SkillEngine {
       gateLog: gate.log,
       persona,
       answerIn: language.answerIn,
+      // A preview answers no conversation; its spend is the AI agent's.
+      chatId: null,
     });
     // A preview the cap stopped is not a result to show: what the skill would
     // say is unknown, and the author is told why instead (429, tm 257.8).
@@ -398,6 +401,8 @@ export class SkillEngine {
       gateLog: SkillRunLogEntry[];
       persona: Persona;
       answerIn: PersonaLanguage | null;
+      /** The conversation the run answers — the usage ledger's `chat_id` (tm 283.2); null on a preview. */
+      chatId: string | null;
     },
   ): Promise<SkillRunResult> {
     const log = [...input.gateLog];
@@ -469,6 +474,7 @@ export class SkillEngine {
             skill: input.skill,
             persona: input.persona,
             answerIn: input.answerIn,
+            chatId: input.chatId,
           });
           usage = addUsage(usage, outcome.spent);
           if (outcome.failure || outcome.capped) {
@@ -520,6 +526,7 @@ export class SkillEngine {
       skill: { aiAgentId: string | null };
       persona: Persona;
       answerIn: PersonaLanguage | null;
+      chatId: string | null;
     },
   ): Promise<{
     text: string | null;
@@ -542,7 +549,10 @@ export class SkillEngine {
     // Outside any transaction, like the model call below (see the file header).
     let question: EmbeddedQuery;
     try {
-      question = await this.#knowledge.embedQuery(input.message, tenant);
+      question = await this.#knowledge.embedQuery(input.message, tenant, {
+        surface: 'ai_agent',
+        chatId: input.chatId,
+      });
     } catch (error) {
       if (error instanceof AiDailyCapError) {
         // The question's embedding did not fit today's cap (tm 257.20): nothing
@@ -610,7 +620,11 @@ export class SkillEngine {
       // Measured where the prompt is whole, so the refusal comes before the
       // provider — any provider — is reached (tm 255.9).
       refuseOverlongPrompt(prompt, this.#maxPromptChars);
-      completion = await this.#llm.complete(tenant, { ...prompt, ...this.#limits });
+      completion = await this.#llm.complete(
+        tenant,
+        { ...prompt, ...this.#limits },
+        { surface: 'ai_agent', chatId: input.chatId },
+      );
     } catch (error) {
       if (error instanceof AiDailyCapError) {
         // Refused before any provider was reached (tm 257.8): the question's

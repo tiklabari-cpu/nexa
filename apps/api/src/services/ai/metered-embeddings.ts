@@ -46,11 +46,22 @@
  * adapter carries their usage on the error. A request abandoned or unreadable
  * may have been billed too, and nobody can say how much — the cap errs toward
  * counting, as the LLM meter's does.
+ *
+ * **Which feature (tm 283.2).** A workspace's call names its surface for the
+ * usage ledger: `knowledge_index` for everything that indexes (the hold is
+ * always one), the asker's surface for a question. A `simulation` is counted
+ * on the `embedding_test` meter. Operator work writes no ledger row — no
+ * workspace spent it.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import type { TenantContext } from '../../lib/tenant.js';
-import { AiDailyBudget, aiDailyCaps, type AiReservation } from './ai-daily-budget.js';
+import {
+  AiDailyBudget,
+  aiDailyCaps,
+  type AiAttribution,
+  type AiReservation,
+} from './ai-daily-budget.js';
 import { createEmbeddingProvider } from './provider/create-embedding-provider.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
 import type {
@@ -75,6 +86,9 @@ export function embeddingEstimate(texts: readonly string[]): number {
   return bytes;
 }
 
+/** Every indexing call's attribution: the bulk import's hold, a source, the freshness sweep. */
+export const KNOWLEDGE_INDEX: AiAttribution = { surface: 'knowledge_index' };
+
 /** What a failed embedding call is counted as — the table in the file header. */
 export function embeddingBilledOnFailure(error: unknown, estimate: number): number {
   if (!(error instanceof EmbeddingProviderError)) return estimate;
@@ -93,6 +107,8 @@ export function embeddingBilledOnFailure(error: unknown, estimate: number): numb
  */
 export class EmbeddingHold {
   readonly tenant: TenantContext;
+  /** Who the hold's calls are for — every reservation it makes, and the ledger row it settles. */
+  readonly attribution: AiAttribution;
   readonly #budget: AiDailyBudget | null;
   readonly #reservations: AiReservation[] = [];
   #reserved = 0;
@@ -101,8 +117,14 @@ export class EmbeddingHold {
   #settled = false;
 
   /** @internal — {@link MeteredEmbeddings.hold}. */
-  constructor(tenant: TenantContext, budget: AiDailyBudget | null, first: AiReservation | null) {
+  constructor(
+    tenant: TenantContext,
+    budget: AiDailyBudget | null,
+    first: AiReservation | null,
+    attribution: AiAttribution,
+  ) {
     this.tenant = tenant;
+    this.attribution = attribution;
     this.#budget = budget;
     if (first) {
       this.#reservations.push(first);
@@ -127,7 +149,12 @@ export class EmbeddingHold {
       const room = this.#reserved - this.#committed - this.#inFlight;
       if (estimate > room) {
         // Throws `AiDailyCapError` with nothing added; the call is not made.
-        const more = await this.#budget.reserve(this.tenant, 'embedding', estimate - room);
+        const more = await this.#budget.reserve(
+          this.tenant,
+          'embedding',
+          estimate - room,
+          this.attribution,
+        );
         this.#reservations.push(more);
         this.#reserved += more.estimate;
       }
@@ -152,7 +179,10 @@ export class EmbeddingHold {
     this.#settled = true;
     if (!this.#budget) return;
     for (const [index, reservation] of this.#reservations.entries()) {
-      await this.#budget.settle(reservation, index === 0 ? this.#committed : 0);
+      await this.#budget.settle(reservation, {
+        inputTokens: index === 0 ? this.#committed : 0,
+        outputTokens: 0,
+      });
     }
   }
 }
@@ -199,13 +229,22 @@ export class MeteredEmbeddings {
    * Embed `texts` for `payer`. Throws `AiDailyCapError` with nothing reserved
    * and the provider not reached when the call does not fit today's caps.
    * `payer` may be left out only where nothing is counted; a counted call
-   * without one is a defect, and fails before the provider is asked.
+   * without one is a defect, and fails before the provider is asked. So is a
+   * workspace's counted call that does not say which feature it is for — a
+   * hold says it for its calls.
    */
-  async embed(texts: readonly string[], payer?: EmbeddingPayer): Promise<Embeddings> {
+  async embed(
+    texts: readonly string[],
+    payer?: EmbeddingPayer,
+    attribution?: AiAttribution,
+  ): Promise<Embeddings> {
     const budget = this.#budget;
     if (!budget || !this.metered || texts.length === 0) return this.#provider.embed(texts);
     if (payer === undefined) {
       throw new Error('A counted embedding call needs the workspace it is for.');
+    }
+    if (!(payer instanceof EmbeddingHold) && attribution === undefined) {
+      throw new Error('A counted embedding call needs the feature it is for.');
     }
 
     const estimate = embeddingEstimate(texts);
@@ -223,7 +262,7 @@ export class MeteredEmbeddings {
         payer.finish(estimate, used);
       }
     }
-    const reservation = await budget.reserve(payer, 'embedding', estimate);
+    const reservation = await budget.reserve(payer, 'embedding', estimate, attribution!);
     return this.#counted(budget, reservation, texts);
   }
 
@@ -232,11 +271,17 @@ export class MeteredEmbeddings {
    * as their payer (the bulk import). Throws `AiDailyCapError` when it does
    * not fit; reserves nothing when nothing is counted or the estimate is 0.
    */
-  async hold(tenant: TenantContext, estimate: number): Promise<EmbeddingHold> {
+  async hold(
+    tenant: TenantContext,
+    estimate: number,
+    attribution: AiAttribution = KNOWLEDGE_INDEX,
+  ): Promise<EmbeddingHold> {
     const budget = this.metered ? this.#budget : null;
     const first =
-      budget && estimate > 0 ? await budget.reserve(tenant, 'embedding', estimate) : null;
-    return new EmbeddingHold(tenant, budget, first);
+      budget && estimate > 0
+        ? await budget.reserve(tenant, 'embedding', estimate, attribution)
+        : null;
+    return new EmbeddingHold(tenant, budget, first, attribution);
   }
 
   /**
@@ -267,7 +312,7 @@ export class MeteredEmbeddings {
       used = embeddingBilledOnFailure(error, estimate);
       throw error;
     } finally {
-      await budget.settle(reservation, used);
+      await budget.settle(reservation, { inputTokens: used, outputTokens: 0 });
     }
   }
 }

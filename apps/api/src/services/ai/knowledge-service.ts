@@ -32,8 +32,10 @@ import { Prisma } from '@prisma/client';
 import { chunk, toVectorLiteral } from '@siyahtus/ai-mock';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import type { AiAttribution } from './ai-daily-budget.js';
 import {
   embeddingEstimate,
+  KNOWLEDGE_INDEX,
   MeteredEmbeddings,
   type EmbeddingHold,
   type EmbeddingPayer,
@@ -271,7 +273,7 @@ export class KnowledgeService {
   async prepare(content: string, payer?: EmbeddingPayer): Promise<PreparedChunks> {
     const pieces = chunk(content);
     if (pieces.length === 0) return { space: this.space, chunks: [], usage: { inputTokens: 0 } };
-    const { vectors, usage } = await this.#embeddings.embed(pieces, payer);
+    const { vectors, usage } = await this.#embeddings.embed(pieces, payer, KNOWLEDGE_INDEX);
     return {
       space: this.space,
       chunks: pieces.map((text, position) => ({
@@ -327,11 +329,16 @@ export class KnowledgeService {
    * what the stub's zero vector always amounted to. Rejects with the
    * provider's `EmbeddingProviderError` when it could not embed, and with
    * `AiDailyCapError` when `payer`'s daily AI allowance cannot take it
-   * (tm 257.20).
+   * (tm 257.20). `attribution` is who asked — the usage ledger's surface and
+   * conversation (tm 283.2); a counted call must say.
    */
-  async embedQuery(query: string, payer?: EmbeddingPayer): Promise<EmbeddedQuery> {
+  async embedQuery(
+    query: string,
+    payer?: EmbeddingPayer,
+    attribution?: AiAttribution,
+  ): Promise<EmbeddedQuery> {
     if (query.trim() === '') return { space: this.space, vector: null, usage: { inputTokens: 0 } };
-    const { vectors, usage } = await this.#embeddings.embed([query], payer);
+    const { vectors, usage } = await this.#embeddings.embed([query], payer, attribution);
     return { space: this.space, vector: toVectorLiteral(vectors[0]!), usage };
   }
 

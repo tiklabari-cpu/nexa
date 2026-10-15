@@ -232,6 +232,8 @@ export const team: Messages = {
   'team.invite.error.invalidEmails': 'Not a valid address: {emails}',
   'team.invite.error.aboveRole': 'You cannot invite someone above your own role.',
   'team.invite.error.generic': 'Could not send those invitations.',
+  'team.invite.error.dailyCap':
+    'This workspace can send {limit} invitations a day, and {remaining} are left today. Nothing was sent; the allowance renews at 00:00 UTC.',
   'team.invite.pending.caption': 'Invitations not yet accepted',
   'team.invite.pending.empty': 'No pending invitations.',
   'team.invite.pending.loading': 'Loading invitations…',

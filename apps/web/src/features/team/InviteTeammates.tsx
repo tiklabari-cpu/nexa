@@ -163,6 +163,21 @@ export function InviteTeammates({
             return;
           }
         }
+        // Fifty a day per workspace (tm 282 · GV-03-S2): the whole batch was
+        // refused, so the list stays as typed for tomorrow or a shorter one.
+        if (
+          failure instanceof ApiClientError &&
+          failure.type === 'limit_reached' &&
+          failure.details?.['reason'] === 'invite_daily_cap'
+        ) {
+          setSubmitError(
+            t('team.invite.error.dailyCap', {
+              limit: Number(failure.details['limit'] ?? 50),
+              remaining: Number(failure.details['remaining'] ?? 0),
+            }),
+          );
+          return;
+        }
         setSubmitError(
           failure instanceof ApiClientError && failure.type === 'authorization'
             ? t('team.invite.error.aboveRole')

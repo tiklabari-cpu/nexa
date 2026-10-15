@@ -224,10 +224,10 @@ model Account {
   passwordHash String?   @map("password_hash")
   lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamptz(6)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  /// When somebody proved this address (tm 257.7). Null only for an owner who
-  /// signed up while `SIGNUP_EMAIL_VERIFICATION=true` and has not yet opened the
-  /// link with the password; every other way an account is made — invitation,
-  /// SSO, SCIM, the seed — is verified by this default.
+  /// When somebody proved this address (tm 257.7). Null for an owner who signed
+  /// up while `SIGNUP_EMAIL_VERIFICATION=true`, and for an account an invitation
+  /// link created (tm 282), until the link mailed to the address is opened with
+  /// the password; SSO, SCIM and the seed are verified by this default.
   emailVerifiedAt DateTime? @default(now()) @map("email_verified_at") @db.Timestamptz(6)
 
   memberships        AgentMembership[]
@@ -237,7 +237,8 @@ model Account {
   expertise          AgentExpertise[]
   passwordResets     PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
-  invitationsSent    Invitation[]
+  invitationsSent    Invitation[]             @relation("InvitationInviter")
+  invitationsPending Invitation[]             @relation("InvitationPendingAccount")
   ticketFollows      TicketFollower[]
   workSchedules      WorkSchedule[]
   presenceEvents     AgentPresenceEvent[]
@@ -1281,11 +1282,17 @@ model Invitation {
   expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
   acceptedAt     DateTime? @map("accepted_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// The account that accepted this invitation and has not yet proved the
+  /// address (tm 282 · GV-03). The invitation stays live until it does; the
+  /// join happens in `auth_join_pending_invitations`.
+  pendingAccountId String? @map("pending_account_id") @db.Uuid
 
-  license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  invitedBy Account @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  license        License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  invitedBy      Account  @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+  pendingAccount Account? @relation("InvitationPendingAccount", fields: [pendingAccountId], references: [id], onDelete: SetNull)
 
   @@index([licenseId, createdAt(sort: Desc)], map: "invitations_license_id_idx")
+  @@index([pendingAccountId])
   @@map("invitations")
 }
 

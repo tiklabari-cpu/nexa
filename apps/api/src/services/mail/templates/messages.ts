@@ -152,6 +152,64 @@ export function verifyEmailMail(
   });
 }
 
+/**
+ * The verification link an invitee gets after accepting (tm 282 · GV-03): the
+ * invitation link is also handed to the admin, so it proves nobody owns the
+ * address — this mail does. Its own copy because the sign-up one thanks the
+ * reader for opening a workspace they never opened.
+ */
+export function joinVerifyEmailMail(
+  ctx: MailContext,
+  input: { url: string; hours: number; workspaceName: string },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const ws = input.workspaceName;
+  const ttl = hoursText(ctx.locale, input.hours);
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: ws,
+    subject: t
+      ? `${ws} ekibine katılmak için e-posta adresinizi doğrulayın`
+      : `Confirm your email address to join ${ws}`,
+    preheader: t ? 'Ekibe katılmak için tek bir adım kaldı.' : 'One step left to join the team.',
+    icon: ICON.verify,
+    heading: t ? 'E-posta adresinizi doğrulayın' : 'Confirm your email address',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: t
+          ? `SiyahTuş'taki ${ws} ekibine katılma davetini kabul ettiniz. Katılımınız, bu adresin size ait olduğunu doğruladığınızda tamamlanır.`
+          : `You accepted an invitation to join the ${ws} team on SiyahTuş. You join once you confirm that this address is yours.`,
+      },
+      {
+        type: 'button',
+        label: t ? 'E-posta adresimi doğrula' : 'Confirm email address',
+        url: input.url,
+        fallback: fallback(ctx),
+      },
+      {
+        type: 'note',
+        text: t
+          ? `Daveti kabul ederken belirlediğiniz şifre sorulacak. Bağlantı ${ttl} geçerlidir ve yalnızca bir kez kullanılabilir.`
+          : `You will be asked for the password you chose when you accepted the invitation. The link expires in ${ttl} and works once.`,
+      },
+      {
+        type: 'note',
+        text: t
+          ? 'Daveti kabul eden siz değilseniz bu e-postayı yok sayabilirsiniz. Şifre olmadan bağlantı hiçbir işe yaramaz ve bu adresle kimse ekibe katılamaz.'
+          : 'If you did not accept this invitation, you can ignore this email. Without the password, the link does nothing, and nobody joins the team with this address.',
+      },
+    ],
+    footer: [
+      t
+        ? `Bu e-postayı, bu adres için ${ws} ekibine katılma daveti kabul edildiği için aldınız.`
+        : `You received this email because an invitation to join ${ws} was accepted for this address.`,
+      signature(ctx),
+    ],
+  });
+}
+
 export function accountExistsMail(
   ctx: MailContext,
   input: { signInUrl: string; resetUrl: string },

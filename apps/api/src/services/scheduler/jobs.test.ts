@@ -215,7 +215,7 @@ describe('buildSchedulerJobs', () => {
         mailer: new NullMailer(),
       }).find((j) => j.name === 'unverified_signups');
       const outcome = await job?.run(context());
-      expect(outcome?.counts).toEqual({ purged: 0, batches: 1 });
+      expect(outcome?.counts).toEqual({ purged: 0, batches: 1, invitees: 0 });
     });
   });
 });

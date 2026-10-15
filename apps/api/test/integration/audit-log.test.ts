@@ -762,9 +762,12 @@ describe('audit log writer (NFR-S12)', () => {
     });
 
     it('records a teammate joining via invitation, with the role but not their email', async () => {
+      // An account somebody already verified joins on the accept; a newcomer
+      // joins when the mailed link is opened (tm 282), recorded the same way —
+      // `invite-email-verification.test.ts` pins that path.
       const invited = await server.post(
         '/invitations',
-        { emails: ['c6a2-join@example.test'], role: 'agent' },
+        { emails: [fx.b.ownerEmail], role: 'agent' },
         auth(adminToken),
       );
       expect(invited.statusCode).toBe(201);
@@ -772,11 +775,7 @@ describe('audit log writer (NFR-S12)', () => {
       const token = new URL(items[0]!.accept_url).searchParams.get('token')!;
 
       const before = await count('member.joined');
-      const accepted = await server.post('/auth/invitations/accept', {
-        token,
-        name: 'New Joiner',
-        password: 'a-quite-long-passphrase',
-      });
+      const accepted = await server.post('/auth/invitations/accept', { token });
       expect(accepted.statusCode, accepted.payload).toBe(200);
       const { account } = accepted.json() as { account: { id: string } };
 
@@ -787,7 +786,7 @@ describe('audit log writer (NFR-S12)', () => {
       expect(entry?.target).toBe(`account:${account.id}`);
       expect(entry?.metadata).toMatchObject({ role: 'agent', via: 'invitation' });
       expect((entry?.metadata as { invitation_id: string }).invitation_id).toBeTruthy();
-      expect(JSON.stringify(entry?.metadata)).not.toContain('c6a2-join@example.test');
+      expect(JSON.stringify(entry?.metadata)).not.toContain(fx.b.ownerEmail);
     });
 
     it('records a bearer token being revoked — the access half, then the refresh half', async () => {

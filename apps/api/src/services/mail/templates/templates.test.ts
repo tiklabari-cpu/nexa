@@ -13,6 +13,7 @@ import {
   customerTranscriptMail,
   duration,
   invitationMail,
+  joinVerifyEmailMail,
   passwordResetMail,
   scheduledReportMail,
   slaBreachMail,
@@ -41,6 +42,11 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
   ];
   return {
     verify: verifyEmailMail(ctx, { url: `${APP}/verify-email?token=abc`, hours: 24 }),
+    joinVerify: joinVerifyEmailMail(ctx, {
+      url: `${APP}/verify-email?token=abc`,
+      hours: 24,
+      workspaceName: 'Acme',
+    }),
     exists: accountExistsMail(ctx, {
       signInUrl: `${APP}/signin`,
       resetUrl: `${APP}/forgot-password`,
@@ -115,9 +121,9 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all twelve in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all thirteen in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(12);
+      expect(Object.keys(mails)).toHaveLength(13);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();
@@ -156,6 +162,11 @@ describe('every message, in both languages (tm 265)', () => {
   it('keeps the security facts exact', () => {
     const en = everyMail('en');
     expect(en['verify']!.body).toContain('The link expires in 24 hours and works once.');
+    // An invitee's link names the workspace and the password chosen at the
+    // invitation, never a sign-up they did not make (tm 282).
+    expect(en['joinVerify']!.subject).toBe('Confirm your email address to join Acme');
+    expect(en['joinVerify']!.body).toContain('The link expires in 24 hours and works once.');
+    expect(en['joinVerify']!.body).not.toContain('signing up');
     expect(en['reset']!.body).toContain('The link expires in one hour and works once.');
     expect(en['invite']!.body).toContain('The invitation expires in 7 days and works once.');
     expect(en['sso']!.body).toContain('7f3a9c21');

@@ -495,7 +495,10 @@ export interface paths {
      *     Also proves the address: the person has just opened a link mailed to it
      *     and chosen the password. An owner still waiting on sign-up verification
      *     is verified by it (and their trial starts), and any outstanding
-     *     verification link is spent.
+     *     verification link is spent. An invitee who accepted an invitation before
+     *     proving the address (tm 282) joins those workspaces here, seats and all —
+     *     the way in for somebody whose invitation was accepted with a password
+     *     they do not know.
      */
     post: operations['confirmPasswordReset'];
     delete?: never;
@@ -534,6 +537,13 @@ export interface paths {
      *     On success the address is verified, any other outstanding link is spent,
      *     the workspace's trial starts now, and the answer is the same session
      *     shape sign-up returns — the client continues with `/auth/authorize`.
+     *
+     *     Also completes invitations (tm 282 · GV-03). An invitation link proves
+     *     nobody owns the address — the admin who sent it was handed it too — so
+     *     accepting one with an unverified account issues one of these links
+     *     instead of joining. Opening it joins every workspace whose invitation the
+     *     account accepted and that is still live, raising seats as the accept
+     *     would have; `joined_license_ids` names them.
      */
     post: operations['verifyEmail'];
     delete?: never;
@@ -607,6 +617,16 @@ export interface paths {
      *     `accounts.email citext unique`), and a duplicate would split their history
      *     in two.
      *
+     *     **Only a verified account joins here** (tm 282 · GV-03). The link is
+     *     mailed to the invitee *and* handed to the admin (`accept_url`, "Copy
+     *     invite link"), so holding it proves nothing about the mailbox. Any other
+     *     account — a new one this call creates, or one nobody has verified — is
+     *     answered `202` with `verification_required`: no session, no membership,
+     *     no seat. A verification link goes to the invited address, and opening it
+     *     with the password (`POST /auth/verify-email`) joins the workspace. Until
+     *     then the invitation stays pending: listed, revocable, and its link still
+     *     works, so the real invitee can accept after somebody else did.
+     *
      *     **This is where a seat reaches the bill** (FR-MOD-04.4). Joining raises
      *     the workspace's purchased seat count to its new headcount, in the same
      *     transaction as the membership, by the same rule and the same function SCIM
@@ -616,8 +636,8 @@ export interface paths {
      *     nothing, so nothing is raised.
      *
      *     Accepting the same invitation twice cannot charge twice: the token is
-     *     spent by the first call (401 afterwards), and the raise sets seats *to*
-     *     the headcount rather than incrementing them.
+     *     spent by the join (401 afterwards), and the raise sets seats *to* the
+     *     headcount rather than incrementing them.
      *
      *     This call is never refused for a seat ceiling. The person holding the link
      *     cannot buy seats or revoke anybody, and the check at `POST /invitations`
@@ -675,6 +695,18 @@ export interface paths {
      *     request must stay within `seats.ceiling` from `GET /invitations`, or the
      *     call is refused with `users_limit_reached` (429) and **nothing is
      *     written**.
+     *
+     *     **Fifty invitations per workspace per UTC day** (tm 282 · GV-03-S2),
+     *     counting every address in every call — a re-invite mails again, so it
+     *     counts again, and revoking gives nothing back. A call that would pass
+     *     fifty is refused whole with `limit_reached` (429, `error.details.reason`
+     *     `invite_daily_cap`, `details.remaining` what is left today) and nothing
+     *     is written; `Retry-After` counts down to 00:00 UTC.
+     *
+     *     Every item's `accept_url` is returned for "Copy invite link" (GV-03-S1).
+     *     Holding it proves only that the address was invited, so accepting it
+     *     joins a verified account at once but makes any other prove the address
+     *     first — see `POST /auth/invitations/accept`.
      */
     post: operations['createInvitations'];
     delete?: never;
@@ -14140,7 +14172,16 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['Session'];
+          'application/json': components['schemas']['Session'] & {
+            /**
+             * @description The workspaces this verification joined through
+             *     invitations accepted before it (tm 282), as strings like
+             *     `memberships[].license_id`. Empty for a sign-up's link.
+             *     A client signs in to the first, the one the person was
+             *     invited to, rather than to `memberships[0]`.
+             */
+            joined_license_ids: string[];
+          };
         };
       };
       400: components['responses']['BadRequest'];
@@ -14210,11 +14251,14 @@ export interface operations {
             /** @enum {string} */
             role: 'admin' | 'agent';
             /**
-             * @description False when the address already has a verified account. An
-             *     account nobody has verified yet (a sign-up waiting on its
-             *     link, tm 257.7) counts as no account: its password may be a
-             *     stranger's, so accepting sets a new one, verifies the
-             *     address and revokes the old password's sessions.
+             * @description True when no account holds the address, or the one that does
+             *     is unverified and belongs to no workspace — an account an
+             *     earlier accept of this or another invitation created (tm
+             *     282). Nobody can use that one, so accepting replaces its
+             *     password and name. False for a verified account, and for an
+             *     unverified one that belongs to a workspace (a sign-up still
+             *     waiting on its link, tm 257.7): its password is left alone,
+             *     and the address is proven with it or with a password reset.
              */
             needs_password: boolean;
           };
@@ -14245,21 +14289,40 @@ export interface operations {
           token: string;
           name?: string;
           /**
-           * @description Required when the address has no verified account yet
-           *     (`needs_password` in the preview); `400` without it.
+           * @description Required when the preview says `needs_password`; `400`
+           *     without it. Ignored otherwise.
            */
           password?: string;
         };
       };
     };
     responses: {
-      /** @description Joined */
+      /** @description Joined — the address belongs to a verified account. */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           'application/json': components['schemas']['Session'];
+        };
+      };
+      /**
+       * @description Accepted, not joined: the address must be proven first. A
+       *     verification link has been mailed to it (after this answer). Nothing
+       *     about the account is returned — whoever holds the link learns nothing
+       *     they did not type.
+       */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            verification_required: true;
+            /** @example Check your inbox: confirm your email address to finish joining. */
+            message: string;
+          };
         };
       };
       400: components['responses']['BadRequest'];
@@ -14404,7 +14467,23 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       402: components['responses']['PaymentRequired'];
       403: components['responses']['Forbidden'];
-      429: components['responses']['TooManyRequests'];
+      /**
+       * @description The rate limit (`too_many_requests`, as everywhere); the seat ceiling
+       *     (`users_limit_reached`, above); or today's invitations are used up
+       *     (`limit_reached`, `error.details.reason` `invite_daily_cap`, tm 282):
+       *     fifty per workspace per UTC day. **Nothing was written.**
+       *     `Retry-After` is the wait until 00:00 UTC for the daily cap.
+       */
+      429: {
+        headers: {
+          /** @description Seconds until the caller may retry. */
+          'Retry-After'?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
     };
   };
   revokeInvitation: {

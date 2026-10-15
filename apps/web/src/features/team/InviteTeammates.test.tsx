@@ -373,3 +373,51 @@ describe('InviteTeammates when an email does not go out (FR-MOD-04.4 · tm 255.4
     expect(screen.queryByRole('button', { name: /^Copy link for/ })).toBeNull();
   });
 });
+
+describe('InviteTeammates past the daily allowance (tm 282 · GV-03-S2)', () => {
+  it('says how many invitations a day the workspace has, and how many are left', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (!url.includes('/invitations')) throw new Error(`unexpected fetch: ${url}`);
+        if (init?.method === 'POST') {
+          return {
+            ok: false,
+            status: 429,
+            headers: { get: () => null },
+            json: async () => ({
+              error: {
+                type: 'limit_reached',
+                message: 'This workspace can send 50 invitations a day.',
+                details: { reason: 'invite_daily_cap', limit: 50, remaining: 2 },
+              },
+            }),
+          } as unknown as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({ items: [], seats: SEATS }),
+        } as unknown as Response;
+      }),
+    );
+    renderInvite();
+    await openModal();
+    await userEvent.type(
+      screen.getByLabelText('Email addresses'),
+      'ada@example.test, bob@example.test, cy@example.test',
+    );
+    await userEvent.click(submitButton());
+
+    expect(
+      await screen.findByText(
+        'This workspace can send 50 invitations a day, and 2 are left today. Nothing was sent; the allowance renews at 00:00 UTC.',
+      ),
+    ).toBeInTheDocument();
+    // The list stays as typed, for a shorter batch or for tomorrow.
+    expect(screen.getByLabelText('Email addresses')).toHaveValue(
+      'ada@example.test, bob@example.test, cy@example.test',
+    );
+  });
+});

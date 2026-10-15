@@ -532,9 +532,12 @@ describe('sign-up email verification (SIGNUP_EMAIL_VERIFICATION=true)', () => {
       return new URL(url).searchParams.get('token')!;
     }
 
-    it('asks for a password, sets it, verifies the address and revokes the old one’s sessions', async () => {
+    it('leaves a waiting owner’s password alone, joins nothing, and lets a password reset finish the join (tm 282)', async () => {
       // The squatter signed up with somebody else's address and never could
-      // verify it. Their password must not reach the workspace that invites it.
+      // verify it. An invitation to that address must reach neither the
+      // squatter's password nor the inviting workspace until the mailbox's
+      // owner proves it — the link is handed to the admin too, so it proves
+      // nothing (GV-03).
       await signup('target@example.test', PASSWORD, 'Squat Ltd');
       const squat = await workspaceOf('target@example.test');
       const squatterPat = await grantToken(owner, {
@@ -546,33 +549,58 @@ describe('sign-up email verification (SIGNUP_EMAIL_VERIFICATION=true)', () => {
 
       const token = await invite('target@example.test');
       const preview = await server.get(`/auth/invitations/preview?token=${token}`);
-      expect(preview.json()).toMatchObject({ needs_password: true });
-
-      // Without a password: refused, and the invitation is not spent.
-      const bare = await server.post('/auth/invitations/accept', { token });
-      expect(bare.statusCode).toBe(400);
-      expect((await server.get(`/auth/invitations/preview?token=${token}`)).statusCode).toBe(200);
+      // The account belongs to a workspace, so its password is not the link
+      // holder's to replace.
+      expect(preview.json()).toMatchObject({ needs_password: false });
 
       const accepted = await server.post('/auth/invitations/accept', {
         token,
-        name: 'Real Person',
+        name: 'Link Holder',
         password: OTHER_PASSWORD,
       });
-      expect(accepted.statusCode).toBe(200);
+      expect(accepted.statusCode).toBe(202);
+      expect(accepted.json()).toMatchObject({ verification_required: true });
+
+      const waiting = await accountOf('target@example.test');
+      expect(waiting.emailVerifiedAt).toBeNull();
+      expect(waiting.name).toBe('Founder');
+      expect(waiting.passwordHash).toBe(squat.account.passwordHash);
+      expect(
+        await owner.agentMembership.count({
+          where: { agentId: waiting.id, licenseId: fx.a.licenseId },
+        }),
+      ).toBe(0);
+      // The invited address got a link worded as the invitation's.
+      const [link] = await mailbox('target@example.test', 'email_verification');
+      expect(link!.subject).toContain('to join');
+
+      // The mailbox's owner never learned the squatter's password: a reset
+      // proves the address, replaces the password — and completes the join.
+      expect(
+        (await server.post('/auth/password-reset', { email: 'target@example.test' })).statusCode,
+      ).toBe(202);
+      const [reset] = await mailbox('target@example.test', 'password_reset');
+      const confirm = await server.post('/auth/password-reset/confirm', {
+        token: tokenIn(reset!, '/reset-password'),
+        password: OTHER_PASSWORD,
+      });
+      expect(confirm.statusCode).toBe(204);
 
       const account = await accountOf('target@example.test');
       expect(account.emailVerifiedAt).not.toBeNull();
-      expect(account.name).toBe('Real Person');
-      const oldLogin = await server.post('/auth/login', {
-        email: 'target@example.test',
-        password: PASSWORD,
-      });
-      expect(oldLogin.statusCode).toBe(401);
+      expect(
+        await owner.agentMembership.count({
+          where: { agentId: account.id, licenseId: fx.a.licenseId },
+        }),
+      ).toBe(1);
       const newLogin = await server.post('/auth/login', {
         email: 'target@example.test',
         password: OTHER_PASSWORD,
       });
       expect(newLogin.json().account.email_verified).toBe(true);
+      expect(
+        (newLogin.json().memberships as Array<{ license_id: string }>).map((m) => m.license_id),
+      ).toContain(fx.a.licenseId.toString());
       expect(
         (await server.get('/auth/me', { authorization: `Bearer ${squatterPat}` })).statusCode,
       ).toBe(401);

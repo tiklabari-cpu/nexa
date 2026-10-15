@@ -16,7 +16,12 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
-import { LifecycleService, hashToken, type Session } from '../services/auth/lifecycle-service.js';
+import {
+  LifecycleService,
+  hashToken,
+  type JoinedWorkspace,
+  type Session,
+} from '../services/auth/lifecycle-service.js';
 import { SEAT_CEILING } from '../lib/entitlements.js';
 import { pricingForPlan } from '../services/billing/subscription-service.js';
 import { REGIONS, servesRegion, type AgentRole } from '@siyahtus/types';
@@ -28,6 +33,7 @@ import { requestLocale } from '../lib/request-locale.js';
 import {
   accountExistsMail,
   invitationMail,
+  joinVerifyEmailMail,
   passwordResetMail,
   verifyEmailMail,
 } from '../services/mail/templates/messages.js';
@@ -43,6 +49,8 @@ const NEUTRAL_RESET_MESSAGE = 'If an account exists for that address, we sent a 
 const NEUTRAL_SIGNUP_MESSAGE = 'Check your inbox to continue.';
 const NEUTRAL_RESEND_MESSAGE = 'If that address is waiting to be confirmed, we sent a new link.';
 const NEUTRAL_VERIFY_FAILURE = 'This link is no longer valid, or the password does not match.';
+/** The accept's answer when the address must be proven first (tm 282 · GV-03). */
+const VERIFY_TO_JOIN_MESSAGE = 'Check your inbox: confirm your email address to finish joining.';
 
 /**
  * Password attempts per verification link per hour. Charged per presentation,
@@ -173,19 +181,26 @@ export default async function accountLifecycleRoutes(
     to: string,
     token: string,
     accountId: string,
-    via: 'signup' | 'resend',
+    via: 'signup' | 'resend' | 'invitation',
+    /** The workspace an invitee is joining: the mail is worded as the invitation's (tm 282). */
+    joining: string | null = null,
   ): void {
     const hours = lifecycle.verificationTtlHours;
+    const ctx = { locale: requestLocale(request), appUrl: env.WEB_APP_URL };
+    const url = `${env.WEB_APP_URL}/verify-email?token=${encodeURIComponent(token)}`;
     app.backgroundMail.send(
       {
         to,
+        // Account mail, not the workspace's (tm 282): an invitee's link is
+        // counted like a sign-up's — per address, inside the deployment's
+        // security reserve — so a workspace that has spent its own day can
+        // still let somebody it invited in.
         licenseId: null,
         kind: 'email_verification',
         // In the language the person signing up is reading the form in (tm 265).
-        ...verifyEmailMail(
-          { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
-          { url: `${env.WEB_APP_URL}/verify-email?token=${encodeURIComponent(token)}`, hours },
-        ),
+        ...(joining === null
+          ? verifyEmailMail(ctx, { url, hours })
+          : joinVerifyEmailMail(ctx, { url, hours, workspaceName: joining })),
       },
       async (outcome) => {
         // A cap refusal was logged where it was decided (`mail-caps.ts`).
@@ -571,7 +586,10 @@ export default async function accountLifecycleRoutes(
 
   app.post('/auth/password-reset/confirm', { config: { public: true } }, async (request, reply) => {
     const body = parse(resetConfirmBody, request.body);
-    const accountId = await lifecycle.confirmPasswordReset(body.token, body.password);
+    const { accountId, joined } = await lifecycle.confirmPasswordReset(body.token, body.password);
+    // Before the reset entries below, so a workspace this reset let the person
+    // into (tm 282) records the join ahead of the account events.
+    for (const workspace of joined) await recordJoin(request, accountId, workspace);
 
     // A password is account-level, but the audit log is tenant-scoped — so the
     // change is recorded once in each workspace the account can reach. The actor
@@ -624,8 +642,16 @@ export default async function accountLifecycleRoutes(
     // leaves the link working — it is the budget above that bounds guessing.
     if (!session) throw ApiError.authentication(NEUTRAL_VERIFY_FAILURE);
 
+    const { joined, ...rest } = session;
+    for (const workspace of joined) await recordJoin(request, session.account.id, workspace);
     await recordForAccount(request, session.account.id, { action: 'auth.email_verified' });
-    return reply.send(session);
+    // `joined_license_ids` names the workspaces this proof let the person into
+    // (tm 282), so the page signs them in to the one they were invited to
+    // rather than to whichever membership happens to come first.
+    return reply.send({
+      ...rest,
+      joined_license_ids: joined.map((workspace) => workspace.licenseId.toString()),
+    });
   });
 
   app.post('/auth/verify-email/resend', { config: { public: true } }, async (request, reply) => {
@@ -642,7 +668,15 @@ export default async function accountLifecycleRoutes(
       // an unverified account gets both happen after the answer.
       const pending = await lifecycle.requestEmailVerification(body.email);
       if (pending) {
-        sendVerificationLink(request, body.email, pending.token, pending.accountId, 'resend');
+        sendVerificationLink(
+          request,
+          body.email,
+          pending.token,
+          pending.accountId,
+          'resend',
+          // An invitee waiting to join gets the invitation's wording (tm 282).
+          pending.pendingWorkspace,
+        );
       }
     }
 
@@ -656,79 +690,94 @@ export default async function accountLifecycleRoutes(
 
   app.post('/auth/invitations/accept', { config: { public: true } }, async (request, reply) => {
     const body = parse(acceptBody, request.body);
-    const { session, licenseId, seatEffect } = await lifecycle.acceptInvitation({
+    const accepted = await lifecycle.acceptInvitation({
       token: body.token,
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.password !== undefined ? { password: body.password } : {}),
     });
 
-    const membership = session.memberships.find((m) => m.license_id === licenseId.toString());
-    // Best-effort, like signup and the password-reset confirmation below: a
-    // completed join must not be undone because the trail could not be
-    // written.
-    //
-    // The seat raise this block *reports* is deliberately not in this block:
-    // it committed with the membership inside `acceptInvitation`, because the
-    // two failures are not comparable. An unwritten audit row is a lost
-    // record. An unraised seat is a wrong bill, and a workspace whose own
-    // checkout then refuses to save — `updateSubscription` rejects seats below
-    // headcount (FR-MOD-10.1.3), so the next admin to change the billing cycle
-    // is stopped by a number nobody chose.
-    if (membership) {
-      try {
-        const tenant = { licenseId, organizationId: membership.organization_id };
-        await withTenant(app.db, tenant, async (tx) => {
-          const context = request.auditContext({
-            licenseId: tenant.licenseId,
-            actorId: session.account.id,
-            actorType: 'agent',
-          });
-
-          // The invitation record — already looked up under this tenant's RLS
-          // — is where the role and the invitation id live; neither travels
-          // back through `acceptInvitation`'s SECURITY DEFINER return.
-          const invitation = await tx.invitation.findFirst({
-            where: { email: session.account.email, acceptedAt: { not: null } },
-            orderBy: { acceptedAt: 'desc' },
-            select: { id: true, role: true },
-          });
-          if (invitation) {
-            await writeAuditEntry(tx, context, {
-              action: 'member.joined',
-              target: `account:${session.account.id}`,
-              metadata: { role: invitation.role, via: 'invitation', invitation_id: invitation.id },
-            });
-          }
-
-          // Not nested under the lookup above: the seat moved whether or not
-          // the invitation row could be found again, and a bill that changes
-          // with nothing in the trail to say why is the worse of the two
-          // silences.
-          //
-          // The same action and the same metadata shape SCIM's
-          // `applySeatEffect` writes, because it is the same event: the shape
-          // of this workspace's bill changed and no human pressed a button.
-          // Two words for one fact would leave an auditor unable to total the
-          // year.
-          if (seatEffect) {
-            await writeAuditEntry(tx, context, {
-              action: 'billing.subscription_updated',
-              metadata: {
-                fields: ['seats'],
-                from: seatEffect.from,
-                to: seatEffect.to,
-                via: 'invitation',
-              },
-            });
-          }
-        });
-      } catch (err) {
-        request.log.warn({ err }, 'failed to record member join in audit log');
-      }
+    // --- The address is not proven yet (tm 282 · GV-03) ----------------------
+    // Holding the link proves only that somebody was invited: `POST
+    // /invitations` hands the same link to the admin. So an account nobody has
+    // verified gets no session and no membership here — a link goes to the
+    // invited address, and the join happens when it is opened with the
+    // password. 202 and no account fields: whoever holds the link learns
+    // nothing they did not type.
+    if (accepted.kind === 'verification_required') {
+      sendVerificationLink(
+        request,
+        accepted.email,
+        accepted.token,
+        accepted.accountId,
+        'invitation',
+        accepted.workspaceName,
+      );
+      return reply.code(202).send({ verification_required: true, message: VERIFY_TO_JOIN_MESSAGE });
     }
 
+    // Only a membership the person can now use: a token that merely re-touched
+    // a suspended one joined nothing, and its trail says nothing.
+    const { session, joined } = accepted;
+    if (session.memberships.some((m) => m.license_id === joined.licenseId.toString())) {
+      await recordJoin(request, session.account.id, joined);
+    }
     return reply.send(session);
   });
+
+  /**
+   * The trail of one join (FR-MOD-04.4), into the workspace joined — at the
+   * accept, or when the address is later proven (tm 282).
+   *
+   * Best-effort, like signup and the password-reset confirmation: a completed
+   * join must not be undone because the trail could not be written.
+   *
+   * The seat raise this block *reports* is deliberately not in this block: it
+   * committed with the membership inside the service, because the two failures
+   * are not comparable. An unwritten audit row is a lost record. An unraised
+   * seat is a wrong bill, and a workspace whose own checkout then refuses to
+   * save — `updateSubscription` rejects seats below headcount (FR-MOD-10.1.3),
+   * so the next admin to change the billing cycle is stopped by a number
+   * nobody chose.
+   */
+  async function recordJoin(
+    request: FastifyRequest,
+    accountId: string,
+    joined: JoinedWorkspace,
+  ): Promise<void> {
+    try {
+      const tenant = { licenseId: joined.licenseId, organizationId: joined.organizationId };
+      await withTenant(app.db, tenant, async (tx) => {
+        const context = request.auditContext({
+          licenseId: tenant.licenseId,
+          actorId: accountId,
+          actorType: 'agent',
+        });
+        await writeAuditEntry(tx, context, {
+          action: 'member.joined',
+          target: `account:${accountId}`,
+          metadata: { role: joined.role, via: 'invitation', invitation_id: joined.invitationId },
+        });
+        // The same action and the same metadata shape SCIM's
+        // `applySeatEffect` writes, because it is the same event: the shape
+        // of this workspace's bill changed and no human pressed a button.
+        // Two words for one fact would leave an auditor unable to total the
+        // year.
+        if (joined.seatEffect) {
+          await writeAuditEntry(tx, context, {
+            action: 'billing.subscription_updated',
+            metadata: {
+              fields: ['seats'],
+              from: joined.seatEffect.from,
+              to: joined.seatEffect.to,
+              via: 'invitation',
+            },
+          });
+        }
+      });
+    } catch (err) {
+      request.log.warn({ err }, 'failed to record member join in audit log');
+    }
+  }
 
   app.get('/invitations', { config: { scopes: ['accounts--all:rw'] } }, async (request, reply) => {
     const tenant = request.tenant();

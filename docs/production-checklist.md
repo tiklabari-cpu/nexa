@@ -832,9 +832,12 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
 - A sign-up deleted by the unverified-sign-up sweep can leave one orphaned row (a customer the
   widget created at that very moment), and a resend or reset request arriving in that instant can
   get a 500. Neither affects another workspace.
-- The invitation flow can be used to open an account with someone else's address: the inviter
-  receives the accept link in the response and can set a password for the invited address
-  (found at tm 257.7, ADR K-e(1) note; present before the verification flag).
+- An inviter still receives the accept link in the response ("Copy invite link") and can set a
+  password for the invited address, but since tm 282 (ADR K-e(5)) that account is unverified and
+  joins nothing: the join waits for the verification link mailed to the invited address. What
+  remains: an admin can trigger up to five verification mails a day to that address, and with
+  `SIGNUP_EMAIL_VERIFICATION` off the unverified invitee account is not swept (it holds the
+  address and a name, no workspace). Invitations are capped at 50 per workspace per UTC day.
 - `pnpm audit --prod` on 2026-10-01 reported 27 advisories (7 moderate, 20 high). Every path
   starts at `apps/mobile` (the Expo tool chain); none reaches the api, rtm, web or widget
   images, and mobile is outside the pilot. New advisories arrive weekly (51 became 59 within

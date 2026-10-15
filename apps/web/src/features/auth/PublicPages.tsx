@@ -720,7 +720,11 @@ export function VerifyEmailPage(): ReactElement {
       ),
     },
     onSubmit: async (values, { setSubmitError }) => {
-      let session: { account: { email: string }; memberships: Array<{ license_id: string }> };
+      let session: {
+        account: { email: string };
+        memberships: Array<{ license_id: string }>;
+        joined_license_ids?: string[];
+      };
       try {
         session = await anonymous.post('/auth/verify-email', { token, password: values.password });
       } catch {
@@ -731,7 +735,10 @@ export function VerifyEmailPage(): ReactElement {
       // Past this point the address is confirmed, and the sentence must not
       // send the person back to a link that has just been spent.
       try {
-        await signIn(session.account.email, values.password, session.memberships[0]!.license_id);
+        // The workspace an invitation was waiting on, when this link completed
+        // one (tm 282) — not whichever membership happens to come first.
+        const licenseId = session.joined_license_ids?.[0] ?? session.memberships[0]!.license_id;
+        await signIn(session.account.email, values.password, licenseId);
       } catch {
         setSubmitError(t('auth.verify.errorSignIn'));
       }
@@ -792,6 +799,8 @@ export function JoinPage(): ReactElement {
 
   const [preview, setPreview] = useState<Preview | null>(null);
   const [invalid, setInvalid] = useState(false);
+  // Accepted, but the address must be proven before the join (tm 282 · GV-03).
+  const [verifying, setVerifying] = useState(false);
 
   const signIn = useAuth((s) => s.signIn);
   // No box here (tm 257.9 · ADR K-f): the party to the terms is the workspace,
@@ -830,14 +839,21 @@ export function JoinPage(): ReactElement {
       : undefined,
     onSubmit: async (values, { setSubmitError }) => {
       try {
-        const session = await anonymous.post<{ memberships: Array<{ license_id: string }> }>(
-          '/auth/invitations/accept',
-          {
-            token,
-            ...(needsPassword ? { name: values.name.trim(), password: values.password } : {}),
-          },
-        );
+        const result = await anonymous.post<
+          { memberships: Array<{ license_id: string }> } | { verification_required: true }
+        >('/auth/invitations/accept', {
+          token,
+          ...(needsPassword ? { name: values.name.trim(), password: values.password } : {}),
+        });
 
+        // The link proves only that this address was invited — the admin was
+        // handed it too — so an account nobody has verified joins once the
+        // link mailed to the address is opened (tm 282).
+        if ('verification_required' in result) {
+          setVerifying(true);
+          return;
+        }
+        const session = result;
         if (needsPassword && preview) {
           await signIn(preview.email, values.password, session.memberships.at(-1)!.license_id);
         } else {
@@ -855,6 +871,29 @@ export function JoinPage(): ReactElement {
     return (
       <AuthCard title={t('auth.join.invalidTitle')} subtitle={t('auth.join.invalidSubtitle')}>
         <p className="text-sm text-content-secondary">{t('auth.join.invalidBody')}</p>
+      </AuthCard>
+    );
+  }
+
+  if (verifying && preview) {
+    return (
+      <AuthCard
+        title={t('auth.join.verifyTitle')}
+        subtitle={t('auth.join.verifySubtitle', { organization: preview.organization_name })}
+        footer={
+          <Link to="/signin" className="text-content-brand underline">
+            {t('auth.common.backToSignIn')}
+          </Link>
+        }
+      >
+        <p role="status" className="mb-4 text-sm text-content-secondary">
+          {t('auth.join.verifyBody', {
+            email: preview.email,
+            organization: preview.organization_name,
+          })}
+        </p>
+        {/* The mail went out a moment ago, so the button starts out waiting. */}
+        <ResendVerification email={preview.email} initialWait={RESEND_COOLDOWN_SECONDS} />
       </AuthCard>
     );
   }

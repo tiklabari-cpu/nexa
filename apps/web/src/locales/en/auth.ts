@@ -151,6 +151,10 @@ export const auth: Messages = {
   'auth.join.submit': 'Join workspace',
   'auth.join.submitting': 'Joining…',
   'auth.join.errorGeneric': 'Could not accept that invitation.',
+  'auth.join.verifyTitle': 'Confirm your email to join',
+  'auth.join.verifySubtitle': 'One more step before you join {organization}.',
+  'auth.join.verifyBody':
+    'We sent a link to {email}. Open it and enter the password you just chose to join {organization}. Until then you are not a member, and nobody can sign in with this address.',
 
   // Shared across the public pages
   'auth.common.backToSignIn': 'Back to sign in',
@@ -204,8 +208,9 @@ export const auth: Messages = {
   'auth.verify.resendSubmit': 'Send link',
   'auth.verify.resendSubmitting': 'Sending…',
   'auth.verify.title': 'Confirm your email',
-  'auth.verify.subtitle': 'Enter your password to finish setting up your workspace.',
-  'auth.verify.passwordHint': 'The password you chose when you signed up.',
+  'auth.verify.subtitle': 'Enter your password to confirm that this address is yours.',
+  'auth.verify.passwordHint':
+    'The password you chose when you signed up or accepted the invitation.',
   'auth.verify.submit': 'Confirm and sign in',
   'auth.verify.submitting': 'Confirming…',
   'auth.verify.errorInvalid':

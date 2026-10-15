@@ -148,6 +148,10 @@ export const auth: Messages = {
   'auth.join.submit': 'Çalışma alanına katıl',
   'auth.join.submitting': 'Katılınıyor…',
   'auth.join.errorGeneric': 'O davet kabul edilemedi.',
+  'auth.join.verifyTitle': 'Katılmak için e-postanızı doğrulayın',
+  'auth.join.verifySubtitle': '{organization} ekibine katılmadan önce bir adım daha.',
+  'auth.join.verifyBody':
+    '{email} adresine bir bağlantı gönderdik. {organization} ekibine katılmak için bağlantıyı açın ve az önce seçtiğiniz parolayı girin. O zamana kadar ekibin üyesi değilsiniz ve bu adresle kimse oturum açamaz.',
 
   // Shared across the public pages
   'auth.common.backToSignIn': 'Oturum açmaya dön',
@@ -200,8 +204,8 @@ export const auth: Messages = {
   'auth.verify.resendSubmit': 'Bağlantı gönder',
   'auth.verify.resendSubmitting': 'Gönderiliyor…',
   'auth.verify.title': 'E-postanızı doğrulayın',
-  'auth.verify.subtitle': 'Çalışma alanınızı kurmayı bitirmek için parolanızı girin.',
-  'auth.verify.passwordHint': 'Kayıt olurken seçtiğiniz parola.',
+  'auth.verify.subtitle': 'Bu adresin size ait olduğunu doğrulamak için parolanızı girin.',
+  'auth.verify.passwordHint': 'Kayıt olurken ya da daveti kabul ederken seçtiğiniz parola.',
   'auth.verify.submit': 'Doğrula ve oturum aç',
   'auth.verify.submitting': 'Doğrulanıyor…',
   'auth.verify.errorInvalid':

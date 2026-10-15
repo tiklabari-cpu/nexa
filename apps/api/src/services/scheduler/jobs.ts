@@ -42,7 +42,10 @@ import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
-import { UnverifiedSignupSweeper } from '../auth/unverified-signup-sweep.js';
+import {
+  UnverifiedInviteeSweeper,
+  UnverifiedSignupSweeper,
+} from '../auth/unverified-signup-sweep.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
 import { ChatService } from '../chat/chat-service.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
@@ -299,7 +302,26 @@ export function buildSchedulerJobs({
             'expired unverified sign-ups purged',
           );
         }
-        return { counts: { purged: report.totals.purged, batches: report.totals.batches } };
+        // Accounts an invitation link created and nobody verified (tm 282),
+        // with the same TTL. In the same job rather than one of its own: the
+        // same switch, the same reasons, and a second job would be one more
+        // name on `/health` for the same chore.
+        const invitees = await new UnverifiedInviteeSweeper(db, {
+          ttlHours: env.UNVERIFIED_SIGNUP_TTL_HOURS,
+        }).run({ signal: context.signal });
+        if (invitees.totals.purged > 0) {
+          context.logger.info(
+            { event: 'invitation.unverified_purged', count: invitees.totals.purged },
+            'expired unverified invitees purged',
+          );
+        }
+        return {
+          counts: {
+            purged: report.totals.purged,
+            batches: report.totals.batches,
+            invitees: invitees.totals.purged,
+          },
+        };
       },
     },
   ];

@@ -90,3 +90,51 @@ export class UnverifiedSignupSweeper {
     return { totals: { purged, batches } };
   }
 }
+
+/**
+ * The expired unverified invitee sweep (tm 282 · GV-03 · ADR
+ * docs/adr/pilot-public-readiness.md K-e(5)).
+ *
+ * Accepting an invitation no longer proves the address, so an account the
+ * link creates waits unverified, in no workspace, until its link is opened —
+ * and one nobody opens (an admin who typed somebody else's address, a typo)
+ * would hold that address and a name for good. `purge_unverified_invitees`
+ * (migration `20261015120000_invitation_email_verification`) deletes such an
+ * account once it is older than the sign-up TTL and no link mailed to it still
+ * works; its invitation, if still live, is live again for the real invitee.
+ *
+ * Run by the `unverified_signups` job, after the sign-ups, with the same batch
+ * bounds and the same reasons for them.
+ */
+export class UnverifiedInviteeSweeper {
+  readonly #db: PrismaClient;
+  readonly #ttlHours: number;
+  readonly #batchSize: number;
+  readonly #maxBatches: number;
+
+  constructor(db: PrismaClient, options: UnverifiedSignupSweepOptions) {
+    this.#db = db;
+    this.#ttlHours = options.ttlHours;
+    this.#batchSize = options.batchSize ?? PURGE_BATCH_SIZE;
+    this.#maxBatches = options.maxBatches ?? PURGE_MAX_BATCHES;
+  }
+
+  async run(options: { signal?: AbortSignal } = {}): Promise<UnverifiedSignupSweepReport> {
+    let purged = 0;
+    let batches = 0;
+
+    while (batches < this.#maxBatches && !options.signal?.aborted) {
+      const [row] = await this.#db.$queryRaw<Array<{ purged: number }>>`
+        SELECT purge_unverified_invitees(
+                 make_interval(hours => ${this.#ttlHours}::int),
+                 ${this.#batchSize}::int
+               ) AS purged`;
+      batches += 1;
+      const count = row?.purged ?? 0;
+      purged += count;
+      if (count < this.#batchSize) break;
+    }
+
+    return { totals: { purged, batches } };
+  }
+}

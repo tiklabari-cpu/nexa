@@ -803,7 +803,7 @@ describe('the unverified_signups job', () => {
     const log = recordingLogger();
     const outcome = await job.run({ signal: new AbortController().signal, logger: log.logger });
 
-    expect(outcome?.counts).toEqual({ purged: 3, batches: 1 });
+    expect(outcome?.counts).toEqual({ purged: 3, batches: 1, invitees: 0 });
     for (const bot of bots) expect(await presence(bot)).toEqual(GONE);
     expect(await presence(fresh)).toEqual(KEPT);
     expect(log.lines).toEqual([
@@ -824,7 +824,7 @@ describe('the unverified_signups job', () => {
     // Nothing left to purge: the pass still reports, and no event is logged.
     const quiet = recordingLogger();
     const again = await job.run({ signal: new AbortController().signal, logger: quiet.logger });
-    expect(again?.counts).toEqual({ purged: 0, batches: 1 });
+    expect(again?.counts).toEqual({ purged: 0, batches: 1, invitees: 0 });
     expect(quiet.lines).toEqual([]);
   });
 
@@ -833,11 +833,12 @@ describe('the unverified_signups job', () => {
     await ageSignup(owner, day, 30);
     const context = { signal: new AbortController().signal, logger: recordingLogger().logger };
 
-    expect((await jobFor().run(context))?.counts).toEqual({ purged: 0, batches: 1 });
+    expect((await jobFor().run(context))?.counts).toEqual({ purged: 0, batches: 1, invitees: 0 });
     expect(await presence(day)).toEqual(KEPT);
     expect((await jobFor({ UNVERIFIED_SIGNUP_TTL_HOURS: '24' }).run(context))?.counts).toEqual({
       purged: 1,
       batches: 1,
+      invitees: 0,
     });
     expect(await presence(day)).toEqual(GONE);
   });

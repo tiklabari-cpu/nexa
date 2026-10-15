@@ -17,6 +17,7 @@ import type { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { MemoryMailer, acceptAndVerify } from '../helpers/invite-join.js';
 import { LifecycleService } from '../../src/services/auth/lifecycle-service.js';
 import { FileMailer } from '../../src/services/mail/mailer.js';
 
@@ -28,12 +29,13 @@ describe('account lifecycle', () => {
   let fx: Fixtures;
   let ownerToken: string;
   let agentToken: string;
+  const mailer = new MemoryMailer();
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
   beforeAll(async () => {
     owner = ownerClient();
-    server = await startTestServer();
+    server = await startTestServer({}, { mailer });
   });
 
   afterAll(async () => {
@@ -313,12 +315,15 @@ describe('account lifecycle', () => {
     it('works once', async () => {
       const invite = await inviteOne('joiner@example.test');
 
-      const first = await server.post('/auth/invitations/accept', {
+      // A newcomer joins when the mailed link is opened (tm 282); that join is
+      // what spends the invitation.
+      const first = await acceptAndVerify(server, mailer, {
         token: invite.token,
+        email: 'joiner@example.test',
         name: 'Joiner',
         password: STRONG_PASSWORD,
       });
-      expect(first.statusCode).toBe(200);
+      expect(first.verified.statusCode).toBe(200);
 
       const second = await server.post('/auth/invitations/accept', {
         token: invite.token,
@@ -659,7 +664,9 @@ describe('account lifecycle', () => {
         name: 'Teammate',
         password: STRONG_PASSWORD,
       });
-      expect(accepted.statusCode).toBe(200);
+      // Accepted, waiting on the address (tm 282) — closed sign-up changes
+      // nothing about how an invitee proves it.
+      expect(accepted.statusCode).toBe(202);
       expect(await owner.account.count({ where: { email: 'teammate@closed.test' } })).toBe(1);
     });
 
@@ -685,19 +692,24 @@ describe('account lifecycle', () => {
   });
 
   describe('accepting an invitation', () => {
-    it('creates the account and the membership for a newcomer', async () => {
+    it('creates the account for a newcomer, and the membership once the address is proven', async () => {
       const invite = await inviteOne('newcomer@example.test', 'agent');
 
       const preview = await server.get(`/auth/invitations/preview?token=${invite.token}`);
       expect(preview.json()).toMatchObject({ needs_password: true, role: 'agent' });
 
-      const response = await server.post('/auth/invitations/accept', {
+      const { accepted, verified } = await acceptAndVerify(server, mailer, {
         token: invite.token,
+        email: 'newcomer@example.test',
         name: 'Newcomer',
         password: STRONG_PASSWORD,
       });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { memberships: Array<{ role: string }> };
+      expect(accepted.json()).toEqual({
+        verification_required: true,
+        message: 'Check your inbox: confirm your email address to finish joining.',
+      });
+      expect(verified.statusCode).toBe(200);
+      const body = verified.json() as { memberships: Array<{ role: string }> };
       expect(body.memberships).toHaveLength(1);
       expect(body.memberships[0]!.role).toBe('agent');
     });

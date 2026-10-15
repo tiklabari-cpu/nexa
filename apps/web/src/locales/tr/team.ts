@@ -225,6 +225,8 @@ export const team: Messages = {
   'team.invite.error.invalidEmails': 'Geçersiz adres: {emails}',
   'team.invite.error.aboveRole': 'Kendi rolünüzün üstünde birini davet edemezsiniz.',
   'team.invite.error.generic': 'Bu davetler gönderilemedi.',
+  'team.invite.error.dailyCap':
+    'Bu çalışma alanı günde {limit} davet gönderebilir; bugün {remaining} davet hakkı kaldı. Hiçbir davet gönderilmedi; hak 00:00 UTC’de yenilenir.',
   'team.invite.pending.caption': 'Henüz kabul edilmemiş davetler',
   'team.invite.pending.empty': 'Bekleyen davet yok.',
   'team.invite.pending.loading': 'Davetler yükleniyor…',

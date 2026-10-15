@@ -14,7 +14,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import { SignUpPage, VerifyEmailPage } from './PublicPages.js';
+import { JoinPage, SignUpPage, VerifyEmailPage } from './PublicPages.js';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
 import type { DeploymentConfig } from '@siyahtus/types';
@@ -239,5 +239,63 @@ describe('VerifyEmailPage (FR-MOD-00.2)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Confirm and sign in' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/address is confirmed/i);
+  });
+});
+
+describe('an invitation accepted before the address is proven (tm 282 · GV-03)', () => {
+  const TOKEN = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+  it('signs in to the workspace the verification joined, not the first membership', async () => {
+    const signIn = vi.fn(async () => undefined);
+    useAuth.setState({ signIn });
+    vi.spyOn(ApiClient.prototype, 'post').mockResolvedValue({
+      account: { email: 'robin@example.com' },
+      memberships: [{ license_id: '41' }, { license_id: '42' }],
+      joined_license_ids: ['42'],
+    });
+    renderAt(<VerifyEmailPage />, `/verify-email?token=${TOKEN}`);
+
+    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm and sign in' }));
+
+    await vi.waitFor(() =>
+      expect(signIn).toHaveBeenCalledWith('robin@example.com', 'longenoughpass', '42'),
+    );
+  });
+
+  it('shows "confirm your email" on a 202 from the accept, offers the link again, and signs nobody in', async () => {
+    const signIn = vi.fn(async () => undefined);
+    useAuth.setState({ signIn });
+    vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue({
+      organization_name: 'Acme',
+      email: 'robin@example.com',
+      role: 'agent',
+      needs_password: true,
+    });
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockResolvedValue({
+      verification_required: true,
+      message: 'Check your inbox: confirm your email address to finish joining.',
+    });
+    renderAt(<JoinPage />, `/join?token=${TOKEN}`);
+
+    await userEvent.type(await screen.findByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Choose a password'), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: 'Join workspace' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm your email to join' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/We sent a link to robin@example\.com\..*join Acme/),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Choose a password')).toBeNull();
+    // The mail went out a moment ago: the resend waits first.
+    expect(screen.getByRole('button', { name: /Send again in \d+ s/ })).toBeDisabled();
+    expect(post).toHaveBeenCalledWith('/auth/invitations/accept', {
+      token: TOKEN,
+      name: 'Robin',
+      password: 'longenoughpass',
+    });
+    expect(signIn).not.toHaveBeenCalled();
   });
 });

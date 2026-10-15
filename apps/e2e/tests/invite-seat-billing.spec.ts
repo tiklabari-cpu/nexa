@@ -15,6 +15,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
+import { linkIn, waitForMail } from './mailbox.js';
 
 const PASSWORD = 'a-quite-long-passphrase';
 
@@ -58,6 +59,7 @@ test.describe('an invited teammate reaches the bill (FR-MOD-04.4)', () => {
   test('the modal prices the invite, and Billing shows the seat once the invitee joins', async ({
     page,
     browser,
+    request,
   }) => {
     await signUpAndEnterTheApp(page);
     const invitee = `newcomer-${Date.now()}@invite-seats.test`;
@@ -131,6 +133,18 @@ test.describe('an invited teammate reaches the bill (FR-MOD-04.4)', () => {
       await inviteePage.getByLabel('Your name').fill('Sam Newcomer');
       await inviteePage.getByLabel('Choose a password').fill(PASSWORD);
       await inviteePage.getByRole('button', { name: 'Join workspace' }).click();
+      // The link proves only that the address was invited (tm 282 · GV-03):
+      // the join — and the seat — wait for the mailbox.
+      await expect(
+        inviteePage.getByRole('heading', { name: 'Confirm your email to join' }),
+      ).toBeVisible();
+      await page.goto('/app/billing');
+      await expect(page.getByTestId('seat-count')).toHaveText('1');
+
+      const mail = await waitForMail(request, invitee, 'Confirm your email address to join');
+      await inviteePage.goto(linkIn(mail, '/verify-email'));
+      await inviteePage.getByLabel('Password').fill(PASSWORD);
+      await inviteePage.getByRole('button', { name: 'Confirm and sign in' }).click();
       // Signed straight in to the workspace they just joined.
       await expect(inviteePage.getByRole('link', { name: 'Inbox' })).toBeVisible();
     } finally {

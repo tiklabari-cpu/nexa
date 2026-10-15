@@ -450,14 +450,29 @@ describe('auth mail over the real carrier (tm 255.4)', () => {
           '/join',
         )!;
 
-      // A minute short of seven days, it works — once.
+      // A minute short of seven days, it works — once. A newcomer's accept
+      // waits on the address (tm 282): the join, which is what spends the
+      // invitation, is the verification link mailed to it. The invitation is
+      // held for that link's life, so a last-minute accept can still finish.
       await age('invitations', items[0]!.id, 7 * DAY_MS - 60_000);
       const accepted = await api.post('/auth/invitations/accept', {
         token: tokenFor(onTime),
         name: 'On Time',
         password: 'a-quite-long-passphrase',
       });
-      expect(accepted.statusCode).toBe(200);
+      expect(accepted.statusCode).toBe(202);
+      await api.app.backgroundMail.settled();
+      const verification = smtp.messages
+        .map(readReceivedMail)
+        .filter((mail) => mail.to === onTime && mail.body.includes('/verify-email'))
+        .at(-1)!;
+      const [held] = await owner.invitation.findMany({ where: { id: items[0]!.id } });
+      expect(held!.expiresAt.getTime()).toBeGreaterThan(Date.now() + 23 * HOUR_MS);
+      const verified = await api.post('/auth/verify-email', {
+        token: tokenIn(verification.body, '/verify-email')!,
+        password: 'a-quite-long-passphrase',
+      });
+      expect(verified.statusCode).toBe(200);
       const again = await api.post('/auth/invitations/accept', {
         token: tokenFor(onTime),
         name: 'On Time',

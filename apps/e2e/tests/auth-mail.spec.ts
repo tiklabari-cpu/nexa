@@ -40,6 +40,9 @@ async function signUp(page: Page, email: string, workspace: string): Promise<voi
 
 test.describe('invitation e-mail over SMTP — the link in the mail makes a teammate (FR-MOD-04.4)', () => {
   test('an invitee joins from the link they were mailed', async ({ page, browser, request }) => {
+    // Two mails and two browsers since tm 282: the invitation, then the
+    // verification that is the join. Measured 51 s on a cold stack.
+    test.slow();
     const id = unique();
     const invitee = `newcomer-${id}@auth-mail.test`;
     await signUp(page, `owner-${id}@auth-mail.test`, `Auth Mail Co ${id}`);
@@ -76,6 +79,19 @@ test.describe('invitation e-mail over SMTP — the link in the mail makes a team
       await joining.getByLabel('Choose a password').fill(PASSWORD);
       await joining.screenshot({ path: 'kanit/255.4-invite-mail-join.png', fullPage: true });
       await joining.getByRole('button', { name: 'Join workspace' }).click();
+      // Holding the link proves only an invitation (tm 282 · GV-03): the
+      // address is proven by a second mail, opened with the same password.
+      await expect(
+        joining.getByRole('heading', { name: 'Confirm your email to join' }),
+      ).toBeVisible();
+      const confirm = await waitForMail(
+        request,
+        invitee,
+        `Confirm your email address to join Auth Mail Co ${id}`,
+      );
+      await joining.goto(linkIn(confirm, '/verify-email'));
+      await joining.getByLabel('Password').fill(PASSWORD);
+      await joining.getByRole('button', { name: 'Confirm and sign in' }).click();
       await expect(joining).toHaveURL(/\/app\//);
     } finally {
       await context.close();
@@ -98,6 +114,100 @@ test.describe('invitation e-mail over SMTP — the link in the mail makes a team
     // And the owner's team now has them.
     await page.goto('/app/team');
     await expect(page.getByRole('button', { name: 'Profile — Nia Newcomer' })).toBeVisible();
+  });
+});
+
+test.describe('a copied invite link proves nothing about the mailbox (tm 282 · GV-03)', () => {
+  test('an admin who sets a password through the link cannot sign in; the invitee joins from the mail', async ({
+    page,
+    browser,
+    request,
+  }) => {
+    test.slow();
+    const id = unique();
+    const invitee = `copied-${id}@auth-mail.test`;
+    const adminPassword = 'chosen-by-the-admin';
+    await signUp(page, `owner-${id}@auth-mail.test`, `Copied Link Co ${id}`);
+    await page.getByRole('button', { name: 'Skip setup' }).click();
+    await expect(page).toHaveURL(/\/app\/inbox/);
+
+    // "Copy invite link": the same link the invitee is mailed, in the admin's hands.
+    await page.goto('/app/team');
+    await page.getByRole('button', { name: 'Invite teammates' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Invite teammates' });
+    await dialog.getByLabel('Email addresses').fill(invitee);
+    const sent = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/invitations') && response.request().method() === 'POST',
+    );
+    await dialog.getByRole('button', { name: /^Invite 1/ }).click();
+    const { items } = (await (await sent).json()) as { items: Array<{ accept_url: string }> };
+    const copied = items[0]!.accept_url;
+
+    const admin = await browser.newContext();
+    try {
+      const holder = await admin.newPage();
+      await holder.goto(copied);
+      await holder.getByLabel('Your name').fill('Impostor');
+      await holder.getByLabel('Choose a password').fill(adminPassword);
+      await holder.getByRole('button', { name: 'Join workspace' }).click();
+      await expect(
+        holder.getByRole('heading', { name: 'Confirm your email to join' }),
+      ).toBeVisible();
+      await holder.screenshot({ path: 'kanit/gv-03-join-confirm-email.png', fullPage: true });
+
+      // The password it chose opens nothing: the sign-in form says the
+      // address is not confirmed and offers no workspace.
+      await holder.goto('/signin');
+      await holder.getByLabel('Email').fill(invitee);
+      await holder.getByLabel('Password').fill(adminPassword);
+      await holder.getByRole('button', { name: 'Sign in' }).click();
+      await expect(holder.getByRole('region', { name: 'Confirm your email first' })).toBeVisible();
+      await expect(holder).not.toHaveURL(/\/app\//);
+    } finally {
+      await admin.close();
+    }
+
+    // The real invitee opens the invitation mail, chooses their own password —
+    // replacing the admin's — and confirms from the second mail.
+    const invitation = await waitForMail(
+      request,
+      invitee,
+      `invited you to join Copied Link Co ${id}`,
+    );
+    const context = await browser.newContext();
+    try {
+      const joining = await context.newPage();
+      await joining.goto(linkIn(invitation, '/join'));
+      await joining.getByLabel('Your name').fill('Real Invitee');
+      await joining.getByLabel('Choose a password').fill(PASSWORD);
+      await joining.getByRole('button', { name: 'Join workspace' }).click();
+      await expect(
+        joining.getByRole('heading', { name: 'Confirm your email to join' }),
+      ).toBeVisible();
+      let confirm = (await mailbox(request, invitee)).filter((mail) =>
+        mail.subject.includes('Confirm your email address to join'),
+      );
+      await expect
+        .poll(async () => {
+          confirm = (await mailbox(request, invitee)).filter((mail) =>
+            mail.subject.includes('Confirm your email address to join'),
+          );
+          return confirm.length;
+        })
+        .toBe(2);
+      // The newest link: the first was spent when the password changed.
+      const newest = confirm.sort((a, b) => b.received - a.received)[0]!;
+      await joining.goto(linkIn(newest, '/verify-email'));
+      await joining.getByLabel('Password').fill(PASSWORD);
+      await joining.getByRole('button', { name: 'Confirm and sign in' }).click();
+      await expect(joining).toHaveURL(/\/app\//);
+    } finally {
+      await context.close();
+    }
+
+    await page.goto('/app/team');
+    await expect(page.getByRole('button', { name: 'Profile — Real Invitee' })).toBeVisible();
   });
 });
 

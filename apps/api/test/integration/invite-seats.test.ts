@@ -25,6 +25,11 @@
  *   4. **Growth nobody is watching has a ceiling, and it is spoken.** The
  *      refusal lands at `POST /invitations`, where an administrator is present,
  *      and never on the person holding the link.
+ *
+ * Since tm 282 (GV-03) "arrive" means "prove the address": a newcomer's accept
+ * creates an unverified account and joins nothing, and the join — seat and
+ * all — happens when the link mailed to the address is opened. `join` below
+ * walks both halves; the last group pins the gap between them.
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
@@ -39,6 +44,7 @@ import {
   type Fixtures,
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { MemoryMailer, verificationTokenFor } from '../helpers/invite-join.js';
 
 const STRONG_PASSWORD = 'a-quite-long-passphrase';
 
@@ -50,12 +56,15 @@ describe('invited seats reach the bill (FR-MOD-04.4)', () => {
   let owner: PrismaClient;
   let fx: Fixtures;
   let ownerToken: string;
+  const mailer = new MemoryMailer();
+  /** The address each invitation token was issued for — `join` needs it to find the mail. */
+  const addressOf = new Map<string, string>();
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
   beforeAll(async () => {
     owner = ownerClient();
-    server = await startTestServer();
+    server = await startTestServer({}, { mailer });
   });
 
   afterAll(async () => {
@@ -69,6 +78,8 @@ describe('invited seats reach the bill (FR-MOD-04.4)', () => {
     // "subscribed" are the two answers the seat rule differs on.
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
+    mailer.clear();
+    addressOf.clear();
     ownerToken = await grantToken(owner, {
       licenseId: fx.a.licenseId,
       organizationId: fx.a.organizationId,
@@ -89,11 +100,25 @@ describe('invited seats reach the bill (FR-MOD-04.4)', () => {
     expect(response.statusCode).toBe(201);
     const body = response.json() as { items: Array<{ id: string; accept_url: string }> };
     const item = body.items[0]!;
-    return { id: item.id, token: new URL(item.accept_url).searchParams.get('token')! };
+    const token = new URL(item.accept_url).searchParams.get('token')!;
+    addressOf.set(token, email);
+    return { id: item.id, token };
   }
 
-  async function join(token: string, name = 'Newcomer') {
+  /** Accept as a newcomer (a 202), then open the link mailed to the address. */
+  async function accept(token: string, name = 'Newcomer') {
     return server.post('/auth/invitations/accept', { token, name, password: STRONG_PASSWORD });
+  }
+
+  /**
+   * The whole join: the accept, then the verification that is the join (tm
+   * 282). Answers with the accept when that was refused, else the verification.
+   */
+  async function join(token: string, name = 'Newcomer') {
+    const accepted = await accept(token, name);
+    if (accepted.statusCode !== 202) return accepted;
+    const link = await verificationTokenFor(server, mailer, addressOf.get(token)!);
+    return server.post('/auth/verify-email', { token: link, password: STRONG_PASSWORD });
   }
 
   /**
@@ -323,6 +348,70 @@ describe('invited seats reach the bill (FR-MOD-04.4)', () => {
 
       expect(await seatsOf()).toBe(SEEDED_HEADCOUNT);
       expect(await entriesFor('billing.subscription_updated')).toHaveLength(0);
+    });
+  });
+
+  // =========================================================================
+  // 3b. Not a seat until the address is proven (tm 282 · GV-03)
+  // =========================================================================
+
+  describe('an invitee whose address is not proven yet', () => {
+    it('is not a member and not a seat after the accept — only after the verification (FR-MOD-04.4)', async () => {
+      await seedSubscription(owner, fx.a.licenseId, 'growth');
+      const invite = await inviteOne('unproven@example.test');
+
+      expect((await accept(invite.token)).statusCode).toBe(202);
+      // An account exists, unverified, in no workspace — and the bill is still
+      // what it was: the link holder may not own the address.
+      const account = await owner.account.findUniqueOrThrow({
+        where: { email: 'unproven@example.test' },
+      });
+      expect(account.emailVerifiedAt).toBeNull();
+      expect(await owner.agentMembership.count({ where: { agentId: account.id } })).toBe(0);
+      expect(await seatsOf()).toBe(SEEDED_HEADCOUNT);
+      expect(await entriesFor('billing.subscription_updated')).toHaveLength(0);
+      expect(await entriesFor('member.joined')).toHaveLength(0);
+
+      const link = await verificationTokenFor(server, mailer, 'unproven@example.test');
+      const verified = await server.post('/auth/verify-email', {
+        token: link,
+        password: STRONG_PASSWORD,
+      });
+      expect(verified.statusCode).toBe(200);
+      expect(verified.json()).toMatchObject({ joined_license_ids: [fx.a.licenseId.toString()] });
+
+      expect(await seatsOf()).toBe(SEEDED_HEADCOUNT + 1);
+      const [entry] = await entriesFor('billing.subscription_updated');
+      expect(entry!.metadata).toMatchObject({
+        fields: ['seats'],
+        from: SEEDED_HEADCOUNT,
+        to: SEEDED_HEADCOUNT + 1,
+        via: 'invitation',
+      });
+      const [joined] = await entriesFor('member.joined');
+      expect(joined!.metadata).toMatchObject({ role: 'agent', via: 'invitation' });
+    });
+
+    it('charges nothing for an invitation revoked between the accept and the verification', async () => {
+      await seedSubscription(owner, fx.a.licenseId, 'growth');
+      const invite = await inviteOne('withdrawn@example.test');
+      expect((await accept(invite.token)).statusCode).toBe(202);
+
+      // Still pending, so still revocable: the admin changed their mind.
+      expect((await server.del(`/invitations/${invite.id}`, auth(ownerToken))).statusCode).toBe(
+        204,
+      );
+
+      const link = await verificationTokenFor(server, mailer, 'withdrawn@example.test');
+      const verified = await server.post('/auth/verify-email', {
+        token: link,
+        password: STRONG_PASSWORD,
+      });
+      // The address is proven — that is the person's — but there is nothing
+      // left to join.
+      expect(verified.statusCode).toBe(200);
+      expect(verified.json()).toMatchObject({ joined_license_ids: [], memberships: [] });
+      expect(await seatsOf()).toBe(SEEDED_HEADCOUNT);
     });
   });
 

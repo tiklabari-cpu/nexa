@@ -24,6 +24,7 @@ import {
 } from '../../lib/tenant.js';
 import { assertInviteSeatCeiling } from '../../lib/entitlements.js';
 import { ensureSeatsCoverHeadcount } from '../billing/subscription-service.js';
+import { secondsUntilUtcMidnight } from '../ai/ai-daily-budget.js';
 import { hashPassword, verifyPassword } from '../../lib/crypto.js';
 import { type AgentRole, type Region } from '@siyahtus/types';
 import { ROLE_RANK } from './principal.js';
@@ -52,8 +53,13 @@ export interface Session {
   memberships: Membership[];
 }
 
-export interface AcceptedInvitation {
-  session: Session;
+/**
+ * One workspace an account has just joined through an invitation — at the
+ * accept for a verified account, or when an unverified one proves its address
+ * (tm 282). What the route needs to write `member.joined` and, when the bill
+ * moved, `billing.subscription_updated` into that workspace's trail.
+ */
+export interface JoinedWorkspace {
   /**
    * The membership this call itself created or reused — `session.memberships`
    * also lists any workspaces the account already belonged to, so it alone
@@ -61,6 +67,9 @@ export interface AcceptedInvitation {
    * audit entry, C6-a2).
    */
   licenseId: bigint;
+  organizationId: string;
+  invitationId: string;
+  role: string;
   /**
    * The seat count this join moved, or `null` when it moved nothing — because
    * the workspace is on a trial with no subscription row, because it had
@@ -73,6 +82,24 @@ export interface AcceptedInvitation {
    */
   seatEffect: { from: number; to: number } | null;
 }
+
+/**
+ * What accepting an invitation did (tm 282 · GV-03). The link is handed to
+ * the admin as well as mailed, so it proves nobody owns the address: only an
+ * account somebody already verified joins on the spot. Any other is parked on
+ * the invitation, and a verification link is issued for the address.
+ */
+export type AcceptedInvitation =
+  | { kind: 'joined'; session: Session; joined: JoinedWorkspace }
+  | {
+      kind: 'verification_required';
+      accountId: string;
+      email: string;
+      /** The workspace's name, for the mail. */
+      workspaceName: string;
+      /** The verification link's token — mailed to `email`, never returned. */
+      token: string;
+    };
 
 export interface InvitationRecord {
   id: string;
@@ -296,19 +323,33 @@ export class LifecycleService {
    * The trial length goes with it because an owner still waiting on sign-up
    * verification starts the trial here.
    */
-  async confirmPasswordReset(token: string, password: string): Promise<string> {
+  async confirmPasswordReset(
+    token: string,
+    password: string,
+  ): Promise<{ accountId: string; joined: JoinedWorkspace[] }> {
     const passwordHash = await hashPassword(password);
-    const rows = await this.#db.$queryRaw<Array<{ reset_account: string }>>`
-      SELECT * FROM auth_consume_password_reset(
-        ${hashToken(token)}, ${passwordHash}, ${this.#trialDays}::int)`;
+    return this.#db.$transaction(
+      async (tx) => {
+        const rows = await tx.$queryRaw<Array<{ reset_account: string }>>`
+          SELECT * FROM auth_consume_password_reset(
+            ${hashToken(token)}, ${passwordHash}, ${this.#trialDays}::int)`;
 
-    const row = rows[0];
-    if (!row) {
-      // Unknown, expired and already-used are one answer: each distinction
-      // would tell someone holding a stale link something about the account.
-      throw ApiError.authentication('This reset link is no longer valid.');
-    }
-    return row.reset_account;
+        const row = rows[0];
+        if (!row) {
+          // Unknown, expired and already-used are one answer: each distinction
+          // would tell someone holding a stale link something about the account.
+          throw ApiError.authentication('This reset link is no longer valid.');
+        }
+        // A reset proves the mailbox, so it also completes any invitation the
+        // account accepted while unverified (tm 282) — the way through for a
+        // real invitee who never learned the password somebody else chose.
+        return {
+          accountId: row.reset_account,
+          joined: await this.#joinPending(tx, row.reset_account),
+        };
+      },
+      { timeout: TENANT_TRANSACTION_TIMEOUT_MS },
+    );
   }
 
   /**
@@ -322,12 +363,18 @@ export class LifecycleService {
    */
   async requestEmailVerification(
     email: string,
-  ): Promise<{ token: string; accountId: string } | null> {
+  ): Promise<{ token: string; accountId: string; pendingWorkspace: string | null } | null> {
     const { token, hash } = newToken();
     const expiresAt = new Date(Date.now() + this.#verificationTtlMs);
-    const [row] = await this.#db.$queryRaw<Array<{ recorded: string | null }>>`
-      SELECT auth_request_email_verification(${email}::citext, ${hash}, ${expiresAt}) AS recorded`;
-    return row?.recorded ? { token, accountId: row.recorded } : null;
+    // `pendingWorkspace`: the workspace an invitee is waiting to join (tm 282),
+    // so a resent link is worded as the invitation's, not as a sign-up's — in
+    // the same single call, so every branch still costs the route one.
+    const [row] = await this.#db.$queryRaw<
+      Array<{ recorded_account: string | null; pending_workspace: string | null }>
+    >`SELECT * FROM auth_issue_email_verification(${email}::citext, ${hash}, ${expiresAt})`;
+    return row?.recorded_account
+      ? { token, accountId: row.recorded_account, pendingWorkspace: row.pending_workspace }
+      : null;
   }
 
   /** How long a verification link works, in hours — the mail says so. */
@@ -349,7 +396,10 @@ export class LifecycleService {
    * password — and the scrypt cost is paid on every path, so neither the
    * answer nor its timing separates "no such link" from "wrong password".
    */
-  async verifyEmail(token: string, password: string): Promise<Session | null> {
+  async verifyEmail(
+    token: string,
+    password: string,
+  ): Promise<(Session & { joined: JoinedWorkspace[] }) | null> {
     const hash = hashToken(token);
     const [pending] = await this.#db.$queryRaw<
       Array<{ pending_account: string; password_hash: string | null }>
@@ -358,23 +408,33 @@ export class LifecycleService {
     const matches = await verifyPassword(password, pending?.password_hash ?? null);
     if (!pending || !pending.password_hash || !matches) return null;
 
-    // The account's email and name come back from the function, for the reason
-    // `auth_accept_invitation` returns them: a follow-up read would run with no
-    // tenant context and row level security would hide the row.
-    const [verified] = await this.#db.$queryRaw<
-      Array<{ verified_account: string; verified_email: string; verified_name: string }>
-    >`SELECT * FROM auth_consume_email_verification(
-        ${hash}, ${pending.password_hash}, ${this.#trialDays}::int)`;
-    if (!verified) return null;
+    // One transaction with the joins the proof unlocks (tm 282): an invitee who
+    // accepted while unverified becomes a member here, and the seat follows in
+    // the same breath, as it does at the accept (FR-MOD-04.4).
+    return this.#db.$transaction(
+      async (tx) => {
+        // The account's email and name come back from the function, for the
+        // reason `auth_accept_invitation` returns them: a follow-up read would
+        // run with no tenant context and row level security would hide the row.
+        const [verified] = await tx.$queryRaw<
+          Array<{ verified_account: string; verified_email: string; verified_name: string }>
+        >`SELECT * FROM auth_consume_email_verification(
+            ${hash}, ${pending.password_hash}, ${this.#trialDays}::int)`;
+        if (!verified) return null;
 
-    return {
-      account: {
-        id: verified.verified_account,
-        email: verified.verified_email,
-        name: verified.verified_name,
+        const joined = await this.#joinPending(tx, verified.verified_account);
+        return {
+          account: {
+            id: verified.verified_account,
+            email: verified.verified_email,
+            name: verified.verified_name,
+          },
+          memberships: await this.#membershipsOf(verified.verified_account, tx),
+          joined,
+        };
       },
-      memberships: await this.#membershipsOf(verified.verified_account),
-    };
+      { timeout: TENANT_TRANSACTION_TIMEOUT_MS },
+    );
   }
 
   /**
@@ -439,6 +499,8 @@ export class LifecycleService {
     const alreadyLive = new Set(live.map((row) => row.email.toLowerCase()));
     const added = unique.filter((email) => !alreadyLive.has(email)).length;
     assertInviteSeatCeiling(headcount + outstanding + added);
+
+    await assertInviteDailyCap(tx, tenant.licenseId, unique.length);
 
     const records: InvitationRecord[] = [];
     for (const email of unique) {
@@ -542,29 +604,38 @@ export class LifecycleService {
   }): Promise<AcceptedInvitation> {
     const passwordHash = input.password ? await hashPassword(input.password) : null;
 
+    // Minted up front, used only if the account turns out to need it: the
+    // link's expiry is also how long the invitation is held for it.
+    const link = newToken();
+    const linkExpiresAt = new Date(Date.now() + this.#verificationTtlMs);
+
     return this.#db.$transaction(
-      async (tx) => {
+      async (tx): Promise<AcceptedInvitation> => {
         // The function returns the account's email and name as well as its id.
         // The obvious follow-up query would run with no tenant context — the
         // person has only just joined — and row level security would filter it
         // away, failing the request *after* the invitation had been consumed.
         //
-        // An address whose account nobody has verified (tm 257.7) is joined
-        // like a newcomer's: the password is required and replaces the old
-        // one, the address becomes verified and the old password's sessions
-        // are revoked — all inside the function. The trial length is for that
-        // account's own workspace, whose trial starts when the address is
-        // proven.
+        // Only an account somebody already verified joins here (tm 282 ·
+        // GV-03). Holding this link proves nothing about the mailbox — the
+        // admin who sent it was handed it too — so a new account is created
+        // unverified, and any unverified account is parked on the invitation
+        // until the address is proven (`#joinPending`). The function no longer
+        // verifies anything; the trial length is passed for older signatures.
         let rows: Array<{
           joined_account: string;
           joined_license: bigint;
           joined_email: string;
           joined_name: string;
+          joined_invitation: string;
+          joined_role: string;
+          verification_required: boolean;
+          joined_organization: string;
         }>;
         try {
           rows = await tx.$queryRaw`SELECT * FROM auth_accept_invitation(
               ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash},
-              ${this.#trialDays}::int)`;
+              ${this.#trialDays}::int, ${linkExpiresAt})`;
         } catch (error) {
           if (error instanceof Error && /siyahtus_password_required/.test(error.message)) {
             // The whole transaction rolls back with this throw, so the
@@ -577,34 +648,101 @@ export class LifecycleService {
         }
 
         const row = rows[0];
-        // Nothing was written on this branch — the UPDATE inside the function
-        // matched no row — so the rollback this throw causes discards nothing.
+        // Nothing was written on this branch — the lookup inside the function
+        // matched no live invitation — so the rollback this throw causes
+        // discards nothing.
         if (!row) throw ApiError.authentication('This invitation is no longer valid.');
+
+        if (row.verification_required) {
+          // In this transaction, so a parked invitation always has a link out
+          // of it. `auth_request_email_verification` spends any earlier link:
+          // a second accept (the real invitee after somebody else) mails anew.
+          const [recorded] = await tx.$queryRaw<Array<{ recorded: string | null }>>`
+            SELECT auth_request_email_verification(
+              ${row.joined_email}::citext, ${link.hash}, ${linkExpiresAt}) AS recorded`;
+          if (!recorded?.recorded) {
+            throw ApiError.internal('Accepting the invitation issued no verification link.');
+          }
+          // Read now rather than returned by the function: the invitation is
+          // still live, so the preview still finds it.
+          const [preview] = await tx.$queryRaw<Array<{ organization_name: string }>>`
+            SELECT organization_name FROM auth_preview_invitation(${hashToken(input.token)})`;
+          return {
+            kind: 'verification_required',
+            accountId: row.joined_account,
+            email: row.joined_email,
+            workspaceName: preview?.organization_name ?? 'SiyahTuş',
+            token: link.token,
+          };
+        }
 
         const memberships = await this.#membershipsOf(row.joined_account, tx);
         const joined = memberships.find((m) => m.license_id === row.joined_license.toString());
 
         return {
+          kind: 'joined',
           session: {
             account: { id: row.joined_account, email: row.joined_email, name: row.joined_name },
             memberships,
           },
-          licenseId: row.joined_license,
-          // `auth_list_memberships` filters suspended and unapproved
-          // memberships out, so a token that only re-touched a suspended
-          // membership finds nothing here — and would raise nothing anyway,
-          // since `ensureSeatsCoverHeadcount` counts non-suspended members. The
-          // two agree by construction rather than by a second rule.
-          seatEffect: joined
-            ? await this.#raiseSeats(tx, {
-                licenseId: row.joined_license,
-                organizationId: joined.organization_id,
-              })
-            : null,
+          joined: {
+            licenseId: row.joined_license,
+            organizationId: row.joined_organization,
+            invitationId: row.joined_invitation,
+            role: row.joined_role,
+            // `auth_list_memberships` filters suspended and unapproved
+            // memberships out, so a token that only re-touched a suspended
+            // membership finds nothing here — and would raise nothing anyway,
+            // since `ensureSeatsCoverHeadcount` counts non-suspended members.
+            // The two agree by construction rather than by a second rule.
+            seatEffect: joined
+              ? await this.#raiseSeats(tx, {
+                  licenseId: row.joined_license,
+                  organizationId: row.joined_organization,
+                })
+              : null,
+          },
         };
       },
       { timeout: TENANT_TRANSACTION_TIMEOUT_MS },
     );
+  }
+
+  /**
+   * Join the workspaces whose invitations this account accepted before its
+   * address was proven (tm 282), and raise each one's seats — inside the
+   * transaction that proved it. A no-op for an account still unverified, which
+   * the function checks itself.
+   *
+   * **The seat is counted here, not at the accept**: an unverified account
+   * holds no membership, so it is not headcount, and an invitation nobody
+   * proves is never billed — the same rule the accept follows for a revoked
+   * one.
+   */
+  async #joinPending(tx: TenantClient, accountId: string): Promise<JoinedWorkspace[]> {
+    const rows = await tx.$queryRaw<
+      Array<{
+        joined_license: bigint;
+        joined_organization: string;
+        joined_invitation: string;
+        joined_role: string;
+      }>
+    >`SELECT * FROM auth_join_pending_invitations(${accountId}::uuid)`;
+
+    const joined: JoinedWorkspace[] = [];
+    for (const row of rows) {
+      joined.push({
+        licenseId: row.joined_license,
+        organizationId: row.joined_organization,
+        invitationId: row.joined_invitation,
+        role: row.joined_role,
+        seatEffect: await this.#raiseSeats(tx, {
+          licenseId: row.joined_license,
+          organizationId: row.joined_organization,
+        }),
+      });
+    }
+    return joined;
   }
 
   /**
@@ -643,6 +781,61 @@ export class LifecycleService {
              client_id
       FROM auth_list_memberships(${accountId}::uuid)`;
   }
+}
+
+/**
+ * Invitations one workspace may send per UTC day (tm 282 · GV-03-S2) — the
+ * same fifty as its daily external mail (`MAIL_DAILY_EXTERNAL_PER_WORKSPACE`'s
+ * default), which an invitation is.
+ */
+export const INVITES_PER_DAY = 50;
+
+/**
+ * Refuse a batch that would take today's invitations past
+ * {@link INVITES_PER_DAY}, before anything is written.
+ *
+ * Counted from the trail: one `member.invited` row per invitation, written in
+ * the same transaction as the invitation itself, append-only — so revoking and
+ * re-inviting cannot reset the count the way counting `invitations` rows
+ * would (a revoke deletes the row; a re-invite rewrites `created_at`). A
+ * re-invite counts again: it mails again. Serialized per workspace with a
+ * transaction lock, so two batches at once cannot both fit under the line.
+ *
+ * Separate from the mail cap on purpose. That one refuses the *mail* and
+ * leaves the invitation live with "Copy invite link" as the way through; this
+ * one refuses the invitation, which is what a link handed to the admin needs.
+ */
+async function assertInviteDailyCap(
+  tx: TenantClient,
+  licenseId: bigint,
+  adding: number,
+): Promise<void> {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext('siyahtus.invite-daily-cap'), hashtext(${licenseId.toString()}))`;
+  const now = new Date();
+  const sent = await tx.auditLogEntry.count({
+    where: {
+      licenseId,
+      action: 'member.invited',
+      createdAt: {
+        gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
+      },
+    },
+  });
+  if (sent + adding <= INVITES_PER_DAY) return;
+  throw new ApiError(
+    'limit_reached',
+    `This workspace can send ${INVITES_PER_DAY} invitations a day and has ` +
+      `${Math.max(0, INVITES_PER_DAY - sent)} left today; the allowance renews at 00:00 UTC.`,
+    {
+      details: {
+        reason: 'invite_daily_cap',
+        limit: INVITES_PER_DAY,
+        remaining: Math.max(0, INVITES_PER_DAY - sent),
+      },
+      headers: { 'Retry-After': String(secondsUntilUtcMidnight(now)) },
+    },
+  );
 }
 
 function isAccountExists(error: unknown): boolean {

@@ -467,6 +467,13 @@ export const playbook: Messages = {
   'playbook.performance.kpiAiChats': 'AI sohbetleri',
   'playbook.performance.kpiCsat': 'CSAT',
   'playbook.performance.kpiTransferRate': 'Aktarım oranı',
+  'playbook.performance.kpiLlmTokens': 'Bugünkü yapay zekâ token’ları',
+  'playbook.performance.kpiEmbeddingTokens': 'Bugünkü gömme token’ları',
+  'playbook.performance.kpiEstimatedCost': 'Bugünün tahmini maliyeti',
+  'playbook.performance.usageShare': 'Günlük kotanın {percent} kadarı',
+  'playbook.performance.costEstimateHint': 'Tahmindir — faturayla birebir tutmaz.',
+  'playbook.performance.usageFooter': 'Token sayıları UTC gününe göredir.',
+  'playbook.performance.usageLink': 'Yapay zekâ kullanımını gör',
 
   // Bulk import (BulkImportForm.tsx, BulkImportResults.tsx)
   'playbook.bulk.toggle': 'Toplu içe aktarma',

@@ -37,7 +37,7 @@ import { FOOTER } from '../../components/navigation.js';
  * gate a navigation link — see `SettingsNav.tsx` for where it renders.
  */
 export type SettingsGroupKey =
-  'general' | 'channels' | 'routing' | 'inbox' | 'integrations' | 'security' | 'billing';
+  'general' | 'channels' | 'routing' | 'inbox' | 'integrations' | 'security' | 'usage' | 'billing';
 
 export interface SettingsSectionEntry {
   /** URL segment: `/app/settings/<slug>`. */
@@ -100,6 +100,7 @@ export const SETTINGS_GROUPS: readonly { key: SettingsGroupKey; labelKey: string
   { key: 'inbox', labelKey: 'settings.nav.group.inbox' },
   { key: 'integrations', labelKey: 'settings.nav.group.integrations' },
   { key: 'security', labelKey: 'settings.nav.group.security' },
+  { key: 'usage', labelKey: 'settings.nav.group.usage' },
   { key: 'billing', labelKey: 'settings.nav.group.billing' },
 ];
 
@@ -391,6 +392,19 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     scope: ACCESS_RULES,
     file: 'SiemExport',
     keywords: ['splunk', 'log export', 'soc 2'],
+  },
+
+  // Usage and quotas (tm 283.4 · AI-16) — no PRD 08.x number of its own. What a
+  // workspace has spent of an allowance somebody else sets. `reports_read` is
+  // an owner/admin scope (an agent holds neither it nor the route), so the
+  // entry is hidden from an agent exactly where the endpoint would answer 403.
+  {
+    slug: 'ai-usage',
+    group: 'usage',
+    labelKey: 'settings.nav.section.aiUsage',
+    scope: ['reports_read'],
+    file: 'AiUsage',
+    keywords: ['tokens', 'quota', 'limit', 'cost', 'llm', 'ai budget', 'kota', 'yapay zeka'],
   },
 
   // 08.10 — Billing: the existing page, gated as the rail gates it.

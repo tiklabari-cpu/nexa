@@ -470,6 +470,13 @@ export const playbook: Messages = {
   'playbook.performance.kpiAiChats': 'AI chats',
   'playbook.performance.kpiCsat': 'CSAT',
   'playbook.performance.kpiTransferRate': 'Transferred',
+  'playbook.performance.kpiLlmTokens': 'AI tokens today',
+  'playbook.performance.kpiEmbeddingTokens': 'Embedding tokens today',
+  'playbook.performance.kpiEstimatedCost': 'Estimated cost today',
+  'playbook.performance.usageShare': '{percent} of the daily allowance',
+  'playbook.performance.costEstimateHint': 'An estimate — it will not match an invoice.',
+  'playbook.performance.usageFooter': 'Token counts are UTC days.',
+  'playbook.performance.usageLink': 'See AI usage',
 
   // Bulk import (BulkImportForm.tsx, BulkImportResults.tsx)
   'playbook.bulk.toggle': 'Bulk import',

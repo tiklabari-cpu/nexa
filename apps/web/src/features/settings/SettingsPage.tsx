@@ -36,6 +36,7 @@ import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
 import { SsoConnection } from './SsoConnection.js';
 import { Compliance } from './Compliance.js';
+import { AiUsage } from './AiUsage.js';
 import { DataRetention } from './DataRetention.js';
 import { SiemExport } from './SiemExport.js';
 import { SlaPolicy } from './SlaPolicy.js';
@@ -146,6 +147,7 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   compliance: (p) => <Compliance canEdit={p.canManageAccess} />,
   'data-retention': (p) => <DataRetention canEdit={p.canManageAccess} />,
   siem: (p) => <SiemExport canEdit={p.canManageAccess} />,
+  'ai-usage': (p) => <AiUsage isOwner={p.isOwner} />,
 };
 
 /** `/app/settings/*` — the navigation beside whichever section is open. */

@@ -147,6 +147,25 @@ export function formatMoney(
 }
 
 /**
+ * An estimated cost in whole US dollars: `0.0123` → `"$0.0123"`. Two decimals
+ * as a floor and four as a ceiling — a day of pilot traffic costs fractions of
+ * a cent, and `"$0.00"` would read as free. (`formatMoney` takes cents and
+ * stops at two decimals.)
+ */
+export function formatUsdEstimate(
+  usd: number | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (usd == null || !Number.isFinite(usd)) return null;
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(usd);
+}
+
+/**
  * ISO 3166-1 alpha-2 code → its flag emoji, via the Unicode regional indicator
  * symbols (each letter maps to `U+1F1E6..U+1F1FF`, offset from `A`). `null` for
  * anything that is not exactly two letters, so a caller can fall back to

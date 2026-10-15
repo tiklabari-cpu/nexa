@@ -302,6 +302,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ✅ **Günlük AI tavanı — aylık AI çözüm metresinden ayrı, çağrıyı reddeden bir sayaç; metre ve fatura değişmedi (tm 257.8 · §D203 · ADR K-e(3) · §C A39 · 2026-10-02).** Mock olmayan sağlayıcıya giden her LLM çağrısı `MeteredLlm` üzerinden geçer: tahmin (istem karakteri + çıktı tavanı) çalışma alanı ve dağıtım satırına atomik rezerv edilir, çağrıdan sonra gerçek kullanımla düzeltilir; tavan dolunca ziyaretçi mesajı insana kalır, önizleme ve Copilot özet/iyileştirme 429 `limit_reached` + `ai_daily_cap` + `Retry-After`. `usage_records` (ADR-09 AI çözüm sayacı) ve AI Agent raporu dokunulmadı; tavan kendi tablosundan okur — `services/ai/{ai-daily-budget.ts,metered-llm.ts}` · `plugins/ai-budget.ts` · migration `20261002150000_ai_daily_usage` · test `ai-daily-caps.test.ts` (15) · `metered-llm.test.ts` (10) · `ai-daily-budget.test.ts` (6) · `skill-engine.test.ts` (+3) · tm 257.8. Damga değişmedi (§D203(4)).
 
+- ℹ tm 272 · ADR-09a eki: AI çözümü yüklemi "ajan olayı yok VE otomatik devir (`ai_handoff`/`bot_handoff`, `ai_handoffs`) yok"; sayaç, `ai_solved`, Reports "Automated", arşiv "AI çözdü" tek tanımdan; yürürlük tm 293.4'ten sonraki ilk fatura dönemi, geçmiş faturalar değişmez — damga `✅` kaldı, kod değişmedi (uygulama tm 293.4) · PLAN.md §0 (ADR tablosunun altı) · `docs/adr/ai-resolution-handoff.md` · test yok (yalnız doküman) · §D221
+
 #### K10.3 — 10.3 · Invoices + payment details yönetimi
 
 - ✅ Faturalar + ödeme yöntemi yönetimi (maskeli kart: marka/son dört/son kullanma/ad; tam kart numarası için alan YOK — PRD §11.1/1) — `services/billing/{invoice-service.ts,payment-method-service.ts}` · `routes/reports.ts` (`/billing/invoices`, `/billing/payment-method` GET+PUT) · tm 56

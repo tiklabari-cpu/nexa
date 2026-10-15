@@ -269,6 +269,32 @@ describe('account lifecycle', () => {
       expect(response.statusCode).toBe(403);
     });
 
+    it('records an invitation that names no role as agent, the lowest role (RL-04)', async () => {
+      const response = await server.post(
+        '/invitations',
+        { emails: ['no-role@example.test'] },
+        auth(ownerToken),
+      );
+      expect(response.statusCode).toBe(201);
+      const body = response.json() as { items: Array<{ id: string; role: string }> };
+      expect(body.items[0]!.role).toBe('agent');
+
+      const stored = await owner.$queryRaw<Array<{ role: string }>>`
+        SELECT role FROM invitations WHERE id = ${body.items[0]!.id}::uuid`;
+      expect(stored[0]!.role).toBe('agent');
+    });
+
+    it('still honours an explicit admin invitation (RL-04)', async () => {
+      const response = await server.post(
+        '/invitations',
+        { emails: ['explicit-admin@example.test'], role: 'admin' },
+        auth(ownerToken),
+      );
+      expect(response.statusCode).toBe(201);
+      const body = response.json() as { items: Array<{ role: string }> };
+      expect(body.items[0]!.role).toBe('admin');
+    });
+
     it('stops working the moment it is revoked (T3)', async () => {
       const invite = await inviteOne('forwarded@example.test');
 

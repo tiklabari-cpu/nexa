@@ -208,6 +208,9 @@ export const team: Messages = {
   'team.invite.description': 'One address per line, or separated by commas.',
   'team.invite.emailsLabel': 'Email addresses',
   'team.invite.roleLabel': 'Role',
+  'team.invite.roleHint.agent': 'Answers chats and works the inbox. No billing or security access.',
+  'team.invite.roleHint.admin': 'Manages the team, settings and data, and can delete visitor data.',
+  'team.invite.roleWarning.admin': 'This role has access to billing and security settings.',
   'team.invite.linkSentNotice':
     'Invitations sent. This link works once and lasts seven days — it is not shown again.',
   'team.invite.copyLink': 'Copy invite link',

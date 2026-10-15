@@ -14341,9 +14341,10 @@ export interface operations {
         'application/json': {
           emails: string[];
           /**
-           * @description Defaults to `admin`, matching the PRD. `owner` is not
+           * @description Defaults to `agent`, the lowest role — a caller that names none
+           *     never mints an administrator by omission. `owner` is not
            *     invitable — ownership transfers deliberately, not by email.
-           * @default admin
+           * @default agent
            * @enum {string}
            */
           role?: 'admin' | 'agent';

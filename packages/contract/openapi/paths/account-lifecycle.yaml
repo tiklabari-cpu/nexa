@@ -439,9 +439,10 @@ invitations:
               role:
                 type: string
                 enum: [admin, agent]
-                default: admin
+                default: agent
                 description: |
-                  Defaults to `admin`, matching the PRD. `owner` is not
+                  Defaults to `agent`, the lowest role — a caller that names none
+                  never mints an administrator by omission. `owner` is not
                   invitable — ownership transfers deliberately, not by email.
     responses:
       "201":

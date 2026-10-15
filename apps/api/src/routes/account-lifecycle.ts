@@ -88,7 +88,9 @@ const resetConfirmBody = z.object({
 
 const inviteBody = z.object({
   emails: z.array(z.string().trim().max(320)).min(1).max(50),
-  role: z.enum(['admin', 'agent']).default('admin'),
+  // The lowest role is the default: an API caller who names none must not mint an
+  // administrator by omission (RL-04).
+  role: z.enum(['admin', 'agent']).default('agent'),
 });
 
 const acceptBody = z.object({

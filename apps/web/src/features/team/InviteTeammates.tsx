@@ -28,6 +28,11 @@ import { useTranslate } from '../../lib/i18n.js';
 import { ErrorNotice } from '../../components/Page.js';
 import { Modal, useConfirm } from '../../components/ui/index.js';
 
+type InviteRole = 'admin' | 'agent';
+
+/** The lowest role: a promotion is a choice, never what a quick invite does (RL-04). */
+const DEFAULT_INVITE_ROLE: InviteRole = 'agent';
+
 interface Invitation {
   id: string;
   email: string;
@@ -107,7 +112,7 @@ export function InviteTeammates({
 } = {}): ReactElement {
   const t = useTranslate();
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<'admin' | 'agent'>('admin');
+  const [role, setRole] = useState<InviteRole>(DEFAULT_INVITE_ROLE);
   const [copied, setCopied] = useState<string | null>(null);
   const [undelivered, setUndelivered] = useState<UndeliveredLink[]>([]);
 
@@ -178,7 +183,7 @@ export function InviteTeammates({
     message: t('team.invite.discardConfirm'),
     onClose: () => {
       setOpen(false);
-      setRole('admin');
+      setRole(DEFAULT_INVITE_ROLE);
       setCopied(null);
       setUndelivered([]);
       form.reset();
@@ -240,12 +245,32 @@ export function InviteTeammates({
           <select
             id="invite-role"
             value={role}
-            onChange={(event) => setRole(event.target.value as 'admin')}
-            className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
+            onChange={(event) => setRole(event.target.value as InviteRole)}
+            aria-describedby="invite-role-hints"
+            className="mb-2 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
           >
-            <option value="admin">{t('team.role.admin')}</option>
             <option value="agent">{t('team.role.agent')}</option>
+            <option value="admin">{t('team.role.admin')}</option>
           </select>
+          <ul
+            id="invite-role-hints"
+            className="mb-2 flex flex-col gap-1 text-xs text-content-secondary"
+          >
+            <li>
+              <span className="font-medium">{t('team.role.agent')}:</span>{' '}
+              {t('team.invite.roleHint.agent')}
+            </li>
+            <li>
+              <span className="font-medium">{t('team.role.admin')}:</span>{' '}
+              {t('team.invite.roleHint.admin')}
+            </li>
+          </ul>
+          {role === 'admin' && (
+            <p role="status" className="mb-2 text-xs font-medium text-warning">
+              {t('team.invite.roleWarning.admin')}
+            </p>
+          )}
+          <div className="mb-2" />
 
           {pending.data && !copied && undelivered.length === 0 && (
             <SeatNotice

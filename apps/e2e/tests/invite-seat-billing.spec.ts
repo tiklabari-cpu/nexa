@@ -91,6 +91,14 @@ test.describe('an invited teammate reaches the bill (FR-MOD-04.4)', () => {
     ).toBeVisible();
 
     await dialog.getByLabel('Email addresses').fill(invitee);
+    // RL-04: a quick invite never makes an administrator. The default is the
+    // lowest role, and choosing Admin says what that role can reach.
+    await expect(dialog.getByLabel('Role')).toHaveValue('agent');
+    await dialog.getByLabel('Role').selectOption('admin');
+    await expect(
+      dialog.getByText('This role has access to billing and security settings.'),
+    ).toBeVisible();
+    await dialog.getByLabel('Role').selectOption('agent');
     // Conditional on purpose: the seat lands when they accept, not now.
     await expect(
       dialog.getByText('Inviting 1 person takes this workspace to 2 seats once they accept.'),
@@ -104,7 +112,10 @@ test.describe('an invited teammate reaches the bill (FR-MOD-04.4)', () => {
     await dialog.getByRole('button', { name: /^Invite/ }).click();
     const sentResponse = await sent;
     expect(sentResponse.ok(), `invite failed: ${sentResponse.status()}`).toBe(true);
-    const { items } = (await sentResponse.json()) as { items: Array<{ accept_url: string }> };
+    const { items } = (await sentResponse.json()) as {
+      items: Array<{ accept_url: string; role: string }>;
+    };
+    expect(items[0]!.role).toBe('agent');
     const acceptUrl = items[0]!.accept_url;
 
     // Sending the invitation is not buying a seat.

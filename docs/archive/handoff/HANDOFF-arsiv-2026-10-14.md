@@ -6,6 +6,13 @@
 > newest-first. Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
 ---
+## tm 277.1 — DRAFT-KEY-FIX: composer sohbet kimliğiyle anahtarlandı (IN-01 güvenlik düzeltmesi) — done — 2026-10-14 UTC
+
+- **Yapıldı:** `InboxPage.tsx` `<Composer key={selectedId} …>` (:883-888). Kusur yalnız önbellekteki sohbete geçişte çıkıyordu: `useChat`'in placeholder'ı yok, ilk ziyarette composer yüklenirken söküldüğü için state sıfırlanıyordu; B bir kez açılmışsa A'nın metni, eki ve not modu B'nin kutusunda kalıyor, Enter B'ye gönderiyordu. Birim `InboxPage.composerIsolation.test.tsx` (2) ve e2e `apps/e2e/tests/inbox-draft.spec.ts` (1) — ikisi de düzeltmeden önce kırmızı koşuldu (e2e: `toHaveValue('')` beklerken A'nın taslağı + not placeholder'ı; birim: `/chats/CHAT-B/events` POST'u), sonra yeşil. PLAN 02.3.3 `✅` kaldı, K02.3.3'e madde.
+- **Doğrulama:** `pnpm test:gate` exit 0, 9m42s ilk koşuda (web build önbelleksiz yeniden derlendi; entegrasyon 7m24s). Tam e2e `pnpm test:e2e` 3 parça GREEN, 390/390, 15m55s. `db:check-drift` temiz; `contract:generate` sonrası değişiklik yok; `audit:req-coverage` exit 0.
+- **Varsayımlar:** 05'teki satır referansları HEAD'de doğru (`Composer.tsx:97-113`, `:116`, `:173-175`, `:212-227`; `InboxPage.tsx:883-890`), kayma yok. Test başlıklarına gereksinim etiketi konmadı (IN-01 Ek A katalog maddesi değil).
+- **Sonraki pencereye not (tm 277.2):** e2e'nin son adımı "A'ya dönünce ek yok"u doğrular; metin/mod geri yükleme 277.2'nin işi — o görev spec'e "A'ya dönünce metin + not modu geri gelir" adımını ekler. Taslak deposu composer'ın mount'unda okunmalı (artık her sohbet geçişi yeni mount). Sahibin efor etiketi "ikinci tur" düzenlemesi (`task_*.md`, `07-gorev-plani.md`, `tasks.json` başlıkları) hâlâ commit'lenmemiş; bu commit'e alınmadı, `tasks.json`'a yalnız tm 277.1 durumu HEAD üzerinden işlendi.
+
 ## tm 275 — ADR-TEMPLATE-CATALOG: task_098 kararına ek — iGaming şablon kataloğu paylaşılan pakette, sunucuda kurulum ucu — done — 2026-10-14 UTC
 
 - **Yapıldı:** karar dosyası `docs/adr/ai-template-catalog.md` (05 uzlaşma tablosu + K27; AI-15-S1/S2/S3 varsayılanları, `site_access` K13); §D224; K05.6'ya `ℹ` maddesi (damga `✅` kaldı). Paket `packages/ai-templates` (`@siyahtus/ai-templates`, `@siyahtus/types` içinde değil); kontratta `GET /ai-templates`, `GET /ai-templates/{key}`, `POST /ai-templates/{key}/install`, `POST /ai-templates/packs/{pack}/install`; kurulum kopya + taslak, idempotens `(license, ai_agent_id, template_key)`; `self_exclusion` / `responsible_gambling_signal` kilitli (`409 template_locked`, kilit sunucuda `template_key`'den); 33 yerel şablon aynen. tm 98 kaydı değişmedi; tm 311 zaten `275`'e bağlıydı. Kod değişikliği yok.

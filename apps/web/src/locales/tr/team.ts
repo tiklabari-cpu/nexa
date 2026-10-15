@@ -201,6 +201,10 @@ export const team: Messages = {
   'team.invite.description': 'Satır başına bir adres, ya da virgülle ayırarak.',
   'team.invite.emailsLabel': 'E-posta adresleri',
   'team.invite.roleLabel': 'Rol',
+  'team.invite.roleHint.agent':
+    'Sohbetleri yanıtlar, gelen kutusunda çalışır. Faturalama ve güvenlik ayarlarına erişemez.',
+  'team.invite.roleHint.admin': 'Ekibi, ayarları ve verileri yönetir; oyuncu verisini silebilir.',
+  'team.invite.roleWarning.admin': 'Bu rol faturalama ve güvenlik ayarlarına erişir.',
   'team.invite.linkSentNotice':
     'Davetler gönderildi. Bu bağlantı yalnızca bir kez çalışır ve yedi gün geçerlidir — bir daha gösterilmez.',
   'team.invite.copyLink': 'Davet bağlantısını kopyala',

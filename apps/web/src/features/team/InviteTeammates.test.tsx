@@ -80,6 +80,45 @@ async function openModal() {
 const submitButton = (): HTMLElement =>
   within(screen.getByRole('dialog')).getByRole('button', { name: /^Invite/ });
 
+describe('InviteTeammates role (RL-04)', () => {
+  it('opens with the lowest role selected and describes every role', async () => {
+    renderInvite();
+    await openModal();
+
+    expect(screen.getByLabelText('Role')).toHaveValue('agent');
+    expect(screen.getByText(/No billing or security access/)).toBeInTheDocument();
+    expect(screen.getByText(/can delete visitor data/)).toBeInTheDocument();
+    expect(screen.queryByText(/has access to billing and security settings/)).toBeNull();
+  });
+
+  it('warns when Admin is chosen, and the warning goes when it is un-chosen', async () => {
+    renderInvite();
+    await openModal();
+
+    await userEvent.selectOptions(screen.getByLabelText('Role'), 'admin');
+    expect(
+      screen.getByText('This role has access to billing and security settings.'),
+    ).toBeVisible();
+
+    await userEvent.selectOptions(screen.getByLabelText('Role'), 'agent');
+    expect(screen.queryByText(/has access to billing and security settings/)).toBeNull();
+  });
+
+  it('sends agent when the role is left alone', async () => {
+    renderInvite();
+    await openModal();
+    await userEvent.type(screen.getByLabelText('Email addresses'), 'robin@example.com');
+    await userEvent.click(submitButton());
+
+    const fetchMock = vi.mocked(fetch);
+    const post = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(post).toBeDefined();
+    expect(JSON.parse(String((post![1] as RequestInit).body))).toMatchObject({ role: 'agent' });
+  });
+});
+
 describe('InviteTeammates validation', () => {
   it('disables Submit until an address is entered', async () => {
     renderInvite();

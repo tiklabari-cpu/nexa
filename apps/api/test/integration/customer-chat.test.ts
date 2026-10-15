@@ -625,6 +625,44 @@ describe('customer chat api', () => {
       expect(response.json().value).toBe('good');
     });
 
+    it('takes a visitor who ends it and writes again today back into the same chat, on a new connection, and rates that one', async () => {
+      // ID-02 (K1 = A): the chat is the member's day. Before the day model the
+      // second message opened a second chat; now it reopens this one with a
+      // further thread, and each ending is rated on its own thread.
+      const { token } = await widgetToken();
+      const morning = await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+      await server.post('/customer/chat/close', undefined, auth(token));
+      await server.post('/customer/chat/rating', { value: 'good' }, auth(token));
+
+      const back = await server.post('/customer/chat/events', { text: 'Me again' }, auth(token));
+      expect(back.statusCode).toBe(201);
+      expect(back.json().chat_id).toBe(morning.json().chat_id);
+      await server.post('/customer/chat/close', undefined, auth(token));
+      const rated = await server.post('/customer/chat/rating', { value: 'bad' }, auth(token));
+      expect(rated.json().chat_id).toBe(morning.json().chat_id);
+
+      const chatId = morning.json().chat_id as string;
+      expect(await owner.chat.count()).toBe(1);
+      const threads = await owner.thread.findMany({
+        where: { chatId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, openedVia: true },
+      });
+      expect(threads.map((thread) => thread.openedVia)).toEqual([
+        'first_of_day',
+        'same_day_return',
+      ]);
+      const ratings = await owner.rating.findMany({
+        where: { chatId },
+        orderBy: { createdAt: 'asc' },
+        select: { threadId: true, value: true },
+      });
+      expect(ratings).toEqual([
+        { threadId: threads[0]!.id, value: 'good' },
+        { threadId: threads[1]!.id, value: 'bad' },
+      ]);
+    });
+
     it('rejects an invalid rating value', async () => {
       const { token } = await widgetToken();
       await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
@@ -1866,9 +1904,11 @@ describe('customer chat api', () => {
     });
 
     it('credits a conversation the visitor returned to inside the window', async () => {
-      // The chat itself is ancient; the visitor came back yesterday, which opens
+      // The chat itself is ancient; the visitor came back yesterday, which opened
       // a new thread on it. Dating the chat by its creation alone would fail to
-      // credit exactly the visitors who chat most.
+      // credit exactly the visitors who chat most. Since the day model (ID-02) a
+      // filed chat spans one day, so only a chat from before it — filed under no
+      // day — can carry a thread that much younger than itself; the fixture is one.
       await enableTracking(fx.a, { attributionWindowDays: 7 });
       const { token } = await widgetToken();
       const started = await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
@@ -1876,7 +1916,11 @@ describe('customer chat api', () => {
 
       await owner.chat.update({
         where: { id: chatId },
-        data: { createdAt: new Date(Date.now() - 60 * 86_400_000) },
+        data: {
+          createdAt: new Date(Date.now() - 60 * 86_400_000),
+          localDay: null,
+          dayTz: null,
+        },
       });
       await owner.thread.updateMany({
         where: { chatId },

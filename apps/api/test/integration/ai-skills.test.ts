@@ -226,10 +226,13 @@ describe('ai skills', () => {
     await owner.aiAgent.update({ where: { id: aiAgentId }, data: { active: false } });
     await createSkill([{ type: 'send_message', source: 'text', text: 'Should not send either.' }]);
 
+    // Back the same day: the same chat, on a second connection (ID-02) — and
+    // no bot line anywhere in the day.
     await server.post('/customer/chat/close', undefined, headers);
     const second = await server.post('/customer/chat/events', { text: 'Hello again' }, headers);
-    const secondChat = (second.json() as { chat_id: string }).chat_id;
-    expect((await events(secondChat)).some((e) => e.authorType === 'bot')).toBe(false);
+    expect((second.json() as { chat_id: string }).chat_id).toBe(firstChat);
+    expect(await owner.thread.count({ where: { chatId: firstChat } })).toBe(2);
+    expect((await events(firstChat)).some((e) => e.authorType === 'bot')).toBe(false);
   });
 
   // --- Steps ----------------------------------------------------------------

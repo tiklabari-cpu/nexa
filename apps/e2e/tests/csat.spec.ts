@@ -308,3 +308,89 @@ test('a visitor who ends the chat themselves is asked the same questions, and th
     await visitorContext.close();
   }
 });
+
+/**
+ * A member back the same day (ID-02 · tm 286.5). The return files under the
+ * morning's chat as a second connection, so the chat id alone no longer tells
+ * one conversation from the next — the widget keys its closing prompts by chat
+ * *and* connection. Before that, the second ending looked like the first one
+ * again: no questions, a stale "Thanks for your feedback!", and no second vote.
+ * Only a browser holds that widget state across the two connections.
+ */
+test('a visitor back the same day is asked again for the new connection, and both votes count (ID-02)', async ({
+  browser,
+  organizationId,
+}) => {
+  test.slow();
+
+  const visitorContext = await browser.newContext();
+  const visitor = await visitorContext.newPage();
+  const stamp = Date.now().toString().slice(-6);
+  const frame = widgetFrame(visitor);
+
+  /** End the chat from the widget menu, answer the question, vote; returns the vote's chat. */
+  async function endAndRate(vote: '👍 Good' | '👎 Not good'): Promise<string> {
+    await frame.getByRole('button', { name: 'More options' }).click();
+    await frame.getByRole('menuitem', { name: 'End chat' }).click();
+    await frame
+      .getByRole('dialog', { name: 'End this chat?' })
+      .getByRole('button', { name: 'End chat' })
+      .click();
+    await expect(frame.getByText('Chat ended.')).toBeVisible();
+
+    // Fresh questions each time — an answered form or a thanked vote from the
+    // morning would mean the widget took the return for the same conversation.
+    const postChat = frame.getByRole('form', { name: 'A few last questions' });
+    await expect(postChat).toBeVisible();
+    await frame.getByRole('textbox', { name: POST_CHAT_LABEL }).fill(`Fine ${stamp}`);
+    await postChat.getByRole('button', { name: 'Send answers' }).click();
+    await expect(postChat.getByText('Thanks, we have your answers.')).toBeVisible();
+
+    const rating = frame.getByRole('group', { name: 'Rate this chat' });
+    await expect(rating.getByText('Thanks for your feedback!')).toBeHidden();
+    const voted = visitor.waitForResponse(
+      (response) =>
+        response.url().endsWith('/customer/chat/rating') && response.request().method() === 'POST',
+    );
+    await rating.getByRole('button', { name: vote }).click();
+    const response = await voted;
+    expect(response.status()).toBe(201);
+    await expect(rating.getByText('Thanks for your feedback!')).toBeVisible();
+    return ((await response.json()) as { chat_id: string }).chat_id;
+  }
+
+  try {
+    const before = await csat();
+
+    await openWidget(visitor, organizationId);
+    await visitorSends(visitor, `Is the blue frame back in stock? — ${stamp}`);
+    const morning = await endAndRate('👍 Good');
+
+    // The return: the button re-arms the composer, the next message reaches
+    // the server and opens the second connection.
+    await frame.getByRole('button', { name: 'Start a new chat' }).click();
+    await visitorSends(visitor, `Me again — what about the red one? ${stamp}`);
+    const afternoon = await endAndRate('👎 Not good');
+
+    // One Thread ID for the day, two Chat IDs under it.
+    expect(afternoon).toBe(morning);
+    const detail = await apiCtx.get(`${API_BASE}/chats/${morning}`, { headers: authorized() });
+    expect(detail.ok(), `reading the chat failed: ${detail.status()}`).toBe(true);
+    const day = (await detail.json()) as { connections: Array<{ opened_via: string | null }> };
+    expect(day.connections.map((connection) => connection.opened_via)).toEqual([
+      'first_of_day',
+      'same_day_return',
+    ]);
+
+    // Each connection's vote is its own response — a day of two conversations
+    // is two ratings, exactly as two separate chats were before the day model.
+    await expect
+      .poll(async () => (await csat()).responses, { timeout: 20_000 })
+      .toBe(before.responses + 2);
+    const after = await csat();
+    expect(after.good).toBe(before.good + 1);
+    expect(after.bad).toBe(before.bad + 1);
+  } finally {
+    await visitorContext.close();
+  }
+});

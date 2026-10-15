@@ -60,7 +60,7 @@ Bu tablonun makinece okunan hâli `packages/types/src/id-glossary.ts` içindeki 
 - **Eleme:** spam filtresi, pre-chat formu ve dil kaydı "bağlantı açan mesaja" uygulanır; aynı gün dönüş ve devir de buna dahildir (`ChatService.opensConnection`, aynı karar, yazmadan).
 - **K2 — 30 dakika:** zaman aşımı ayarlamamış kiracıda **widget** sohbetleri 30 dakika sessizlikte kapanır (`chat-timeout.ts`); mesajlaşma kanallarından gelen sohbet (gelen `channel_messages` satırı olan) kiracı kendi süresini ayarlayana kadar açık kalır. Ayarlanmış süre her sohbete uygulanır. Bu, ayarlamamış mevcut kiracılar için **davranış değişikliğidir**.
 - **Widget:** kapanış istemleri (CSAT, post-chat formu) sohbet + bağlantıya göre anahtarlanır; aynı gün dönüşte sohbet numarası aynı kaldığı için önceki bağlantının istemi yeni bağlantıda temizlenir.
-- **Kapsam dışı (tm 286.3):** ajanın `POST /chats`'i ve `resume`'u, kanal adaptörleri (`ChannelService` hâlâ `start`/`sendEvent` ile eski modelde açar), müşteri profilindeki "gün/bağlantı" sayacı, `listDayConnections`.
+- **Kapsam dışı (tm 286.3'te yapıldı, aşağıda):** ajanın `POST /chats`'i ve `resume`'u, kanal adaptörleri, müşteri profilindeki "gün/bağlantı" sayacı, `listDayConnections`.
 
 ### Ajan yolları, kanal sohbetleri, bağlantının ekibi ve sayaçlar (ID-02 · tm 286.3, PLAN §D238)
 
@@ -71,6 +71,16 @@ Bu tablonun makinece okunan hâli `packages/types/src/id-glossary.ts` içindeki 
 - **Sayaçlar:** müşteri profili `chats_count` (gün = sohbet) + yeni `connections_count` (bağlantı = thread; raporların, SLA'nın, AI çözümünün ve puanın saydığı birim). Raporlar thread tabanlı kaldığı için değişmez — regresyon testi aynı bağlantıları bir günde tek sohbet ve bağlantı başına sohbet olarak iki kiracıda kurup Overview'u karşılaştırır.
 - **AI-02 kancası:** `listDayConnections(tx, chatId, { excludeThreadId })` — günün diğer bağlantıları en eskiden yeniye, özet ve etiketleriyle (döküm değil); güne dosyalanmamış sohbette yalnız en yenisi; başka kiracının sohbeti boş gün okunur.
 
+### Davranış değişikliği duyurusu (ID-02 · tm 286.5, PLAN §D239)
+
+Günlük model mevcut kiracılarda ve entegrasyonlarda şunları değiştirir. Eski kayıtlar (`local_day` NULL) eski modelde kalır; değişiklik yeni açılan konuşmalardan itibaren geçerlidir.
+
+- **K2 — widget sohbetleri 30 dakikada kapanır.** Sohbet zaman aşımı ayarlamamış kiracıda eskiden hiçbir sohbet kendiliğinden kapanmazdı; artık **web sitesi widget'ından** gelen sohbet 30 dakika hareketsizlikten sonra kapanır (`chat-timeout.ts`, `widgetDefault`). Mesajlaşma kanallarından gelen sohbet eskisi gibi açık kalır. Kiracının kendi süresi ayarlıysa hiçbir şey değişmez (süre her sohbete uygulanır). "Hiç kapanmasın" seçeneği yok: daha uzun süre isteyen kiracı Ayarlar › "Chat timeout and day boundary" ekranından en çok 30 güne kadar süre girer. Ekrandaki ipucu (en+tr) ve kontrat açıklaması bunu söyler.
+- **Aynı gün dönen üye aynı sohbete döner.** Ziyaretçi sohbeti bitirip (ya da sohbet arşivlenip) aynı gün tekrar yazınca yeni sohbet açılmaz: aynı `chat_id` (ekranda Thread ID) altında yeni bir bağlantı (`thread_id`, ekranda Chat ID) açılır; ertesi gün yeni sohbet açılır. Ajanlar dönüşü bugünkü bağlantıların ayırıcılarıyla tek transkriptte görür; dönüşün ekibi sohbetin erişimine eklenir, sabahki ekip görmeye devam eder.
+- **Webhook alıcıları:** aynı gün dönüş `chat_started` değil yeni **`thread_started`** olayıyla duyurulur (`reason` = `opened_via`). `chat_started` artık günün ilk bağlantısıdır; `chat_started`/`chat_deactivated` yükü `thread_id` taşır. Ajanın yeniden açması (`resume`) önceden webhook yaymıyordu, artık `thread_started` (geçmiş günden devamda `chat_started`) yayar. Her yeni bağlantıyı sohbet sayan alıcı `thread_started`'a da abone olmalıdır.
+- **API istemcileri:** `POST /chats` üyenin bugünkü sohbeti varsa yeni sohbet yerine **aynı sohbette yeni bağlantı** açar (201, aynı numara). `POST /chats/{id}/resume` geçmiş güne dosyalanmış sohbeti yerinde açmaz; bugünün sohbetinde devam eder ve **farklı bir sohbet** döndürür (`continued_from_chat_id`). `Chat.connections`, `ChatSummary.connection_count`, `CustomerSummary.connections_count` yeni alanlardır; `chats_count` artık gün sayısıdır.
+- **Raporlar değişmez.** Toplam sohbet, AI çözümü, CSAT, SLA ihlali bağlantı (thread) başına sayılır; aynı gün iki kez dönen ve iki kez puan veren üye eskisi gibi iki yanıt üretir (`daily-thread-agent.test.ts` rapor regresyonu, e2e `csat.spec.ts`).
+
 ## 3. Seçenek B neden alınmadı
 
 B, yeni bir "gün thread'i" tablosu açmayı önerirdi: sahibin Thread ID'si için yeni tablo, nexa `chats`/`threads` ayrı kalırdı. Maliyeti: ikinci bir kimlik katmanı, RLS politikaları ve migration'lar, bütün `chat_id` bağımlıları için çifte yazım. A aynı sonucu (sahibin dilinde iki kimlik) yeni tablo olmadan verir; çevirinin tek yeri sunum katmanıdır. B seçilirse ID-02, ID-05, ID-06 ve ID-08'in veri modeli kısımları yeniden yazılmalıdır.
@@ -80,7 +90,7 @@ B, yeni bir "gün thread'i" tablosu açmayı önerirdi: sahibin Thread ID'si iç
 - Ekranda, logda ve dışa aktarmada aynı iki ad aynı iki şeyi anlatır; "Chat ID" artık `thread_id`'dir.
 - Bir ekranın "Chat ID" etiketini elle yazması test kırar (`ids-glossary.test.ts`); yeni kimlik türü `ID_KINDS`'a eklenince sözlük + web kataloğu + mobil sabitleri birlikte güncellenir, testler (`id-glossary.test.ts`, `ids-glossary.test.ts`, `idLabels.test.ts`) eksik anahtarı yakalar.
 - Mevcut kullanıcı görünür değişiklik tek yerde: Inbox Ayrıntılar panelindeki "Chat ID" satırı **"Thread ID"** olur ve başlıktaki numaranın tooltip'i eklenir. Numaranın kendisi aynıdır.
-- Webhook alıcıları ve API istemcileri etkilenmez.
+- Sözlük (ID-01) webhook alıcılarını ve API istemcilerini etkilemez; günlük model (ID-02) etkiler — bkz. "Davranış değişikliği duyurusu".
 
 ## 5. Değişen dosyalar
 

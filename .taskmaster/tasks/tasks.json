@@ -12045,7 +12045,7 @@
           "285"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-15T14:57:27.869Z",
+        "updatedAt": "2026-10-15T16:55:46.245Z",
         "subtasks": [
           {
             "id": 1,
@@ -12065,13 +12065,13 @@
             "description": "conversation-day.ts: openOrContinueConnection — ziyaretçi yolu, aynı gün dönüş, day_rollover, yarış",
             "details": "resolveLocalDay + openOrContinueConnection; customer.ts bu servisi kullanır; K2 varsayılan 30 dk kapanış.",
             "testStrategy": "Senaryo 1-8, 10 entegrasyon; yarış testi.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "286.1"
             ],
             "parentId": "286",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-15T16:55:46.245Z"
           },
           {
             "id": 3,

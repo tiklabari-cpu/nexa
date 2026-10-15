@@ -7,8 +7,9 @@
  * at 1280 — so the layout switches on the header's own width (`useNarrow`), not
  * the viewport's: collapsing the panel gives the full layout back. Narrow, the
  * actions keep their accessible names (`aria-label`) and a tooltip, the status
- * keeps its word for a screen reader, and the chat id — already in the Details
- * panel — is dropped (tm 259.12 · UX audit O3 + O4).
+ * keeps its word for a screen reader, and the two numbers (the day's and the
+ * newest connection's, `ids.thread` / `ids.chat`) — both also in the Details
+ * panel — are dropped (tm 259.12 · UX audit O3 + O4 · tm 286.4).
  */
 import { useState, type ReactElement } from 'react';
 import { useTranslate } from '../../lib/i18n.js';
@@ -22,6 +23,7 @@ const NARROW_BELOW = 680;
 
 export function ThreadHeader({
   chatId,
+  threadId = null,
   customerName,
   active,
   onOpenTicket,
@@ -29,6 +31,8 @@ export function ThreadHeader({
   onShowDetails,
 }: {
   chatId: string;
+  /** The newest connection (`ids.chat`); null when the chat has none. */
+  threadId?: string | null;
   customerName: string | null;
   active: boolean;
   onOpenTicket: (ticketId: string) => void;
@@ -51,12 +55,21 @@ export function ThreadHeader({
         {name}
       </h2>
       {!narrow && (
-        <span
-          title={`${t('ids.thread.label')} — ${t('ids.thread.hint')}`}
-          className="shrink-0 font-mono text-2xs text-content-tertiary"
-        >
-          {chatId}
-        </span>
+        // Both numbers (ID-02 · tm 286.4): the member's day, and the connection
+        // the composer writes into. Stacked rather than side by side, so the
+        // second number costs the name no width.
+        <dl className="flex shrink-0 flex-col text-2xs leading-tight text-content-tertiary">
+          <div title={`${t('ids.thread.label')} — ${t('ids.thread.hint')}`} className="flex gap-1">
+            <dt>{t('ids.thread.label')}</dt>
+            <dd className="font-mono">{chatId}</dd>
+          </div>
+          {threadId && (
+            <div title={`${t('ids.chat.label')} — ${t('ids.chat.hint')}`} className="flex gap-1">
+              <dt>{t('ids.chat.label')}</dt>
+              <dd className="font-mono">{threadId}</dd>
+            </div>
+          )}
+        </dl>
       )}
       <StatusDot
         compact={narrow}

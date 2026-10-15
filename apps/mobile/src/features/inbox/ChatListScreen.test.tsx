@@ -120,6 +120,23 @@ describe('ChatListScreen', () => {
     expect(screen.getByLabelText('2 unread')).toBeOnTheScreen();
   });
 
+  it("counts a member's connections today once they came back (ID-02 · tm 286.4)", async () => {
+    const store = new InboxStore({
+      api: api({
+        listChats: async () => ({
+          items: [
+            chat({ id: 'chat-1', customer_name: 'Ada', connection_count: 3 }),
+            chat({ id: 'chat-2', customer_name: 'Bo', connection_count: 1 }),
+          ],
+        }),
+      }),
+    });
+    await mount(store);
+
+    expect(await screen.findByText('3 connections')).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-connections-chat-2')).toBeNull();
+  });
+
   it('names an anonymous visitor rather than showing a blank row', async () => {
     const store = new InboxStore({
       api: api({

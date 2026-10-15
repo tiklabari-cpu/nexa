@@ -19,6 +19,7 @@ function detail(overrides: Partial<CustomerDetail> = {}): CustomerDetail {
     is_lead: true,
     banned: false,
     chats_count: 4,
+    connections_count: 4,
     tickets_count: 1,
     last_activity_at: '2026-08-16T10:00:00.000Z',
     created_at: '2026-01-01T00:00:00.000Z',

@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { isEditableEventType, isWithinEditWindow, readEditedAt } from '@siyahtus/types';
 import type { ChatEvent } from './types.js';
+import { connectionBreaks, type ConnectionLabel } from './dayConnections.js';
 import type { FailedSend } from './failedSends.js';
 import { AttachmentView } from './Attachment.js';
 import { renderRichText } from './richText.js';
@@ -41,10 +42,17 @@ export function Transcript({
   failedSends = [],
   onRetry,
   onEdit,
+  connections = [],
 }: {
   /** Which conversation this is — the one thing that means "start over". */
   chatId: string;
   events: ChatEvent[];
+  /**
+   * The day's connections, oldest first (ID-02 · tm 286.4). Each one the
+   * transcript shows is introduced by a separator naming its number, when it
+   * opened and the team it went to; empty for a chat with no day to split.
+   */
+  connections?: readonly ConnectionLabel[];
   loading: boolean;
   currentAgentId: string | null;
   /** More history exists above the oldest event loaded. */
@@ -68,6 +76,19 @@ export function Transcript({
   const containerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
   const t = useTranslate();
+
+  const breaks = useMemo(
+    () =>
+      connectionBreaks(events, {
+        atStartOfDay: !hasOlder,
+        connectionCount: connections.length,
+      }),
+    [events, hasOlder, connections.length],
+  );
+  const labels = useMemo(
+    () => new Map(connections.map((connection) => [connection.id, connection])),
+    [connections],
+  );
 
   /**
    * The scroll geometry to measure the next prepend against.
@@ -189,19 +210,80 @@ export function Transcript({
           />
         </div>
       )}
-      {events.map((event, index) => (
-        <Bubble
-          key={event.id}
-          event={event}
-          isMine={event.author_id === currentAgentId}
-          showDayDivider={needsDayDivider(events[index - 1], event)}
-          {...(onEdit ? { onEdit } : {})}
-        />
-      ))}
+      {events.map((event, index) => {
+        const opens = breaks.get(index);
+        return (
+          <Fragment key={event.id}>
+            {opens !== undefined && (
+              <ConnectionSeparator
+                id={opens}
+                label={labels.get(opens)}
+                fallbackAt={event.created_at}
+                showDay={needsDayDivider(events[index - 1], event)}
+              />
+            )}
+            <Bubble
+              event={event}
+              isMine={event.author_id === currentAgentId}
+              showDayDivider={opens === undefined && needsDayDivider(events[index - 1], event)}
+              {...(onEdit ? { onEdit } : {})}
+            />
+          </Fragment>
+        );
+      })}
       {failedSends.map((entry) => (
         <FailedBubble key={entry.input.idempotencyKey} entry={entry} onRetry={onRetry} />
       ))}
     </div>
+  );
+}
+
+/**
+ * Where one connection of the day starts (ID-02 · tm 286.4): `ids.chat` C2 ·
+ * 14:02 · Bonus. The connection list may not know a connection yet — the
+ * member came back while the agent read, and the chat is still being re-read —
+ * so the time falls back to the connection's first event and the team is left
+ * out rather than guessed.
+ */
+function ConnectionSeparator({
+  id,
+  label,
+  fallbackAt,
+  showDay,
+}: {
+  id: string;
+  label: ConnectionLabel | undefined;
+  fallbackAt: string;
+  showDay: boolean;
+}): ReactElement {
+  const t = useTranslate();
+  const at = label?.created_at ?? fallbackAt;
+  const params = { label: t('ids.chat.label'), id, time: formatTime(at) };
+  const text = label?.team
+    ? t('inbox.transcript.connectionWithTeam', { ...params, team: label.team })
+    : t('inbox.transcript.connection', params);
+  return (
+    <>
+      {showDay && (
+        <div className="my-2 flex items-center gap-3" role="separator">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-2xs text-content-tertiary">{formatDay(at)}</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+      )}
+      <div
+        className="my-1 flex items-center gap-3"
+        role="separator"
+        aria-label={text}
+        data-testid="connection-separator"
+      >
+        <span className="h-px flex-1 bg-border-strong" />
+        <span title={t('ids.chat.hint')} className="text-2xs font-medium text-content-secondary">
+          {text}
+        </span>
+        <span className="h-px flex-1 bg-border-strong" />
+      </div>
+    </>
   );
 }
 

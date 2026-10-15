@@ -40,8 +40,28 @@ export interface ChatSummary {
   assignee_id: string | null;
   queue_position: number | null;
   unread_count: number;
+  /** The day's connections (ID-02); absent from a server that predates them. */
+  connection_count?: number;
   last_event: ChatEvent | null;
   tags: string[];
+}
+
+/** How a connection came to exist (ID-02); null on one opened before the daily model. */
+export type ConnectionOpenedVia =
+  'first_of_day' | 'same_day_return' | 'agent_start' | 'agent_reopen' | 'day_rollover';
+
+/**
+ * One connection of a chat's day, as `Chat.connections` lists it (ID-02) —
+ * the code's `thread`, the panel's `ids.chat`.
+ */
+export interface ChatConnection {
+  id: string;
+  active: boolean;
+  created_at: string;
+  closed_at: string | null;
+  assignee_id: string | null;
+  opened_via: ConnectionOpenedVia | null;
+  group_id: number | null;
 }
 
 /** The customer's most recent visit, projected onto the chat (FR-MOD-02.4). */
@@ -81,6 +101,13 @@ export interface ChatDetail {
     closed_at: string | null;
     tags: string[];
   } | null;
+  /** The conversation day (`YYYY-MM-DD`) this chat is filed under; null before ID-02. */
+  local_day?: string | null;
+  /**
+   * The day's connections, oldest first; only the newest for a chat with no
+   * `local_day`. Optional because fixtures and older servers omit it.
+   */
+  connections?: ChatConnection[];
   /** Present only on the agent's fetch of a single chat; null when unrecorded. */
   visitor?: ChatVisitor | null;
 }

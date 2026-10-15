@@ -90,6 +90,8 @@ export const inbox: Messages = {
   'inbox.list.item.visitorFallback': 'Visitor',
   'inbox.list.item.queuePosition': '#{position} in queue',
   'inbox.list.item.unreadAria': '{count} unread',
+  'inbox.list.item.connections.one': '{count} connection',
+  'inbox.list.item.connections.other': '{count} connections',
   'inbox.list.item.noMessages': 'No messages yet',
   'inbox.list.error.title': "Conversations couldn't be loaded",
   'inbox.list.error.retry': 'Try again',
@@ -198,6 +200,8 @@ export const inbox: Messages = {
   'inbox.transcript.editSaving': 'Saving…',
   'inbox.transcript.edited': 'edited',
   'inbox.transcript.editFailed': 'The correction was not saved.',
+  'inbox.transcript.connection': '{label} {id} · {time}',
+  'inbox.transcript.connectionWithTeam': '{label} {id} · {time} · {team}',
 
   // "Visitor is typing…"
   'inbox.typing.visitorFallback': 'Visitor',
@@ -240,6 +244,15 @@ export const inbox: Messages = {
   'inbox.details.section.teams': 'Teams',
   'inbox.details.teams.empty': 'Not routed to a team.',
   'inbox.details.teams.unknown': 'Team #{id}',
+  'inbox.details.section.connectionsToday': "Today's connections",
+  'inbox.details.section.connectionsOn': 'Connections on {day}',
+  'inbox.details.connections.open': 'Open',
+  'inbox.details.connections.closed': 'Closed',
+  'inbox.details.connections.via.first_of_day': 'First of the day',
+  'inbox.details.connections.via.same_day_return': 'Came back',
+  'inbox.details.connections.via.agent_start': 'Started by an agent',
+  'inbox.details.connections.via.agent_reopen': 'Reopened by an agent',
+  'inbox.details.connections.via.day_rollover': 'After the day turned',
   'inbox.details.section.apps': 'Apps',
   'inbox.details.apps.empty': 'No connected apps.',
   // tm 263: a live card's data is the provider's; a demo card's is sample data.

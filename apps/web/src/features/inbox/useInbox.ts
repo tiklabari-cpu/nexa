@@ -8,6 +8,7 @@
  * duplicate and out-of-order messages come from.
  */
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -27,7 +28,22 @@ import { useConflictStore, type ConflictAgent } from './conflict.js';
 import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
-import type { ChatDetail, ChatEvent, ChatSummary, InboxView, SendInput } from './types.js';
+import {
+  earlierConnections,
+  firstConnectionCursor,
+  joinDayEvents,
+  nextConnectionCursor,
+  type ConnectionCursor,
+  type ConnectionLabel,
+} from './dayConnections.js';
+import type {
+  ChatConnection,
+  ChatDetail,
+  ChatEvent,
+  ChatSummary,
+  InboxView,
+  SendInput,
+} from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
 
@@ -564,7 +580,21 @@ export interface TranscriptResult {
   refetch: () => void;
 }
 
-export function useTranscript(chatId: string | null): TranscriptResult {
+/**
+ * The open conversation — and, for a chat filed under a day, the connections
+ * the member opened earlier that day above it (ID-02 · tm 286.4).
+ *
+ * The newest connection is read exactly as before, under `eventsKey(chatId)`:
+ * that cache is the one pushes, sends and edits write to. Once the reader has
+ * reached its start, the earlier connections follow one after another, newest
+ * first, through `?thread_id=` — a separate cache, because those connections
+ * are closed and nothing pushes into them. A chat with one connection (or none
+ * listed, as before ID-02) never asks for the second cache at all.
+ */
+export function useTranscript(
+  chatId: string | null,
+  connections?: readonly ChatConnection[],
+): TranscriptResult {
   const buildUrl = useCallback(
     (pageId: string | undefined) => transcriptUrl(chatId ?? '', pageId),
     [chatId],
@@ -575,17 +605,125 @@ export function useTranscript(chatId: string | null): TranscriptResult {
     enabled: chatId !== null,
   });
 
-  const events = useMemo(() => flattenTranscriptPages(query.pages), [query.pages]);
+  const liveEvents = useMemo(() => flattenTranscriptPages(query.pages), [query.pages]);
+
+  // The connection the live transcript starts in, once it has reached that
+  // start — until then the earlier connections are not next in line.
+  const anchorThreadId =
+    query.isPending || query.hasNext
+      ? null
+      : (liveEvents.find((event) => event.thread_id)?.thread_id ?? connections?.at(-1)?.id ?? null);
+  const earlier = useMemo(
+    () => earlierConnections(connections, anchorThreadId),
+    [connections, anchorThreadId],
+  );
+  const day = useEarlierConnections(chatId, earlier);
+
+  const events = useMemo(() => joinDayEvents(day.events, liveEvents), [day.events, liveEvents]);
 
   return {
     events,
-    hasOlder: query.hasNext,
-    isLoadingOlder: query.isFetchingNext,
-    loadOlder: query.fetchNext,
+    hasOlder: query.hasNext || day.hasOlder,
+    isLoadingOlder: query.isFetchingNext || day.isLoading,
+    loadOlder: query.hasNext ? query.fetchNext : day.loadOlder,
     isPending: query.isPending,
     isError: query.isError && query.pages.length === 0,
     error: query.error,
     refetch: query.refetch,
+  };
+}
+
+/**
+ * The day's connections as the transcript's separators name them: the team by
+ * name, from the same `['team', 'groups']` cache the Details panel reads. A team
+ * the list does not hold (deleted, still in flight, or a caller who may not
+ * read teams) is left off the separator rather than shown as a bare number.
+ */
+export function useConnectionLabels(
+  connections: readonly ChatConnection[] | undefined,
+): ConnectionLabel[] {
+  const api = useApiClient();
+  const teams = useQuery({
+    queryKey: ['team', 'groups'],
+    queryFn: () => api.get<{ items: Array<{ id: number; name: string }> }>('/groups'),
+    staleTime: 60_000,
+    enabled: (connections?.length ?? 0) > 1,
+  });
+  return useMemo(() => {
+    if (!connections || connections.length < 2) return [];
+    const names = new Map((teams.data?.items ?? []).map((team) => [team.id, team.name]));
+    return connections.map((connection) => ({
+      id: connection.id,
+      created_at: connection.created_at,
+      team: connection.group_id === null ? null : (names.get(connection.group_id) ?? null),
+    }));
+  }, [connections, teams.data]);
+}
+
+/** One page of an earlier connection, tagged with the cursor that read it. */
+interface ConnectionPage extends PagedResponse<ChatEvent> {
+  cursor: ConnectionCursor;
+}
+
+/**
+ * The earlier connections of the day, walked backwards a page at a time.
+ *
+ * Keyed on the connections it walks, so a list that grows (the member came
+ * back while the agent read) starts a fresh walk rather than splicing onto
+ * one cut for a different day. A failed page ends the walk quietly — the live
+ * connection the agent is answering is unaffected — and the next open of the
+ * conversation asks again.
+ */
+function useEarlierConnections(
+  chatId: string | null,
+  earlier: readonly ChatConnection[],
+): { events: ChatEvent[]; hasOlder: boolean; isLoading: boolean; loadOlder: () => void } {
+  const api = useApiClient();
+  const first = firstConnectionCursor(earlier);
+  const enabled = chatId !== null && first !== undefined;
+
+  const query = useInfiniteQuery({
+    queryKey: ['day-events', chatId, earlier.map((connection) => connection.id)],
+    queryFn: async ({ pageParam }: { pageParam: ConnectionCursor | undefined }) => {
+      const cursor = pageParam ?? first!;
+      const before = cursor.before ? `&before_event_id=${encodeURIComponent(cursor.before)}` : '';
+      const page = await api.get<PagedResponse<ChatEvent>>(
+        `/chats/${chatId}/events?thread_id=${encodeURIComponent(cursor.threadId)}` +
+          `&sort=newest&limit=${TRANSCRIPT_PAGE_SIZE}${before}`,
+      );
+      return { ...page, cursor } satisfies ConnectionPage;
+    },
+    initialPageParam: first,
+    getNextPageParam: (last: ConnectionPage) =>
+      nextConnectionCursor(earlier, last.cursor, last.next_page_id),
+    enabled,
+    // Closed connections do not change under the reader; nothing pushes here.
+    staleTime: 5 * 60_000,
+  });
+
+  const pages = query.data?.pages;
+  const events = useMemo(() => (pages ? flattenTranscriptPages(pages) : []), [pages]);
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  const inFlight = useRef(false);
+  const loadOlder = useCallback((): void => {
+    if (!hasNextPage || isFetchingNextPage || inFlight.current) return;
+    inFlight.current = true;
+    const settle = (): void => {
+      inFlight.current = false;
+    };
+    void fetchNextPage().then(settle, settle);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  if (!enabled || query.isError) {
+    return { events: query.isError ? events : [], hasOlder: false, isLoading: false, loadOlder };
+  }
+  return {
+    events,
+    // Still in flight counts as "more above": the reader is at the seam.
+    hasOlder: query.isPending || hasNextPage,
+    isLoading: query.isPending || isFetchingNextPage,
+    loadOlder,
   };
 }
 
@@ -1244,13 +1382,21 @@ export function applyPush(
       return;
     }
 
-    case 'incoming_chat':
+    case 'incoming_chat': {
       // A conversation that started just now is the newest row there is, so it
       // can only land at the top of page 1 — re-reading that page is the whole
       // update (`mergeChatHead`). The pages already scrolled past are keyed on
       // `created_at`, which does not move, so they cannot slide underneath it.
       refreshChatHeads();
+      // A member back the same day arrives as an `incoming_chat` for a chat the
+      // agent may have open (ID-02): its connections, and the connection number
+      // the header shows, just changed.
+      const chat = payload['chat'] as { id?: unknown } | undefined;
+      if (typeof chat?.id === 'string') {
+        void queryClient.invalidateQueries({ queryKey: ['chat', chat.id] });
+      }
       return;
+    }
 
     case 'chat_transferred': {
       // Handed to someone else (IN-01-S2): the draft was written for the agent

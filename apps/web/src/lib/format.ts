@@ -204,6 +204,17 @@ export function formatDateTime(
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
+/** ISO timestamp → the time of day alone, for a list already grouped under one day. */
+export function formatTime(
+  iso: string | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(date);
+}
+
 /** A weekday key, in `WorkScheduleDay`'s own spelling — Monday first. */
 export type Weekday =
   'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';

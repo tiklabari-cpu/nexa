@@ -1046,3 +1046,95 @@ describe('applyPush — event_updated', () => {
     });
   });
 });
+
+/**
+ * The day's earlier connections (ID-02 · tm 286.4): read by `thread_id` only
+ * once the live connection has reached its own start, then walked back a page
+ * at a time, connection by connection.
+ */
+describe('useTranscript — the day before the live connection', () => {
+  const day = (id: string) => ({
+    id,
+    active: false,
+    created_at: '2026-10-15T07:00:00.000Z',
+    closed_at: null,
+    assignee_id: null,
+    opened_via: null,
+    group_id: null,
+  });
+  const CONNECTIONS = [day('C1'), day('C2'), day('C3')];
+
+  function inThread(threadId: string, seq: number): ChatEvent {
+    return { ...message(`${threadId}_${seq}`, CHAT, `${threadId}-${seq}`), thread_id: threadId };
+  }
+
+  function renderDay() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return renderHook(() => useTranscript(CHAT, CONNECTIONS), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+  }
+
+  const threadOf = (url: string): string | null =>
+    new URLSearchParams(url.slice(url.indexOf('?'))).get('thread_id');
+
+  beforeEach(() => {
+    api.get.mockReset();
+  });
+
+  it('asks for nothing earlier while the live connection still has history above', async () => {
+    api.get.mockResolvedValue(eventPage([inThread('C3', 2), inThread('C3', 1)]));
+
+    const { result } = renderDay();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+
+    expect(result.current.hasOlder).toBe(true);
+    expect(api.get.mock.calls.every(([url]) => threadOf(String(url)) === null)).toBe(true);
+  });
+
+  it('walks C2 page by page, then C1, then stops', async () => {
+    api.get.mockImplementation((url: string) => {
+      const thread = threadOf(url);
+      if (thread === null) return Promise.resolve(firstEverPage([inThread('C3', 1)]));
+      if (thread === 'C2') {
+        return Promise.resolve(
+          url.includes('before_event_id=')
+            ? firstEverPage([inThread('C2', 1)])
+            : eventPage([inThread('C2', 3), inThread('C2', 2)]),
+        );
+      }
+      return Promise.resolve(firstEverPage([inThread('C1', 1)]));
+    });
+
+    const { result } = renderDay();
+    // The live connection is whole, so the newest page of C2 follows on its own.
+    await waitFor(() => expect(result.current.events).toHaveLength(3));
+    expect(texts(result.current.events)).toEqual(['C2-2', 'C2-3', 'C3-1']);
+    expect(result.current.hasOlder).toBe(true);
+
+    act(() => result.current.loadOlder());
+    await waitFor(() => expect(result.current.events).toHaveLength(4));
+    expect(String(api.get.mock.calls.at(-1)?.[0])).toContain('before_event_id=C2_2');
+
+    act(() => result.current.loadOlder());
+    await waitFor(() => expect(result.current.events).toHaveLength(5));
+    expect(threadOf(String(api.get.mock.calls.at(-1)?.[0]))).toBe('C1');
+    expect(texts(result.current.events)).toEqual(['C1-1', 'C2-1', 'C2-2', 'C2-3', 'C3-1']);
+    expect(result.current.hasOlder).toBe(false);
+
+    const calls = api.get.mock.calls.length;
+    act(() => result.current.loadOlder());
+    expect(api.get.mock.calls).toHaveLength(calls);
+  });
+});
+
+describe('applyPush — incoming_chat re-reads the open chat (ID-02)', () => {
+  it('invalidates the chat a member came back to, so its connections are current', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['chat', CHAT], { id: CHAT, connections: [] });
+    applyPush(queryClient, 'incoming_chat', { chat: { id: CHAT, thread: { id: 'C2' } } });
+    expect(queryClient.getQueryState(['chat', CHAT])?.isInvalidated).toBe(true);
+  });
+});

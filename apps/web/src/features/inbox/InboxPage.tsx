@@ -28,6 +28,7 @@ import {
   useChat,
   useChatList,
   useConnectedChannels,
+  useConnectionLabels,
   useEditMessage,
   useMarkSeen,
   useSendMessage,
@@ -275,7 +276,12 @@ export function InboxPage(): ReactElement {
   const counts = useViewCounts(activeChannel);
   const list = useChatList(view, chatSort, activeChannel);
   const chat = useChat(selectedId);
-  const transcript = useTranscript(selectedId);
+  // The day's earlier connections join the transcript only while the chat read
+  // is the selected one's — a stale detail from the chat before would walk the
+  // wrong day.
+  const dayConnections = chat.data?.id === selectedId ? chat.data?.connections : undefined;
+  const transcript = useTranscript(selectedId, dayConnections);
+  const connectionLabels = useConnectionLabels(dayConnections);
   const tickets = useTicketList(ticketView, ticketSort, onTickets);
 
   // A refused reply waits in the transcript rather than vanishing with the
@@ -768,6 +774,15 @@ export function InboxPage(): ReactElement {
                                 })}
                               </span>
                             )}
+                            {/* The member's connections today (ID-02 · tm 286.4);
+                              one is every chat, so only a return is marked. */}
+                            {(item.connection_count ?? 0) > 1 && (
+                              <span className="tabular shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
+                                {t('inbox.list.item.connections', {
+                                  count: item.connection_count ?? 0,
+                                })}
+                              </span>
+                            )}
                             {item.unread_count > 0 && (
                               <span
                                 role="img"
@@ -822,6 +837,7 @@ export function InboxPage(): ReactElement {
                 <>
                   <ThreadHeader
                     chatId={selectedId}
+                    threadId={chat.data.thread?.id ?? null}
                     customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
                     active={chat.data.active}
                     onOpenTicket={(ticketId) => {
@@ -858,6 +874,7 @@ export function InboxPage(): ReactElement {
                     <Transcript
                       chatId={selectedId}
                       events={transcript.events}
+                      connections={connectionLabels}
                       loading={transcript.isPending}
                       currentAgentId={agent?.account_id ?? null}
                       hasOlder={transcript.hasOlder}

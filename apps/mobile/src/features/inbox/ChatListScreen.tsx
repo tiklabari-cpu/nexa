@@ -82,6 +82,8 @@ function ChatRow({ chat, onPress }: { chat: ChatSummary; onPress: () => void }) 
   const { colors } = useTheme();
   const preview = previewOf(chat);
   const unread = chat.unread_count ?? 0;
+  // The member's connections today (ID-02 · tm 286.4); one is every chat.
+  const connections = chat.connection_count ?? 0;
 
   return (
     <Pressable
@@ -110,6 +112,14 @@ function ChatRow({ chat, onPress }: { chat: ChatSummary; onPress: () => void }) 
         <Text numberOfLines={1} style={[styles.preview, { color: colors.textSecondary }]}>
           {preview}
         </Text>
+        {connections > 1 && (
+          <Text
+            testID={`chat-connections-${chat.id}`}
+            style={[styles.connections, { color: colors.textTertiary }]}
+          >
+            {`${connections} connections`}
+          </Text>
+        )}
         {unread > 0 && (
           <View
             testID={`chat-unread-${chat.id}`}
@@ -201,6 +211,11 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: RADIUS.lg,
     alignItems: 'center',
+  },
+  connections: {
+    fontSize: FONT_SIZE['2xs'].size,
+    lineHeight: FONT_SIZE['2xs'].lineHeight,
+    fontWeight: FONT_SIZE['2xs'].weight,
   },
   badgeText: {
     fontSize: FONT_SIZE['2xs'].size,

@@ -7,7 +7,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { liveDataApps } from '../../lib/live-apps.js';
 import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
-import { formatDateTime } from '../../lib/format.js';
+import { formatDateTime, formatDay, formatTime } from '../../lib/format.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
 import type { ChatDetail } from './types.js';
@@ -121,12 +121,12 @@ export function DetailsPanel({
     queryFn: () => api.get<{ items: Array<{ id: number; name: string }> }>('/groups'),
     staleTime: 60_000,
   });
+  const knownTeams = new Map((teamsQuery.data?.items ?? []).map((team) => [team.id, team.name]));
+  const teamName = (id: number): string =>
+    teamsQuery.isPending ? '…' : (knownTeams.get(id) ?? t('inbox.details.teams.unknown', { id }));
   const teamNames = (() => {
     if (teamsQuery.isPending) return chat.access.group_ids.map(() => '…');
-    const known = new Map((teamsQuery.data?.items ?? []).map((team) => [team.id, team.name]));
-    return chat.access.group_ids
-      .map((id) => known.get(id) ?? t('inbox.details.teams.unknown', { id }))
-      .sort((a, b) => a.localeCompare(b, getLocale()));
+    return chat.access.group_ids.map(teamName).sort((a, b) => a.localeCompare(b, getLocale()));
   })();
 
   // Suggest the curated library (FR-MOD-08.7.1) so a team applies agreed labels
@@ -237,6 +237,54 @@ export function DetailsPanel({
             <span className="text-xs">{formatDateTime(chat.created_at)}</span>
           </Row>
         </PanelSection>
+
+        {/* The member's day, connection by connection (ID-02 · tm 286.4). A
+          chat with no `local_day` is not a day and lists only its newest
+          connection, which the header already names — so it has no section. */}
+        {chat.local_day && (chat.connections?.length ?? 0) > 0 && (
+          <PanelSection
+            title={
+              chat.active
+                ? t('inbox.details.section.connectionsToday')
+                : t('inbox.details.section.connectionsOn', {
+                    day: formatDay(chat.local_day) ?? chat.local_day,
+                  })
+            }
+          >
+            <ol className="flex flex-col gap-2" aria-label={t('ids.chat.label')}>
+              {chat.connections!.map((connection) => (
+                <li key={connection.id} className="flex flex-col gap-0.5 text-xs">
+                  <span className="flex items-center gap-2">
+                    <span title={t('ids.chat.hint')} className="select-all font-mono text-2xs">
+                      {connection.id}
+                    </span>
+                    <span className="tabular text-content-secondary">
+                      {formatTime(connection.created_at)}
+                    </span>
+                    <StatusDot
+                      tone={connection.active ? 'success' : 'neutral'}
+                      label={
+                        connection.active
+                          ? t('inbox.details.connections.open')
+                          : t('inbox.details.connections.closed')
+                      }
+                    />
+                  </span>
+                  <span className="text-2xs text-content-tertiary">
+                    {[
+                      connection.opened_via
+                        ? t(`inbox.details.connections.via.${connection.opened_via}`)
+                        : null,
+                      connection.group_id === null ? null : teamName(connection.group_id),
+                    ]
+                      .filter((part): part is string => part !== null)
+                      .join(' · ')}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </PanelSection>
+        )}
 
         <PanelSection title={t('inbox.details.section.tags')}>
           {tags.length === 0 ? (

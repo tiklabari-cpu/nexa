@@ -101,6 +101,25 @@ describe('ChatScreen', () => {
     expect(screen.getByText('my order never arrived')).toBeOnTheScreen();
   });
 
+  it("marks where the member's return starts, with its number (ID-02 · tm 286.4)", async () => {
+    const api = fakeApi({
+      pages: [
+        {
+          items: [
+            event({ id: 'THREAD2_1', thread_id: 'THREAD2', text: 'me again' }),
+            event({ id: 'THREAD1_2', text: 'thanks, bye' }),
+            event({ id: 'THREAD1_1', text: 'my order never arrived' }),
+          ],
+        },
+      ],
+    });
+    await mount(new InboxStore({ api }));
+
+    const separator = screen.getByTestId('connection-THREAD2');
+    expect(separator).toHaveTextContent(/^Chat ID THREAD2 · /);
+    expect(screen.queryByTestId('connection-THREAD1')).toBeNull();
+  });
+
   it('says an empty conversation is empty rather than showing a spinner forever', async () => {
     await mount(new InboxStore({ api: fakeApi() }));
 

@@ -15,6 +15,7 @@
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { isPending, type ChatEvent } from './types';
+import { idHint, idLabel } from '../../lib/idLabels';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
 import { useTheme } from '../../theme/theme';
 
@@ -43,9 +44,18 @@ export function Transcript({
       onEndReached={onLoadOlder}
       onEndReachedThreshold={0.4}
       contentContainerStyle={styles.content}
-      renderItem={({ item }) => (
-        <MessageBubble event={item} isMine={item.author_id === currentAccountId} />
-      )}
+      renderItem={({ item, index }) => {
+        const opens = opensConnection(events, index);
+        const bubble = <MessageBubble event={item} isMine={item.author_id === currentAccountId} />;
+        return opens === null ? (
+          bubble
+        ) : (
+          <View>
+            <ConnectionSeparator threadId={opens} at={item.created_at} />
+            {bubble}
+          </View>
+        );
+      }}
       // Inverted, so the footer is the visual top — where older history loads.
       ListFooterComponent={
         loadingOlder ? (
@@ -57,6 +67,37 @@ export function Transcript({
         ) : null
       }
     />
+  );
+}
+
+/**
+ * The connection an event opens, when it opens one (ID-02 · tm 286.4): the
+ * event older than it (the next index — the list is newest-first) belongs to
+ * another connection of the same day. An optimistic bubble has no
+ * `thread_id` yet and opens nothing.
+ */
+export function opensConnection(events: readonly ChatEvent[], index: number): string | null {
+  const current = events[index]?.thread_id;
+  const older = events[index + 1]?.thread_id;
+  if (!current || !older || current === older) return null;
+  return current;
+}
+
+/** "<connection label> C2 · 14:02" — where a member's return starts in the transcript. */
+export function ConnectionSeparator({ threadId, at }: { threadId: string; at: string }) {
+  const { colors } = useTheme();
+  const text = `${idLabel('connection')} ${threadId} · ${formatTime(at)}`;
+  return (
+    <View
+      testID={`connection-${threadId}`}
+      accessibilityRole="text"
+      accessibilityLabel={`${text} — ${idHint('connection')}`}
+      style={styles.separator}
+    >
+      <View style={[styles.rule, { backgroundColor: colors.border }]} />
+      <Text style={[styles.separatorText, { color: colors.textSecondary }]}>{text}</Text>
+      <View style={[styles.rule, { backgroundColor: colors.border }]} />
+    </View>
   );
 }
 
@@ -161,6 +202,18 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE['2xs'].size,
     lineHeight: FONT_SIZE['2xs'].lineHeight,
     fontWeight: FONT_SIZE['2xs'].weight,
+  },
+  separator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+  },
+  rule: { flex: 1, height: StyleSheet.hairlineWidth },
+  separatorText: {
+    fontSize: FONT_SIZE['2xs'].size,
+    lineHeight: FONT_SIZE['2xs'].lineHeight,
+    fontWeight: '600',
   },
   system: {
     alignSelf: 'center',

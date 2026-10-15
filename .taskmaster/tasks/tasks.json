@@ -11951,7 +11951,7 @@
           "270"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-15T05:41:14.366Z",
+        "updatedAt": "2026-10-15T08:29:12.598Z",
         "subtasks": [
           {
             "id": 1,
@@ -11985,13 +11985,13 @@
             "description": "GET /ai/usage (reports_read + admin) + ai-usage-alerts (%80/%100, tekil) + kota dolunca ai.cap_reached",
             "details": "contract paths/ai-usage.yaml; yalnız sayı döner, içerik yok; bildirim uygulama içi + e-posta Kurucu ve seçilen alıcılar.",
             "testStrategy": "ai-usage.test.ts; uyarı tekilliği.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "283.2"
             ],
             "parentId": "283",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-15T08:29:12.598Z"
           },
           {
             "id": 4,

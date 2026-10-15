@@ -53,6 +53,19 @@ events:
       Returns 201 when the message was recorded, 200 when an `idempotency_key`
       replayed an earlier one.
 
+      **The member's day (ID-02).** `chat_id` is the member's conversation for
+      the day ("Thread ID" in the panel), and each visit is a connection inside
+      it ("Chat ID", the event's `thread_id`). A message goes into the open
+      connection; with none open it opens one — the day's first opens the chat,
+      a later one the same day opens a further connection under the *same*
+      `chat_id`, and the next day starts a new chat. Days follow the
+      workspace's day boundary (`/settings/chat-timeout`). A connection still
+      open from an earlier day keeps taking messages while it is live, so a
+      conversation crossing midnight is not split; once it has been silent for
+      the idle window it is closed and the message opens today's. Two first
+      messages sent at once land in one connection. `queue_position` is present
+      when the message opened a connection.
+
       A customer cannot write an internal note. The field is not accepted here at
       all, rather than accepted and downgraded silently.
 
@@ -61,7 +74,7 @@ events:
       uploaded through `/uploads`; any other value is refused.
 
       **Pre-chat requirements (WG-01).** A message that would *open* a
-      conversation is refused with 400 `validation_error` — nothing written,
+      connection is refused with 400 `validation_error` — nothing written,
       not even the other pre-chat values — when the brand's saved pre-chat form
       (`/settings/prechat`) is on and requires `name`, `username` or `email`
       and the request neither carries it nor finds it already on the contact.

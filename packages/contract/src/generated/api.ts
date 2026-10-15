@@ -1362,6 +1362,19 @@ export interface paths {
      *     Returns 201 when the message was recorded, 200 when an `idempotency_key`
      *     replayed an earlier one.
      *
+     *     **The member's day (ID-02).** `chat_id` is the member's conversation for
+     *     the day ("Thread ID" in the panel), and each visit is a connection inside
+     *     it ("Chat ID", the event's `thread_id`). A message goes into the open
+     *     connection; with none open it opens one — the day's first opens the chat,
+     *     a later one the same day opens a further connection under the *same*
+     *     `chat_id`, and the next day starts a new chat. Days follow the
+     *     workspace's day boundary (`/settings/chat-timeout`). A connection still
+     *     open from an earlier day keeps taking messages while it is live, so a
+     *     conversation crossing midnight is not split; once it has been silent for
+     *     the idle window it is closed and the message opens today's. Two first
+     *     messages sent at once land in one connection. `queue_position` is present
+     *     when the message opened a connection.
+     *
      *     A customer cannot write an internal note. The field is not accepted here at
      *     all, rather than accepted and downgraded silently.
      *
@@ -1370,7 +1383,7 @@ export interface paths {
      *     uploaded through `/uploads`; any other value is refused.
      *
      *     **Pre-chat requirements (WG-01).** A message that would *open* a
-     *     conversation is refused with 400 `validation_error` — nothing written,
+     *     connection is refused with 400 `validation_error` — nothing written,
      *     not even the other pre-chat values — when the brand's saved pre-chat form
      *     (`/settings/prechat`) is on and requires `name`, `username` or `email`
      *     and the request neither carries it nor finds it already on the contact.
@@ -4919,7 +4932,8 @@ export interface paths {
      * @description The idle window before a conversation is auto-closed (FR-MOD-08.7.3).
      *     `chat_timeout_seconds` is null when the feature is off, which is also what
      *     a workspace that has never saved it reads — there is no row until then, so
-     *     the read has no side effect.
+     *     the read has no side effect. While it is null, widget conversations still
+     *     close after 30 minutes without activity (K2, ID-02).
      */
     get: operations['getChatTimeout'];
     /**
@@ -4927,6 +4941,9 @@ export interface paths {
      * @description Creates the row on first write. `chat_timeout_seconds` must be a positive
      *     integer (up to 30 days) or null to disable — a zero or negative window is
      *     rejected, since reaching the sweep it would close every live chat at once.
+     *     A positive window covers every conversation; null leaves widget
+     *     conversations on the 30-minute default (K2, ID-02) and conversations from
+     *     messaging channels open.
      *
      *     The conversation day boundary (ID-04) is saved here too, and is optional:
      *     leave a field out and the stored value stays. `day_boundary_timezone` must
@@ -9878,7 +9895,11 @@ export interface components {
      *
      *     `chat_timeout_seconds` is null when auto-close is off — which is also
      *     what a workspace that has never saved it reads, since no row exists yet.
-     *     A stored value is always a positive integer.
+     *     A stored value is always a positive integer and applies to every
+     *     conversation. Off is not "never" for widget conversations: they still
+     *     close after 30 minutes without activity (owner decision K2, ID-02), so
+     *     a member back later the same day opens a new connection; conversations
+     *     from messaging channels stay open.
      *
      *     The same row carries the conversation **day boundary** (ID-04, decision
      *     K3): which calendar day a conversation belongs to is counted in
@@ -9896,7 +9917,7 @@ export interface components {
       brand_id?: string;
       /**
        * Format: int32
-       * @description Seconds of inactivity before auto-close, or null when disabled.
+       * @description Seconds of inactivity before auto-close, or null when disabled — widget conversations then close after the 30-minute default (K2).
        */
       chat_timeout_seconds: number | null;
       /**
@@ -21146,7 +21167,7 @@ export interface operations {
         'application/json': {
           /**
            * Format: int32
-           * @description Seconds of inactivity before auto-close; null disables it.
+           * @description Seconds of inactivity before auto-close; null disables it, and widget conversations then close after the 30-minute default (K2).
            */
           chat_timeout_seconds: number | null;
           /**

@@ -518,7 +518,9 @@ const bannedIp = z
 const CHAT_TIMEOUT_MAX_SECONDS = 2_592_000;
 
 /**
- * The idle window before a chat auto-closes (FR-MOD-08.7.3). `null` disables it.
+ * The idle window before a chat auto-closes (FR-MOD-08.7.3). `null` disables it
+ * — except for widget conversations, which then close on K2's 30-minute default
+ * (ID-02, `chat-timeout.ts`). A stored value applies to every conversation.
  * A stored value is always a positive integer: `.positive()` is what rejects a
  * zero or negative window, which — reaching the sweep — would close every live
  * chat at once. The database column and the sweep both assume this holds.

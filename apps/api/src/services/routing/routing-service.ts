@@ -169,6 +169,41 @@ export class RoutingService {
   }
 
   /**
+   * Give a returning member's new connection back to the agent who had their
+   * earlier one that day (ID-02-S5), if that agent can take a chat right now.
+   *
+   * "Can" is exactly `#selectAgent`'s rule, asked about one named agent:
+   * accepting chats, not suspended, not awaiting approval, below their own
+   * concurrent limit. Asked inside the caller's transaction for `route`'s
+   * reason — a load count read in one transaction and acted on in another lets
+   * two arrivals both take the last free slot. On a yes the assignment is
+   * recorded the way `route` records one (`last_assigned_at`), so the
+   * least-recently-assigned tie-break stays honest; on a no nothing is written
+   * and the caller routes normally.
+   */
+  async assignIfAvailable(tx: TenantClient, licenseId: bigint, agentId: string): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ has_capacity: boolean }>>`
+      SELECT COUNT(t.id) < m.concurrent_chats_limit AS has_capacity
+      FROM agent_memberships m
+      LEFT JOIN threads t
+        ON t.assignee_id = m.agent_id AND t.active AND t.license_id = ${licenseId}
+      WHERE m.license_id = ${licenseId}
+        AND m.agent_id = ${agentId}::uuid
+        AND m.routing_status = 'accepting_chats'
+        AND NOT m.suspended
+        AND NOT m.awaiting_approval
+      GROUP BY m.agent_id, m.concurrent_chats_limit
+    `;
+    if (!rows[0]?.has_capacity) return false;
+
+    await tx.agentMembership.update({
+      where: { licenseId_agentId: { licenseId, agentId } },
+      data: { lastAssignedAt: new Date() },
+    });
+    return true;
+  }
+
+  /**
    * Re-evaluate the queue after capacity frees up.
    *
    * Called when an agent closes a chat or comes back online. Assigns as many

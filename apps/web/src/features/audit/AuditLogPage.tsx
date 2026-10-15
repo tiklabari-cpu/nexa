@@ -233,8 +233,17 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     // *changing*, and the correction overwrites the old wording, so this row is
     // all that is left of it. An entry nobody can find in the dropdown is
     // reachable only by editing the URL.
+    // `chat.connection_opened` (ID-02) is the third way a transcript becomes
+    // writable again — a member back the same day reopening their day's chat —
+    // so it sits beside the archive/reopen pair it completes.
     labelKey: 'audit.group.conversations',
-    actions: ['chat.archived', 'chat.reopened', 'chat.taken_over', 'chat.message_edited'],
+    actions: [
+      'chat.archived',
+      'chat.reopened',
+      'chat.connection_opened',
+      'chat.taken_over',
+      'chat.message_edited',
+    ],
   },
   {
     labelKey: 'audit.group.tickets',

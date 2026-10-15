@@ -237,7 +237,7 @@ export const settings: Messages = {
   'settings.chatTimeout.loadError': 'Could not load the chat timeout setting.',
   'settings.chatTimeout.enableLabel': 'Automatically close idle chats',
   'settings.chatTimeout.enableHint':
-    'Off by default. While on, a conversation with no activity for the duration below is closed automatically.',
+    'While off, website widget conversations still close after 30 minutes without activity, and conversations from messaging channels stay open. While on, every conversation with no activity for the duration below is closed automatically.',
   'settings.chatTimeout.amountLabel': 'Idle for',
   'settings.chatTimeout.unitLabel': 'Unit',
   'settings.chatTimeout.unitMinutes': 'Minutes',

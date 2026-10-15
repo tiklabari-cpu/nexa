@@ -1438,7 +1438,8 @@ chatTimeout:
       The idle window before a conversation is auto-closed (FR-MOD-08.7.3).
       `chat_timeout_seconds` is null when the feature is off, which is also what
       a workspace that has never saved it reads — there is no row until then, so
-      the read has no side effect.
+      the read has no side effect. While it is null, widget conversations still
+      close after 30 minutes without activity (K2, ID-02).
     responses:
       "200":
         description: The current window
@@ -1459,6 +1460,9 @@ chatTimeout:
       Creates the row on first write. `chat_timeout_seconds` must be a positive
       integer (up to 30 days) or null to disable — a zero or negative window is
       rejected, since reaching the sweep it would close every live chat at once.
+      A positive window covers every conversation; null leaves widget
+      conversations on the 30-minute default (K2, ID-02) and conversations from
+      messaging channels open.
 
       The conversation day boundary (ID-04) is saved here too, and is optional:
       leave a field out and the stored value stays. `day_boundary_timezone` must
@@ -1481,7 +1485,9 @@ chatTimeout:
                 minimum: 1
                 maximum: 2592000
                 nullable: true
-                description: Seconds of inactivity before auto-close; null disables it.
+                description: >-
+                  Seconds of inactivity before auto-close; null disables it, and
+                  widget conversations then close after the 30-minute default (K2).
               day_boundary_timezone:
                 type: string
                 example: Europe/Istanbul

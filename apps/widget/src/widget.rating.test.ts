@@ -218,6 +218,60 @@ describe('widget rating — automatic prompt on close (FR-MOD-07.8-b)', () => {
   });
 });
 
+describe('widget rating — a same-day return under the same chat (ID-02)', () => {
+  const RETURN_EVENT = { ...OPEN_EVENT, id: 'evt-2', text: 'Still no deposit' };
+
+  it("clears the earlier connection's prompt when a new one opens under the same chat id", async () => {
+    // The visitor's chat is their day: the first connection ends (poll 2), and
+    // the member's next message opens a further one under the *same* chat id.
+    chatStateAt = (poll) =>
+      poll === 1
+        ? { chat: { id: 'chat-1', thread_id: 'thr-1', queue_position: null }, events: [OPEN_EVENT] }
+        : poll === 2
+          ? { chat: null, events: [] }
+          : {
+              chat: { id: 'chat-1', thread_id: 'thr-2', queue_position: null },
+              events: [RETURN_EVENT],
+            };
+
+    vi.useFakeTimers();
+    const root = mountWidget();
+    openPanel(root);
+    await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(1));
+    await vi.advanceTimersByTimeAsync(4_000);
+    await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(2));
+    const rating = root.querySelector<HTMLElement>('.nx-rating')!;
+    expect(rating.hidden).toBe(false);
+
+    // A closed panel polls slowly; the next answer carries the new connection.
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(3));
+    expect(rating.hidden).toBe(true);
+    expect(ratingCalls()).toHaveLength(0);
+  });
+
+  it('keeps an early vote for the open connection when the poll learns its thread', async () => {
+    // A chat adopted before its connection is known is still that conversation.
+    chatStateAt = () => ({
+      chat: { id: 'chat-1', thread_id: 'thr-1', queue_position: null },
+      events: [OPEN_EVENT],
+    });
+    vi.useFakeTimers();
+    const root = mountWidget();
+    openPanel(root);
+    await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(1));
+
+    root.querySelector<HTMLButtonElement>('.nx-menu-btn')!.click();
+    root.querySelector<HTMLButtonElement>('.nx-menu-rate')!.click();
+    const rating = root.querySelector<HTMLElement>('.nx-rating')!;
+    expect(rating.hidden).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(4_000);
+    await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(2));
+    expect(rating.hidden).toBe(false);
+  });
+});
+
 describe('widget rating — early vote from the header menu (FR-MOD-07.8-b)', () => {
   it('is reachable mid-conversation, and posts the same request the auto-prompt would', async () => {
     const root = mountWidget();

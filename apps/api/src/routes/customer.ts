@@ -647,6 +647,11 @@ export default async function customerRoutes(
    * A single endpoint because from the widget's side there is no difference: a
    * visitor types and presses enter. Making the client decide between "start"
    * and "send" invites a race where two first messages both try to start.
+   *
+   * "A conversation" is a connection inside the member's chat for the day
+   * (ID-02): the day's first message opens the chat, a message after the
+   * previous connection ended opens a further one under the same chat, and
+   * the next day starts a new chat (`ChatService.openOrContinueConnection`).
    */
   app.post(
     '/customer/chat/events',
@@ -681,15 +686,12 @@ export default async function customerRoutes(
         await assertUploadedAttachment(store, tenant.licenseId, body.attachment_url);
       }
 
-      // The one active conversation, if there is one. Fetched here — before any
-      // pre-chat write — because the spam filter below screens only the message
-      // that would OPEN a chat, and a refused chat-start must leave no trace.
-      const existing = await request.withTenant((tx) =>
-        tx.chat.findFirst({
-          where: { customerId: principal.customerId, active: true },
-          select: { id: true },
-        }),
-      );
+      // Whether this message opens a connection rather than continuing the open
+      // one (ID-02): no open conversation, or yesterday's gone silent and about
+      // to be closed under the visitor. Asked here — before any pre-chat write —
+      // because the screens below apply only to a message that OPENS one, and a
+      // refused opening must leave no trace.
+      const opens = await chats.opensConnection(tenant, principal.customerId);
 
       // Spam filter (FR-MOD-08.9.3): screen the message that would open a chat.
       // A spam conversation floods the queue; screening only chat-start — not
@@ -697,7 +699,9 @@ export default async function customerRoutes(
       // off a legitimate visitor mid-conversation (who may, say, paste several
       // links). Gated by the per-workspace spamFilterEnabled (schema default on)
       // and routed through the same deterministic engine the email channel uses.
-      if (!existing && maskedText) {
+      // A member back the same day is screened too: their message opens a new
+      // connection the queue has to take, exactly as a first one does.
+      if (opens && maskedText) {
         const spamFilterOn = await request.withTenant((tx) => isSpamFilterEnabled(tx));
         if (evaluateSpam({ filterEnabled: spamFilterOn, text: maskedText }).spam) {
           // An enveloped refusal, like the co-located banned-IP check: a
@@ -717,7 +721,7 @@ export default async function customerRoutes(
       // contact counts: a returning visitor is not asked twice. The brand is
       // the one signed into the token at mint, i.e. the form the widget was
       // handed; an unsaved form is not enforced at all.
-      if (!existing) {
+      if (opens) {
         const missing = await request.withTenant(async (tx) => {
           const prechat = await readCustomerPrechat(tx, principal.brandId);
           if (!prechat.configured || !prechat.config.enabled) return [];
@@ -770,7 +774,7 @@ export default async function customerRoutes(
       // After every refusal above, so a refused chat-start leaves no trace; not
       // on later messages, which would spend a write on a value that is already
       // there. A later chat from a different widget language updates it.
-      if (!existing && body.locale) {
+      if (opens && body.locale) {
         await request.withTenant((tx) =>
           tx.customer.update({
             where: { id: principal.customerId },
@@ -800,8 +804,8 @@ export default async function customerRoutes(
       //
       // Deliberately *not* a traffic-board publish site (FR-MOD-03.1.1), even
       // though a visit is one of the board's three sources. Every path through
-      // this handler ends in `chats.sendEvent` or `chats.start` below, and both
-      // announce the visitor themselves; a second signal here would say the
+      // this handler ends in `chats.openOrContinueConnection` below, which
+      // announces the visitor itself; a second signal here would say the
       // same thing about the same person one step earlier, and — because the
       // request always leaves them in a conversation — the buckets a visit can
       // produce (`browsing`, `invited`) are ones this visitor is now in no
@@ -855,27 +859,13 @@ export default async function customerRoutes(
         }
       }
 
-      if (existing) {
-        const { event, replayed } = await chats.sendEvent(tenant, principal, existing.id, {
-          type: 'message',
-          ...(maskedText !== undefined ? { text: maskedText } : {}),
-          ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
-          recipients: 'all',
-          ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
-        });
-
-        // A replay is the same message arriving twice; answering or notifying
-        // again would do both twice for one question.
-        if (!replayed) followUp(request, existing.id, 'message', maskedText, body.url ?? null);
-
-        return reply.status(replayed ? 200 : 201).send({ chat_id: existing.id, event });
-      }
-
-      const { chat } = await chats.start(tenant, principal, {
+      // One call decides and writes (ID-02): into the open connection, or into a
+      // connection it opens under the member's chat for the day — the day's
+      // first one, or a further one when they are back the same day. Routing
+      // decides who takes an opened one; the customer never self-assigns.
+      const result = await chats.openOrContinueConnection(tenant, principal, {
         customerId: principal.customerId,
-        // Never self-assign: the customer is not an agent, and routing decides.
-        assignToMe: false,
-        initialEvent: {
+        event: {
           type: 'message',
           ...(maskedText !== undefined ? { text: maskedText } : {}),
           ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
@@ -883,37 +873,46 @@ export default async function customerRoutes(
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         },
         ...(body.url ? { routing: { url: body.url } } : {}),
+        audit: request.auditContext(),
       });
+      const chatId = result.chat.id;
 
-      // Campaign engagement (FR-MOD-03.3.2/.3, tm 176.4): a fresh chat is the
-      // "Chats" half of a campaign card's numbers actually being earned.
-      // `ChatService.start` already committed the chat in its own
-      // transaction, so this can never be atomic with it anyway — its own
-      // transaction and best-effort, same reasoning as the page-view/goal
-      // write above. Losing it should cost a report number, not the message
-      // the visitor is trying to send.
+      // A replay is the same message arriving twice; answering or notifying
+      // again would do both twice for one question.
+      if (result.replayed) return reply.status(200).send({ chat_id: chatId, event: result.event });
+
+      if (result.openedVia === null) {
+        followUp(request, chatId, 'message', maskedText, body.url ?? null);
+        return reply.status(201).send({ chat_id: chatId, event: result.event });
+      }
+
+      // Campaign engagement (FR-MOD-03.3.2/.3, tm 176.4): a conversation the
+      // visitor opened — the day's first or a return — is the "Chats" half of a
+      // campaign card's numbers actually being earned; a delivery is only ever
+      // owed while no conversation is open, which is exactly when one opens.
+      // The connection is already committed in its own transaction, so this can
+      // never be atomic with it anyway — its own transaction and best-effort,
+      // same reasoning as the page-view/goal write above. Losing it should cost
+      // a report number, not the message the visitor is trying to send.
       try {
         await request.withTenant((tx) =>
-          markCampaignEngaged(tx, tenant, { customerId: principal.customerId, chatId: chat.id }),
+          markCampaignEngaged(tx, tenant, { customerId: principal.customerId, chatId }),
         );
       } catch (error) {
         request.log.warn({ err: error }, 'could not record campaign engagement');
       }
 
-      const events = await chats.listEvents(tenant, principal, chat.id, { limit: 10 });
-
-      // Routing may have assigned this brand-new chat to an agent — that is the
+      // Routing may have assigned the connection to an agent — that is the
       // "assignment" notification (FR-MOD-13.8). `new_chat` rather than
       // `assignment` because of how it reads on a phone: nobody handed this to
-      // the agent, a visitor walked in. Handed in after the read above, so the
-      // `event` this answers with is what the visitor's message produced, never
-      // a reply that happened to commit first.
-      followUp(request, chat.id, 'new_chat', maskedText, body.url ?? null);
+      // the agent, a visitor walked in. The `event` this answers with is the
+      // visitor's own message as written, never a reply that committed first.
+      followUp(request, chatId, 'new_chat', maskedText, body.url ?? null);
 
       return reply.status(201).send({
-        chat_id: chat.id,
-        queue_position: chat.thread?.queue_position ?? null,
-        event: events.items.at(-1) ?? null,
+        chat_id: chatId,
+        queue_position: result.chat.thread?.queue_position ?? null,
+        event: result.event,
       });
     },
   );

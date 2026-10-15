@@ -227,7 +227,7 @@ export const settings: Messages = {
   'settings.chatTimeout.loadError': 'Sohbet zaman aşımı ayarı yüklenemedi.',
   'settings.chatTimeout.enableLabel': 'Boşta kalan sohbetleri otomatik kapat',
   'settings.chatTimeout.enableHint':
-    'Varsayılan olarak kapalı. Açıkken, aşağıdaki süre boyunca hiçbir hareket olmayan bir sohbet otomatik olarak kapanır.',
+    "Kapalıyken web sitesi widget'ından gelen sohbetler 30 dakika hareketsiz kalınca yine kapanır, mesajlaşma kanallarından gelenler açık kalır. Açıkken, aşağıdaki süre boyunca hiçbir hareket olmayan her sohbet otomatik olarak kapanır.",
   'settings.chatTimeout.amountLabel': 'Şu süre boşta kalınca',
   'settings.chatTimeout.unitLabel': 'Birim',
   'settings.chatTimeout.unitMinutes': 'Dakika',

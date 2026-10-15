@@ -204,6 +204,8 @@ describe('AuditLogPage', () => {
     ).toEqual([
       'chat.archived',
       'chat.reopened',
+      // A member back the same day reopens their day's chat (ID-02).
+      'chat.connection_opened',
       'chat.taken_over',
       // The correction entry (FR-MOD-02.3.7). It belongs in this group for the
       // reason the others do, and it is the only one whose subject — the words

@@ -5,7 +5,10 @@
  * missing (GL-9 §F.1/7, M-UI-GAP tm 136.1) — `GET/PUT /settings/chat-timeout`
  * already existed with nothing calling it.
  *
- * The server stores whole seconds (1 to 30 days) or `null` for "off"; the
+ * The server stores whole seconds (1 to 30 days) or `null` for "off". Off is
+ * not "never" for widget conversations: they still close after 30 minutes of
+ * silence (owner decision K2, ID-02 · tm 286.2), which the hint says so the
+ * unchecked box does not read as "conversations stay open". The
  * form lets a person pick a whole number in either minutes or hours rather
  * than doing that arithmetic themselves. The two are independent fields on
  * purpose — switching the unit re-interprets the number already entered

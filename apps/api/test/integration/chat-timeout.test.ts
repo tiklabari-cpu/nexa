@@ -10,7 +10,10 @@
  *      window survives, whether the activity was a fresh event on an old thread
  *      or the thread simply being young.
  *   3. A workspace that never enabled a timeout — no row, or a non-positive value
- *      that should never have been stored — is never swept.
+ *      that should never have been stored — still closes its widget
+ *      conversations after 30 minutes (owner decision K2, ID-02 · tm 286.2), and
+ *      leaves conversations from messaging channels open until it sets a window
+ *      of its own.
  *   4. One tenant's sweep can never reach another's chats. RLS is the guarantee,
  *      tested directly: a close driven in A's context against B's chat id closes
  *      nothing.
@@ -211,30 +214,83 @@ describe('chat timeout sweep (FR-MOD-08.7.3)', () => {
   });
 
   // ==========================================================================
-  // Only when enabled, only with a positive window
+  // No window of its own: K2's 30 minutes, for widget conversations only
   // ==========================================================================
 
-  it('never sweeps a workspace that has not enabled a timeout', async () => {
+  /** Mark a chat as one that arrived over a messaging channel. */
+  async function arrivedOverChannel(t: TenantFixture, chatId: string): Promise<void> {
+    await owner.channelMessage.create({
+      data: {
+        licenseId: t.licenseId,
+        channelType: 'telegram',
+        direction: 'inbound',
+        externalId: `tg-${chatId}`,
+        chatId,
+        text: 'hello from telegram',
+      },
+    });
+  }
+
+  it('closes an idle widget conversation after 30 minutes in a workspace that set no window (K2)', async () => {
     const now = new Date();
     // fx.a: no inbox_settings row at all.
-    const { chatId } = await seedActiveChat(fx.a, new Date(now.getTime() - 10 * HOUR));
+    const idle = await seedActiveChat(fx.a, new Date(now.getTime() - 10 * HOUR));
+    const justOver = await seedActiveChat(fx.a, new Date(now.getTime() - 31 * 60_000));
+    const quiet = await seedActiveChat(fx.a, new Date(now.getTime() - 29 * 60_000));
 
     const report = await sweeper().run({ now });
-    expect(tenantResult(report, fx.a)?.timeoutSeconds).toBeNull();
-    expect(tenantResult(report, fx.a)?.closed).toBe(0);
-    expect(await chatActive(chatId)).toBe(true);
+    expect(tenantResult(report, fx.a)).toMatchObject({
+      timeoutSeconds: 1800,
+      widgetDefault: true,
+      closed: 2,
+    });
+    expect(await chatActive(idle.chatId)).toBe(false);
+    expect(await chatActive(justOver.chatId)).toBe(false);
+    expect(await chatActive(quiet.chatId)).toBe(true);
+
+    // Closed exactly as a configured window closes it.
+    const closeEvent = await owner.event.findFirst({
+      where: { threadId: idle.threadId, authorType: 'system' },
+    });
+    expect(closeEvent?.properties).toMatchObject({
+      system_event: 'chat_deactivated',
+      reason: 'timeout',
+    });
   });
 
-  it('skips a stored window that is not positive rather than closing everything', async () => {
+  it('leaves a messaging-channel conversation open until the workspace sets a window of its own', async () => {
+    const now = new Date();
+    const telegram = await seedActiveChat(fx.a, new Date(now.getTime() - 10 * HOUR));
+    await arrivedOverChannel(fx.a, telegram.chatId);
+    const widget = await seedActiveChat(fx.a, new Date(now.getTime() - 10 * HOUR));
+
+    expect(tenantResult(await sweeper().run({ now }), fx.a)?.closed).toBe(1);
+    expect(await chatActive(telegram.chatId)).toBe(true);
+    expect(await chatActive(widget.chatId)).toBe(false);
+
+    // A window the workspace chose covers every conversation.
+    await configureTimeout(fx.a, 3600);
+    const report = await sweeper().run({ now });
+    expect(tenantResult(report, fx.a)).toMatchObject({
+      timeoutSeconds: 3600,
+      widgetDefault: false,
+      closed: 1,
+    });
+    expect(await chatActive(telegram.chatId)).toBe(false);
+  });
+
+  it('reads a stored window that is not positive as unset — the default, never "close everything"', async () => {
     const now = new Date();
     // A zero window can only get here by bypassing the endpoint; the sweep's own
     // guard is what stops it from closing every live chat.
     await configureTimeout(fx.a, 0);
-    const { chatId } = await seedActiveChat(fx.a, new Date(now.getTime() - 10 * HOUR));
+    const idle = await seedActiveChat(fx.a, new Date(now.getTime() - 10 * HOUR));
+    const live = await seedActiveChat(fx.a, new Date(now.getTime() - 60_000));
 
     const report = await sweeper().run({ now });
-    expect(tenantResult(report, fx.a)?.closed).toBe(0);
-    expect(await chatActive(chatId)).toBe(true);
+    expect(tenantResult(report, fx.a)).toMatchObject({ timeoutSeconds: 1800, closed: 1 });
+    expect(await chatActive(idle.chatId)).toBe(false);
+    expect(await chatActive(live.chatId)).toBe(true);
   });
 
   // ==========================================================================

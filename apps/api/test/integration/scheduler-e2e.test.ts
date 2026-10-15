@@ -340,9 +340,11 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       assigneeId: fx.a.agentAccountId,
     });
 
-    // B — a customer who has been waiting two hours for a first reply, against
-    // a one-minute target. B has no inbox timeout, so the chat timeout sweep
-    // leaves this thread open for the SLA sweep to judge.
+    // B — a customer who has been waiting ten minutes for a first reply, against
+    // a one-minute target. B set no inbox timeout, so its widget conversations
+    // close after K2's 30-minute default (ID-02); ten minutes is well inside it,
+    // so the chat timeout sweep leaves this thread open for the SLA sweep to
+    // judge.
     await owner.slaPolicy.create({
       data: {
         licenseId: fx.b.licenseId,
@@ -352,7 +354,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       },
     });
     unansweredThreadId = (
-      await seedConversation(fx.b, { at: new Date(now - 2 * HOUR), active: true })
+      await seedConversation(fx.b, { at: new Date(now - 10 * 60_000), active: true })
     ).threadId;
 
     // B — the canary: a thread far past the retention window. Nothing in this

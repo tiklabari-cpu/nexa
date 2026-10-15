@@ -365,6 +365,14 @@ export const AUDIT_ACTIONS = [
   // the content it would otherwise copy.
   'chat.archived',
   'chat.reopened',
+  // A member back the same day (ID-02 · tm 286): their day's archived chat
+  // opened again with a further connection under it. The third lifecycle
+  // transition beside the two above — the transcript becomes writable again —
+  // reached without anyone pressing "Reopen", so it is recorded as what the
+  // visitor's message did. Metadata is the new thread and how it opened
+  // (`same_day_return`, or `day_rollover` when yesterday's silent connection
+  // was closed on the way in); never the message.
+  'chat.connection_opened',
   // An agent corrected a message they had already sent (FR-MOD-02.3.7). It
   // belongs beside the two lines above by their own reasoning: those are
   // recorded because they are the moments at which the record of what was said

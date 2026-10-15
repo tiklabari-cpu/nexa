@@ -4,7 +4,18 @@
  * A workspace can set a positive `chat_timeout_seconds` (see `InboxSettings`).
  * When it does, a chat with no activity for that long is archived automatically
  * — the customer wandered off, the agent moved on, and nobody should have to
- * find and close it by hand. Workspaces that leave it unset are never swept.
+ * find and close it by hand.
+ *
+ * A workspace that leaves it unset still has a window for its **widget**
+ * conversations: 30 minutes (owner decision K2, ID-02 · tm 286.2). The member's
+ * day is a chat with one connection per visit, and a visit has to end for the
+ * next one to be a connection of its own — without a window a widget
+ * conversation never closed, and a member back in the afternoon was still in
+ * the morning's connection. Conversations that arrived over a messaging channel
+ * (WhatsApp, Telegram, …) are not visits to a page; they stay open until the
+ * workspace sets a window of its own, which then covers every conversation.
+ * Applying the default to workspaces that never chose one is a behaviour
+ * change, announced with ID-02.
  *
  * Like the retention sweep, there is no production scheduler in this environment
  * (a project boundary), so this is a script an operator runs rather than a cron
@@ -17,10 +28,10 @@
  *      there?" and is shared rather than duplicated.
  *   2. **The age predicate is the not-yet-idle guard.** A chat is a candidate
  *      only when its last activity is strictly older than the cutoff, and the
- *      cutoff comes from a positive window; a non-positive window is skipped
- *      entirely, so it can never collapse to "close everything now". The close
- *      itself re-checks the cutoff (see `deactivateByTimeout`), so a reply that
- *      lands mid-sweep spares the chat.
+ *      cutoff always comes from a positive window: a stored non-positive value
+ *      reads as unset (K2's default), so it can never collapse to "close
+ *      everything now". The close itself re-checks the cutoff (see
+ *      `deactivateByTimeout`), so a reply that lands mid-sweep spares the chat.
  *
  * The sweep is idempotent: a chat closed on one pass is inactive on the next and
  * no longer a candidate.
@@ -32,17 +43,23 @@
  * reason the retention sweep does (`retention.ts`), and it is handed in for the
  * same reason too: this codebase has no ambient environment.
  */
-import { type PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
 import { type AuditContext } from '../audit/audit-log.js';
 import { type ChatService } from './chat-service.js';
+import { DEFAULT_CONNECTION_IDLE_SECONDS, readChatTimeoutSeconds } from './conversation-day.js';
 
 export interface TenantTimeoutResult {
   /** Stringified: a bigint cannot be JSON-serialised, and this report is JSON. */
   licenseId: string;
   organizationId: string;
-  /** The configured window, or null when the workspace has not enabled it. */
-  timeoutSeconds: number | null;
+  /** The window this pass applied — the workspace's own, or K2's default. */
+  timeoutSeconds: number;
+  /**
+   * True when the workspace set no window and K2's 30-minute default was
+   * applied — to widget conversations only.
+   */
+  widgetDefault: boolean;
   closed: number;
 }
 
@@ -107,25 +124,17 @@ export class ChatTimeoutSweeper {
       organizationId: tenant.organization_id,
     };
 
-    const seconds = await withTenant(this.#db, context, async (tx) => {
-      const row = await tx.inboxSettings.findFirst({ select: { chatTimeoutSeconds: true } });
-      return row?.chatTimeoutSeconds ?? null;
-    });
+    const configured = await withTenant(this.#db, context, (tx) => readChatTimeoutSeconds(tx));
 
-    // Unset, or a value that should never have been stored: nothing to sweep.
-    // Belt-and-suspenders with the endpoint's positivity check — a non-positive
-    // window here would otherwise mean "close every live chat".
-    if (seconds === null || seconds <= 0) {
-      return {
-        licenseId: tenant.license_id.toString(),
-        organizationId: tenant.organization_id,
-        timeoutSeconds: null,
-        closed: 0,
-      };
-    }
+    // Unset, or a value that should never have been stored, is K2's default —
+    // and only for widget conversations. Belt-and-suspenders with the
+    // endpoint's positivity check: a non-positive window must never become
+    // "close every live chat".
+    const own = configured !== null && configured > 0;
+    const seconds = own ? configured : DEFAULT_CONNECTION_IDLE_SECONDS;
 
     const cutoff = new Date(now.getTime() - seconds * 1000);
-    const candidates = await this.#idleChats(context, cutoff);
+    const candidates = await this.#idleChats(context, cutoff, { widgetOnly: !own });
 
     // One context for the whole tenant's sweep: the licence is the same for
     // every chat in it, and the actor is the system in all of them. No request
@@ -147,12 +156,22 @@ export class ChatTimeoutSweeper {
       licenseId: tenant.license_id.toString(),
       organizationId: tenant.organization_id,
       timeoutSeconds: seconds,
+      widgetDefault: !own,
       closed,
     };
   }
 
-  /** Active chats whose newest activity is older than the cutoff, this tenant only. */
-  async #idleChats(context: TenantContext, cutoff: Date): Promise<string[]> {
+  /**
+   * Active chats whose newest activity is older than the cutoff, this tenant
+   * only. `widgetOnly` leaves out a conversation that arrived over a messaging
+   * channel — one with an inbound `channel_messages` row, the same fact the
+   * inbox's channel views and Reports' channel split read (`chatIdsOnChannel`).
+   */
+  async #idleChats(
+    context: TenantContext,
+    cutoff: Date,
+    options: { widgetOnly: boolean },
+  ): Promise<string[]> {
     return withTenant(this.#db, context, async (tx) => {
       const rows = await tx.$queryRaw<Array<{ chat_id: string }>>`
         SELECT t.chat_id AS chat_id
@@ -161,7 +180,16 @@ export class ChatTimeoutSweeper {
           AND COALESCE(
                 (SELECT max(e.created_at) FROM events e WHERE e.thread_id = t.id),
                 t.created_at
-              ) < ${cutoff}`;
+              ) < ${cutoff}
+          ${
+            options.widgetOnly
+              ? Prisma.sql`AND NOT EXISTS (
+                  SELECT 1 FROM channel_messages cm
+                  WHERE cm.license_id = t.license_id
+                    AND cm.chat_id = t.chat_id
+                    AND cm.direction = 'inbound')`
+              : Prisma.empty
+          }`;
       return rows.map((r) => r.chat_id);
     });
   }

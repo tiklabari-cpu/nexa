@@ -204,6 +204,14 @@ interface State {
   connected: boolean;
   online: boolean;
   chatId: string | null;
+  /**
+   * The connection open in that chat (ID-02): the visitor's chat holds their
+   * whole day, and coming back the same day opens a further connection under
+   * the *same* chat id. What a closing prompt is about is therefore the chat
+   * and its connection — see `sameConversation`. Null when none is open, or
+   * not yet known (a chat adopted from a push before the next poll).
+   */
+  threadId: string | null;
   queuePosition: number | null;
   events: WidgetEvent[];
   /** Who the visitor is talking to, shown in the header (FR-MOD-11.3). */
@@ -249,7 +257,7 @@ interface State {
    * Null when the workspace configures no post-chat fields, or once a new
    * conversation starts.
    */
-  postChat: { chatId: string; submitted: boolean } | null;
+  postChat: { chatId: string; threadId: string | null; submitted: boolean } | null;
   postChatSubmitting: boolean;
   /** The last submit failed — the answers are still on screen to retry. */
   postChatError: boolean;
@@ -279,7 +287,7 @@ interface State {
    * prompt to a "thanks" state; voting again still posts (the server neither
    * blocks nor dedupes a second rating, so the UI does not either).
    */
-  rating: { chatId: string; value: 'good' | 'bad' | null } | null;
+  rating: { chatId: string; threadId: string | null; value: 'good' | 'bad' | null } | null;
   ratingSubmitting: boolean;
   /**
    * The visitor's chat has ended — by their own "End chat" (FR-MOD-11.4-b) or
@@ -295,6 +303,24 @@ interface State {
    * has answered.
    */
   fileSharingEnabled: boolean;
+}
+
+/**
+ * Whether a closing prompt (CSAT, post-chat form) belongs to the conversation
+ * now on screen (ID-02). Since the visitor's chat is their whole day, the same
+ * chat id comes back for a same-day return with a new connection under it, so
+ * the chat alone no longer tells "this conversation" from "the one before".
+ * A connection not yet known on either side (`null`) is not a difference: the
+ * chat decides, as it did before the day model.
+ */
+function sameConversation(
+  prompt: { chatId: string; threadId: string | null },
+  current: { chatId: string | null; threadId: string | null },
+): boolean {
+  if (prompt.chatId !== current.chatId) return false;
+  return (
+    prompt.threadId === null || current.threadId === null || prompt.threadId === current.threadId
+  );
 }
 
 export function mount(doc: Document = document, win: Window = window): void {
@@ -333,6 +359,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     connected: false,
     online: false,
     chatId: null,
+    threadId: null,
     queuePosition: null,
     events: [],
     agent: null,
@@ -663,13 +690,13 @@ export function mount(doc: Document = document, win: Window = window): void {
   }
 
   async function vote(value: 'good' | 'bad'): Promise<void> {
-    const chatId = state.rating?.chatId;
-    if (!chatId || state.ratingSubmitting) return;
+    const target = state.rating;
+    if (!target || state.ratingSubmitting) return;
     state.ratingSubmitting = true;
     renderRating();
     try {
       await api.rate(value);
-      state.rating = { chatId, value };
+      state.rating = { ...target, value };
     } catch (error) {
       // Fire-and-forget from the visitor's perspective, like `typing`/`trackSale`
       // above — a dropped vote is not worth surfacing as a chat-blocking error,
@@ -772,22 +799,27 @@ export function mount(doc: Document = document, win: Window = window): void {
 
   /**
    * Shared by `refresh`'s poll-based detection and `endChat`'s explicit
-   * request: raise 134.1's CSAT prompt for the chat that just ended. A rating
-   * already open for that same chat — voted early from the header menu — is
-   * left alone rather than reset (07.8-b's rule, unchanged here).
+   * request: raise 134.1's CSAT prompt for the conversation that just ended. A
+   * rating already open for that same conversation — voted early from the
+   * header menu — is left alone rather than reset (07.8-b's rule, unchanged
+   * here). "Conversation" is the chat and its connection (`sameConversation`).
    */
-  function noteChatClosed(previousChatId: string): void {
+  function noteChatClosed(previousChatId: string, previousThreadId: string | null): void {
     state.closed = true;
-    if (state.rating?.chatId !== previousChatId) {
-      state.rating = { chatId: previousChatId, value: null };
+    const ended = { chatId: previousChatId, threadId: previousThreadId };
+    if (!state.rating || !sameConversation(state.rating, ended)) {
+      state.rating = { ...ended, value: null };
     }
     // The post-chat form (FR-MOD-08.7.7) rides the same trigger, so it appears
     // however the conversation ended — the visitor's own "End chat", an agent
     // archiving it, or the idle sweep. Only when the workspace asks something;
-    // an already-open form for this chat is left as it is rather than reset,
-    // which would wipe answers a visitor is midway through typing.
-    if (state.postChatFields.length > 0 && state.postChat?.chatId !== previousChatId) {
-      state.postChat = { chatId: previousChatId, submitted: false };
+    // an already-open form for this conversation is left as it is rather than
+    // reset, which would wipe answers a visitor is midway through typing.
+    if (
+      state.postChatFields.length > 0 &&
+      (!state.postChat || !sameConversation(state.postChat, ended))
+    ) {
+      state.postChat = { ...ended, submitted: false };
       state.postChatError = false;
     }
   }
@@ -797,9 +829,11 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (!chatId) return;
     try {
       await api.close();
+      const threadId = state.threadId;
       state.chatId = null;
+      state.threadId = null;
       state.queuePosition = null;
-      noteChatClosed(chatId);
+      noteChatClosed(chatId, threadId);
       renderHeader();
       renderStatus();
       renderPostChat();
@@ -1398,6 +1432,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.connected = true;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
+      state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
       state.events = snapshot.events;
       pendingBubbleIds = [];
@@ -1657,27 +1692,30 @@ export function mount(doc: Document = document, win: Window = window): void {
     notePollAnswered();
     try {
       const previousChatId = state.chatId;
+      const previousThreadId = state.threadId;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
+      state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
 
       // The widget holds no socket (see `startPolling` below), so this poll is
       // the only signal that a conversation just ended — agent archive or the
       // idle-timeout sweep alike, same as the visitor's own "End chat"
       // (`endChat` above uses `noteChatClosed` directly instead of waiting for
-      // this poll to notice). One left over for an older chat — or the moment a
-      // fresh conversation starts — is cleared, since lingering over the new
-      // composer would be confusing.
+      // this poll to notice). One left over for an older conversation — or the
+      // moment a fresh one starts, a same-day return under the same chat id
+      // included (ID-02) — is cleared, since lingering over the new composer
+      // would be confusing.
       if (previousChatId && !state.chatId) {
-        noteChatClosed(previousChatId);
+        noteChatClosed(previousChatId, previousThreadId);
       } else if (state.chatId) {
         state.closed = false;
-        if (state.rating && state.rating.chatId !== state.chatId) {
+        if (state.rating && !sameConversation(state.rating, state)) {
           state.rating = null;
         }
         // A new conversation is underway — the previous one's questions no
         // longer belong on screen, answered or not.
-        if (state.postChat && state.postChat.chatId !== state.chatId) {
+        if (state.postChat && !sameConversation(state.postChat, state)) {
           state.postChat = null;
           state.postChatError = false;
         }
@@ -1894,9 +1932,11 @@ export function mount(doc: Document = document, win: Window = window): void {
   /** The conversation ended — the socket learned it before the next poll would. */
   function applyChatClosed(chatId: string): void {
     if (state.chatId !== chatId) return;
+    const threadId = state.threadId;
     state.chatId = null;
+    state.threadId = null;
     state.queuePosition = null;
-    noteChatClosed(chatId);
+    noteChatClosed(chatId, threadId);
     renderHeader();
     renderStatus();
     renderPostChat();
@@ -2105,11 +2145,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       menuOpen = false;
       renderMenu();
       if (!state.chatId) return;
-      // Reopen for the current chat without discarding an existing vote for it.
+      // Reopen for the current conversation without discarding an existing
+      // vote for it.
       state.rating =
-        state.rating?.chatId === state.chatId
+        state.rating && sameConversation(state.rating, state)
           ? state.rating
-          : { chatId: state.chatId, value: null };
+          : { chatId: state.chatId, threadId: state.threadId, value: null };
       renderRating();
     });
     ui.postchat.addEventListener('submit', (event) => {

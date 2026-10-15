@@ -12045,7 +12045,7 @@
           "285"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-15T16:55:46.245Z",
+        "updatedAt": "2026-10-15T18:45:17.571Z",
         "subtasks": [
           {
             "id": 1,
@@ -12079,13 +12079,13 @@
             "description": "Ajan yolları (POST /chats, resume önceki gün → bugünün chat'i), chat_access ekleme, sayaçlar, audit, listDayConnections kancası",
             "details": "resume eski günde continued_from_chat_id; customer-service sayaç \"gün/bağlantı\"; AI-02 için listDayConnections(tx, chatId, {excludeThreadId}).",
             "testStrategy": "Senaryo 9; rapor regresyonu.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "286.2"
             ],
             "parentId": "286",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-15T18:45:17.571Z"
           },
           {
             "id": 4,

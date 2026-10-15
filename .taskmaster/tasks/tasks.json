@@ -11971,7 +11971,7 @@
             "description": "Kiracı bazlı tavan (licenses.ai_daily_*_cap override → plan → env) + ai_usage_events defteri + test meter'ları",
             "details": "XHIGH GEREKÇESİ: (2) para doğruluğu — kota ve kullanım ölçümü. Migration: licenses nullable cap kolonları, ai_usage_events (RLS, (license_id, at desc)), ai_daily_usage meter CHECK genişletmesi. Tek SQL ifadesinde kontrol+artırma korunur.",
             "testStrategy": "Tavan önceliği birim; eşzamanlı rezerv entegrasyon; RLS negatif.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "283.1"
             ],

@@ -12045,7 +12045,7 @@
           "285"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-15T18:45:17.571Z",
+        "updatedAt": "2026-10-15T20:46:47.308Z",
         "subtasks": [
           {
             "id": 1,
@@ -12093,13 +12093,13 @@
             "description": "Web: günün bütün bağlantıları ayırıcıyla, ThreadHeader Thread ID + aktif Chat ID, \"Bugünkü bağlantılar\", satırda \"N bağlantı\"; mobil ayırıcı",
             "details": "useInbox yalnız en yeni thread yerine günün bağlantılarını sırayla yükler; ids i18n (#284).",
             "testStrategy": "Web birim; e2e inbox.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "286.3"
             ],
             "parentId": "286",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-15T20:46:47.308Z"
           },
           {
             "id": 5,

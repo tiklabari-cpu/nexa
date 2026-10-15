@@ -1054,7 +1054,13 @@ components:
       type: object
       required: [id, license_id, customer_id, active, created_at, access, users]
       properties:
-        id: { type: string, description: "Short base32 token, e.g. TJ1H8CFKRV." }
+        id:
+          type: string
+          description: |
+            Short base32 token, e.g. TJ1H8CFKRV. Panelde: Thread ID (günlük) —
+            the member's conversation container for the day; every connection
+            (`Thread`) of that day sits under it. The field name does not change;
+            only the panel's label does (docs/adr/conversation-day-ids.md).
         license_id: { type: string }
         customer_id: { type: string, format: uuid }
         active: { type: boolean }
@@ -1084,12 +1090,17 @@ components:
       type: object
       required: [id, customer_id, active, created_at]
       properties:
-        id: { type: string }
+        id:
+          type: string
+          description: "Panelde: Thread ID (günlük) — the same `chat_id` token as `Chat.id`."
         customer_id: { type: string, format: uuid }
         customer_name: { type: string, nullable: true }
         active: { type: boolean }
         created_at: { type: string, format: date-time }
-        thread_id: { type: string, nullable: true }
+        thread_id:
+          type: string
+          nullable: true
+          description: "Panelde: Chat ID (bağlantı) — the most recent connection of this day."
         assignee_id: { type: string, format: uuid, nullable: true }
         queue_position: { type: integer, nullable: true }
         unread_count: { type: integer }
@@ -1117,8 +1128,12 @@ components:
       type: object
       required: [id, chat_id, active, created_at]
       properties:
-        id: { type: string }
-        chat_id: { type: string }
+        id:
+          type: string
+          description: "Panelde: Chat ID (bağlantı) — one connection (`thread_id`)."
+        chat_id:
+          type: string
+          description: "Panelde: Thread ID (günlük) — the day container this connection sits under."
         active: { type: boolean }
         assignee_id: { type: string, format: uuid, nullable: true }
         queue_position: { type: integer, nullable: true }
@@ -1196,8 +1211,12 @@ components:
         id:
           type: string
           description: "`<thread_id>_<sequence>` — ordering is decidable from the id alone."
-        chat_id: { type: string }
-        thread_id: { type: string }
+        chat_id:
+          type: string
+          description: "Panelde: Thread ID (günlük)."
+        thread_id:
+          type: string
+          description: "Panelde: Chat ID (bağlantı)."
         type:
           type: string
           enum: [message, system_message, rich_message, file, filled_form]
@@ -2229,6 +2248,9 @@ components:
         A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
         deliberately absent — it is returned only once, by the register call
         (see `WebhookRegistration`).
+
+        Delivery payloads keep the code names: `chat_id` is the panel's
+        "Thread ID (günlük)", `thread_id` the panel's "Chat ID (bağlantı)".
       required: [id, url, action, type, enabled, created_at, app_id]
       properties:
         id: { type: string, format: uuid }
@@ -7304,7 +7326,7 @@ components:
       name: chatId
       in: path
       required: true
-      description: Short base32 chat token.
+      description: "Short base32 chat token. Panelde: Thread ID (günlük)."
       schema: { type: string, minLength: 10, maxLength: 12 }
     ChannelTypePath:
       name: type

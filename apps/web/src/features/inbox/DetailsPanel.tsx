@@ -179,7 +179,8 @@ export function DetailsPanel({
               }
             />
           </Row>
-          <Row label={t('inbox.details.row.chatId')}>
+          {/* The code's `chat_id` is the day container, named by the ids catalogue (ID-01, K1 = A). */}
+          <Row label={t('ids.thread.label')} hint={t('ids.thread.hint')}>
             <span className="select-all font-mono text-2xs">{chat.id}</span>
           </Row>
           <Row label={t('inbox.details.row.assignee')}>
@@ -628,10 +629,21 @@ function TakeoverModal({
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }): ReactElement {
+function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  /** A one-line "what is this" shown as the label's tooltip. */
+  hint?: string;
+  children: React.ReactNode;
+}): ReactElement {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-xs text-content-secondary">{label}</span>
+      <span title={hint} className="text-xs text-content-secondary">
+        {label}
+      </span>
       {children}
     </div>
   );

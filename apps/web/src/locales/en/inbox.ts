@@ -222,7 +222,6 @@ export const inbox: Messages = {
   'inbox.details.row.status': 'Status',
   'inbox.details.status.active': 'Active',
   'inbox.details.status.archived': 'Archived',
-  'inbox.details.row.chatId': 'Chat ID',
   'inbox.details.row.assignee': 'Assignee',
   'inbox.details.assignee.assigned': 'Assigned',
   'inbox.details.assignee.unassigned': 'Unassigned',

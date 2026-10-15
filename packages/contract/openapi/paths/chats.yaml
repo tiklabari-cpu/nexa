@@ -187,7 +187,7 @@ events:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"
       - name: thread_id
         in: query
-        description: Defaults to the most recent thread.
+        description: "Defaults to the most recent thread. Panelde: Chat ID (bağlantı)."
         schema: { type: string }
       - name: after_event_id
         in: query

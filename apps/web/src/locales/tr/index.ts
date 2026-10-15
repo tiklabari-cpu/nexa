@@ -6,6 +6,7 @@ import { billing } from './billing.js';
 import { common } from './common.js';
 import { customers } from './customers.js';
 import { home } from './home.js';
+import { ids } from './ids.js';
 import { inbox } from './inbox.js';
 import { playbook } from './playbook.js';
 import { reports } from './reports.js';
@@ -22,6 +23,7 @@ export const trNamespaces: Record<Namespace, Messages> = {
   common,
   customers,
   home,
+  ids,
   inbox,
   playbook,
   reports,

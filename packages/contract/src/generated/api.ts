@@ -8364,7 +8364,12 @@ export interface components {
       organization_id?: string;
     };
     Chat: {
-      /** @description Short base32 token, e.g. TJ1H8CFKRV. */
+      /**
+       * @description Short base32 token, e.g. TJ1H8CFKRV. Panelde: Thread ID (günlük) —
+       *     the member's conversation container for the day; every connection
+       *     (`Thread`) of that day sits under it. The field name does not change;
+       *     only the panel's label does (docs/adr/conversation-day-ids.md).
+       */
       id: string;
       license_id: string;
       /** Format: uuid */
@@ -8387,6 +8392,7 @@ export interface components {
       visitor?: components['schemas']['ChatVisitor'] | null;
     };
     ChatSummary: {
+      /** @description Panelde: Thread ID (günlük) — the same `chat_id` token as `Chat.id`. */
       id: string;
       /** Format: uuid */
       customer_id: string;
@@ -8394,6 +8400,7 @@ export interface components {
       active: boolean;
       /** Format: date-time */
       created_at: string;
+      /** @description Panelde: Chat ID (bağlantı) — the most recent connection of this day. */
       thread_id?: string | null;
       /** Format: uuid */
       assignee_id?: string | null;
@@ -8414,7 +8421,9 @@ export interface components {
       avatar_url?: string | null;
     };
     Thread: {
+      /** @description Panelde: Chat ID (bağlantı) — one connection (`thread_id`). */
       id: string;
+      /** @description Panelde: Thread ID (günlük) — the day container this connection sits under. */
       chat_id: string;
       active: boolean;
       /** Format: uuid */
@@ -8476,7 +8485,9 @@ export interface components {
     Event: {
       /** @description `<thread_id>_<sequence>` — ordering is decidable from the id alone. */
       id: string;
+      /** @description Panelde: Thread ID (günlük). */
       chat_id: string;
+      /** @description Panelde: Chat ID (bağlantı). */
       thread_id: string;
       /** @enum {string} */
       type: 'message' | 'system_message' | 'rich_message' | 'file' | 'filled_form';
@@ -9321,6 +9332,9 @@ export interface components {
      * @description A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
      *     deliberately absent — it is returned only once, by the register call
      *     (see `WebhookRegistration`).
+     *
+     *     Delivery payloads keep the code names: `chat_id` is the panel's
+     *     "Thread ID (günlük)", `thread_id` the panel's "Chat ID (bağlantı)".
      */
     Webhook: {
       /** Format: uuid */
@@ -13456,7 +13470,7 @@ export interface components {
   parameters: {
     /** @description Opaque keyset cursor from the previous page. */
     PageId: string;
-    /** @description Short base32 chat token. */
+    /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
     ChatId: string;
     /** @description The adapter channel. */
     ChannelTypePath: components['schemas']['ChannelType'];
@@ -15165,7 +15179,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15188,7 +15202,7 @@ export interface operations {
   listEvents: {
     parameters: {
       query?: {
-        /** @description Defaults to the most recent thread. */
+        /** @description Defaults to the most recent thread. Panelde: Chat ID (bağlantı). */
         thread_id?: string;
         /** @description Return only events following this one, in the same thread. */
         after_event_id?: string;
@@ -15204,7 +15218,7 @@ export interface operations {
       };
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15232,7 +15246,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15279,7 +15293,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
         /** @description `<thread_id>_<sequence>`, as returned by the send. */
         eventId: string;
@@ -15320,7 +15334,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15353,7 +15367,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15386,7 +15400,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15438,7 +15452,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15479,7 +15493,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15504,7 +15518,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15527,7 +15541,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15559,7 +15573,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
         tagName: string;
       };
@@ -15582,7 +15596,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        /** @description Short base32 chat token. */
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
         chatId: components['parameters']['ChatId'];
       };
       cookie?: never;
@@ -15850,6 +15864,7 @@ export interface operations {
             id: string;
             /** @enum {string} */
             value: 'good' | 'bad';
+            /** @description Panelde: Thread ID (günlük). */
             chat_id: string;
           };
         };

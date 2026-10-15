@@ -205,7 +205,6 @@ export const inbox: Messages = {
   'inbox.details.row.status': 'Durum',
   'inbox.details.status.active': 'Etkin',
   'inbox.details.status.archived': 'Arşivlendi',
-  'inbox.details.row.chatId': 'Sohbet kimliği',
   'inbox.details.row.assignee': 'Atanan',
   'inbox.details.assignee.assigned': 'Atandı',
   'inbox.details.assignee.unassigned': 'Atanmadı',

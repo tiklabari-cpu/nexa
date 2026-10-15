@@ -51,7 +51,12 @@ export function ThreadHeader({
         {name}
       </h2>
       {!narrow && (
-        <span className="shrink-0 font-mono text-2xs text-content-tertiary">{chatId}</span>
+        <span
+          title={`${t('ids.thread.label')} — ${t('ids.thread.hint')}`}
+          className="shrink-0 font-mono text-2xs text-content-tertiary"
+        >
+          {chatId}
+        </span>
       )}
       <StatusDot
         compact={narrow}

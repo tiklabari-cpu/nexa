@@ -19,8 +19,8 @@
 const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 export const SHORT_ID_LENGTH = 10;
 
-const SHORT_ID_RE = new RegExp(`^[${CROCKFORD_ALPHABET}]{${SHORT_ID_LENGTH}}$`);
-const EVENT_ID_RE = new RegExp(`^[${CROCKFORD_ALPHABET}]{${SHORT_ID_LENGTH}}_\\d{1,12}$`);
+export const SHORT_ID_RE = new RegExp(`^[${CROCKFORD_ALPHABET}]{${SHORT_ID_LENGTH}}$`);
+export const EVENT_ID_RE = new RegExp(`^[${CROCKFORD_ALPHABET}]{${SHORT_ID_LENGTH}}_\\d{1,12}$`);
 
 /** Injectable so tests can supply deterministic bytes. */
 export type RandomBytes = (size: number) => Uint8Array;
@@ -95,7 +95,7 @@ export function compareEventIds(a: string, b: string): number {
   return pa.sequence - pb.sequence;
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value);

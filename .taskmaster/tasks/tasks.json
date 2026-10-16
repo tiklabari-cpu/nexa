@@ -12129,7 +12129,7 @@
           "284"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-16T01:24:56.433Z",
+        "updatedAt": "2026-10-16T02:45:49.888Z",
         "subtasks": [
           {
             "id": 1,
@@ -12163,13 +12163,13 @@
             "description": "Widget: partitioned CHIPS çerez, localStorage yedeği, gönderim; logout",
             "details": "XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — kimlik saklama. iOS/Safari kısıtları notu.",
             "testStrategy": "Widget birim testleri; e2e.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "287.2"
             ],
             "parentId": "287",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-16T02:45:49.888Z"
           },
           {
             "id": 4,

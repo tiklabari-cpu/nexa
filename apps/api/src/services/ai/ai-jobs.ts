@@ -23,9 +23,16 @@
  * worker's (tm 289.3). The fence stops a stale worker from *recording* a
  * result; only the idempotency check before sending stops it from *sending*
  * one (ADR-11a §2.6).
+ *
+ * A job gets in through the outbox (tm 289.2 · ADR-11a §2.1):
+ * {@link enqueueAiJob}, handed to `ChatService` as {@link aiJobOutbox}, writes
+ * it in the visitor message's own transaction — a committed message has its
+ * job, a rolled-back one has none.
  */
 import type { PrismaClient } from '@prisma/client';
+import { isAcceptableRequestId } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import type { EventOutbox } from '../chat/chat-service.js';
 
 /** `ai_jobs_kind_check`. One kind for now (ADR-11a §2.9). */
 export const AI_JOB_KINDS = ['visitor_message'] as const;
@@ -45,6 +52,97 @@ export const AI_JOB_OUTCOME_RE = /^[a-z][a-z0-9_]{0,63}$/;
 export const AI_JOB_CLAIM_MAX_LIMIT = 100;
 export const AI_JOB_MAX_LEASE_MS = 3_600_000;
 export const AI_JOB_MAX_RETRY_AFTER_MS = 3_600_000;
+
+/**
+ * Unfinished jobs (`pending` or `running`) one chat may hold before its next
+ * one is written `expired` at the door (ADR-11a §2.5) — the durable
+ * `MAX_FOLLOW_UPS_PER_KEY`, counted the same way, the running one included.
+ */
+export const AI_JOB_MAX_UNFINISHED_PER_CHAT = 20;
+
+/** The outcome of a job expired at the door: its chat was too far behind. */
+export const AI_JOB_BACKLOG_OUTCOME = 'chat_backlog';
+
+export interface EnqueueAiJobInput {
+  /** The day container (panel "Thread ID"). */
+  chatId: string;
+  /** The connection (panel "Chat ID") the visitor wrote on. */
+  threadId: string;
+  /** The visitor event the reply is owed to. */
+  triggerEventId: string;
+  kind?: AiJobKind;
+  /**
+   * The request that wrote the message, for the job's log lines. One that is
+   * not a valid request id is left out rather than refused: correlation is
+   * not worth the visitor's message.
+   */
+  requestId?: string | null;
+}
+
+/** The job the outbox wrote: `pending`, or `expired` when its chat was backed up. */
+export interface EnqueuedAiJob {
+  id: string;
+  state: 'pending' | 'expired';
+}
+
+/**
+ * Write the job `input.triggerEventId` is owed, inside `tx` — the transaction
+ * that wrote the message, so the two commit or roll back together. Call it
+ * after the event is appended (`ChatService` calls an {@link EventOutbox}
+ * there): the append has locked the chat row, so jobs of one chat are created
+ * in the order their messages were, and the backlog count below is exact.
+ *
+ * A chat already holding {@link AI_JOB_MAX_UNFINISHED_PER_CHAT} unfinished
+ * jobs gets this one `expired` with {@link AI_JOB_BACKLOG_OUTCOME}: the
+ * message stays in the inbox for a human, as with every other failure on this
+ * path, and the row says so. One statement, one round trip on the visitor's
+ * send. A second job for the same message is refused by the unique index —
+ * and takes the message down with it, which is the point of writing both in
+ * one transaction.
+ */
+export async function enqueueAiJob(
+  tx: TenantClient,
+  tenant: TenantContext,
+  input: EnqueueAiJobInput,
+): Promise<EnqueuedAiJob> {
+  const kind = input.kind ?? 'visitor_message';
+  const requestId = isAcceptableRequestId(input.requestId) ? input.requestId : null;
+  const rows = await tx.$queryRaw<EnqueuedAiJob[]>`
+    INSERT INTO ai_jobs (id, license_id, organization_id, chat_id, thread_id,
+                         trigger_event_id, kind, state, finished_at, outcome, request_id)
+    SELECT gen_random_uuid(), ${tenant.licenseId}, ${tenant.organizationId}::uuid,
+           ${input.chatId}, ${input.threadId}, ${input.triggerEventId}, ${kind},
+           CASE WHEN backlog.at_limit THEN 'expired' ELSE 'pending' END,
+           CASE WHEN backlog.at_limit THEN clock_timestamp() END,
+           CASE WHEN backlog.at_limit THEN ${AI_JOB_BACKLOG_OUTCOME}::text END,
+           ${requestId}::text
+      FROM (SELECT count(*) >= ${AI_JOB_MAX_UNFINISHED_PER_CHAT}::int AS at_limit
+              FROM (SELECT 1 FROM ai_jobs
+                     WHERE chat_id = ${input.chatId} AND state IN ('pending', 'running')
+                     LIMIT ${AI_JOB_MAX_UNFINISHED_PER_CHAT}::int) unfinished) backlog
+    RETURNING id, state`;
+  return rows[0]!;
+}
+
+/**
+ * The outbox for a visitor's message: pass it to `openOrContinueConnection`
+ * (or `sendEvent` / `start`) and the job is written with the message. To see
+ * whether it was expired at the door, call {@link enqueueAiJob} from your own
+ * {@link EventOutbox} instead.
+ */
+export function aiJobOutbox(
+  options: { requestId?: string | null; kind?: AiJobKind } = {},
+): EventOutbox {
+  return async (tx, written) => {
+    await enqueueAiJob(tx, written.tenant, {
+      chatId: written.chatId,
+      threadId: written.threadId,
+      triggerEventId: written.event.id,
+      ...(options.kind ? { kind: options.kind } : {}),
+      requestId: options.requestId ?? null,
+    });
+  };
+}
 
 /** A job this worker now holds. */
 export interface AiJobClaim {

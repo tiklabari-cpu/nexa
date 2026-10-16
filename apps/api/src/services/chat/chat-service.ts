@@ -152,7 +152,37 @@ export interface ConnectionInput {
    * close is recorded as the system's, built from it with the person removed.
    */
   audit: AuditContext;
+  /** Written with the message, in its transaction (ADR-11a §2.1 — see {@link EventOutbox}). */
+  outbox?: EventOutbox;
 }
+
+/** An event a write has just appended, as its {@link EventOutbox} sees it. */
+export interface OutboxEvent {
+  tenant: TenantContext;
+  /** The day container (panel "Thread ID"). */
+  chatId: string;
+  /** The connection (panel "Chat ID") the event landed in. */
+  threadId: string;
+  event: SerialisedEvent;
+  /** How the connection came to exist when this write opened it; null when it continued one. */
+  openedVia: ConnectionOpenedVia | null;
+}
+
+/**
+ * Something that must commit with an event or not at all — the outbox
+ * (ADR-11a §2.1 · tm 289.2): the AI job a visitor's message is owed. `start`,
+ * `sendEvent` and `openOrContinueConnection` open their own transaction, so
+ * this is how a caller puts a write into it.
+ *
+ * Called inside that transaction right after the event is appended, which is
+ * after the chat row and the thread's sequence are locked: whatever it writes
+ * for one chat is written in the order the events were (`ai_jobs.created_at`
+ * is that order). If it throws, the event rolls back with it. Never called for
+ * a replay, which writes nothing; called again on a race retry, whose first
+ * attempt rolled back along with whatever this wrote — so it writes through
+ * `tx` and nowhere else.
+ */
+export type EventOutbox = (tx: TenantClient, written: OutboxEvent) => Promise<void>;
 
 /** What a visitor's message did (ID-02). */
 export interface ConnectionResult {
@@ -476,6 +506,8 @@ export class ChatService {
        * rollover close as the system's, built from it with the person removed.
        */
       audit: AuditContext;
+      /** Written with `initialEvent`, in its transaction; unused without one ({@link EventOutbox}). */
+      outbox?: EventOutbox;
     },
   ): Promise<{ chat: ChatDetail; created: boolean }> {
     // One instant for both attempts, as on the visitor's path.
@@ -577,6 +609,7 @@ export class ChatService {
       initialEvent?: NewEventInput;
       routing?: RoutingContext;
       audit: AuditContext;
+      outbox?: EventOutbox;
     },
     now: Date,
   ): Promise<StartOutcome> {
@@ -662,6 +695,13 @@ export class ChatService {
             ...input.initialEvent,
             recipients: recipientsFor(principal, input.initialEvent.recipients ?? 'all'),
           },
+        });
+        await input.outbox?.(tx, {
+          tenant,
+          chatId,
+          threadId,
+          event: initial,
+          openedVia: 'agent_start',
         });
 
         // Registered under the same key `sendEvent` checks.
@@ -931,8 +971,14 @@ export class ChatService {
       ...input.event,
       recipients: recipientsFor(principal, input.event.recipients),
     };
-    const append = (tx: TenantClient, chatId: string, threadId: string) =>
-      this.#appendEvent(tx, {
+    // The outbox right behind the append, inside the locks it took.
+    const append = async (
+      tx: TenantClient,
+      chatId: string,
+      threadId: string,
+      openedVia: ConnectionOpenedVia | null,
+    ) => {
+      const event = await this.#appendEvent(tx, {
         licenseId: tenant.licenseId,
         chatId,
         threadId,
@@ -940,6 +986,9 @@ export class ChatService {
         authorType,
         input: message,
       });
+      await input.outbox?.(tx, { tenant, chatId, threadId, event, openedVia });
+      return event;
+    };
 
     return withTenant(this.db, tenant, async (tx) => {
       const customer = await tx.customer.findUnique({
@@ -974,7 +1023,7 @@ export class ChatService {
         if (await openChatTakesMessage(tx, open, openThread, now, day)) {
           const replay = await this.#replayedEvent(tx, tenant, [open.id], message.idempotencyKey);
           if (replay) return { kind: 'replayed', chat: open, event: replay };
-          const event = await append(tx, open.id, openThread.id);
+          const event = await append(tx, open.id, openThread.id, null);
           return { kind: 'continued', chat: open, event, recipients: message.recipients };
         }
       }
@@ -1028,7 +1077,7 @@ export class ChatService {
             metadata: { opened_via: openedVia },
           },
         });
-        const event = await append(tx, dayChat.id, threadId);
+        const event = await append(tx, dayChat.id, threadId, openedVia);
         const chat = await tx.chat.findUniqueOrThrow({
           where: { id: dayChat.id },
           include: chatInclude,
@@ -1048,7 +1097,7 @@ export class ChatService {
         openedVia,
       });
       const threadId = created.threads[0]!.id;
-      const event = await append(tx, created.id, threadId);
+      const event = await append(tx, created.id, threadId, openedVia);
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: created.id },
         include: chatInclude,
@@ -1189,6 +1238,8 @@ export class ChatService {
     principal: Principal,
     chatId: string,
     input: NewEventInput,
+    /** `outbox` is written with the event, in its transaction ({@link EventOutbox}). */
+    options: { outbox?: EventOutbox } = {},
   ): Promise<{ event: SerialisedEvent; replayed: boolean }> {
     // Idempotency is checked before the transaction so a retry costs one Redis
     // read rather than a write transaction that then has to be rolled back.
@@ -1225,6 +1276,13 @@ export class ChatService {
         authorId: actorOf(principal),
         authorType,
         input: { ...input, recipients },
+      });
+      await options.outbox?.(tx, {
+        tenant,
+        chatId: chat.id,
+        threadId: thread.id,
+        event,
+        openedVia: null,
       });
 
       // First agent reply drives the first-response-time report; recorded here

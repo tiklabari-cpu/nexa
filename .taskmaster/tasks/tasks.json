@@ -12368,7 +12368,7 @@
           "290"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-16T20:15:55.838Z",
+        "updatedAt": "2026-10-16T22:08:07.190Z",
         "subtasks": [
           {
             "id": 1,
@@ -12376,11 +12376,11 @@
             "description": "ai_conversations tablosu + RLS + state-store (iyimser kilit, sürüm)",
             "details": "Alanlar yukarıda; tenant-isolation negatif testi.",
             "testStrategy": "RLS negatif; kilit birim testi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "292",
             "priority": "high",
-            "updatedAt": "2026-10-16T20:15:55.838Z"
+            "updatedAt": "2026-10-16T22:08:07.190Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-16T20:15:55.838Z",
+      "lastModified": "2026-10-16T22:08:07.191Z",
       "taskCount": 390,
       "completedCount": 290,
       "tags": [

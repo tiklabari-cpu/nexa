@@ -54,10 +54,12 @@ MAX_CONSEC_TASK_FAILS="${LOOP_MAX_CONSEC_TASK_FAILS:-3}"
 ALLOW=""                   # gerekirse: '--allowedTools Bash(git *),Bash(pnpm *)'
 
 # --- Kod haritası (codebase-memory-mcp, 2026-10-16) ---------------------------
-# Görev pencereleri projenin .mcp.json'ını YÜKLEMİYOR (tm 288.1 açılışında taskmaster-ai bile
-# yoktu), harita bu yüzden açık --mcp-config ile verilir. --strict-mcp-config kullanıcı
-# düzeyindeki sunucuları (Gmail, Canva, …) pencereden çıkarır: 270–288 arası hiçbiri çağrılmadı
-# ve otonom pencerenin kişisel hesaplara erişmesi istenmez. Program yoksa pencere haritasız açılır.
+# Harita açık --mcp-config ile verilir; --strict-mcp-config kullanıcı düzeyindeki sunucuları
+# (Gmail, Canva, …) ve projenin .mcp.json'ını pencereden çıkarır: 270–288 arası hiçbiri
+# çağrılmadı ve otonom pencerenin kişisel hesaplara erişmesi istenmez. (Not: .mcp.json
+# pencerelerde YÜKLENİYOR — tm 288.2'de codebase-memory source=project bağlandı; taskmaster-ai'nin
+# yokluğu .claude/settings.local.json disabledMcpjsonServers yüzündendi.) Program yoksa
+# pencere haritasız açılır.
 # Yenileme: scripts/loop/cbm-refresh.sh (döngü başı + her BİTTİ sonrası); kurallar TASK-RUNNER-PROMPT §0.7.
 CBM_REFRESH="scripts/loop/cbm-refresh.sh"
 CBM_BIN="${CBM_BIN:-$(cygpath -m "${LOCALAPPDATA:-}" 2>/dev/null)/nexa-tools/cbm/bin/codebase-memory-mcp.exe}"

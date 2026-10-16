@@ -8491,6 +8491,8 @@ export interface components {
       };
       scheduler?: components['schemas']['SchedulerHealth'];
       event_partitions?: components['schemas']['EventPartitionsHealth'];
+      /** @description Null when the queue could not be read. */
+      ai_jobs?: components['schemas']['AiJobsHealth'] | null;
       providers?: components['schemas']['HealthProviders'];
     };
     /**
@@ -8644,6 +8646,24 @@ export interface components {
          */
         error_code: string;
       }[];
+    };
+    /**
+     * @description The durable AI job queue (tm 289.5 · ADR-11a · GV-02), across every
+     *     workspace: the replies visitor messages are still owed. A queue that
+     *     grows, or whose oldest job keeps ageing, means no worker is taking
+     *     jobs; past 120 s a job is handed to a person instead of answered.
+     *     Body only, never the status code.
+     */
+    AiJobsHealth: {
+      /** @description Jobs waiting for a worker, those handed back for a retry included. */
+      pending: number;
+      /** @description Jobs a worker holds right now. */
+      running: number;
+      /**
+       * @description Seconds since the oldest unfinished (`pending` or `running`) job
+       *     was written, by the database's clock. Null when there is none.
+       */
+      oldest_age_s: number | null;
     };
     /**
      * @description Which implementation each mockable dependency (M-ENV-b · §D113/K3)

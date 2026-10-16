@@ -32,6 +32,7 @@
 import type { FastifyInstance } from 'fastify';
 import { roleAtLeast } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
+import { type AiJobsHealth, readAiJobsHealth } from '../services/ai/ai-jobs.js';
 
 interface DependencyHealth {
   status: 'up' | 'down';
@@ -142,6 +143,27 @@ export default async function healthRoutes(
         return reply.status(healthy ? 200 : 503).send({ status, service: 'api' });
       }
 
+      // The durable AI job queue across every workspace (tm 289.5 · GV-02):
+      // how many replies are owed and how long the oldest has waited. Read
+      // only for an admin, and only when the database answered the probe.
+      // Body only — a queue that is behind does not stop this process serving,
+      // and a reading that fails or times out is `null`, not a 503.
+      let aiJobs: AiJobsHealth | null = null;
+      if (database.status === 'up') {
+        let timer: NodeJS.Timeout | undefined;
+        aiJobs = await Promise.race([
+          readAiJobsHealth(app.db),
+          new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), PROBE_TIMEOUT_MS);
+          }),
+        ])
+          .catch((error: unknown) => {
+            request.log.warn({ err: error }, 'ai job queue could not be read for /health');
+            return null;
+          })
+          .finally(() => clearTimeout(timer));
+      }
+
       return reply.status(healthy ? 200 : 503).send({
         status,
         service: 'api',
@@ -160,6 +182,7 @@ export default async function healthRoutes(
         // only, never the status code — the process still serves, and a
         // restart fixes nothing.
         event_partitions: app.eventPartitions.snapshot(),
+        ai_jobs: aiJobs,
         // Which implementation each mockable dependency currently runs (M-ENV-b ·
         // §D113/K3) — read straight off the validated env, so this can never drift
         // from what `server.ts` actually built the factories with.

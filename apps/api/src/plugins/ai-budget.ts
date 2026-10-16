@@ -28,6 +28,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
+import type { TenantContext } from '../lib/tenant.js';
 import type { AiDailyBudget } from '../services/ai/ai-daily-budget.js';
 
 declare module 'fastify' {
@@ -37,6 +38,14 @@ declare module 'fastify' {
      * for this workspace. A no-op when no provider is counted.
      */
     requireAiBudget: () => Promise<void>;
+  }
+
+  interface FastifyInstance {
+    /**
+     * The same question for a caller that is not a request — the AI job
+     * worker, answering a visitor's message after its response (tm 289.5).
+     */
+    requireAiBudget: (tenant: TenantContext) => Promise<void>;
   }
 
   interface FastifyContextConfig {
@@ -60,9 +69,12 @@ export interface AiBudgetPluginOptions {
 async function aiBudgetPlugin(app: FastifyInstance, options: AiBudgetPluginOptions): Promise<void> {
   const { budget, metered, minimum } = options;
 
-  app.decorateRequest('requireAiBudget', async function (this: FastifyRequest): Promise<void> {
+  app.decorate('requireAiBudget', async (tenant: TenantContext): Promise<void> => {
     if (!metered) return;
-    await budget.check(this.tenant(), 'llm', minimum);
+    await budget.check(tenant, 'llm', minimum);
+  });
+  app.decorateRequest('requireAiBudget', async function (this: FastifyRequest): Promise<void> {
+    await app.requireAiBudget(this.tenant());
   });
 
   app.addHook('preHandler', async (request: FastifyRequest) => {

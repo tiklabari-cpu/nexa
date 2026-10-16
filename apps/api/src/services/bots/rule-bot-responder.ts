@@ -15,15 +15,19 @@
  * been with no automation at all, and the reply is authored as a *bot*
  * principal, which is what makes the event `author_type: 'bot'`.
  *
- * One thing it deliberately does NOT borrow: `request.requireAiInference()`.
+ * One thing it deliberately does NOT borrow: `turn.requireAiInference()`.
  * That gate exists because a route is about to send workspace content to a model
  * provider (NFR-C4 · C4-e). This path sends nothing anywhere — the match happens
  * in process against the workspace's own rules, and the reply is text the
  * workspace itself typed — so gating it would switch off a non-AI feature for
  * every HIPAA-covered workspace on a data-residency question it does not raise.
+ *
+ * It runs in the AI job worker, in the same job as the AI Agent and the
+ * assignee's notice (tm 289.5): its reply carries the job's mark and is written
+ * with the job's fence (`turn.replyProperties`, `turn.replyOutbox`), so a
+ * message is answered once whichever of the two answers it.
  */
-import type { FastifyRequest } from 'fastify';
-import { bindChatLogContext } from '../../plugins/log-context.js';
+import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
@@ -53,18 +57,14 @@ export class RuleBotResponder {
    * when no rule matched.
    */
   async handle(
-    request: FastifyRequest,
-    chatId: string,
+    turn: VisitorTurn,
     message: string,
     pageUrl: string | null,
   ): Promise<RuleBotOutcome | null> {
-    const tenant = request.tenant();
-    // The chat every line below is about (ID-08) — already bound by the
-    // customer route, with the connection, so normally a no-op.
-    bindChatLogContext(request, { chatId });
+    const { tenant, chatId } = turn;
 
     try {
-      const match = await request.withTenant((tx) =>
+      const match = await turn.withTenant((tx) =>
         selectRuleBotMatch(tx, tenant, { chatId, message, pageUrl }, new Date()),
       );
       if (!match) return null;
@@ -73,11 +73,18 @@ export class RuleBotResponder {
       let tookOver = false;
 
       if (match.actions.send_message) {
-        await this.chats.sendEvent(tenant, principal, chatId, {
-          type: 'message',
-          text: match.actions.send_message,
-          recipients: 'all',
-        });
+        await this.chats.sendEvent(
+          tenant,
+          principal,
+          chatId,
+          {
+            type: 'message',
+            text: match.actions.send_message,
+            recipients: 'all',
+            properties: { ...turn.replyProperties },
+          },
+          { outbox: turn.replyOutbox },
+        );
         tookOver = true;
       }
 
@@ -87,7 +94,7 @@ export class RuleBotResponder {
         await this.chats
           .tagThread(tenant, principal, chatId, match.actions.add_tag)
           .catch((error: unknown) =>
-            request.log.warn(
+            turn.log.warn(
               { err: error, tag: match.actions.add_tag, bot_id: match.botId },
               'rule bot could not apply tag',
             ),
@@ -96,7 +103,7 @@ export class RuleBotResponder {
 
       if (match.actions.transfer_to_group_id != null) {
         const transferred = await this.#transfer(
-          request,
+          turn,
           principal,
           chatId,
           BigInt(match.actions.transfer_to_group_id),
@@ -110,21 +117,24 @@ export class RuleBotResponder {
 
       return { ...match, tookOver };
     } catch (error) {
+      // Not a failure: the job may not answer this message (it has its answer,
+      // or another claim holds the job). The worker decides what that means.
+      if (error instanceof AiJobReplyRefusedError) throw error;
       // The customer's message is already stored. Whatever went wrong, the
       // conversation is intact and the AI — then a human — still gets it.
-      request.log.error({ err: error }, 'rule bot failed');
+      turn.log.error({ err: error }, 'rule bot failed');
       return null;
     }
   }
 
   /** Hand the conversation to a team. False when it could not be done. */
   async #transfer(
-    request: FastifyRequest,
+    turn: VisitorTurn,
     principal: BotPrincipal,
     chatId: string,
     groupId: bigint,
   ): Promise<boolean> {
-    const tenant = request.tenant();
+    const tenant = turn.tenant;
     try {
       await this.chats.transfer(tenant, principal, chatId, {
         groupId,
@@ -134,7 +144,7 @@ export class RuleBotResponder {
         reason: 'bot_handoff',
       });
     } catch (error) {
-      request.log.warn(
+      turn.log.warn(
         { err: error, group_id: String(groupId) },
         'rule bot could not transfer the chat',
       );

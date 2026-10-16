@@ -12,7 +12,7 @@
  */
 import { isMailLocale } from '../services/mail/templates/layout.js';
 import { visitorMessageMail } from '../services/mail/templates/messages.js';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
@@ -23,6 +23,7 @@ import {
   SNEAK_PEEK_MAX_LENGTH,
   typingStateKey,
   WIDGET_UI_LOCALES,
+  type Region,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
@@ -40,9 +41,17 @@ import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.j
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
+import type { AiJobRun } from '../services/ai/ai-job-worker.js';
+import {
+  AI_JOB_MAX_UNFINISHED_PER_CHAT,
+  aiJobOutbox,
+  type EnqueuedAiJob,
+} from '../services/ai/ai-jobs.js';
+import type { VisitorTurn } from '../services/chat/visitor-turn.js';
+import { withTenant } from '../lib/tenant.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
-import { SkillEngine } from '../services/ai/skill-engine.js';
+import { SkillEngine, type TenantRunner } from '../services/ai/skill-engine.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -264,6 +273,9 @@ function maskAnswers(
   );
 }
 
+/** What asked for the residency check on a visitor's message (the audit entry's `route`). */
+const VISITOR_MESSAGE_JOB = 'ai_job:visitor_message';
+
 export default async function customerRoutes(
   app: FastifyInstance,
   {
@@ -332,47 +344,98 @@ export default async function customerRoutes(
    * delivery: an answer — the rule bot, then the AI Agent — and then the
    * assignee's notice. The order is the one this handler always ran them in
    * (the notice reads the assignee a bot's transfer may just have changed);
-   * what moved is *when* (tm 256.10). They run after the response, through
-   * `app.followUps`, one message at a time per chat, so the visitor's send no
-   * longer waits out the model (up to `EMBEDDING_TIMEOUT_MS` +
-   * `LLM_TIMEOUT_MS`) behind a locked send button. The answer reaches the
+   * what moved is *when* and *where*. Since tm 256.10 after the response, so
+   * the visitor's send no longer waits out the model; since tm 289.5 as a
+   * durable job (ADR-11a · GV-02): the route writes the job with the message
+   * (`aiJobOutbox`, in the message's own transaction) and the AI job worker
+   * runs this — in whichever API process claims it, one job at a time per
+   * chat, in the order the messages came. A restart no longer loses the
+   * answer, and the job's fence (`run.replyOutbox`) lets a message be answered
+   * once, whichever of the two responders answers it. The answer reaches the
    * widget the way an agent's reply does — the socket, or the next poll.
    *
-   * Only for a message that was not a replay: the same message arriving twice
-   * must not be answered or announced twice. An attachment with no text gives
-   * the bot and the skill nothing to match, so it is only announced.
-   *
-   * Everything read from `request` here is plain data or reaches the database
-   * through `app.db` (`withTenant`, `requireAiInference`), none of it through
-   * the connection, so it outlives the response unchanged; `request.log` keeps
-   * the request id — and, since ID-08, the workspace, the member, the chat and
-   * the connection the route bound — on whatever the answer logs.
+   * Everything here comes from the job, not from the request that wrote it:
+   * the text from the message's own event (masked at the source), the page and
+   * whether the message opened its connection from the job's row. An
+   * attachment with no text gives the bot and the skill nothing to match, so it
+   * is only announced. A replay writes no job, so it is not answered or
+   * announced twice.
    */
-  function followUp(
-    request: FastifyRequest,
-    chatId: string,
-    kind: PushEventKind,
-    text: string | undefined,
-    pageUrl: string | null,
-    triggerEventId: string,
-  ): void {
-    // The route has usually bound it already, with the connection; a no-op then.
-    bindChatLogContext(request, { chatId });
-    const queued = app.followUps.enqueue(`${request.tenant().licenseId}:${chatId}`, async () => {
-      if (text?.trim()) {
-        await respondToCustomerMessage(request, chatId, text, pageUrl, triggerEventId);
-      }
-      await notifyAssignee(request, chatId, kind);
+  async function answerVisitorMessage(run: AiJobRun): Promise<void> {
+    const { job } = run;
+    const tenant = job.context;
+    const inTenant: TenantRunner = (fn) => withTenant(app.db, tenant, fn);
+
+    const message = await inTenant(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: {
+          id: job.triggerEventId,
+          threadId: job.threadId,
+          // The event is written just before its job, in the same transaction:
+          // the bound keeps the lookup to a partition or two of `events`.
+          createdAt: {
+            gte: new Date(job.createdAt.getTime() - 86_400_000),
+            lte: new Date(job.createdAt.getTime() + 1_000),
+          },
+        },
+        select: { text: true },
+      });
+      const row = await tx.aiJob.findUnique({
+        where: { id: job.id },
+        select: { pageUrl: true, openedConnection: true },
+      });
+      return event && row ? { text: event.text, ...row } : null;
     });
-    if (!queued) {
-      // The bound in `follow-ups.ts`: a chat this far behind is being written
-      // to faster than anything can answer it. The message is committed and in
-      // the inbox; it is left for a human, like any other failure here.
-      request.log.warn(
-        { pending: app.followUps.maxPerKey },
-        'visitor follow-ups backed up; leaving this message for a human',
-      );
+    // Gone with its connection — the worker has nothing to answer either.
+    if (!message) return;
+
+    const turn: VisitorTurn = {
+      tenant,
+      chatId: job.chatId,
+      threadId: job.threadId,
+      customerId: run.customerId,
+      triggerEventId: job.triggerEventId,
+      requestId: job.requestId,
+      // The job's lines name its tenant, chat, connection and request; these
+      // add the visitor, as the request that wrote the message named them (ID-08).
+      log: run.log.child({
+        actor_type: 'customer',
+        actor_id: run.customerId,
+        customer_id: run.customerId,
+      }),
+      withTenant: inTenant,
+      requireAiInference: async () => {
+        const organization = await inTenant((tx) =>
+          tx.organization.findUnique({
+            where: { id: tenant.organizationId },
+            select: { region: true },
+          }),
+        );
+        await app.requireAiInference({
+          tenant,
+          // `organizations_region_check` holds the column to `REGIONS`.
+          region: (organization?.region ?? 'eu') as Region,
+          // The visitor whose message it is, as their own request recorded it.
+          auditContext: () => ({
+            chainSecret: env.AUDIT_CHAIN_SECRET,
+            licenseId: tenant.licenseId,
+            actorId: run.customerId,
+            actorType: 'customer',
+            requestId: job.requestId,
+            ip: null,
+          }),
+          route: VISITOR_MESSAGE_JOB,
+        });
+      },
+      requireAiBudget: () => app.requireAiBudget(tenant),
+      replyProperties: run.replyProperties,
+      replyOutbox: run.replyOutbox,
+    };
+
+    if (message.text?.trim()) {
+      await respondToCustomerMessage(turn, message.text, message.pageUrl);
     }
+    await notifyAssignee(turn, message.openedConnection ? 'new_chat' : 'message');
   }
 
   /**
@@ -392,16 +455,19 @@ export default async function customerRoutes(
    * question, which is the kind of defect nobody finds by reading the rule.
    */
   async function respondToCustomerMessage(
-    request: FastifyRequest,
-    chatId: string,
+    turn: VisitorTurn,
     text: string,
     pageUrl: string | null,
-    triggerEventId: string,
   ): Promise<void> {
-    const bot = await ruleBots.handle(request, chatId, text, pageUrl);
+    const bot = await ruleBots.handle(turn, text, pageUrl);
     if (bot?.tookOver) return;
-    await ai.handle(request, chatId, text, { triggerEventId });
+    await ai.handle(turn, text);
   }
+
+  // Every visitor message is answered by the AI job worker from here on
+  // (tm 289.5): this process's, or any other's that claims the job first.
+  // `chats` writes the hand-over note a late job leaves for a person.
+  app.aiJobs.start({ handler: answerVisitorMessage, notes: chats });
 
   /**
    * Tell the human assigned to a chat that their visitor wrote in
@@ -414,7 +480,8 @@ export default async function customerRoutes(
    * nobody to notify, and notifying on every message to an unassigned chat
    * would be noise. The e-mail is further held to one per chat and assignee per
    * `ASSIGNEE_EMAIL_COOLDOWN_MS`, and sent in the background (tm 256.4). The
-   * whole notice runs after the visitor's response, from `followUp` (tm 256.10).
+   * whole notice runs after the visitor's response, in the message's AI job
+   * (`answerVisitorMessage`, tm 256.10 · tm 289.5).
    *
    * The two channels are gated separately and neither can suppress the other:
    * an agent who reads e-mail on a laptop and one who only carries a phone have
@@ -422,14 +489,11 @@ export default async function customerRoutes(
    * about the *preferences* being one set, not about the deliveries being one
    * decision.
    */
-  async function notifyAssignee(
-    request: FastifyRequest,
-    chatId: string,
-    kind: PushEventKind,
-  ): Promise<void> {
+  async function notifyAssignee(turn: VisitorTurn, kind: PushEventKind): Promise<void> {
+    const { tenant, chatId, log } = turn;
     try {
-      const licenseId = request.tenant().licenseId;
-      const channel = await request.withTenant(async (tx) => {
+      const licenseId = tenant.licenseId;
+      const channel = await turn.withTenant(async (tx) => {
         const thread = await tx.thread.findFirst({
           where: { chatId, active: true },
           orderBy: { createdAt: 'desc' },
@@ -449,7 +513,7 @@ export default async function customerRoutes(
             select: { notifyEmail: true, locale: true },
           }),
           tx.organization.findUnique({
-            where: { id: request.tenant().organizationId },
+            where: { id: tenant.organizationId },
             select: { name: true },
           }),
         ]);
@@ -472,11 +536,10 @@ export default async function customerRoutes(
       // preference and the device list under the tenant's RLS, and is silent
       // when there is nothing to reach (13.7-d).
       if (channel) {
-        await pushToAgentDevices(
-          { db: app.db, provider: push, log: request.log },
-          request.tenant(),
-          { accountId: channel.assigneeId, event: { kind, chatId } },
-        );
+        await pushToAgentDevices({ db: app.db, provider: push, log }, tenant, {
+          accountId: channel.assigneeId,
+          event: { kind, chatId },
+        });
       }
 
       // Honours the opt-out and the no-assignee/no-address cases in one place
@@ -495,7 +558,7 @@ export default async function customerRoutes(
           assigneeId: channel.assigneeId,
           cooldownMs: env.ASSIGNEE_EMAIL_COOLDOWN_MS,
         },
-        (error) => request.log.warn({ err: error }, 'assignee e-mail window unavailable; mailing'),
+        (error) => log.warn({ err: error }, 'assignee e-mail window unavailable; mailing'),
       );
       if (!open) return;
 
@@ -517,12 +580,12 @@ export default async function customerRoutes(
             },
           ),
         },
-        (outcome) => logUnsentMail(request.log, 'assignee_notification.mail', outcome),
+        (outcome) => logUnsentMail(log, 'assignee_notification.mail', outcome),
       );
     } catch (error) {
       // The realtime push already reached the agent's open inbox; e-mail and
       // handset are the courtesy for when it is not open.
-      request.log.warn({ err: error }, 'assignee notification failed');
+      log.warn({ err: error }, 'assignee notification failed');
     }
   }
 
@@ -875,6 +938,12 @@ export default async function customerRoutes(
       // connection it opens under the member's chat for the day — the day's
       // first one, or a further one when they are back the same day. Routing
       // decides who takes an opened one; the customer never self-assigns.
+      //
+      // The answer this message is owed is written with it (tm 289.5 ·
+      // ADR-11a): one AI job, in the message's own transaction — committed
+      // together or not at all. `expired` at the door when the chat is
+      // already too far behind.
+      const enqueued: { job: EnqueuedAiJob | null } = { job: null };
       const result = await chats.openOrContinueConnection(tenant, principal, {
         customerId: principal.customerId,
         event: {
@@ -886,18 +955,37 @@ export default async function customerRoutes(
         },
         ...(body.url ? { routing: { url: body.url } } : {}),
         audit: request.auditContext(),
+        outbox: aiJobOutbox({
+          requestId: request.id,
+          pageUrl: body.url ?? null,
+          onEnqueued: (job) => {
+            enqueued.job = job;
+          },
+        }),
       });
       const chatId = result.chat.id;
-      // From here every line — the follow-ups' included — names the day's chat
-      // and the connection this message landed in (ID-08).
+      // From here every line names the day's chat and the connection this
+      // message landed in (ID-08).
       bindChatLogContext(request, { chatId, threadId: result.event.thread_id });
 
-      // A replay is the same message arriving twice; answering or notifying
-      // again would do both twice for one question.
+      // A replay is the same message arriving twice and wrote no job; answering
+      // or notifying again would do both twice for one question.
       if (result.replayed) return reply.status(200).send({ chat_id: chatId, event: result.event });
 
+      if (enqueued.job?.state === 'expired') {
+        // A chat this far behind is being written to faster than anything can
+        // answer it. The message is committed and in the inbox; it is left for
+        // a human, like any other failure on this path.
+        request.log.warn(
+          { pending: AI_JOB_MAX_UNFINISHED_PER_CHAT },
+          'visitor follow-ups backed up; leaving this message for a human',
+        );
+      } else {
+        // This process's worker looks now, rather than at its next poll.
+        app.aiJobs.wake();
+      }
+
       if (result.openedVia === null) {
-        followUp(request, chatId, 'message', maskedText, body.url ?? null, result.event.id);
         return reply.status(201).send({ chat_id: chatId, event: result.event });
       }
 
@@ -918,12 +1006,11 @@ export default async function customerRoutes(
       }
 
       // Routing may have assigned the connection to an agent — that is the
-      // "assignment" notification (FR-MOD-13.8). `new_chat` rather than
-      // `assignment` because of how it reads on a phone: nobody handed this to
-      // the agent, a visitor walked in. The `event` this answers with is the
-      // visitor's own message as written, never a reply that committed first.
-      followUp(request, chatId, 'new_chat', maskedText, body.url ?? null, result.event.id);
-
+      // "assignment" notification (FR-MOD-13.8), sent by the job as `new_chat`
+      // rather than `assignment` because of how it reads on a phone: nobody
+      // handed this to the agent, a visitor walked in. The `event` this answers
+      // with is the visitor's own message as written, never a reply that
+      // committed first.
       return reply.status(201).send({
         chat_id: chatId,
         queue_position: result.chat.thread?.queue_position ?? null,

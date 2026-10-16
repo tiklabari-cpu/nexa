@@ -12255,7 +12255,7 @@
           "288"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-16T13:54:44.482Z",
+        "updatedAt": "2026-10-16T14:27:22.556Z",
         "subtasks": [
           {
             "id": 1,
@@ -12318,13 +12318,13 @@
             "description": "follow-ups.ts AI dalının işçiye taşınması (kural botu + atanan bildirimi aynı işte, bugünkü sırayla) + /health ai_jobs {pending, oldest_age_s}",
             "details": "Üst görev YAPILACAK'taki \"follow-ups.ts AI dalı işçiye taşınır\" ve \"/health ai_jobs\" maddeleri; reportComponentStatus yardımcısı varsa kullan. İşçi API'si 289.3'te bitti. Ayrıntı ve kabul maddeleri: üst görev #289 details (tek kaynak).",
             "testStrategy": "Entegrasyon (sıra: kural botu → AI → atanan bildirimi; /health sayıları); `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "289.3"
             ],
             "parentId": "289",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-16T14:27:22.556Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-16T13:54:44.482Z",
+      "lastModified": "2026-10-16T14:27:22.562Z",
       "taskCount": 390,
       "completedCount": 287,
       "tags": [

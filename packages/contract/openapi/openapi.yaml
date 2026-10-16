@@ -810,6 +810,11 @@ components:
             redis: { $ref: "#/components/schemas/DependencyHealth" }
         scheduler: { $ref: "#/components/schemas/SchedulerHealth" }
         event_partitions: { $ref: "#/components/schemas/EventPartitionsHealth" }
+        ai_jobs:
+          description: Null when the queue could not be read.
+          allOf:
+            - $ref: "#/components/schemas/AiJobsHealth"
+          nullable: true
         providers: { $ref: "#/components/schemas/HealthProviders" }
 
     DeploymentConfig:
@@ -1013,6 +1018,29 @@ components:
                   database never answered, the error's class. Never the
                   message.
                 examples: ["42501", "23514", "55P03"]
+
+    AiJobsHealth:
+      type: object
+      description: |
+        The durable AI job queue (tm 289.5 · ADR-11a · GV-02), across every
+        workspace: the replies visitor messages are still owed. A queue that
+        grows, or whose oldest job keeps ageing, means no worker is taking
+        jobs; past 120 s a job is handed to a person instead of answered.
+        Body only, never the status code.
+      required: [pending, running, oldest_age_s]
+      properties:
+        pending:
+          type: integer
+          description: Jobs waiting for a worker, those handed back for a retry included.
+        running:
+          type: integer
+          description: Jobs a worker holds right now.
+        oldest_age_s:
+          type: number
+          nullable: true
+          description: |
+            Seconds since the oldest unfinished (`pending` or `running`) job
+            was written, by the database's clock. Null when there is none.
 
     HealthProviders:
       type: object

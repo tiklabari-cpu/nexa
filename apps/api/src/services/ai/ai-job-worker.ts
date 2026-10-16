@@ -3,14 +3,15 @@
  *
  * Takes the jobs the outbox wrote (`ai-jobs.ts`) and runs them: a visitor's
  * message, answered — by whatever handler the server hands to {@link
- * AiJobWorker.start} (the rule bot, the AI Agent and the assignee's notice,
- * in that order: tm 289.5). What this file owns is everything around the
- * handler that makes the answer durable and single:
+ * AiJobWorker.start} (the customer routes: the rule bot, the AI Agent and the
+ * assignee's notice, in that order — tm 289.5). What this file owns is
+ * everything around the handler that makes the answer durable and single:
  *
  *   1. **Finding work.** A claim pass every {@link AI_JOB_POLL_MS}, plus one
- *      whenever the doorbell rings (`ai-job-wakeups.ts`, `LISTEN ai_jobs`) and
- *      whenever a job of this worker finishes — its chat's next job may be the
- *      head now. At most {@link AI_JOB_CONCURRENCY} jobs at once; a pass never
+ *      whenever the doorbell rings (`ai-job-wakeups.ts`, `LISTEN ai_jobs`),
+ *      whenever the route that wrote a job asks ({@link AiJobWorker.wake})
+ *      and whenever a job of this worker finishes — its chat's next job may
+ *      be the head now. At most {@link AI_JOB_CONCURRENCY} jobs at once; a pass never
  *      claims more than it can start, so nothing claimed waits here.
  *   2. **Order.** `ai_jobs_claim` hands out one job per chat, oldest first, and
  *      none while that chat's head is running under a live lease — so one
@@ -53,6 +54,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
 import type { EventOutbox, OutboxEvent, SerialisedEvent } from '../chat/chat-service.js';
+import { AiJobReplyRefusedError, type AiJobRefusal } from '../chat/visitor-turn.js';
 import {
   AI_JOB_MAX_ATTEMPTS,
   type AiJobClaim,
@@ -109,20 +111,10 @@ export const AI_JOB_OUTCOMES = {
 /** Why a hand-over happened, as the note and the decision record say it. */
 type HandoverReason = 'stale' | 'attempts_exhausted' | 'handler_failed';
 
-/** Why {@link AiJobRun.replyOutbox} refused a reply. */
-export type AiJobRefusal = 'already_answered' | 'connection_closed' | 'claim_lost';
-
-/**
- * Thrown from {@link AiJobRun.replyOutbox} — inside the reply's transaction, so
- * the reply rolls back — when this run may not answer the message. A handler
- * may let it propagate or swallow it; the worker already knows.
- */
-export class AiJobReplyRefusedError extends Error {
-  constructor(readonly reason: AiJobRefusal) {
-    super(`ai job reply refused: ${reason}`);
-    this.name = 'AiJobReplyRefusedError';
-  }
-}
+// Why {@link AiJobRun.replyOutbox} refused a reply, and the error it throws:
+// defined beside the chat core (`chat/visitor-turn.ts`), where the rule bot can
+// catch it without reaching an AI module (FR-MOD-06.6).
+export { AiJobReplyRefusedError, type AiJobRefusal };
 
 /** The logger a job's lines go to; a Fastify or pino logger is one. */
 export interface AiJobLogger {
@@ -176,7 +168,12 @@ export interface AiJobWorkerOptions {
   logger: AiJobLogger;
   /** The doorbell; without one the worker polls alone. */
   wakeups?: AiJobWakeups | null;
-  pollMs?: number;
+  /**
+   * How often to look for due jobs unasked. `null`: never — the worker finds
+   * work only through {@link AiJobWorker.wake} (the route that wrote the job,
+   * its own finished jobs) and the doorbell. A test server runs this way.
+   */
+  pollMs?: number | null;
   leaseMs?: number;
   freshnessMs?: number;
   concurrency?: number;
@@ -245,7 +242,7 @@ export class AiJobWorker {
   readonly #db: PrismaClient;
   readonly #log: AiJobLogger;
   readonly #wakeups: AiJobWakeups | null;
-  readonly #pollMs: number;
+  readonly #pollMs: number | null;
   readonly #leaseMs: number;
   readonly #freshnessMs: number;
   readonly #concurrency: number;
@@ -271,7 +268,7 @@ export class AiJobWorker {
     this.#db = options.db;
     this.#log = options.logger;
     this.#wakeups = options.wakeups ?? null;
-    this.#pollMs = options.pollMs ?? AI_JOB_POLL_MS;
+    this.#pollMs = options.pollMs === undefined ? AI_JOB_POLL_MS : options.pollMs;
     this.#leaseMs = options.leaseMs ?? AI_JOB_LEASE_MS;
     this.#freshnessMs = options.freshnessMs ?? AI_JOB_FRESHNESS_MS;
     this.#concurrency = options.concurrency ?? AI_JOB_CONCURRENCY;
@@ -292,9 +289,11 @@ export class AiJobWorker {
     if (this.#handler || this.#stopping) throw new Error('AiJobWorker: start() once per worker');
     this.#handler = options.handler;
     this.#notes = options.notes;
-    this.#timer = setInterval(() => this.wake(), this.#pollMs);
-    // A worker is never the reason a process stays up.
-    this.#timer.unref();
+    if (this.#pollMs !== null) {
+      this.#timer = setInterval(() => this.wake(), this.#pollMs);
+      // A worker is never the reason a process stays up.
+      this.#timer.unref();
+    }
     this.#wakeups?.start(() => this.wake());
     this.wake();
   }

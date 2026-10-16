@@ -30,21 +30,29 @@ export async function startTestServer(
   /** Everything `buildServer` takes besides `env` — currently the mailer. */
   build: Partial<Omit<BuildServerOptions, 'env'>> = {},
 ): Promise<TestServer> {
-  const app = await buildServer({ env: testEnv(overrides), ...build });
+  // `in_process` (tm 289.5): this server's AI job worker answers what its own
+  // requests wrote, never another open server's — a suite holding two, one of
+  // them with a stubbed model, would otherwise race their workers for a job.
+  const app = await buildServer({
+    env: testEnv(overrides),
+    aiJobDiscovery: 'in_process',
+    ...build,
+  });
   await app.ready();
 
   const url = (path: string): string => `${API_PREFIX}${path}`;
 
   /**
-   * One request, returned once the follow-ups it set off have finished
-   * (tm 256.10): a visitor's message is answered after its response, so a
-   * suite asserting on the answer would otherwise race it. These helpers read
-   * the state the visitor eventually sees; a test about the gap itself — the
-   * response arriving before the answer — calls `app.inject` directly.
+   * One request, returned once the AI jobs it set off have run (tm 256.10 ·
+   * tm 289.5): a visitor's message is answered after its response, by the AI
+   * job worker, so a suite asserting on the answer would otherwise race it.
+   * These helpers read the state the visitor eventually sees; a test about the
+   * gap itself — the response arriving before the answer — calls `app.inject`
+   * directly.
    */
   const request = async (options: InjectOptions): Promise<LightMyRequestResponse> => {
     const response = await app.inject(options);
-    await app.followUps.settled();
+    await app.aiJobs.idle();
     // A counted model call tells the AI usage alerts after it settles, and they
     // run beside the response (tm 283.3); a suite that resets the database
     // next must not TRUNCATE under their transaction.

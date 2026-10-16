@@ -55,13 +55,17 @@ export const AI_JOB_MAX_RETRY_AFTER_MS = 3_600_000;
 
 /**
  * Unfinished jobs (`pending` or `running`) one chat may hold before its next
- * one is written `expired` at the door (ADR-11a §2.5) — the durable
- * `MAX_FOLLOW_UPS_PER_KEY`, counted the same way, the running one included.
+ * one is written `expired` at the door (ADR-11a §2.5) — the bound the
+ * in-memory follow-ups had (tm 256.10), counted the same way, the running one
+ * included.
  */
 export const AI_JOB_MAX_UNFINISHED_PER_CHAT = 20;
 
 /** The outcome of a job expired at the door: its chat was too far behind. */
 export const AI_JOB_BACKLOG_OUTCOME = 'chat_backlog';
+
+/** `ai_jobs_page_url_check` — the route's own bound on the widget's `url`. */
+export const AI_JOB_MAX_PAGE_URL_LENGTH = 2048;
 
 export interface EnqueueAiJobInput {
   /** The day container (panel "Thread ID"). */
@@ -77,6 +81,10 @@ export interface EnqueueAiJobInput {
    * not worth the visitor's message.
    */
   requestId?: string | null;
+  /** The page the message was sent from, for the rule bot's page conditions. */
+  pageUrl?: string | null;
+  /** The message opened its connection (the assignee's notice says "new chat"). */
+  openedConnection?: boolean;
 }
 
 /** The job the outbox wrote: `pending`, or `expired` when its chat was backed up. */
@@ -107,15 +115,20 @@ export async function enqueueAiJob(
 ): Promise<EnqueuedAiJob> {
   const kind = input.kind ?? 'visitor_message';
   const requestId = isAcceptableRequestId(input.requestId) ? input.requestId : null;
+  // Like the request id: a page the column cannot hold is left out — a rule
+  // with a page condition then does not match — rather than refusing the message.
+  const pageUrl =
+    input.pageUrl && input.pageUrl.length <= AI_JOB_MAX_PAGE_URL_LENGTH ? input.pageUrl : null;
   const rows = await tx.$queryRaw<EnqueuedAiJob[]>`
     INSERT INTO ai_jobs (id, license_id, organization_id, chat_id, thread_id,
-                         trigger_event_id, kind, state, finished_at, outcome, request_id)
+                         trigger_event_id, kind, state, finished_at, outcome, request_id,
+                         page_url, opened_connection)
     SELECT gen_random_uuid(), ${tenant.licenseId}, ${tenant.organizationId}::uuid,
            ${input.chatId}, ${input.threadId}, ${input.triggerEventId}, ${kind},
            CASE WHEN backlog.at_limit THEN 'expired' ELSE 'pending' END,
            CASE WHEN backlog.at_limit THEN clock_timestamp() END,
            CASE WHEN backlog.at_limit THEN ${AI_JOB_BACKLOG_OUTCOME}::text END,
-           ${requestId}::text
+           ${requestId}::text, ${pageUrl}::text, ${input.openedConnection ?? false}
       FROM (SELECT count(*) >= ${AI_JOB_MAX_UNFINISHED_PER_CHAT}::int AS at_limit
               FROM (SELECT 1 FROM ai_jobs
                      WHERE chat_id = ${input.chatId} AND state IN ('pending', 'running')
@@ -126,21 +139,31 @@ export async function enqueueAiJob(
 
 /**
  * The outbox for a visitor's message: pass it to `openOrContinueConnection`
- * (or `sendEvent` / `start`) and the job is written with the message. To see
- * whether it was expired at the door, call {@link enqueueAiJob} from your own
- * {@link EventOutbox} instead.
+ * (or `sendEvent` / `start`) and the job is written with the message, noting
+ * whether that write opened the connection. `onEnqueued` hears what was
+ * written — `expired` when the chat was backed up — from inside the
+ * transaction: act on it once the call has returned, when it is committed. A
+ * race retry calls it again, and the last call is the one that committed.
  */
 export function aiJobOutbox(
-  options: { requestId?: string | null; kind?: AiJobKind } = {},
+  options: {
+    requestId?: string | null;
+    kind?: AiJobKind;
+    pageUrl?: string | null;
+    onEnqueued?: (job: EnqueuedAiJob) => void;
+  } = {},
 ): EventOutbox {
   return async (tx, written) => {
-    await enqueueAiJob(tx, written.tenant, {
+    const job = await enqueueAiJob(tx, written.tenant, {
       chatId: written.chatId,
       threadId: written.threadId,
       triggerEventId: written.event.id,
       ...(options.kind ? { kind: options.kind } : {}),
       requestId: options.requestId ?? null,
+      pageUrl: options.pageUrl ?? null,
+      openedConnection: written.openedVia !== null,
     });
+    options.onEnqueued?.(job);
   };
 }
 
@@ -274,4 +297,31 @@ export async function settleAiJob(
                           ${outcome}::text, ${result.error ?? null}::text,
                           ${retryAfterSeconds}::int) AS settled`;
   return rows[0]?.settled === true;
+}
+
+/** The queue at a glance, across every workspace (`/health`). */
+export interface AiJobsHealth {
+  /** Waiting for a worker, those handed back for a retry included. */
+  pending: number;
+  /** Held by a worker right now. */
+  running: number;
+  /** Seconds since the oldest unfinished job was written; null when there is none. */
+  oldest_age_s: number | null;
+}
+
+/**
+ * Read {@link AiJobsHealth} through `ai_jobs_health()` — the queue's one
+ * cross-tenant read besides the claim (migration 20261016160000). Counts only;
+ * the age is the database's clock, rounded to a tenth of a second.
+ */
+export async function readAiJobsHealth(db: Pick<PrismaClient, '$queryRaw'>): Promise<AiJobsHealth> {
+  const rows = await db.$queryRaw<
+    Array<{ pending: bigint; running: bigint; oldest_age_s: number | null }>
+  >`SELECT pending, running, oldest_age_s FROM ai_jobs_health()`;
+  const row = rows[0];
+  return {
+    pending: Number(row?.pending ?? 0),
+    running: Number(row?.running ?? 0),
+    oldest_age_s: row?.oldest_age_s == null ? null : Math.round(Number(row.oldest_age_s) * 10) / 10,
+  };
 }

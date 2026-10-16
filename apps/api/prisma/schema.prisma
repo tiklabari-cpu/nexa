@@ -2014,6 +2014,11 @@ model AiJob {
   lastError      String?   @map("last_error")
   /// The HTTP request that enqueued the job (`request_id` on its log lines).
   requestId      String?   @map("request_id") @db.VarChar(64)
+  /// The page the message was sent from, for the rule bot's page conditions
+  /// (tm 289.5). At most 2048 characters (`ai_jobs_page_url_check`).
+  pageUrl          String?  @map("page_url")
+  /// The message opened its connection — the assignee's notice says "new chat".
+  openedConnection Boolean  @default(false) @map("opened_connection")
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)

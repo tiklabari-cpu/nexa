@@ -811,15 +811,17 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
 - The MCP `summarize_chat` tool answers from the `ai-mock` summarizer, not from the model the
   panel's summary button uses, so its text differs from the panel's. MCP itself is outside the
   pilot.
-- There is no persisted AI queue (PLAN §D201). The AI Agent's and the rule bot's answers are
-  written after the visitor's send returns and are not persisted. They run in the api process,
-  one message at a time per chat, followed by the assignee's notice; the widget receives the
-  answer over its socket or its next poll. A graceful stop waits for answers already on their
-  way, inside the same 15 s close ceiling a held request had; a crash, or a model call the
-  ceiling cuts off, loses that answer and the message stays unanswered in the inbox for a
-  human — the same outcome as a model error. A chat 20 messages behind leaves the next one for
-  a human and logs `warn` `visitor follow-ups backed up; leaving this message for a human`.
-  The per-chat order holds within one api process, which is what the pilot runs.
+- The AI queue is persisted (tm 289 · ADR-11a). Each visitor message writes an `ai_jobs` row
+  in its own transaction; the api's AI job worker answers it after the send returns — the rule
+  bot, then the AI Agent, then the assignee's notice — one message at a time per chat, in any
+  api process, and the widget receives the answer over its socket or its next poll. A graceful
+  stop waits up to 10 s for answers on their way and hands the rest back; a crash leaves the
+  job for the next process. One answer per message, whoever runs it. A job older than 120 s
+  when it starts is not answered: the conversation gets an internal note for a person. A chat
+  20 messages behind leaves the next one for a human and logs `warn`
+  `visitor follow-ups backed up; leaving this message for a human`. The admin `/health` body's
+  `ai_jobs` block shows the queue: `pending`, `running` and `oldest_age_s` — an age that keeps
+  growing means no worker is taking jobs.
 - Courtesy mail is sent after the answer, and is not persisted. The assignee's new-message
   notice, the chat transcript on close and the customer's ticket-status notice go through
   `app.backgroundMail`, like the password reset: the request answers at once, and a mail that

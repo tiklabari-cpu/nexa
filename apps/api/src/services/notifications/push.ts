@@ -31,7 +31,6 @@
  * API once the person taps it. That also means nothing here needs masking, and
  * the spool cannot become a second, unredacted transcript store.
  */
-import type { FastifyBaseLogger } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { DevicePlatform, NotificationPreferences } from '@siyahtus/types';
 import { isDevicePlatform, pushAllowed } from '@siyahtus/types';
@@ -146,7 +145,8 @@ export function renderPush(kind: PushEventKind): { title: string; body: string }
 export interface PushDeps {
   db: PrismaClient;
   provider: PushProvider;
-  log: FastifyBaseLogger;
+  /** A request's logger, or the AI job's (tm 289.5) — only `warn` is used. */
+  log: { warn(details: Record<string, unknown>, message: string): void };
 }
 
 /**

@@ -1,12 +1,14 @@
 /**
- * A visitor's message is answered after its response (tm 256.10).
+ * A visitor's message is answered after its response (tm 256.10), by the
+ * durable AI job worker (tm 289.5).
  *
  * The rule bot, the AI Agent and the assignee's notice used to run inside
  * `POST /customer/chat/events`, so the visitor's send waited out the model —
  * up to `EMBEDDING_TIMEOUT_MS` + `LLM_TIMEOUT_MS` — with the widget's send
- * button locked. They now run through `app.followUps`. Every test here holds
- * the model (the fake's `hold`) for as long as it needs to, and asks the
- * questions the move must not change the answer to:
+ * button locked. They moved to an in-memory queue (tm 256.10) and then onto
+ * `ai_jobs`, run by `app.aiJobs` (tm 289.5). Every test here holds the model
+ * (the fake's `hold`) for as long as it needs to, and asks the questions
+ * neither move may change the answer to:
  *
  *   - the response arrives while the model is still writing, and the answer
  *     is stored afterwards, as a bot event, the way it always was;
@@ -14,10 +16,11 @@
  *     still being written;
  *   - one chat's messages are answered one at a time, in the order they came;
  *   - an AI Agent that is switched off still answers nothing;
+ *   - a chat too far behind leaves the next message for a human;
  *   - a shutdown waits for an answer already on its way.
  *
  * `app.inject` directly wherever the gap matters: the `TestServer` helpers
- * settle the follow-ups before they return (`helpers/server.ts`), which would
+ * wait for the AI jobs before they return (`helpers/server.ts`), which would
  * hide it.
  */
 import type { PrismaClient } from '@prisma/client';
@@ -29,7 +32,10 @@ import {
   seedAiWorkspace,
   type AiWorkspace,
 } from '../helpers/ai-workspace.js';
-import { MAX_FOLLOW_UPS_PER_KEY } from '../../src/services/chat/follow-ups.js';
+import {
+  AI_JOB_BACKLOG_OUTCOME,
+  AI_JOB_MAX_UNFINISHED_PER_CHAT,
+} from '../../src/services/ai/ai-jobs.js';
 import { FakeLlmProvider } from '../helpers/fake-llm-provider.js';
 import { ownerClient, seedFixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -184,7 +190,7 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
     expect(await eventsOf(chatId)).toEqual([{ text: AI_QUESTION, authorType: 'customer' }]);
 
     model.release(0);
-    await within(server.app.followUps.settled(), 'the follow-up');
+    await within(server.app.aiJobs.idle(), 'the follow-up');
 
     expect(await eventsOf(chatId)).toEqual([
       { text: AI_QUESTION, authorType: 'customer' },
@@ -211,7 +217,7 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
     );
     expect(replay.statusCode).toBe(200);
     model.release(0);
-    await within(server.app.followUps.settled(), 'the follow-ups');
+    await within(server.app.aiJobs.idle(), 'the follow-ups');
 
     // …and a later message in the same chat, replayed straight after it.
     const second = SECOND_QUESTION;
@@ -227,7 +233,7 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
     );
     expect(again.statusCode).toBe(200);
     model.release(1);
-    await within(server.app.followUps.settled(), 'the follow-ups');
+    await within(server.app.aiJobs.idle(), 'the follow-ups');
 
     expect(model.fake.calls).toHaveLength(2);
     expect(await eventsOf(chatId)).toEqual([
@@ -263,7 +269,7 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
       { text: `Answer to: ${AI_QUESTION}`, authorType: 'bot' },
     ]);
     model.release(1);
-    await within(server.app.followUps.settled(), 'the follow-ups');
+    await within(server.app.aiJobs.idle(), 'the follow-ups');
 
     expect(model.fake.maxInFlight).toBe(1);
     expect(await eventsOf(chatId)).toEqual([
@@ -281,7 +287,7 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
 
     const sent = await within(send(server.app, token, { text: AI_QUESTION }), 'the send');
     expect(sent.statusCode).toBe(201);
-    await within(server.app.followUps.settled(), 'the follow-up');
+    await within(server.app.aiJobs.idle(), 'the follow-up');
 
     const chatId = (sent.json() as { chat_id: string }).chat_id;
     expect(model.fake.calls).toHaveLength(0);
@@ -307,8 +313,9 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
       await within(backlog.started(0), 'the first model call');
 
       // The running answer counts towards the bound, so the chat holds
-      // MAX_FOLLOW_UPS_PER_KEY - 1 more, and the message after them is refused.
-      for (let i = 1; i <= MAX_FOLLOW_UPS_PER_KEY; i += 1) {
+      // AI_JOB_MAX_UNFINISHED_PER_CHAT - 1 more, and the message after them is
+      // refused at the door.
+      for (let i = 1; i <= AI_JOB_MAX_UNFINISHED_PER_CHAT; i += 1) {
         const sent = await within(
           send(busy.app, token, { text: `${SECOND_QUESTION} #${i}` }),
           `send ${i}`,
@@ -320,20 +327,33 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
         'visitor follow-ups backed up; leaving this message for a human',
       );
       expect(refusals).toHaveLength(1);
-      expect(refusals[0]).toMatchObject({ chat_id: chatId, pending: MAX_FOLLOW_UPS_PER_KEY });
+      expect(refusals[0]).toMatchObject({
+        chat_id: chatId,
+        pending: AI_JOB_MAX_UNFINISHED_PER_CHAT,
+      });
+      // …and its job says so: written `expired`, never claimed.
+      const refused = await owner.aiJob.findMany({ where: { chatId, state: 'expired' } });
+      expect(refused).toHaveLength(1);
+      expect(refused[0]).toMatchObject({ outcome: AI_JOB_BACKLOG_OUTCOME, attempts: 0 });
 
       backlog.release(0);
-      await within(busy.app.followUps.settled(), 'the backlog');
+      // Twenty jobs one after another, each a claim, a model call and a settle:
+      // a correctness check, not a latency one, so not held to PROMPTLY_MS.
+      await within(busy.app.aiJobs.idle(), 'the backlog', 20_000);
 
       const events = await eventsOf(chatId);
       expect(events.filter((event) => event.authorType === 'customer')).toHaveLength(
-        MAX_FOLLOW_UPS_PER_KEY + 1,
+        AI_JOB_MAX_UNFINISHED_PER_CHAT + 1,
       );
       const answers = events.filter((event) => event.authorType === 'bot').map((e) => e.text);
-      expect(answers).toHaveLength(MAX_FOLLOW_UPS_PER_KEY);
+      expect(answers).toHaveLength(AI_JOB_MAX_UNFINISHED_PER_CHAT);
       // The last message is the one nobody answered.
-      expect(answers).not.toContain(`Answer to: ${SECOND_QUESTION} #${MAX_FOLLOW_UPS_PER_KEY}`);
-      expect(answers.at(-1)).toBe(`Answer to: ${SECOND_QUESTION} #${MAX_FOLLOW_UPS_PER_KEY - 1}`);
+      expect(answers).not.toContain(
+        `Answer to: ${SECOND_QUESTION} #${AI_JOB_MAX_UNFINISHED_PER_CHAT}`,
+      );
+      expect(answers.at(-1)).toBe(
+        `Answer to: ${SECOND_QUESTION} #${AI_JOB_MAX_UNFINISHED_PER_CHAT - 1}`,
+      );
     } finally {
       backlog.release(0);
       await busy.close();

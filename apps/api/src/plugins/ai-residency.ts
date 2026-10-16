@@ -32,15 +32,28 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
+import type { Region } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { readHipaaScope } from '../lib/hipaa.js';
-import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { type TenantContext, withTenant } from '../lib/tenant.js';
+import { type AuditContext, writeAuditEntry } from '../services/audit/audit-log.js';
 import {
   assertInferenceAllowed,
   inferenceLeavesRegion,
   resolveEmbeddingInferenceProvider,
   resolveInferenceProvider,
 } from '../services/ai/inference.js';
+
+/** Who is about to send a workspace's content to a model, when it is not a request. */
+export interface AiInferenceCaller {
+  tenant: TenantContext;
+  /** The workspace's own region (`organizations.region`). */
+  region: Region;
+  /** The refusal's audit context — built only when a refusal is recorded. */
+  auditContext: () => AuditContext;
+  /** What asked, for the audit entry: a route, or the job that runs the AI. */
+  route: string;
+}
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -50,6 +63,14 @@ declare module 'fastify' {
      * in region.
      */
     requireAiInference: () => Promise<void>;
+  }
+
+  interface FastifyInstance {
+    /**
+     * The same check for a caller that is not a request — the AI job worker,
+     * answering a visitor's message after its response (tm 289.5).
+     */
+    requireAiInference: (caller: AiInferenceCaller) => Promise<void>;
   }
 
   interface FastifyContextConfig {
@@ -69,8 +90,8 @@ async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): P
     { kind: 'embedding', ...resolveEmbeddingInferenceProvider(options.env) },
   ] as const;
 
-  app.decorateRequest('requireAiInference', async function (this: FastifyRequest): Promise<void> {
-    const workspaceRegion = this.requireRegion();
+  app.decorate('requireAiInference', async (caller: AiInferenceCaller): Promise<void> => {
+    const workspaceRegion = caller.region;
 
     // The common case, and deliberately first: in-region providers raise no
     // question for anyone, covered or not, so nothing is read and nothing is
@@ -80,8 +101,10 @@ async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): P
     );
     if (!provider) return;
 
-    const licenseId = this.tenant().licenseId;
-    const hipaaScope = await this.withTenant((tx) => readHipaaScope(tx, licenseId));
+    const licenseId = caller.tenant.licenseId;
+    const hipaaScope = await withTenant(app.db, caller.tenant, (tx) =>
+      readHipaaScope(tx, licenseId),
+    );
     // The negative half of the requirement, and it is a feature rather than an
     // omission: a workspace that never signed a BAA keeps working exactly as it
     // did. The constraint arrives with the agreement, not with the deployment.
@@ -98,8 +121,8 @@ async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): P
     // the intended volume: this state is an operator error that should be
     // impossible to miss, and a compliance trail that samples is a compliance
     // trail that cannot answer the question it exists for.
-    await this.withTenant((tx) =>
-      writeAuditEntry(tx, this.auditContext(), {
+    await withTenant(app.db, caller.tenant, (tx) =>
+      writeAuditEntry(tx, caller.auditContext(), {
         action: 'compliance.ai_region_blocked',
         target: `license:${licenseId}`,
         metadata: {
@@ -107,12 +130,22 @@ async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): P
           provider_region: provider.region,
           provider: provider.id,
           provider_kind: provider.kind,
-          route: this.routeOptions.url ?? this.url,
+          route: caller.route,
         },
       }),
     );
 
     assertInferenceAllowed({ provider, workspaceRegion, hipaaScope });
+  });
+
+  app.decorateRequest('requireAiInference', async function (this: FastifyRequest): Promise<void> {
+    const region = this.requireRegion();
+    await app.requireAiInference({
+      tenant: this.tenant(),
+      region,
+      auditContext: () => this.auditContext(),
+      route: this.routeOptions.url ?? this.url,
+    });
   });
 
   app.addHook('preHandler', async (request: FastifyRequest) => {

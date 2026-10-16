@@ -13,11 +13,10 @@ import logContext from './plugins/log-context.js';
 import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
 import aiBudget from './plugins/ai-budget.js';
-import aiJobs from './plugins/ai-jobs.js';
+import aiJobs, { type AiJobDiscovery } from './plugins/ai-jobs.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
-import followUps from './plugins/follow-ups.js';
 import { logSafeUrl, PROVIDER_SECRET_LOG_PATHS } from './lib/log-redact.js';
 import { trustProxyFor } from './lib/trust-proxy.js';
 import licenseGate from './plugins/license-gate.js';
@@ -174,6 +173,13 @@ export interface BuildServerOptions {
   appsHttp?: SafeHttp;
   /** Provider hosts for `appsHttp` (tm 263). Omitted, the real ones. */
   appsEndpoints?: ProviderEndpoints;
+  /**
+   * How the AI job worker finds jobs it was not woken for (tm 289.5,
+   * `plugins/ai-jobs.ts`). Omitted, `shared`: the poll and the doorbell, so
+   * any process answers any visitor message. The test fixture passes
+   * `in_process`, so one suite's two servers never answer each other's.
+   */
+  aiJobDiscovery?: AiJobDiscovery;
 }
 
 export async function buildServer({
@@ -191,6 +197,7 @@ export async function buildServer({
   pilotRefusedPaths = PILOT_REFUSED_PATHS,
   appsHttp,
   appsEndpoints,
+  aiJobDiscovery,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -495,14 +502,15 @@ export async function buildServer({
   // answer cannot depend on the carrier, and since tm 256.4 the assignee notice,
   // the close transcript and the ticket notice. Before the routes that use it.
   await app.register(backgroundMail, { mailer });
-  // What a visitor's message sets off after its response (tm 256.10): the rule
-  // bot, the AI Agent and the assignee's notice. After `backgroundMail`, which
-  // the notice writes to, so its drain on close runs first.
-  await app.register(followUps);
-  // The durable AI job worker (tm 289.3 · ADR-11a). Idle until the customer
-  // routes hand it its handler (tm 289.5); after `database`, so its bounded
-  // drain on close runs while the pool is still open.
-  await app.register(aiJobs, { env });
+  // The durable AI job worker (tm 289.3 · ADR-11a): what a visitor's message
+  // sets off after its response — the rule bot, the AI Agent and the
+  // assignee's notice, started by the customer routes (tm 289.5). After
+  // `database` and `backgroundMail`, which the notice writes to, so its
+  // bounded drain on close runs while both are still open.
+  await app.register(aiJobs, {
+    env,
+    ...(aiJobDiscovery ? { discovery: aiJobDiscovery } : {}),
+  });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
   // phase in registration order — so this is what puts the rate limiter's

@@ -36,6 +36,12 @@
  * The sweep is idempotent: a chat closed on one pass is inactive on the next and
  * no longer a candidate.
  *
+ * It is also the queue record's safety net (tm 291 · RP-04): after its closes,
+ * each tenant's pass closes any stay in `queue_entries` still open on a closed
+ * connection (`closeOrphanedQueueEntries`). Every path that ends a wait closes
+ * its stay in its own transaction, so this finds nothing unless one forgot —
+ * and then "a closed session keeps no open stay" holds anyway.
+ *
  * Every close it drives is recorded in the audit trail as `chat.archived`
  * (FR-MOD-02.8), authored by the system: nobody asked for this archive, so the
  * entry carries a null actor rather than the last agent who touched the chat.
@@ -46,6 +52,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
 import { type AuditContext } from '../audit/audit-log.js';
+import { closeOrphanedQueueEntries } from '../routing/queue-entries.js';
 import { type ChatService } from './chat-service.js';
 import { DEFAULT_CONNECTION_IDLE_SECONDS, readChatTimeoutSeconds } from './conversation-day.js';
 
@@ -61,13 +68,15 @@ export interface TenantTimeoutResult {
    */
   widgetDefault: boolean;
   closed: number;
+  /** Stays left open on a closed connection, closed by the safety net. */
+  queueEntriesClosed: number;
 }
 
 export interface ChatTimeoutReport {
   startedAt: string;
   finishedAt: string;
   tenants: TenantTimeoutResult[];
-  totals: { tenants: number; closed: number };
+  totals: { tenants: number; closed: number; queueEntriesClosed: number };
 }
 
 interface TenantRow {
@@ -104,6 +113,7 @@ export class ChatTimeoutSweeper {
       totals: {
         tenants: results.length,
         closed: results.reduce((sum, r) => sum + r.closed, 0),
+        queueEntriesClosed: results.reduce((sum, r) => sum + r.queueEntriesClosed, 0),
       },
     };
   }
@@ -152,12 +162,19 @@ export class ChatTimeoutSweeper {
       if (await this.#chats.deactivateByTimeout(context, chatId, cutoff, audit)) closed += 1;
     }
 
+    // After the closes, so a stay this pass ended is already closed by its own
+    // close and only one some other path forgot is left here.
+    const queueEntriesClosed = await withTenant(this.#db, context, (tx) =>
+      closeOrphanedQueueEntries(tx),
+    );
+
     return {
       licenseId: tenant.license_id.toString(),
       organizationId: tenant.organization_id,
       timeoutSeconds: seconds,
       widgetDefault: !own,
       closed,
+      queueEntriesClosed,
     };
   }
 

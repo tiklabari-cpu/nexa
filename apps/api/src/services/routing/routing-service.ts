@@ -22,6 +22,7 @@
 import { Prisma } from '@prisma/client';
 import { GROUP_PRIORITY_ORDER, type GroupPriority } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
+import { leaveQueue } from './queue-entries.js';
 
 export interface RoutingContext {
   /** Page the visitor was on — matched against rule conditions. */
@@ -253,6 +254,8 @@ export class RoutingService {
         where: { id: thread.id },
         data: { assigneeId: assignee, queuePosition: null, queuedAt: null },
       });
+      // The wait it ends goes on the record in the same write (RP-04).
+      await leaveQueue(tx, thread.id, 'assigned');
       await tx.chatUser.upsert({
         where: { chatId_userId: { chatId: thread.chatId, userId: assignee } },
         create: { chatId: thread.chatId, userId: assignee, userType: 'agent', present: true },

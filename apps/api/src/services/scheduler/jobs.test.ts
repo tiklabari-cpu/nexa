@@ -126,7 +126,7 @@ describe('buildSchedulerJobs', () => {
         (j) => j.name === 'chat_timeout',
       );
       const outcome = await job?.run(context());
-      expect(outcome?.counts).toEqual({ tenants: 0, closed: 0 });
+      expect(outcome?.counts).toEqual({ tenants: 0, closed: 0, queue_entries_closed: 0 });
     });
 
     it('sla finds nothing to mark and reports zero tenants', async () => {

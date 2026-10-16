@@ -142,7 +142,13 @@ export function buildSchedulerJobs({
       intervalMs: intervals.chat_timeout,
       async run() {
         const report = await new ChatTimeoutSweeper(db, chats, env.AUDIT_CHAIN_SECRET).run();
-        return { counts: { tenants: report.totals.tenants, closed: report.totals.closed } };
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            closed: report.totals.closed,
+            queue_entries_closed: report.totals.queueEntriesClosed,
+          },
+        };
       },
     },
     {

@@ -36,6 +36,7 @@ import {
   type ConnectionOpenedVia,
   type EventRecipients,
   type EventType,
+  type QueueEntryOutcome,
   type TransferReason,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
@@ -62,6 +63,7 @@ import {
   type DrainedAssignment,
   type RoutingContext,
 } from '../routing/routing-service.js';
+import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
 import {
@@ -750,6 +752,8 @@ export class ChatService {
         text: 'Chat closed at the end of the day',
         properties: { system_event: 'chat_deactivated', reason: 'day_rollover' },
         audit: { ...audit, actorId: null, actorType: 'system', ip: null },
+        // The day ended under the wait; nobody chose to end it.
+        queueOutcome: 'timeout',
       }),
     };
   }
@@ -1180,6 +1184,7 @@ export class ChatService {
     }
 
     const threadId = await this.#allocateThreadId(tx);
+    const queuedAt = new Date();
     await tx.thread.create({
       data: {
         id: threadId,
@@ -1189,11 +1194,17 @@ export class ChatService {
         assigneeId: route.assigneeId,
         groupId: route.groupId,
         openedVia: opening.openedVia,
-        ...(route.queuePosition != null
-          ? { queuePosition: route.queuePosition, queuedAt: new Date() }
-          : {}),
+        ...(route.queuePosition != null ? { queuePosition: route.queuePosition, queuedAt } : {}),
       },
     });
+    if (route.queuePosition != null) {
+      await enterQueue(tx, {
+        licenseId: tenant.licenseId,
+        threadId,
+        groupId: queueGroup(route),
+        enteredAt: queuedAt,
+      });
+    }
 
     if (opening.marker) await this.#appendMarker(tx, tenant, dayChat.id, threadId, opening.marker);
 
@@ -1708,6 +1719,8 @@ export class ChatService {
         text: 'Chat archived',
         properties: { system_event: 'chat_deactivated' },
         audit,
+        // RP-04-S1: the player closing a chat that still waits gave up on it.
+        queueOutcome: principal.kind === 'customer' ? 'abandoned' : 'closed_by_agent',
       });
     });
 
@@ -1760,6 +1773,9 @@ export class ChatService {
         text: 'Chat closed after inactivity',
         properties: { system_event: 'chat_deactivated', reason: 'timeout' },
         audit,
+        // RP-04-S1: a wait that went quiet until the window closed it is a
+        // player who left.
+        queueOutcome: 'abandoned',
       });
     });
 
@@ -1811,6 +1827,8 @@ export class ChatService {
       text: string;
       properties: Record<string, unknown>;
       audit: AuditContext;
+      /** How a wait this close ends goes on the queue record (RP-04-S1). */
+      queueOutcome: QueueEntryOutcome;
     },
   ): Promise<CloseResult> {
     const closedAt = new Date();
@@ -1818,6 +1836,7 @@ export class ChatService {
       where: { id: thread.id },
       data: { active: false, closedAt, queuePosition: null, queuedAt: null },
     });
+    await leaveQueue(tx, thread.id, close.queueOutcome, closedAt);
 
     // Both clocks stop here (FR-MOD-11.5 · 11.5-d). Resolution is obvious; the
     // first-response one is the case that would otherwise never be judged from a
@@ -2402,6 +2421,19 @@ export class ChatService {
           where: { id: thread.id },
           data: { assigneeId: null, groupId: group.id },
         });
+        // A stay ends with the team it waited for. Still positioned and now
+        // unassigned, the connection waits on in the receiving team's queue —
+        // the drain reads exactly that — so that wait is a stay of its own.
+        const now = new Date();
+        await leaveQueue(tx, thread.id, 'transferred', now);
+        if (thread.queuePosition != null) {
+          await enterQueue(tx, {
+            licenseId: tenant.licenseId,
+            threadId: thread.id,
+            groupId: group.id,
+            enteredAt: now,
+          });
+        }
       } else {
         const membership = await tx.agentMembership.findUnique({
           where: {
@@ -2418,6 +2450,7 @@ export class ChatService {
           where: { id: thread.id },
           data: { assigneeId: target.agentId! },
         });
+        await leaveQueue(tx, thread.id, 'transferred');
         await tx.chatUser.upsert({
           where: { chatId_userId: { chatId: chat.id, userId: target.agentId! } },
           create: {
@@ -2644,6 +2677,8 @@ export class ChatService {
       if (seized.count === 0) {
         throw new ApiError('takeover_conflict', 'Another supervisor took this chat over first.');
       }
+      // Seizing a chat that still waited is how it got an agent (RP-04).
+      await leaveQueue(tx, thread.id, 'assigned');
 
       // The supervisor is now present; the agent they took it from stays on the
       // chat as a non-present participant so the record of who was there survives.
@@ -2997,6 +3032,7 @@ export class ChatService {
       });
     }
 
+    const queuedAt = new Date();
     await tx.thread.create({
       data: {
         id: threadId,
@@ -3006,11 +3042,17 @@ export class ChatService {
         assigneeId: input.assigneeId,
         groupId: input.groupId,
         openedVia: input.openedVia,
-        ...(input.queuePosition != null
-          ? { queuePosition: input.queuePosition, queuedAt: new Date() }
-          : {}),
+        ...(input.queuePosition != null ? { queuePosition: input.queuePosition, queuedAt } : {}),
       },
     });
+    if (input.queuePosition != null) {
+      await enterQueue(tx, {
+        licenseId: input.licenseId,
+        threadId,
+        groupId: queueGroup(input),
+        enteredAt: queuedAt,
+      });
+    }
 
     return { id: chatId, threads: [{ id: threadId }] };
   }
@@ -3027,6 +3069,15 @@ export class ChatService {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * The team a queued connection waits for, on the queue record (RP-04): the
+ * connection's own team, else the chat's first access group. Team queues
+ * (AU-01 · #305) will name it outright.
+ */
+function queueGroup(route: { groupId: bigint | null; groupIds: readonly bigint[] }): bigint | null {
+  return route.groupId ?? route.groupIds[0] ?? null;
+}
 
 /**
  * `ChatService.list`'s query, taking an already-open tenant transaction

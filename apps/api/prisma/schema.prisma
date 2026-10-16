@@ -186,6 +186,7 @@ model License {
   aiUsageAlertRecipients AiUsageAlertRecipient[]
   aiDecisionLogs         AiDecisionLog[]
   aiJobs                 AiJob[]
+  queueEntries           QueueEntry[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -1006,11 +1007,43 @@ model Thread {
   skillRuns      SkillRun[]
   aiDecisionLogs AiDecisionLog[]
   aiJobs         AiJob[]
+  queueEntries   QueueEntry[]
 
   @@index([chatId, createdAt])
   @@index([licenseId, active, createdAt(sort: Desc)])
   @@index([assigneeId])
   @@map("threads")
+}
+
+/// One stay of a connection in the routing queue (tm 291 · RP-04, K21).
+///
+/// `threads.queued_at` is cleared when the connection leaves the queue, so a
+/// finished wait lives here instead: a row opens where the connection enters
+/// the queue and closes, in the same transaction, where it leaves. A
+/// connection may wait more than once (a transfer to another team, WG-03's
+/// re-queue), but never twice at once — the partial unique index
+/// `queue_entries_thread_open_key` (hand-written in the migration; Prisma has
+/// no syntax for it) allows one open row per thread.
+model QueueEntry {
+  id        String    @id @default(uuid()) @db.Uuid
+  licenseId BigInt    @map("license_id")
+  threadId  String    @map("thread_id") @db.VarChar(12)
+  /// The team it waited for. No relation, the `threads.group_id` rule: a
+  /// deleted team must not erase the record of what waited for it.
+  groupId   BigInt?   @map("group_id")
+  enteredAt DateTime  @map("entered_at") @db.Timestamptz(6)
+  /// Null while it still waits; set together with `outcome`.
+  leftAt    DateTime? @map("left_at") @db.Timestamptz(6)
+  /// One of `QUEUE_ENTRY_OUTCOMES` (`@siyahtus/types`), enforced by
+  /// `queue_entries_outcome_check`.
+  outcome   String?
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  thread  Thread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, enteredAt])
+  @@index([threadId])
+  @@map("queue_entries")
 }
 
 /// Everything that ever happened in a thread.

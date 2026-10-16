@@ -185,6 +185,7 @@ model License {
   aiUsageAlerts          AiUsageAlert[]
   aiUsageAlertRecipients AiUsageAlertRecipient[]
   aiDecisionLogs         AiDecisionLog[]
+  aiJobs                 AiJob[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -957,6 +958,7 @@ model Chat {
   goalAchievements GoalAchievement[]
   trackedSales     TrackedSale[]
   aiDecisionLogs   AiDecisionLog[]
+  aiJobs           AiJob[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   /// The inbox list's ordering index. Kept beside the `created_at` one rather
@@ -1003,6 +1005,7 @@ model Thread {
   events         Event[]
   skillRuns      SkillRun[]
   aiDecisionLogs AiDecisionLog[]
+  aiJobs         AiJob[]
 
   @@index([chatId, createdAt])
   @@index([licenseId, active, createdAt(sort: Desc)])
@@ -1953,6 +1956,76 @@ model AiDecisionLog {
   @@index([threadId])
   @@index([customerId])
   @@map("ai_decision_logs")
+}
+
+/// The durable AI job queue (ADR-11a · tm 289 · SiyahTuş analysis GV-02): one
+/// row per automatic reply a visitor message is owed, written in the same
+/// transaction as the message (the outbox) and worked off by the AI job
+/// worker. Replaces the in-memory `FollowUps` queue for that work, so a
+/// restart no longer loses an answer.
+///
+/// State moves only through two SECURITY DEFINER functions
+/// (`services/ai/ai-jobs.ts`): `ai_jobs_claim` takes due jobs across tenants
+/// under `FOR UPDATE SKIP LOCKED` with a lease, one chat at a time in arrival
+/// order; `ai_jobs_settle` records the result, fenced by the attempt number
+/// the claim handed out. `siyahtus_app` may read its tenant's rows and enqueue
+/// (`pending`, or `expired` at the door), nothing else. The CHECKs on `kind`,
+/// `state`, each state's shape and `outcome` live in the migration
+/// (20261016120000_ai_jobs) — Prisma cannot model them.
+///
+/// Kept as long as the conversation: every row names its thread, which
+/// cascades, so the retention sweep's thread delete and the customer's
+/// erasure take the queue's history with the conversation.
+model AiJob {
+  id             String    @id @default(uuid()) @db.Uuid
+  licenseId      BigInt    @map("license_id")
+  /// The licence's organization, so the worker can open the job's tenant
+  /// context without a lookup. The insert policy holds it to
+  /// `app.current_organization`.
+  organizationId String    @map("organization_id") @db.Uuid
+  /// The day container (panel "Thread ID") — the queue's ordering key.
+  chatId         String    @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID") the visitor wrote on.
+  threadId       String    @map("thread_id") @db.VarChar(12)
+  /// The visitor event the reply is owed to. No relation: `events` is
+  /// partitioned and keyed by (id, created_at).
+  triggerEventId String    @map("trigger_event_id") @db.VarChar(40)
+  /// One of `AI_JOB_KINDS`, enforced by `ai_jobs_kind_check`.
+  kind           String
+  /// One of `AI_JOB_STATES`, enforced by `ai_jobs_state_check`.
+  state          String    @default("pending")
+  /// Claims so far. Also the settle's fence: a worker whose lease ran out and
+  /// was re-claimed holds a stale number and cannot settle.
+  attempts       Int       @default(0)
+  /// Not claimable before this (a released job's retry delay).
+  availableAt    DateTime  @default(now()) @map("available_at") @db.Timestamptz(6)
+  /// Set while `running`: another worker may re-claim the job once it passes.
+  leaseUntil     DateTime? @map("lease_until") @db.Timestamptz(6)
+  /// Insert time, not transaction start (`now()`): the per-chat order is this
+  /// column, and two sends on one thread can start in one order and take the
+  /// thread's sequence lock in the other. Leave it to the default.
+  createdAt      DateTime  @default(dbgenerated("clock_timestamp()")) @map("created_at") @db.Timestamptz(6)
+  /// The first claim.
+  startedAt      DateTime? @map("started_at") @db.Timestamptz(6)
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz(6)
+  /// A snake_case code (`ai_jobs_outcome_check`) — never conversation text.
+  outcome        String?
+  /// At most 1000 characters (`ai_jobs_last_error_check`).
+  lastError      String?   @map("last_error")
+  /// The HTTP request that enqueued the job (`request_id` on its log lines).
+  requestId      String?   @map("request_id") @db.VarChar(64)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  thread  Thread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  /// One job per message and kind: a second enqueue of the same event is a
+  /// refused write, not a race.
+  @@unique([licenseId, triggerEventId, kind])
+  @@index([state, availableAt])
+  @@index([chatId, createdAt])
+  @@index([threadId])
+  @@map("ai_jobs")
 }
 
 /// Visual node/edge automation (FR-MOD-13.4). The table exists so the schema

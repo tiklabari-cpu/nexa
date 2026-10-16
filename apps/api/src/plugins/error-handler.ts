@@ -68,9 +68,10 @@ async function errorHandlerPlugin(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((error, request: FastifyRequest, reply: FastifyReply) => {
     const apiError = normalise(error);
 
+    // No `request_id` here: the request's logger carries it on every line
+    // (`requestIdLogLabel`, ID-08), and pino would write a second copy.
     const logPayload = {
       err: error,
-      request_id: request.id,
       error_type: apiError.type,
       method: request.method,
       url: request.url,

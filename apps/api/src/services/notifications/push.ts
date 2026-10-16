@@ -187,7 +187,7 @@ export async function pushToAgentDevices(
     }
   } catch (error) {
     deps.log.warn(
-      { err: error, chatId: input.event.chatId, accountId: input.accountId },
+      { err: error, chat_id: input.event.chatId, account_id: input.accountId },
       'push notification failed',
     );
   }

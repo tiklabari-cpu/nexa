@@ -8,7 +8,7 @@
  */
 import type { Logger } from 'pino';
 import { RTM_LIMITS, RTM_PUSH_ACTIONS, type ErrorType, type RtmAction } from '@siyahtus/types';
-import type { SocketAuthenticator, SocketPrincipal } from './auth.js';
+import { principalLogContext, type SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { ConflictDetectionService } from './conflict.js';
 import type { ConflictPublisher } from './conflict-publisher.js';
 import type { Connection, ConnectionRegistry } from './connection.js';
@@ -133,6 +133,7 @@ export class Dispatcher {
     this.deps.registry.authenticate(connection.id, {
       licenseId: principal.licenseId,
       actorId: principal.actorId,
+      actorType: principal.kind,
       groupIds: principal.groupIds,
       unrestricted: principal.unrestricted,
     });
@@ -259,7 +260,12 @@ export class Dispatcher {
         }
       } catch (error) {
         this.deps.log.error(
-          { err: error, chat_id: chatId, request_id: message.request_id },
+          {
+            ...principalLogContext(principal),
+            err: error,
+            chat_id: chatId,
+            request_id: message.request_id,
+          },
           'conflict detection failed',
         );
       }

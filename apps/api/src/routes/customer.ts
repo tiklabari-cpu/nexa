@@ -52,6 +52,7 @@ import {
   claimAssigneeEmailWindow,
   shouldEmailAssignee,
 } from '../services/notifications/assignee-email.js';
+import { bindChatLogContext } from '../plugins/log-context.js';
 import { pushToAgentDevices } from '../services/notifications/push.js';
 import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -344,7 +345,8 @@ export default async function customerRoutes(
    * Everything read from `request` here is plain data or reaches the database
    * through `app.db` (`withTenant`, `requireAiInference`), none of it through
    * the connection, so it outlives the response unchanged; `request.log` keeps
-   * the request id on whatever the answer logs.
+   * the request id — and, since ID-08, the workspace, the member, the chat and
+   * the connection the route bound — on whatever the answer logs.
    */
   function followUp(
     request: FastifyRequest,
@@ -353,6 +355,8 @@ export default async function customerRoutes(
     text: string | undefined,
     pageUrl: string | null,
   ): void {
+    // The route has usually bound it already, with the connection; a no-op then.
+    bindChatLogContext(request, { chatId });
     const queued = app.followUps.enqueue(`${request.tenant().licenseId}:${chatId}`, async () => {
       if (text?.trim()) await respondToCustomerMessage(request, chatId, text, pageUrl);
       await notifyAssignee(request, chatId, kind);
@@ -362,7 +366,7 @@ export default async function customerRoutes(
       // to faster than anything can answer it. The message is committed and in
       // the inbox; it is left for a human, like any other failure here.
       request.log.warn(
-        { chat_id: chatId, pending: app.followUps.maxPerKey },
+        { pending: app.followUps.maxPerKey },
         'visitor follow-ups backed up; leaving this message for a human',
       );
     }
@@ -487,8 +491,7 @@ export default async function customerRoutes(
           assigneeId: channel.assigneeId,
           cooldownMs: env.ASSIGNEE_EMAIL_COOLDOWN_MS,
         },
-        (error) =>
-          request.log.warn({ err: error, chatId }, 'assignee e-mail window unavailable; mailing'),
+        (error) => request.log.warn({ err: error }, 'assignee e-mail window unavailable; mailing'),
       );
       if (!open) return;
 
@@ -510,13 +513,12 @@ export default async function customerRoutes(
             },
           ),
         },
-        (outcome) =>
-          logUnsentMail(request.log, 'assignee_notification.mail', outcome, { chat_id: chatId }),
+        (outcome) => logUnsentMail(request.log, 'assignee_notification.mail', outcome),
       );
     } catch (error) {
       // The realtime push already reached the agent's open inbox; e-mail and
       // handset are the courtesy for when it is not open.
-      request.log.warn({ err: error, chatId }, 'assignee notification failed');
+      request.log.warn({ err: error }, 'assignee notification failed');
     }
   }
 
@@ -598,6 +600,12 @@ export default async function customerRoutes(
 
       return { chat, agentsOnline, customer, responder, campaign };
     });
+    if (state.chat) {
+      bindChatLogContext(request, {
+        chatId: state.chat.id,
+        threadId: state.chat.threads[0]?.id ?? null,
+      });
+    }
 
     const events = state.chat
       ? await chats.listEvents(request.tenant(), principal, state.chat.id, { limit: 100 })
@@ -876,6 +884,9 @@ export default async function customerRoutes(
         audit: request.auditContext(),
       });
       const chatId = result.chat.id;
+      // From here every line — the follow-ups' included — names the day's chat
+      // and the connection this message landed in (ID-08).
+      bindChatLogContext(request, { chatId, threadId: result.event.thread_id });
 
       // A replay is the same message arriving twice; answering or notifying
       // again would do both twice for one question.
@@ -943,6 +954,7 @@ export default async function customerRoutes(
       );
 
       if (chat) {
+        bindChatLogContext(request, { chatId: chat.id });
         await chats.publishCustomerTyping(request.tenant(), principal, chat.id, {
           isTyping: body.is_typing,
           // The sneak-peek is pushed to the agent as the visitor types; mask a
@@ -970,6 +982,7 @@ export default async function customerRoutes(
         }),
       );
       if (!chat) throw ApiError.chatInactive('There is no open conversation.');
+      bindChatLogContext(request, { chatId: chat.id });
 
       await chats.deactivate(request.tenant(), principal, chat.id, request.auditContext());
       return reply.status(204).send();

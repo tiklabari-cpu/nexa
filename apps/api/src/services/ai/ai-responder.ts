@@ -22,6 +22,7 @@
  */
 import type { FastifyRequest } from 'fastify';
 import { AI_BOT_ID } from '@siyahtus/types';
+import { bindChatLogContext } from '../../plugins/log-context.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
@@ -51,6 +52,9 @@ export class AiResponder {
     message: string,
   ): Promise<SkillRunResult | null> {
     const tenant = request.tenant();
+    // Every line below is about this chat (ID-08); the customer route has
+    // normally bound it already, with the connection, and this is a no-op.
+    bindChatLogContext(request, { chatId });
 
     // Residency, before the message reaches the engine (NFR-C4 · C4-e). This is
     // the one AI surface a *customer* triggers, and the content is the message
@@ -63,7 +67,7 @@ export class AiResponder {
       await request.requireAiInference();
     } catch (error) {
       request.log.warn(
-        { err: error, chat_id: chatId },
+        { err: error },
         'ai inference refused for this workspace; leaving the message for a human',
       );
       return null;
@@ -82,7 +86,7 @@ export class AiResponder {
     } catch (error) {
       if (!(error instanceof AiDailyCapError)) {
         request.log.error(
-          { err: error, chat_id: chatId },
+          { err: error },
           'daily AI cap could not be checked; leaving the message for a human',
         );
       }
@@ -107,7 +111,6 @@ export class AiResponder {
         const { provider, kind, transient, status, code, requestId, reason } = result.failure;
         request.log.warn(
           {
-            chat_id: chatId,
             skill_id: result.skillId,
             provider,
             kind,
@@ -166,7 +169,7 @@ export class AiResponder {
       // The customer's message is already stored. Whatever went wrong here, the
       // conversation is intact and a human will pick it up — which is exactly
       // what would have happened without any AI.
-      request.log.error({ err: error, chat_id: chatId }, 'skill engine failed');
+      request.log.error({ err: error }, 'skill engine failed');
       return null;
     }
   }
@@ -181,7 +184,7 @@ export class AiResponder {
     if (!group) {
       // The skill names a team that no longer exists. Leaving the conversation
       // where it is means a human still sees it; silently dropping it would not.
-      request.log.warn({ chat_id: chatId, group: groupName }, 'skill targets an unknown team');
+      request.log.warn({ group: groupName }, 'skill targets an unknown team');
       return;
     }
 

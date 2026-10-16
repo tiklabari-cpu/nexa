@@ -288,9 +288,9 @@ export default async function scimRoutes(
         // a driver message or a stack frame must not leave the process.
         ApiError.internal('Internal server error.', error);
 
+    // `request_id` rides on the request's logger (ID-08), as in the global handler.
     const payload = {
       err: error,
-      request_id: request.id,
       error_type: apiError.type,
       method: request.method,
       url: request.url,

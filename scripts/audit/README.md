@@ -14,6 +14,8 @@ koşulamaz; bunlar koşulabilir. Hepsi salt-okunurdur — hiçbiri dosya yazmaz.
 | `unpaged-lists.cjs`    |     NFR-P5     | `pnpm audit:unpaged-lists`    | `apps/web/src`'te sabit `limit` ile yapılıp aynı istekte imleç (`page_id`/`before_event_id`/`after_event_id`) taşımayan liste çağrıları. Sayfalaması OLMAYAN uçlar da `limit` alır — bunlar `paging-exempt:` ile muaf tutulur (aşağı bak).                 |
 | `req-coverage.cjs`     | CONVENTIONS §7 | `pnpm audit:req-coverage`     | `prd-uyum-denetimi.md` Ek A'nın 247 satırını, test başlıklarındaki gereksinim etiketleriyle kesiştirir: **hangi kabul kriterini kimse üstlenmemiş**. Etiketin kriteri DOĞRU ölçtüğünü göremez (aşağı bak). `--json` makine biçimini verir.                 |
 
+| `log-keys.mjs` | ID-08 | `pnpm audit:log-keys` | `apps/api/src` + `apps/rtm/src` log çağrılarında (`*log(ger)?.<seviye>(` / `.child(`, ilk argüman nesne) camelCase kimlik anahtarı (`chatId`, `licenseId`, `reqId` …). **Kapı:** bulgu varsa exit 1, CI "Log keys" adımı (tm 288.1). Liste `LOG_KEYS`'e `log-keys-audit.test.ts` ile bağlı. |
+
 Kökten koş: `pnpm audit:<ad>` (ör. `pnpm audit:sweep`) veya doğrudan `node scripts/audit/<betik>`.
 Bulguların değerlendirmesi HANDOFF'un ilgili turunun §F.1 bölümündedir (ilk tam koşu: `## 126` bloğu).
 

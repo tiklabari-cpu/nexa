@@ -111,6 +111,11 @@ jobs:
       - name: Requirement coverage
         run: pnpm audit:req-coverage
 
+      # Identity keys in log calls are snake_case (ID-08 · LOG_KEYS): a `chatId`
+      # on one line and `chat_id` on the next is a search that finds half.
+      - name: Log keys
+        run: pnpm audit:log-keys
+
       - name: Build
         run: pnpm build
 

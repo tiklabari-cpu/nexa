@@ -36,7 +36,6 @@ class LineSink {
 interface LogLine {
   level: number;
   msg?: string;
-  reqId?: string;
   request_id?: string;
   error_type?: string;
 }

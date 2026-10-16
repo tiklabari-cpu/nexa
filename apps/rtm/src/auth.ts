@@ -17,6 +17,7 @@ import {
   scopesWithinRole,
   servesRegion,
   type AgentRole,
+  type LogContext,
   type Region,
 } from '@siyahtus/types';
 
@@ -30,6 +31,16 @@ export interface SocketPrincipal {
   groupIds: number[];
   /** True when the token may see every chat in the license. */
   unrestricted: boolean;
+}
+
+/** The identity half of a log line written for this principal (ID-08 · `LOG_KEYS`). */
+export function principalLogContext(principal: SocketPrincipal): LogContext {
+  return {
+    license_id: principal.licenseId,
+    organization_id: principal.organizationId,
+    actor_type: principal.kind,
+    actor_id: principal.actorId,
+  };
 }
 
 export type AuthFailure =

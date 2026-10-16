@@ -23,6 +23,7 @@
  * every HIPAA-covered workspace on a data-residency question it does not raise.
  */
 import type { FastifyRequest } from 'fastify';
+import { bindChatLogContext } from '../../plugins/log-context.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
@@ -58,6 +59,9 @@ export class RuleBotResponder {
     pageUrl: string | null,
   ): Promise<RuleBotOutcome | null> {
     const tenant = request.tenant();
+    // The chat every line below is about (ID-08) — already bound by the
+    // customer route, with the connection, so normally a no-op.
+    bindChatLogContext(request, { chatId });
 
     try {
       const match = await request.withTenant((tx) =>
@@ -108,7 +112,7 @@ export class RuleBotResponder {
     } catch (error) {
       // The customer's message is already stored. Whatever went wrong, the
       // conversation is intact and the AI — then a human — still gets it.
-      request.log.error({ err: error, chat_id: chatId }, 'rule bot failed');
+      request.log.error({ err: error }, 'rule bot failed');
       return null;
     }
   }
@@ -131,7 +135,7 @@ export class RuleBotResponder {
       });
     } catch (error) {
       request.log.warn(
-        { err: error, chat_id: chatId, group_id: String(groupId) },
+        { err: error, group_id: String(groupId) },
         'rule bot could not transfer the chat',
       );
       return false;

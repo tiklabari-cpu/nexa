@@ -25,6 +25,7 @@ import {
   type TenantContext,
 } from '../lib/tenant.js';
 import { authFailureBucket } from './rate-limit.js';
+import { bindLogContext, principalLogContext } from './log-context.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
 import { LastSeenRecorder } from '../services/auth/last-seen.js';
@@ -238,6 +239,10 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     const { principal } = resolved;
     request.principal = principal;
     request.principalRegion = resolved.region;
+    // Every line from here on says whose request it is (ID-08) — including the
+    // refusals just below, which are the lines an operator most wants to match
+    // to a workspace.
+    bindLogContext(request, principalLogContext(principal));
 
     // --- Principal kind ---------------------------------------------------
     const allowed = config.principals ?? DEFAULT_PRINCIPALS;

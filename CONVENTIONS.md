@@ -26,6 +26,9 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
       coverage" adımı, §1.5). Yeni yazılan/değişen bir test bir PRD kabul kriterini koruyorsa
       CONVENTIONS §7'nin biçimiyle etiketlenir. Kapı **kapsama borcunu kırmızı yapmaz** (§7.5
       kademeli benimseme) — yalnız raporun kendi hakkında yalan söylemesinde kırmızı verir.
+- [ ] **Log anahtarları snake_case** — `pnpm audit:log-keys` (exit 0; CI'da "Log keys" adımı,
+      tm 288.1). `apps/api` + `apps/rtm` log çağrısında `chatId`/`licenseId`/`reqId` gibi bir
+      kimlik anahtarı kırmızı verir; doğru yazım `LOG_KEYS` (`@siyahtus/types`).
 - [ ] **PLAN.md gereksinim satırı güncellendi** — task'ın PRD kodundaki satır(lar) `⬜`/`◐` → `✅`.
       Doğrulama: `grep -n '| <PRD kodu>' PLAN.md` çıktısındaki **durum damgalı** satırlarda `⬜`
       kalmamalı. Bir task birden çok satır kapatıyorsa hepsi. Kısmen karşılandıysa `◐` + eksik

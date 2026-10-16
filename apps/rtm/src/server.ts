@@ -20,7 +20,7 @@ import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
 import { ConflictPublisher } from './conflict-publisher.js';
-import { ConnectionRegistry, type Connection } from './connection.js';
+import { ConnectionRegistry, connectionLogContext, type Connection } from './connection.js';
 import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
 import { decodeRequest, encodeError } from './protocol.js';
@@ -707,7 +707,12 @@ function attach(params: {
           // it this line cannot be pinned to the frame the client is still
           // waiting on, the one correlation an operator actually needs here.
           log.error(
-            { err: error, action: decoded.value.action, request_id: decoded.value.request_id },
+            {
+              ...connectionLogContext(connection),
+              err: error,
+              action: decoded.value.action,
+              request_id: decoded.value.request_id,
+            },
             'rtm dispatch failed',
           );
           send(
@@ -740,7 +745,10 @@ function attach(params: {
       protocolViolation =
         protocolViolation || (error as NodeJS.ErrnoException).code!.startsWith('WS_ERR_');
     }
-    log.warn({ err: error, connection_id: connection.id, side }, 'socket error');
+    log.warn(
+      { ...connectionLogContext(connection), err: error, connection_id: connection.id, side },
+      'socket error',
+    );
   });
 }
 

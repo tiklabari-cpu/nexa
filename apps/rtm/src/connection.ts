@@ -8,6 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
+import type { LogContext } from '@siyahtus/types';
 
 export interface Connection {
   id: string;
@@ -18,6 +19,8 @@ export interface Connection {
   authenticated: boolean;
   licenseId: string | null;
   actorId: string | null;
+  /** The principal kind that logged in (`agent`, `bot`, `customer`) — for the log. */
+  actorType: string | null;
   /** Teams the agent belongs to — the audience filter keys on these. */
   groupIds: number[];
   /** True when the token may see every chat in the licence. */
@@ -50,6 +53,7 @@ export class ConnectionRegistry {
       authenticated: false,
       licenseId: null,
       actorId: null,
+      actorType: null,
       groupIds: [],
       unrestricted: false,
       subscriptions: new Set(),
@@ -71,6 +75,7 @@ export class ConnectionRegistry {
     actor: {
       licenseId: string;
       actorId: string;
+      actorType?: string;
       groupIds?: number[];
       unrestricted?: boolean;
     },
@@ -80,6 +85,7 @@ export class ConnectionRegistry {
     connection.authenticated = true;
     connection.licenseId = actor.licenseId;
     connection.actorId = actor.actorId;
+    connection.actorType = actor.actorType ?? connection.side;
     connection.groupIds = actor.groupIds ?? [];
     connection.unrestricted = actor.unrestricted ?? false;
     this.#index(this.#byActor, this.#actorKey(connection.organizationId, actor.actorId), id);
@@ -150,4 +156,18 @@ export class ConnectionRegistry {
     existing.delete(id);
     if (existing.size === 0) map.delete(key);
   }
+}
+
+/**
+ * Who a socket's log line is about (ID-08) — the gateway's half of the API's
+ * `plugins/log-context.ts`, with the same `LOG_KEYS`. Before login only the
+ * organization is known; afterwards the licence and the actor are too.
+ */
+export function connectionLogContext(connection: Connection): LogContext {
+  return {
+    organization_id: connection.organizationId,
+    ...(connection.licenseId ? { license_id: connection.licenseId } : {}),
+    ...(connection.actorId ? { actor_id: connection.actorId } : {}),
+    actor_type: connection.actorType ?? connection.side,
+  };
 }

@@ -31,7 +31,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { licenseChannel, type AgentConflictWarningPush, type BusEnvelope } from '@siyahtus/types';
-import type { SocketPrincipal } from './auth.js';
+import { principalLogContext, type SocketPrincipal } from './auth.js';
 import type { ComposingAgent } from './conflict.js';
 
 const ACTION = 'agent_conflict_warning' as const;
@@ -57,7 +57,10 @@ export class ConflictPublisher {
     // Fail closed: an audience of nobody is meaningless, and the opposite
     // default would tell every agent in the licence who is working this chat.
     if (agentIds.length === 0) {
-      this.log.warn({ action: ACTION }, 'refusing to publish a conflict warning with no audience');
+      this.log.warn(
+        { ...principalLogContext(principal), chat_id: chatId, action: ACTION },
+        'refusing to publish a conflict warning with no audience',
+      );
       return;
     }
 
@@ -66,7 +69,10 @@ export class ConflictPublisher {
       // No active thread means nothing coherent to warn about; the read is
       // RLS-scoped, so a chat the caller cannot see also lands here.
       if (!threadId) {
-        this.log.warn({ action: ACTION }, 'no active thread for conflict warning — skipping');
+        this.log.warn(
+          { ...principalLogContext(principal), chat_id: chatId, action: ACTION },
+          'no active thread for conflict warning — skipping',
+        );
         return;
       }
 
@@ -95,7 +101,10 @@ export class ConflictPublisher {
     } catch (error) {
       // Never rethrow: a lost warning is re-published on the next keystroke, and
       // the typing indicator it rides on must still succeed.
-      this.log.error({ err: error, action: ACTION }, 'conflict warning publish failed');
+      this.log.error(
+        { ...principalLogContext(principal), chat_id: chatId, err: error, action: ACTION },
+        'conflict warning publish failed',
+      );
     }
   }
 

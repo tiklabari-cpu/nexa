@@ -39,3 +39,4 @@ export * from './retention.js';
 export * from './ui-preferences.js';
 export * from './panel-font.js';
 export * from './deployment.js';
+export * from './log-keys.js';

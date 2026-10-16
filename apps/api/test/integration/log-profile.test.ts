@@ -6,8 +6,8 @@
  * (M-PROD-CFG-a) first ran the CORS branch:
  *
  *  - `genReqId`/`X-Request-Id` (`server.ts`) mean every log line Fastify
- *    writes for a request carries the same `reqId` the client can read off
- *    the response header — the correlation NFR-M5 asks for. Untested, a
+ *    writes for a request carries the same `request_id` the client can read off
+ *    the response header (pino's `reqId` until ID-08 renamed the label) — the correlation NFR-M5 asks for. Untested, a
  *    refactor that moved the header write off `request.id` (or vice versa)
  *    would pass every other suite and silently break the one thing an
  *    operator uses the id for: finding the log line that matches a report.
@@ -99,7 +99,8 @@ describe('production log profile', () => {
     expect(response.headers['x-request-id']).toBe('client-supplied-abc123');
 
     const completed = parsedLines(sink).find((entry) => entry['msg'] === 'request completed');
-    expect(completed?.['reqId']).toBe('client-supplied-abc123');
+    expect(completed?.['request_id']).toBe('client-supplied-abc123');
+    expect(completed).not.toHaveProperty('reqId');
   });
 
   it('still correlates when the client sends no id — the server-generated one matches on both sides', async () => {
@@ -112,7 +113,7 @@ describe('production log profile', () => {
     expect((generatedId as string).length).toBeGreaterThan(0);
 
     const completed = parsedLines(sink).find((entry) => entry['msg'] === 'request completed');
-    expect(completed?.['reqId']).toBe(generatedId);
+    expect(completed?.['request_id']).toBe(generatedId);
   });
 
   it('masks a PII-bearing query string under NODE_ENV=production, not only under the test default', async () => {

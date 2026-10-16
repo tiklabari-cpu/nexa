@@ -3,11 +3,13 @@ import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { isAcceptableRequestId, LOG_KEYS } from '@siyahtus/types';
 import type { Env } from './config/env.js';
 import errorHandler from './plugins/error-handler.js';
 import telemetryPlugin from './plugins/telemetry.js';
 import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
 import auth from './plugins/auth.js';
+import logContext from './plugins/log-context.js';
 import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
 import aiBudget from './plugins/ai-budget.js';
@@ -261,8 +263,17 @@ export async function buildServer({
           }),
     },
     // Correlates the log line, the trace and the `request_id` the client sees.
-    genReqId: (req) => (req.headers['x-request-id'] as string | undefined) ?? randomUUID(),
-    requestIdHeader: 'x-request-id',
+    // The caller's `X-Request-Id` is kept only when it looks like an id
+    // (ID-08): it lands on every line this request writes and in every error
+    // body, so anything else — a newline, a 2 KB string, a shape nobody can
+    // grep for — is replaced with a fresh UUID rather than trusted. There is no
+    // `requestIdHeader` on purpose: with one set, Fastify reads the header
+    // itself and calls this only when it is absent, which is how an unchecked
+    // id used to get in.
+    genReqId: (req) => {
+      const supplied = req.headers['x-request-id'];
+      return isAcceptableRequestId(supplied) ? supplied : randomUUID();
+    },
     // Trust exactly `TRUST_PROXY_HOPS` proxy hops, not the whole
     // `X-Forwarded-For` chain.
     //
@@ -294,7 +305,12 @@ export async function buildServer({
     // other test keeps it off, because thousands of lines nobody reads is what
     // made it off in the first place. (The top-level option is FSTDEP023 from
     // Fastify 5.12; the controller takes the same value.)
-    logController: new LogController({ disableRequestLogging: env.isTest && !logStream }),
+    // `request_id`, not pino's `reqId`: one spelling for the id on the log line,
+    // in the error body, on the span and in the RTM frame (ID-08 · LOG_KEYS).
+    logController: new LogController({
+      disableRequestLogging: env.isTest && !logStream,
+      requestIdLogLabel: LOG_KEYS.requestId,
+    }),
     bodyLimit: 1_048_576, // 1 MiB — attachments go through signed upload URLs
     // Do not let `close()` tear down live connections (M-OPS-b).
     //
@@ -494,6 +510,9 @@ export async function buildServer({
   // asserts the ordering by its effect rather than trusting this comment.
   await app.register(rateLimit, { env });
   await app.register(auth, { env });
+  // After `auth`, so its `onRequest` hook adds the route's chat, connection and
+  // customer ids to a logger that already says whose request it is (ID-08).
+  await app.register(logContext);
   await app.register(audit, { env });
   // After `audit`, which it writes through, and before the routes that declare
   // `aiInference` (NFR-C4 · C4-e).

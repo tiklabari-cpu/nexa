@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WebSocket } from 'ws';
-import { ConnectionRegistry } from './connection.js';
+import { ConnectionRegistry, connectionLogContext } from './connection.js';
 
 function fakeSocket(): WebSocket {
   return { close: () => undefined } as unknown as WebSocket;
@@ -94,5 +94,34 @@ describe('ConnectionRegistry', () => {
       organizationId: ORG_A,
     });
     expect(() => registry.closeAll(1001, 'bye')).not.toThrow();
+  });
+});
+
+describe('connectionLogContext (ID-08)', () => {
+  it('names only the organization before login, then the licence and the actor in LOG_KEYS', () => {
+    const registry = new ConnectionRegistry();
+    const connection = registry.add({ ws: fakeSocket(), side: 'agent', organizationId: ORG_A });
+    expect(connectionLogContext(connection)).toEqual({
+      organization_id: ORG_A,
+      actor_type: 'agent',
+    });
+
+    registry.authenticate(connection.id, { licenseId: '7', actorId: 'bot-1', actorType: 'bot' });
+    expect(connectionLogContext(connection)).toEqual({
+      organization_id: ORG_A,
+      license_id: '7',
+      actor_id: 'bot-1',
+      actor_type: 'bot',
+    });
+  });
+
+  it('falls back to the socket side when the login did not say which kind it was', () => {
+    const registry = new ConnectionRegistry();
+    const connection = registry.add({ ws: fakeSocket(), side: 'customer', organizationId: ORG_B });
+    registry.authenticate(connection.id, { licenseId: '9', actorId: 'cust-1' });
+    expect(connectionLogContext(connection)).toMatchObject({
+      license_id: '9',
+      actor_type: 'customer',
+    });
   });
 });

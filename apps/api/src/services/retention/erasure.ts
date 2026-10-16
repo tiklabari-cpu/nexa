@@ -17,7 +17,9 @@
  * ratings, chat access), `visits`, `channel_identities`, `campaign_sends`,
  * `goal_achievements` and `custom_field_values` are all `ON DELETE CASCADE`.
  * So are the AI decision records (`ai_decision_logs`, tm 288.2) — through
- * `customer_id` and `chat_id` both, so a record filed under either goes.
+ * `customer_id` and `chat_id` both, so a record filed under either goes —
+ * and the AI conversation state (`ai_conversations`, tm 292.1), whose slot
+ * values are the subject's own data, through its thread.
  *
  * Two relations are `ON DELETE SET NULL`, and they are the interesting ones:
  *

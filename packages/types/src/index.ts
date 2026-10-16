@@ -6,6 +6,7 @@ export * from './api-packages.js';
 export * from './ai-packages.js';
 export * from './ai-usage.js';
 export * from './ai-decision.js';
+export * from './ai-conversation.js';
 export * from './entitlements.js';
 export * from './integrations.js';
 export * from './errors.js';

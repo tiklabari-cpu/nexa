@@ -187,6 +187,7 @@ model License {
   aiDecisionLogs         AiDecisionLog[]
   aiJobs                 AiJob[]
   queueEntries           QueueEntry[]
+  aiConversations        AiConversation[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -1001,13 +1002,14 @@ model Thread {
   /// erase the record of what it handled (20261015170000_thread_group).
   groupId          BigInt?   @map("group_id")
 
-  chat           Chat            @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  tags           ThreadTag[]
-  events         Event[]
-  skillRuns      SkillRun[]
-  aiDecisionLogs AiDecisionLog[]
-  aiJobs         AiJob[]
-  queueEntries   QueueEntry[]
+  chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tags            ThreadTag[]
+  events          Event[]
+  skillRuns       SkillRun[]
+  aiDecisionLogs  AiDecisionLog[]
+  aiJobs          AiJob[]
+  queueEntries    QueueEntry[]
+  aiConversations AiConversation[]
 
   @@index([chatId, createdAt])
   @@index([licenseId, active, createdAt(sort: Desc)])
@@ -2064,6 +2066,81 @@ model AiJob {
   @@index([chatId, createdAt])
   @@index([threadId])
   @@map("ai_jobs")
+}
+
+/// Where the AI is in one connection (tm 292.1 · SiyahTuş analysis AI-01,
+/// AI-03, AI-04, AI-11; ADR-14b §2.7): one row per connection, the state a
+/// turn reads and writes back. A record, not configuration.
+///
+/// The optimistic lock: a turn reads `version`, does its model work outside
+/// any transaction and writes back only `WHERE version = :read`
+/// (`services/ai/conversation/state-store.ts`). A trigger bumps `version` on
+/// every UPDATE — the runtime role cannot write it — so any write, an agent's
+/// takeover included, fences a turn still holding the old number. The same
+/// trigger keeps `config_version_id` pinned once set and
+/// `last_processed_event_seq` from moving back; the insert trigger holds the
+/// row to a thread of its own licence and chat. Those triggers and the CHECKs
+/// live in the migration (20261016200000_ai_conversations) — Prisma cannot
+/// model them.
+///
+/// Goes with its connection (thread CASCADE): the retention sweep and a
+/// customer's erasure take it. It holds personal data (slot values).
+model AiConversation {
+  id                    String    @id @default(uuid()) @db.Uuid
+  licenseId             BigInt    @map("license_id")
+  /// The day container (panel "Thread ID"); always the thread's own chat.
+  chatId                String    @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID").
+  threadId              String    @map("thread_id") @db.VarChar(12)
+  /// One of `AI_CONVERSATION_MODES` (`@siyahtus/types`), enforced by
+  /// `ai_conversations_mode_check`. Its logic is AI-11's (#293).
+  mode                  String    @default("ai")
+  modeChangedAt         DateTime? @map("mode_changed_at") @db.Timestamptz(6)
+  /// An account id, `ai` or `system` — a code, never text.
+  modeChangedBy         String?   @map("mode_changed_by")
+  /// A snake_case reason code (`ai_conversations_mode_reason_check`).
+  modeReason            String?   @map("mode_reason")
+  /// The procedure (today: the skill) in progress. No relation: deleting a
+  /// procedure must not erase where the conversation was.
+  activeSkillId         String?   @map("active_skill_id") @db.Uuid
+  /// The procedure's definition, frozen when it started (AI-03, ADR-14b §2.9),
+  /// and the sha256 of its canonical JSON — always together.
+  procedureSnapshot     Json?     @map("procedure_snapshot")
+  procedureSnapshotHash String?   @map("procedure_snapshot_hash")
+  stepId                String?   @map("step_id")
+  /// One of `AI_CONVERSATION_STEP_STATUSES`, or null with no step active.
+  stepStatus            String?   @map("step_status")
+  /// What the AI has collected (AI-04). Personal data.
+  slots                 Json      @default("{}")
+  /// The one suspended topic (skill, step, slots).
+  suspended             Json?
+  counters              Json      @default("{}")
+  signals               Json      @default("{}")
+  /// The connection's summary for the same day's later connections (AI-02).
+  digest                Json?
+  /// One of `AI_CONVERSATION_OUTCOMES`, or null while unsettled.
+  outcome               String?
+  /// The connection's `event_sequence` the last turn covered. Never moves back.
+  lastProcessedEventSeq Int       @default(0) @map("last_processed_event_seq")
+  /// The lock's counter. The database's alone: 0 on insert, +1 on every update.
+  version               Int       @default(0)
+  /// The AI configuration version the conversation runs on (ADR-14b §2.7):
+  /// pinned when the row opens, null until versioning ships (tm 316); a null
+  /// may be filled once, a value never changes. No relation yet —
+  /// `ai_config_versions` is tm 316's.
+  configVersionId       String?   @map("config_version_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Set by the update trigger, not by the writer.
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  closedAt              DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  thread  Thread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  /// One row per connection, and the way a turn finds it.
+  @@unique([licenseId, chatId, threadId])
+  @@index([threadId])
+  @@map("ai_conversations")
 }
 
 /// Visual node/edge automation (FR-MOD-13.4). The table exists so the schema

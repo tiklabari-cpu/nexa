@@ -92,6 +92,7 @@ export const settings: Messages = {
   'settings.nav.section.sandbox': 'Sandbox',
   'settings.nav.section.trustedDomains': 'Trusted domains',
   'settings.nav.section.bannedCustomers': 'Blocked IP addresses',
+  'settings.nav.section.memberRecognition': 'Member recognition',
   'settings.nav.section.fileSharing': 'File sharing',
   'settings.nav.section.ipAllowlist': 'IP allowlist',
   'settings.nav.section.sso': 'Single sign-on',
@@ -1242,4 +1243,59 @@ export const settings: Messages = {
   'settings.aiUsage.recipientsSaved': 'Saved.',
   'settings.aiUsage.capNote':
     'The daily allowance is set by the SiyahTuş team and cannot be changed here. To raise it, contact us.',
+
+  // Member recognition — MemberRecognition.tsx (ID-03 · tm 287.5)
+  'settings.memberRecognition.title': 'Member recognition',
+  'settings.memberRecognition.description':
+    'How a returning visitor is recognised on your website, and what an agent is shown about other records that may be the same person.',
+  'settings.memberRecognition.loadError': 'Could not load the member recognition settings.',
+  'settings.memberRecognition.ttlHeading': 'How long a visitor is remembered',
+  'settings.memberRecognition.ttlHint':
+    'A visitor is recognised again for this long after their last visit. Every visit starts the time over, so someone who keeps coming back is never forgotten.',
+  'settings.memberRecognition.amountLabel': 'Remember for',
+  'settings.memberRecognition.unitLabel': 'Unit',
+  'settings.memberRecognition.unitDays': 'days',
+  'settings.memberRecognition.unitHours': 'hours',
+  'settings.memberRecognition.ttlBounds': 'From {min} day to {max} days.',
+  'settings.memberRecognition.ttlError': 'Enter a whole number from 1 day to 365 days.',
+  'settings.memberRecognition.matchesLabel': 'Show possible matches to agents',
+  'settings.memberRecognition.matchesHint':
+    'Other customers who typed the same username or e-mail are listed on a customer as unverified suggestions. Only an agent’s confirmation links two records. Off, the list is empty.',
+  'settings.memberRecognition.keyHeading': 'Signing key',
+  'settings.memberRecognition.keyHint':
+    'The key the server signs member tokens with. It is never shown. Rotate it when you suspect it has leaked, or on a schedule.',
+  'settings.memberRecognition.keyNone':
+    'No key yet. One is created the first time a visitor is recognised, or when you rotate.',
+  'settings.memberRecognition.keyVersion': 'Current version',
+  'settings.memberRecognition.keyCreated': 'Created',
+  'settings.memberRecognition.keyPrevious': 'Previous key',
+  'settings.memberRecognition.keyPreviousUntil': 'Version {version}, still accepted until {date}',
+  'settings.memberRecognition.graceLabel': 'Keep the old key for (days)',
+  'settings.memberRecognition.graceHint.one':
+    'Visitors the old key signed are still recognised for {count} day, and signed again under the new key.',
+  'settings.memberRecognition.graceHint.other':
+    'Visitors the old key signed are still recognised for {count} days, and signed again under the new key.',
+  'settings.memberRecognition.graceNone':
+    '0 retires the old key at once: every returning visitor starts again as a new visitor.',
+  'settings.memberRecognition.graceError': 'Enter a whole number from {min} to {max}.',
+  'settings.memberRecognition.rotateButton': 'Rotate the key',
+  'settings.memberRecognition.rotateConfirmTitle': 'Rotate the signing key?',
+  'settings.memberRecognition.rotateConfirmGrace.one':
+    'A new key signs from now on. Visitors the old key signed are still recognised for {count} day.',
+  'settings.memberRecognition.rotateConfirmGrace.other':
+    'A new key signs from now on. Visitors the old key signed are still recognised for {count} days.',
+  'settings.memberRecognition.rotateConfirmNone':
+    'The old key stops working at once. Every returning visitor starts again as a new visitor.',
+  'settings.memberRecognition.rotateConfirm': 'Rotate key',
+  'settings.memberRecognition.rotateFailure': 'The key could not be rotated.',
+  'settings.memberRecognition.forgetHeading': 'Forget every returning visitor',
+  'settings.memberRecognition.forgetHint':
+    'Every browser that was recognised before now becomes a new visitor. Nothing is deleted and nobody is blocked; conversations and customer records stay as they are.',
+  'settings.memberRecognition.forgetLast': 'Last done {date}.',
+  'settings.memberRecognition.forgetButton': 'Forget all visitors',
+  'settings.memberRecognition.forgetConfirmTitle': 'Forget every returning visitor?',
+  'settings.memberRecognition.forgetConfirmDescription':
+    'Every visitor your website recognised so far starts again as a new visitor on their next visit. This cannot be undone.',
+  'settings.memberRecognition.forgetConfirm': 'Forget all visitors',
+  'settings.memberRecognition.forgetFailure': 'The visitors could not be forgotten.',
 };

@@ -79,6 +79,7 @@ export const settings: Messages = {
   'settings.nav.section.sandbox': 'Sandbox',
   'settings.nav.section.trustedDomains': 'Güvenilir alan adları',
   'settings.nav.section.bannedCustomers': 'Engellenen IP adresleri',
+  'settings.nav.section.memberRecognition': 'Üye tanıma',
   'settings.nav.section.fileSharing': 'Dosya paylaşımı',
   'settings.nav.section.ipAllowlist': 'IP izin listesi',
   'settings.nav.section.sso': 'Tek oturum açma',
@@ -847,6 +848,61 @@ export const settings: Messages = {
   'settings.siemExport.lastRun': 'Son çalıştırma',
   'settings.siemExport.delivered': 'Teslim edildi',
   'settings.siemExport.pending': 'Bekliyor',
+
+  // Üye tanıma — MemberRecognition.tsx (ID-03 · tm 287.5)
+  'settings.memberRecognition.title': 'Üye tanıma',
+  'settings.memberRecognition.description':
+    'Geri dönen bir ziyaretçinin web sitenizde nasıl tanındığı ve bir temsilciye aynı kişi olabilecek diğer kayıtlar hakkında ne gösterildiği.',
+  'settings.memberRecognition.loadError': 'Üye tanıma ayarları yüklenemedi.',
+  'settings.memberRecognition.ttlHeading': 'Bir ziyaretçi ne kadar süre hatırlanır',
+  'settings.memberRecognition.ttlHint':
+    'Ziyaretçi, son ziyaretinden sonra bu süre boyunca yeniden tanınır. Her ziyaret süreyi baştan başlatır; bu yüzden düzenli gelen biri hiç unutulmaz.',
+  'settings.memberRecognition.amountLabel': 'Hatırlama süresi',
+  'settings.memberRecognition.unitLabel': 'Birim',
+  'settings.memberRecognition.unitDays': 'gün',
+  'settings.memberRecognition.unitHours': 'saat',
+  'settings.memberRecognition.ttlBounds': '{min} günden {max} güne kadar.',
+  'settings.memberRecognition.ttlError': '1 günden 365 güne kadar bir tam sayı girin.',
+  'settings.memberRecognition.matchesLabel': 'Temsilcilere olası eşleşmeleri göster',
+  'settings.memberRecognition.matchesHint':
+    'Aynı kullanıcı adını veya e-postayı yazan diğer müşteriler, bir müşterinin üzerinde doğrulanmamış öneri olarak listelenir. İki kaydı yalnızca bir temsilcinin onayı bağlar. Kapalıyken liste boştur.',
+  'settings.memberRecognition.keyHeading': 'İmza anahtarı',
+  'settings.memberRecognition.keyHint':
+    'Sunucunun üye tokenlarını imzaladığı anahtar. Hiçbir zaman gösterilmez. Sızdığından şüphelendiğinizde ya da belli aralıklarla yenileyin.',
+  'settings.memberRecognition.keyNone':
+    'Henüz anahtar yok. Bir ziyaretçi ilk kez tanındığında ya da siz yenilediğinizde oluşturulur.',
+  'settings.memberRecognition.keyVersion': 'Geçerli sürüm',
+  'settings.memberRecognition.keyCreated': 'Oluşturuldu',
+  'settings.memberRecognition.keyPrevious': 'Önceki anahtar',
+  'settings.memberRecognition.keyPreviousUntil': '{version}. sürüm, {date} tarihine kadar geçerli',
+  'settings.memberRecognition.graceLabel': 'Eski anahtar şu kadar tutulsun (gün)',
+  'settings.memberRecognition.graceHint.one':
+    'Eski anahtarın imzaladığı ziyaretçiler {count} gün daha tanınır ve yeni anahtarla yeniden imzalanır.',
+  'settings.memberRecognition.graceHint.other':
+    'Eski anahtarın imzaladığı ziyaretçiler {count} gün daha tanınır ve yeni anahtarla yeniden imzalanır.',
+  'settings.memberRecognition.graceNone':
+    '0, eski anahtarı hemen devre dışı bırakır: geri dönen her ziyaretçi yeni ziyaretçi olarak baştan başlar.',
+  'settings.memberRecognition.graceError': '{min} ile {max} arasında bir tam sayı girin.',
+  'settings.memberRecognition.rotateButton': 'Anahtarı yenile',
+  'settings.memberRecognition.rotateConfirmTitle': 'İmza anahtarı yenilensin mi?',
+  'settings.memberRecognition.rotateConfirmGrace.one':
+    'Bundan sonra yeni bir anahtar imzalar. Eski anahtarın imzaladığı ziyaretçiler {count} gün daha tanınır.',
+  'settings.memberRecognition.rotateConfirmGrace.other':
+    'Bundan sonra yeni bir anahtar imzalar. Eski anahtarın imzaladığı ziyaretçiler {count} gün daha tanınır.',
+  'settings.memberRecognition.rotateConfirmNone':
+    'Eski anahtar hemen çalışmaz olur. Geri dönen her ziyaretçi yeni ziyaretçi olarak baştan başlar.',
+  'settings.memberRecognition.rotateConfirm': 'Anahtarı yenile',
+  'settings.memberRecognition.rotateFailure': 'Anahtar yenilenemedi.',
+  'settings.memberRecognition.forgetHeading': 'Geri dönen bütün ziyaretçileri unut',
+  'settings.memberRecognition.forgetHint':
+    'Daha önce tanınan her tarayıcı yeni bir ziyaretçi olur. Hiçbir şey silinmez, kimse engellenmez; sohbetler ve müşteri kayıtları olduğu gibi kalır.',
+  'settings.memberRecognition.forgetLast': 'Son işlem: {date}.',
+  'settings.memberRecognition.forgetButton': 'Bütün ziyaretçileri unut',
+  'settings.memberRecognition.forgetConfirmTitle': 'Geri dönen bütün ziyaretçiler unutulsun mu?',
+  'settings.memberRecognition.forgetConfirmDescription':
+    'Web sitenizin şimdiye kadar tanıdığı her ziyaretçi, bir sonraki ziyaretinde yeni ziyaretçi olarak baştan başlar. Bu geri alınamaz.',
+  'settings.memberRecognition.forgetConfirm': 'Bütün ziyaretçileri unut',
+  'settings.memberRecognition.forgetFailure': 'Ziyaretçiler unutulamadı.',
 
   // SLA — SlaPolicy.tsx
   'settings.sla.title': 'SLA',

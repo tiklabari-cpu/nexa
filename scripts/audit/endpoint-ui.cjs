@@ -317,30 +317,7 @@ const INDIRECT = [
  * collection endpoint has a screen and one verb on the item does not, so a
  * thing can be made but not changed, or made but not removed.
  */
-const TRACKED = [
-  {
-    op: 'GET /settings/member-recognition',
-    owner: 'tm 287.5',
-    reason:
-      'the API half of member recognition lands first (287.2); Settings › Security › Member ' +
-      'recognition, which reads it, is 287.5.',
-  },
-  {
-    op: 'PATCH /settings/member-recognition',
-    owner: 'tm 287.5',
-    reason: "the token lifetime and the possible-match switch; their form is 287.5's screen.",
-  },
-  {
-    op: 'POST /settings/member-recognition/rotate-key',
-    owner: 'tm 287.5',
-    reason: "the signing key's rotation, with its grace period; the button is on 287.5's screen.",
-  },
-  {
-    op: 'POST /settings/member-recognition/revoke-all',
-    owner: 'tm 287.5',
-    reason: "forgetting every returning visitor at once; the button is on 287.5's screen.",
-  },
-];
+const TRACKED = [];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
 function pathMatcher(path) {

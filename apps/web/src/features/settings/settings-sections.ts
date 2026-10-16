@@ -329,6 +329,25 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'BannedCustomerIps',
     keywords: ['blocklist', 'ip ban'],
   },
+  // Reads `GET /settings/member-recognition` (`access_rules`, admin rank) — how
+  // long a returning visitor is remembered, the signing key and the bulk
+  // "forget everyone" (tm 287.5 · ID-03).
+  {
+    slug: 'member-recognition',
+    group: 'security',
+    labelKey: 'settings.nav.section.memberRecognition',
+    scope: ACCESS_RULES,
+    file: 'MemberRecognition',
+    keywords: [
+      'returning visitor',
+      'member token',
+      'signing key',
+      'possible match',
+      'logout',
+      'ziyaretçi',
+      'üye',
+    ],
+  },
   {
     slug: 'file-sharing',
     group: 'security',

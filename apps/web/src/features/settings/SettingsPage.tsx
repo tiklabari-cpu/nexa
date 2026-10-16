@@ -47,6 +47,7 @@ import { Integrations } from './Integrations.js';
 import { TrustedDomains } from './TrustedDomains.js';
 import { CannedResponses } from './CannedResponses.js';
 import { ChatTimeout } from './ChatTimeout.js';
+import { MemberRecognition } from './MemberRecognition.js';
 import { TwoFactor } from './TwoFactor.js';
 import { PersonalAccessTokens } from './PersonalAccessTokens.js';
 import { Tags } from './Tags.js';
@@ -140,6 +141,7 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   sandbox: (p) => <Sandbox canEdit={p.canManageAccess} />,
   'trusted-domains': (p) => <TrustedDomains canEdit={p.canManageAccess} />,
   'banned-customers': (p) => <BannedCustomerIps canEdit={p.canManageAccess} />,
+  'member-recognition': (p) => <MemberRecognition canEdit={p.canManageAccess} />,
   'file-sharing': (p) => <FileSharing canEdit={p.canManageAccess} />,
   'ip-allowlist': (p) => <IpAllowlist canEdit={p.canManageAccess} />,
   sso: (p) => <SsoConnection canEdit={p.canManageAccess} />,

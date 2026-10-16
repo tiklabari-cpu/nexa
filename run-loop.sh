@@ -31,6 +31,7 @@ MODEL_SMALL="claude-sonnet-5-5"
 EFFORT_MAX="max"            # opus 'max' desteklemiyorsa: "high"
 EFFORT_XHIGH="xhigh"
 EFFORT_HIGH="high"
+EFFORT_MEDIUM="medium"      # [OPUS-MEDIUM]/[SONNET-MEDIUM] (2026-10-16; #385, #386)
 PERM="auto"   # tam otonom, prompt YOK, sınıflandırıcılı (2026-10-03). Eski: "bypassPermissions"
 MAX_TURNS=250
 RUNNER_PROMPT_FILE="TASK-RUNNER-PROMPT.md"
@@ -52,6 +53,23 @@ ATTEMPTS_FILE="$LOG_DIR/attempts.tsv"; : >> "$ATTEMPTS_FILE"
 MAX_CONSEC_TASK_FAILS="${LOOP_MAX_CONSEC_TASK_FAILS:-3}"
 ALLOW=""                   # gerekirse: '--allowedTools Bash(git *),Bash(pnpm *)'
 
+# --- Kod haritası (codebase-memory-mcp, 2026-10-16) ---------------------------
+# Görev pencereleri projenin .mcp.json'ını YÜKLEMİYOR (tm 288.1 açılışında taskmaster-ai bile
+# yoktu), harita bu yüzden açık --mcp-config ile verilir. --strict-mcp-config kullanıcı
+# düzeyindeki sunucuları (Gmail, Canva, …) pencereden çıkarır: 270–288 arası hiçbiri çağrılmadı
+# ve otonom pencerenin kişisel hesaplara erişmesi istenmez. Program yoksa pencere haritasız açılır.
+# Yenileme: scripts/loop/cbm-refresh.sh (döngü başı + her BİTTİ sonrası); kurallar TASK-RUNNER-PROMPT §0.7.
+CBM_REFRESH="scripts/loop/cbm-refresh.sh"
+CBM_BIN="${CBM_BIN:-$(cygpath -m "${LOCALAPPDATA:-}" 2>/dev/null)/nexa-tools/cbm/bin/codebase-memory-mcp.exe}"
+CBM_TOOLS="index_repository index_status list_projects search_graph query_graph trace_path search_code get_code_snippet get_file_outline get_architecture get_graph_schema detect_changes check_index_coverage"
+MCP_ARGS=(--strict-mcp-config)
+if [ -f "$CBM_BIN" ]; then
+  jq -n --arg cmd "$CBM_BIN" '{mcpServers:{"codebase-memory":{type:"stdio",command:$cmd,args:[]}}}' \
+    > "$LOG_DIR/loop-mcp.json"
+  MCP_ARGS+=(--mcp-config "$LOG_DIR/loop-mcp.json"
+             --allowedTools "$(for t in $CBM_TOOLS; do printf 'mcp__codebase-memory__%s,' "$t"; done | sed 's/,$//')")
+fi
+
 # --- Kota kapısı ayarları -----------------------------------------------------
 # Bir pencere açmadan ÖNCE "kalan kota bu işi kaldırır mı?" diye sorulur. Maliyet
 # yüzdeleri geçmiş koşulardan ölçüldü (tam 5 saatlik pencere ≈ $170 → %1 ≈ $1.7):
@@ -67,7 +85,7 @@ WAIT_RESET_MAX_MIN="${LOOP_WAIT_RESET_MAX_MIN:-90}"
 COST_MAX_PCT="${LOOP_COST_MAX_PCT:-20}"
 COST_HIGH_PCT="${LOOP_COST_HIGH_PCT:-10}"
 
-pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_id":{"type":"string"},"model":{"type":"string","enum":["sonnet","opus"]},"effort":{"type":"string","enum":["max","xhigh","high"]},"remaining":{"type":"integer"}},"required":["has_task"]}'
+pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_id":{"type":"string"},"model":{"type":"string","enum":["sonnet","opus"]},"effort":{"type":"string","enum":["max","xhigh","high","medium"]},"remaining":{"type":"integer"}},"required":["has_task"]}'
 # `marked_in_progress` ZORUNLU alandır ve bunun tek amacı protokol §1'i görünür kılmak:
 # pencerenin başında task'ı 'in-progress' işaretlemek, protokolün geri besleme üretmeyen
 # TEK adımıydı — DoD kapısı bakmıyor, `git status` o noktada temiz, sonuç JSON'unda alanı
@@ -204,7 +222,9 @@ Hiçbir aday doğrulamadan geçmiyorsa has_task=false döndür — yanlış gör
 İş YAPMA, kod okuma/yazma yok.
 Döndür: has_task, task_id, model, effort, remaining (kalan yapılabilir görev sayısı).
 MODEL ve EFOR seçilen işin BAŞLIĞINDAKİ ETİKETTEN okunur (PLAN §5.1.1 model x efor matrisi).
-Altı etiketin altısı da TANIMLIDIR; hiçbiri belirsiz sayılmaz:
+Sekiz etiketin sekizi de TANIMLIDIR; hiçbiri belirsiz sayılmaz:
+  [SONNET-MEDIUM] -> model=\"sonnet\", effort=\"medium\"
+  [OPUS-MEDIUM]  -> model=\"opus\",   effort=\"medium\"
   [SONNET-HIGH]  -> model=\"sonnet\", effort=\"high\"
   [SONNET-XHIGH] -> model=\"sonnet\", effort=\"xhigh\"
   [SONNET-MAX]   -> model=\"sonnet\", effort=\"max\"
@@ -213,7 +233,7 @@ Altı etiketin altısı da TANIMLIDIR; hiçbiri belirsiz sayılmaz:
   [OPUS-MAX]     -> model=\"opus\",   effort=\"max\"
 Eski tek boyutlu etiketler (Faz-0/v1 tarihcesi): [MAX] -> opus+max; [XHIGH] veya etiket YOK -> opus+xhigh.
 Etiket bu listede yoksa ya da çelişkiliyse GÜVENLİ tarafa düş: model=\"opus\", effort=\"max\"." \
-    --model "$MODEL" --effort low --permission-mode "$PERM" --max-turns 10 $ALLOW \
+    --model "$MODEL" --effort low --permission-mode "$PERM" --max-turns 10 $ALLOW --strict-mcp-config \
     --output-format json --json-schema "$pick_schema" 2>>"$LOG_DIR/pick.err" \
     | jq -c '.structured_output' 2>/dev/null
 }
@@ -227,7 +247,7 @@ stream_task(){
 
 # HEDEF TASK: ${id}
 Yalnız bu task'ı baştan sona tamamla, protokolü uygula, en son JSON sonucu döndür." \
-    --model "$mdl" --effort "$eff" --permission-mode "$PERM" --max-turns "$MAX_TURNS" $ALLOW \
+    --model "$mdl" --effort "$eff" --permission-mode "$PERM" --max-turns "$MAX_TURNS" $ALLOW "${MCP_ARGS[@]}" \
     --output-format stream-json --verbose --json-schema "$result_schema" \
     2>>"$LOG_DIR/task-$id.err" | tee -a "$logf" | pretty
 }
@@ -356,6 +376,7 @@ rm -f "$STOP_FLAG" "$STOP_HONORED"
 # =============================================================================
 consec_errors=0; iteration=0; consec_task_fails=0
 log "▶▶ Döngü başladı. Canlı akış aşağıda; tam kayıt: $LOG_DIR/"
+CBM_BIN="$CBM_BIN" bash "$CBM_REFRESH" || true
 
 while true; do
   iteration=$((iteration+1))
@@ -383,6 +404,7 @@ while true; do
   case "$eff_label" in
     max)  eff="$EFFORT_MAX" ;;
     high) eff="$EFFORT_HIGH" ;;
+    medium) eff="$EFFORT_MEDIUM" ;;
     *)    eff="$EFFORT_XHIGH" ;;
   esac
   mdl=$(echo "$pick" | jq -r '.model // empty')
@@ -426,6 +448,8 @@ while true; do
   if [ "$status" = "done" ]; then
     clear_attempt "$task_id"; consec_task_fails=0
     log "✔ Task $task_id BİTTİ (+commit +push +done) — ${el}s. Sıradakine geçiliyor."
+    # Sonraki pencere güncel haritayla açılsın. Başarısızlık döngüyü durdurmaz (betik hep 0 döner).
+    CBM_BIN="$CBM_BIN" bash "$CBM_REFRESH" || true
   else
     consec_task_fails=$((consec_task_fails+1))
     # Tur başarısız. Görev büyük olasılıkla 'blocked' bırakıldı; eskiden döngü

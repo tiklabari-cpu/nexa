@@ -41,6 +41,23 @@ Sırayla oku:
 
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
+7. **Kod haritası (codebase-memory MCP, 2026-10-16).** Yön bulmak için grep/cat zinciri yerine
+   önce haritaya sor; böylece bağlama 5–15 grep çıktısı yerine tek kısa cevap girer.
+   - **Açık mı?** `.loop-logs/cbm-state.json`: `ok:true` ve `head` = `git rev-parse HEAD` ise
+     açık. Değilse bir kez `index_repository` (repo_path = repo kökü, mode `full`, ~15 sn) çağır;
+     `status: indexed` dönerse açık. Dönmezse ya da araç hiç yoksa **kapalı**: bu pencerede
+     haritayı hiç kullanma, eskisi gibi grep/Read ile çalış, sonuç özetine "harita kapalıydı" yaz.
+     Yarı güvenilir harita yok. Proje adı `list_projects`'ten (`root_path` repo kökü olan).
+   - **Haritaya sor:** kim çağırıyor / neyi çağırıyor (`trace_path`), ada göre sembol ya da
+     dosya (`search_graph` + `name_pattern`), rota → işleyici, test ↔ kaynak, birlikte değişen
+     dosyalar, genel yapı (`get_architecture`).
+   - **Her zaman grep/Read:** SQL migrasyonları (`apps/api/prisma/migrations/**`, çoğu kısmi
+     ayrıştırılıyor), `nginx.conf` ve yapılandırma dosyaları, doğal dil soruları (`semantic_query`
+     alakasız döndürüyor), doküman ↔ kod bağları, **bu pencerede değiştirdiğin dosyalar**
+     (`git diff --name-only`; harita onları eski haliyle bilir) ve **düzenleyeceğin dosyanın
+     içeriği** — yazmadan önce her zaman Read.
+   - Harita "yok / bulunamadı" derse bunu "yok" sayma: bir kez grep ile doğrula.
+   - Harita yenilemesini döngü yapar (her görev bitince); kapanışta senin ayrıca çağırman gerekmez.
 
 ## 1) Resume kontrolü + durum damgası (yeniden deneme olabilir)
 

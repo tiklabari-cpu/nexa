@@ -29,6 +29,7 @@ import {
   testEnv,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { mintForExistingCustomer } from '../helpers/member-token.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const ADMIN = ['tickets--all:rw', 'tickets--all:ro'];
@@ -331,11 +332,7 @@ describe('tickets — bulk actions (FR-13-EK.3)', () => {
 
     it('refuses a customer token outright', async () => {
       const ticket = await seedTicket(fx.a.licenseId, 'Internal work');
-      const tokenResponse = await server.post(
-        '/customer/token',
-        { organization_id: fx.a.organizationId, customer_id: fx.a.customerId },
-        { origin: `https://${fx.a.trustedDomain}` },
-      );
+      const tokenResponse = await mintForExistingCustomer(server, fx.a, fx.a.customerId);
       const { token } = tokenResponse.json() as { token: string };
 
       const response = await bulk(token, { ticket_ids: [ticket], status: 'solved' });

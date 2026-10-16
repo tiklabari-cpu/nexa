@@ -203,18 +203,24 @@ export class WidgetApi {
   /**
    * Exchange the organization id for a short-lived customer token.
    *
-   * The customer id is kept in localStorage so a returning visitor continues
-   * the same conversation. It is not a secret — it identifies, it does not
-   * authorize; the token does that, and is re-minted on every load.
+   * A returning visitor is recognised by the member token the server signed
+   * for this browser (ID-03 · K4), kept here and sent back on every load — the
+   * server re-signs it each time, so it lives as long as the visitor keeps
+   * coming back. The customer id is kept too, but it identifies, it does not
+   * authenticate: the server no longer recognises anybody by it. A browser
+   * from before member tokens holds only the id, and sends it — without a
+   * member token — for the one trade the server allows during the transition.
    */
   async connect(): Promise<WidgetState> {
-    const stored = safeGetItem('siyahtus.customer_id');
+    const memberToken = safeGetItem(MEMBER_TOKEN_KEY);
+    const stored = memberToken ? null : safeGetItem('siyahtus.customer_id');
 
     const response = await fetch(`${this.baseUrl}/customer/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         organization_id: this.organizationId,
+        ...(memberToken ? { member_token: memberToken } : {}),
         ...(stored ? { customer_id: stored } : {}),
         ...(this.hostOrigin ? { host_origin: this.hostOrigin } : {}),
       }),
@@ -224,6 +230,7 @@ export class WidgetApi {
     const {
       token,
       customer_id,
+      member_token,
       rtm_url,
       widget,
       file_sharing_enabled,
@@ -235,6 +242,7 @@ export class WidgetApi {
     } = (await response.json()) as {
       token: string;
       customer_id: string;
+      member_token?: string;
       rtm_url?: string;
       widget?: MintedAppearance;
       file_sharing_enabled?: boolean;
@@ -253,6 +261,12 @@ export class WidgetApi {
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
     this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];
     this.#prospectForm = Array.isArray(prospect_form) ? prospect_form : [];
+    // Absent only when the server's cookie carried the token, which then lives
+    // where no script can read it — the copy here is the fallback for a browser
+    // that would not keep that cookie.
+    if (typeof member_token === 'string' && member_token !== '') {
+      safeSetItem(MEMBER_TOKEN_KEY, member_token);
+    }
     safeSetItem('siyahtus.customer_id', customer_id);
 
     return this.state();
@@ -450,6 +464,12 @@ async function failure(response: Response): Promise<WidgetApiError> {
     });
   }
 }
+
+/**
+ * Where this browser keeps the member token the server signed for it
+ * (ID-03 · K4). Exported for the tests that act as a returning visitor.
+ */
+export const MEMBER_TOKEN_KEY = 'siyahtus.member_token';
 
 /**
  * Storage can throw: Safari private mode, and any browser where the user has

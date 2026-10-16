@@ -1,6 +1,6 @@
 # Üye tanıma — imzalı üye tokenı, iptal listesi, olası eşleşme ve ajan onaylı bağlama (ID-03 · K4)
 
-- **Görev:** tm 287 (MEMBER-TOKEN). Bu kayıt tm 287.1 (şema + sözleşme) ile açıldı · PLAN.md §D240
+- **Görev:** tm 287 (MEMBER-TOKEN). Bu kayıt tm 287.1 (şema + sözleşme) ile açıldı · PLAN.md §D240; tm 287.2 (token üretimi/doğrulaması, geçiş, rotasyon, iptal) §8'de · PLAN.md §D241
 - **Tarih:** 2026-10-15
 - **Durum:** Kabul edildi — sahip kararı **K4** ("Token'ı bizim widget'ımız üretir (imzalı, çerez/localStorage'da saklanır); widget geri gelişte okuyup sunucuda doğrular … Başka cihazdan gelişte ajan onayı yolu geçerli", `SiyahTus-Analiz/04-gerekceler-ve-sorular.md` Karar kaydı K4 ve "Kararların maddelere etkisi"). Varsayımlar: **K5** (AI yalnız konu düzeyinde hatırlatır), **ID-03-S4** (ajan onaylı bağlama Ekip Lideri ve üstü; RL-01 gelene kadar admin ve üstü).
 - **Değiştirdiği karar:** `05-uygulama-rehberi.md` ID-03'ün "operatörün imzaladığı `user_hash`" yolu. K4 ile token'ı operatör değil SiyahTuş widget'ı üretir; operatör imzası F2'ye kaldı (tm 388, deferred) ve geldiğinde aynı doğrulama altyapısına ikinci giriş olur.
@@ -57,7 +57,7 @@ Bir yolu bağlayan alt görev aynı commit'te: `apps/mobile/src/__tests__/parity
 
 ## 5. Sonraki alt görevlere kararlar ve öneriler
 
-- **tm 287.2 (MT-MINT-VERIFY):**
+- **tm 287.2 (MT-MINT-VERIFY):** _Uygulandı — alınan kararlar ve öneriden sapmalar §8'de; aşağıdaki maddeler 287.1'in önerisi olarak kalır._
   - Token biçimi önerisi: müşteri tokenının (`nxc1.<body>.<sig>`) kardeşi `nxm1.<body>.<sig>`, gövdede `sub` (müşteri), `lic`, `did` (cihaz numarası, ilk basımda rastgele), `iat`/`exp` (milisaniye — saniye hassasiyeti aynı saniyedeki toplu iptalden sonra basılan tokenı da reddeder), `ver`, `kid` (= `key_version`). İmza HMAC-SHA256, sabit zamanlı karşılaştırma (`constantTimeEqual`).
   - KEK önerisi: `CUSTOMER_TOKEN_SECRET`'tan HKDF-SHA256 ile türetilmiş 32 bayt (ayrı `info` dizesiyle) — yeni zorunlu ortam değişkeni ve açılışı engelleyen kural yok. `CUSTOMER_TOKEN_SECRET` değişirse saklı anahtarlar açılmaz: açılmayan anahtar "yeniden anahtarla" sayılmalı (yeni sürüm), üyeler bir kez yeni ziyaretçi olur. AAD önerisi: `member-token:<license_id>:<key_version>`.
   - Anahtar ilk basımda tembel oluşur (`INSERT … ON CONFLICT (license_id) DO NOTHING`, sonra oku).
@@ -74,6 +74,8 @@ Bir yolu bağlayan alt görev aynı commit'te: `apps/mobile/src/__tests__/parity
 - **Rotasyon geçiş süresi** varsayılan 7 gün, 0–30 gün; `0` = acil rotasyon.
 - **Olası eşleşme anahtarı** K4 panelindeki "kullanıcı adına göre olası eşleşmeyi ajana göster" seçeneğidir ve listenin tamamını (kullanıcı adı ya da e-posta) açıp kapatır.
 - **İptal ve anahtar lisans kapsamlı;** bağlar kuruluş kapsamlı (müşteri kuruluş düzeyinde).
+- **Geçiş penceresi (tm 287.2)** dağıtımdan itibaren 30 gün (varsayılan token ömrü kadar; kaynakta değer yok) ve yalnız dağıtım anında var olan, kanal kimliği olmayan müşteriler için. Kanaldan gelen (e-posta, WhatsApp, SMS, Telegram, Messenger) müşterinin takas edeceği bir widget numarası hiç olmadı; pencere onlara yalnız açık bir kapı bırakırdı.
+- **Toplu iptal kuruluşun geçiş penceresini de kapatır.** Müşteri kuruluş düzeyinde, iptal lisans düzeyindedir: birden çok lisanslı bir kuruluşta bir lisansın toplu iptali öteki lisansın henüz takas etmemiş eski ziyaretçilerini de yeni ziyaretçi yapar (bugünkü kayıt akışı kuruluş başına tek lisans açar; sandbox da kendi kuruluşudur).
 
 ## 7. Değişen dosyalar (tm 287.1)
 
@@ -81,3 +83,59 @@ Bir yolu bağlayan alt görev aynı commit'te: `apps/mobile/src/__tests__/parity
 - `packages/types/src/member-recognition.ts` (+ test).
 - `packages/contract/openapi/openapi.yaml` (bileşen şemaları), `paths/auth.yaml` (`/customer/token`), `paths/settings.yaml` + `paths/customers.yaml` (bağlanmamış yollar), `packages/contract/src/generated/api.ts`.
 - `apps/api/test/integration/member-recognition-schema.test.ts` (17 test; 10 mutasyonun 10'u kırmızı).
+
+## 8. Token üretimi ve doğrulaması (tm 287.2)
+
+`POST /customer/token` artık kimseyi çıplak `customer_id` ile tanımaz. Kod: `services/auth/member-token.ts` (biçim, imza, anahtar mühürleme), `services/auth/member-recognition.ts` (hangi müşteri, anahtar, rotasyon, iptal, ayar görünümü), `routes/auth.ts` (uç), `routes/member-recognition.ts` (beş yönetim işlemi), migration `20261016090000_member_adoption`.
+
+### 8.1 Biçim ve anahtar
+
+- **Biçim `nxm1.<kid>.<body>.<sig>`** — §5'in önerisinden bir sapma: `kid` gövdenin içinde değil, açıkta ve imzanın kapsadığı kısımda. Doğrulayıcı anahtarı gövdeyi okumadan seçer; imzası doğrulanmamış gövde hiç ayrıştırılmaz (`customer-token.ts`'in kuralı), `kid`'i değiştirmek imzayı bozar. İmza HMAC-SHA256, `constantTimeEqual`.
+- **Gövde:** `sub` (müşteri), `lic`, `did` (tarayıcı numarası, 128 bit, ilk tanınmada çekilir ve her yeniden imzalamada taşınır), `oat` (bu tarayıcının token zincirinin başladığı an), `iat`, `exp` (milisaniye), `ver` = 1. **`oat` öneride yoktu:** iptal `iat`'e değil zincirin başına karşı karşılaştırılır. Aksi halde iptal işlemi commit olmadan hemen önce tokenı okuyup hemen sonra yeniden imzalayan bir basım, iptalin hiç reddetmediği bir token verirdi — çalınmış bir tokenla basım ucunu sürekli çağıran biri iptali böyle atlatabilirdi.
+- **Tek saat:** karşılaştırılan her zaman veritabanından gelir (basımın başında `clock_timestamp()`, iptalde `revoked_at = clock_timestamp()`, rotasyonun bitişi SQL'de). API ile veritabanı saati kayabilir (uykudan dönen Docker Desktop VM'i, kendi NTP'si olan iki kopya); iki saat arasında karşılaştırılan bir iptal, kendinden önce basılmış tokenı geçirebilir.
+- **KEK** önerildiği gibi: `CUSTOMER_TOKEN_SECRET`'tan HKDF-SHA256, `info` = `siyahtus/member-token/key-encryption/v1`; yeni ortam değişkeni ya da açılışı engelleyen kural yok. AAD `member-token:<license_id>:<key_version>`.
+- **Anahtar ilk basımda tembel oluşur** (`INSERT … ON CONFLICT DO NOTHING`, sonra oku — yarışan iki ilk basım aynı anahtarı kullanır). Okuma hiçbir şey oluşturmaz.
+- **Açılmayan anahtar** (`CUSTOMER_TOKEN_SECRET` değişti, satır elle değişti) bir sonraki basımda yeni sürümle değiştirilir, önceki yuva boşalır, `warn` yazılır; o lisansın üyeleri bir kez yeni ziyaretçi olur. Anahtarı kimse okuyamıyorsa tek dürüst sonuç budur.
+
+### 8.2 Doğrulama sırası ve cevap
+
+1. Token: önce `siyahtus_member` çerezi, yoksa gövdedeki `member_token`; ikisi gelirse çerez kazanır (kontrat).
+2. `kid` → anahtar: güncel sürüm, geçiş süresi süren önceki sürüm; süresi dolmuş önceki sürüm `key_retired`, başka her sürüm `unknown_key`.
+3. İmza (`bad_signature`) → gövde biçimi (`malformed`) → süre (`expired`) → lisans (`license_mismatch`, gömülü lisans uç adının çözdüğü lisans değilse — anahtar zaten lisansa ait, bu ikinci kilit) → iptal listesi (`revoked`) → müşteri hâlâ bu kuruluşta mı (`customer_gone`).
+4. Geçerliyse o müşteri; yasaklıysa 403 `customer_banned` (yalnız kim olduğunu kanıtlamış üye yasağını öğrenir). Token aynı `did` ve `oat` ile, lisansın güncel ömrüyle yeniden imzalanır (kayan süre).
+5. Geçersizse ve gövdede `customer_id` varsa geçiş (§8.3); o da tutmazsa yeni anonim müşteri.
+
+Reddedilen her kimlik bilgisi ilk ziyaretle **aynı durum ve aynı alan kümesiyle** cevaplanır (testte anahtar kümesi karşılaştırılır) ve `warn` yazılır: `member credential refused; answered as a new visitor` + `license_id`, `reason`, `source` (`cookie` | `body` | `customer_id`); token ya da müşteri numarası log'a girmez. `req.body.member_token` log redaksiyonuna eklendi (çerez ve `Set-Cookie` zaten redakte).
+
+Her 200'de `Set-Cookie: siyahtus_member=…; Max-Age=<ömür>; Path=<uç yolu>; Secure; HttpOnly; SameSite=None; Partitioned`. Gövdede `member_token` yalnız çerez geçerli bir tokenı taşıyıp tanındığında yoktur; `member_token_expires_at` her zaman vardır.
+
+### 8.3 Geçiş: çıplak `customer_id` bir kez takas edilir
+
+- Önerildiği gibi `customers.member_adoptable_until`: migration'da `DEFAULT (now() + interval '30 days')` ile eklenip varsayılan hemen bırakılır — Postgres 11+ değişken olmayan varsayılanı bir kez hesaplar, tablo yeniden yazılmaz; yalnız dağıtım anında var olan müşteriler 30 gün takas edebilir. **Ek:** kanal kimliği olan müşteriler aynı migration'da pencereden çıkarılır (yalnız o satırlar güncellenir).
+- Takas `UPDATE customers SET member_adoptable_until = NULL WHERE id = $1 AND member_adoptable_until > clock_timestamp() RETURNING …` ile hak talep eder: aynı numara için yarışan iki istekten yalnız biri kazanır, kaybeden yeni anonim müşteri olur. Takas edilen müşteri yasaklıysa 403 ve takas geri alınır.
+- Bir üyenin iptali o üyenin, toplu iptal kuruluşun bütün geçiş pencerelerini kapatır. İptal zamanını müşteri satır(lar)ını kilitledikten **sonra** alır; takas zamanını talep güncellemesinden **önce** okur — yarışan bir takas ya iptalden önce commit olup iptalce reddedilir ya da pencereyi kapalı bulur.
+- `auth_find_customer` artık çağrılmıyor; veritabanında kaldı (düşürmek daraltma adımıdır, ayrı iş).
+
+### 8.4 Yönetim uçları
+
+| İşlem                                       | Yetki                           | Davranış                                                                                                                                          | Denetim                                                                                                                                                                                   |
+| ------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /settings/member-recognition`          | `access_rules:ro`/`:rw` + admin | Varsayılanları okur, satır/anahtar oluşturmaz; önceki anahtar yalnız hâlâ kabul edilirken görünür                                                 | —                                                                                                                                                                                         |
+| `PATCH /settings/member-recognition`        | `access_rules:rw` + admin       | Upsert; yeni ömür bir sonraki imzalamadan itibaren                                                                                                | `settings.security_updated` (`resource: member_recognition`, alanlar, `ttl_seconds_before/after`, `possible_matches_before/after` — metadata anahtarında "token" sözcüğü sanitize edilir) |
+| `POST …/rotate-key`                         | `access_rules:rw` + admin       | Satırı kilitler; geçiş > 0: güncel anahtar önceki yuvaya, bitiş `clock_timestamp() + geçiş`; 0: önceki yuva boşalır (acil); anahtar yoksa sürüm 1 | `member_token_key.rotated` (`version`, `previous_version`, `grace_period_seconds`)                                                                                                        |
+| `POST …/revoke-all`                         | `access_rules:rw` + admin       | Kuruluşun geçiş pencerelerini kapatır, `customer_id` NULL iptal satırı                                                                            | `member_tokens.revoked` (`scope: all`)                                                                                                                                                    |
+| `POST /customers/{id}/revoke-member-tokens` | `customers:rw`                  | Müşteri satırını kilitler (başka kuruluşun müşterisi 404), penceresini kapatır, iptal satırı; `revoked_by` hesap                                  | `member_tokens.revoked` (`scope: customer`)                                                                                                                                               |
+
+Denetim eylemleri web kataloğunda (en + tr, "Credentials" grubu), hedef türü `member_recognition`.
+
+### 8.5 Widget'ta en küçük gönderim (tm 287.3'ten öne alınan pay)
+
+Çıplak numara kapanınca bugünkü widget her yüklemede yeni müşteri olurdu (e2e "sends a message and keeps it after a reload" kırmızı). Bu yüzden `apps/widget/src/api.ts` cevaptaki `member_token`'ı `siyahtus.member_token` localStorage anahtarına yazar ve sonraki basımda gönderir; `customer_id`'yi yalnız token yokken (geçiş için) gönderir. **tm 287.3'e kalan:** `credentials: 'include'` + CORS ile partitioned çerez, çerez taşıdığında yerel kopyanın silinmesi, logout, iOS Safari notu. Önbellekte eski widget paketi kalan bir tarayıcı geçişte bir kez benimsenir, sonraki yüklemede (tokenı saklamadığı için) yeni ziyaretçi olur — geçiş süresince kabul edilen bir sınır.
+
+### 8.6 Değişen dosyalar (tm 287.2)
+
+- `apps/api/prisma/migrations/20261016090000_member_adoption/migration.sql`, `schema.prisma` (`Customer.memberAdoptableUntil`).
+- `apps/api/src/services/auth/member-token.ts`, `member-recognition.ts`, `src/lib/cookie.ts`, `src/plugins/auth.ts` (`app.memberRecognition`), `src/routes/auth.ts`, `src/routes/member-recognition.ts`, `src/server.ts` (kayıt + redaksiyon), `src/services/audit/audit-log.ts`.
+- Kontrat: `openapi.yaml` dört yol bağlandı, `paths/settings.yaml` + `paths/customers.yaml` başlık/açıklama, `src/generated/api.ts`; mobil parity 227 → 231; `scripts/audit/endpoint-ui.cjs` `TRACKED` (ayarlar → tm 287.5, üye iptali → tm 287.4).
+- Web: `AuditLogPage.tsx` grubu, `locales/{en,tr}/audit-labels.ts`. Widget: `src/api.ts` (+ `api.member.test.ts`).
+- Testler: `apps/api/test/integration/member-token.test.ts`, birim `member-token.test.ts`, `cookie.test.ts`, yardımcı `test/helpers/member-token.ts`; çıplak numarayla mevcut müşteriye basım yapan 9 entegrasyon dosyası geçiş yoluna ya da üye tokenına çevrildi.

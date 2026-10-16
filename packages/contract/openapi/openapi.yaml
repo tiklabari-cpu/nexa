@@ -261,6 +261,8 @@ paths:
     $ref: "./paths/customers.yaml#/erase"
   /customers/{customerId}/custom-fields:
     $ref: "./paths/customers.yaml#/customerCustomFields"
+  /customers/{customerId}/revoke-member-tokens:
+    $ref: "./paths/customers.yaml#/revokeMemberTokens"
 
   /traffic:
     $ref: "./paths/traffic.yaml#/traffic"
@@ -415,6 +417,12 @@ paths:
     $ref: "./paths/custom-fields.yaml#/customField"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
+  /settings/member-recognition:
+    $ref: "./paths/settings.yaml#/memberRecognition"
+  /settings/member-recognition/rotate-key:
+    $ref: "./paths/settings.yaml#/memberRecognitionRotateKey"
+  /settings/member-recognition/revoke-all:
+    $ref: "./paths/settings.yaml#/memberRecognitionRevokeAll"
   /settings/retention:
     $ref: "./paths/settings.yaml#/retention"
   /settings/compliance:
@@ -2757,11 +2765,11 @@ components:
     # --- Member recognition (ID-03 · decision K4 · tm 287) ---------------------
     #
     # The shapes of Settings › Security › Member recognition and of a
-    # customer's possible matches and links. Defined ahead of the paths that
-    # return them: `paths/settings.yaml` and `paths/customers.yaml` hold those
-    # path items, and each is mounted under `paths:` by the subtask that serves
-    # it — `contract-parity.test.ts` refuses a documented operation nothing
-    # serves (docs/adr/member-recognition.md §3).
+    # customer's possible matches and links. The settings and the per-member
+    # revocation are served since tm 287.2; the possible matches and links are
+    # defined ahead of their paths, which `paths/customers.yaml` holds unmounted
+    # until tm 287.4 serves them — `contract-parity.test.ts` refuses a
+    # documented operation nothing serves (docs/adr/member-recognition.md §3).
 
     MemberTokenKeyInfo:
       type: object

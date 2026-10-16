@@ -36,6 +36,7 @@ import notificationRoutes from './routes/notifications.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
+import memberRecognitionRoutes from './routes/member-recognition.js';
 import trafficRoutes from './routes/traffic.js';
 import campaignRoutes from './routes/campaigns.js';
 import goalRoutes from './routes/goals.js';
@@ -217,6 +218,10 @@ export async function buildServer({
           'req.body.client_secret',
           'req.body.code_verifier',
           'req.body.token',
+          // A returning visitor's member token (ID-03 · K4) — whoever holds it
+          // is that member to `POST /customer/token`. Its cookie twin is
+          // covered by `req.headers.cookie` above and the `Set-Cookie` below.
+          'req.body.member_token',
           // Telegram's connect body carries a caller-supplied bot token
           // (`08.5.8-b`) — a real credential, unlike the other channels' mock
           // OAuth `code`.
@@ -558,6 +563,7 @@ export async function buildServer({
       await api.register(notificationRoutes);
       await api.register(customerRoutes, { env, push, automations, llm: meteredLlm, knowledge });
       await api.register(customerDirectoryRoutes);
+      await api.register(memberRecognitionRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
       await api.register(goalRoutes);

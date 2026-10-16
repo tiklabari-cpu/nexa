@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
   isScope,
   DEFAULT_PRECHAT_CONFIG,
+  MEMBER_TOKEN_COOKIE,
   normalizePrechatConfig,
   normalizeWidgetAppearance,
   RTM_PATHS,
@@ -19,6 +20,7 @@ import {
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { readCookie, serializeCookie } from '../lib/cookie.js';
 import { verifyPassword } from '../lib/crypto.js';
 import { poweredByFor } from '../lib/entitlements.js';
 import { originHost } from '../lib/origin.js';
@@ -33,6 +35,8 @@ import {
   type AuditEntry,
 } from '../services/audit/audit-log.js';
 import { registerConsoleRedirect } from '../services/auth/console-redirect-sync.js';
+import type { MemberTokenSource } from '../services/auth/member-recognition.js';
+import { MEMBER_TOKEN_MAX_LENGTH } from '../services/auth/member-token.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
 import type { IssuedToken } from '../services/auth/token-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
@@ -191,6 +195,18 @@ const reauthenticateBody = z.object({
 
 const customerTokenBody = z.object({
   organization_id: z.string().uuid(),
+  /**
+   * The member token from the widget's localStorage (ID-03 · K4), sent by a
+   * browser that would not keep the `siyahtus_member` cookie. Any string is
+   * accepted here — an invalid one is a new visitor, not a 400, so a refused
+   * token is answered exactly like no token.
+   */
+  member_token: z.string().max(MEMBER_TOKEN_MAX_LENGTH).optional(),
+  /**
+   * The id a widget from before member tokens kept. It identifies; it does not
+   * authenticate. It reaches its customer only once, inside the transition
+   * window (`customers.member_adoptable_until`), and never again after.
+   */
   customer_id: z.string().uuid().optional(),
   /**
    * Origin of the page the widget is embedded in.
@@ -1679,35 +1695,49 @@ export default async function authRoutes(
       throw new ApiError('customer_banned', 'This customer is banned.');
     }
 
-    let customerId = body.customer_id;
-    if (customerId) {
-      const existing = await app.db.$queryRaw<
-        Array<{ id: string; banned_at: Date | null }>
-      >`SELECT id, banned_at FROM auth_find_customer(${customerId}::uuid, ${match.organization_id}::uuid)`;
+    // --- Who this is (ID-03 · K4 · tm 287.2) ----------------------------------
+    // A returning visitor is the member their browser's member token names —
+    // nothing else. The cookie when it came (the browser sends it to this
+    // endpoint alone, and page scripts cannot read it), else the copy the
+    // widget kept in localStorage; the cookie wins when both arrive. A bare
+    // `customer_id` is not a credential: whoever learned a member's id could
+    // open their conversation with it. `resolve` trades one for a member token
+    // only once, inside the transition window, and otherwise opens a new
+    // anonymous customer — answered exactly like a first visit.
+    const cookieToken = readCookie(request.headers.cookie, MEMBER_TOKEN_COOKIE);
+    const presented: { token: string; source: MemberTokenSource } | null = cookieToken
+      ? { token: cookieToken, source: 'cookie' }
+      : body.member_token
+        ? { token: body.member_token, source: 'body' }
+        : null;
 
-      const found = existing[0];
-      if (!found) {
-        // A customer id from another tenant, or simply stale. Issue a fresh
-        // identity rather than an error — the visitor did nothing wrong, and a
-        // distinguishable failure would let a site probe for valid ids.
-        customerId = undefined;
-      } else if (found.banned_at) {
-        throw new ApiError('customer_banned', 'This customer is banned.');
-      }
-    }
-
-    if (!customerId) {
-      // Goes through withTenant like every other write, rather than setting the
-      // session variables inline: one implementation of the tenant context means
-      // one place to get it right.
-      const created = await withTenant(app.db, tenant, (tx) =>
-        tx.customer.create({
-          data: { organizationId: match.organization_id, lastActivityAt: new Date() },
-          select: { id: true },
-        }),
+    // Goes through withTenant like every other write: one implementation of
+    // the tenant context means one place to get it right.
+    const member = await withTenant(app.db, tenant, async (tx) => {
+      const resolved = await app.memberRecognition.resolve(tx, {
+        licenseId: match.license_id,
+        organizationId: match.organization_id,
+        presented,
+        ...(body.customer_id ? { customerId: body.customer_id } : {}),
+        log: request.log,
+      });
+      // Thrown inside the transaction, so an adoption it would have made is
+      // rolled back with it. Only a member who proved who they are — by token,
+      // or by the one adoption — learns they are banned: a bare id that is not
+      // adopted is never looked up, so it cannot probe for bans.
+      if (resolved.banned) throw new ApiError('customer_banned', 'This customer is banned.');
+      return resolved;
+    });
+    // Logged, never answered: a refused credential is a new visitor with the
+    // status and the shape of a first visit, so the response says neither why
+    // nor that there was anything to refuse.
+    for (const refusal of member.refusals) {
+      request.log.warn(
+        { license_id: match.license_id.toString(), reason: refusal.reason, source: refusal.source },
+        'member credential refused; answered as a new visitor',
       );
-      customerId = created.id;
     }
+    const customerId = member.customerId;
 
     // Which brand this widget speaks for (WG-01): the website registered for
     // the embedding host, else the licence default. Signed into the token so
@@ -1774,11 +1804,30 @@ export default async function authRoutes(
     ]);
 
     reply.header('Cache-Control', 'no-store');
+    // The re-signed member token, on every 200: in a cookie the browser keeps
+    // per embedding site (CHIPS `Partitioned`), sends back to this endpoint
+    // alone (`Path`) and never shows a page script (`HttpOnly`) — and in the
+    // body too unless the cookie is what carried it here, for the browser that
+    // would not keep the cookie and has to hold the token in localStorage.
+    reply.header(
+      'Set-Cookie',
+      serializeCookie(MEMBER_TOKEN_COOKIE, member.memberToken, {
+        maxAgeSeconds: member.ttlSeconds,
+        path: request.routeOptions.url ?? '/',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'None',
+        partitioned: true,
+      }),
+    );
+    const cookieCarriedIt = presented?.source === 'cookie' && member.via === 'token';
     return reply.send({
       token,
       expires_in: expiresIn,
       customer_id: customerId,
       organization_id: match.organization_id,
+      ...(cookieCarriedIt ? {} : { member_token: member.memberToken }),
+      member_token_expires_at: member.expiresAt.toISOString(),
       // Where the widget dials for its socket (FR-MOD-11.6). It cannot derive
       // this: the gateway is a separate process on its own origin, and nothing
       // in `apiBaseUrl` says where. Handed over at mint alongside the appearance

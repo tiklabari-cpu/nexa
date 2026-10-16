@@ -2241,11 +2241,7 @@ sandboxReset:
 #
 # Settings › Security › Member recognition: how a returning visitor is
 # recognised by the member token the widget keeps (docs/adr/member-recognition.md).
-#
-# NOT MOUNTED YET. tm 287.1 wrote these path items ahead of their routes;
-# `openapi.yaml` `paths:` gains each one together with the route that serves it
-# (tm 287.2), because `contract-parity.test.ts` refuses an operation the
-# document promises and nothing serves.
+# Written by tm 287.1, served by `routes/member-recognition.ts` since tm 287.2.
 #
 # Licence-scoped, not brand-scoped — no `X-SiyahTus-Brand`: the member token and
 # its key are the licence's, and a member is the same person on every brand's
@@ -2340,9 +2336,11 @@ memberRecognitionRevokeAll:
     operationId: revokeAllMemberTokens
     summary: Forget every returning visitor at once
     description: |
-      Refuses every member token this licence has issued so far: each browser's
-      next visit is a new anonymous customer, and nobody is recognised until
-      they come back and are given a new token. Earlier conversations stay with
+      Refuses every member token this licence has issued so far, and every
+      re-signing of them: each browser's next visit is a new anonymous
+      customer, and nobody is recognised until they come back and are given a
+      new token. The one-time trade of an id from before member tokens closes
+      for the whole organization as well. Earlier conversations stay with
       their customer records, and agents can still link a member to them.
 
       `access_rules:rw` plus `minimumRole: admin`; audited.

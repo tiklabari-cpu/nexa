@@ -278,6 +278,11 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'partner_app.updated',
       'partner_app.deleted',
       'partner_app.secret_rotated',
+      // The member token a returning visitor's browser holds (ID-03 · K4): a
+      // key rotation or a revocation is how a workspace's regulars all become
+      // new visitors at once, so it is found where the other credentials are.
+      'member_token_key.rotated',
+      'member_tokens.revoked',
     ],
   },
   { labelKey: 'audit.group.data', actions: ['data.retention_pruned', 'data.deleted'] },

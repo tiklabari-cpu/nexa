@@ -28,6 +28,8 @@ import { authFailureBucket } from './rate-limit.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
 import { LastSeenRecorder } from '../services/auth/last-seen.js';
+import { MemberRecognitionService } from '../services/auth/member-recognition.js';
+import { MemberTokenCodec } from '../services/auth/member-token.js';
 import { roleAtLeast, tenantOf, type Principal } from '../services/auth/principal.js';
 import { TokenService } from '../services/auth/token-service.js';
 
@@ -35,6 +37,8 @@ declare module 'fastify' {
   interface FastifyInstance {
     tokens: TokenService;
     customerTokens: CustomerTokenService;
+    /** Who a widget's `POST /customer/token` speaks for (ID-03 · K4 · tm 287.2). */
+    memberRecognition: MemberRecognitionService;
   }
 
   interface FastifyRequest {
@@ -108,6 +112,12 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
 
   app.decorate('tokens', tokens);
   app.decorate('customerTokens', customerTokens);
+  // The member-token keys are sealed under a key derived from the same secret
+  // (HKDF, its own label) — no new environment key to boot with.
+  app.decorate(
+    'memberRecognition',
+    new MemberRecognitionService(new MemberTokenCodec(env.CUSTOMER_TOKEN_SECRET)),
+  );
 
   app.decorateRequest('principal', undefined);
   app.decorateRequest('principalRegion', undefined);

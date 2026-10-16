@@ -19,6 +19,7 @@ import {
   TEST_PASSWORD,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { mintForExistingCustomer } from '../helpers/member-token.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 /** A fresh, valid PKCE pair. */
@@ -875,13 +876,17 @@ describe('auth', () => {
     });
 
     it('refuses a banned customer', async () => {
+      // The member their browser's token names (tm 287.2) — a ban answers the
+      // member, never a bare id, which reaches nobody.
+      const adopted = await mintForExistingCustomer(server, fx.a, fx.a.customerId);
+      const { member_token } = adopted.json() as { member_token: string };
       await owner.customer.update({
         where: { id: fx.a.customerId },
         data: { bannedAt: new Date() },
       });
       const response = await post(
         '/customer/token',
-        { organization_id: fx.a.organizationId, customer_id: fx.a.customerId },
+        { organization_id: fx.a.organizationId, member_token },
         widgetOrigin(fx.a.trustedDomain),
       );
       expect(response.statusCode).toBe(403);

@@ -114,18 +114,24 @@ describe('widget pre-chat form setting (WG-01)', () => {
     return response.json() as PrechatConfig & { configured: boolean; brand_id: string };
   }
 
-  async function mint(host = fx.a.trustedDomain, customerId?: string) {
+  /** `memberToken`: a returning visitor's browser (ID-03 · K4 · tm 287.2). */
+  async function mint(host = fx.a.trustedDomain, memberToken?: string) {
     const response = await server.post(
       '/customer/token',
       {
         organization_id: fx.a.organizationId,
         host_origin: `https://${host}`,
-        ...(customerId ? { customer_id: customerId } : {}),
+        ...(memberToken ? { member_token: memberToken } : {}),
       },
       { origin: `https://${host}` },
     );
     expect(response.statusCode).toBe(200);
-    return response.json() as { token: string; customer_id: string; prechat: PrechatConfig };
+    return response.json() as {
+      token: string;
+      customer_id: string;
+      member_token: string;
+      prechat: PrechatConfig;
+    };
   }
 
   // =========================================================================
@@ -244,7 +250,8 @@ describe('widget pre-chat form setting (WG-01)', () => {
       expect(before.prechat.enabled).toBe(true);
 
       await save({ ...DEFAULT_PRECHAT_CONFIG, enabled: false });
-      const after = await mint(fx.a.trustedDomain, before.customer_id);
+      const after = await mint(fx.a.trustedDomain, before.member_token);
+      expect(after.customer_id).toBe(before.customer_id);
       expect(after.prechat.enabled).toBe(false);
     });
 

@@ -16,6 +16,7 @@ import type { PrismaClient } from '@prisma/client';
 import { generateShortId } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { mintForExistingCustomer } from '../helpers/member-token.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const ADMIN = ['tickets--all:rw', 'tickets--all:ro', 'chats--all:rw', 'customers:ro'];
@@ -426,11 +427,7 @@ describe('tickets', () => {
     });
 
     it('refuses a customer token outright', async () => {
-      const tokenResponse = await server.post(
-        '/customer/token',
-        { organization_id: fx.a.organizationId, customer_id: fx.a.customerId },
-        { origin: `https://${fx.a.trustedDomain}` },
-      );
+      const tokenResponse = await mintForExistingCustomer(server, fx.a, fx.a.customerId);
       const { token } = tokenResponse.json() as { token: string };
 
       // Tickets are internal. The service has no customer branch at all, so

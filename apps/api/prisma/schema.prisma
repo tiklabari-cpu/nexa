@@ -430,6 +430,12 @@ model Customer {
   lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz(6)
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Until when a widget may still trade this customer's bare id for a member
+  /// token, once (ID-03 · K4 · tm 287.2): set only on customers that existed
+  /// when member tokens arrived (20261016090000_member_adoption), cleared by
+  /// that one adoption or by a revocation. NULL — every customer created since —
+  /// means the id alone never reaches this record.
+  memberAdoptableUntil DateTime? @map("member_adoptable_until") @db.Timestamptz(6)
 
   chats             Chat[]
   tickets           Ticket[]

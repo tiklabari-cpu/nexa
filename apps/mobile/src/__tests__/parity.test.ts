@@ -909,7 +909,14 @@ describe('module parity matrix — what is still owed', () => {
       // — the workspace's daily AI allowance, its history and its 80%/100%
       // alerts, read and configured in the web panel's Settings by the owner
       // and admins. The app has no settings screens; nothing here re-scopes.
-      contractEndpoints: 227,
+      // 227 -> 231 with `/settings/member-recognition` (+ `/rotate-key`,
+      // `/revoke-all`) and `/customers/{customerId}/revoke-member-tokens`
+      // (tm 287.2) — how a returning widget visitor is recognised: the token
+      // lifetime, the signing key, and forgetting one member's browsers or
+      // everyone's. Workspace security set in the web panel by admins; the app
+      // has no settings screens and no customer actions of that weight, so
+      // nothing here re-scopes.
+      contractEndpoints: 231,
       scopeBoundaries: 1,
     });
   });

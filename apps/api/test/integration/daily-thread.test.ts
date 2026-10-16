@@ -145,17 +145,22 @@ describe("the member's day — visitor path (ID-02)", () => {
 
   // --- helpers ---------------------------------------------------------------
 
-  async function widgetToken(tenant = fx.a, customerId?: string) {
+  /**
+   * The widget's mint. A returning visitor presents the member token their
+   * browser kept (ID-03 · K4); `customer_id` is the bare id, which reaches
+   * nobody on its own (tm 287.2).
+   */
+  async function widgetToken(
+    tenant = fx.a,
+    credential: { member_token?: string; customer_id?: string } = {},
+  ) {
     const response = await server.post(
       '/customer/token',
-      {
-        organization_id: tenant.organizationId,
-        ...(customerId ? { customer_id: customerId } : {}),
-      },
+      { organization_id: tenant.organizationId, ...credential },
       { origin: `https://${tenant.trustedDomain}` },
     );
     expect(response.statusCode).toBe(200);
-    return response.json() as { token: string; customer_id: string };
+    return response.json() as { token: string; customer_id: string; member_token: string };
   }
 
   async function say(token: string, text: string, extra: Record<string, unknown> = {}) {
@@ -449,8 +454,9 @@ describe("the member's day — visitor path (ID-02)", () => {
     const chatId = (await say(first.token, 'Hello')).json().chat_id as string;
     const [connection] = await threadsOf(chatId);
 
-    // A reloaded page, a second tab, a reconnect: a fresh token, same member.
-    const second = await widgetToken(fx.a, first.customer_id);
+    // A reloaded page, a second tab, a reconnect: a fresh token, same member —
+    // recognised by the member token the first load left in the browser.
+    const second = await widgetToken(fx.a, { member_token: first.member_token });
     expect(second.customer_id).toBe(first.customer_id);
     for (const token of [second.token, first.token, second.token]) {
       const response = await say(token, 'again');
@@ -766,7 +772,7 @@ describe("the member's day — visitor path (ID-02)", () => {
     await endConnection(token);
 
     // B's widget presenting A's member id is simply a member of B.
-    const intruder = await widgetToken(fx.b, customer_id);
+    const intruder = await widgetToken(fx.b, { customer_id });
     expect(intruder.customer_id).not.toBe(customer_id);
     const theirs = await say(intruder.token, 'Theirs');
     expect(theirs.statusCode).toBe(201);

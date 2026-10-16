@@ -2082,6 +2082,37 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customers/{customerId}/revoke-member-tokens': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Forget this member's browsers
+     * @description Refuses every member token this licence has issued to this customer so
+     *     far, and every re-signing of them (ID-03 · K4): each of their browsers is
+     *     a new anonymous visitor on its next visit, and a copied token stops
+     *     working. A customer from before member tokens who has not yet traded
+     *     their old id for a token loses that one-time chance too. The record and
+     *     its conversations stay — this forgets browsers, it does not ban or erase.
+     *
+     *     `customers:rw`, so admins and above today; the Agent role reaches it when
+     *     the RL-02 permission matrix grants it. Audited. A customer of another
+     *     organization is a 404.
+     */
+    post: operations['revokeCustomerMemberTokens'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/traffic': {
     parameters: {
       query?: never;
@@ -4610,6 +4641,98 @@ export interface paths {
      *     limits; `null` is how a limit is turned off.
      */
     patch: operations['updateSecuritySettings'];
+    trace?: never;
+  };
+  '/settings/member-recognition': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * How returning visitors are recognised
+     * @description The member-token lifetime, whether agents see possible matches, the
+     *     signing key's version and rotation state (never the key itself) and the
+     *     latest bulk revocation (ID-03 · decision K4). A workspace that never saved
+     *     these reads the defaults; reading creates nothing.
+     *
+     *     `access_rules:ro` (or `:rw`) plus `minimumRole: admin`, like the other
+     *     Security settings.
+     */
+    get: operations['getMemberRecognitionSettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change the token lifetime or the possible-match switch
+     * @description Creates the row on first write; only the fields sent change. A new
+     *     lifetime applies to the tokens signed from then on — every visit
+     *     re-signs, so a returning member picks it up on their next visit — and
+     *     does not cut short a token already issued.
+     *
+     *     `access_rules:rw` plus `minimumRole: admin`. Writes an audit entry naming
+     *     the fields changed and their old and new values.
+     */
+    patch: operations['updateMemberRecognitionSettings'];
+    trace?: never;
+  };
+  '/settings/member-recognition/rotate-key': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Replace the member-token signing key
+     * @description Generates a new signing key. The replaced key stays accepted for
+     *     `grace_period_seconds` (default 7 days): a member who visits in that time
+     *     is re-signed under the new key and notices nothing, and a token the old
+     *     key signed is refused once the window closes — that browser starts again
+     *     as a new visitor. `0` retires the old key at once, the rotation for a key
+     *     that may have leaked. One previous key at a time: rotating again inside
+     *     the window drops the oldest key immediately.
+     *
+     *     The key is never returned, by this or any endpoint. `access_rules:rw`
+     *     plus `minimumRole: admin`; audited.
+     */
+    post: operations['rotateMemberTokenKey'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/member-recognition/revoke-all': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Forget every returning visitor at once
+     * @description Refuses every member token this licence has issued so far, and every
+     *     re-signing of them: each browser's next visit is a new anonymous
+     *     customer, and nobody is recognised until they come back and are given a
+     *     new token. The one-time trade of an id from before member tokens closes
+     *     for the whole organization as well. Earlier conversations stay with
+     *     their customer records, and agents can still link a member to them.
+     *
+     *     `access_rules:rw` plus `minimumRole: admin`; audited.
+     */
+    post: operations['revokeAllMemberTokens'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/settings/retention': {
@@ -17024,6 +17147,32 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  revokeCustomerMemberTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MemberTokenRevocation'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   listTraffic: {
     parameters: {
       query?: {
@@ -20982,6 +21131,108 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getMemberRecognitionSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MemberRecognitionSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateMemberRecognitionSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MemberRecognitionSettingsInput'];
+      };
+    };
+    responses: {
+      /** @description The settings after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MemberRecognitionSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  rotateMemberTokenKey: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['MemberKeyRotationInput'];
+      };
+    };
+    responses: {
+      /** @description The settings, with the new key's version */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MemberRecognitionSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  revokeAllMemberTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings, `tokens_revoked_before` now this moment */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MemberRecognitionSettings'];
+        };
+      };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

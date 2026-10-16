@@ -22,6 +22,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { mintForExistingCustomer } from '../helpers/member-token.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { withTenant } from '../../src/lib/tenant.js';
 import {
@@ -322,11 +323,7 @@ describe('chat supervision', () => {
 
     it('turns a customer token away', async () => {
       const chatId = await seedChat(fx.a, supportGroupId);
-      const minted = await server.post(
-        '/customer/token',
-        { organization_id: fx.a.organizationId, customer_id: fx.a.customerId },
-        { origin: `https://${fx.a.trustedDomain}` },
-      );
+      const minted = await mintForExistingCustomer(server, fx.a, fx.a.customerId);
       expect(minted.statusCode).toBe(200);
 
       const response = await supervise(chatId, (minted.json() as { token: string }).token);

@@ -446,6 +446,15 @@ export const AUDIT_ACTIONS = [
   // able to find without first working out which PAT was special.
   'scim_token.created',
   'scim_token.revoked',
+  // Member recognition (ID-03 · K4 · tm 287.2) — the credential a returning
+  // visitor's browser holds. A key rotation can forget every member at once
+  // (a grace of 0 does), and a revocation forgets one member's browsers or
+  // every member's, so both are the kind of line an owner asks the trail for
+  // after "why did all our regulars become new visitors". Metadata: versions
+  // and the grace window for a rotation, `scope` (`customer` | `all`) and the
+  // moment for a revocation — never the key and never a token.
+  'member_token_key.rotated',
+  'member_tokens.revoked',
   // A handset was allowed to receive this workspace's conversations, or stopped
   // being allowed (FR-MOD-13.7 · 13.7-c). Recorded because a push registration
   // is a standing permission to deliver customer messages to a physical device

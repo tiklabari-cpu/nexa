@@ -307,11 +307,11 @@ erase:
 # customer-side doors: forgetting one member's browsers, the unverified
 # possible matches an agent is shown, and the links an agent confirms.
 #
-# NOT MOUNTED YET. tm 287.1 wrote these path items ahead of their routes;
-# `openapi.yaml` `paths:` gains each one together with the route that serves it
-# — `revokeMemberTokens` with tm 287.2, the possible matches and links with
-# tm 287.4 — because `contract-parity.test.ts` refuses an operation the
-# document promises and nothing serves.
+# `revokeMemberTokens` is served since tm 287.2 (`routes/member-recognition.ts`).
+# The possible matches and links below are NOT MOUNTED YET: tm 287.1 wrote them
+# ahead of their routes, and `openapi.yaml` `paths:` gains each one together
+# with the route that serves it (tm 287.4), because `contract-parity.test.ts`
+# refuses an operation the document promises and nothing serves.
 
 revokeMemberTokens:
   parameters:
@@ -326,9 +326,11 @@ revokeMemberTokens:
     summary: Forget this member's browsers
     description: |
       Refuses every member token this licence has issued to this customer so
-      far (ID-03 · K4): each of their browsers is a new anonymous visitor on
-      its next visit, and a copied token stops working. The record and its
-      conversations stay — this forgets browsers, it does not ban or erase.
+      far, and every re-signing of them (ID-03 · K4): each of their browsers is
+      a new anonymous visitor on its next visit, and a copied token stops
+      working. A customer from before member tokens who has not yet traded
+      their old id for a token loses that one-time chance too. The record and
+      its conversations stay — this forgets browsers, it does not ban or erase.
 
       `customers:rw`, so admins and above today; the Agent role reaches it when
       the RL-02 permission matrix grants it. Audited. A customer of another

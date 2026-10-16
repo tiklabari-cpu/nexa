@@ -25,6 +25,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { mintForExistingCustomer } from '../helpers/member-token.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PRICING_PAGE = 'https://shop.example/pricing';
@@ -107,14 +108,16 @@ describe('campaign engagement', () => {
     return customer.id;
   }
 
-  /** The widget's token for a specific visitor, minted the way the loader does. */
+  /**
+   * The widget's token for a specific visitor, minted the way the loader does.
+   * A seeded visitor's bare id no longer reaches them (tm 287.2): their widget
+   * trades it in once, the transition's one production path to an existing
+   * customer without a member token.
+   */
   async function widgetToken(t: TenantFixture, customerId: string): Promise<string> {
-    const response = await server.post(
-      '/customer/token',
-      { organization_id: t.organizationId, customer_id: customerId },
-      { origin: `https://${t.trustedDomain}` },
-    );
+    const response = await mintForExistingCustomer(server, t, customerId);
     expect(response.statusCode).toBe(200);
+    expect((response.json() as { customer_id: string }).customer_id).toBe(customerId);
     return (response.json() as { token: string }).token;
   }
 

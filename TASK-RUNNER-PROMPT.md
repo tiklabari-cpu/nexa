@@ -41,23 +41,24 @@ Sırayla oku:
 
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
-7. **Kod haritası (codebase-memory MCP, 2026-10-16).** Yön bulmak için grep/cat zinciri yerine
-   önce haritaya sor; böylece bağlama 5–15 grep çıktısı yerine tek kısa cevap girer.
-   - **Açık mı?** `.loop-logs/cbm-state.json`: `ok:true` ve `head` = `git rev-parse HEAD` ise
-     açık. Değilse bir kez `index_repository` (repo_path = repo kökü, mode `full`, ~15 sn) çağır;
-     `status: indexed` dönerse açık. Dönmezse ya da araç hiç yoksa **kapalı**: bu pencerede
-     haritayı hiç kullanma, eskisi gibi grep/Read ile çalış, sonuç özetine "harita kapalıydı" yaz.
-     Yarı güvenilir harita yok. Proje adı `list_projects`'ten (`root_path` repo kökü olan).
-   - **Haritaya sor:** kim çağırıyor / neyi çağırıyor (`trace_path`), ada göre sembol ya da
-     dosya (`search_graph` + `name_pattern`), rota → işleyici, test ↔ kaynak, birlikte değişen
-     dosyalar, genel yapı (`get_architecture`).
-   - **Her zaman grep/Read:** SQL migrasyonları (`apps/api/prisma/migrations/**`, çoğu kısmi
-     ayrıştırılıyor), `nginx.conf` ve yapılandırma dosyaları, doğal dil soruları (`semantic_query`
-     alakasız döndürüyor), doküman ↔ kod bağları, **bu pencerede değiştirdiğin dosyalar**
-     (`git diff --name-only`; harita onları eski haliyle bilir) ve **düzenleyeceğin dosyanın
-     içeriği** — yazmadan önce her zaman Read.
-   - Harita "yok / bulunamadı" derse bunu "yok" sayma: bir kez grep ile doğrula.
-   - Harita yenilemesini döngü yapar (her görev bitince); kapanışta senin ayrıca çağırman gerekmez.
+7. **Kod haritası (codebase-memory MCP) — isteğe bağlı bir araç, zorunlu adım değil.**
+   Kod kalitesi için en güvenilir kaynak kendi okumandır; harita yalnız yön bulmayı kısaltır.
+   - **Ne zaman işe yarar:** çok adımlı çağrı zinciri ("bunu kim çağırıyor, onu kim çağırıyor" —
+     `trace_path`, depth 2–3), bir imza değişikliğinin paketler arası etki alanı, rota → işleyici,
+     yabancı bir alanda genel yön (`get_architecture`, `search_graph`). Bunlar grep ile çok tur ve
+     çok çıktı ister.
+   - **Ne zaman grep/Read doğrudur:** tek dosyada satır bulma, bilinen bir tanımın yeri, düz metin
+     (tablo adı, log metni, test başlığı), SQL migrasyonları ve `schema.prisma`, yapılandırma
+     (yaml/json/nginx), doküman ↔ kod bağı, bu pencerede değiştirdiğin dosyalar.
+   - **Kullanacaksan:** `.loop-logs/cbm-state.json` `ok:true` ve `head` = `git rev-parse HEAD`
+     olmalı (değilse bir kez `index_repository`, mode `full`; olmazsa haritayı bu pencerede
+     kullanma). Araçlar ertelenmiştir, önce yükle:
+     `ToolSearch` → `select:mcp__codebase-memory__trace_path,mcp__codebase-memory__search_graph,mcp__codebase-memory__get_code_snippet,mcp__codebase-memory__get_file_outline`
+     Proje adı: `C-Users-Hobbie-Desktop-nexa-main`.
+   - **Harita yön verir, son söz kaynağındır:** haritanın gösterdiği yeri düzenlemeden önce Read
+     ile oku. Harita test dosyalarındaki çağrıları listelemeyebilir ve çözemediği çağrıyı ayrı
+     sayar (`USAGE`); "bulunamadı" derse grep ile doğrula, "yok" sayma.
+   - Yenilemeyi döngü yapar (her görev bitince); kapanışta çağırma.
 
 ## 1) Resume kontrolü + durum damgası (yeniden deneme olabilir)
 

@@ -12208,12 +12208,12 @@
         "description": "\"AI bu oyuncuya neden böyle dedi?\" sorusuna numarayla dakikalar içinde cevap. Bugün loglar yalnız stdout, chatId/chat_id tutarsız, thread_id hiçbir satırda yok, request_id istemciden doğrulanmadan alınıyor (server.ts:255), pilot log döndürme 10 MB × 5. CGA/UKGC kayıt beklentisi. Kaynak: ID-08.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: ID-08. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 2 — kimlik çekirdeği ve altyapı.\n\nKOD: server.ts:200-256 (genReqId :255), :324-398; customer.ts:484,512 (chatId); ai-responder.ts:169,184 ve rule-bot-responder.ts:111 (chat_id); SkillRun yalnız chatId; telemetry.ts:65; docker-compose.pilot.yml.\nYAPILACAK: types/log-keys.ts (LOG_KEYS, LogContext); plugins/log-context.ts (auth sonrası child logger: license_id, organization_id, actor_type, actor_id); bindChatLogContext(request, {chatId, threadId, customerId}); genReqId yalnız ^[A-Za-z0-9._-]{8,64}$; camelCase anahtarlar düzeltilir; RTM aynı anahtarlar; migration ai_decision_logs (id, license_id, chat_id, thread_id, customer_id, trigger_event_id, reply_event_id, request_id, job_id, decision CHECK answered|asked|handoff|silent|blocked|expired|cap_reached, procedure_id, procedure_version, step, knowledge_source_ids, chunk_ids, retrieval_scores, guardrail_hits, handoff_reason, risk_flags, model, llm_input_tokens, llm_output_tokens, latency_ms, error_type, details jsonb ≤8KB, config_version_id?, created_at) + RLS + indeksler (license_id, created_at desc), (chat_id, created_at), (thread_id); skill_runs.thread_id (nullable); retention/erasure kapsamı; scripts/audit/log-keys.mjs (camelCase kimlik anahtarı bulursa hata, CI'a bağlı); yazıcı API'si (AI görevleri kullanır).\nKURALLAR: karar kaydı mesaj metni tutmaz; tam prompt yalnız \"hata ayıklama modu\" açıkken ai_debug_traces'e 7 gün (varsayılan kapalı, yalnız Kurucu açar; ID-08-S2); yazılamazsa cevap engellenmez, error log; saklama konuşmayla aynı (ID-08-S1, 365 gün varsayılan); harici log sistemi pilotta yok (S3).\n\nKABUL KRİTERLERİ:\n- Sohbet/müşteri/AI yollarında her log satırında license_id ve request_id; sohbet satırlarında chat_id + thread_id.\n- log-keys denetim aracı CI'da yeşil.\n- Her AI turu için tam bir ai_decision_logs satırı (AI çekirdeği gelince; bu görevde yazıcı + test).\n- Geçersiz X-Request-Id yeni UUID ile değişir.\n- Başka kiracının karar kaydı okunamaz.\n\nKULLANILAN VARSAYIMLAR:\n- ID-08-S1/S2/S3 varsayılanları.\n\nPANEL YERLEŞİMİ (tm 389 root panel · docs/platform-admin/gorev-yerlesimi.md · 2026-10-14): W+R. Platform süreci (389.3) aynı yapılandırılmış logger'ı kullanır; bağlam alanlarına `platform_admin_id` ve `impersonation_session_id` eklenebilmeli — log bağlamını kapalı liste yerine genişletilebilir yaz (TS tipi `LogContext` export).",
         "testStrategy": "logStream ile entegrasyon (widget mesajı → AI yolu satırları), ai_decision_logs RLS negatif, retention testi; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "284"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T20:30:00.000Z",
+        "updatedAt": "2026-10-16T06:47:49.015Z",
         "subtasks": [
           {
             "id": 1,
@@ -12221,11 +12221,11 @@
             "description": "Log bağlamı eklentisi, request-id doğrulama, anahtar düzeltmeleri, RTM, scripts/audit/log-keys.mjs",
             "details": "Mevcut maskPii/redaksiyon kuralları korunur.",
             "testStrategy": "logStream entegrasyon; denetim aracı testi.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "288",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-16T06:47:49.015Z"
           },
           {
             "id": 2,

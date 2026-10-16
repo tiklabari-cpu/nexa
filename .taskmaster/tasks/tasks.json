@@ -12249,13 +12249,13 @@
         "description": "AI ve kural botu işleri süreç belleğinde (follow-ups.ts \"Not durable, on purpose\"); yeniden başlatma/güncelleme/takılmada bekleyen yanıtlar sessizce kaybolur, çok kopyada çift cevap riski. Tek ev sunucusunda pilot. \"Önce AI\" (K9) insan güvenlik ağını kaldırdığı için pilottan önce şart. Kaynak: GV-02.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: GV-02. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 2 — kimlik çekirdeği ve altyapı.\n\nXHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): eşzamanlılık/kilit + ChatService transaction sınırı. ADR-11a (#273).\nKOD: services/chat/follow-ups.ts (MAX_FOLLOW_UPS_PER_KEY=20), plugins/follow-ups.ts; customer.ts:342-389 (followUp → respondToCustomerMessage: kural botu, ai.handle, atanan bildirimi); ai-responder.ts:48; kalıp webhooks/redelivery.ts; scheduler.ts, lock.ts.\nYAPILACAK: migration ai_jobs (id, license_id, organization_id, chat_id, thread_id, trigger_event_id, kind CHECK visitor_message, state CHECK pending|running|done|expired|failed, attempts, available_at, lease_until, created_at, started_at, finished_at, outcome, last_error, request_id), tekil (license_id, trigger_event_id, kind), indeks (state, available_at), RLS; SECURITY DEFINER ai_jobs_claim(p_limit, p_lease_seconds) (FOR UPDATE SKIP LOCKED, sohbet başına sıra) + ai_jobs_settle; ChatService.sendEvent/start'a \"aynı işlemde yaz\" outbox kancası; services/ai/ai-job-worker.ts (eklentiyle başlar, 500 ms yoklama + LISTEN/NOTIFY, withTenant); follow-ups.ts AI dalı işçiye taşınır (kural botu ve atanan bildirimi aynı işte, bugünkü sırayla); /health ai_jobs {pending, oldest_age_s}.\nMANTIK: tazelik 120 sn → expired + iç not + insan yönlendirmesi + karar kaydı expired; uygunluk (bağlantı aktif mi, insan devraldı mı (AI-11 gelince), kota); idempotens properties.reply_to_event_id = trigger_event_id (göndermeden önce kontrol); çökme: süresi dolan running en çok 2 deneme; sohbette 20+ bekleyen → expired; kapanışta SHUTDOWN_DRAIN_MS; çok turlu AI (AI-03) geldiğinde iş konuşmanın o anki durumuna cevap üretir.\n\nKABUL KRİTERLERİ:\n- Süreç AI işi bekleyen mesajdan hemen sonra zorla durdurulup başlatılırsa oyuncu cevabı bir kez alır (120 sn içinde) ya da devir + iç not.\n- Aynı mesaja iki işçiyle eşzamanlı testte asla iki cevap gitmez.\n- Aynı sohbette cevaplar geliş sırasıyla.\n- Normal yükte yazımdan iş başlangıcına p95 < 1 sn.\n- /health kuyruk derinliğini ve en eski işin yaşını gösterir.\n\nKULLANILAN VARSAYIMLAR:\n- K18/ADR-11a.\n- GV-02-S1 120 sn; S2 bildirim e-postaları sonraki adım.\n\nPANEL YERLEŞİMİ (tm 389 root panel · docs/platform-admin/gorev-yerlesimi.md · 2026-10-14): W+R. `ai_jobs` birikimi / ölü iş sayısı root operasyon ekranında (389.14, salt okunur sayılar). Bu görev root panel kodlamaz; işçi canlılığını `reportComponentStatus('ai_jobs', …)` ile yazabilir (389.8 yardımcısı varsa; yoksa atla — 389.14 ekler).",
         "testStrategy": "Entegrasyon (atomik yazım, yeniden başlatma, iki işçi, sıra, süre aşımı, RLS); visitor-follow-ups.test.ts uyarlanır; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "273",
           "288"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-16T07:00:34.672Z",
+        "updatedAt": "2026-10-16T12:02:02.001Z",
         "subtasks": [
           {
             "id": 1,
@@ -12263,11 +12263,11 @@
             "description": "ai_jobs tablosu + RLS + ai_jobs_claim / ai_jobs_settle SECURITY DEFINER fonksiyonları",
             "details": "Sabit search_path; kiracılar arası sayıcı redelivery.ts kalıbında.",
             "testStrategy": "db:check-drift; fonksiyon birim/entegrasyon.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "289",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-16T12:02:02.001Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-16T08:09:35.433Z",
+      "lastModified": "2026-10-16T12:02:02.002Z",
       "taskCount": 390,
       "completedCount": 287,
       "tags": [

@@ -12177,13 +12177,13 @@
             "description": "Olası eşleşmeler + ajan onaylı bağla/çöz (audit), AI hafızası dışı",
             "details": "XHIGH GEREKÇESİ: (1) yeni yetkili endpoint.",
             "testStrategy": "customers.test.ts; görünürlük; audit.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "287.2"
             ],
             "parentId": "287",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-16T04:55:47.847Z"
           },
           {
             "id": 5,

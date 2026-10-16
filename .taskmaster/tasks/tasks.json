@@ -12129,7 +12129,7 @@
           "284"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-15T22:58:44.311Z",
+        "updatedAt": "2026-10-16T01:24:56.433Z",
         "subtasks": [
           {
             "id": 1,
@@ -12149,13 +12149,13 @@
             "description": "Token üretimi/doğrulaması (imza → süre → license → iptal), bare customer_id kapatma + geçiş yolu, kayan yenileme, rotasyon",
             "details": "Sabit zamanlı karşılaştırma; geçersizde aynı yanıt biçimi; warn log (license_id, reason).",
             "testStrategy": "Entegrasyon ve birim; negatif kiracı testi.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "287.1"
             ],
             "parentId": "287",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-16T01:24:56.433Z"
           },
           {
             "id": 3,

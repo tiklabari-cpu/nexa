@@ -12255,7 +12255,7 @@
           "288"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-16T12:48:15.191Z",
+        "updatedAt": "2026-10-16T13:54:44.482Z",
         "subtasks": [
           {
             "id": 1,
@@ -12289,13 +12289,13 @@
             "description": "ai-job-worker çekirdeği: claim/lease, LISTEN/NOTIFY + yoklama, tazelik (120 sn → expired + iç not + insan), uygunluk, idempotens, sohbet içi sıra, çökme denemeleri, kapanışta drain",
             "details": "Kural botu ve bildirim sırası korunur.",
             "testStrategy": "Yeniden başlatma, iki işçi, expired yolu.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "289.2"
             ],
             "parentId": "289",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-16T13:54:44.482Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-16T12:48:15.192Z",
+      "lastModified": "2026-10-16T13:54:44.482Z",
       "taskCount": 390,
       "completedCount": 287,
       "tags": [

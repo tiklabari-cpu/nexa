@@ -1,6 +1,6 @@
 # Task ID: 286
 
-**Title:** DAILY-THREAD [OPUS-MAX] (Opus 5.5) Günlük thread (K1=A): üyenin o günkü ilk bağlantısı yeni nexa chat (Thread ID) + thread (Chat ID); aynı gün dönüşte aynı chat'e yeni thread; ertesi gün ikisi de yeni
+**Title:** DAILY-THREAD [OPUS-XHIGH] (Opus 5.5) Günlük thread (K1=A): üyenin o günkü ilk bağlantısı yeni nexa chat (Thread ID) + thread (Chat ID); aynı gün dönüşte aynı chat'e yeni thread; ertesi gün ikisi de yeni
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 2 — kimlik çekirdeği ve altyapı.
 
-[MAX] chat→thread→event çekirdek modeli (MASTER-PROMPT efor kapısı).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): chat→thread→event çekirdek modeli (MASTER-PROMPT efor kapısı).
 KOD: customer.ts:676-685, :813-826 + chats.start; chat-service.ts start :323-360, #startInTransaction :361-460, sendEvent :463, #closeConversation :952-1050, resume :1289-1370 (yeni thread'i ajana atar), transfer :1371+ (chat_access sil/yaz :1414-1415), #createChatWithThread :1962-2014; uq_one_active_chat / uq_one_active_thread (20260722154008_domain_model:718-726); chat-timeout.ts:104-118 (ayar yoksa kapanmaz); customer-service.ts:498 sohbet sayısı; webhook chat_started yalnız yeni chat (chat-service.ts:350-355); useInbox.ts:97-100 yalnız en yeni thread.
 MANTIK (05 ID-02 Kodlama mantığı 1-8):
 - local_day = localDayKey(now, tz, hour) (#285); chats.local_day, chats.day_tz yazılır.
@@ -49,21 +49,21 @@ customer-chat.test.ts, chats.test.ts senaryoları; rapor regresyonu; webhook tes
 
 ## Subtasks
 
-### 286.1. DAY-SCHEMA [OPUS-MAX] Contract + migration: chats.local_day/day_tz, threads.opened_via (+CHECK), uq_chat_customer_day kısmi tekil indeks, Chat.connections, webhook thread_started, GET /chats/{id}/events thread_id
+### 286.1. DAY-SCHEMA [OPUS-XHIGH] Contract + migration: chats.local_day/day_tz, threads.opened_via (+CHECK), uq_chat_customer_day kısmi tekil indeks, Chat.connections, webhook thread_started, GET /chats/{id}/events thread_id
 
 **Status:** pending  
 **Dependencies:** None  
 
 Yalnız genişletme; eski kayıtlarda local_day NULL ("eski model"). İndeks ayrı migration'da CONCURRENTLY.
 
-### 286.2. DAY-VISITOR-PATH [OPUS-MAX] conversation-day.ts: openOrContinueConnection — ziyaretçi yolu, aynı gün dönüş, day_rollover, yarış
+### 286.2. DAY-VISITOR-PATH [OPUS-XHIGH] conversation-day.ts: openOrContinueConnection — ziyaretçi yolu, aynı gün dönüş, day_rollover, yarış
 
 **Status:** pending  
 **Dependencies:** 286.1  
 
 resolveLocalDay + openOrContinueConnection; customer.ts bu servisi kullanır; K2 varsayılan 30 dk kapanış.
 
-### 286.3. DAY-AGENT-PATHS [OPUS-MAX] Ajan yolları (POST /chats, resume önceki gün → bugünün chat'i), chat_access ekleme, sayaçlar, audit, listDayConnections kancası
+### 286.3. DAY-AGENT-PATHS [OPUS-XHIGH] Ajan yolları (POST /chats, resume önceki gün → bugünün chat'i), chat_access ekleme, sayaçlar, audit, listDayConnections kancası
 
 **Status:** pending  
 **Dependencies:** 286.2  

@@ -1,6 +1,6 @@
 # Task ID: 324
 
-**Title:** ROLE-SET-TEAM-LEAD [OPUS-MAX] (Opus 5.5) Rol seti (K6): Kurucu=owner, Yönetici=admin, Ekip Lideri=team_lead (yeni), Ekip Üyesi=agent; ekip liderliği (group_agents.is_lead); viceowner → admin taşıması; davette team_lead + ekip seçimi
+**Title:** ROLE-SET-TEAM-LEAD [OPUS-XHIGH] (Opus 5.5) Rol seti (K6): Kurucu=owner, Yönetici=admin, Ekip Lideri=team_lead (yeni), Ekip Üyesi=agent; ekip liderliği (group_agents.is_lead); viceowner → admin taşıması; davette team_lead + ekip seçimi
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 4 — roller ve yetki matrisi.
 
-[MAX] yetki çekirdeği (güvenlik incelemesi).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): yetki çekirdeği (güvenlik incelemesi).
 KOD: domain.ts:8-9 AGENT_ROLES; role-scopes.ts:20-25 ROLE_RANK, :32-80, :83-138, :148-152 defaultScopesForRole, :193-196 scopesWithinRole; agent_memberships_role_check, invitations_role_check, uq_license_single_owner; agents.ts:640-690; lifecycle-service.ts:406-413; RoleMenu.tsx (ROLE_RANK ikinci kopyası); GroupAgent schema:715-726; agents.ts:1044-1066; scim.ts:139; rtm/src/auth.ts.
 types: AGENT_ROLES'a team_lead; ROLE_RANK owner 4, viceowner 3, admin 2, team_lead 1, agent 0 (sayısal rütbenin hiçbir yerde saklanmadığı doğrulanır); TEAM_LEAD_SCOPES = DEFAULT_AGENT_SCOPES + ekler (RL-02 sonrası matristen); defaultScopesForRole team_lead'i tanır.
 migration (genişlet): iki CHECK'e team_lead; group_agents.is_lead BOOLEAN NOT NULL DEFAULT false + indeks (agent_id) WHERE is_lead; invitations ekip ataması (invitation_groups (invitation_id, group_id, is_lead) ya da invitations.group_ids).
@@ -48,19 +48,26 @@ role-scopes birim, agents-role.test.ts (admin team_lead atar; team_lead rol değ
 
 ## Subtasks
 
-### 324.1. ROLE-TYPES-SCHEMA [OPUS-MAX] types (team_lead, ROLE_RANK), CHECK genişletme, is_lead, davet ekipleri, kontrat
+### 324.1. ROLE-TYPES-SCHEMA [OPUS-XHIGH] types (team_lead, ROLE_RANK), CHECK genişletme, is_lead, davet ekipleri, kontrat
 
 **Status:** pending  
 **Dependencies:** None  
 
 Üst görev 324 ayrıntılarındaki ilgili bölüm.
 
-### 324.2. ROLE-API-WEB [OPUS-MAX] Rol değiştirme/grup liderliği/davet/SCIM/RTM + RoleMenu/TeamEditor/InviteTeammates + mobil etiketler + seed
+### 324.2. ROLE-API [OPUS-XHIGH] Rol değiştirme (team_lead), grup liderliği (admin+), davet akışı (RL-04-S1), principal + RTM rol listeleri, SCIM, seed
 
 **Status:** pending  
 **Dependencies:** 324.1  
 
 Üst görev 324 ayrıntılarındaki ilgili bölüm.
+
+### 324.4. ROLE-WEB [SONNET-HIGH] RoleMenu (ROLE_RANK @siyahtus/types'tan), Türkçe rol etiketleri, TeamEditor lider anahtarı, InviteTeammates ekip seçimi, mobil etiketler
+
+**Status:** pending  
+**Dependencies:** 324.2  
+
+Üst görev "web:" maddesi + mobil etiketler; i18n (TRANSLATED_FILES). Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #324 details (tek kaynak).
 
 ### 324.3. ROLE-VICEOWNER-MIGRATE [OPUS-XHIGH] viceowner → admin taşıma migration'ı (ayrı, sonraki) + audit
 

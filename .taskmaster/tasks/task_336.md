@@ -41,3 +41,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 URL dönüştürücü birim (kişisel veri yok), her filtre ve kombinasyon entegrasyon, e2e filtreli URL yeniden yükleme; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 336.1. AF-API [OPUS-HIGH] Arşiv filtreleri API: parametreler + dizi kolonları/GIN + geri doldurma + filtre derleyicisi
+
+**Status:** pending  
+**Dependencies:** None  
+
+contract parametreleri + prisma (threads.agent_ids, threads.risk_flags GIN, ratings indeksi) + sayfalı geri doldurma (ayrı migration) + archive-service filtre derleyicisi (kiracı TZ gün sınırı, etiket any/all/exclude, LATERAL puan, görünürlük WHERE'de, handled_by #293 yüklemi) + PERFORMANS (EXPLAIN kanıtı). Ayrıntı ve kabul maddeleri: üst görev #336 details (tek kaynak).
+
+### 336.2. AF-WEB [SONNET-HIGH] Arşiv filtre çubuğu: çipler, popover'lar, tarih kaydırma, URL ↔ filtre (yalnız kimlik)
+
+**Status:** pending  
+**Dependencies:** 336.1  
+
+ArchiveFilters.tsx; URL ↔ filtre dönüştürücüsü yalnız kimlikler (GV-05); çelişen filtre uyarısı; EÜ için ajan filtresi "ben"; kayıtlı filtreler kişisel. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #336 details (tek kaynak).

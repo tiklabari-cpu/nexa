@@ -59,12 +59,19 @@ Motor turunun yan etkisizliği, sahte saat, kesin kontroller, izolasyon negatif 
 
 Üst görev 314 ayrıntılarındaki ilgili bölüm.
 
-### 314.2. SIM-RUNNER-CHECKS [OPUS-MAX] runner + checks + simulated-player + simülasyon bağlamı yazma kalkanı
+### 314.2. SIM-RUNNER [OPUS-MAX] runner.ts (senaryo başına boş durum, tur başına yapılandırma sürümü, donmuş saat, araç taklitleri, durma koşulları) + simülasyon bağlamı yazma kalkanı
+
+**Status:** pending  
+**Dependencies:** 314.1, 314.6  
+
+İzolasyon güvenlik sınırı.
+
+### 314.6. SIM-CHECKS-PLAYER [OPUS-XHIGH] checks.ts (KESİN KONTROLLER: sonuç/hedef ekip, prosedür, zorunlu bilgiler, yasaklı ifade, hassas veri isteme, bayraklar, tur sayısı) + simulated-player.ts (SCENARIO_PERSONAS)
 
 **Status:** pending  
 **Dependencies:** 314.1  
 
-İzolasyon güvenlik sınırı.
+Üst görev KESİN KONTROLLER ve TİPLER (persona listesi); runner (314.2) bunları çağırır. Ayrıntı ve kabul maddeleri: üst görev #314 details (tek kaynak).
 
 ### 314.3. SIM-JUDGE-REGRESSION [OPUS-HIGH] Hakem (öneri) + regresyon farkı + test kotası
 

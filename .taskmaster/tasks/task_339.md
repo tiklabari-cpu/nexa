@@ -1,6 +1,6 @@
 # Task ID: 339
 
-**Title:** WIDGET-ABUSE-GUARD [OPUS-XHIGH] (Opus 5.5) Widget kötüye kullanım koruması: üye başına günlük AI turu, yalnız riskte doğrulama (Turnstile/mock), kota %80 bildirimi, kota dolunca insana devir
+**Title:** WIDGET-ABUSE-GUARD [OPUS-HIGH] (Opus 5.5) Widget kötüye kullanım koruması: üye başına günlük AI turu, yalnız riskte doğrulama (Turnstile/mock), kota %80 bildirimi, kota dolunca insana devir
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-XHIGH GEREKÇESİ: (1) güvenlik yüzeyi (bot/kötüye kullanım), (2) AI maliyeti (para doğruluğu).
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 KOD: plugins/rate-limit.ts (müşteri 60/dk, anonim IP 30/dk; Redis yoksa açık), services/ai/ai-daily-budget.ts + plugins/ai-budget.ts (ai_budget_* SECURITY DEFINER), security/spam-filter.ts (customer.ts:687+), auth.ts:1697-1709 (her yeni ziyaretçiye müşteri satırı), config/env.ts productionProblems.
 env: CAPTCHA_PROVIDER mock|turnstile|none, TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY; PILOT_MODE'da turnstile + anahtar zorunluluğu productionProblems'a. GERÇEK ANAHTAR YOK — geliştirme/test mock sağlayıcıyla (CLAUDE.md sınırı).
 prisma: ai_customer_daily_usage (license_id, customer_id, day, ai_turns, llm_tokens) PK + RLS; security_settings.ai_turns_per_customer_day INT DEFAULT 40, captcha_mode TEXT DEFAULT 'risk' (off|risk|always_on_chat_start); customers.challenge_passed_at.
@@ -46,14 +46,14 @@ Birim (risk eşikleri), entegrasyon (41. tur, sahte sağlayıcıyla geçerli/ge�
 
 ## Subtasks
 
-### 339.1. ABUSE-QUOTA [OPUS-XHIGH] Üye başına günlük AI turu + cap_reached + %80 bildirimi + ayarlar
+### 339.1. ABUSE-QUOTA [OPUS-HIGH] Üye başına günlük AI turu + cap_reached + %80 bildirimi + ayarlar
 
 **Status:** pending  
 **Dependencies:** None  
 
 Üst görev 339 ayrıntılarındaki ilgili bölüm.
 
-### 339.2. ABUSE-CAPTCHA [OPUS-XHIGH] Risk değerlendirmesi + captcha.ts (mock/Turnstile) + challenge_required kontratı + env/productionProblems
+### 339.2. ABUSE-CAPTCHA [OPUS-HIGH] Risk değerlendirmesi + captcha.ts (mock/Turnstile) + challenge_required kontratı + env/productionProblems
 
 **Status:** pending  
 **Dependencies:** 339.1  

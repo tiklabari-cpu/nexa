@@ -37,3 +37,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 Kapanış senaryoları entegrasyonu, rapor toplamları; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 369.1. ME-API [OPUS-HIGH] Kaçan sohbet verisi ve rapor uçları: initiated_by/needs_human_since/missed_reason + geri doldurma + iki uç
+
+**Status:** pending  
+**Dependencies:** None  
+
+threads.initiated_by/needs_human_since/missed_reason + CHECK; oturum oluşturmada initiated_by; kapanışta missed_reason (bir kez); kısmi geri doldurma migration'ı + rapor notu; report-csv.ts yardımcıları + GET /reports/missed, /reports/engagement + export; RP-01 filtreleri (#368 hazırsa). Ayrıntı ve kabul maddeleri: üst görev #369 details (tek kaynak).
+
+### 369.2. ME-WEB [SONNET-HIGH] Kaçan sohbet ve etkileşim sekmeleri + ısı haritası
+
+**Status:** pending  
+**Dependencies:** 369.1  
+
+İki sekme + ısı haritası bileşeni (staffing ile ortak, kiracı TZ) + "bilinmiyor" gösterimi. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #369 details (tek kaynak).

@@ -1,6 +1,6 @@
 # Task ID: 326
 
-**Title:** TEAM-LEAD-CAPABILITIES [OPUS-XHIGH] (Opus 5.5) Ekip Lideri yetenekleri: kendi ekibinin sohbetlerini izleme/devralma/yeniden atama, "Ekibim" görünümü, ekip kapsamlı raporlar (sunucuda zorunlu)
+**Title:** TEAM-LEAD-CAPABILITIES [OPUS-HIGH] (Opus 5.5) Ekip Lideri yetenekleri: kendi ekibinin sohbetlerini izleme/devralma/yeniden atama, "Ekibim" görünümü, ekip kapsamlı raporlar (sunucuda zorunlu)
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 4 — roller ve yetki matrisi.
 
-XHIGH GEREKÇESİ: (1) yetkili endpoint kapsam genişletmesi.
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 api: ledGroupIds(tx, accountId) (group_agents.is_lead #324); devralma, transfer, yeniden atama: tüm sohbet yetkisi YA DA (yetenek chats.takeover_team + sohbetin ekipleri ∩ liderin ekipleri — HERHANGİ biri yeterli; aynı gün farklı ekiplere giden bağlantılar için kesişim kuralı); rota chats--access:rw kabul eder, asıl kontrol serviste; raporlarda EL için sunucu tarafında zorunlu ekip kapsamı (RP-01 #368 filtresiyle); audit mevcut eylemler (chat.taken_over).
 contract: GET /chats view=team; rapor uçlarına group_id[] (RP-01 ortak).
 web: Inbox "Ekibim" görünümü (AI'ın yürüttükleri dahil), satırda İzle/Devral; raporlarda ekip seçici (liderde kilitli). QA ve taslak ekranları AI maddelerinde (#316, #319).

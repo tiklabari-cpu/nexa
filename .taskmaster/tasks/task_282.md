@@ -1,6 +1,6 @@
 # Task ID: 282
 
-**Title:** INVITE-EMAIL-VERIFY [OPUS-XHIGH] (Opus 5.5) Davet akışının kötüye kullanımını engelle: bağlantıyla açılan yeni hesap e-posta doğrulanmadan giriş yapamasın + günlük davet sınırı
+**Title:** INVITE-EMAIL-VERIFY [OPUS-HIGH] (Opus 5.5) Davet akışının kötüye kullanımını engelle: bağlantıyla açılan yeni hesap e-posta doğrulanmadan giriş yapamasın + günlük davet sınırı
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 1 — hızlı güvenlik/temel düzeltmeler.
 
-XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — kimlik doğrulama akışı.
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 KOD: account-lifecycle.ts:650-729 (preview/accept), :788-860 (POST /invitations, accept_url döner); lifecycle-service.ts:538-608 acceptInvitation; kayıt doğrulaması SIGNUP_EMAIL_VERIFICATION (:641).
 YAPILACAK: migration ile `auth_accept_invitation` yeni hesapta email_verified_at = NULL (mevcut hesap yolu şifre ister, değişmez); kabul yanıtı yeni hesapta `{verification_required: true}` + davet edilen adrese doğrulama e-postası (kayıttaki mekanizma, güvenlik rezervi); doğrulanmamış hesap girişte reddedilir; doğrulama sonrası audit account.email_verified; workspace başına günlük davet sınırı 50 (429 limit_reached); "bağlantıyı kopyala" kalır (GV-03-S1). Koltuk etkisi (seatEffect) doğrulamada (doğrulanmamış hesap koltuk tüketmez). Doğrulanmamış davet hesabının temizlenmesi kararı ADR notu olarak yazılır (varsayılan: kayıt temizleme işine benzer süreli temizlik).
 contract account-lifecycle.yaml; web /join "E-postanı doğrula" durumu ve günlük sınır mesajı.

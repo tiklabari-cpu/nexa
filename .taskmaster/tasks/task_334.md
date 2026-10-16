@@ -39,3 +39,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 Entegrasyon (birleştirme/sıralama, 404, maskeleme + audit), e2e (Inbox'tan aç, AI karar satırını bul, CSV indir, "Thread ID (chat_id)" başlığı); `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 334.1. TL-API [OPUS-HIGH] Zaman çizelgesi API: kontrat + audit_log indeksi + kaynakları birleştirme/sayfalama/görünürlük + maskeli akışlı dışa aktarma
+
+**Status:** pending  
+**Dependencies:** None  
+
+contract (GET timeline, POST export) + audit_log (license_id, target, created_at) indeksi (CONCURRENTLY, kendi dosyası) + services/chat/timeline.ts (kaynaklar, (at, kind_sırası, id) birleştirme ve sayfalama, görünürlük, görünmeyen 404) + akışlı dışa aktarma (≤20.000, varsayılan maskeli, maskesiz yalnız export_unmasked, audit chat.timeline_exported) + yetenekler (timeline.view/export/export_unmasked). Ayrıntı ve kabul maddeleri: üst görev #334 details (tek kaynak).
+
+### 334.2. TL-WEB [SONNET-HIGH] Zaman çizelgesi ekranı: TimelinePage, sayfa içi süzme, bağlantı ayırıcıları, dışa aktarma modali
+
+**Status:** pending  
+**Dependencies:** 334.1  
+
+features/timeline/TimelinePage.tsx; üst görev KURALLAR'ının arayüz maddeleri (sanallaştırma YOK, 200 satırlık sayfalar, sayfa içi süzme, workspace TZ + UTC tooltip, bağlantı ayırıcıları, saklama notu); dışa aktarma modali; Inbox'tan giriş. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #334 details (tek kaynak).

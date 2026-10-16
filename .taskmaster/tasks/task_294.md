@@ -1,6 +1,6 @@
 # Task ID: 294
 
-**Title:** AI-DAILY-MEMORY [OPUS-XHIGH] (Opus 5.5) Gün içi hafıza: aynı gün yeni bağlantıda AI önceki bağlantıların özetini (konu, toplanan bilgiler, sonuç) görür; kimlik güvenine göre filtre (K4, K5)
+**Title:** AI-DAILY-MEMORY [OPUS-HIGH] (Opus 5.5) Gün içi hafıza: aynı gün yeni bağlantıda AI önceki bağlantıların özetini (konu, toplanan bilgiler, sonuç) görür; kimlik güvenine göre filtre (K4, K5)
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).
 
-XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — kişisel veriyi kimlik güvenine göre modele verme/vermeme.
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 K1=A: günlük thread = nexa chat; loadDailyDigests(chatId, excludeThreadId) aynı chat'in önceki thread'lerinin ai_conversations.digest'lerini okur (ID-02 listDayConnections kancası). Ayrı daily_thread_id YOK.
 DİGEST (LLM'siz): {connection, started_at, ended_at, procedure_key/name, intent_label, slots {display,status}, outcome resolved|resolved_waiting|handed_off|abandoned|no_ai, handoff {id, team_id, reason_codes, agent_replied}|null, risk_flags, last_ai_excerpt ≤200}. Her AI turunda güncellenir; kapanışta (deactivate :841, deactivateByTimeout :890) outcome kesinleşir; aktif collect varken kapanış → abandoned.
 YÜKLEME: yeni bağlantının ilk turunda o günün en yeni 3 özeti system prompt'a "Bugünkü önceki konuşmalar (oyuncu beyanı, doğrulanmadı)".

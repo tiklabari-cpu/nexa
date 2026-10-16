@@ -1,6 +1,6 @@
 # Task ID: 316
 
-**Title:** AI-CONFIG-VERSIONING [OPUS-MAX] (Opus 5.5) Taslak → test → onay → yayın: ai_config_versions (snapshot + işaretçi), dört göz, uyum değişikliğinde Kurucu onayı, geri alma, duraklatma, zamanlı yayın
+**Title:** AI-CONFIG-VERSIONING [OPUS-XHIGH] (Opus 5.5) Taslak → test → onay → yayın: ai_config_versions (snapshot + işaretçi), dört göz, uyum değişikliğinde Kurucu onayı, geri alma, duraklatma, zamanlı yayın
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3c — AI yönetişimi ve ölçüm.
 
-[MAX] eşzamanlılık (If-Match, yayın transaction'ı, önbellek geçersizleştirme) + yetki.
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): eşzamanlılık (If-Match, yayın transaction'ı, önbellek geçersizleştirme) + yetki.
 PRİSMA: ai_config_versions (id, license_id, ai_agent_id, number, minor, status in_review|approved|published|superseded|rejected, snapshot, knowledge_manifest, diff_summary, draft_revision, test_run_id, touches_compliance, submitted_by/at, reviewed_by/at, review_note, published_by/at, scheduled_at?, rollback_of?); ai_agents.published_version_id, draft_revision; knowledge_chunks.visible_from_version, hidden_from_version + indeks; geri dolum: mevcut durum v1, parçalar visible_from 1.
 API routes/ai-config.ts: GET /ai/config/draft/diff; POST /ai/config/versions (onaya gönder); POST …/{id}/approve {publish_at?}, /reject, /rollback; POST /ai/pause, /ai/resume; GET /ai/config/versions, …/{a}/diff/{b}. Servisler config-compiler.ts (taslak → paket + doğrulama), config-cache.ts (sürüme göre önbellek, realtime-bus ile geçersizleştirme).
 ZAMANLAYICI: ai_scheduled_publish (dakikada, kilitli); knowledge_chunk_gc (5 sürüm + 30 günden eski gizli parçalar).
@@ -52,26 +52,40 @@ Dört göz 403, Kurucu kuralı, uyum kapısı, geri alma, zamanlı yayın, If-Ma
 
 ## Subtasks
 
-### 316.1. VER-SCHEMA-COMPILER [OPUS-MAX] ai_config_versions + işaretçi + parça görünürlüğü + geri dolum v1 + config-compiler
+### 316.1. VER-SCHEMA [OPUS-XHIGH] ai_config_versions + ai_agents.published_version_id/draft_revision + knowledge_chunks görünürlük kolonları ve indeks + geri dolum v1
 
 **Status:** pending  
 **Dependencies:** None  
 
 Üst görev 316 ayrıntılarındaki ilgili bölüm.
 
-### 316.2. VER-WORKFLOW-API [OPUS-MAX] Gönder/onayla/reddet/geri al/duraklat uçları, dört göz, Kurucu kuralı, uyum kapısı, If-Match
+### 316.5. VER-COMPILER [OPUS-HIGH] config-compiler.ts: taslak → derlenmiş paket + doğrulama (adımlar, AI-07 çelişki, devir hedefleri) + fark özeti + touches_compliance
 
 **Status:** pending  
 **Dependencies:** 316.1  
 
+Üst görev "Servisler config-compiler.ts" ve AKIŞ'taki gönderme doğrulaması; iş akışı uçları (316.2) bunu çağırır. Ayrıntı ve kabul maddeleri: üst görev #316 details (tek kaynak).
+
+### 316.2. VER-WORKFLOW-API [OPUS-XHIGH] Gönder/onayla/reddet/geri al/duraklat uçları, dört göz, Kurucu kuralı, uyum kapısı, If-Match
+
+**Status:** pending  
+**Dependencies:** 316.1, 316.5  
+
 Üst görev 316 ayrıntılarındaki ilgili bölüm.
 
-### 316.3. VER-RUNTIME-CACHE [OPUS-MAX] Çalışma anı sürüm sabitleme + config-cache + realtime-bus + arama görünürlük süzgeci + zamanlı yayın/gc işleri
+### 316.3. VER-RUNTIME-CACHE [OPUS-XHIGH] Çalışma anı sürüm sabitleme + config-cache (sürüme göre) + realtime-bus geçersizleştirme + arama görünürlük süzgeci
 
 **Status:** pending  
 **Dependencies:** 316.2  
 
 Üst görev 316 ayrıntılarındaki ilgili bölüm.
+
+### 316.6. VER-SCHEDULED-JOBS [OPUS-HIGH] Zamanlı işler: ai_scheduled_publish (dakikada, kilitli) + knowledge_chunk_gc (5 sürüm + 30 günden eski gizli parçalar)
+
+**Status:** pending  
+**Dependencies:** 316.3  
+
+Üst görev ZAMANLAYICI maddesi; yayın yolu 316.2/316.3'teki tek transaction'ı çağırır. Ayrıntı ve kabul maddeleri: üst görev #316 details (tek kaynak).
 
 ### 316.4. VER-WEB [OPUS-HIGH] VersionBar, Versions, DiffView, Taslak şeridi, RTM bandı
 

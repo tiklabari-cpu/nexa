@@ -39,3 +39,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 Kural motoru birim (her operatör), eski koşul dönüşümü, loader SPA testi, widget.campaign.test.ts; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 352.1. CMC-ENGINE [OPUS-HIGH] Çok koşullu hedefleme çekirdeği: v2 tipler + dönüşüm migration + kural motoru + /customer/visit + istemci koşullu teslim
+
+**Status:** pending  
+**Dependencies:** None  
+
+types/contract CampaignConditions v2 + eski {url_contains} dönüşümü + veri dönüştürme migration'ı + visits.variables + sunucu kural motoru + POST /customer/visit (oran sınırı, debounce) + istemci kuralları için "bekleyen koşul" ve "gösterildi" teslim damgası + KURALLAR'ın sunucu tarafı. Ayrıntı ve kabul maddeleri: üst görev #352 details (tek kaynak).
+
+### 352.2. CMC-CLIENT [SONNET-HIGH] Hedefleme istemcisi: loader sayfa değişimi/çıkış niyeti/süre + setSessionVariables + kampanya kural editörü
+
+**Status:** pending  
+**Dependencies:** 352.1  
+
+loader/widget: pushState/popstate → iframe mesajı (debounce), siyahtus('setSessionVariables'), çıkış niyeti, sayfada kalma zamanlayıcısı, yalnız mint bayrağı olan kiracıda; CampaignBuilder kural editörü (match all/any, satır ekle/sil). Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #352 details (tek kaynak).

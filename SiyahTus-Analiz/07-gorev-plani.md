@@ -11,7 +11,7 @@
 **Toplam:** 120 görev (#269–#388), 141 alt görev. Öncelik: high 59, medium 49, low 12. Durum: pending 116, deferred 4 (#322, #378, #379, #388).
 
 - **Öncelik eşlemesi:** P0 → high, P1 → medium, P2 → low. **Öncelik devri:** high bir görevin bağımlı olduğu görev de high yapıldı; yoksa otonom döngü önkoşula sıra vermez (ör. #281 RL-04, #291 RP-04 veri yakalama, #323 GV-06/WG-14, #335 AR-01).
-- **Etiketler:** PLAN §5.1.1 matrisi (`[SONNET|OPUS-HIGH|XHIGH|MAX]`). Her XHIGH etiketinin gerekçesi görev ayrıntısında adıyla yazılı; authZ/kripto/kiracı izolasyonu/eşzamanlılık/algoritma işleri `OPUS-MAX`. **Gözden geçirme (2026-10-14, sahip):** #385–#386 `OPUS-MEDIUM` (matriste yok; `run-loop.sh` tanımaz), #320/#323/#338/#345/#350/#370 `OPUS-HIGH`, #346 `OPUS-XHIGH`. Task Master başlıklarında etiketin ardına `(Opus 5.5)` / `(Sonnet 5.5)` yazılıdır; bu tabloda yazılmaz.
+- **Etiketler:** PLAN §5.1.1 matrisi (`[SONNET|OPUS-HIGH|XHIGH|MAX]`). Her XHIGH etiketinin gerekçesi görev ayrıntısında adıyla yazılı; authZ/kripto/kiracı izolasyonu/eşzamanlılık/algoritma işleri `OPUS-MAX`. **Gözden geçirme (2026-10-14, sahip):** #385–#386 `OPUS-MEDIUM` (matriste yok; `run-loop.sh` tanımaz), #320/#323/#338/#345/#350/#370 `OPUS-HIGH`, #346 `OPUS-HIGH`. **İkinci tur (2026-10-14):** MAX→XHIGH #286 #289 #292 #293 #296 #305 #316 #324 #328 #340; XHIGH→HIGH #282 #294 #302 #326 #327 #332 #339 #346 #368 #383. Task Master başlıklarında etiketin ardına `(Opus 5.5)` / `(Sonnet 5.5)` yazılıdır; bu tabloda yazılmaz.
 - **Görev biçimi:** başlık `KOD [ETİKET] açıklama`; `description` sonunda "Kaynak: …"; `details` = ortak üst bilgi (kaynak, K1=A, contract-first sıra, protokol, satır numaralarını yeniden doğrulama notu, dalga) + 05 mantığı + **KABUL KRİTERLERİ** + **KULLANILAN VARSAYIMLAR**; `testStrategy` sonunda DoD satırı. L maddeler alt görevlere bölündü; alt görev bağımlılıkları `"<üst>.<n>"` biçiminde.
 - **F2 / deferred:** #322 (AI-28 aktif araç kullanımı), #378 (KN-06 gerçek entegrasyon), #379 (KN-05 iframe SDK), #388 (operatörün imzaladığı kimlik). KN-06'nın F1 pasif "Bağla" kartları (K15) normal görev: #377.
 - **Doğrulama (bu turda koşuldu):** `tasks.json` JSON olarak geçerli; id'ler tekrarsız ve 269–388 ardışık; tüm bağımlılıklar mevcut, döngü yok (alt görevler dahil, alt görev yalnız önceki kardeşe bağlı); aktif hiçbir görev deferred bir göreve bağlı değil; 109 maddenin hepsi en az bir göreve eşli; `git diff` mevcut 268 göreve dokunmuyor (yalnız ekleme + metadata `taskCount` 388, `lastModified`).
@@ -234,7 +234,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 279 | WIDGET-PRECHAT-CONFIG [OPUS-HIGH] | WG-01 | high | pending | – | 278 |
 | 280 | WIDGET-LANGUAGE [SONNET-HIGH] | WG-02 | high | pending | – | – |
 | 281 | INVITE-DEFAULT-ROLE [SONNET-HIGH] | RL-04 | high | pending | – | – |
-| 282 | INVITE-EMAIL-VERIFY [OPUS-XHIGH] | GV-03 | high | pending | – | – |
+| 282 | INVITE-EMAIL-VERIFY [OPUS-HIGH] | GV-03 | high | pending | – | – |
 | 283 | AI-REAL-LLM-READINESS [OPUS-HIGH] | AI-16 | high | pending | 4 | 270 |
 
 ### Dalga 2 — kimlik çekirdeği ve altyapı
@@ -243,10 +243,10 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 |---|---|---|---|---|---|---|
 | 284 | ID-GLOSSARY [SONNET-HIGH] | ID-01 | high | pending | – | – |
 | 285 | DAY-BOUNDARY [SONNET-HIGH] | ID-04 | high | pending | – | – |
-| 286 | DAILY-THREAD [OPUS-MAX] | ID-02 | high | pending | 5 | 284, 285 |
+| 286 | DAILY-THREAD [OPUS-XHIGH] | ID-02 | high | pending | 5 | 284, 285 |
 | 287 | MEMBER-TOKEN [OPUS-MAX] | ID-03 | high | pending | 5 | 278, 284 |
 | 288 | STRUCTURED-LOGS-AI-DECISIONS [OPUS-HIGH] | ID-08 | high | pending | 2 | 284 |
-| 289 | DURABLE-AI-QUEUE [OPUS-MAX] | GV-02 | high | pending | 4 | 273, 288 |
+| 289 | DURABLE-AI-QUEUE [OPUS-XHIGH] | GV-02 | high | pending | 5 | 273, 288 |
 | 290 | AI-CONFIG-VERSION-DESIGN [OPUS-HIGH] | AI-20 | high | pending | – | – |
 | 291 | QUEUE-ENTRIES-CAPTURE [OPUS-HIGH] | RP-04 | high | pending | – | – |
 
@@ -254,20 +254,20 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 
 | # | Kod [etiket] | Kaynak | Öncelik | Durum | Alt | Bağımlı olduğu |
 |---|---|---|---|---|---|---|
-| 292 | AI-CONVERSATION-CORE [OPUS-MAX] | AI-01, AI-19 | high | pending | 5 | 270, 283, 286, 288, 289, 290 |
-| 293 | AI-FIRST-AND-SILENCE [OPUS-MAX] | AI-11 | high | pending | 5 | 271, 272, 292 |
-| 294 | AI-DAILY-MEMORY [OPUS-XHIGH] | AI-02 | high | pending | – | 287, 292 |
+| 292 | AI-CONVERSATION-CORE [OPUS-XHIGH] | AI-01, AI-19 | high | pending | 5 | 270, 283, 286, 288, 289, 290 |
+| 293 | AI-FIRST-AND-SILENCE [OPUS-XHIGH] | AI-11 | high | pending | 6 | 271, 272, 292 |
+| 294 | AI-DAILY-MEMORY [OPUS-HIGH] | AI-02 | high | pending | – | 287, 292 |
 | 295 | AI-SLOTS [OPUS-HIGH] | AI-04 | high | pending | 3 | 270, 292 |
-| 296 | AI-PROCEDURE-ENGINE [OPUS-MAX] | AI-03 | high | pending | 6 | 269, 290, 292, 295 |
+| 296 | AI-PROCEDURE-ENGINE [OPUS-XHIGH] | AI-03 | high | pending | 7 | 269, 290, 292, 295 |
 | 297 | AI-UNDERSTAND-SELECT [OPUS-HIGH] | AI-05 | high | pending | 3 | 270, 296 |
 | 298 | AI-KNOWLEDGE-ANSWER [OPUS-HIGH] | AI-06 | high | pending | – | 297 |
 | 299 | AI-GUIDANCE-RULES [OPUS-HIGH] | AI-07 | high | pending | 2 | 270, 292 |
-| 300 | SENSITIVE-MASKING [OPUS-XHIGH] | AI-26 | high | pending | – | – |
+| 300 | SENSITIVE-MASKING [OPUS-XHIGH] | AI-26 | high | pending | 2 | – |
 | 301 | AI-GUARDRAILS [OPUS-XHIGH] | AI-08 | high | pending | 4 | 298, 299, 300 |
-| 302 | AI-RISK-FLAGS [OPUS-XHIGH] | AI-27 | high | pending | 3 | 287, 301 |
+| 302 | AI-RISK-FLAGS [OPUS-HIGH] | AI-27 | high | pending | 3 | 287, 301 |
 | 303 | AI-HANDOFF-TRIGGERS-RULES [OPUS-HIGH] | AI-09 | high | pending | 5 | 293, 297, 298, 301 |
 | 304 | AI-HANDOFF-CARD [OPUS-HIGH] | AI-10 | high | pending | 2 | 295, 303 |
-| 305 | TEAM-TOPIC-QUEUES [OPUS-MAX] | AU-01 | high | pending | 4 | 271, 291 |
+| 305 | TEAM-TOPIC-QUEUES [OPUS-XHIGH] | AU-01 | high | pending | 4 | 271, 291 |
 | 306 | INBOX-TRANSFER-TO-TEAM [OPUS-HIGH] | IN-04 | high | pending | – | 305 |
 | 307 | AI-HANDOFF-TARGET-PRIORITY [OPUS-HIGH] | AI-12 | high | pending | 3 | 303, 304, 305, 306 |
 | 308 | AI-TRANSPARENCY-HUMAN-BUTTON [OPUS-HIGH] | AI-29 | medium | pending | – | 303, 307 |
@@ -286,9 +286,9 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 
 | # | Kod [etiket] | Kaynak | Öncelik | Durum | Alt | Bağımlı olduğu |
 |---|---|---|---|---|---|---|
-| 314 | AI-SIMULATION-LAB [OPUS-HIGH] | AI-19 | high | pending | 5 | 296, 301, 302, 303 |
+| 314 | AI-SIMULATION-LAB [OPUS-HIGH] | AI-19 | high | pending | 6 | 296, 301, 302, 303 |
 | 315 | AI-CONFIG-HISTORY [OPUS-HIGH] | AI-21 | medium | pending | – | 290 |
-| 316 | AI-CONFIG-VERSIONING [OPUS-MAX] | AI-20 | medium | pending | 4 | 290, 314, 315 |
+| 316 | AI-CONFIG-VERSIONING [OPUS-XHIGH] | AI-20 | medium | pending | 6 | 290, 314, 315 |
 | 317 | AI-UNRESOLVED-QUESTIONS [OPUS-HIGH] | AI-22 | high | pending | 3 | 288, 297, 298, 303 |
 | 318 | AI-COACHING-SUGGESTIONS [OPUS-HIGH] | AI-23 | medium | pending | 2 | 304, 316, 317 |
 | 319 | AI-QA-QUEUE [OPUS-HIGH] | AI-24 | medium | pending | 3 | 288, 302, 314 |
@@ -301,11 +301,11 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | # | Kod [etiket] | Kaynak | Öncelik | Durum | Alt | Bağımlı olduğu |
 |---|---|---|---|---|---|---|
 | 323 | SETTINGS-SAVE-PATTERN [OPUS-HIGH] | GV-06, WG-14 | high | pending | 2 | – |
-| 324 | ROLE-SET-TEAM-LEAD [OPUS-MAX] | RL-01, RL-04 | high | pending | 3 | 281 |
+| 324 | ROLE-SET-TEAM-LEAD [OPUS-XHIGH] | RL-01, RL-04 | high | pending | 4 | 281 |
 | 325 | PERMISSION-MATRIX [OPUS-MAX] | RL-02 | high | pending | 5 | 323, 324 |
-| 326 | TEAM-LEAD-CAPABILITIES [OPUS-XHIGH] | RL-03 | medium | pending | – | 325 |
-| 327 | PROFILE-NAME-PASSWORD [OPUS-XHIGH] | RL-06 | medium | pending | – | – |
-| 328 | OWNERSHIP-TRANSFER [OPUS-MAX] | RL-05 | low | pending | – | 324, 327 |
+| 326 | TEAM-LEAD-CAPABILITIES [OPUS-HIGH] | RL-03 | medium | pending | – | 325 |
+| 327 | PROFILE-NAME-PASSWORD [OPUS-HIGH] | RL-06 | medium | pending | – | – |
+| 328 | OWNERSHIP-TRANSFER [OPUS-XHIGH] | RL-05 | low | pending | 2 | 324, 327 |
 
 ### Dalga 5 — ajan deneyimi, arama, arşiv
 
@@ -314,11 +314,11 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 329 | ID-DISPLAY-COPY [SONNET-HIGH] | ID-05 | high | pending | – | 284, 286 |
 | 330 | GEOIP-COUNTRY [OPUS-HIGH] | IN-02, EN-03, AU-02 | high | pending | – | – |
 | 331 | INBOX-PLAYER-CARD [OPUS-HIGH] | IN-02 | high | pending | 2 | 286, 287, 304, 329, 330 |
-| 332 | ID-SEARCH [OPUS-XHIGH] | ID-06 | high | pending | – | 284, 286, 287 |
+| 332 | ID-SEARCH [OPUS-HIGH] | ID-06 | high | pending | – | 284, 286, 287 |
 | 333 | MESSAGE-FULLTEXT-SEARCH [OPUS-MAX] | ID-07 | high | pending | 4 | 332 |
-| 334 | TIMELINE-VIEWER [OPUS-HIGH] | ID-09 | medium | pending | – | 288, 329 |
-| 335 | ARCHIVE-SCREEN [OPUS-HIGH] | AR-01 | high | pending | – | 286, 329, 331 |
-| 336 | ARCHIVE-FILTERS [OPUS-HIGH] | AR-02 | high | pending | – | 285, 293, 335 |
+| 334 | TIMELINE-VIEWER [OPUS-HIGH] | ID-09 | medium | pending | 2 | 288, 329 |
+| 335 | ARCHIVE-SCREEN [OPUS-HIGH] | AR-01 | high | pending | 2 | 286, 329, 331 |
+| 336 | ARCHIVE-FILTERS [OPUS-HIGH] | AR-02 | high | pending | 2 | 285, 293, 335 |
 | 337 | RATING-COMMENT [OPUS-HIGH] | AR-03, WG-11 | medium | pending | – | 335 |
 | 338 | TRANSCRIPT-EXPORT [OPUS-HIGH] | AR-04 | medium | pending | – | 335 |
 
@@ -326,20 +326,20 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 
 | # | Kod [etiket] | Kaynak | Öncelik | Durum | Alt | Bağımlı olduğu |
 |---|---|---|---|---|---|---|
-| 339 | WIDGET-ABUSE-GUARD [OPUS-XHIGH] | GV-01 | high | pending | 3 | 283, 287 |
-| 340 | UNRESPONSIVE-TRANSFER [OPUS-MAX] | WG-03 | high | pending | 3 | 305 |
+| 339 | WIDGET-ABUSE-GUARD [OPUS-HIGH] | GV-01 | high | pending | 3 | 283, 287 |
+| 340 | UNRESPONSIVE-TRANSFER [OPUS-XHIGH] | WG-03 | high | pending | 3 | 305 |
 | 341 | WIDGET-AVAILABILITY [OPUS-HIGH] | WG-09 | medium | pending | – | 307 |
 | 342 | ASK-EMAIL [SONNET-HIGH] | WG-08 | medium | pending | – | 340, 341 |
 | 343 | FORM-FIELD-TYPES-TOPIC [OPUS-HIGH] | WG-04 | medium | pending | – | 305 |
 | 344 | WIDGET-PHRASES-ETA [OPUS-HIGH] | WG-05 | medium | pending | – | 291, 305 |
 | 345 | TRANSCRIPT-ON-REQUEST [OPUS-HIGH] | WG-06 | medium | pending | – | 280, 338 |
-| 346 | MANUAL-ASSIGNMENT-MODE [OPUS-XHIGH] | WG-07 | medium | pending | – | 305 |
+| 346 | MANUAL-ASSIGNMENT-MODE [OPUS-HIGH] | WG-07 | medium | pending | – | 305 |
 | 347 | LAUNCHER-VISIBILITY-LOGO [SONNET-HIGH] | WG-10 | medium | pending | – | – |
 | 348 | WIDGET-KB-SEARCH [OPUS-HIGH] | WG-12 | medium | pending | – | 309 |
 | 349 | INSTALL-WIZARD-NOSCRIPT [SONNET-HIGH] | WG-13, WG-15 | low | pending | – | – |
 | 350 | PROMO-SUPPRESSION [OPUS-HIGH] | EN-01 | high | pending | – | 302 |
 | 351 | CAMPAIGN-CURRENT-URL-FIX [SONNET-HIGH] | EN-04 | medium | pending | – | – |
-| 352 | CAMPAIGN-MULTI-CONDITIONS [OPUS-HIGH] | EN-03 | medium | pending | – | 351, 330 |
+| 352 | CAMPAIGN-MULTI-CONDITIONS [OPUS-HIGH] | EN-03 | medium | pending | 2 | 351, 330 |
 | 353 | RICH-CAMPAIGN-CARD [OPUS-HIGH] | EN-02 | medium | pending | – | 350 |
 | 354 | CAMPAIGN-DELETE-REPORT-TEMPLATES [SONNET-HIGH] | EN-05 | medium | pending | – | 353, 350 |
 | 355 | GOAL-CUSTOM-EVENT [SONNET-HIGH] | EN-06 | low | pending | – | 352 |
@@ -353,10 +353,10 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 363 | CANNED-SEARCH-VARS-PRIVATE [OPUS-HIGH] | IN-06 | medium | pending | – | – |
 | 364 | EVENT-SUGGESTED-REPLIES [SONNET-HIGH] | IN-07 | low | pending | – | 363, 337 |
 | 365 | SHORTCUTS-PALETTE-SETTINGS [SONNET-HIGH] | IN-08, IN-11 | medium | pending | 2 | 277 |
-| 366 | COPILOT-DRAWER [OPUS-HIGH] | IN-09 | medium | pending | – | 309, 283 |
+| 366 | COPILOT-DRAWER [OPUS-HIGH] | IN-09 | medium | pending | 2 | 309, 283 |
 | 367 | EVENT-NOTIFICATIONS-REPEAT [SONNET-HIGH] | IN-10 | medium | pending | – | 361 |
-| 368 | REPORT-FILTERS [OPUS-XHIGH] | RP-01 | medium | pending | – | 325 |
-| 369 | MISSED-ENGAGEMENT-REPORTS [OPUS-HIGH] | RP-02 | medium | pending | – | 293 |
+| 368 | REPORT-FILTERS [OPUS-HIGH] | RP-01 | medium | pending | 2 | 325 |
+| 369 | MISSED-ENGAGEMENT-REPORTS [OPUS-HIGH] | RP-02 | medium | pending | 2 | 293 |
 | 370 | AVAILABILITY-ACTIVITY-REPORTS [OPUS-HIGH] | RP-03 | medium | pending | – | 340 |
 | 371 | QUEUE-REPORTS [SONNET-HIGH] | RP-04 | medium | pending | – | 291, 305, 368 |
 | 372 | DIGEST-EMAILS [SONNET-HIGH] | RP-05 | medium | pending | – | 368, 369, 371 |
@@ -370,10 +370,10 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 380 | WHATSAPP-LIVE [OPUS-XHIGH] | KN-01 | medium | pending | 3 | 289 |
 | 381 | MESSENGER-INSTAGRAM-LIVE [OPUS-HIGH] | KN-02 | low | pending | – | 380 |
 | 382 | BILLING-PAYMENT-METHODS [OPUS-XHIGH] | BL-01 | medium | pending | 4 | 276 |
-| 383 | INVOICE-PDF-PROFILE [OPUS-XHIGH] | BL-02 | medium | pending | – | 382 |
+| 383 | INVOICE-PDF-PROFILE [OPUS-HIGH] | BL-02 | medium | pending | – | 382 |
 | 384 | SUBSCRIPTION-CANCEL [OPUS-HIGH] | BL-03 | low | pending | – | 382, 383 |
-| 385 | NARROW-SCREEN-PANEL [OPUS-MEDIUM] | GV-04 | medium | pending | – | 304, 334 |
-| 386 | NO-PII-IN-URLS [OPUS-MEDIUM] | GV-05 | medium | pending | – | – |
+| 385 | NARROW-SCREEN-PANEL [OPUS-HIGH] | GV-04 | medium | pending | – | 304, 334 |
+| 386 | NO-PII-IN-URLS [OPUS-HIGH] | GV-05 | medium | pending | – | – |
 | 387 | AI-MULTILINGUAL [OPUS-HIGH] | AI-30 | low | pending | – | 297, 301 |
 | 388 | OPERATOR-SIGNED-IDENTITY-F2 [OPUS-MAX] | ID-03 | low | deferred | – | 287 |
 

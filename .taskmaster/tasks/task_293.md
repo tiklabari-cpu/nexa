@@ -1,6 +1,6 @@
 # Task ID: 293
 
-**Title:** AI-FIRST-AND-SILENCE [OPUS-MAX] (Opus 5.5) "Önce AI" (K9) ve devirden sonra AI'ın susması: mod durum makinesi, örtük devralma, AI'a geri ver, bekçi, ADR-09a yüklemi
+**Title:** AI-FIRST-AND-SILENCE [OPUS-XHIGH] (Opus 5.5) "Önce AI" (K9) ve devirden sonra AI'ın susması: mod durum makinesi, örtük devralma, AI'a geri ver, bekçi, ADR-09a yüklemi
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).
 
-[MAX] yönlendirme zamanlaması + eşzamanlılık. ADR-08a (#271), ADR-09a (#272).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): yönlendirme zamanlaması + eşzamanlılık. ADR-08a (#271), ADR-09a (#272).
 DURUM MAKİNESİ (bağlantı başına): ai → (AI devri | ajan mesajı | takeover | AI kapalı/tavan) → human; human → (yetkili "AI'a geri ver", bayrak engeli yok) → ai; ai → (gözetmen "duraklat") → paused.
 KAPI: AiResponder.handle en başta modu okur (threads.ai_mode); ai değilse model çağrısı yok. Kural botu sırası korunur; kural botu devralırsa mode=human.
 ÖNCE AI BAŞLANGICI: AI ajanı etkinken chat-service.start thread'i atamasız, kuyruk dışı (queue_position=null), ai_mode='ai' açar; "atanmamış"/"kuyrukta" görünümlerine girmez, ai görünümüne girer; eşzamanlı sınır tüketilmez; yönlendirme devir anında (AI-12). "Paralel" mod kiracı ayarı (ai_handoff_settings.assignment_mode 'ai_first'|'parallel').
@@ -51,19 +51,26 @@ Entegrasyon (sıfır model çağrısı, örtük devralma yarışı, yetkisiz ger
 
 ## Subtasks
 
-### 293.1. MODE-GATE [OPUS-MAX] threads.ai_mode + mod durum makinesi + AiResponder kapısı + örtük devralma (aynı transaction)
+### 293.1. MODE-GATE [OPUS-XHIGH] threads.ai_mode + mod durum makinesi + AiResponder kapısı + örtük devralma (aynı transaction)
 
 **Status:** pending  
 **Dependencies:** None  
 
 Takeover ve kural botu devralma da human yapar.
 
-### 293.2. AI-FIRST-START [OPUS-MAX] Önce-AI başlangıcı (atamasız, kuyruk dışı) + assignment_mode ayarı + bekçi işi
+### 293.2. AI-FIRST-START [OPUS-XHIGH] Önce-AI başlangıcı (atamasız, kuyruk dışı, ai görünümü, eşzamanlı sınır tüketilmez) + assignment_mode ayarı (ai_first|parallel)
 
 **Status:** pending  
 **Dependencies:** 293.1  
 
 Yönlendirme devir anına taşınır (AI-12 hedefi gelene kadar mevcut route()).
+
+### 293.6. AI-STALL-WATCHDOG [OPUS-HIGH] Bekçi işi: oyuncu mesajından sonra ai_stall_timeout_seconds (60) içinde bot olayı/devir yoksa zamanlanmış iş ai_failure ile insana yönlendirir
+
+**Status:** pending  
+**Dependencies:** 293.2  
+
+Üst görev BEKÇİ maddesi (jobs.ts); ai_handoff_settings.ai_stall_timeout_seconds; yönlendirme devir yolundan (AI-12 gelene kadar mevcut route). Ayrıntı ve kabul maddeleri: üst görev #293 details (tek kaynak).
 
 ### 293.3. RETURN-PAUSE [OPUS-XHIGH] POST return-to-ai / pause-ai + yetki + bayrak engeli kancası
 

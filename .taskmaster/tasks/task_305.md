@@ -1,6 +1,6 @@
 # Task ID: 305
 
-**Title:** TEAM-TOPIC-QUEUES [OPUS-MAX] (Opus 5.5) Konuya göre ekip kuyrukları (K14): Finans, KYC/Risk, Bonus, Sorumlu Oyun (yalnız eğitimli), Teknik, Şikâyet — ekip başına kuyruk, öncelik, baş-tıkanmasının giderilmesi
+**Title:** TEAM-TOPIC-QUEUES [OPUS-XHIGH] (Opus 5.5) Konuya göre ekip kuyrukları (K14): Finans, KYC/Risk, Bonus, Sorumlu Oyun (yalnız eğitimli), Teknik, Şikâyet — ekip başına kuyruk, öncelik, baş-tıkanmasının giderilmesi
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).
 
-[MAX] Routing/queue algoritması + concurrent limit + fallback (MASTER-PROMPT). ADR-08a (#271).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): Routing/queue algoritması + concurrent limit + fallback (MASTER-PROMPT). ADR-08a (#271).
 KOD: routing-service.ts route :114-171, drainQueue :179-241, renumberQueue :244-257, #nextQueuePosition :407-414, #selectGroup :261-313, #fallbackGroup :315-321, #selectAgent :341-405; Group schema:698-711, AgentExpertise :759; ai-responder.ts:174-187 adla arama.
 TİPLER/KONTRAT: QUEUE_TOPIC_ROLES ['finance','kyc_risk','bonus','responsible_gambling','technical','complaint']; packages/contract/openapi/paths/agents.yaml#/group (rol, gerekli yetenekler, mesai dışı modu); GET /routing/queues (rol → ekip; AI-12 ve WG-04 kullanır).
 PRİSMA: groups.topic_role TEXT NULL + kısmi tekil (license_id, topic_role); groups.after_hours_mode DEFAULT 'queue'; ekip gerekli yetenek bağlantı tablosu; threads.queue_group_id BIGINT NULL; threads.priority (AI-12 ile ortak: urgent|high|normal; tek tanım burada) ; mevcut kuyruktaki oturumlar için queue_group_id geri doldurma (ilk erişim grubu); queue_entries.group_id (#291) bu alandan yazılır.
@@ -47,14 +47,14 @@ Entegrasyon (baş-tıkanması, yedek yasağı, yetenek kuralı, öncelik, eşzam
 
 ## Subtasks
 
-### 305.1. TQ-SCHEMA [OPUS-MAX] topic_role, after_hours_mode, gerekli yetenekler, threads.queue_group_id/priority + geri doldurma + kontrat
+### 305.1. TQ-SCHEMA [OPUS-XHIGH] topic_role, after_hours_mode, gerekli yetenekler, threads.queue_group_id/priority + geri doldurma + kontrat
 
 **Status:** pending  
 **Dependencies:** None  
 
 Üst görev 305 ayrıntılarındaki ilgili bölüm.
 
-### 305.2. TQ-ROUTING [OPUS-MAX] Ekip başına kuyruk/boşaltma/numaralandırma + öncelik sırası + yetenek uygulaması + RG yedek yasağı
+### 305.2. TQ-ROUTING [OPUS-XHIGH] Ekip başına kuyruk/boşaltma/numaralandırma + öncelik sırası + yetenek uygulaması + RG yedek yasağı
 
 **Status:** pending  
 **Dependencies:** 305.1  

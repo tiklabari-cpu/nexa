@@ -1,6 +1,6 @@
 # Task ID: 332
 
-**Title:** ID-SEARCH [OPUS-XHIGH] (Opus 5.5) ID ile arama: Ctrl+K ve arşivde Thread ID, Chat ID, mesaj ID, üye ID, kullanıcı adı, e-posta ile sunucudan doğrudan bulma (görünürlük süzgeçli, var/yok sızdırmadan)
+**Title:** ID-SEARCH [OPUS-HIGH] (Opus 5.5) ID ile arama: Ctrl+K ve arşivde Thread ID, Chat ID, mesaj ID, üye ID, kullanıcı adı, e-posta ile sunucudan doğrudan bulma (görünürlük süzgeçli, var/yok sızdırmadan)
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 5 — ajan deneyimi, arama, arşiv.
 
-XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — görünürlük süzgeci, var/yok kahinliği.
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 contract: paths/search.yaml GET /search?query=&types=&limit= → items [{kind chat|connection|event|customer|ticket, chat_id?, thread_id?, event_id?, customer_id?, ticket_id?, title, subtitle, matched_on}].
 types: classifyIdentifier() (#284).
 api: routes/search.ts (sohbet, müşteri ya da ticket okuma yetkilerinden biri), services/search/lookup.ts. Sınıflandırma: mesaj ID biçimi → baştaki bağlantı numarası → thread → chat; 10 karakter → önce chats.id sonra threads.id (tesadüfi çakışmada ikisi); UUID → müşteri (ticket UUID ise ticket); e-posta → customers.email eşitliği; diğer → müşteri (ad, username_normalized önek/eşitlik #278, e-posta) + ticket konusu (+ ID-07 hazır olunca mesaj metni).

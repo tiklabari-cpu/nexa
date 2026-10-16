@@ -45,3 +45,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 Türkçe pozitif/negatif örnek seti (cc-mask.test.ts yanında), her yazma yolu için entegrasyon (cc-masking.test.ts genişler), log redaksiyonu, prompt kontrolü; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 300.1. MASK-CORE [OPUS-XHIGH] Saf maskeleme çekirdeği: sensitive-mask.ts + 8 dedektör + yazar politikası + cc-mask sarmalayıcı + Türkçe test seti
+
+**Status:** pending  
+**Dependencies:** None  
+
+apps/api/src/lib/sensitive-mask.ts maskSensitive(text, {author, policy}) → {text, detections}; üst görevdeki DEDEKTÖRLER ve POLİTİKA (AI-26-S2) aynen; cc-mask.ts geriye uyumlu sarmalayıcı; packages/types SENSITIVE_TYPES + yazar politikası + uyarı metinleri. Regex'ler önceden derlenmiş ve geri izlemesiz. Çağrı noktalarına BAĞLAMA YOK (300.2). Kabul: üst görevin ilk üç kabul maddesi (maskelenenler, maskelenmeyenler, BIP-39) birim testle. Ayrıntı ve kabul maddeleri: üst görev #300 details (tek kaynak).
+
+### 300.2. MASK-WIRE [OPUS-HIGH] Maskelemeyi bütün yazma yollarına, log, AI ve LLM prompt'una bağla + uyarı olayı + rozet/bilgi sayfası/widget uyarısı
+
+**Status:** pending  
+**Dependencies:** 300.1  
+
+maskSensitive üst görevdeki ÇAĞRI NOKTALARI'na (satırlar kaymış olabilir — kod haritasıyla doğrula) SIRA ilkesiyle bağlanır: kalıcı yazım, RTM, log, spam filtresi ve AI'dan önce; AI yanıtı gönderim öncesi + LLM prompt (savunma derinliği) + AI-22/23/24 kayıtları; UYARI system olayı (sohbet × tür bir kez, oyuncunun dili) + sensitive_shared; web Transcript rozeti + Ayarlar › Güvenlik › Hassas veri bilgi sayfası; widget uyarı mesajı. Kabul: üst görevin son üç kabul maddesi. Ayrıntı ve kabul maddeleri: üst görev #300 details (tek kaynak).

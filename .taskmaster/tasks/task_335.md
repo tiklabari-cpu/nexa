@@ -41,3 +41,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 archive.test.ts (3 satır, görünürlük, kiracılar arası), e2e archive.spec.ts, EXPLAIN kanıtı; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 335.1. AR-API [OPUS-HIGH] Arşiv API: archive.yaml + iki CONCURRENTLY migration + threads.handled_by + archive-service (görünürlük WHERE'de, N+1 yok)
+
+**Status:** pending  
+**Dependencies:** None  
+
+contract paths/archive.yaml (liste + detay) + iki ayrı CONCURRENTLY migration + threads.handled_by (kapanışta; #293 yüklemiyle) + services/archive/archive-service.ts + routes/archive.ts (withTenant + resolveVisibility WHERE içinde, ilk mesaj tek sorguda, keyset, total_capped) + KURALLAR'ın sunucu tarafı. Ayrıntı ve kabul maddeleri: üst görev #335 details (tek kaynak).
+
+### 335.2. AR-WEB [SONNET-HIGH] Arşiv ekranı: /app/archive, salt okunur transkript, oyuncu paneli, "Inbox'ta aç"
+
+**Status:** pending  
+**Dependencies:** 335.1  
+
+features/archive/ ArchivePage + gezinme girişi + salt okunur transkript + oyuncu paneli + "Inbox'ta aç / yeniden aç" + "Aynı günü grupla" anahtarı + i18n. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #335 details (tek kaynak).

@@ -1,6 +1,6 @@
 # Task ID: 368
 
-**Title:** REPORT-FILTERS [OPUS-XHIGH] (Opus 5.5) Rapor filtreleri (ajan, ekip, etiket, konu) tek filterClause yardımcısıyla tüm uçlarda + Ekip Lideri kapsam kesişimi sunucuda + derin linkler + filtreli paylaşım/zamanlanmış rapor
+**Title:** REPORT-FILTERS [OPUS-HIGH] (Opus 5.5) Rapor filtreleri (ajan, ekip, etiket, konu) tek filterClause yardımcısıyla tüm uçlarda + Ekip Lideri kapsam kesişimi sunucuda + derin linkler + filtreli paylaşım/zamanlanmış rapor
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-XHIGH GEREKÇESİ: (1) yetki kapsamı (EL başka ekibi göremez), (2) JSON/CSV sayı tutarlılığı (ADR-09).
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 KOD: reports.ts:200-211 rangeQuery, :1592/:1603/:1707 (ilk 20 ajan)/:1804/:1892; report-csv.ts (JSON, CSV, zamanlanmış aynı yardımcılar); reports_read yalnız ADMIN_SCOPES; ReportsPage.tsx, report-views.ts.
 contract/types: ReportFilter {agent_id[], group_id[], tag[], topic[], channel?} tüm rapor uçlarına; yalnız ID (GV-05).
 api: rangeQuery → reportQuery; report-csv.ts tek filterClause (assignee_id, chat_access.group_id, thread_tags, AI konusu = AI-05 prosedür kimliği, etiketle birleştirilmez — 05 karar 2); export, paylaşım linki, zamanlanmış rapor filters JSONB saklar; paylaşım linki filtreyi dondurur.
@@ -40,3 +40,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 Her filtre entegrasyon, EL kesişim testi, JSON=CSV testi, "tüm uçlar" testi; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 368.1. RF-API [OPUS-HIGH] Rapor filtreleri API: tek filterClause tüm uçlarda + dışa aktarma/paylaşım/zamanlı + ekip kapsamı kesişimi
+
+**Status:** pending  
+**Dependencies:** None  
+
+ReportFilter contract tüm rapor uçlarına; rangeQuery → reportQuery, report-csv.ts tek filterClause; export, paylaşım linki ve zamanlanmış rapor filters JSONB; YETKİ kesişimi sunucuda; migration (CONCURRENTLY ayrı dosya); "tüm uçlar filtreyi uyguluyor" testi zorunlu. Ayrıntı ve kabul maddeleri: üst görev #368 details (tek kaynak).
+
+### 368.2. RF-WEB [SONNET-HIGH] Rapor filtre çubuğu: çoklu seçim, URL'de yalnız ID, kayıtlı görünümler, derin linkler
+
+**Status:** pending  
+**Dependencies:** 368.1  
+
+Çoklu seçimli filtre çubuğu, URL'de yalnız kimlik, kayıtlı görünümler filtreyi saklar, ekip/üye sayfalarında "Raporları gör"; Ekip Liderinde kilitli ekip seçici. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #368 details (tek kaynak).

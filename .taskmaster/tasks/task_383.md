@@ -1,6 +1,6 @@
 # Task ID: 383
 
-**Title:** INVOICE-PDF-PROFILE [OPUS-XHIGH] (Opus 5.5) Fatura profili + bilgi amaçlı fatura PDF'i (K24) + mock e-Fatura sağlayıcısı: ardışık boşluksuz numara, snapshot, ödeme yöntemi ve referansı faturada
+**Title:** INVOICE-PDF-PROFILE [OPUS-HIGH] (Opus 5.5) Fatura profili + bilgi amaçlı fatura PDF'i (K24) + mock e-Fatura sağlayıcısı: ardışık boşluksuz numara, snapshot, ödeme yöntemi ve referansı faturada
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-XHIGH GEREKÇESİ: (2) para/belge doğruluğu — numara boşluğu/çakışması, değişmez snapshot.
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 KOD: GET /billing/invoices (reports.ts:2196), CSV :2208-2235; invoice-close-sweep.ts; rapor PDF'i reports-export.ts (Türkçe karakter sorunu — kullanılmaz; AR-04 #338 notu).
 prisma: billing_profiles (license_id PK, legal_name, adres, country ISO, tax_office, tax_id, vat_id, invoice_email) + RLS + CHECK (ülkeye göre vergi no biçimi); faturalara number (ihraççı başına benzersiz, yıl bazlı ardışık boşluksuz — 05 karar 2), issued_at, seller_snapshot/buyer_snapshot JSON, pdf_storage_key, payment_method, payment_reference (SWIFT referansı / TXID / Stripe ödeme ID — K16); satır kilitli sayaç tablosu.
 contract/api: GET/PUT /billing/profile (yazma Kurucu, okuma Yönetici), GET /billing/invoices/{period}/pdf, credit_note (düzeltme yeni belge).

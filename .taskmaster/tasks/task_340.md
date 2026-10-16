@@ -1,6 +1,6 @@
 # Task ID: 340
 
-**Title:** UNRESPONSIVE-TRANSFER [OPUS-MAX] (Opus 5.5) Ajan yanıt vermezse aktarma + "inactive" durumu + bağlantı kopunca offline: assigned_at, CAS aktarma, kapasite dışı inactive, ping-pong sınırı
+**Title:** UNRESPONSIVE-TRANSFER [OPUS-XHIGH] (Opus 5.5) Ajan yanıt vermezse aktarma + "inactive" durumu + bağlantı kopunca offline: assigned_at, CAS aktarma, kapasite dışı inactive, ping-pong sınırı
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.
 
-[MAX] routing/eşzamanlılık (MASTER-PROMPT [MAX] dilimi).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): routing/eşzamanlılık (MASTER-PROMPT [MAX] dilimi).
 KOD: chat-timeout.ts (ChatTimeoutSweeper; #sweepTenant findFirst ile rastgele marka satırı), scheduler/jobs.ts:138, env.ts:1012, InboxSettings schema:2127-2142, settings.ts:2617/2632, ChatTimeout.tsx; first_response_at chat-service.ts:508-512; transfer :1371; TRANSFER_REASONS domain.ts:64-70 (agent_disconnected kullanılmıyor); threads'te assigned_at yok; routing #selectAgent kapasite tüm aktifleri sayıyor; RTM presence yazmıyor, lastSeenAt yalnız API (auth.ts:459-466).
 types/contract: TRANSFER_REASONS += agent_unresponsive; settings.yaml chat-timeout gövdesine unanswered_transfer_seconds, inactive_after_seconds; chats.yaml özetine inactive.
 prisma: InboxSettings iki nullable INT; threads.assigned_at, inactive_since, unresponsive_transfers SMALLINT DEFAULT 0.
@@ -54,7 +54,7 @@ Entegrasyon (sweep, yarış, kapasite, ping-pong sınırı), RTM birim (tolerans
 
 Üst görev 340 ayrıntılarındaki ilgili bölüm.
 
-### 340.2. UT-SWEEP [OPUS-MAX] chat_inactivity sweep: CAS aktarma, hedef seçimi, kuyruk başı, ping-pong sınırı, inactive kapasite
+### 340.2. UT-SWEEP [OPUS-XHIGH] chat_inactivity sweep: CAS aktarma, hedef seçimi, kuyruk başı, ping-pong sınırı, inactive kapasite
 
 **Status:** pending  
 **Dependencies:** 340.1  

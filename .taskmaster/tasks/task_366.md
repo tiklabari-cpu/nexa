@@ -36,3 +36,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 copilot-ask.test.ts (yetkisiz BI, kota, kiracılar arası kaynak), birim, e2e copilot-drawer.spec.ts; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 366.1. CP-API [OPUS-HIGH] Copilot sor API: /copilot/ask sınıflandırma + KB RAG + BI kapısı + kota + audit
+
+**Status:** pending  
+**Dependencies:** None  
+
+contract POST /copilot/ask + routes/copilot.ts sınıflandırma (BI sözlüğü + dil modeli; LLM ADR §6) + BI yolu reports_read + KB yolu AI-14 tek depo RAG (#309) + "bilmiyorum" + kullanım sayacı/kota + audit (soru metni yok). Ayrıntı ve kabul maddeleri: üst görev #366 details (tek kaynak).
+
+### 366.2. CP-WEB [SONNET-HIGH] Copilot çekmecesi: AppShell'de her ekrandan, ortak BI/KB bileşenleri, oturum geçmişi
+
+**Status:** pending  
+**Dependencies:** 366.1  
+
+components/CopilotDrawer.tsx (rota değişiminde açık kalır, modal değil, odak yönetimi), CopilotPanel'den ortak BI/KB bileşenleri, Inbox sohbet eylemleri, oturum geçmişi (zustand), "yanıta ekle", kısayol; i18n. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #366 details (tek kaynak).

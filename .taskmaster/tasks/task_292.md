@@ -1,6 +1,6 @@
 # Task ID: 292
 
-**Title:** AI-CONVERSATION-CORE [OPUS-MAX] (Opus 5.5) Konuşma motoru çekirdeği + sohbet içi hafıza: ai_conversations durumu, yan etkisiz runTurn sözleşmesi, bağlam yükleyici, art arda mesaj birleştirme, iyimser kilit
+**Title:** AI-CONVERSATION-CORE [OPUS-XHIGH] (Opus 5.5) Konuşma motoru çekirdeği + sohbet içi hafıza: ai_conversations durumu, yan etkisiz runTurn sözleşmesi, bağlam yükleyici, art arda mesaj birleştirme, iyimser kilit
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).
 
-[MAX] eşzamanlılık (iyimser kilit, çok kopya).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): eşzamanlılık (iyimser kilit, çok kopya).
 HEDEF MODÜL apps/api/src/services/ai/conversation/: conversation-engine.ts (handleTurn), context-loader.ts, state-store.ts, policy.ts iskeleti, compose.ts; AiResponder.handle kapılarını (requireAiInference :63, requireAiBudget :81) korur, SkillEngine.run yerine ConversationEngine.handleTurn çağırır. Eski tek mesajlık skill'ler adaptörle tek adımlı prosedür olarak koşar; iki motor bırakılmaz.
 K1=A EŞLEMESİ: bağlantı = ConnectionRef {chatId (=Thread ID, günlük), threadId (=Chat ID)}. Günlük thread = nexa chat_id; 05 §1.0'daki ayrı daily_thread_id KOLONU AÇILMAZ (sapma notu 07'de).
 ai_conversations (bağlantı başına bir satır, unique(license_id, chat_id, thread_id), RLS): mode ('ai'|'human'|'paused', AI-11 kullanır), active_skill_id, procedure_snapshot, step_id, step_status, slots, suspended, counters, signals, digest, outcome, last_processed_event_seq, version, config_version_id (#290), created_at/updated_at/closed_at. AI-03/04/11 alanları burada açılır, mantıkları kendi görevlerinde.
@@ -50,14 +50,14 @@ context-loader birim; ai-skills.test.ts yanında çok turlu entegrasyon; eşzama
 
 ## Subtasks
 
-### 292.1. CORE-STATE-TABLE [OPUS-MAX] ai_conversations tablosu + RLS + state-store (iyimser kilit, sürüm)
+### 292.1. CORE-STATE-TABLE [OPUS-XHIGH] ai_conversations tablosu + RLS + state-store (iyimser kilit, sürüm)
 
 **Status:** pending  
 **Dependencies:** None  
 
 Alanlar yukarıda; tenant-isolation negatif testi.
 
-### 292.2. CORE-RUNTURN-ADAPTER [OPUS-MAX] runTurn sözleşmesi (yan etkisiz) + canlı adaptör (AiResponder) + eski skill adaptörü
+### 292.2. CORE-RUNTURN-ADAPTER [OPUS-XHIGH] runTurn sözleşmesi (yan etkisiz) + canlı adaptör (AiResponder) + eski skill adaptörü
 
 **Status:** pending  
 **Dependencies:** 292.1  
@@ -71,7 +71,7 @@ Yan etkiler döndürülür; canlı adaptör uygular; eski adım tipleri eşlenir
 
 TurnContext {messages, systemNotes, stateDigest, newCustomerText, lastSeq}; (thread_id, event_sequence) tek indeksli sorgu, LIMIT N+1.
 
-### 292.4. CORE-BATCH-LOCK [OPUS-MAX] Debounce/birleştirme + iyimser kilit + gönderim öncesi yeni mesaj kontrolü
+### 292.4. CORE-BATCH-LOCK [OPUS-XHIGH] Debounce/birleştirme + iyimser kilit + gönderim öncesi yeni mesaj kontrolü
 
 **Status:** pending  
 **Dependencies:** 292.3  

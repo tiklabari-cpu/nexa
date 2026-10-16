@@ -1,6 +1,6 @@
 # Task ID: 327
 
-**Title:** PROFILE-NAME-PASSWORD [OPUS-XHIGH] (Opus 5.5) Profilim: görünen ad + isteğe bağlı oyuncuya görünen takma ad, uygulama içinden şifre değiştirme (mevcut şifreyle, diğer oturumlar kapanır)
+**Title:** PROFILE-NAME-PASSWORD [OPUS-HIGH] (Opus 5.5) Profilim: görünen ad + isteğe bağlı oyuncuya görünen takma ad, uygulama içinden şifre değiştirme (mevcut şifreyle, diğer oturumlar kapanır)
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 4 — roller ve yetki matrisi.
 
-XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — kimlik doğrulama (şifre değişimi, oturum iptali).
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 contract: PATCH /agents/me (name, public_name), POST /auth/password (current_password, new_password).
 prisma: accounts.public_name TEXT NULL.
 api: ad 1–120 karakter kırpma; şifre: mevcut şifre scrypt ile doğrulanır, yeni ≥12 karakter (davet kabulüyle aynı), eskisiyle aynı olamaz; SSO zorunlu üyede açıklayıcı ret; başarıda BU OTURUM HARİÇ tüm yenileme token aileleri (oauth_refresh_tokens.familyId) iptal (RL-06-S1); audit account.profile_updated, account.password_changed; güvenlik bilgilendirme e-postası (güvenlik rezervi; tavana takılırsa değişiklik engellenmez — backgroundMail); hız sınırı hesap başına saatte 10. Widget'ta public_name ?? name (customer.ts:565-569).

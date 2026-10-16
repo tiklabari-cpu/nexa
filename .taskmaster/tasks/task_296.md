@@ -1,6 +1,6 @@
 # Task ID: 296
 
-**Title:** AI-PROCEDURE-ENGINE [OPUS-MAX] (Opus 5.5) Prosedür (konu akışı) motoru: çok turlu Skill (mode=procedure), adım/koşul dili, sürüm sabitleme, konu değişimi, SOP'tan taslak, editör (görsel tuval YOK)
+**Title:** AI-PROCEDURE-ENGINE [OPUS-XHIGH] (Opus 5.5) Prosedür (konu akışı) motoru: çok turlu Skill (mode=procedure), adım/koşul dili, sürüm sabitleme, konu değişimi, SOP'tan taslak, editör (görsel tuval YOK)
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).
 
-[MAX] algoritma tasarımı.
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): algoritma tasarımı.
 TANIM (packages/types/src/procedure.ts, web+API ortak): Procedure {when_to_use, examples[], priority, slots: SlotDef[], steps: ProcStep[], templates [{key,text,verbatim?}], handoff {conditions, target (AI-12), card_fields, next_step_hint}, limits {max_turns 12}}. ProcStep: say{template_key|instruction} · collect{slots ≤2} · check{when, then, else?} · answer_from_knowledge{query_hint?} · handoff{reason_code, target?} · resolve{outcome resolved|resolved_waiting, followup_template?} · tag{tag} · tool{tool_key, inputs, active:false} (AI-28 yuvası, F1'de atlanır). Cond = all|any|not|slot{name,op,value}|fact{path,op,value}|fn{name,args}|ai{question}; op: eq neq lt lte gt gte in not_in exists missing matches; fn sabit liste: elapsed_minutes, within_working_hours, next_window; fact yolları AI-13 tablolarından (#310; o gelene kadar facts arayüzü stub, testlerde fixture); ai koşulu anlama çıktısında ai_conditions, unknown=false + kayıt. Serbest ifade/eval YOK.
 PRİSMA (genişletme, varsayılanlı): skills.mode text default 'single', when_to_use, examples text[], priority int default 100, slots jsonb, procedure jsonb, locked bool, template_key, template_version, is_fallback bool (AI-05). status/version EKLENMEZ (#290 sürüm paketi).
 YÜRÜTME: başta slotlar anlama çıktısı + gün içi özetle önden dolar; tur başına ≤8 iç adım (döngü kalkanı); collect eksik zorunlu slotları max_questions_per_message ile sorar → awaiting_answer; check dallanır; say kalıbı doldurur (eksik değişkende kalıp gönderilmez, hata kaydı, instruction kullanılır); answer_from_knowledge → AI-06; handoff → AI-09/10/12; resolve sonucu işaretler (K9 çözüldü kriterleri #303); tool F1'de "pasif, atlandı" kaydı. Eylemler tek mesajda compose'a; verbatim kalıplar olduğu gibi.
@@ -49,7 +49,7 @@ Birim (yürütücü, koşul değerlendirici, kaydetme doğrulaması), entegrasyo
 
 ## Subtasks
 
-### 296.1. PROC-TYPES [OPUS-MAX] packages/types procedure.ts: Procedure/ProcStep/Cond tipleri + kaydetme doğrulayıcısı + problem kodları
+### 296.1. PROC-TYPES [OPUS-XHIGH] packages/types procedure.ts: Procedure/ProcStep/Cond tipleri + kaydetme doğrulayıcısı + problem kodları
 
 **Status:** pending  
 **Dependencies:** None  
@@ -63,12 +63,19 @@ Web ve API aynı doğrulayıcıyı kullanır.
 
 Mevcut skill'ler için veri taşıma gerekmez.
 
-### 296.3. PROC-EXECUTOR [OPUS-MAX] executor.ts + conditions.ts + templates.ts: adım döngüsü, snapshot, konu değişimi/askı, max_turns
+### 296.3. PROC-EXECUTOR [OPUS-XHIGH] executor.ts: adım döngüsü (tur başına ≤8 iç adım), procedure_snapshot, konu değişimi/askı, max_turns
+
+**Status:** pending  
+**Dependencies:** 296.1, 296.7  
+
+facts arayüzü (AI-13 öncesi stub).
+
+### 296.7. PROC-CONDITIONS-TEMPLATES [OPUS-HIGH] conditions.ts (Cond ağacı: all|any|not|slot|fact|fn|ai, op listesi, sabit fn listesi, fact stub arayüzü) + templates.ts (kalıp doldurma; eksik değişkende gönderme yok + hata kaydı) — saf modüller
 
 **Status:** pending  
 **Dependencies:** 296.1  
 
-facts arayüzü (AI-13 öncesi stub).
+Üst görev TANIM'daki Cond ve templates kuralları; serbest ifade/eval YOK; tipler 296.1'de. Executor (296.3) bunları kullanır. Ayrıntı ve kabul maddeleri: üst görev #296 details (tek kaynak).
 
 ### 296.4. PROC-API [OPUS-HIGH] POST /skills/compile (procedure, SOP taslağı) + GET /chats/{id}/ai-conversation + preview conversation girdisi
 

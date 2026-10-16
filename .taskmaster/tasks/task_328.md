@@ -1,6 +1,6 @@
 # Task ID: 328
 
-**Title:** OWNERSHIP-TRANSFER [OPUS-MAX] (Opus 5.5) Sahiplik (Kurucu) devri: şifre/2FA ile başlatma, devralanın 72 saat içinde e-posta tokenıyla kabulü, eski Kurucu Yönetici olur
+**Title:** OWNERSHIP-TRANSFER [OPUS-XHIGH] (Opus 5.5) Sahiplik (Kurucu) devri: şifre/2FA ile başlatma, devralanın 72 saat içinde e-posta tokenıyla kabulü, eski Kurucu Yönetici olur
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 4 — roller ve yetki matrisi.
 
-[MAX] authZ (tek Kurucu kısıtı, rol geçişi).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): authZ (tek Kurucu kısıtı, rol geçişi).
 contract: POST /ownership-transfers (target_agent_id, password, totp?), GET /ownership-transfers/current, POST …/{id}/accept (token), DELETE …/{id}.
 prisma: ownership_transfers (id, license_id, from_account_id, to_account_id, token_hash, state, expires_at, created_at, decided_at) + RLS + kısmi tekil (license_id) WHERE state='pending'.
 api: services/team/ownership-transfer.ts; e-posta şablonu ownershipTransfer (messages.ts); audit ownership.transfer_requested|accepted|cancelled|expired. Başlatma: şifre (+2FA) yeniden; hedef aynı lisansın aktif, e-postası doğrulanmış üyesi; workspace 2FA zorunluysa hedefin 2FA'sı açık. Kabul: giriş yapmış + token (72 saat, RL-05-S1); tek işlemde önce eski Kurucu admin'e (S2), sonra hedef owner (tek-Kurucu kısmi indeksini her ifadede sağlar); SSO zorunluysa yeni Kurucu muaf, eski zorunluluğa girer (ekranda yazılır); fatura iletişimi geçer ya da sorulur; tüm Yöneticilere bilgi e-postası.
@@ -40,3 +40,19 @@ KULLANILAN VARSAYIMLAR:
 **Test Strategy:**
 
 Entegrasyon, e2e (apps/e2e/tests/mailbox.ts ile); `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.
+
+## Subtasks
+
+### 328.1. OT-CORE [OPUS-XHIGH] Sahiplik devri çekirdeği: kontrat + ownership_transfers (RLS, kısmi tekil) + servis + tek-Kurucu takası + e-posta + audit
+
+**Status:** pending  
+**Dependencies:** None  
+
+contract (4 uç) + prisma ownership_transfers + RLS + kısmi tekil (license_id) WHERE state='pending' + services/team/ownership-transfer.ts + ownershipTransfer e-posta şablonu + audit eylemleri; başlatma (şifre/2FA yeniden, hedef koşulları), kabul tek işlemde (önce eski Kurucu admin, sonra hedef owner), SSO ve fatura iletişimi kuralları, Yöneticilere bilgi e-postası, S3 runbook notu. Kabul: üst görevin bütün kabul maddeleri API düzeyinde. Ayrıntı ve kabul maddeleri: üst görev #328 details (tek kaynak).
+
+### 328.2. OT-WEB [SONNET-HIGH] Sahiplik devri arayüzü: Ayarlar › Şirket "Tehlikeli bölge", kabul sayfası, bekleyen devir bandı
+
+**Status:** pending  
+**Dependencies:** 328.1  
+
+web: hedef seçimi, şifre/2FA, workspace adını yazarak onay; token'lı kabul sayfası; bekleyen devir bandı + iptal; SSO notu ekranda; i18n (TRANSLATED_FILES). Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #328 details (tek kaynak).

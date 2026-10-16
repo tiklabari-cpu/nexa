@@ -1,6 +1,6 @@
 # Task ID: 302
 
-**Title:** AI-RISK-FLAGS [OPUS-XHIGH] (Opus 5.5) Risk bayrakları: sohbet ve üye kapsamlı yapılandırılmış bayraklar, riskPolicy (promosyon/bonus engeli, zorunlu devir), görünürlük, gerekçeli kaldırma, webhook
+**Title:** AI-RISK-FLAGS [OPUS-HIGH] (Opus 5.5) Risk bayrakları: sohbet ve üye kapsamlı yapılandırılmış bayraklar, riskPolicy (promosyon/bonus engeli, zorunlu devir), görünürlük, gerekçeli kaldırma, webhook
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).
 
-XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — yeni yetkili uçlar, rol kısıtlı hassas veri.
+EFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).
 PRİSMA: risk_flags (id, license_id, scope chat|member, chat_id?, thread_id?, customer_id?, member_key?, type rg_signal|self_exclusion_request|underage_suspected|self_harm|complaint_formal|fraud_suspected|account_takeover_suspected|multi_account|abusive|account_security, severity info|high|urgent, source ai_rule|ai_classifier|agent|qa, rule_ref, evidence_event_ids, note, basis declared|verified, status active|cleared, raised_by/at, cleared_by/at, clear_reason); satır silinmez; RLS lisans; indeksler (license_id, status, type), (license_id, customer_id) WHERE status='active'. EN-01'in customer_risk_flags ihtiyacı bu tablonun member kapsamıyla karşılanır (tek tablo).
 TİPLER: RISK_FLAG_TYPES, varsayılan şiddet/kapsam/kaldırma yetkisi; saf riskPolicy(flags) → {noPromotions, noBonusTalk, mustHandoff, priority, targetTeamKey} (web, API, widget yapılandırması ortak).
 API: services/risk/risk-flags.ts; POST /chats/{id}/risk-flags, DELETE /risk-flags/{id} (gerekçe zorunlu), GET /customers/{id}/risk-flags, GET /risk-flags (rapor/arşiv filtresi). AI motoru bayrağı devirle aynı transaction'da koyar.
@@ -49,14 +49,14 @@ riskPolicy birim; kaldırma yetkisi/gerekçe; görünürlük; webhook payload; R
 
 ## Subtasks
 
-### 302.1. RF-SCHEMA-POLICY [OPUS-XHIGH] risk_flags tablosu + RISK_FLAG_TYPES + riskPolicy saf fonksiyonu
+### 302.1. RF-SCHEMA-POLICY [OPUS-HIGH] risk_flags tablosu + RISK_FLAG_TYPES + riskPolicy saf fonksiyonu
 
 **Status:** pending  
 **Dependencies:** None  
 
 Üst görev 302 ayrıntılarındaki ilgili bölüm.
 
-### 302.2. RF-API-RUNTIME [OPUS-XHIGH] Uçlar, AI motorunda devirle aynı transaction, kaldırma yetkisi, RTM, webhook, bildirim
+### 302.2. RF-API-RUNTIME [OPUS-HIGH] Uçlar, AI motorunda devirle aynı transaction, kaldırma yetkisi, RTM, webhook, bildirim
 
 **Status:** pending  
 **Dependencies:** 302.1  

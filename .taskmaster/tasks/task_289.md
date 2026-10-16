@@ -1,6 +1,6 @@
 # Task ID: 289
 
-**Title:** DURABLE-AI-QUEUE [OPUS-MAX] (Opus 5.5) Kalıcı AI iş kuyruğu (ai_jobs, outbox, SKIP LOCKED işçi): çökmede yanıt kaybolmaz, aynı mesaja asla iki cevap gitmez
+**Title:** DURABLE-AI-QUEUE [OPUS-XHIGH] (Opus 5.5) Kalıcı AI iş kuyruğu (ai_jobs, outbox, SKIP LOCKED işçi): çökmede yanıt kaybolmaz, aynı mesaja asla iki cevap gitmez
 
 **Status:** pending
 
@@ -19,7 +19,7 @@ PROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → clos
 NOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.
 DALGA: Dalga 2 — kimlik çekirdeği ve altyapı.
 
-[MAX] eşzamanlılık/kilit + ChatService transaction sınırı. ADR-11a (#273).
+XHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): eşzamanlılık/kilit + ChatService transaction sınırı. ADR-11a (#273).
 KOD: services/chat/follow-ups.ts (MAX_FOLLOW_UPS_PER_KEY=20), plugins/follow-ups.ts; customer.ts:342-389 (followUp → respondToCustomerMessage: kural botu, ai.handle, atanan bildirimi); ai-responder.ts:48; kalıp webhooks/redelivery.ts; scheduler.ts, lock.ts.
 YAPILACAK: migration ai_jobs (id, license_id, organization_id, chat_id, thread_id, trigger_event_id, kind CHECK visitor_message, state CHECK pending|running|done|expired|failed, attempts, available_at, lease_until, created_at, started_at, finished_at, outcome, last_error, request_id), tekil (license_id, trigger_event_id, kind), indeks (state, available_at), RLS; SECURITY DEFINER ai_jobs_claim(p_limit, p_lease_seconds) (FOR UPDATE SKIP LOCKED, sohbet başına sıra) + ai_jobs_settle; ChatService.sendEvent/start'a "aynı işlemde yaz" outbox kancası; services/ai/ai-job-worker.ts (eklentiyle başlar, 500 ms yoklama + LISTEN/NOTIFY, withTenant); follow-ups.ts AI dalı işçiye taşınır (kural botu ve atanan bildirimi aynı işte, bugünkü sırayla); /health ai_jobs {pending, oldest_age_s}.
 MANTIK: tazelik 120 sn → expired + iç not + insan yönlendirmesi + karar kaydı expired; uygunluk (bağlantı aktif mi, insan devraldı mı (AI-11 gelince), kota); idempotens properties.reply_to_event_id = trigger_event_id (göndermeden önce kontrol); çökme: süresi dolan running en çok 2 deneme; sohbette 20+ bekleyen → expired; kapanışta SHUTDOWN_DRAIN_MS; çok turlu AI (AI-03) geldiğinde iş konuşmanın o anki durumuna cevap üretir.
@@ -41,30 +41,37 @@ Entegrasyon (atomik yazım, yeniden başlatma, iki işçi, sıra, süre aşımı
 
 ## Subtasks
 
-### 289.1. AIJ-SCHEMA [OPUS-MAX] ai_jobs tablosu + RLS + ai_jobs_claim / ai_jobs_settle SECURITY DEFINER fonksiyonları
+### 289.1. AIJ-SCHEMA [OPUS-XHIGH] ai_jobs tablosu + RLS + ai_jobs_claim / ai_jobs_settle SECURITY DEFINER fonksiyonları
 
 **Status:** pending  
 **Dependencies:** None  
 
 Sabit search_path; kiracılar arası sayıcı redelivery.ts kalıbında.
 
-### 289.2. AIJ-OUTBOX [OPUS-MAX] ChatService outbox kancası: iş satırı ziyaretçi mesajıyla aynı transaction'da
+### 289.2. AIJ-OUTBOX [OPUS-XHIGH] ChatService outbox kancası: iş satırı ziyaretçi mesajıyla aynı transaction'da
 
 **Status:** pending  
 **Dependencies:** 289.1  
 
 sendEvent/start isteğe bağlı aynı işlemde yazım.
 
-### 289.3. AIJ-WORKER [OPUS-MAX] ai-job-worker: claim/lease, LISTEN/NOTIFY, tazelik, idempotens, sıra, kapanış; follow-ups AI dalının taşınması
+### 289.3. AIJ-WORKER [OPUS-XHIGH] ai-job-worker çekirdeği: claim/lease, LISTEN/NOTIFY + yoklama, tazelik (120 sn → expired + iç not + insan), uygunluk, idempotens, sohbet içi sıra, çökme denemeleri, kapanışta drain
 
 **Status:** pending  
 **Dependencies:** 289.2  
 
 Kural botu ve bildirim sırası korunur.
 
-### 289.4. AIJ-HEALTH-TESTS [OPUS-HIGH] /health metrikleri + visitor-follow-ups testlerinin uyarlanması + HANDOFF
+### 289.5. AIJ-FOLLOWUPS-HEALTH [OPUS-HIGH] follow-ups.ts AI dalının işçiye taşınması (kural botu + atanan bildirimi aynı işte, bugünkü sırayla) + /health ai_jobs {pending, oldest_age_s}
 
 **Status:** pending  
 **Dependencies:** 289.3  
+
+Üst görev YAPILACAK'taki "follow-ups.ts AI dalı işçiye taşınır" ve "/health ai_jobs" maddeleri; reportComponentStatus yardımcısı varsa kullan. İşçi API'si 289.3'te bitti. Ayrıntı ve kabul maddeleri: üst görev #289 details (tek kaynak).
+
+### 289.4. AIJ-HEALTH-TESTS [OPUS-HIGH] /health metrikleri + visitor-follow-ups testlerinin uyarlanması + HANDOFF
+
+**Status:** pending  
+**Dependencies:** 289.3, 289.5  
 
 Üst görev 289 ayrıntılarındaki ilgili bölüm.

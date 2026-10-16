@@ -27,6 +27,16 @@
  * the CPU with the unit suites is how a timing test turns into a timeout
  * (memory: integration gate needs serial turbo). `e2e` is last.
  *
+ * Red stops what is pointless to run next (2026-10-16 — a red integration run
+ * used to be followed by a 21-minute e2e run that could not count as proof):
+ *   · `build` red      → nothing else runs (no `dist/` to test against);
+ *   · `entegrasyon` red → `e2e` is skipped;
+ *   · `statik`/`birim` red → `entegrasyon` still runs (independent information,
+ *     skipping it only costs another 9-minute round), `e2e` is skipped.
+ * Skipped headings show as ATLANDI in the table. `--keep-going` restores the
+ * old run-everything behaviour. For every red unit/integration file the gate
+ * prints the one-line command that re-runs just that file on private datastores.
+ *
  * Every step's output goes to a log under the OS temp directory; a red step's
  * log tail is printed under the table. Exit code is 1 if any step failed.
  */
@@ -140,14 +150,58 @@ function formatDuration(seconds) {
   return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
+const keepGoing = flags.has('--keep-going');
+
+/** Why a heading is not worth running after the results so far, or null. */
+function skipReason(heading) {
+  if (keepGoing) return null;
+  const red = (name) => results.some((r) => r.heading === name && r.code !== 0);
+  if (red('build')) return 'build kırmızı';
+  if (heading === 'e2e') {
+    if (red('entegrasyon')) return 'entegrasyon kırmızı';
+    if (red('statik') || red('birim')) return 'statik/birim kırmızı';
+  }
+  return null;
+}
+
 const started = Date.now();
 const results = [];
 console.log(`[test-gate] headings: ${[...selected].join(', ')} — logs in ${logDir}`);
 for (const phase of PHASES) {
   const headings = phase.filter((h) => selected.has(h));
   if (headings.length === 0) continue;
-  const runs = headings.flatMap((h) => STEPS[h].map((step) => runStep(h, step)));
+  const runs = [];
+  for (const h of headings) {
+    const reason = skipReason(h);
+    if (reason) {
+      console.log(`[test-gate] ${h} ATLANDI (${reason})`);
+      for (const step of STEPS[h]) results.push({ heading: h, step: step.name, code: 0, seconds: 0, skipped: reason });
+    } else {
+      runs.push(...STEPS[h].map((step) => runStep(h, step)));
+    }
+  }
   results.push(...(await Promise.all(runs)));
+}
+
+/**
+ * `@siyahtus/api:test:integration:  FAIL  test/integration/x.test.ts > …` → one re-run command per
+ * package. Colour codes are stripped first; the same file listed twice (several tests) is kept once.
+ */
+function rerunHints(log) {
+  const byPackage = new Map();
+  const text = readFileSync(log, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^(?:(@siyahtus\/[\w-]+):[\w:-]+:\s+)?FAIL\s+(\S+\.test\.tsx?)/.exec(line.trim()) ??
+      /^(@siyahtus\/[\w-]+):[\w:-]+:\s+FAIL\s+(\S+\.test\.tsx?)/.exec(line.trim());
+    if (!m) continue;
+    const pkg = m[1] ?? '@siyahtus/api';
+    if (!byPackage.has(pkg)) byPackage.set(pkg, new Set());
+    byPackage.get(pkg).add(m[2]);
+  }
+  return [...byPackage].map(
+    ([pkg, files]) =>
+      `pnpm --filter ${pkg} exec tsx scripts/with-test-datastores.ts vitest run ${[...files].join(' ')}`,
+  );
 }
 
 const total = Math.round((Date.now() - started) / 1000);
@@ -158,8 +212,8 @@ console.log('');
 console.log('══════════════ test-gate ══════════════');
 for (const r of results) {
   const label = `${r.heading} › ${r.step}`.padEnd(width);
-  const verdict = r.code === 0 ? 'OK  ' : `RED (exit ${r.code})`;
-  console.log(`  ${label}  ${verdict}  ${formatDuration(r.seconds).padStart(7)}`);
+  const verdict = r.skipped ? `ATLANDI (${r.skipped})` : r.code === 0 ? 'OK  ' : `RED (exit ${r.code})`;
+  console.log(`  ${label}  ${verdict}  ${r.skipped ? '' : formatDuration(r.seconds).padStart(7)}`);
 }
 console.log(
   `  ${'toplam (duvar saati)'.padEnd(width)}        ${formatDuration(total).padStart(7)}`,
@@ -171,6 +225,14 @@ for (const r of failed) {
   console.log('');
   console.log(`----- ${r.heading} › ${r.step}: last 80 lines of ${r.log} -----`);
   console.log(lines.slice(-80).join('\n'));
+}
+
+const hints = failed.flatMap((r) => (r.heading === 'birim' || r.heading === 'entegrasyon' ? rerunHints(r.log) : []));
+if (hints.length > 0) {
+  console.log('');
+  console.log('----- Kırmızı dosyaları tek tek yeniden koş (özel veritabanıyla; tam kapıyı beklemeden) -----');
+  for (const h of [...new Set(hints)]) console.log(`  ${h}`);
+  console.log('  Hepsi yeşilse kapıyı yeniden başlat; e2e yalnız o koşuda ve yalnız entegrasyon yeşilse koşar.');
 }
 
 process.exitCode = failed.length === 0 ? 0 : 1;

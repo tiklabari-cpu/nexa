@@ -112,6 +112,11 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   akışın spec'i koşulur (`pnpm test:e2e --shards=1 <spec>`, ~2 dk). e2e'nin tamamı ve tam kapı
   **kapanışta bir kez** koşulur; DoD kanıtı o koşudur. Gerekçe: son 30 görevde süre %36'sı e2e'nin
   tamamına gitti (görev başına ~4 tam koşu), kapının 62 koşusunun 44'ü `--force` ileydi.
+  **KURAL — kırmızı kapı e2e koşmaz (2026-10-16):** `build` kırmızıysa hiçbir şey koşmaz;
+  `statik`/`birim`/`entegrasyon` kırmızıysa e2e ATLANIR (tabloda `ATLANDI`). Entegrasyon, statik/birim
+  kırmızıyken de koşar (bağımsız bilgi). `--keep-going` eski "hepsini koş" davranışıdır. Gate,
+  kırmızı birim/entegrasyon dosyaları için tek dosyalık yeniden-koşma komutunu yazar; önce onu
+  yeşile çevir, sonra kapıyı yeniden başlat.
 - **e2e parçalı koşar (tm 260):** `pnpm -w test:e2e` = `apps/e2e/scripts/run-e2e-sharded.mjs`;
   her parça kendi yığınında ve portlarında. Parça sayısı `--shards=N` / `SIYAHTUS_E2E_SHARDS`.
   Kapı için **son satırlar** okunur: parça satırları, `Tests: …` ve `verdict: GREEN|RED`; exit 1 =

@@ -106,6 +106,10 @@ bekle** (`TaskOutput` block=true ya da log'da çıkış işaretini bekleyen ön 
 **KURAL:** Ara doğrulamada e2e'nin tamamını değil yalnız ilgili spec'i koş
 (`pnpm test:e2e --shards=1 <spec>`); kapıyı `--force` olmadan koş. Tam e2e + tam kapı kapanışta
 bir kez koşulur ve DoD kanıtı odur. Ayrıntı: CONVENTIONS §1.3.
+**Kapı kırmızıysa e2e koşmaz** (`pnpm test:gate --e2e` entegrasyon/birim/statik kırmızıyken e2e'yi
+ATLAR; `--keep-going` eski davranıştır, gerekçesiz kullanma). Kapı sonunda kırmızı dosyalar için
+yazdığı `with-test-datastores.ts vitest run <dosya>` satırını koş, yeşile çevir, ancak sonra kapıyı
+yeniden başlat — tam kapıyı kırmızıyı aramak için tekrar tekrar koşma (tm 289.5: 4 kapı, ~105 dk).
 Sıranı bitirmek pencerenin sonudur: `-p` oturumu kapanır, arka plandaki koşu onunla ölür, bildirim
 ASLA gelmez, kapanış (§3) çalışmaz ve döngü bunu `blocked` sayar. (Görülen vaka: tm 93.3 — kod
 bitmişti, iki pencere de "bildirim bekleyeyim" deyip sırasını bitirdiği için öldü.)

@@ -137,6 +137,43 @@ export const customers: Messages = {
   'customers.detail.saving': 'Saving…',
   'customers.detail.saveChanges': 'Save changes',
 
+  // Member recognition — MemberIdentity.tsx (ID-03 · K4)
+  'customers.identity.matches.heading': 'Possible matches',
+  'customers.identity.matches.unverified': 'unverified',
+  'customers.identity.matches.hint':
+    'Other records with the same username or email typed into the pre-chat form. Anyone can type these — ask before you link.',
+  'customers.identity.matches.sameUsername': 'Same username',
+  'customers.identity.matches.sameEmail': 'Same email',
+  'customers.identity.matches.linked': 'Linked',
+  'customers.identity.open': 'Open record',
+  'customers.identity.openNamed': 'Open record: {name}',
+  'customers.identity.link': 'Link as same person',
+  'customers.identity.linkConfirm.title': 'Link {name} to {current} as the same person?',
+  'customers.identity.linkConfirm.description':
+    'Agents will see both records’ conversations together. The AI keeps answering each record from its own conversations only. You can undo this.',
+  'customers.identity.linkConfirm.confirm': 'Link records',
+  'customers.identity.linkConfirm.failure': 'The records could not be linked.',
+  'customers.identity.links.heading': 'Same person — linked records',
+  'customers.identity.links.hint':
+    'Confirmed by an agent. Only this view joins the records; the AI does not.',
+  'customers.identity.links.linkedOn': 'Linked {date}',
+  'customers.identity.links.noConversations': 'No conversations on this record.',
+  'customers.identity.unlink': 'Unlink',
+  'customers.identity.unlinkConfirm.title': 'Unlink {name}?',
+  'customers.identity.unlinkConfirm.description':
+    'The two records’ histories will show apart again. Nothing is deleted.',
+  'customers.identity.unlinkConfirm.confirm': 'Unlink',
+  'customers.identity.unlinkConfirm.failure': 'The records could not be unlinked.',
+  'customers.identity.forget.button': 'Forget this person’s browsers',
+  'customers.identity.forget.hint':
+    'Every browser they used starts again as a new visitor. The record and its conversations stay.',
+  'customers.identity.forget.confirmTitle': 'Forget the browsers of {name}?',
+  'customers.identity.forget.confirmDescription':
+    'Each browser this person used becomes a new visitor on its next visit, and a copied member token stops working. Nothing is deleted and nobody is banned.',
+  'customers.identity.forget.confirm': 'Forget browsers',
+  'customers.identity.forget.failure': 'The browsers could not be forgotten.',
+  'customers.identity.forget.done': 'Browsers forgotten {date}.',
+
   // Shared custom-fields control — CustomFields.tsx (also used by Inbox and Settings)
   'customFields.booleanYes': 'Yes',
   'customFields.booleanNo': 'No',

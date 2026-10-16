@@ -53,6 +53,7 @@ export const audit: Messages = {
   'audit.group.webhooks': 'Webhook’lar',
   'audit.group.conversations': 'Sohbetler',
   'audit.group.tickets': 'Talepler',
+  'audit.group.customerRecords': 'Müşteri kayıtları',
   'audit.group.credentials': 'Kimlik bilgileri',
   'audit.group.data': 'Veri',
 

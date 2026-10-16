@@ -126,6 +126,43 @@ export const customers: Messages = {
   'customers.detail.saving': 'Kaydediliyor…',
   'customers.detail.saveChanges': 'Değişiklikleri kaydet',
 
+  // Üye tanıma — MemberIdentity.tsx (ID-03 · K4)
+  'customers.identity.matches.heading': 'Olası eşleşmeler',
+  'customers.identity.matches.unverified': 'doğrulanmamış',
+  'customers.identity.matches.hint':
+    'Ön sohbet formuna aynı kullanıcı adını ya da e-postayı yazmış diğer kayıtlar. Bunları herkes yazabilir — bağlamadan önce sorun.',
+  'customers.identity.matches.sameUsername': 'Aynı kullanıcı adı',
+  'customers.identity.matches.sameEmail': 'Aynı e-posta',
+  'customers.identity.matches.linked': 'Bağlı',
+  'customers.identity.open': 'Kaydı aç',
+  'customers.identity.openNamed': 'Kaydı aç: {name}',
+  'customers.identity.link': 'Aynı kişi olarak bağla',
+  'customers.identity.linkConfirm.title': '{name} ile {current} aynı kişi olarak bağlansın mı?',
+  'customers.identity.linkConfirm.description':
+    'Temsilciler iki kaydın sohbetlerini birlikte görür. AI her kayda yalnız kendi sohbetlerinden yanıt vermeye devam eder. Bunu geri alabilirsiniz.',
+  'customers.identity.linkConfirm.confirm': 'Kayıtları bağla',
+  'customers.identity.linkConfirm.failure': 'Kayıtlar bağlanamadı.',
+  'customers.identity.links.heading': 'Aynı kişi — bağlı kayıtlar',
+  'customers.identity.links.hint':
+    'Bir temsilci onayladı. Kayıtları yalnız bu görünüm birleştirir; AI birleştirmez.',
+  'customers.identity.links.linkedOn': 'Bağlandı: {date}',
+  'customers.identity.links.noConversations': 'Bu kayıtta sohbet yok.',
+  'customers.identity.unlink': 'Bağı kaldır',
+  'customers.identity.unlinkConfirm.title': '{name} ile bağ kaldırılsın mı?',
+  'customers.identity.unlinkConfirm.description':
+    'İki kaydın geçmişi yeniden ayrı görünür. Hiçbir şey silinmez.',
+  'customers.identity.unlinkConfirm.confirm': 'Bağı kaldır',
+  'customers.identity.unlinkConfirm.failure': 'Bağ kaldırılamadı.',
+  'customers.identity.forget.button': 'Bu kişinin tarayıcılarını unut',
+  'customers.identity.forget.hint':
+    'Kullandığı her tarayıcı yeni ziyaretçi olarak başlar. Kayıt ve sohbetleri kalır.',
+  'customers.identity.forget.confirmTitle': '{name} kişisinin tarayıcıları unutulsun mu?',
+  'customers.identity.forget.confirmDescription':
+    'Bu kişinin kullandığı her tarayıcı bir sonraki ziyarette yeni ziyaretçi olur ve kopyalanmış üye tokenı çalışmaz. Hiçbir şey silinmez, kimse engellenmez.',
+  'customers.identity.forget.confirm': 'Tarayıcıları unut',
+  'customers.identity.forget.failure': 'Tarayıcılar unutulamadı.',
+  'customers.identity.forget.done': 'Tarayıcılar unutuldu: {date}.',
+
   // Shared custom-fields control — CustomFields.tsx (also used by Inbox and Settings)
   'customFields.booleanYes': 'Evet',
   'customFields.booleanNo': 'Hayır',

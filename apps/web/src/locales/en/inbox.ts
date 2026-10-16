@@ -235,6 +235,8 @@ export const inbox: Messages = {
   'inbox.details.assign.offline': 'That teammate is offline.',
   'inbox.details.row.queue': 'Queue',
   'inbox.details.row.started': 'Started',
+  'inbox.details.possibleMatches.hint':
+    'Same username or email as another record. Anyone can type these — ask, then link on the customer’s profile.',
   'inbox.details.section.tags': 'Tags',
   'inbox.details.tags.empty': 'No tags yet.',
   'inbox.details.tags.remove': 'Remove tag {tag}',

@@ -622,6 +622,9 @@ describe('banning a customer', () => {
           custom_fields: [],
         };
       }
+      // The profile also asks who else Ada may be (ID-03): nobody.
+      if (/\/customers\/C1\/possible-matches$/.test(path)) return { items: [], enabled: true };
+      if (/\/customers\/C1\/links$/.test(path)) return { items: [] };
       if (path.startsWith('/customers')) return { items: [summary(banned)], total: 1 };
       return undefined;
     });

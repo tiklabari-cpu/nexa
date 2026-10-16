@@ -340,13 +340,6 @@ const TRACKED = [
     owner: 'tm 287.5',
     reason: "forgetting every returning visitor at once; the button is on 287.5's screen.",
   },
-  {
-    op: 'POST /customers/{customerId}/revoke-member-tokens',
-    owner: 'tm 287.4',
-    reason:
-      "forgetting one member's browsers; the action sits beside the possible matches and " +
-      "links on the customer's side, which 287.4 builds.",
-  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

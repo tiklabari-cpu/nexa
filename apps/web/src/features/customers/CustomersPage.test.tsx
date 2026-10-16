@@ -201,6 +201,13 @@ describe('paging (P5-PAGE-e)', () => {
       if (/\/customers\/C3$/.test(url)) {
         return Promise.resolve(jsonResponse(customerDetail('C3', { name: 'Robin Lee' })));
       }
+      // The open profile also asks who else Robin may be (ID-03): nobody.
+      if (/\/customers\/C3\/possible-matches$/.test(url)) {
+        return Promise.resolve(jsonResponse({ items: [], enabled: true }));
+      }
+      if (/\/customers\/C3\/links$/.test(url)) {
+        return Promise.resolve(jsonResponse({ items: [] }));
+      }
       if (url.includes('page_id=cursor-1')) {
         return Promise.resolve(customerPage([customer('C3', { name: 'Robin Lee' })], 3));
       }
@@ -531,5 +538,91 @@ describe('sorting (FR-MOD-03.2.3)', () => {
         ([url]) => String(url).includes('sort=name') && String(url).includes('order=asc'),
       ),
     ).toBe(true);
+  });
+});
+
+/**
+ * Member recognition (ID-03 · K4 · tm 287.4). Linking two records needs
+ * `customers:rw` *and* the admin rank (team lead and above once RL-01 lands),
+ * so the page decides `canLink` from both; and a possible match opens in the
+ * same panel, even while a search that would not list it is typed.
+ */
+describe('possible matches on the profile (ID-03)', () => {
+  function routeMira(): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn((url: string) => {
+      if (/\/customers\/C1\/possible-matches$/.test(url)) {
+        return Promise.resolve(
+          jsonResponse({
+            enabled: true,
+            items: [
+              {
+                customer: {
+                  id: 'C2',
+                  name: 'Phone Mira',
+                  username: 'mirah_92',
+                  email: null,
+                  last_activity_at: null,
+                },
+                matched_on: ['username'],
+                linked: false,
+              },
+            ],
+          }),
+        );
+      }
+      if (/\/customers\/C[12]\/(links|possible-matches)$/.test(url)) {
+        return Promise.resolve(jsonResponse({ items: [], enabled: true }));
+      }
+      if (/\/customers\/C1$/.test(url)) {
+        return Promise.resolve(jsonResponse(customerDetail('C1', { name: 'Mira Haddad' })));
+      }
+      if (/\/customers\/C2$/.test(url)) {
+        return Promise.resolve(jsonResponse(customerDetail('C2', { name: 'Phone Mira' })));
+      }
+      return Promise.resolve(
+        customerPage(
+          [customer('C1', { name: 'Mira Haddad' }), customer('C2', { name: 'Phone Mira' })],
+          2,
+        ),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  function signInAs(role: string, scopes: string[]): void {
+    useAuth.setState((state) => ({ ...state, agent: { ...state.agent!, role, scopes } }));
+  }
+
+  it('offers the link to the admin rank holding customers:rw', async () => {
+    signInAs('admin', ['customers:rw']);
+    routeMira();
+    renderPage('/app/customers?customer=C1');
+
+    expect(await screen.findByRole('button', { name: 'Link as same person' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['an agent, even holding customers:rw', 'agent', ['customers:rw']],
+    ['an owner who may only read customers', 'owner', ['customers:ro']],
+  ])('shows %s the match but no link', async (_who, role, scopes) => {
+    signInAs(role, scopes);
+    routeMira();
+    renderPage('/app/customers?customer=C1');
+
+    expect(await screen.findByText('Same username')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Link as same person' })).not.toBeInTheDocument();
+  });
+
+  it('opens a match in the panel', async () => {
+    const user = userEvent.setup();
+    signInAs('agent', ['customers:ro']);
+    routeMira();
+    renderPage('/app/customers?customer=C1');
+
+    await user.click(await screen.findByRole('button', { name: 'Open record: Phone Mira' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Phone Mira', level: 2 }),
+    ).toBeInTheDocument();
   });
 });

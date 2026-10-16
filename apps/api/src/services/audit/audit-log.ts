@@ -400,6 +400,16 @@ export const AUDIT_ACTIONS = [
   // and the moderator's free-text reason are deliberately not copied in.
   'customer.banned',
   'customer.unbanned',
+  // An agent confirmed that two customer records are the same person, or
+  // undid that (ID-03 · K4 · tm 287.4). Recorded because a link puts one
+  // record's conversations in front of whoever opens the other — a mistaken
+  // one shows a stranger's history to the agent serving them — and "who said
+  // these two were the same, and when" is what a reader of the trail asks
+  // after one. Metadata is the other record's id only: never the username or
+  // e-mail the agent judged by, which the visitor typed and the link exists to
+  // keep from meaning anything on its own.
+  'customer.identity_linked',
+  'customer.identity_unlinked',
   // External connections
   //
   // A marketplace integration was connected (FR-MOD-09.1) — the OAuth grant

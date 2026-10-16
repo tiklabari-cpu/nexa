@@ -9,6 +9,11 @@
  * behind a confirmation — the `Sandbox.tsx` destructive-confirmation pattern.
  * It sits beside the ban button on purpose and is worded to say what separates
  * them: a ban can be lifted and keeps the history; this deletes it.
+ *
+ * Member recognition (ID-03 · K4 · tm 287.4) adds three things from
+ * `MemberIdentity.tsx`: the unverified possible matches, the records an agent
+ * linked as the same person with their conversations, and forgetting this
+ * person's browsers.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -23,6 +28,7 @@ import { formatDate } from '../../lib/format.js';
 import { email, FieldError, optional, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { CustomFields } from '../custom-fields/CustomFields.js';
+import { ForgetBrowsers, LinkedRecordsCard, PossibleMatchesCard } from './MemberIdentity.js';
 import type { CustomerDetail } from './types.js';
 
 interface Props {
@@ -31,6 +37,13 @@ interface Props {
   canBan: boolean;
   /** `customers.erase:rw` — narrower than `canEdit`, and never implied by it. */
   canErase: boolean;
+  /**
+   * Linking two records as one person: `customers:rw` and the admin rank
+   * (team lead and above once RL-01 lands — ID-03-S4). Narrower than `canEdit`.
+   */
+  canLink?: boolean;
+  /** Show another customer here — a possible match or a linked record. */
+  onOpen?: (id: string) => void;
   onChanged: () => void;
   /** Returns the request's promise when there is one, so a confirmation can wait on it. */
   onBanToggle: (id: string, banned: boolean) => unknown;
@@ -47,6 +60,8 @@ export function CustomerDetailPanel({
   canEdit,
   canBan,
   canErase,
+  canLink = false,
+  onOpen = () => {},
   onChanged,
   onBanToggle,
   banPending,
@@ -197,8 +212,19 @@ export function CustomerDetailPanel({
           </div>
         )}
 
+        {/* `customers:rw`, the route's own gate — the same people who may edit. */}
+        {canEdit && <ForgetBrowsers customerId={customer.id} customerName={customer.name} />}
+
         {canErase && <EraseCustomer customerId={customer.id} onErased={onErased} />}
       </Card>
+
+      <PossibleMatchesCard
+        key={`matches-${customer.id}`}
+        customerId={customer.id}
+        customerName={customer.name}
+        canLink={canLink}
+        onOpen={onOpen}
+      />
 
       {customer.custom_fields.length > 0 && (
         <Card>
@@ -297,6 +323,13 @@ export function CustomerDetailPanel({
           </ul>
         )}
       </Card>
+
+      <LinkedRecordsCard
+        key={`links-${customer.id}`}
+        customerId={customer.id}
+        canLink={canLink}
+        onOpen={onOpen}
+      />
 
       <Card>
         <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">

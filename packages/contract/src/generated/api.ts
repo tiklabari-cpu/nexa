@@ -2140,6 +2140,101 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customers/{customerId}/possible-matches': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Other records that may be the same person
+     * @description Other customers of this organization with the same pre-chat username
+     *     (trimmed and case-folded) or the same e-mail as this one — at most ten,
+     *     most recently active first (ID-03 · K4).
+     *
+     *     **Unverified.** The visitor typed both, so a match is a question for the
+     *     agent, never an answer: nothing here joins two records, and the AI never
+     *     sees this list. When the workspace turned possible matches off,
+     *     `enabled` is false and the list is empty.
+     *
+     *     `customers:ro` — every agent sees them; linking needs more.
+     */
+    get: operations['listCustomerPossibleMatches'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customers/{customerId}/links': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Records confirmed as the same person
+     * @description The records an agent has linked to this one, most recently linked first —
+     *     what the agent's merged history view reads (ID-03 · K4). A link that was
+     *     undone is not listed. `customers:ro`.
+     */
+    get: operations['listCustomerIdentityLinks'];
+    put?: never;
+    /**
+     * Confirm that another record is the same person
+     * @description Links the two records for the agent's history view only. The day's
+     *     conversation (ID-02) and the AI's memory stay with each record's own
+     *     customer number, so nothing from the linked record reaches the AI
+     *     (ID-03 · K4).
+     *
+     *     A new link answers 201; linking a pair that is already linked changes
+     *     nothing and answers 200. Linking a record to itself is a 400; a customer
+     *     of another organization is a 404, whichever of the two it is.
+     *
+     *     Team lead and above: `customers:rw` plus `minimumRole: admin` until the
+     *     RL-01 role set adds the team lead. Writes `customer.identity_linked` to
+     *     the audit trail.
+     */
+    post: operations['linkCustomerIdentity'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customers/{customerId}/links/{linkedCustomerId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+        linkedCustomerId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Undo a link
+     * @description Undoes the confirmation; the two records' histories show apart again.
+     *     Either record may be named first. Same permission as linking; writes
+     *     `customer.identity_unlinked`. A 404 when the two are not linked.
+     */
+    delete: operations['unlinkCustomerIdentity'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/traffic': {
     parameters: {
       query?: never;
@@ -17214,6 +17309,123 @@ export interface operations {
         content: {
           'application/json': components['schemas']['MemberTokenRevocation'];
         };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCustomerPossibleMatches: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The possible matches */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PossibleMatchList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCustomerIdentityLinks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The linked records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerIdentityLinkList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  linkCustomerIdentity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CustomerIdentityLinkInput'];
+      };
+    };
+    responses: {
+      /** @description Already linked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerIdentityLink'];
+        };
+      };
+      /** @description Linked */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerIdentityLink'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  unlinkCustomerIdentity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+        linkedCustomerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Unlinked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];

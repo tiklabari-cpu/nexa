@@ -82,6 +82,8 @@ export const auditLabels: Messages = {
   'audit.action.chat.message_edited': 'Sohbet mesajı düzenlendi',
   'audit.action.customer.banned': 'Müşteri engellendi',
   'audit.action.customer.unbanned': 'Müşterinin engeli kaldırıldı',
+  'audit.action.customer.identity_linked': 'Müşteri kayıtları aynı kişi olarak bağlandı',
+  'audit.action.customer.identity_unlinked': 'Müşteri kayıtlarının bağı kaldırıldı',
   'audit.action.app.connected': 'Uygulama bağlandı',
   'audit.action.channel.connected': 'Kanal bağlandı',
   'audit.action.channel.disconnected': 'Kanal bağlantısı kesildi',

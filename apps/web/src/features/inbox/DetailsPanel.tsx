@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, Modal, Panel, PanelSection } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
@@ -8,6 +9,11 @@ import { useDeployment } from '../../lib/deployment.js';
 import { liveDataApps } from '../../lib/live-apps.js';
 import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { formatDateTime, formatDay, formatTime } from '../../lib/format.js';
+import {
+  matchedOnLabel,
+  possibleMatchesKey,
+  type PossibleMatchList,
+} from '../customers/MemberIdentity.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
 import type { ChatDetail } from './types.js';
@@ -285,6 +291,8 @@ export function DetailsPanel({
             </ol>
           </PanelSection>
         )}
+
+        <PossibleMatchesSection customerId={chat.customer_id} />
 
         <PanelSection title={t('inbox.details.section.tags')}>
           {tags.length === 0 ? (
@@ -688,6 +696,54 @@ function TakeoverModal({
         </button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Other records this visitor may be (ID-03 · K4 · tm 287.4) — the same
+ * pre-chat username or e-mail as someone this workspace already knows. Shown
+ * while the agent is talking to them, because that is when "are you the Mira
+ * who wrote last week?" can be asked; unverified, because anyone can type a
+ * name. Linking is done on the customer's profile, where the confirmation and
+ * the undo live — this only points there. Absent when there is nothing to
+ * show, when the workspace turned matches off, or when the caller may not read
+ * customers.
+ */
+function PossibleMatchesSection({ customerId }: { customerId: string }): ReactElement | null {
+  const api = useApiClient();
+  const t = useTranslate();
+  const matches = useQuery({
+    queryKey: possibleMatchesKey(customerId),
+    queryFn: () => api.get<PossibleMatchList>(`/customers/${customerId}/possible-matches`),
+    staleTime: 60_000,
+  });
+  const items = matches.data?.enabled === true ? matches.data.items : [];
+  if (items.length === 0) return null;
+
+  return (
+    <PanelSection
+      title={`${t('customers.identity.matches.heading')} (${t('customers.identity.matches.unverified')})`}
+    >
+      <p className="text-2xs text-content-tertiary">{t('inbox.details.possibleMatches.hint')}</p>
+      <ul className="flex flex-col gap-2">
+        {items.map(({ customer, matched_on, linked }) => (
+          <li key={customer.id} className="flex flex-col gap-0.5 text-xs">
+            <Link
+              to={`/app/customers?customer=${encodeURIComponent(customer.id)}`}
+              className="truncate text-content-brand underline underline-offset-2"
+            >
+              {customer.name ?? t('customers.detail.unnamedVisitor')}
+            </Link>
+            <span className="text-2xs text-content-tertiary">
+              {[
+                ...matched_on.map((field) => t(matchedOnLabel(field))),
+                ...(linked ? [t('customers.identity.matches.linked')] : []),
+              ].join(' · ')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </PanelSection>
   );
 }
 

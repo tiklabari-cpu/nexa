@@ -81,6 +81,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/customers/CustomerDetailPanel.tsx',
   'src/features/customers/CustomersFilters.tsx',
   'src/features/customers/CustomersTabs.tsx',
+  'src/features/customers/MemberIdentity.tsx',
   'src/features/custom-fields/CustomFields.tsx',
   'src/features/traffic/TrafficPage.tsx',
   'src/features/traffic/TrafficFilters.tsx',

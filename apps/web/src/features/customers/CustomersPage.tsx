@@ -21,6 +21,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { countryFlag, formatCount, formatDate } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { usePagedQuery } from '../../lib/paged-query.js';
+import { roleAtLeast } from '../team/RoleMenu.js';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
 import { CustomersFilters } from './CustomersFilters.js';
 import {
@@ -78,6 +79,7 @@ export function CustomersPage(): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  const role = useAuth((s) => s.agent?.role ?? null);
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -182,6 +184,10 @@ export function CustomersPage(): ReactElement {
   // "erişim ≠ silme"): `customers:rw` does not expand to this scope, and the
   // endpoint refuses it on top of a `minimumRole: admin` gate.
   const canErase = scopes.includes('customers.erase:rw');
+  // Linking two records as one person (ID-03 · K4): the route asks for
+  // `customers:rw` and the admin rank — team lead and above once RL-01 adds the
+  // role (ID-03-S4) — so an agent never sees a button that would be refused.
+  const canLink = canEdit && roleAtLeast(role, 'admin');
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -389,6 +395,16 @@ export function CustomersPage(): ReactElement {
             canEdit={canEdit}
             canBan={canBan}
             canErase={canErase}
+            canLink={canLink}
+            onOpen={(id) => {
+              // Everyone's segment and no search, so the record is on the list
+              // the selection is validated against (a match rarely shares the
+              // name being searched for).
+              setSegment('all');
+              setSearch('');
+              setDebounced('');
+              setSelectedId(id);
+            }}
             onChanged={invalidate}
             // The promise keeps the ban confirmation pending until the answer; a
             // refusal is held by the mutation and shown in the panel (`banError`).

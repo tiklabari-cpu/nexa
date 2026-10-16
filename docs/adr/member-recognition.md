@@ -1,6 +1,6 @@
 # Üye tanıma — imzalı üye tokenı, iptal listesi, olası eşleşme ve ajan onaylı bağlama (ID-03 · K4)
 
-- **Görev:** tm 287 (MEMBER-TOKEN). Bu kayıt tm 287.1 (şema + sözleşme) ile açıldı · PLAN.md §D240; tm 287.2 (token üretimi/doğrulaması, geçiş, rotasyon, iptal) §8'de · PLAN.md §D241; tm 287.3 (widget saklama, kuruluş başına çerez, çıkış) §9'da · PLAN.md §D242
+- **Görev:** tm 287 (MEMBER-TOKEN). Bu kayıt tm 287.1 (şema + sözleşme) ile açıldı · PLAN.md §D240; tm 287.2 (token üretimi/doğrulaması, geçiş, rotasyon, iptal) §8'de · PLAN.md §D241; tm 287.3 (widget saklama, kuruluş başına çerez, çıkış) §9'da · PLAN.md §D242; tm 287.4 (olası eşleşmeler, ajan onaylı bağlama, tarayıcıları unut düğmesi) §10'da · PLAN.md §D243
 - **Tarih:** 2026-10-15
 - **Durum:** Kabul edildi — sahip kararı **K4** ("Token'ı bizim widget'ımız üretir (imzalı, çerez/localStorage'da saklanır); widget geri gelişte okuyup sunucuda doğrular … Başka cihazdan gelişte ajan onayı yolu geçerli", `SiyahTus-Analiz/04-gerekceler-ve-sorular.md` Karar kaydı K4 ve "Kararların maddelere etkisi"). Varsayımlar: **K5** (AI yalnız konu düzeyinde hatırlatır), **ID-03-S4** (ajan onaylı bağlama Ekip Lideri ve üstü; RL-01 gelene kadar admin ve üstü).
 - **Değiştirdiği karar:** `05-uygulama-rehberi.md` ID-03'ün "operatörün imzaladığı `user_hash`" yolu. K4 ile token'ı operatör değil SiyahTuş widget'ı üretir; operatör imzası F2'ye kaldı (tm 388, deferred) ve geldiğinde aynı doğrulama altyapısına ikinci giriş olur.
@@ -181,3 +181,43 @@ Bölüm (partition) kuruluş başına değil, **gömülen site** başınadır. B
 - API: `src/routes/auth.ts` (kuruluş başına çerez, `DELETE`), `src/lib/cookie.ts` (`cookieNames`).
 - Widget: `src/api.ts` (`credentials: 'include'`, kuruluş başına anahtarlar, kopya silme, paylaşılan yuvanın taşınması, `forget`), `src/widget.ts` (`logout`, kuruluş başına dönen ziyaretçi), `src/loader.ts` (Promise, onay, çerçeveyi yeniden açma).
 - Testler: `member-token.test.ts` (+4: kuruluş başına çerez ×2, `DELETE` ×2), `production-boot.test.ts` (+1 CORS), `member-recognition-schema.test.ts` (kontrat), birim `cookie.test.ts` (+2), types (+3), widget `api.member.test.ts` (14), `widget.logout.test.ts` (4), `loader.test.ts` (+5), e2e `widget.spec.ts` (+2).
+
+## 10. Olası eşleşmeler ve ajan onaylı bağlama (tm 287.4)
+
+### 10.1 Uçlar
+
+`routes/member-recognition.ts` + `services/customers/customer-identity.ts`; §4'teki üç yol `openapi.yaml` `paths:` altına bağlandı (231 → 234 yol, mobil parity yorumla).
+
+- **`GET /customers/{id}/possible-matches`** (`customers:ro` — her ajan): aynı kuruluşta katlanmış kullanıcı adı (`username_normalized`) ya da e-postası (`citext`, büyük/küçük harf duyarsız) eşit başka müşteriler; kaydın kendisi hariç, en son aktif önce, en çok `POSSIBLE_MATCH_LIMIT` (10). Boş kullanıcı adı (`'   '` → `''`) ve boş e-posta kimseyle eşleşmez. Her satırda `matched_on` (`username` / `email`) ve `linked`. Lisansın anahtarı kapalıysa `{items: [], enabled: false}` — sorgu hiç koşmaz.
+- **`GET /customers/{id}/links`** (`customers:ro`): canlı bağlar, en son bağlanan önce; geri alınmış bağ listelenmez.
+- **`POST /customers/{id}/links`** (`customers:rw` + `minimumRole: admin`): yeni bağ 201 + `customer.identity_linked`; zaten canlı bağ (hangi sırayla adlandırılırsa) 200, hiçbir şey yazılmaz; geri alınmış çift yeniden bağlanınca yeni karar sayılır (201, yeni bağlayan, yeni denetim kaydı — satır güncellenir, uygulama rolü silemez). Kendine bağ (büyük/küçük harf farkıyla da) 400.
+- **`DELETE /customers/{id}/links/{linkedId}`** (bağlamayla aynı yetki): 204 + `customer.identity_unlinked`; satır kalır, `unlinked_by/at` dolar; bağlı değilse 404.
+- **Kiracı:** iki numaradan hangisi başka kuruluşunsa aynı 404 (hangisinin var olduğu söylenmez); RLS `WITH CHECK` zaten kuruluş dışı bağı yazdırmaz. Denetim kaydı yalnız öteki kaydın numarasını taşır (`linked_customer_id`) — ajanın dayandığı kullanıcı adı / e-posta asla.
+
+### 10.2 Bağ yalnız ajan görünümünü birleştirir — AI dışı
+
+Günün sohbeti (ID-02) ve AI hafızası (AI-02, K5) müşteri numarasıyla okunur; hiçbiri `customer_identity_links`'i okumaz. İki koruma: entegrasyon testi bağlı kaydın konuşmasındaki gizli metnin öteki kaydın ziyaretçisine yanıt veren modelin istemine girmediğini gösterir (`customer-identity-links.test.ts`); birim testi `services/ai`, `services/chat`, `services/bots`, `routes/customer.ts`, `routes/copilot.ts` kaynaklarında bağ tablosuna/servisine hiçbir başvuru olmadığını tarar (`customer-identity.test.ts`). **tm 292 (AI-02)** gün içi hafızayı `listDayConnections` ile müşteri numarasından kurar; bağlı kayıtları katmak isteyen bir değişiklik önce bu testi ve bu ADR'yi değiştirmek zorunda.
+
+### 10.3 Ölçüm: e-posta yarısı RLS altında indeks koşulu olamaz
+
+Arama iki yarının `UNION`'ıdır (tek `OR`, iki yarısı da indeks koşulu olamayınca kuruluşun bütün müşterilerine filtre olurdu). Kullanıcı adı yarısı `texteq` (leakproof) — `customers_organization_id_username_normalized_idx` indeks koşulunda (`siyahtus_app` olarak EXPLAIN, testte sabit). **E-posta yarısı `citext_eq` — leakproof değil** (`pg_proc.proleakproof = false`): RLS güvenlik bariyeri onu indeks koşuluna indirmez; `(organization_id, email)` indeksi yalnız kuruluşu daraltır, e-posta filtre olur ve kuruluşun her müşterisi okunur. Bugün `email-inbound.ts`'in müşteri araması da aynı bedeli öder; pilot ölçeğinde önemsiz. Bir kiracı büyüdüğünde çare kullanıcı adının emsali: üretilmiş, katlanmış bir `text` kolonu (`lower(email::text)`, `GENERATED ALWAYS … STORED`) + kısmi indeks (ayrı genişletme göçü; tabloyu yeniden yazar). Bu görevde yapılmadı — kapsam dışı bir şema değişikliği olurdu.
+
+### 10.4 Panel
+
+- **Müşteriler › profil** (`MemberIdentity.tsx`): "Olası eşleşmeler (doğrulanmamış)" kartı — eşleşme yoksa ya da anahtar kapalıysa çizilmez; her satırda paylaşılan alan çipleri, "Kaydı aç", yetkiliye "Aynı kişi olarak bağla" (onay penceresi AI'ın birleştirmediğini söyler). "Aynı kişi — bağlı kayıtlar" kartı her bağlı kaydı **kendi sohbetleriyle** gösterir (birleşik geçmiş görünümü; ayrıntı sorgusu profilin kendi önbellek anahtarıyla), yetkiliye "Bağı kaldır". Ana kartta `customers:rw` sahibine "Bu kişinin tarayıcılarını unut" (`revoke-member-tokens`, onaylı) — `endpoint-ui` `TRACKED` girişi kalktı.
+- **Gelen kutusu › Ayrıntılar**: aynı sorgu, eşleşme varsa "Olası eşleşmeler (doğrulanmamış)" bölümü — her kayıt profiline bağlantı; bağlama orada yapılmaz (onay ve geri alma profilde).
+- **Yetki arayüzde de aynı:** `canLink` = `customers:rw` **ve** admin rütbesi; Ajan rolü eşleşmeyi görür, düğmeyi görmez.
+
+### 10.5 Varsayımlar
+
+- Eşleşme listesi bağlamanın tek giriş kapısı (ID-03 madde 6); kullanıcı adı/e-posta yazmamış bir üyeyi elle aranıp bağlama arayüzü yok (uç herhangi bir numarayı kabul eder; arayüz ayrı iş).
+- Bağ simetriktir ve zincirlenmez: A–B ve B–C bağlıysa A'nın profili yalnız B'yi gösterir (geçişli kapanış yok — her bağ bir ajanın tek bir kararıdır).
+- Bağlanmış kayıtlar sohbet listelerinde ve raporlarda ayrı müşteri olarak kalır (raporlar müşteri numarasıyla sayar).
+
+### 10.6 Değişen dosyalar (tm 287.4)
+
+- Kontrat: `openapi.yaml` (üç yol bağlandı), `paths/customers.yaml` (başlık), `src/generated/api.ts`; mobil `parity.test.ts` 231 → 234.
+- API: `src/services/customers/customer-identity.ts` (yeni), `src/routes/member-recognition.ts` (dört uç), `src/services/audit/audit-log.ts` (`customer.identity_linked`, `customer.identity_unlinked`).
+- Web: `features/customers/MemberIdentity.tsx` (yeni), `CustomerDetailPanel.tsx`, `CustomersPage.tsx` (`canLink`, kaydı aç), `features/inbox/DetailsPanel.tsx` (bölüm), `features/audit/AuditLogPage.tsx` ("Müşteri kayıtları" grubu), `locales/{en,tr}/{customers,inbox,audit,audit-labels}.ts`, `lib/i18n-coverage.test.ts`.
+- `scripts/audit/endpoint-ui.cjs` (`revoke-member-tokens` `TRACKED`'ten çıktı).
+- Testler: `customer-identity-links.test.ts` (16, entegrasyon), birim `customer-identity.test.ts` (2), web `MemberIdentity.test.tsx` (11), `CustomersPage.test.tsx` (+4), `DetailsPanel.possibleMatches.test.tsx` (4), e2e `customers.spec.ts` (+1); profili açan iki testin sahte `fetch`'i iki yeni okumayı açıkça yönlendirir (`CustomersPage.test.tsx`, `ConfirmTeamCustomer.test.tsx`).

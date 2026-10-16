@@ -263,6 +263,12 @@ paths:
     $ref: "./paths/customers.yaml#/customerCustomFields"
   /customers/{customerId}/revoke-member-tokens:
     $ref: "./paths/customers.yaml#/revokeMemberTokens"
+  /customers/{customerId}/possible-matches:
+    $ref: "./paths/customers.yaml#/possibleMatches"
+  /customers/{customerId}/links:
+    $ref: "./paths/customers.yaml#/identityLinks"
+  /customers/{customerId}/links/{linkedCustomerId}:
+    $ref: "./paths/customers.yaml#/identityLink"
 
   /traffic:
     $ref: "./paths/traffic.yaml#/traffic"

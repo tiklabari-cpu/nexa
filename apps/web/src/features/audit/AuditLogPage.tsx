@@ -263,6 +263,14 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     ],
   },
   {
+    // An agent's confirmation that two customer records are one person, and
+    // its undoing (ID-03 · K4): what a reader asks after a stranger's history
+    // was shown to the wrong visitor. Its own family — a link is neither a
+    // conversation nor a credential.
+    labelKey: 'audit.group.customerRecords',
+    actions: ['customer.identity_linked', 'customer.identity_unlinked'],
+  },
+  {
     labelKey: 'audit.group.credentials',
     actions: [
       'pat.created',

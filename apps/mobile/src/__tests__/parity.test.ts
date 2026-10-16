@@ -916,7 +916,13 @@ describe('module parity matrix — what is still owed', () => {
       // everyone's. Workspace security set in the web panel by admins; the app
       // has no settings screens and no customer actions of that weight, so
       // nothing here re-scopes.
-      contractEndpoints: 231,
+      // 231 -> 234 with `/customers/{customerId}/possible-matches`, `/links`
+      // and `/links/{linkedCustomerId}` (tm 287.4) — the other records a
+      // visitor may be (same typed username or e-mail, unverified) and the
+      // links an admin confirms between them, read and set in the web panel's
+      // Customers page. The app has no customer profile screen; nothing here
+      // re-scopes.
+      contractEndpoints: 234,
       scopeBoundaries: 1,
     });
   });

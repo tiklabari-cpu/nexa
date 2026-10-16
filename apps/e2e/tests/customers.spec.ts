@@ -6,7 +6,15 @@
  * read their history and act on it — and whether the page a visitor wrote from
  * survives all the way from the widget to the panel an agent reads.
  */
-import { expect, test, openWidget, PRECHAT_VISITOR, visitorSends } from './fixtures.js';
+import {
+  expect,
+  test,
+  introduceVisitor,
+  openWidget,
+  PRECHAT_VISITOR,
+  visitorSends,
+  widgetFrame,
+} from './fixtures.js';
 
 test.describe('customers', () => {
   test('lists people with conversation counts the stored column would get wrong', async ({
@@ -123,6 +131,83 @@ test.describe('customers', () => {
       await expect(agentPage.getByText(/demo\.html/)).toBeVisible();
     } finally {
       await visitorContext.close();
+    }
+  });
+
+  test('shows a visitor who typed a known username as a possible match, links and unlinks them (ID-03)', async ({
+    browser,
+    agentPage,
+    organizationId,
+  }) => {
+    // The same member on two devices: nothing recognises the second as the
+    // first (K4), and the username they typed again only surfaces the earlier
+    // record to the agent, unverified, until an admin links the two.
+    const stamp = Date.now().toString().slice(-6);
+    const username = `mira_${stamp}`;
+    const laptopName = `Mira Laptop ${stamp}`;
+    const phoneName = `Mira Phone ${stamp}`;
+    const contexts = [await browser.newContext(), await browser.newContext()];
+
+    try {
+      for (const [index, name] of [laptopName, phoneName].entries()) {
+        const visitor = await contexts[index]!.newPage();
+        await openWidget(visitor, organizationId);
+        const recorded = visitor.waitForResponse(
+          (response) =>
+            response.url().includes('/customer/chat/events') &&
+            response.request().method() === 'POST' &&
+            response.ok(),
+        );
+        await introduceVisitor(widgetFrame(visitor), `Hello, this is ${name}`, {
+          name,
+          // Typed differently each time — the match folds case and spaces.
+          username: index === 0 ? username : ` ${username.toUpperCase()} `,
+          email: `${username}-${index}@example.test`,
+        });
+        await recorded;
+      }
+
+      await agentPage.goto('/app/customers');
+      await agentPage.getByRole('searchbox', { name: 'Search customers' }).fill(phoneName);
+      await agentPage.getByRole('button', { name: new RegExp(phoneName) }).click();
+
+      await expect(agentPage.getByRole('heading', { name: /Possible matches/ })).toContainText(
+        'unverified',
+      );
+      await expect(agentPage.getByText('Same username', { exact: true })).toBeVisible();
+
+      await agentPage.getByRole('button', { name: 'Link as same person' }).click();
+      const linkDialog = agentPage.getByRole('dialog', {
+        name: `Link ${laptopName} to ${phoneName} as the same person?`,
+      });
+      await linkDialog.getByRole('button', { name: 'Link records' }).click();
+      await expect(linkDialog).toBeHidden();
+
+      // The merged history: the laptop's conversation now shows on the phone's
+      // profile, under the linked record.
+      await expect(agentPage.getByRole('heading', { name: /Same person/ })).toBeVisible();
+      // The match is marked linked, so it offers no second link.
+      await expect(agentPage.getByRole('button', { name: 'Link as same person' })).toHaveCount(0);
+      await expect(agentPage.getByRole('link', { name: /Conversation of/ })).toHaveCount(2);
+
+      // Undone, the histories show apart again and the match can be linked anew.
+      await agentPage.getByRole('button', { name: 'Unlink' }).click();
+      const unlinkDialog = agentPage.getByRole('dialog', { name: `Unlink ${laptopName}?` });
+      await unlinkDialog.getByRole('button', { name: 'Unlink' }).click();
+      await expect(agentPage.getByRole('heading', { name: /Same person/ })).toHaveCount(0);
+      await expect(agentPage.getByRole('button', { name: 'Link as same person' })).toBeVisible();
+
+      // The agent talking to the phone sees the match in the inbox too, and
+      // can go from there to the earlier record.
+      await agentPage.getByRole('link', { name: /Conversation of/ }).click();
+      // The inbox reads `?chat=` and drops it from the address, so the open
+      // conversation is the proof, not the URL.
+      await expect(agentPage.getByRole('heading', { name: phoneName, level: 2 })).toBeVisible();
+      await expect(agentPage.getByText('Possible matches (unverified)')).toBeVisible();
+      await agentPage.getByRole('link', { name: laptopName }).click();
+      await expect(agentPage.getByRole('heading', { name: laptopName, level: 2 })).toBeVisible();
+    } finally {
+      for (const context of contexts) await context.close();
     }
   });
 });

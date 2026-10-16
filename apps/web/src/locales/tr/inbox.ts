@@ -218,6 +218,8 @@ export const inbox: Messages = {
   'inbox.details.assign.offline': 'Bu takım arkadaşı çevrimdışı.',
   'inbox.details.row.queue': 'Sıra',
   'inbox.details.row.started': 'Başlangıç',
+  'inbox.details.possibleMatches.hint':
+    'Başka bir kayıtla aynı kullanıcı adı ya da e-posta. Bunları herkes yazabilir — sorun, sonra müşterinin profilinde bağlayın.',
   'inbox.details.section.tags': 'Etiketler',
   'inbox.details.tags.empty': 'Henüz etiket yok.',
   'inbox.details.tags.remove': '{tag} etiketini kaldır',

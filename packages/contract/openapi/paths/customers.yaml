@@ -307,11 +307,9 @@ erase:
 # customer-side doors: forgetting one member's browsers, the unverified
 # possible matches an agent is shown, and the links an agent confirms.
 #
-# `revokeMemberTokens` is served since tm 287.2 (`routes/member-recognition.ts`).
-# The possible matches and links below are NOT MOUNTED YET: tm 287.1 wrote them
-# ahead of their routes, and `openapi.yaml` `paths:` gains each one together
-# with the route that serves it (tm 287.4), because `contract-parity.test.ts`
-# refuses an operation the document promises and nothing serves.
+# All four are served by `routes/member-recognition.ts`: `revokeMemberTokens`
+# since tm 287.2, the possible matches and links since tm 287.4 (tm 287.1 wrote
+# them ahead of their routes).
 
 revokeMemberTokens:
   parameters:

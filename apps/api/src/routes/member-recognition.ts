@@ -13,6 +13,11 @@
  *   - Forgetting one member's browsers, from the customer's side. `customers:rw`
  *     — admins and above today; the Agent role reaches it when the RL-02
  *     permission matrix grants it.
+ *   - The other records a customer may be (tm 287.4): the unverified possible
+ *     matches every agent sees (`customers:ro`), and the links a team lead or
+ *     above confirms and undoes (`customers:rw` plus `minimumRole: admin` until
+ *     RL-01 adds the team lead — ID-03-S4). A link joins the agent's history
+ *     view only; see `services/customers/customer-identity.ts`.
  *
  * Licence-scoped, not brand-scoped: the member token and the key that signs it
  * are the licence's, and a member is the same person on every brand's site.
@@ -23,6 +28,7 @@ import { MEMBER_KEY_ROTATION_GRACE, MEMBER_TOKEN_TTL } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { selfAccountId } from '../services/auth/principal.js';
+import { CustomerIdentityService } from '../services/customers/customer-identity.js';
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -57,10 +63,18 @@ const rotateBody = z.object({
     .default(MEMBER_KEY_ROTATION_GRACE.defaultSeconds),
 });
 
-const customerIdSchema = z.string().uuid();
+// Lower-cased once here: a uuid is the same uuid in either case, and the link
+// table's ordered pair (and "is this the same record") compare it as a value.
+const customerIdSchema = z
+  .string()
+  .uuid()
+  .transform((id) => id.toLowerCase());
+
+const linkBody = z.object({ customer_id: customerIdSchema });
 
 export default async function memberRecognitionRoutes(app: FastifyInstance): Promise<void> {
   const members = app.memberRecognition;
+  const identities = new CustomerIdentityService();
 
   app.get(
     '/settings/member-recognition',
@@ -201,6 +215,94 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
       });
 
       return reply.send(revocation);
+    },
+  );
+
+  // --- Possible matches and links (tm 287.4) --------------------------------
+
+  app.get<{ Params: { customerId: string } }>(
+    '/customers/:customerId/possible-matches',
+    { config: { scopes: ['customers:ro', 'customers:rw'] } },
+    async (request, reply) => {
+      const customerId = parse(customerIdSchema, request.params.customerId);
+      const { licenseId } = request.tenant();
+
+      const matches = await request.withTenant((tx) =>
+        identities.possibleMatches(tx, { licenseId, customerId }),
+      );
+      // Another organization's customer reads as absent (NFR-S5).
+      if (!matches) throw ApiError.notFound('Customer not found.');
+      return reply.send(matches);
+    },
+  );
+
+  app.get<{ Params: { customerId: string } }>(
+    '/customers/:customerId/links',
+    { config: { scopes: ['customers:ro', 'customers:rw'] } },
+    async (request, reply) => {
+      const customerId = parse(customerIdSchema, request.params.customerId);
+
+      const items = await request.withTenant((tx) => identities.links(tx, customerId));
+      if (!items) throw ApiError.notFound('Customer not found.');
+      return reply.send({ items });
+    },
+  );
+
+  app.post<{ Params: { customerId: string } }>(
+    '/customers/:customerId/links',
+    { config: { scopes: ['customers:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const customerId = parse(customerIdSchema, request.params.customerId);
+      const { customer_id: otherId } = parse(linkBody, request.body);
+      if (otherId === customerId) {
+        throw ApiError.validation('customer_id: a record cannot be linked to itself.');
+      }
+      const { organizationId } = request.tenant();
+      // `minimumRole` has already required an agent principal, so there is an
+      // account to name; the column has no FK, the audit trail is the record.
+      const linkedBy = selfAccountId(request.requirePrincipal())!;
+
+      const outcome = await request.withTenant(async (tx) => {
+        const result = await identities.link(tx, { organizationId, customerId, otherId, linkedBy });
+        // Either record being another organization's is the same 404, so the
+        // answer never says which of the two ids exists (NFR-S5).
+        if (result.kind === 'not_found') throw ApiError.notFound('Customer not found.');
+        // A new decision only: confirming a link that already holds changes
+        // nothing and writes nothing. Ids only — no name, e-mail or username,
+        // which are what the visitor typed and what the agent judged by.
+        if (result.kind === 'linked') {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'customer.identity_linked',
+            target: `customer:${customerId}`,
+            metadata: { linked_customer_id: otherId },
+          });
+        }
+        return result;
+      });
+
+      return reply.code(outcome.kind === 'linked' ? 201 : 200).send(outcome.link);
+    },
+  );
+
+  app.delete<{ Params: { customerId: string; linkedCustomerId: string } }>(
+    '/customers/:customerId/links/:linkedCustomerId',
+    { config: { scopes: ['customers:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const customerId = parse(customerIdSchema, request.params.customerId);
+      const otherId = parse(customerIdSchema, request.params.linkedCustomerId);
+      const unlinkedBy = selfAccountId(request.requirePrincipal())!;
+
+      await request.withTenant(async (tx) => {
+        const undone = await identities.unlink(tx, { customerId, otherId, unlinkedBy });
+        if (!undone) throw ApiError.notFound('These records are not linked.');
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'customer.identity_unlinked',
+          target: `customer:${customerId}`,
+          metadata: { linked_customer_id: otherId },
+        });
+      });
+
+      return reply.code(204).send();
     },
   );
 }

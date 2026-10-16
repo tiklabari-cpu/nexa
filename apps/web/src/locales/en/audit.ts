@@ -60,6 +60,7 @@ export const audit: Messages = {
   'audit.group.webhooks': 'Webhooks',
   'audit.group.conversations': 'Conversations',
   'audit.group.tickets': 'Tickets',
+  'audit.group.customerRecords': 'Customer records',
   'audit.group.credentials': 'Credentials',
   'audit.group.data': 'Data',
 

@@ -1322,6 +1322,59 @@ export class ChatService {
   }
 
   /**
+   * A line only the agents see, written by the system into one connection —
+   * the AI job worker's hand-over note (tm 289.3 · ADR-11a §2.5: the AI's
+   * answer came too late, a person takes it from here).
+   *
+   * Authored by `system`, not by the AI bot: a bot-authored line in a thread
+   * with no agent in it files the chat under "AI conversations"
+   * (`listChatsInTenant`), and this note says the opposite.
+   *
+   * Writes nothing and returns null when that connection is no longer open —
+   * there is nobody left to hand the conversation to. `outbox` runs in the
+   * note's transaction ({@link EventOutbox}); the worker settles its job
+   * there, so only the claim that still holds the job leaves a note.
+   */
+  async addSystemNote(
+    tenant: TenantContext,
+    at: { chatId: string; threadId: string },
+    note: { text: string; properties: Record<string, unknown> },
+    options: { outbox?: EventOutbox } = {},
+  ): Promise<SerialisedEvent | null> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const chat = await tx.chat.findUnique({ where: { id: at.chatId }, include: chatInclude });
+      const thread = chat?.threads.find((t) => t.id === at.threadId);
+      if (!chat?.active || !thread?.active) return null;
+
+      const event = await this.#appendEvent(tx, {
+        licenseId: tenant.licenseId,
+        chatId: chat.id,
+        threadId: thread.id,
+        authorId: null,
+        authorType: 'system',
+        input: {
+          type: 'system_message',
+          text: note.text,
+          recipients: 'agents',
+          properties: note.properties,
+        },
+      });
+      await options.outbox?.(tx, {
+        tenant,
+        chatId: chat.id,
+        threadId: thread.id,
+        event,
+        openedVia: null,
+      });
+      return { event, recipients: 'agents' as const, audience: this.#audienceFor(chat) };
+    });
+    if (!result) return null;
+
+    await this.#announceEvent(tenant, result);
+    return result.event;
+  }
+
+  /**
    * Everything a committed event sets off: the push to whoever can see it, the
    * real-time board, a reply's way back out through its channel, and the
    * workspace's subscribers. Shared by `sendEvent` and a visitor's message that

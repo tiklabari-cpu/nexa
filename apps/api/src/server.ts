@@ -13,6 +13,7 @@ import logContext from './plugins/log-context.js';
 import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
 import aiBudget from './plugins/ai-budget.js';
+import aiJobs from './plugins/ai-jobs.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
@@ -498,6 +499,10 @@ export async function buildServer({
   // bot, the AI Agent and the assignee's notice. After `backgroundMail`, which
   // the notice writes to, so its drain on close runs first.
   await app.register(followUps);
+  // The durable AI job worker (tm 289.3 · ADR-11a). Idle until the customer
+  // routes hand it its handler (tm 289.5); after `database`, so its bounded
+  // drain on close runs while the pool is still open.
+  await app.register(aiJobs, { env });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
   // phase in registration order — so this is what puts the rate limiter's

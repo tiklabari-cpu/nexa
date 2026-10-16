@@ -489,8 +489,10 @@ is, roughly:
 ```
 
 "Headroom" covers the standalone job scripts (each opens a short-lived pool of its own
-when invoked) and Postgres' own `superuser_reserved_connections` (3 by default); leave
-at least 10-20 connections unclaimed by either pool.
+when invoked), the AI job worker's doorbell — one extra connection per `apps/api`
+process, outside the pool, holding `LISTEN ai_jobs` (tm 289.3, `services/ai/ai-job-wakeups.ts`)
+— and Postgres' own `superuser_reserved_connections` (3 by default); leave at least
+10-20 connections unclaimed by either pool.
 
 Set `DATABASE_POOL_SIZE` (see `.env.example`) to size both pools explicitly instead of
 leaving them at the CPU-derived default — both `apps/api` and `apps/rtm` read the same
@@ -508,7 +510,10 @@ connection may belong to a different tenant. The two advisory locks in the codeb
 use `pg_advisory_xact_lock`, the transaction-scoped variant, for the same reason — the
 session-scoped `pg_advisory_lock` would leak across whichever tenant's transaction
 happens to reuse that connection next. Nothing in the request path uses `LISTEN`/`NOTIFY`
-or a session-scoped `SET`.
+or a session-scoped `SET`. The one `LISTEN` — the AI job worker's doorbell — runs on a
+connection of its own, and is not opened at all when the runtime URL carries
+`pgbouncer=true` (transaction mode accepts a `LISTEN` and never delivers it): the worker
+then finds its jobs by its 500 ms poll alone, which it does anyway.
 
 The one incompatibility is Prisma's own prepared statements: transaction-mode pooling
 can hand two consecutive transactions on the same client different physical

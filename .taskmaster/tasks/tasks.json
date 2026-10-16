@@ -12255,7 +12255,7 @@
           "288"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-16T12:02:02.001Z",
+        "updatedAt": "2026-10-16T12:48:15.191Z",
         "subtasks": [
           {
             "id": 1,
@@ -12275,13 +12275,13 @@
             "description": "ChatService outbox kancası: iş satırı ziyaretçi mesajıyla aynı transaction'da",
             "details": "sendEvent/start isteğe bağlı aynı işlemde yazım.",
             "testStrategy": "Atomiklik testi (mesaj var ⇔ iş var).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "289.1"
             ],
             "parentId": "289",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-16T12:48:15.191Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-16T12:02:02.002Z",
+      "lastModified": "2026-10-16T12:48:15.192Z",
       "taskCount": 390,
       "completedCount": 287,
       "tags": [

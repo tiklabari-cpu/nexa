@@ -4,7 +4,7 @@
 - **Tarih:** 2026-10-14
 - **Durum:** Kabul edildi — sahip kararı **K18** ("ADR-08a ve ADR-11a ekleri — ✅ Hepsi onaylı"); GV-02 sorularının varsayılanları **GV-02-S1** (120 sn) ve **GV-02-S2** (bildirim e-postaları ikinci adımda) (`SiyahTus-Analiz/04-gerekceler-ve-sorular.md`, Karar kaydı ve § GV-02).
 - **Değiştirdiği karar:** ADR-11 (PLAN.md §0) — lafzı aynen kalır. Bu ek, ADR-11'in kapsamadığı bir şeyi tarif eder: **kaybolmaması gereken** arka plan işinin nerede durduğu. ADR tablosunun satırı değişmedi.
-- **Bağlı görev:** tm 289 DURABLE-AI-QUEUE (GV-02) — uygulamayı o yapar.
+- **Bağlı görev:** tm 289 DURABLE-AI-QUEUE (GV-02) — uygulamayı o yaptı (2026-10-16); kabul maddelerinin testleri ve "açık kalan"ların karşılığı §5'te.
 - **Kod değişikliği:** yok. Bu dosya yalnız kararı kayda geçirir.
 
 ## 1. Bağlam
@@ -51,3 +51,24 @@ GV-02 (P0) bu belleği kalıcı yapmayı istiyor: tek ev sunucusundaki pilotta h
 - `SiyahTus-Analiz/05-uygulama-rehberi.md` — "Uygulayıcı için kurallar" madde 4; § GV-02 (mevcut kod, eklenecek yerler, kodlama mantığı 1–7, kabul kriterleri).
 - `SiyahTus-Analiz/07-gorev-plani.md` — #273 Dalga 0; GV-02 → #289 (bağımlılık #273).
 - `docs/production-checklist.md` — "Known risks", kalıcı AI kuyruğu yok maddesi.
+
+## 5. Uygulama (tm 289 · 2026-10-16)
+
+Beş alt görevde: şema + RLS + `ai_jobs_claim` / `ai_jobs_settle` (289.1, §D247), outbox kancası (289.2, §D248), işçi (289.3, §D249), ziyaretçi takibinin işçiye taşınması + `/health` (289.5, §D250), kapanış (289.4, §D251). Bellek içi `FollowUps` silindi; `docs/production-checklist.md` "Known risks" maddesi kalıcı kuyruğu anlatacak biçimde yeniden yazıldı.
+
+**Kabul maddesi → onu koruyan test** (`apps/api/test/integration/`):
+
+| Kabul maddesi (GV-02)                                                                                  | Test                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zorla durdurulup başlatılan süreçte ziyaretçi cevabı bir kez alır (120 sn içinde) ya da devir + iç not | `ai-job-worker.test.ts` "a process that hung right after claiming loses the job to the restarted one…", "…older than 120 s is not answered: expired, an internal note…", "…every attempt of which died is handed to a person…"; rota üzerinden `ai-job-followups.test.ts` "a job whose process stopped mid-answer is answered once, by the next process" |
+| Aynı mesaja iki işçiyle eşzamanlı asla iki cevap                                                       | `ai-job-worker.test.ts` "two workers on one queue answer every message exactly once…", "a worker whose lease ran out cannot send…", "an answer that arrives while the handler runs is not doubled"; kural botu + AI için `ai-job-followups.test.ts` "a rule's reply is the message's one answer…"                                                        |
+| Aynı sohbette cevaplar geliş sırasıyla                                                                 | `ai-job-worker.test.ts` "two workers … in each chat in order…"; `ai-jobs-outbox.test.ts` "creates the jobs of one chat in the order its messages were written"; `visitor-follow-ups.test.ts` "answers one chat's messages one at a time, in the order they came"                                                                                         |
+| Normal yükte yazımdan iş başlangıcına p95 < 1 sn                                                       | `ai-job-worker.test.ts` "starts a job within a second of its message, p95" (`LISTEN` zili açık, 20 mesaj / 25 ms aralık; 2026-10-16 ölçümü üç koşuda p95 10–13 ms)                                                                                                                                                                                       |
+| `/health` kuyruk derinliğini ve en eski işin yaşını gösterir                                           | `ai-job-followups.test.ts` "shows an admin how many jobs wait and run, across every workspace, and how old the oldest is", "shows nobody else the queue"                                                                                                                                                                                                 |
+
+**§3 "Açık kalan" maddelerinin karşılığı:**
+
+- **Saklama / temizlik:** ayrı süpürme yok — satır thread'ine `ON DELETE CASCADE` bağlı; konuşma saklama süpürmesi ve müşteri silme kuyruk geçmişini konuşmayla birlikte götürür (§D247).
+- **Uyarı eşiği:** pilotta otomatik uyarı yok. Okuma yolu admin `/health` gövdesindeki `ai_jobs {pending, running, oldest_age_s}`; işletme kuralı `docs/production-checklist.md`'de ("an age that keeps growing means no worker is taking jobs"). Kök paneldeki sayılar 389.14'ün işi; eşikli uyarı gerekirse onu yeni bir görev ekler (§D251).
+
+**ADR'den sapmalar (her biri kendi §D'sinde):** kanca `sendEvent` / `start`'ın yanında `openOrContinueConnection`'da da var, çünkü ziyaretçi yolu ID-02'den beri oradan geçiyor (§D248). "İnsan yönlendirmesi" bugün boş bir adım; bağlantılar açılışta zaten insanlara yönlendiriliyor, "Önce AI" modu yok (§D249). Tazelik ya da kapalı bağlantı yüzünden işleyicisiz biten işte atanan kişiye bildirim gitmez; devir notu panele gerçek zamanlı düşer (§D250).

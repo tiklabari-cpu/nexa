@@ -12255,7 +12255,7 @@
           "288"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-16T16:54:41.514Z",
+        "updatedAt": "2026-10-16T16:55:52.262Z",
         "subtasks": [
           {
             "id": 1,
@@ -12303,14 +12303,14 @@
             "description": "/health metrikleri + visitor-follow-ups testlerinin uyarlanması + HANDOFF",
             "details": "Üst görev 289 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Tam kapı.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "289.3",
               "289.5"
             ],
             "parentId": "289",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-16T16:55:52.262Z"
           },
           {
             "id": 5,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-16T16:54:41.515Z",
+      "lastModified": "2026-10-16T16:55:52.262Z",
       "taskCount": 390,
       "completedCount": 287,
       "tags": [

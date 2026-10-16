@@ -116,7 +116,21 @@ export async function resetDatabase(db: PrismaClient): Promise<void> {
   if (tables.length === 0) return;
 
   const quoted = tables.map((t) => `"${t.tablename}"`).join(', ');
-  await db.$executeRawUnsafe(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`);
+  // Retried when Postgres picks the TRUNCATE as a deadlock victim (40P01). A
+  // server booting in the suite starts its AI job worker with a claim pass
+  // (`AiJobWorker.start`), and that pass takes up whatever jobs an earlier
+  // file left `pending` — `ai-jobs-outbox.test.ts` writes them without a
+  // worker. Nothing awaits the pass, so it can still be reading `events`
+  // while the first `beforeEach` truncates: two lock orders, one deadlock. The
+  // victim's statement is rolled back whole, so running it again is safe.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await db.$executeRawUnsafe(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`);
+      break;
+    } catch (error) {
+      if (attempt >= 3 || !String((error as Error).message).includes('40P01')) throw error;
+    }
+  }
   await applyLicenseIdOffset(db);
 }
 

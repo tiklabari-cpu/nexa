@@ -184,6 +184,7 @@ model License {
   aiUsageEvents          AiUsageEvent[]
   aiUsageAlerts          AiUsageAlert[]
   aiUsageAlertRecipients AiUsageAlertRecipient[]
+  aiDecisionLogs         AiDecisionLog[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -445,6 +446,7 @@ model Customer {
   customFieldValues CustomFieldValue[]
   goalAchievements  GoalAchievement[]
   trackedSales      TrackedSale[]
+  aiDecisionLogs    AiDecisionLog[]
 
   memberTokenRevocations MemberTokenRevocation[]
   identityLinksAsA       CustomerIdentityLink[]  @relation("IdentityLinkA")
@@ -954,6 +956,7 @@ model Chat {
   skillRuns        SkillRun[]
   goalAchievements GoalAchievement[]
   trackedSales     TrackedSale[]
+  aiDecisionLogs   AiDecisionLog[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   /// The inbox list's ordering index. Kept beside the `created_at` one rather
@@ -995,9 +998,11 @@ model Thread {
   /// erase the record of what it handled (20261015170000_thread_group).
   groupId          BigInt?   @map("group_id")
 
-  chat   Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  tags   ThreadTag[]
-  events Event[]
+  chat           Chat            @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tags           ThreadTag[]
+  events         Event[]
+  skillRuns      SkillRun[]
+  aiDecisionLogs AiDecisionLog[]
 
   @@index([chatId, createdAt])
   @@index([licenseId, active, createdAt(sort: Desc)])
@@ -1864,6 +1869,9 @@ model SkillRun {
   id              String   @id @default(uuid()) @db.Uuid
   skillId         String   @map("skill_id") @db.Uuid
   chatId          String?  @map("chat_id") @db.VarChar(12)
+  /// The connection the run answered (tm 288.2 · ID-08) — the panel's "Chat
+  /// ID". Null on a preview and on runs recorded before it was kept.
+  threadId        String?  @map("thread_id") @db.VarChar(12)
   licenseId       BigInt   @map("license_id")
   status          String   @default("succeeded")
   log             Json     @default("[]")
@@ -1872,12 +1880,79 @@ model SkillRun {
   llmOutputTokens Int      @default(0) @map("llm_output_tokens")
   embeddingTokens Int      @default(0) @map("embedding_tokens")
 
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  chat  Chat? @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  skill  Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  thread Thread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
 
   @@index([skillId, ranAt(sort: Desc)])
   @@index([licenseId, ranAt(sort: Desc)])
+  @@index([threadId])
   @@map("skill_runs")
+}
+
+/// What the AI decided on one turn, and on what grounds (tm 288.2 · ID-08) —
+/// the record that answers "why did the AI say that to this player?" by
+/// number. Ids, scores, flags and counts only: no message, reply or prompt
+/// text (ID-08 rule). Written by `services/ai/decision-log.ts`, which never
+/// lets a failed write stop the reply.
+///
+/// Kept as long as the conversation (ID-08-S1): a row on a connection goes
+/// with it (`thread_id` cascades, so the retention sweep's thread delete takes
+/// it), a row with no connection is swept by age under the same window, and
+/// erasing the customer takes every row through `customer_id` / `chat_id`.
+/// Rows are never edited — `siyahtus_app` holds SELECT, INSERT and DELETE.
+///
+/// Not partitioned: one row per AI turn is a fraction of `events`. If it ever
+/// grows to that scale, the monthly range scheme `events` uses
+/// (`services/chat/event-partitions.ts`) is the model to follow.
+model AiDecisionLog {
+  id                 String   @id @default(uuid()) @db.Uuid
+  licenseId          BigInt   @map("license_id")
+  /// The day container (panel "Thread ID").
+  chatId             String?  @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID").
+  threadId           String?  @map("thread_id") @db.VarChar(12)
+  customerId         String?  @map("customer_id") @db.Uuid
+  /// The customer event the turn answered, and the event it wrote. No
+  /// relation: `events` is partitioned and keyed by (id, created_at).
+  triggerEventId     String?  @map("trigger_event_id") @db.VarChar(40)
+  replyEventId       String?  @map("reply_event_id") @db.VarChar(40)
+  /// The HTTP request (`request_id` on its log lines) or the queued job that ran the turn.
+  requestId          String?  @map("request_id") @db.VarChar(64)
+  jobId              String?  @map("job_id") @db.VarChar(128)
+  /// One of `AI_DECISIONS` (`@siyahtus/types`), enforced by `ai_decision_logs_decision_check`.
+  decision           String
+  /// The procedure (today: the skill) and the version and step it was on. No
+  /// relation: deleting a procedure must not erase what it decided.
+  procedureId        String?  @map("procedure_id") @db.Uuid
+  procedureVersion   Int?     @map("procedure_version")
+  step               String?
+  knowledgeSourceIds String[] @default([]) @map("knowledge_source_ids") @db.Uuid
+  chunkIds           String[] @default([]) @map("chunk_ids") @db.Uuid
+  retrievalScores    Float[]  @default([]) @map("retrieval_scores")
+  guardrailHits      String[] @default([]) @map("guardrail_hits")
+  handoffReason      String?  @map("handoff_reason")
+  riskFlags          String[] @default([]) @map("risk_flags")
+  model              String?
+  llmInputTokens     Int      @default(0) @map("llm_input_tokens")
+  llmOutputTokens    Int      @default(0) @map("llm_output_tokens")
+  latencyMs          Int?     @map("latency_ms")
+  errorType          String?  @map("error_type")
+  /// Anything else worth keeping, at most `AI_DECISION_DETAILS_MAX_BYTES` of JSON text.
+  details            Json     @default("{}")
+  configVersionId    String?  @map("config_version_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license  License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat     Chat?     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  thread   Thread?   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt(sort: Desc)])
+  @@index([chatId, createdAt])
+  @@index([threadId])
+  @@index([customerId])
+  @@map("ai_decision_logs")
 }
 
 /// Visual node/edge automation (FR-MOD-13.4). The table exists so the schema

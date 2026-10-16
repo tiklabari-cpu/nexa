@@ -354,11 +354,14 @@ export default async function customerRoutes(
     kind: PushEventKind,
     text: string | undefined,
     pageUrl: string | null,
+    triggerEventId: string,
   ): void {
     // The route has usually bound it already, with the connection; a no-op then.
     bindChatLogContext(request, { chatId });
     const queued = app.followUps.enqueue(`${request.tenant().licenseId}:${chatId}`, async () => {
-      if (text?.trim()) await respondToCustomerMessage(request, chatId, text, pageUrl);
+      if (text?.trim()) {
+        await respondToCustomerMessage(request, chatId, text, pageUrl, triggerEventId);
+      }
       await notifyAssignee(request, chatId, kind);
     });
     if (!queued) {
@@ -393,10 +396,11 @@ export default async function customerRoutes(
     chatId: string,
     text: string,
     pageUrl: string | null,
+    triggerEventId: string,
   ): Promise<void> {
     const bot = await ruleBots.handle(request, chatId, text, pageUrl);
     if (bot?.tookOver) return;
-    await ai.handle(request, chatId, text);
+    await ai.handle(request, chatId, text, { triggerEventId });
   }
 
   /**
@@ -893,7 +897,7 @@ export default async function customerRoutes(
       if (result.replayed) return reply.status(200).send({ chat_id: chatId, event: result.event });
 
       if (result.openedVia === null) {
-        followUp(request, chatId, 'message', maskedText, body.url ?? null);
+        followUp(request, chatId, 'message', maskedText, body.url ?? null, result.event.id);
         return reply.status(201).send({ chat_id: chatId, event: result.event });
       }
 
@@ -918,7 +922,7 @@ export default async function customerRoutes(
       // `assignment` because of how it reads on a phone: nobody handed this to
       // the agent, a visitor walked in. The `event` this answers with is the
       // visitor's own message as written, never a reply that committed first.
-      followUp(request, chatId, 'new_chat', maskedText, body.url ?? null);
+      followUp(request, chatId, 'new_chat', maskedText, body.url ?? null, result.event.id);
 
       return reply.status(201).send({
         chat_id: chatId,

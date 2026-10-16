@@ -213,6 +213,7 @@ export function buildSchedulerJobs({
             tenants: report.totals.tenants,
             threads: report.totals.threads,
             visits: report.totals.visits,
+            aiDecisions: report.totals.aiDecisions,
             mailFiles: report.totals.mailFiles,
             auditEntries: report.totals.auditEntries,
           },

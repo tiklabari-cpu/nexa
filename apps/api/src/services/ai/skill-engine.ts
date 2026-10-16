@@ -177,6 +177,12 @@ export interface SkillRunResult {
   skillName: string | null;
   /** Text the AI wants to send, if any. The caller writes it as an event. */
   reply: string | null;
+  /**
+   * Which kind of step wrote `reply`: a `request_info` question or a
+   * `send_message` answer — the decision record's `asked` and `answered`
+   * (tm 288.2). Null when there is no reply.
+   */
+  replyFrom: 'request_info' | 'send_message' | null;
   /** Tags to apply to the thread. */
   tags: string[];
   /** Team to transfer to, when the skill handed off. */
@@ -202,6 +208,7 @@ const NOTHING_RAN: SkillRunResult = {
   skillId: null,
   skillName: null,
   reply: null,
+  replyFrom: null,
   tags: [],
   transferTo: null,
   summary: null,
@@ -234,7 +241,7 @@ export class SkillEngine {
   async run(
     db: TenantRunner,
     tenant: TenantContext,
-    input: { message: string; chatId: string; history?: string[] },
+    input: { message: string; chatId: string; threadId?: string | null; history?: string[] },
   ): Promise<SkillRunResult> {
     const skills = await db((tx) =>
       tx.skill.findMany({
@@ -289,7 +296,7 @@ export class SkillEngine {
             chatId: input.chatId,
           });
 
-      await this.#record(db, tenant, skill.id, input.chatId, result);
+      await this.#record(db, tenant, skill.id, input.chatId, input.threadId ?? null, result);
       return result;
     }
 
@@ -408,6 +415,7 @@ export class SkillEngine {
     const log = [...input.gateLog];
     const tags: string[] = [];
     let reply: string | null = null;
+    let replyFrom: SkillRunResult['replyFrom'] = null;
     let transferTo: string | null = null;
     let summary: string | null = null;
     let failure: SkillFailure | null = null;
@@ -458,6 +466,7 @@ export class SkillEngine {
             });
           } else {
             reply = step.prompt;
+            replyFrom = 'request_info';
             log.push({ step: 'request_info', detail: `asked for ${step.field}`, ok: true });
           }
           break;
@@ -484,8 +493,10 @@ export class SkillEngine {
             // earlier would reach the customer as the AI's last word before a
             // silence (see the file header).
             reply = null;
+            replyFrom = null;
           } else if (outcome.text) {
             reply = outcome.text;
+            replyFrom = 'send_message';
           }
           log.push({ step: 'send_message', detail: outcome.detail, ok: outcome.text !== null });
           break;
@@ -507,6 +518,7 @@ export class SkillEngine {
       skillId: input.skill.id,
       skillName: input.skill.name,
       reply,
+      replyFrom,
       tags,
       transferTo,
       summary,
@@ -689,9 +701,10 @@ export class SkillEngine {
     tenant: TenantContext,
     skillId: string,
     chatId: string,
+    threadId: string | null,
     result: SkillRunResult,
   ): Promise<void> {
-    await db((tx) => this.#writeRun(tx, tenant, skillId, chatId, result));
+    await db((tx) => this.#writeRun(tx, tenant, skillId, chatId, threadId, result));
   }
 
   async #writeRun(
@@ -699,6 +712,7 @@ export class SkillEngine {
     tenant: TenantContext,
     skillId: string,
     chatId: string,
+    threadId: string | null,
     result: SkillRunResult,
   ): Promise<void> {
     // `status` answers "did the run complete?" — the schema constrains it to
@@ -710,6 +724,8 @@ export class SkillEngine {
       data: {
         skillId,
         chatId,
+        // The connection beside the day container (tm 288.2 · ID-08).
+        threadId,
         licenseId: tenant.licenseId,
         status: result.log.some((entry) => !entry.ok && entry.step !== 'detect_intent')
           ? 'failed'

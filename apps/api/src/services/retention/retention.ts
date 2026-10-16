@@ -77,6 +77,12 @@ export interface TenantPruneResult {
   organizationId: string;
   threads: number;
   visits: number;
+  /**
+   * AI decision records with no connection, swept by age under the thread
+   * window (tm 288.2 · ID-08-S1). A record on a connection is not counted
+   * here: it cascades with its thread, inside `threads`.
+   */
+  aiDecisions: number;
   /** Audit-log entries pruned for this tenant (NFR-S12 30-day window). */
   auditEntries: number;
   /** Whether this workspace is covered by a signed BAA (NFR-C4 · C4-e). */
@@ -110,6 +116,7 @@ export interface RetentionReport {
     hipaaTenants: number;
     threads: number;
     visits: number;
+    aiDecisions: number;
     mailFiles: number;
     auditEntries: number;
   };
@@ -182,6 +189,7 @@ export class RetentionRunner {
         hipaaTenants: results.filter((r) => r.hipaaScope).length,
         threads: results.reduce((sum, r) => sum + r.threads, 0),
         visits: results.reduce((sum, r) => sum + r.visits, 0),
+        aiDecisions: results.reduce((sum, r) => sum + r.aiDecisions, 0),
         mailFiles,
         auditEntries,
       },
@@ -255,6 +263,21 @@ export class RetentionRunner {
               this.#deleteVisitBatch(tx, cutoffs.visits!),
             );
 
+    // The AI decision record is kept as long as the conversation (ID-08-S1),
+    // so it runs on the thread window and is skipped with it. A record on a
+    // connection went with its thread above (`thread_id` cascades) and is
+    // never named here; this only takes the ones filed under no connection.
+    const aiDecisions =
+      cutoffs.threads === null
+        ? 0
+        : dryRun
+          ? await withTenant(this.#db, context, (tx) =>
+              this.#countThreadlessDecisions(tx, cutoffs.threads!),
+            )
+          : await this.#deleteInBatches(context, (tx) =>
+              this.#deleteThreadlessDecisionBatch(tx, cutoffs.threads!),
+            );
+
     // The audit log is append-only to `siyahtus_app` (no DELETE grant), so its
     // window cannot be applied through `withTenant` like the tables above. A
     // real run goes through the one SECURITY DEFINER hole, `audit_prune_expired`,
@@ -270,7 +293,7 @@ export class RetentionRunner {
     // of the audit trail (a no-op delete is not an event). The audit prune runs
     // before this entry, so the row that records the sweep is itself fresh and
     // never inside the window it just applied.
-    if (!dryRun && threads + visits + auditEntries > 0) {
+    if (!dryRun && threads + visits + aiDecisions + auditEntries > 0) {
       await withTenant(this.#db, context, (tx) =>
         writeAuditEntry(
           tx,
@@ -285,6 +308,7 @@ export class RetentionRunner {
             metadata: {
               threads,
               visits,
+              ai_decisions: aiDecisions,
               audit_entries: auditEntries,
               dry_run: false,
               // The windows that were actually applied, and why they were those
@@ -313,6 +337,7 @@ export class RetentionRunner {
       organizationId: tenant.organization_id,
       threads,
       visits,
+      aiDecisions,
       auditEntries,
       hipaaScope,
       policy,
@@ -362,6 +387,25 @@ export class RetentionRunner {
           ORDER BY started_at
           LIMIT ${RETENTION_BATCH}
        )`;
+  }
+
+  #deleteThreadlessDecisionBatch(tx: TenantClient, cutoff: Date): Promise<number> {
+    return tx.$executeRaw`
+      DELETE FROM ai_decision_logs
+       WHERE id IN (
+         SELECT id FROM ai_decision_logs
+          WHERE thread_id IS NULL
+            AND created_at < ${cutoff}
+          ORDER BY created_at
+          LIMIT ${RETENTION_BATCH}
+       )`;
+  }
+
+  async #countThreadlessDecisions(tx: TenantClient, cutoff: Date): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM ai_decision_logs
+       WHERE thread_id IS NULL AND created_at < ${cutoff}`;
+    return Number(rows[0]?.n ?? 0n);
   }
 
   async #countThreads(tx: TenantClient, cutoff: Date): Promise<number> {

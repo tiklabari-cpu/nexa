@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { boot, RTL_LANGUAGES, type SiyahTusWidgetConfig } from './loader.js';
+import { boot, LOGOUT_TIMEOUT_MS, RTL_LANGUAGES, type SiyahTusWidgetConfig } from './loader.js';
 import { RTL_LOCALES } from './locales/index.js';
 
 type TestWindow = Window & {
@@ -401,5 +401,120 @@ describe('the frame follows the widget document’s corner (UX audit D17)', () =
 
   it('agrees with the widget’s own list of right-to-left locales', () => {
     expect([...RTL_LANGUAGES]).toEqual([...RTL_LOCALES]);
+  });
+});
+
+describe("siyahtus('logout') (ID-03 · K4 · tm 287.3)", () => {
+  beforeEach(() => setup());
+
+  type Siyahtus = (command: string, payload?: unknown) => Promise<void> | undefined;
+  const siyahtusGlobal = (): Siyahtus => (window as unknown as { siyahtus: Siyahtus }).siyahtus;
+
+  function fromFrame(data: unknown, el: HTMLIFrameElement | null, origin = 'https://widget.test') {
+    const event = new MessageEvent('message', { data, origin });
+    Object.defineProperty(event, 'source', { value: el ? el.contentWindow : window });
+    window.dispatchEvent(event);
+  }
+
+  /** Boots the loader and lets the widget document say it is ready. */
+  function bootReady(config: Partial<SiyahTusWidgetConfig> = {}): HTMLIFrameElement {
+    boot(setup(config));
+    const el = frame()!;
+    fromFrame({ type: 'siyahtus:ready' }, el);
+    return el;
+  }
+
+  it('relays the command and resolves once the widget says it has forgotten its visitor', async () => {
+    const el = bootReady();
+    const post = vi.spyOn(el.contentWindow!, 'postMessage');
+    let resolved = false;
+
+    const done = siyahtusGlobal()('logout');
+    expect(done).toBeInstanceOf(Promise);
+    void done!.then(() => {
+      resolved = true;
+    });
+    expect(post).toHaveBeenCalledWith(
+      { type: 'siyahtus:command', command: 'logout', payload: undefined },
+      'https://widget.test',
+    );
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    fromFrame({ type: 'siyahtus:logged-out' }, el);
+    await done;
+    expect(resolved).toBe(true);
+  });
+
+  it('then opens a fresh widget document as a closed launcher, holding commands until it is ready', () => {
+    const el = bootReady({ mobileFullscreen: true });
+    fromFrame({ type: 'siyahtus:resize', width: 380, height: 620 }, el);
+    fromFrame({ type: 'siyahtus:open' }, el);
+    expect(el.style.width).toBe('380px');
+    const url = el.src;
+    const navigate = vi.spyOn(el, 'src', 'set');
+
+    void siyahtusGlobal()('logout');
+    fromFrame({ type: 'siyahtus:logged-out' }, el);
+
+    // The same address again: a new document, so nothing the old one held in
+    // memory — the transcript, the token — survives into the next visitor's.
+    expect(navigate).toHaveBeenCalledWith(url);
+    expect(el.style.width).toBe('124px');
+    expect(el.style.height).toBe('124px');
+
+    const post = vi.spyOn(el.contentWindow!, 'postMessage');
+    const payload = { external_order_id: 'o-2', amount_cents: 100, currency: 'USD' };
+    siyahtusGlobal()('trackSale', payload);
+    expect(post).not.toHaveBeenCalled();
+    fromFrame({ type: 'siyahtus:ready' }, el);
+    expect(post).toHaveBeenCalledWith(
+      { type: 'siyahtus:command', command: 'trackSale', payload },
+      'https://widget.test',
+    );
+  });
+
+  it('takes that answer from its own frame only', async () => {
+    const el = bootReady();
+    const navigate = vi.spyOn(el, 'src', 'set');
+    let resolved = false;
+    const done = siyahtusGlobal()('logout')!;
+    void done.then(() => {
+      resolved = true;
+    });
+
+    fromFrame({ type: 'siyahtus:logged-out' }, el, 'https://not-the-widget.test');
+    fromFrame({ type: 'siyahtus:logged-out' }, null);
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+
+    fromFrame({ type: 'siyahtus:logged-out' }, el);
+    await done;
+    expect(navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves anyway when no widget answers, and never rejects', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolved = false;
+      const done = siyahtusGlobal()('logout')!;
+      void done.then(() => {
+        resolved = true;
+      });
+      await vi.advanceTimersByTimeAsync(LOGOUT_TIMEOUT_MS - 1);
+      expect(resolved).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(resolved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('answers nothing for every other command, as before', () => {
+    bootReady();
+    expect(
+      siyahtusGlobal()('trackSale', { external_order_id: 'o', amount_cents: 1, currency: 'USD' }),
+    ).toBeUndefined();
   });
 });

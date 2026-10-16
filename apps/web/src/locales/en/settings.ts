@@ -501,6 +501,8 @@ export const settings: Messages = {
   'settings.websiteWidgets.customizeWidget': 'Customize widget',
   'settings.websiteWidgets.snippet.reportSale':
     'To report a sale once checkout completes, call the tracking code from your own script:',
+  'settings.websiteWidgets.snippet.signOut':
+    'When your site signs a user out, make the chat forget them too, so the next person on this browser starts a new conversation. Wait for it before you leave the page:',
   'settings.websiteWidgets.snippet.copyCode': 'Copy code',
   'settings.websiteWidgets.snippet.inviteDeveloper': 'Invite developer',
   'settings.websiteWidgets.platformInstall': 'Platform install',

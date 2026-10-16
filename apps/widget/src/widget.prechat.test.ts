@@ -12,6 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrechatConfig, WidgetFormField } from '@siyahtus/types';
 import { mount } from './widget.js';
+import { storageKeys } from './api.js';
 
 interface FetchCall {
   url: string;
@@ -260,7 +261,7 @@ describe('widget fixed pre-chat fields (owner, 2026-10-14)', () => {
 
   describe('a returning visitor', () => {
     it('goes straight to their conversation, never past the form', async () => {
-      window.localStorage.setItem('siyahtus.customer_id', 'cust-1');
+      window.localStorage.setItem(storageKeys('org-1').customerId, 'cust-1');
       chatEvents = [
         {
           id: 'e1',
@@ -282,7 +283,7 @@ describe('widget fixed pre-chat fields (owner, 2026-10-14)', () => {
     });
 
     it('meets the form once the mint finds no conversation', async () => {
-      window.localStorage.setItem('siyahtus.customer_id', 'cust-1');
+      window.localStorage.setItem(storageKeys('org-1').customerId, 'cust-1');
       const root = mountWidget('?organization_id=org-1');
       root.querySelector<HTMLButtonElement>('.nx-launcher')!.click();
 

@@ -110,6 +110,18 @@ describe('WebsiteWidgets trackSale documentation', () => {
     );
   });
 
+  it('shows the sign-out call beside it, awaited (tm 287.3)', async () => {
+    renderWidgets();
+    await userEvent.click(await screen.findByRole('button', { name: 'Get code' }));
+
+    expect(screen.getByTestId('website-snippet-sign-out')).toHaveTextContent(
+      "await siyahtus('logout');",
+    );
+    expect(
+      screen.getByText(/make the chat forget them too, so the next person on this browser/),
+    ).toBeInTheDocument();
+  });
+
   it('hides the example until the snippet panel is opened', async () => {
     renderWidgets();
     await screen.findByText('shop.example');

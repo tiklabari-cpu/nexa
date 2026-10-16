@@ -28,6 +28,7 @@ import {
   MEMBER_TOKEN_TTL,
   POSSIBLE_MATCH_FIELDS,
   POSSIBLE_MATCH_LIMIT,
+  memberTokenCookieName,
 } from '@siyahtus/types';
 import { withTenant, type TenantClient } from '../../src/lib/tenant.js';
 import {
@@ -526,19 +527,33 @@ describe('member recognition schema (ID-03 · K4)', () => {
   describe('contract', () => {
     it('carries the member token on POST /customer/token in the cookie @siyahtus/types names, optional both ways', () => {
       type Content = Record<string, { schema: SchemaNode }>;
-      const operation = (
-        loadOpenApiDocument().paths['/customer/token'] as {
-          post: {
-            parameters?: Array<{ name: string; in: string; required?: boolean }>;
-            requestBody: { content: Content };
-            responses: Record<string, { headers?: Record<string, unknown>; content: Content }>;
-          };
-        }
-      ).post;
+      type Headers = Record<string, { description?: string }>;
+      const path = loadOpenApiDocument().paths['/customer/token'] as {
+        post: {
+          description: string;
+          parameters?: Array<{ name: string; in: string; required?: boolean }>;
+          requestBody: { content: Content };
+          responses: Record<string, { headers?: Headers; content: Content }>;
+        };
+        delete: { responses: Record<string, { headers?: Headers }> };
+      };
+      const operation = path.post;
 
-      expect(operation.parameters).toContainEqual(
-        expect.objectContaining({ name: MEMBER_TOKEN_COOKIE, in: 'cookie', required: false }),
+      // One cookie per organization (tm 287.3) — a name OpenAPI cannot declare
+      // as a parameter, so the description and both `Set-Cookie` headers name
+      // it, and no fixed-name cookie parameter claims otherwise.
+      const perOrganization = `${MEMBER_TOKEN_COOKIE}_<organization_id>`;
+      expect(memberTokenCookieName('7f8b4a62-5c1e-4b9e-9a77-0d1e2f3a4b5c')).toBe(
+        `${MEMBER_TOKEN_COOKIE}_7f8b4a62-5c1e-4b9e-9a77-0d1e2f3a4b5c`,
       );
+      expect(operation.description).toContain(perOrganization);
+      expect(operation.responses['200']?.headers?.['Set-Cookie']?.description).toContain(
+        `${perOrganization}=<member token>`,
+      );
+      expect(path.delete.responses['204']?.headers?.['Set-Cookie']?.description).toContain(
+        `${perOrganization}=; Max-Age=0`,
+      );
+      expect((operation.parameters ?? []).filter((p) => p.in === 'cookie')).toEqual([]);
 
       const body = operation.requestBody.content['application/json']?.schema;
       expect(Object.keys(body?.properties ?? {})).toContain('member_token');

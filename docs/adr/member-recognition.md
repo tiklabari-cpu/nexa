@@ -1,6 +1,6 @@
 # Üye tanıma — imzalı üye tokenı, iptal listesi, olası eşleşme ve ajan onaylı bağlama (ID-03 · K4)
 
-- **Görev:** tm 287 (MEMBER-TOKEN). Bu kayıt tm 287.1 (şema + sözleşme) ile açıldı · PLAN.md §D240; tm 287.2 (token üretimi/doğrulaması, geçiş, rotasyon, iptal) §8'de · PLAN.md §D241
+- **Görev:** tm 287 (MEMBER-TOKEN). Bu kayıt tm 287.1 (şema + sözleşme) ile açıldı · PLAN.md §D240; tm 287.2 (token üretimi/doğrulaması, geçiş, rotasyon, iptal) §8'de · PLAN.md §D241; tm 287.3 (widget saklama, kuruluş başına çerez, çıkış) §9'da · PLAN.md §D242
 - **Tarih:** 2026-10-15
 - **Durum:** Kabul edildi — sahip kararı **K4** ("Token'ı bizim widget'ımız üretir (imzalı, çerez/localStorage'da saklanır); widget geri gelişte okuyup sunucuda doğrular … Başka cihazdan gelişte ajan onayı yolu geçerli", `SiyahTus-Analiz/04-gerekceler-ve-sorular.md` Karar kaydı K4 ve "Kararların maddelere etkisi"). Varsayımlar: **K5** (AI yalnız konu düzeyinde hatırlatır), **ID-03-S4** (ajan onaylı bağlama Ekip Lideri ve üstü; RL-01 gelene kadar admin ve üstü).
 - **Değiştirdiği karar:** `05-uygulama-rehberi.md` ID-03'ün "operatörün imzaladığı `user_hash`" yolu. K4 ile token'ı operatör değil SiyahTuş widget'ı üretir; operatör imzası F2'ye kaldı (tm 388, deferred) ve geldiğinde aynı doğrulama altyapısına ikinci giriş olur.
@@ -64,7 +64,7 @@ Bir yolu bağlayan alt görev aynı commit'te: `apps/mobile/src/__tests__/parity
   - İptal denetimi: `max(revoked_at)` üzerinden `license_id = $lic AND (customer_id = $sub OR customer_id IS NULL)`.
   - **Geçiş (bare `customer_id`):** token'ı olmayan eski ziyaretçi bir kez benimsenir (TOFU), sonra yalnız token. Bunun için müşteri başına bir işaret gerekir; tm 287.1 eklemedi (alt görev başlığında yok, karar 287.2'nin). Öneri: `customers.member_adoptable_until TIMESTAMPTZ`, migration anındaki bir varsayılanla eklenip hemen bırakılır (`ADD COLUMN … DEFAULT (now() + interval '30 days')` → `ALTER COLUMN … DROP DEFAULT`): Postgres 11+ değişken olmayan varsayılanı bir kez hesaplar ve tabloyu yeniden yazmaz, böylece yalnız eski müşteriler süreli olarak benimsenebilir, yeniler ve kanal müşterileri asla. Benimseme ya da ilk token basımı işareti NULL yapar.
   - Yolları bağlama: ayarlar (dört işlem) + `revoke-member-tokens`; arayüz yoksa `TRACKED` sahibi ayarlar için `tm 287.5`, üye iptali düğmesi için `tm 287.4`. Denetim eylemleri (ör. `settings.member_recognition_updated`, `member_tokens.revoked`, `member_token_key.rotated`) web denetim kataloğuna en+tr.
-- **tm 287.3 (MT-WIDGET-STORAGE):** API widget'tan başka origin'dedir (`apps/widget/src/widget.ts:3568-3573`): çerezin gidip gelmesi için token isteği `credentials: 'include'` ile atılmalı ve API bu uçta widget origin'ine `Access-Control-Allow-Credentials: true` + tam origin ile yanıt vermeli. `Partitioned` çerez desteği tarayıcıya göre değişir (iOS Safari gerçek cihaz notu HANDOFF'a); localStorage yedeği her zaman çalışır. Çerez adı için `__Host-` öneki `Path=/` ister — uca sınırlı yol ile çelişir; seçilirse `MEMBER_TOKEN_COOKIE` ve kontrat birlikte değişir.
+- **tm 287.3 (MT-WIDGET-STORAGE):** _Uygulandı — kararlar ve öneriden sapma (çerez adı kuruluş başına) §9'da._ API widget'tan başka origin'dedir (`apps/widget/src/widget.ts:3568-3573`): çerezin gidip gelmesi için token isteği `credentials: 'include'` ile atılmalı ve API bu uçta widget origin'ine `Access-Control-Allow-Credentials: true` + tam origin ile yanıt vermeli. `Partitioned` çerez desteği tarayıcıya göre değişir (iOS Safari gerçek cihaz notu HANDOFF'a); localStorage yedeği her zaman çalışır. Çerez adı için `__Host-` öneki `Path=/` ister — uca sınırlı yol ile çelişir; seçilirse `MEMBER_TOKEN_COOKIE` ve kontrat birlikte değişir.
 - **tm 287.4 (MT-MATCH-LINK):** çifti SQL'de sırala (`LEAST`/`GREATEST` uuid üzerinde — `customer_identity_links_order_check` aynı sırayı ister); olası eşleşme `username_normalized` (kısmi indeks `customers_organization_id_username_normalized_idx`) ya da `email` (`customers_organization_id_email_idx`) eşitliği, en çok `POSSIBLE_MATCH_LIMIT`, `possible_matches_enabled` kapalıysa boş + `enabled: false`; bağlanmış kaydın konuşmaları AI bağlamına girmez; denetim `customer.identity_linked` / `customer.identity_unlinked`.
 - **tm 287.5 (MT-SETTINGS-UI):** `settings-sections.ts` kaydı (scope `access_rules`), anahtar bilgisi yalnız sürüm/tarih.
 
@@ -139,3 +139,45 @@ Denetim eylemleri web kataloğunda (en + tr, "Credentials" grubu), hedef türü 
 - Kontrat: `openapi.yaml` dört yol bağlandı, `paths/settings.yaml` + `paths/customers.yaml` başlık/açıklama, `src/generated/api.ts`; mobil parity 227 → 231; `scripts/audit/endpoint-ui.cjs` `TRACKED` (ayarlar → tm 287.5, üye iptali → tm 287.4).
 - Web: `AuditLogPage.tsx` grubu, `locales/{en,tr}/audit-labels.ts`. Widget: `src/api.ts` (+ `api.member.test.ts`).
 - Testler: `apps/api/test/integration/member-token.test.ts`, birim `member-token.test.ts`, `cookie.test.ts`, yardımcı `test/helpers/member-token.ts`; çıplak numarayla mevcut müşteriye basım yapan 9 entegrasyon dosyası geçiş yoluna ya da üye tokenına çevrildi.
+
+## 9. Widget saklama, kuruluş başına çerez ve çıkış (tm 287.3)
+
+### 9.1 Token tarayıcıda nerede durur
+
+- **Basım isteği kimlik bilgisiyle gider** (`credentials: 'include'`, `apps/widget/src/api.ts`). Çerez yalnız böyle bir istekte gönderilir ve yanıttaki `Set-Cookie` yalnız böyle bir istekte saklanır; tm 287.2'nin widget'ı bunu yapmadığı için çerez hiçbir tarayıcıda oluşmamıştı (API ile widget ayrı origin: `api.<alan>` / `widget.<alan>`). Diğer istekler bearer token taşır, çerez göndermez.
+- **CORS sunucuda zaten hazırdı:** `@fastify/cors` `credentials: true`; üretimde izin listesi `WEB_ORIGIN`, ve `productionProblems` widget origin'i listede değilse açılışı reddeder (tm 243). Yeni: `production-boot.test.ts` kimlik bilgili basımın ve `DELETE` ön-uçuşunun widget origin'ine adıyla + `Access-Control-Allow-Credentials: true` ile cevaplandığını sabitler.
+- **Yerel kopya yalnız çerez tutulmadığında:** sunucu tokenı gövdeden yalnız çerez taşıdığında çıkarır (§8.2); widget o zaman kendi kopyasını siler. Çerezi tutan tarayıcıda token yalnız hiçbir betiğin (widget'ınki dahil) okuyamadığı yerde kalır; tutmayan tarayıcıda localStorage yedektir.
+- **Her şey kuruluş başına:** localStorage `siyahtus.member_token.<kuruluş>` ve `siyahtus.customer_id.<kuruluş>` (küçük harf). Müşteri numarası kimlik doğrulamaz; yalnız "bu tarayıcı bu çalışma alanını daha önce gördü" der (`isReturningVisitor`: kapalı panelde bağlanıp okunmamış rozeti göstermek için).
+
+### 9.2 Öneriden sapma: çerez adı kuruluş başına (`siyahtus_member_<kuruluş>`)
+
+Bölüm (partition) kuruluş başına değil, **gömülen site** başınadır. Bütün çalışma alanlarının barındırılan sohbet sayfası (`chat.html`) widget'ın kendi sitesindedir, yani aynı bölümü paylaşır; aynı sitede iki çalışma alanının widget'ı da öyle. Tek adlı çerezde ikinci çalışma alanının basımı birincinin tokenını ezerdi — ve çerez taşıdığında widget kendi kopyasını sildiği için o üye birinci çalışma alanında yabancı olurdu (sırayla birbirini unutan iki çalışma alanı). Bu yüzden:
+
+- `@siyahtus/types` `memberTokenCookieName(organizationId)` = `siyahtus_member_<kuruluş, küçük harf>`; `MEMBER_TOKEN_COOKIE` önek olarak kaldı. Sunucu yalnız istenen kuruluşun çerezini okur ve yeniler; tarayıcının yanında gönderdiği öteki kuruluşların çerezleri okunmaz, ezilmez, red log'u da üretmez.
+- Kontrat: OpenAPI'de çerez parametresinin adı desen olamaz; `/customer/token` `in: cookie` parametresi kaldırıldı, ad işlem açıklamasında ve iki `Set-Cookie` başlığında yazılı (`member-recognition-schema.test.ts` okur).
+- Eski tek adlı çerez hiçbir tarayıcıda yok (§9.1, ilk madde); okunmaz. tm 287.2 widget'ının localStorage'da bıraktığı paylaşılan yuva (`siyahtus.member_token` / `siyahtus.customer_id`) bir kez taşınır: kendi anahtarı olmayan kuruluş paylaşılan yuvayı gönderir; sunucu o müşteriyi tanırsa (yanıttaki `customer_id` yuvadakiyle aynı) yuva silinir, tanımazsa başka kuruluşundur ve yerinde kalır. Kuruluş kendi anahtarına kavuştuktan sonra paylaşılan yuvayı bir daha okumaz.
+
+### 9.3 Çıkış: `siyahtus('logout')`
+
+05 ID-03'ün öngördüğü komut: gömen sayfa kendi kullanıcısının oturumunu kapatınca widget o ziyaretçiyi unutur — ortak bilgisayardaki bir sonraki kişi önceki üyenin konuşmasına düşmemeli.
+
+1. **Yükleyici** (`loader.ts`) komutu çerçeveye aktarır ve bir **Promise** döner; widget "unuttum" (`siyahtus:logged-out`) dediğinde ya da `LOGOUT_TIMEOUT_MS` (5 sn) dolunca çözülür, hiç reddetmez. Gömen sayfa `await siyahtus('logout')` ile sonra yönlendirebilir — yoksa sayfa değişimi çerçeveyi unutma işinin ortasında kapatabilirdi.
+2. **Widget** (`widget.ts`) komutu yalnız gömen sayfadan kabul eder (`event.source === parent`; aynı sayfadaki başka bir çerçeve ziyaretçiyi çıkaramaz) ve barındırılan sohbet sayfasında yok sayar. Yoldaki basımın bitmesini bekler (yoksa başlattığı yoklama/soket ve getirdiği çerez çıkıştan sağ çıkardı), yoklamayı ve soketi durdurur, `WidgetApi#forget` ile bu sitedeki **bütün çalışma alanlarının** localStorage kimliklerini (paylaşılan eski yuva dahil) siler ve `DELETE /customer/token`'ı kimlik bilgisiyle çağırır; okunmamış işaretini de siler. Bu andan sonra aynı belge kimse adına basım yapmaz (`#forgotten`; 401 yolu dahil).
+3. **`DELETE /customer/token`** (`forgetCustomerMemberTokens`, herkese açık, veritabanına dokunmaz, hep 204): tarayıcının gönderdiği her `siyahtus_member_<uuid>` çerezini aynı özniteliklerle `Max-Age=0` yazarak düşürür (tarayıcı adı, yolu ve bölümü eşleşen çerezi siler). Bölümlü olduğu için bir sayfa yalnız kendi bölümünü unutturabilir; köken denetimi gerekmez. **Hiçbir şey iptal etmez:** tarayıcıdan kopyalanmış bir token süresi dolana ya da üye iptal edilene kadar geçerlidir (iptal ajanın işidir, §8.4) — çıkış tarayıcının unutmasıdır.
+4. **Yükleyici** onayı alınca çerçeveyi yeniden açar (aynı adres, yeni belge): eski belgenin bellekte tuttuğu transkript, form ve token yeni ziyaretçiye hiçbir alan unutulmadan sıfırlanmış olur; çerçeve kapalı başlatıcı boyutuna döner, arada gelen komutlar yeni belgenin `siyahtus:ready`'sine kadar sıraya girer. Yeni ziyaretçi ilk kez gelen biridir; paneli açana kadar basım yapılmaz.
+
+Çerez isteği başarısız olursa (ağ) çerez kalır ve sonraki yükleme eski üye olarak tanınır; widget bunu `console.warn` ile yazar, gizlemez.
+
+### 9.4 Tarayıcı kısıtları — iOS Safari gerçek cihaz notu
+
+- **Chrome / Edge (114+)** bölümlü çerezi tutar: üye çerezde kalır, yerel kopya silinir.
+- **Firefox** üçüncü taraf çerezleri zaten site başına böler (Total Cookie Protection); `Partitioned` özniteliği aynı sonucu verir.
+- **Safari (macOS ve iOS — iOS'ta her tarayıcı WebKit'tir)** üçüncü taraf çerezlerini varsayılan olarak engeller; bölümlü çerez desteği sürüme göre değişir. Engellendiğinde sunucu tokenı gövdede vermeye devam eder ve widget localStorage yedeğiyle çalışır. Ancak WebKit üçüncü taraf iframe depolamasını da site başına böler ve ITP, kullanıcının etkileşmediği siteler için betikle yazılmış depolamayı **7 gün** sonra silebilir: iOS'ta bir haftadan uzun aradan sonra dönen üye yeni ziyaretçi olabilir. Gizli sekmede depolama oturumla biter. **Bu, gerçek iPhone/iPad'de doğrulanmadı** (bu ortamda cihaz yok; e2e yalnız Chromium koşar) — pilotta bir iOS cihazda "aynı sekmede ikinci gün dönüş" ve "8 gün sonra dönüş" elle denenmeli. Barındırılan sohbet sayfası (`chat.html`) birinci taraf olduğundan bu kısıtlardan etkilenmez.
+
+### 9.5 Değişen dosyalar (tm 287.3)
+
+- `packages/types/src/member-recognition.ts` (`memberTokenCookieName`, `isMemberTokenCookieName`, + test).
+- Kontrat: `paths/auth.yaml` (`/customer/token` çerez adı, `delete: forgetCustomerMemberTokens`), `src/generated/api.ts`. Yol sayısı değişmedi (231; mobil parity aynı).
+- API: `src/routes/auth.ts` (kuruluş başına çerez, `DELETE`), `src/lib/cookie.ts` (`cookieNames`).
+- Widget: `src/api.ts` (`credentials: 'include'`, kuruluş başına anahtarlar, kopya silme, paylaşılan yuvanın taşınması, `forget`), `src/widget.ts` (`logout`, kuruluş başına dönen ziyaretçi), `src/loader.ts` (Promise, onay, çerçeveyi yeniden açma).
+- Testler: `member-token.test.ts` (+4: kuruluş başına çerez ×2, `DELETE` ×2), `production-boot.test.ts` (+1 CORS), `member-recognition-schema.test.ts` (kontrat), birim `cookie.test.ts` (+2), types (+3), widget `api.member.test.ts` (14), `widget.logout.test.ts` (4), `loader.test.ts` (+5), e2e `widget.spec.ts` (+2).

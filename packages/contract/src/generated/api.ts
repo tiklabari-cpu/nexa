@@ -986,11 +986,21 @@ export interface paths {
      *     recognised by the *member token* this endpoint gave their browser, not by
      *     a `customer_id`: an id identifies, it does not authenticate, and whoever
      *     learns a member's id must not be able to open their conversation. The
-     *     token comes back in the `siyahtus_member` cookie this endpoint sets —
-     *     `HttpOnly` and `Partitioned`, so page scripts cannot read it and no other
-     *     site sees it — or, from a browser that will not keep that cookie, as
-     *     `member_token` in the body, out of the widget's localStorage. The cookie
-     *     wins when both arrive.
+     *     token comes back in the `siyahtus_member_<organization_id>` cookie this
+     *     endpoint sets — `HttpOnly` and `Partitioned`, so page scripts cannot read
+     *     it and no other site sees it — or, from a browser that will not keep that
+     *     cookie, as `member_token` in the body, out of the widget's localStorage.
+     *     The cookie wins when both arrive.
+     *
+     *     **The cookie** is named per organization (tm 287.3), because a partition
+     *     is per embedding *site*: every workspace's hosted Chat page shares one,
+     *     and so do two workspaces' widgets on one site. It is not declared as a
+     *     cookie parameter here — OpenAPI has no name pattern for one. The browser
+     *     sends it on its own when the widget's request carries credentials
+     *     (`credentials: 'include'`, which the CORS answer for the widget's origin
+     *     allows); page scripts can neither read nor write it. Only the cookie
+     *     named for the requested organization is read; the others a browser sends
+     *     along (one per workspace it has talked to on this site) are ignored.
      *
      *     The token is checked in order: signature, expiry, licence (it must be the
      *     one the embedding origin resolved to), then the revocation list. A token
@@ -1004,7 +1014,24 @@ export interface paths {
      *     agent confirms the link.
      */
     post: operations['issueCustomerToken'];
-    delete?: never;
+    /**
+     * Forget this browser's member tokens (widget logout)
+     * @description Called by the widget when the page it is embedded in signs its own user
+     *     out — `siyahtus('logout')` (ID-03 · K4 · tm 287.3). Expires every member
+     *     token cookie (`siyahtus_member_<organization_id>`) the request carries:
+     *     all of them, not one workspace's. The browser sends only the cookies of
+     *     the site it is on (they are partitioned), and a person who signed out of
+     *     that site has signed out of every workspace's widget on it. The widget
+     *     deletes its localStorage copies itself; the cookie is the one copy page
+     *     scripts cannot reach, which is why this endpoint exists.
+     *
+     *     Public and stateless: it reads no database and revokes nothing. A token
+     *     copied elsewhere stays valid until it expires or the member's tokens are
+     *     revoked (`POST /customers/{customerId}/revoke-member-tokens`); this makes
+     *     the browser forget, which is what a shared computer needs. Always 204,
+     *     with or without cookies, so it says nothing about whom it forgot.
+     */
+    delete: operations['forgetCustomerMemberTokens'];
     options?: never;
     head?: never;
     patch?: never;
@@ -15401,14 +15428,7 @@ export interface operations {
       query?: never;
       header?: never;
       path?: never;
-      cookie?: {
-        /**
-         * @description The member token as this endpoint set it (ID-03 · K4). The browser
-         *     sends it on its own when the widget's request carries credentials;
-         *     page scripts can neither read nor write it.
-         */
-        siyahtus_member?: string;
-      };
+      cookie?: never;
     };
     requestBody: {
       content: {
@@ -15417,7 +15437,7 @@ export interface operations {
           organization_id: string;
           /**
            * @description The member token from the widget's localStorage, sent only by
-           *     a browser that would not keep the `siyahtus_member` cookie
+           *     a browser that would not keep the member token cookie
            *     (ID-03 · K4); ignored when the cookie arrives too. An invalid
            *     one is not an error: the visitor is treated as new, exactly as
            *     with none.
@@ -15446,11 +15466,12 @@ export interface operations {
       200: {
         headers: {
           /**
-           * @description `siyahtus_member=<member token>; Max-Age=<token lifetime>; Secure;
-           *     HttpOnly; SameSite=None; Partitioned`, its `Path` limited to this
-           *     endpoint — on every 200, carrying the token just re-signed
-           *     (ID-03 · K4). Partitioned (CHIPS): the browser keeps a separate
-           *     one per embedding site and never sends one site's to another.
+           * @description `siyahtus_member_<organization_id>=<member token>;
+           *     Max-Age=<token lifetime>; Secure; HttpOnly; SameSite=None;
+           *     Partitioned`, its `Path` limited to this endpoint — on every 200,
+           *     carrying the token just re-signed (ID-03 · K4). Partitioned
+           *     (CHIPS): the browser keeps a separate one per embedding site and
+           *     never sends one site's to another.
            */
           'Set-Cookie'?: string;
           [name: string]: unknown;
@@ -15466,8 +15487,8 @@ export interface operations {
             /**
              * @description The member token this response re-signed (ID-03 · K4), for
              *     a browser that has to keep it itself: present whenever the
-             *     request did not arrive with a valid `siyahtus_member`
-             *     cookie, a first visit included. The widget stores it in its
+             *     request did not arrive with a valid member token cookie,
+             *     a first visit included. The widget stores it in its
              *     localStorage and sends it back as `member_token`. Absent
              *     when the cookie carried the token — the widget then deletes
              *     its own copy, so the token lives only where page scripts
@@ -15568,6 +15589,33 @@ export interface operations {
       400: components['responses']['BadRequest'];
       403: components['responses']['Forbidden'];
       421: components['responses']['MisdirectedRequest'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  forgetCustomerMemberTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The member token cookies the request carried are expired */
+      204: {
+        headers: {
+          /**
+           * @description One per member token cookie the request carried:
+           *     `siyahtus_member_<organization_id>=; Max-Age=0; Secure;
+           *     HttpOnly; SameSite=None; Partitioned`, its `Path` this endpoint —
+           *     the attributes it was set with, which is what makes the browser
+           *     drop it.
+           */
+          'Set-Cookie'?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
       429: components['responses']['TooManyRequests'];
     };
   };

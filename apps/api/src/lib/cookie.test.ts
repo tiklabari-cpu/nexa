@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readCookie, serializeCookie } from './cookie.js';
+import { cookieNames, readCookie, serializeCookie } from './cookie.js';
 
 describe('readCookie', () => {
   it('finds one cookie among several', () => {
@@ -25,6 +25,22 @@ describe('readCookie', () => {
     expect(readCookie('m=', 'm')).toBeNull();
     expect(readCookie(undefined, 'm')).toBeNull();
     expect(readCookie('garbage', 'm')).toBeNull();
+  });
+});
+
+describe('cookieNames', () => {
+  it('lists every name once, in order, and never a value', () => {
+    expect(cookieNames('a=1; siyahtus_member_x=t; a=2; b="q=r"')).toEqual([
+      'a',
+      'siyahtus_member_x',
+      'b',
+    ]);
+  });
+
+  it('reads a header split across lines and skips what is not a pair', () => {
+    expect(cookieNames(['a=1', 'garbage; =v; b=2'])).toEqual(['a', 'b']);
+    expect(cookieNames(undefined)).toEqual([]);
+    expect(cookieNames('')).toEqual([]);
   });
 });
 

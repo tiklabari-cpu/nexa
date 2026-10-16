@@ -21,10 +21,38 @@
  */
 
 /**
- * The cookie the member token travels in — set by `POST /customer/token`
- * (`Secure; HttpOnly; SameSite=None; Partitioned`) and sent back to it alone.
+ * The prefix of the cookie the member token travels in — set by
+ * `POST /customer/token` (`Secure; HttpOnly; SameSite=None; Partitioned`) and
+ * sent back to it alone. The full name carries the organization
+ * (`memberTokenCookieName`).
  */
 export const MEMBER_TOKEN_COOKIE = 'siyahtus_member';
+
+/**
+ * The member token cookie for one organization's widget (tm 287.3):
+ * `siyahtus_member_<organization id>`.
+ *
+ * One cookie per organization, because a partition is per embedding *site*,
+ * not per workspace: every workspace's hosted Chat page shares the widget's
+ * own site, and two workspaces' widgets on one site share that site's. With a
+ * single name the second workspace's mint would overwrite the first one's
+ * token — and the widget keeps no copy of a token the cookie carries, so that
+ * member would come back as a stranger. Lowercased: an organization id is a
+ * UUID, which Postgres hands back lowercase whatever case the snippet used.
+ */
+export function memberTokenCookieName(organizationId: string): string {
+  return `${MEMBER_TOKEN_COOKIE}_${organizationId.toLowerCase()}`;
+}
+
+/**
+ * Whether `name` is a member token cookie of any organization — what
+ * `DELETE /customer/token` expires when a host page signs its user out.
+ */
+export function isMemberTokenCookieName(name: string): boolean {
+  return /^siyahtus_member_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+    name,
+  );
+}
 
 /** A bound of seconds with the value a workspace has before it chooses one. */
 export interface SecondsRange {

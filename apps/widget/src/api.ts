@@ -105,6 +105,10 @@ export class WidgetApi {
   #postChatForm: WidgetFormField[] = [];
   #ticketForm: WidgetFormField[] = [];
   #prospectForm: WidgetFormField[] = [];
+  /** The mint in flight, which `forget` lets land before it forgets anything. */
+  #minting: Promise<void> | null = null;
+  /** Set by `forget`: this instance speaks for nobody any more. */
+  #forgotten = false;
 
   /**
    * The credential the socket logs in with (FR-MOD-11.6), or null before the
@@ -204,19 +208,58 @@ export class WidgetApi {
    * Exchange the organization id for a short-lived customer token.
    *
    * A returning visitor is recognised by the member token the server signed
-   * for this browser (ID-03 · K4), kept here and sent back on every load — the
-   * server re-signs it each time, so it lives as long as the visitor keeps
-   * coming back. The customer id is kept too, but it identifies, it does not
-   * authenticate: the server no longer recognises anybody by it. A browser
-   * from before member tokens holds only the id, and sends it — without a
-   * member token — for the one trade the server allows during the transition.
+   * for this browser (ID-03 · K4), and nothing else — the server re-signs it on
+   * every load, so it lives as long as the visitor keeps coming back. It
+   * travels two ways (tm 287.3):
+   *
+   *   - **The cookie** (`siyahtus_member_<organization>`, `HttpOnly`,
+   *     `Partitioned`), which the browser keeps and sends on its own — but
+   *     only on a credentialed request, hence `credentials: 'include'`. No
+   *     script here can read it, which is the point.
+   *   - **The copy in localStorage**, for a browser that will not keep the
+   *     cookie. The server leaves the token out of its answer exactly when the
+   *     cookie carried it, and the copy is deleted then: where the cookie
+   *     works, the token lives only where no script can reach it.
+   *
+   * Both are per organization: a partition is per embedding site, and every
+   * workspace's hosted Chat page shares the widget's own site — one shared
+   * slot would have each workspace overwrite the other's member.
+   *
+   * The customer id is kept per organization too, but it identifies, it does
+   * not authenticate: it only says this browser has been here before
+   * (`isReturningVisitor`). A browser from before member tokens holds the old
+   * un-keyed id and sends it, without a token, for the one trade the server
+   * allows during the transition.
    */
   async connect(): Promise<WidgetState> {
-    const memberToken = safeGetItem(MEMBER_TOKEN_KEY);
-    const stored = memberToken ? null : safeGetItem('siyahtus.customer_id');
+    // Signed out (`forget`): the next visitor gets a fresh instance in a
+    // fresh document — this one must not mint for them, not even on a 401.
+    if (this.#forgotten) throw new WidgetApiError('signed out');
+    const minting = this.#mint();
+    this.#minting = minting;
+    try {
+      await minting;
+    } finally {
+      if (this.#minting === minting) this.#minting = null;
+    }
+    return this.state();
+  }
+
+  async #mint(): Promise<void> {
+    const keys = storageKeys(this.organizationId);
+    // Read only by a workspace this browser has not met under its own keys
+    // yet: whatever a widget from before tm 287.3 left in the shared slot.
+    const met = safeGetItem(keys.customerId) !== null;
+    const legacyToken = met ? null : safeGetItem(LEGACY_MEMBER_TOKEN_KEY);
+    const legacyId = met ? null : safeGetItem(LEGACY_CUSTOMER_ID_KEY);
+    const memberToken = safeGetItem(keys.memberToken) ?? legacyToken;
+    const stored = memberToken ? null : legacyId;
 
     const response = await fetch(`${this.baseUrl}/customer/token`, {
       method: 'POST',
+      // The member cookie rides only a credentialed request; the API answers
+      // the widget's origin by name with `Access-Control-Allow-Credentials`.
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         organization_id: this.organizationId,
@@ -261,15 +304,55 @@ export class WidgetApi {
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
     this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];
     this.#prospectForm = Array.isArray(prospect_form) ? prospect_form : [];
-    // Absent only when the server's cookie carried the token, which then lives
-    // where no script can read it — the copy here is the fallback for a browser
-    // that would not keep that cookie.
+    // Absent exactly when the cookie carried the token: it then lives only
+    // where no script can read it, and the copy here goes. Present otherwise —
+    // the fallback for a browser that would not keep that cookie.
     if (typeof member_token === 'string' && member_token !== '') {
-      safeSetItem(MEMBER_TOKEN_KEY, member_token);
+      safeSetItem(keys.memberToken, member_token);
+    } else {
+      safeRemoveItem(keys.memberToken);
     }
-    safeSetItem('siyahtus.customer_id', customer_id);
+    safeSetItem(keys.customerId, customer_id);
+    // The shared slot was this workspace's if the server just recognised the
+    // customer it names; it has moved under this workspace's keys. Anything
+    // else in it is another workspace's to collect, so it stays.
+    if (legacyId !== null && legacyId === customer_id) {
+      safeRemoveItem(LEGACY_MEMBER_TOKEN_KEY);
+      safeRemoveItem(LEGACY_CUSTOMER_ID_KEY);
+    }
+  }
 
-    return this.state();
+  /**
+   * Make this browser forget its visitor — the widget's half of the host
+   * page's `siyahtus('logout')` (ID-03 · K4 · tm 287.3). Never throws.
+   *
+   * Every workspace's identity on this site goes, not only this one's: the
+   * host page signed its user out, and the next person at this browser must
+   * not be recognised as them by any widget on it. The localStorage copies are
+   * deleted here; the cookies are `HttpOnly`, so only the API can expire them,
+   * which `DELETE /customer/token` does for every one the browser sends.
+   *
+   * Nothing is revoked: a token copied off this browser stays valid until it
+   * expires or an agent revokes the member. The cookie request is
+   * best-effort — if it fails the cookie survives, and the next load is
+   * recognised as the old member — so the failure is logged, not hidden.
+   */
+  async forget(): Promise<void> {
+    this.#forgotten = true;
+    // A mint already out lands first: forgetting before it would leave the
+    // copy it writes and the cookie it brings back.
+    await this.#minting?.catch(() => undefined);
+    this.#token = null;
+    forgetStoredIdentities();
+    try {
+      const response = await fetch(`${this.baseUrl}/customer/token`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new WidgetApiError(`request failed (${response.status})`);
+    } catch (error) {
+      console.warn('siyahtus widget: could not expire the member cookie', error);
+    }
   }
 
   async state(): Promise<WidgetState> {
@@ -465,11 +548,63 @@ async function failure(response: Response): Promise<WidgetApiError> {
   }
 }
 
+const MEMBER_TOKEN_PREFIX = 'siyahtus.member_token.';
+const CUSTOMER_ID_PREFIX = 'siyahtus.customer_id.';
+
 /**
- * Where this browser keeps the member token the server signed for it
- * (ID-03 · K4). Exported for the tests that act as a returning visitor.
+ * The single, un-keyed slots a widget from before tm 287.3 kept — one for
+ * whichever workspace wrote last. Read once per workspace, to move a member
+ * across (`connect`), and cleared on sign-out.
  */
-export const MEMBER_TOKEN_KEY = 'siyahtus.member_token';
+export const LEGACY_MEMBER_TOKEN_KEY = 'siyahtus.member_token';
+export const LEGACY_CUSTOMER_ID_KEY = 'siyahtus.customer_id';
+
+/**
+ * Where this browser keeps what it knows about its visitor for one
+ * organization (ID-03 · K4 · tm 287.3): the member token copy — only when the
+ * browser would not keep the cookie — and the customer id, which marks a
+ * returning visitor. Lowercased so the snippet's casing cannot split one
+ * workspace into two. Exported for the tests that act as a returning visitor.
+ */
+export function storageKeys(organizationId: string): { memberToken: string; customerId: string } {
+  const organization = organizationId.toLowerCase();
+  return {
+    memberToken: `${MEMBER_TOKEN_PREFIX}${organization}`,
+    customerId: `${CUSTOMER_ID_PREFIX}${organization}`,
+  };
+}
+
+/**
+ * Whether this browser has talked to `organizationId` before — its own key,
+ * or the shared slot a widget from before tm 287.3 left, which `connect`
+ * moves across on the first mint.
+ */
+export function isReturningVisitor(organizationId: string): boolean {
+  return (
+    safeGetItem(storageKeys(organizationId).customerId) !== null ||
+    safeGetItem(LEGACY_CUSTOMER_ID_KEY) !== null
+  );
+}
+
+/** Every visitor identity this browser holds on this site, for every workspace. */
+function forgetStoredIdentities(): void {
+  try {
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (
+        key !== null &&
+        (key === LEGACY_MEMBER_TOKEN_KEY ||
+          key === LEGACY_CUSTOMER_ID_KEY ||
+          key.startsWith(MEMBER_TOKEN_PREFIX) ||
+          key.startsWith(CUSTOMER_ID_PREFIX))
+      ) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Storage that cannot be read holds nothing to forget.
+  }
+}
 
 /**
  * Storage can throw: Safari private mode, and any browser where the user has
@@ -489,6 +624,14 @@ function safeSetItem(key: string, value: string): void {
     localStorage.setItem(key, value);
   } catch {
     // Ignored — the visitor simply gets a new identity next load.
+  }
+}
+
+function safeRemoveItem(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignored — storage that cannot be written cannot hold the copy either.
   }
 }
 

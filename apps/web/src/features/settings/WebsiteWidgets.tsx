@@ -289,6 +289,14 @@ const TRACK_SALE_EXAMPLE =
   "siyahtus('trackSale', { external_order_id: 'order-123', amount_cents: 4999, currency: 'USD' });";
 
 /**
+ * Documentation only (ID-03 · K4 · tm 287.3) — the host page's sign-out. The
+ * widget forgets its visitor (localStorage and the `HttpOnly` member cookie)
+ * and the returned promise resolves once it has, so the page awaits it before
+ * navigating away.
+ */
+const SIGN_OUT_EXAMPLE = "await siyahtus('logout');";
+
+/**
  * The code to paste, plus the two ways to hand it off: copy it, or mail it to a
  * developer. The mail is composed as a `mailto:` so it is the admin's own mail
  * client that sends it, never us.
@@ -328,6 +336,15 @@ function SnippetPanel({ snippet, domain }: { snippet: string; domain: string }):
           className="mt-1 overflow-x-auto font-mono text-2xs leading-relaxed text-content-secondary"
         >
           {TRACK_SALE_EXAMPLE}
+        </pre>
+        <p className="mt-2 text-2xs text-content-tertiary">
+          {t('settings.websiteWidgets.snippet.signOut')}
+        </p>
+        <pre
+          data-testid="website-snippet-sign-out"
+          className="mt-1 overflow-x-auto font-mono text-2xs leading-relaxed text-content-secondary"
+        >
+          {SIGN_OUT_EXAMPLE}
         </pre>
       </div>
       <div className="flex items-center gap-2 border-t border-border px-3 py-2">

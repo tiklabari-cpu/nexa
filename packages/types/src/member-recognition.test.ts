@@ -5,7 +5,9 @@ import {
   MEMBER_TOKEN_TTL,
   POSSIBLE_MATCH_FIELDS,
   POSSIBLE_MATCH_LIMIT,
+  isMemberTokenCookieName,
   isPossibleMatchField,
+  memberTokenCookieName,
 } from './member-recognition.js';
 
 const DAY = 86_400;
@@ -36,6 +38,31 @@ describe('MEMBER_KEY_ROTATION_GRACE (ID-03 · K4)', () => {
 describe('MEMBER_TOKEN_COOKIE', () => {
   it('is a valid cookie name (an RFC 6265 token), so no browser drops or rewrites it', () => {
     expect(MEMBER_TOKEN_COOKIE).toMatch(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
+  });
+});
+
+describe('memberTokenCookieName (tm 287.3)', () => {
+  const ORG = '7f8b4a62-5c1e-4b9e-9a77-0d1e2f3a4b5c';
+
+  it('names one cookie per organization, still a valid cookie name', () => {
+    expect(memberTokenCookieName(ORG)).toBe(`siyahtus_member_${ORG}`);
+    expect(memberTokenCookieName(ORG)).toMatch(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
+    expect(memberTokenCookieName(ORG)).not.toBe(
+      memberTokenCookieName('00000000-0000-4000-8000-000000000000'),
+    );
+  });
+
+  it('is the same cookie whatever case the snippet wrote the id in', () => {
+    expect(memberTokenCookieName(ORG.toUpperCase())).toBe(memberTokenCookieName(ORG));
+  });
+
+  it('recognises exactly the names it makes', () => {
+    expect(isMemberTokenCookieName(memberTokenCookieName(ORG))).toBe(true);
+    expect(isMemberTokenCookieName(MEMBER_TOKEN_COOKIE)).toBe(false);
+    expect(isMemberTokenCookieName(`siyahtus_member_${ORG}x`)).toBe(false);
+    expect(isMemberTokenCookieName(`x_siyahtus_member_${ORG}`)).toBe(false);
+    expect(isMemberTokenCookieName('siyahtus_member_not-a-uuid')).toBe(false);
+    expect(isMemberTokenCookieName('session')).toBe(false);
   });
 });
 

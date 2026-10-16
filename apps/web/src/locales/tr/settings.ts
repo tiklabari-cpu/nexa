@@ -493,6 +493,8 @@ export const settings: Messages = {
   'settings.websiteWidgets.customizeWidget': "Widget'ı özelleştir",
   'settings.websiteWidgets.snippet.reportSale':
     'Ödeme tamamlandığında bir satışı bildirmek için kendi betiğinizden izleme kodunu çağırın:',
+  'settings.websiteWidgets.snippet.signOut':
+    'Siteniz bir kullanıcının oturumunu kapattığında sohbetin de onu unutmasını sağlayın; bu tarayıcıdaki sonraki kişi yeni bir konuşma başlatır. Sayfadan ayrılmadan önce bitmesini bekleyin:',
   'settings.websiteWidgets.snippet.copyCode': 'Kodu kopyala',
   'settings.websiteWidgets.snippet.inviteDeveloper': 'Geliştiriciyi davet et',
   'settings.websiteWidgets.platformInstall': 'Platform kurulumu',

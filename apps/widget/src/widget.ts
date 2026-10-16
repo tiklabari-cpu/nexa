@@ -21,6 +21,7 @@ import {
   type WidgetFormField,
 } from '@siyahtus/types';
 import {
+  isReturningVisitor,
   WidgetApi,
   WidgetApiError,
   type MintedAppearance,
@@ -1052,7 +1053,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // exists — and not for a returning visitor whose mint is still out: they
       // may well have a conversation, and the form flashing up before their
       // transcript replaces it is worse than the mint raising it a moment late.
-      if (needsPrechat() && (state.connected || !returningVisitor(win))) state.prechat = true;
+      if (needsPrechat() && (state.connected || !returningVisitor())) state.prechat = true;
       renderPanelBody();
       (state.prechat ? firstPrechatInput() : ui.input).focus();
       // First open: this mints, fetches and starts the poll. Every open after
@@ -1390,9 +1391,29 @@ export function mount(doc: Document = document, win: Window = window): void {
    * for a conversation the visitor cannot see.
    */
   let connecting: Promise<void> | null = null;
+  /** Set once `siyahtus('logout')` arrives; see `logout`. */
+  let loggingOut = false;
+
+  /**
+   * Whether this browser has talked to this workspace before (FR-MOD-11.1) —
+   * the id `WidgetApi#connect` stores, per organization, on a successful mint.
+   *
+   * Read at mount to decide whether to connect without being asked. A
+   * first-ever visitor is left alone: they have no conversation, so nothing can
+   * be unread, and minting for them would create a customer record for every
+   * page view of every site running the snippet. A returning one is connected
+   * straight away, because otherwise the badge cannot exist — nothing polls
+   * until the panel is opened, and by then the visitor has already found the
+   * reply themselves.
+   */
+  function returningVisitor(): boolean {
+    return isReturningVisitor(config.organizationId);
+  }
 
   async function connect(): Promise<void> {
-    if (state.connected) return;
+    // Signing out: whatever asks now is speaking for nobody until the fresh
+    // document the loader opens next.
+    if (state.connected || loggingOut) return;
     connecting ??= mint().finally(() => {
       connecting = null;
     });
@@ -1481,6 +1502,38 @@ export function mount(doc: Document = document, win: Window = window): void {
       // The real reason goes nowhere near the visitor.
       console.warn('siyahtus widget: connect failed', error);
     }
+  }
+
+  /**
+   * `siyahtus('logout')` (ID-03 · K4 · tm 287.3), relayed here from the loader:
+   * the host page signed its own user out, so this browser stops being them.
+   *
+   * The poll and the socket stop first — nothing may keep talking as the old
+   * customer while the browser forgets them. Then every stored identity goes
+   * (`WidgetApi#forget`: the localStorage copies here, the `HttpOnly` cookies
+   * through the API) and the unread watermark with them, since it belonged to
+   * that visitor's conversation. The transcript, the forms and the token are
+   * still in this document's memory, so this document does not carry on:
+   * `siyahtus:logged-out` tells the loader, which answers the host page's
+   * promise and opens a fresh one — a reset no field can be forgotten from.
+   * The next visitor starts as a first-time one, and a mint happens only when
+   * they open the panel.
+   */
+  async function logout(): Promise<void> {
+    if (loggingOut) return;
+    loggingOut = true;
+    // A mint already out lands first — it starts the poll and the socket, so
+    // stopping them before it would not stop them.
+    await connecting;
+    if (pollTimer !== null) clearTimeout(pollTimer);
+    pollTimer = null;
+    polling = false;
+    socket?.close();
+    socket = null;
+    state.connected = false;
+    await api.forget();
+    forgetLastReadAt(win);
+    postToHost(win, { type: 'siyahtus:logged-out' });
   }
 
   /**
@@ -2240,6 +2293,16 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (data?.type === 'siyahtus:host-close') setOpen(false);
     if (data?.type === 'siyahtus:command' && data.command === 'trackSale')
       void trackSale(data.payload);
+    // Only from the page the widget is embedded in: another frame on that page
+    // can reach this one too, and must not sign its visitor out.
+    if (
+      data?.type === 'siyahtus:command' &&
+      data.command === 'logout' &&
+      event.source === win.parent &&
+      !config.chatPage
+    ) {
+      void logout();
+    }
   });
 
   if (config.chatPage) {
@@ -2264,7 +2327,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // the closed panel can find out an agent answered (FR-MOD-11.1). Before
     // this, the first poll of a page load waited for the panel to be opened —
     // which is the one moment an unread badge is of no use any more.
-    if (returningVisitor(win)) void connect();
+    if (returningVisitor()) void connect();
   }
 }
 
@@ -3494,6 +3557,15 @@ function rememberLastReadAt(win: Window, isoDate: string): void {
   }
 }
 
+/** Drops the watermark on sign-out (tm 287.3): it was the old visitor's. */
+function forgetLastReadAt(win: Window): void {
+  try {
+    win.localStorage.removeItem(LAST_READ_KEY);
+  } catch {
+    // Ignored — storage that cannot be written holds no watermark either.
+  }
+}
+
 /**
  * Whether an event is a message *from the team* — the only kind that can be
  * unread. The visitor's own messages are not news to them, and a
@@ -3515,25 +3587,6 @@ function newestTeamMessageAt(events: WidgetEvent[]): string | null {
     if (newest === null || event.created_at > newest) newest = event.created_at;
   }
   return newest;
-}
-
-/**
- * Whether this browser has talked to us before (FR-MOD-11.1) — the id
- * `WidgetApi#connect` stores on a successful mint.
- *
- * Read at mount to decide whether to connect without being asked. A first-ever
- * visitor is left alone: they have no conversation, so nothing can be unread,
- * and minting for them would create a customer record for every page view of
- * every site running the snippet. A returning one is connected straight away,
- * because otherwise the badge cannot exist — nothing polls until the panel is
- * opened, and by then the visitor has already found the reply themselves.
- */
-function returningVisitor(win: Window): boolean {
-  try {
-    return win.localStorage.getItem('siyahtus.customer_id') !== null;
-  } catch {
-    return false;
-  }
 }
 
 /** Same pattern as `greetingDismissed`, keyed per campaign id. */

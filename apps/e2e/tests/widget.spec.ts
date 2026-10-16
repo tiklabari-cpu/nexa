@@ -133,11 +133,112 @@ test.describe('widget embedding', () => {
     const text = `Do you ship to Norway? ${Date.now().toString().slice(-6)}`;
     await visitorSends(page, text);
 
-    // A returning visitor continues the same conversation — the customer id is
-    // remembered, and the token is re-minted rather than reused.
+    // A returning visitor continues the same conversation — the member token
+    // is remembered (ID-03 · K4), and the customer token is re-minted rather
+    // than reused.
     await page.reload();
     await widgetFrame(page).getByRole('button', { name: 'Open chat' }).click();
     await expect(widgetFrame(page).getByRole('log', { name: 'Conversation' })).toContainText(text);
+  });
+
+  // ID-03 · K4 · tm 287.3: where a real browser keeps the member token. The
+  // first mint can only hand it over in the body (there is no cookie yet); from
+  // the next load on the partitioned cookie carries it, the server leaves it
+  // out of the answer, and the widget drops its own copy — the token then
+  // lives only where no script, the widget's included, can read it. Its own
+  // host, so its own partition: no other spec's visitor shares the cookie.
+  test('keeps the member token in a partitioned cookie no script can read, and no copy of its own (tm 287.3)', async ({
+    browser,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const site = tenantSubdomain(`member-${stamp}`);
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const stored = (key: string) =>
+      page.frame({ url: /widget\.html/ })!.evaluate((k) => window.localStorage.getItem(k), key);
+    const memberKey = `siyahtus.member_token.${organizationId.toLowerCase()}`;
+    const customerKey = `siyahtus.customer_id.${organizationId.toLowerCase()}`;
+    const cookieName = `siyahtus_member_${organizationId.toLowerCase()}`;
+    try {
+      await openWidget(page, organizationId, { host: site.origin });
+      const text = `Is this the same me? ${stamp}`;
+      await visitorSends(page, text);
+      // First visit: the body was the only way to hand the token over.
+      expect(await stored(memberKey)).toMatch(/^nxm1\./);
+
+      const [cookie] = (await context.cookies()).filter((c) => c.name === cookieName);
+      expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: 'None' });
+      // Kept for the embedding site only — another site's frame never sees it.
+      expect(cookie?.partitionKey).toMatch(/^http:\/\/([a-z0-9-]+\.)*acme-bikes\.localhost$/);
+      expect(cookie?.path).toBe('/api/v1/customer/token');
+
+      // Back: the cookie carried the token, so the widget keeps no copy.
+      await page.reload();
+      await widgetFrame(page).getByRole('button', { name: 'Open chat' }).click();
+      await expect(widgetFrame(page).getByRole('log', { name: 'Conversation' })).toContainText(
+        text,
+      );
+      await expect.poll(() => stored(memberKey)).toBeNull();
+      expect(await stored(customerKey)).not.toBeNull();
+      expect(
+        await page.frame({ url: /widget\.html/ })!.evaluate(() => document.cookie),
+      ).not.toContain('siyahtus_member');
+
+      // And again, on the cookie alone.
+      await page.reload();
+      await widgetFrame(page).getByRole('button', { name: 'Open chat' }).click();
+      await expect(widgetFrame(page).getByRole('log', { name: 'Conversation' })).toContainText(
+        text,
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  // The host page's half of a sign-out: `siyahtus('logout')` resolves once the
+  // widget has forgotten its visitor — the localStorage copies, and the
+  // `HttpOnly` cookie through `DELETE /customer/token` — and the frame starts
+  // again, so the next person at this browser is a first-time visitor.
+  test("a host page's siyahtus('logout') makes the next visitor a stranger (tm 287.3)", async ({
+    browser,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const site = tenantSubdomain(`logout-${stamp}`);
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const cookieName = `siyahtus_member_${organizationId.toLowerCase()}`;
+    try {
+      await openWidget(page, organizationId, { host: site.origin });
+      const text = `Private question before I sign out ${stamp}`;
+      await visitorSends(page, text);
+      expect((await context.cookies()).map((c) => c.name)).toContain(cookieName);
+
+      const forgotten = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/customer/token') && response.request().method() === 'DELETE',
+      );
+      await page.evaluate(() =>
+        (window as unknown as { siyahtus: (command: string) => Promise<void> }).siyahtus('logout'),
+      );
+      expect((await forgotten).status()).toBe(204);
+      expect((await context.cookies()).map((c) => c.name)).not.toContain(cookieName);
+
+      // The fresh document: a closed launcher, and behind it a first-time
+      // visitor — the pre-chat form, not the conversation.
+      const frame = widgetFrame(page);
+      await frame.getByRole('button', { name: 'Open chat' }).click();
+      await expect(frame.getByRole('button', { name: 'Start chat' })).toBeVisible();
+      await expect(frame.locator('body')).not.toContainText(text);
+
+      // Still a stranger after a reload.
+      await page.reload();
+      await widgetFrame(page).getByRole('button', { name: 'Open chat' }).click();
+      await expect(widgetFrame(page).getByRole('button', { name: 'Start chat' })).toBeVisible();
+    } finally {
+      await context.close();
+    }
   });
 
   test('a message the spam filter refuses says so, not "check your connection" (tm 259.10)', async ({

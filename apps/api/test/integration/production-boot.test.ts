@@ -204,6 +204,36 @@ describe('a production server whose widget is a separate origin (NFR-S6)', () =>
     expect(request.headers['access-control-allow-origin']).toBe(WIDGET_ORIGIN);
   });
 
+  it("lets the widget's credentialed calls through — the mint that carries the member cookie, and the sign-out that expires it (tm 287.3)", async () => {
+    // The widget sends both with `credentials: 'include'`, so the browser hands
+    // the answer to the page only when it names the origin itself (never `*`)
+    // and allows credentials — on the preflight AND on the response.
+    const preflight = await server.app.inject({
+      method: 'OPTIONS',
+      url: server.url('/customer/token'),
+      headers: { origin: WIDGET_ORIGIN, 'access-control-request-method': 'DELETE' },
+    });
+    expect(preflight.statusCode).toBe(204);
+    expect(preflight.headers['access-control-allow-origin']).toBe(WIDGET_ORIGIN);
+    expect(preflight.headers['access-control-allow-credentials']).toBe('true');
+    expect(String(preflight.headers['access-control-allow-methods'])).toMatch(/\bDELETE\b/);
+
+    const signOut = await server.del('/customer/token', { origin: WIDGET_ORIGIN });
+    expect(signOut.statusCode).toBe(204);
+    expect(signOut.headers['access-control-allow-origin']).toBe(WIDGET_ORIGIN);
+    expect(signOut.headers['access-control-allow-credentials']).toBe('true');
+
+    // The mint's answer too, whatever its status: the browser applies the same
+    // rule to a refusal, and this one is refused (no such organization).
+    const mint = await server.post(
+      '/customer/token',
+      { organization_id: '00000000-0000-4000-8000-000000000000' },
+      { origin: WIDGET_ORIGIN },
+    );
+    expect(mint.headers['access-control-allow-origin']).toBe(WIDGET_ORIGIN);
+    expect(mint.headers['access-control-allow-credentials']).toBe('true');
+  });
+
   it('still refuses an origin nobody listed', async () => {
     const preflight = await server.app.inject({
       method: 'OPTIONS',

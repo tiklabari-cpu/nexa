@@ -1,6 +1,7 @@
 /**
- * The two cookie operations the API needs, and no more (tm 287.2): reading
- * one cookie out of a request's `Cookie` header, and writing one `Set-Cookie`.
+ * The cookie operations the API needs, and no more (tm 287.2): reading one
+ * cookie out of a request's `Cookie` header, listing the names it carries
+ * (tm 287.3, to expire them), and writing one `Set-Cookie`.
  *
  * Only the member token travels in a cookie (`siyahtus_member`, ID-03 · K4) —
  * every other credential is a bearer header — so a cookie plugin with signing,
@@ -30,6 +31,23 @@ export function readCookie(header: string | string[] | undefined, name: string):
     return value === '' ? null : value;
   }
   return null;
+}
+
+/**
+ * The names of the cookies a request carries, each once, in header order —
+ * values are never read. A pair without `=` is not a cookie and is skipped.
+ */
+export function cookieNames(header: string | string[] | undefined): string[] {
+  const joined = Array.isArray(header) ? header.join('; ') : header;
+  if (!joined) return [];
+  const names = new Set<string>();
+  for (const pair of joined.split(';')) {
+    const separator = pair.indexOf('=');
+    if (separator === -1) continue;
+    const name = pair.slice(0, separator).trim();
+    if (name !== '') names.add(name);
+  }
+  return [...names];
 }
 
 export interface CookieAttributes {

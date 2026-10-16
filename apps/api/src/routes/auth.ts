@@ -7,7 +7,8 @@ import { z } from 'zod';
 import {
   isScope,
   DEFAULT_PRECHAT_CONFIG,
-  MEMBER_TOKEN_COOKIE,
+  isMemberTokenCookieName,
+  memberTokenCookieName,
   normalizePrechatConfig,
   normalizeWidgetAppearance,
   RTM_PATHS,
@@ -20,7 +21,7 @@ import {
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
-import { readCookie, serializeCookie } from '../lib/cookie.js';
+import { cookieNames, readCookie, serializeCookie } from '../lib/cookie.js';
 import { verifyPassword } from '../lib/crypto.js';
 import { poweredByFor } from '../lib/entitlements.js';
 import { originHost } from '../lib/origin.js';
@@ -197,7 +198,7 @@ const customerTokenBody = z.object({
   organization_id: z.string().uuid(),
   /**
    * The member token from the widget's localStorage (ID-03 · K4), sent by a
-   * browser that would not keep the `siyahtus_member` cookie. Any string is
+   * browser that would not keep the member token cookie. Any string is
    * accepted here — an invalid one is a new visitor, not a 400, so a refused
    * token is answered exactly like no token.
    */
@@ -1704,7 +1705,14 @@ export default async function authRoutes(
     // open their conversation with it. `resolve` trades one for a member token
     // only once, inside the transition window, and otherwise opens a new
     // anonymous customer — answered exactly like a first visit.
-    const cookieToken = readCookie(request.headers.cookie, MEMBER_TOKEN_COOKIE);
+    //
+    // The cookie is this organization's (tm 287.3): a browser holds one per
+    // workspace it has talked to on this site and sends them all here, and
+    // another workspace's token is neither read nor overwritten — otherwise
+    // two workspaces sharing a site (every hosted Chat page does) would take
+    // turns forgetting the same visitor.
+    const memberCookie = memberTokenCookieName(match.organization_id);
+    const cookieToken = readCookie(request.headers.cookie, memberCookie);
     const presented: { token: string; source: MemberTokenSource } | null = cookieToken
       ? { token: cookieToken, source: 'cookie' }
       : body.member_token
@@ -1811,14 +1819,7 @@ export default async function authRoutes(
     // would not keep the cookie and has to hold the token in localStorage.
     reply.header(
       'Set-Cookie',
-      serializeCookie(MEMBER_TOKEN_COOKIE, member.memberToken, {
-        maxAgeSeconds: member.ttlSeconds,
-        path: request.routeOptions.url ?? '/',
-        secure: true,
-        httpOnly: true,
-        sameSite: 'None',
-        partitioned: true,
-      }),
+      memberTokenCookie(memberCookie, member.memberToken, member.ttlSeconds, request),
     );
     const cookieCarriedIt = presented?.source === 'cookie' && member.via === 'token';
     return reply.send({
@@ -1846,6 +1847,48 @@ export default async function authRoutes(
       ticket_form: forms.ticket,
       prospect_form: forms.prospect,
     });
+  });
+
+  // --- DELETE /customer/token ------------------------------------------------
+  // The widget's half of a host page's sign-out (`siyahtus('logout')`, ID-03 ·
+  // K4 · tm 287.3): expire every member token cookie this browser sent. The
+  // widget deletes its localStorage copies itself; the cookie is the copy no
+  // script can reach. Every one, not the calling widget's organization's: the
+  // browser sends only this site's cookies (they are partitioned), and whoever
+  // signed out of the site signed out of every workspace's widget on it.
+  //
+  // Public and stateless — no database, nothing revoked, always 204 — so it
+  // needs no origin check: a page can only ever make its own partition forget.
+  app.delete('/customer/token', { config: { public: true } }, async (request, reply) => {
+    const expired = cookieNames(request.headers.cookie)
+      .filter(isMemberTokenCookieName)
+      .map((name) => memberTokenCookie(name, '', 0, request));
+    reply.header('Cache-Control', 'no-store');
+    if (expired.length > 0) reply.header('Set-Cookie', expired);
+    return reply.code(204).send();
+  });
+}
+
+/**
+ * One member token cookie (ID-03 · K4), written with the attributes the
+ * contract names: kept per embedding site (CHIPS `Partitioned`), sent back to
+ * this endpoint alone (`Path`), never shown to a page script (`HttpOnly`).
+ * Expiring one (`maxAgeSeconds` 0, empty value) repeats them all, because a
+ * browser drops a cookie only when its name, path and partition match.
+ */
+function memberTokenCookie(
+  name: string,
+  value: string,
+  maxAgeSeconds: number,
+  request: FastifyRequest,
+): string {
+  return serializeCookie(name, value, {
+    maxAgeSeconds,
+    path: request.routeOptions.url ?? '/',
+    secure: true,
+    httpOnly: true,
+    sameSite: 'None',
+    partitioned: true,
   });
 }
 

@@ -63,7 +63,15 @@ const ALLOWED_INBOUND = new Set([
   'siyahtus:resize',
   'siyahtus:open',
   'siyahtus:close',
+  'siyahtus:logged-out',
 ]);
+
+/**
+ * How long `siyahtus('logout')` waits for the widget to say it has forgotten
+ * its visitor before resolving anyway — a widget that never booted (no
+ * `organizationId`, a blocked frame) must not hang the host page's sign-out.
+ */
+export const LOGOUT_TIMEOUT_MS = 5_000;
 
 const IFRAME_ID = 'siyahtus-widget-frame';
 
@@ -112,6 +120,9 @@ let pendingCommands: Array<{ command: string; payload: SiyahTusCommandPayload }>
 /** Set once the current widget instance confirms (`siyahtus:ready`) it can receive commands. */
 let relayCommand: ((command: string, payload: SiyahTusCommandPayload) => void) | null = null;
 
+/** Host-page promises from `siyahtus('logout')`, answered by `siyahtus:logged-out`. */
+let logoutWaiters: Array<() => void> = [];
+
 /**
  * `siyahtus('trackSale', …)` (FR-MOD-13.5) — the general command surface a host
  * page's own scripts call. Exposed as soon as this script runs, since a page's
@@ -119,8 +130,14 @@ let relayCommand: ((command: string, payload: SiyahTusCommandPayload) => void) |
  * rather than dropped, and flushed once the frame confirms it is ready
  * (classic command-queue snippet pattern). Never throws — a checkout page
  * must not break because a call arrived early or was misused.
+ *
+ * `siyahtus('logout')` (ID-03 · K4 · tm 287.3) is the one command with an
+ * answer: the host page signed its user out, the widget forgets them, and the
+ * returned promise resolves once it has — so a page can `await` it before
+ * navigating away, which would otherwise tear the frame down mid-forget. It
+ * never rejects, and resolves after `LOGOUT_TIMEOUT_MS` whatever happened.
  */
-function siyahtus(command: string, payload?: SiyahTusCommandPayload): void {
+function siyahtus(command: string, payload?: SiyahTusCommandPayload): Promise<void> | undefined {
   try {
     if (relayCommand) relayCommand(command, payload);
     else pendingCommands.push({ command, payload });
@@ -128,6 +145,18 @@ function siyahtus(command: string, payload?: SiyahTusCommandPayload): void {
     // Never propagates into the host page — not even a relay failure against
     // a frame that has since gone away.
   }
+  return command === 'logout' ? loggedOut() : undefined;
+}
+
+function loggedOut(): Promise<void> {
+  return new Promise((resolve) => {
+    const finish = (): void => {
+      logoutWaiters = logoutWaiters.filter((waiter) => waiter !== finish);
+      resolve();
+    };
+    logoutWaiters.push(finish);
+    setTimeout(finish, LOGOUT_TIMEOUT_MS);
+  });
 }
 
 export function boot(
@@ -258,6 +287,21 @@ export function boot(
       const width = clampDimension(data.width, 84, MAX_FRAME.width);
       if (height) wantHeight = height;
       if (width) wantWidth = width;
+    }
+
+    if (data.type === 'siyahtus:logged-out') {
+      // The widget has forgotten its visitor (tm 287.3): answer the host page,
+      // then open a fresh document — the old one still holds the transcript
+      // in memory. Commands issued meanwhile wait for its `siyahtus:ready`,
+      // and the frame starts again as a closed launcher.
+      const waiting = logoutWaiters;
+      logoutWaiters = [];
+      for (const finish of waiting) finish();
+      relayCommand = null;
+      open = false;
+      wantWidth = 124;
+      wantHeight = 124;
+      frame.src = buildFrameUrl(widgetOrigin, config, hostPageUrl(win));
     }
 
     applyGeometry();

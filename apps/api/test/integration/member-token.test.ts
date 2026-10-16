@@ -25,12 +25,15 @@
  *     in once, inside the window — never twice, never two requests at once.
  *   - **The licence's controls** (Settings › Security › Member recognition and
  *     forgetting one member) — role, scope, audit, tenant isolation.
+ *   - **One cookie per workspace, and sign-out** (tm 287.3): a visit reads and
+ *     renews only its own workspace's cookie; `DELETE /customer/token` expires
+ *     every member cookie the browser sent and revokes nothing.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MEMBER_TOKEN_COOKIE, MEMBER_TOKEN_TTL } from '@siyahtus/types';
+import { MEMBER_TOKEN_COOKIE, MEMBER_TOKEN_TTL, memberTokenCookieName } from '@siyahtus/types';
 import {
   MEMBER_TOKEN_FORMAT,
   MemberTokenCodec,
@@ -113,7 +116,11 @@ describe('member tokens (ID-03 · K4)', () => {
     const response =
       via === 'body'
         ? await mint(tenant, { member_token: memberToken })
-        : await mint(tenant, {}, { cookie: `${MEMBER_TOKEN_COOKIE}=${memberToken}` });
+        : await mint(
+            tenant,
+            {},
+            { cookie: `${memberTokenCookieName(tenant.organizationId)}=${memberToken}` },
+          );
     expect(response.statusCode).toBe(200);
     return response.json() as Minted;
   }
@@ -207,7 +214,8 @@ describe('member tokens (ID-03 · K4)', () => {
       // The cookie: kept per embedding site, sent to this endpoint alone, never
       // shown to a page script.
       expect(response.headers['set-cookie']).toBe(
-        `${MEMBER_TOKEN_COOKIE}=${body.member_token}; Max-Age=${MEMBER_TOKEN_TTL.defaultSeconds}; ` +
+        `${memberTokenCookieName(fx.a.organizationId)}=${body.member_token}; ` +
+          `Max-Age=${MEMBER_TOKEN_TTL.defaultSeconds}; ` +
           'Path=/api/v1/customer/token; Secure; HttpOnly; SameSite=None; Partitioned',
       );
       expect(response.headers['cache-control']).toBe('no-store');
@@ -278,7 +286,7 @@ describe('member tokens (ID-03 · K4)', () => {
       const response = await mint(
         fx.a,
         {},
-        { cookie: `${MEMBER_TOKEN_COOKIE}=${first.member_token}` },
+        { cookie: `${memberTokenCookieName(fx.a.organizationId)}=${first.member_token}` },
       );
       expect(response.statusCode).toBe(200);
       const body = response.json() as Minted;
@@ -287,7 +295,7 @@ describe('member tokens (ID-03 · K4)', () => {
       // The token lives where no script reads it; the cookie is renewed.
       expect(body).not.toHaveProperty('member_token');
       expect(String(response.headers['set-cookie'])).toMatch(
-        new RegExp(`^${MEMBER_TOKEN_COOKIE}=nxm1\\.1\\.`),
+        new RegExp(`^${memberTokenCookieName(fx.a.organizationId)}=nxm1\\.1\\.`),
       );
       expect(body.member_token_expires_at).toBeTruthy();
     });
@@ -298,9 +306,91 @@ describe('member tokens (ID-03 · K4)', () => {
       const response = await mint(
         fx.a,
         { member_token: bob.member_token },
-        { cookie: `other=1; ${MEMBER_TOKEN_COOKIE}=${alice.member_token}` },
+        { cookie: `other=1; ${memberTokenCookieName(fx.a.organizationId)}=${alice.member_token}` },
       );
       expect((response.json() as Minted).customer_id).toBe(alice.customer_id);
+    });
+  });
+
+  // ==========================================================================
+  // One cookie per workspace, and the host page's sign-out (tm 287.3)
+  // ==========================================================================
+
+  describe('the cookie per workspace (tm 287.3)', () => {
+    it("reads and renews only its own workspace's cookie — another's survives a visit untouched (NFR-S2)", async () => {
+      // Two workspaces on one site — every hosted Chat page shares the widget's
+      // own — so one browser sends both cookies to both.
+      const atA = await firstVisit(fx.a);
+      const atB = await firstVisit(fx.b);
+      const both =
+        `${memberTokenCookieName(fx.b.organizationId)}=${atB.member_token}; ` +
+        `${memberTokenCookieName(fx.a.organizationId)}=${atA.member_token}`;
+
+      const from = sink.lines.length;
+      const backAtA = await mint(fx.a, {}, { cookie: both });
+      const backAtB = await mint(fx.b, {}, { cookie: both });
+
+      expect((backAtA.json() as Minted).customer_id).toBe(atA.customer_id);
+      expect((backAtB.json() as Minted).customer_id).toBe(atB.customer_id);
+      // Each answer renews its own cookie and names no other: B's visit cannot
+      // overwrite A's member with B's.
+      expect(backAtA.headers['set-cookie']).toMatch(
+        new RegExp(`^${memberTokenCookieName(fx.a.organizationId)}=nxm1\\.`),
+      );
+      expect(backAtB.headers['set-cookie']).toMatch(
+        new RegExp(`^${memberTokenCookieName(fx.b.organizationId)}=nxm1\\.`),
+      );
+      // The other workspace's token was never even read, so nothing was refused.
+      expect(refusals(from)).toEqual([]);
+    });
+
+    it('treats a cookie under another name — the old shared one, or another workspace’s — as no cookie', async () => {
+      const member = await firstVisit(fx.a);
+      const from = sink.lines.length;
+
+      for (const name of [MEMBER_TOKEN_COOKIE, memberTokenCookieName(fx.b.organizationId)]) {
+        const response = await mint(fx.a, {}, { cookie: `${name}=${member.member_token}` });
+        const body = response.json() as Minted;
+        expect(body.customer_id, name).not.toBe(member.customer_id);
+        // A new visitor, handed a token of their own in the body.
+        expect(body.member_token, name).toMatch(/^nxm1\./);
+      }
+      expect(refusals(from)).toEqual([]);
+    });
+  });
+
+  describe('sign-out: DELETE /customer/token (tm 287.3)', () => {
+    it("expires every workspace's member cookie the browser sent, with the attributes it was set with, and nothing else", async () => {
+      const a = memberTokenCookieName(fx.a.organizationId);
+      const b = memberTokenCookieName(fx.b.organizationId);
+      const response = await server.del('/customer/token', {
+        ...origin(fx.a),
+        cookie: `other=1; ${a}=nxm1.1.x.y; ${MEMBER_TOKEN_COOKIE}=old; ${b}=nxm1.1.z.w; ${a}=dup`,
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(response.body).toBe('');
+      expect(response.headers['cache-control']).toBe('no-store');
+      const attributes =
+        'Max-Age=0; Path=/api/v1/customer/token; Secure; HttpOnly; SameSite=None; Partitioned';
+      expect(response.headers['set-cookie']).toEqual([
+        `${a}=; ${attributes}`,
+        `${b}=; ${attributes}`,
+      ]);
+    });
+
+    it('answers the same 204 with no cookie to expire, and revokes nothing — a copy kept elsewhere still works', async () => {
+      const member = await firstVisit(fx.a);
+
+      const response = await server.del('/customer/token', origin(fx.a));
+      expect(response.statusCode).toBe(204);
+      expect(response.headers['set-cookie']).toBeUndefined();
+
+      // Stateless: forgetting is the browser's, revoking is an agent's.
+      const back = await mint(fx.a, {
+        member_token: member.member_token,
+      });
+      expect((back.json() as Minted).customer_id).toBe(member.customer_id);
     });
   });
 

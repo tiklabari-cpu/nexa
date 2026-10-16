@@ -15,6 +15,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GREETING_DELAY_MS, PREVIEW_MS, mount } from './widget.js';
+import { storageKeys } from './api.js';
 
 const API = 'https://api.test/v1';
 
@@ -96,7 +97,7 @@ function mountWidget(): HTMLElement {
 
 /** Simulate the visitor having chatted here before — what `connect` stores. */
 function returningVisitor(): void {
-  window.localStorage.setItem('siyahtus.customer_id', 'cust-1');
+  window.localStorage.setItem(storageKeys('org-1').customerId, 'cust-1');
 }
 
 function launcher(root: HTMLElement): HTMLButtonElement {

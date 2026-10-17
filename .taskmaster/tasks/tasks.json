@@ -12567,7 +12567,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T19:58:32.878Z",
+        "updatedAt": "2026-10-17T21:53:33.956Z",
         "subtasks": [
           {
             "id": 1,
@@ -12575,11 +12575,11 @@
             "description": "packages/types slots.ts: tipler, yasaklı ad/etiket listesi, ortak doğrulayıcılar, problem kodları",
             "details": "Üst görev 295 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Birim.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "295",
             "priority": "high",
-            "updatedAt": "2026-10-17T19:58:32.878Z"
+            "updatedAt": "2026-10-17T21:53:33.956Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T19:58:32.879Z",
+      "lastModified": "2026-10-17T21:53:33.957Z",
       "taskCount": 390,
       "completedCount": 293,
       "tags": [

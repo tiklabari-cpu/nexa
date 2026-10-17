@@ -12368,7 +12368,7 @@
           "290"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T04:14:15.595Z",
+        "updatedAt": "2026-10-17T04:15:52.741Z",
         "subtasks": [
           {
             "id": 1,
@@ -12416,13 +12416,13 @@
             "description": "Debounce/birleştirme + iyimser kilit + gönderim öncesi yeni mesaj kontrolü",
             "details": "ai_jobs işçisi (#289) ile çalışır.",
             "testStrategy": "Üç mesaj → tek cevap; iki işçi → tek cevap.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "292.3"
             ],
             "parentId": "292",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-17T04:15:52.741Z"
           },
           {
             "id": 5,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T04:14:15.596Z",
+      "lastModified": "2026-10-17T04:15:52.742Z",
       "taskCount": 390,
       "completedCount": 290,
       "tags": [

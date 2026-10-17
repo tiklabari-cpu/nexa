@@ -755,6 +755,17 @@ export const envSchema = z.object({
    */
   LLM_MAX_PROMPT_CHARS: z.coerce.number().int().min(2_000).max(500_000).default(16_000),
   /**
+   * How long the AI waits for a visitor to stop typing before it answers
+   * (tm 292.4 · AI-01 §5): messages written within this many milliseconds of
+   * each other are answered as one turn, so "hi" / "my deposit" / "has not
+   * arrived" gets one reply rather than three. A turn waits for the newest
+   * message to be this old, and never more than twice this in all. 0 answers
+   * at once — what the test servers run with; whatever was already waiting is
+   * still answered together. Ten seconds at most: past that the visitor is
+   * left wondering whether anybody is there.
+   */
+  AI_BATCH_WINDOW_MS: z.coerce.number().int().min(0).max(10_000).default(3_000),
+  /**
    * Who turns text into vectors for knowledge retrieval (tm 255.7 · ADR
    * docs/adr/pilot-llm-embedding-provider.md §9.2). Configured apart from
    * `LLM_PROVIDER`: its own key, host, model and region. `mock` is the lexical

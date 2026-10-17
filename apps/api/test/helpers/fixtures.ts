@@ -60,6 +60,11 @@ export function testEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): Env {
     // caps stay at their defaults: `resetDatabase` empties their counter with
     // every other table, so a suite starts each test on a fresh day's count.
     RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
+    // The AI answers at once (tm 292.4): a suite that sends a message and
+    // waits for its answer would otherwise wait out the visitor's typing window
+    // on every one. Messages already waiting are still answered together; the
+    // window itself is proven with its own value in `ai-batch-lock.test.ts`.
+    AI_BATCH_WINDOW_MS: '0',
     ...overrides,
   });
 }

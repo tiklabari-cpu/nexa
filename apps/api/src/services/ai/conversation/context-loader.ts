@@ -41,6 +41,11 @@
  * bound on visitor messages is a row filter: it skips at most the messages the
  * visitor wrote after the one being answered.
  * `test/integration/ai-context-loader.test.ts` explains both statements.
+ *
+ * **The visitor's newest message** ({@link newestVisitorEvent}, tm 292.4): the
+ * one more read the live adapter makes of the event model — the batch window
+ * waits for it to be old enough, and the reply checks it once more before it
+ * goes out (AI-01 §5, §7).
  */
 import { Prisma } from '@prisma/client';
 import type { TenantClient } from '../../../lib/tenant.js';
@@ -107,6 +112,8 @@ export interface ConnectionEvents {
 export interface ConnectionContext extends TurnHistory {
   /** The visitor's messages after `processedThrough`, merged: what the turn answers. */
   readonly newCustomerText: string;
+  /** How many visitor messages `newCustomerText` merges (tm 292.4). */
+  readonly freshMessages: number;
   /** The newest event read; the turn covers the connection up to here. */
   readonly lastSeq: number;
 }
@@ -179,6 +186,43 @@ export async function loadConnectionEvents(
   // nothing between the two was left out.
   const gapAfter = Number(older.event_sequence) === anchor.sequence ? null : anchor.sequence;
   return { events: [anchor, ...window], gapAfter };
+}
+
+/** The visitor's newest message on a connection, and how long ago it was written. */
+export interface VisitorEventAge {
+  readonly sequence: number;
+  readonly ageMs: number;
+}
+
+/**
+ * The visitor's newest `message` or `file` on the connection (tm 292.4 ·
+ * AI-01 §5, §7) — what the batch window waits on and what the check before a
+ * reply goes out compares against. Null when the visitor has written nothing.
+ *
+ * The age is measured on the database's clock, the one that stamped the row,
+ * so a skew between this process and Postgres cannot make a message look older
+ * than it is. The same index as {@link loadConnectionEvents}, walked back from
+ * the newest event to the first of the visitor's.
+ */
+export async function newestVisitorEvent(
+  tx: TenantClient,
+  ref: ConnectionRef,
+): Promise<VisitorEventAge | null> {
+  const [row] = await tx.$queryRaw<Array<{ event_sequence: bigint | number; age_ms: number }>>(
+    Prisma.sql`
+      SELECT event_sequence,
+             GREATEST(0, EXTRACT(EPOCH FROM clock_timestamp() - created_at) * 1000)::float8 AS age_ms
+      FROM events
+      WHERE thread_id = ${ref.threadId}
+        AND chat_id = ${ref.chatId}
+        AND author_type = 'customer'
+        AND recipients = 'all'
+        AND type IN ('message', 'file')
+      ORDER BY event_sequence DESC
+      LIMIT 1
+    `,
+  );
+  return row ? { sequence: Number(row.event_sequence), ageMs: Number(row.age_ms) } : null;
 }
 
 /** Read and build a turn's context in one call — the live adapter's door. */
@@ -259,6 +303,7 @@ export function buildConnectionContext(
     omitted: read.gapAfter !== null || kept.length < earlier.length,
     visitorMessages,
     newCustomerText: fresh.join('\n'),
+    freshMessages: fresh.length,
     lastSeq,
   };
 }

@@ -38,6 +38,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ℹ tm 269 · ADR-14a eki: Skill `mode: 'single' | 'procedure'`, adımlara `when`/`check`/`collect`, araç yuvası adım tipi, `workflows`/tuval yok — damga `✅` kaldı, kod değişmedi · PLAN.md §0 (ADR tablosunun altı) · `docs/adr/skill-procedure.md` · test yok (yalnız doküman) · §D217
 
+- ℹ tm 292.1 · AI-01 1/5 (AI çekirdeği #292): bağlantı başına AI konuşma durumu `ai_conversations` (RLS; iyimser kilit — sürüm her UPDATE'te tetikleyiciyle artar, tur `WHERE version` ile yazar, kaybeden turun cevabı geri alınır; yapılandırma sürümü açılışta bir kez sabitlenir; başka kiracının thread'ine konuşma açılamaz) + durum deposu; bugünkü tek mesajlık skill akışı değişmedi, damga `✅` kaldı · migration `20261016200000_ai_conversations` · `services/ai/conversation/state-store.ts:189` · `test/integration/ai-conversations.test.ts` (19) · `state-store.test.ts` (13) · §D254
+
 #### K06.2.5 — 06.2.5 · Preview (canlı simülasyon)
 
 - ✅ Örnek girdi → AI eylem narrasyonu — `SkillEditor.tsx` `PreviewResult` (StatusDot outcome + `log` per-step narration: detect_intent/tag/**request_info (toplama)**/summarize/send_message/transfer_to_team, her biri `ok`/detail) · `POST /skills/preview` gerçek `SkillEngine.preview` (yazma yok) · tm 33 · §D53

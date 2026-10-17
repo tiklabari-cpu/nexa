@@ -25,10 +25,31 @@
  *
  * **The turn reads the conversation (tm 292.3 · AI-01).** With the state and
  * the configuration (`AiConfigSource`, ADR-14b §2.6) the same read loads the
- * connection's transcript up to the message being answered
- * (`context-loader.ts`): what came before it is the turn's history, which the
- * model reads; the message itself is still the one the job names. Gathering
- * several unanswered messages into one turn is tm 292.4's.
+ * connection's transcript (`context-loader.ts`): what came before the job's
+ * message is the turn's history, which the model reads.
+ *
+ * **One answer to what the visitor said, not one per message (tm 292.4 ·
+ * AI-01 §4–§7).** A visitor who writes "hi", "my deposit", "has not arrived"
+ * a second apart is asking one question. So the turn:
+ *
+ *   1. does nothing when its message is answered already — an earlier turn
+ *      gathered it (`last_processed_event_seq`), checked before the gates and
+ *      again once the turn is ready to read;
+ *   2. waits for the visitor to stop typing (`batch-window.ts`,
+ *      `AI_BATCH_WINDOW_MS`) — unless the AI has no skill it could run, when
+ *      no turn could come of the wait — then answers its message and every one after it
+ *      as one turn, and records the newest as processed — the jobs those
+ *      messages set off find nothing left to do (point 1). The chat's jobs run
+ *      one at a time (`ai_jobs_claim`), so the next one waits for this;
+ *   3. looks once more just before the reply goes out, in the reply's own
+ *      transaction: if the visitor wrote again while the model was thinking,
+ *      the draft answers a conversation that has moved on, so it is dropped
+ *      (its decision record says `expired`) and the turn is taken again with
+ *      the new message — once; the second draft goes out whatever arrives.
+ *
+ * Two engines on one connection — two API copies, or a job whose lease ran out
+ * while its model was thinking — both may think; the optimistic lock above
+ * lets one of them send.
  *
  * It is not the first thing an incoming message meets. The deterministic rule
  * bot (FR-MOD-06.6, `services/bots/rule-bot-responder.ts`) is tried first and
@@ -49,7 +70,12 @@ import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
-import { loadConnectionContext, type ConnectionContext } from './conversation/context-loader.js';
+import { awaitBatchWindow } from './conversation/batch-window.js';
+import {
+  loadConnectionContext,
+  newestVisitorEvent,
+  type ConnectionContext,
+} from './conversation/context-loader.js';
 import type { ConversationEngine } from './conversation/conversation-engine.js';
 import {
   AiConversationConflictError,
@@ -68,20 +94,47 @@ import {
   turnStatePatch,
   type TurnHistory,
   type TurnResult,
+  type TurnState,
 } from './conversation/turn.js';
-import { readAndCompile } from './conversation/turn-config.js';
+import { readAndCompile, type AiConfigRead } from './conversation/turn-config.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 
+/** How many drafts one turn may write: the first, and one after the visitor wrote again. */
+const DRAFTS_PER_TURN = 2;
+
+export interface AiResponderOptions {
+  /**
+   * How quiet the visitor must have been before the turn starts, in
+   * milliseconds (`AI_BATCH_WINDOW_MS`). 0, the default here: no wait.
+   */
+  readonly batchWindowMs?: number;
+}
+
+/**
+ * Thrown in the reply's transaction when the visitor wrote again after the
+ * turn read the conversation (AI-01 §7): the reply rolls back and the turn is
+ * taken again.
+ */
+class VisitorWroteAgainError extends Error {
+  constructor(readonly newestSequence: number) {
+    super('the visitor wrote again before the reply went out');
+    this.name = 'VisitorWroteAgainError';
+  }
+}
+
 export class AiResponder {
   readonly #engine: ConversationEngine;
+  readonly #batchWindowMs: number;
 
   constructor(
     private readonly chats: ChatService,
     private readonly publisher: RealtimePublisher,
     engine: ConversationEngine,
+    options: AiResponderOptions = {},
   ) {
     this.#engine = engine;
+    this.#batchWindowMs = options.batchWindowMs ?? 0;
   }
 
   /**
@@ -94,7 +147,9 @@ export class AiResponder {
    * after the turn is applied, so the record names the reply it wrote. A
    * message no skill matched is not a turn and leaves none; nor does a turn
    * that lost the conversation to another writer, whose own turn is the one on
-   * record. A record that cannot be written is one log line, never a lost reply.
+   * record, nor a message an earlier turn answered. A draft dropped because the
+   * visitor wrote again leaves an `expired` record of its own. A record that
+   * cannot be written is one log line, never a lost reply.
    */
   async handle(turn: VisitorTurn, message: string): Promise<TurnResult | null> {
     const { tenant, chatId, log } = turn;
@@ -107,6 +162,30 @@ export class AiResponder {
     };
     const record = (input: Omit<AiDecisionInput, keyof typeof ids>): Promise<string | null> =>
       recordAiDecision(turn.withTenant, tenant, { ...ids, ...input }, log);
+    const ref: ConnectionRef = { chatId, threadId: turn.threadId };
+    // The message's place on its connection. A job's message is always on the
+    // job's connection; one that is not is answered alone, as it always was.
+    const answering = parseEventId(turn.triggerEventId);
+    const trigger = answering && answering.threadId === ref.threadId ? answering.sequence : null;
+
+    // Answered already (AI-01 §5): an earlier turn gathered this message with
+    // the one its job was for. Asked before the gates, which would otherwise
+    // record a refusal for a message nobody is waiting on.
+    let runnable = true;
+    try {
+      if (trigger !== null) {
+        const lookout = await this.#lookout(turn, ref);
+        if (lookout.answeredThrough >= trigger) {
+          log.info({}, 'an earlier ai turn answered this message; nothing to do');
+          return null;
+        }
+        runnable = lookout.runnable;
+      }
+    } catch (error) {
+      // Whatever went wrong, the message is stored and a human will see it.
+      log.error({ err: error }, 'ai turn failed');
+      return null;
+    }
 
     // Residency, before the message reaches the engine (NFR-C4 · C4-e). This is
     // the one AI surface a *customer* triggers, and the content is the message
@@ -149,85 +228,122 @@ export class AiResponder {
       return null;
     }
 
-    const ref: ConnectionRef = { chatId, threadId: turn.threadId };
     const startedAt = performance.now();
     let read: AiConversationState | null = null;
     let result: TurnResult | null = null;
     let replyEventId: string | null = null;
     let applyFailed = false;
     let unrecorded = false;
+    /** The visitor's messages the turn answers, and the drafts it wrote. */
+    let gathered = 1;
+    let drafts = 0;
     try {
-      // Where the conversation stands, what the AI may run and what was said
-      // before this message, read together; then the turn, over a runner
-      // rather than one transaction around it — the engine opens a short one
-      // per read so the model call waits in none.
-      const answering = parseEventId(turn.triggerEventId);
-      const loaded = await turn.withTenant(async (tx) => {
-        const conversation = await loadConversation(tx, ref);
-        const state = conversation ? toTurnState(conversation) : emptyTurnState();
-        const config = await readAndCompile.forTurn(tx, {
-          aiAgentId: null,
-          pinnedVersionId: conversation?.configVersionId ?? null,
-        });
-        // Everything before the message is history; the message is the turn's.
-        const context =
-          answering && answering.threadId === ref.threadId
-            ? await loadConnectionContext(tx, ref, state, {
-                through: answering.sequence,
-                processedThrough: answering.sequence - 1,
-              })
-            : null;
-        return { conversation, state, config, context };
-      });
-      read = loaded.conversation;
-      const history = historyOf(loaded.context);
-      result = await this.#engine.runTurn(
-        loaded.state,
-        { text: message, ...(history ? { history } : {}) },
-        {
-          tenant,
-          db: turn.withTenant,
-          now: new Date(),
-          mode: 'live',
-          chatId,
-          configVersionId: read?.configVersionId ?? loaded.config.versionId,
-          config: loaded.config.pkg,
-          toolStubs: {},
-        },
-      );
-      const { decisions } = result;
-      if (decisions.failure) {
-        // The provider's own lines (component `llm` or `embedding`) carry the
-        // status and the code but not the conversation; this one, on the
-        // turn's logger, ties the failure to the chat a human now has to
-        // answer (tm 255.6), and says which provider it was (tm 255.7). The
-        // customer's outcome is the same for every failure, so this line is
-        // where one is told from another (tm 255.9): transient or not, and the
-        // provider's own status, code and request id — never its words.
-        const { provider, kind, transient, status, code, requestId, reason } = decisions.failure;
-        log.warn(
+      for (;;) {
+        drafts += 1;
+        // The visitor may still be typing (AI-01 §5): the turn starts once
+        // they have been quiet for the window, so it answers all of it. Not
+        // where the AI has nothing to run — no turn could come of the wait.
+        if (trigger !== null && runnable && this.#batchWindowMs > 0) {
+          await awaitBatchWindow({
+            windowMs: this.#batchWindowMs,
+            read: () => turn.withTenant((tx) => newestVisitorEvent(tx, ref)),
+          });
+        }
+        // Where the conversation stands, what the AI may run and what was
+        // said, read together; then the turn, over a runner rather than one
+        // transaction around it — the engine opens a short one per read so the
+        // model call waits in none.
+        const loaded = await turn.withTenant((tx) => this.#read(tx, ref, trigger));
+        if (!loaded) {
+          // Answered while this turn waited — by another engine on the same
+          // connection, which owns the reply.
+          log.info({}, 'an earlier ai turn answered this message; nothing to do');
+          return null;
+        }
+        read = loaded.conversation;
+        gathered = loaded.context?.freshMessages || 1;
+        const history = historyOf(loaded.context);
+        result = await this.#engine.runTurn(
+          loaded.state,
           {
-            skill_id: decisions.skillId,
-            provider,
-            kind,
-            transient,
-            ...(status !== null ? { status } : {}),
-            ...(code !== null ? { code } : {}),
-            ...(requestId !== null ? { provider_request_id: requestId } : {}),
-            ...(reason !== null ? { reason } : {}),
+            // Everything the visitor wrote from the job's message on, merged —
+            // or the job's message alone when it is not on the connection.
+            text: loaded.context?.newCustomerText || message,
+            ...(history ? { history } : {}),
+            ...(loaded.through !== null ? { throughSeq: loaded.through } : {}),
           },
-          decisions.failure.provider === 'llm'
-            ? 'ai model could not answer; the conversation stays with a human'
-            : 'ai knowledge search could not run; the conversation stays with a human',
+          {
+            tenant,
+            db: turn.withTenant,
+            now: new Date(),
+            mode: 'live',
+            chatId,
+            configVersionId: read?.configVersionId ?? loaded.config.versionId,
+            config: loaded.config.pkg,
+            toolStubs: {},
+          },
         );
-      }
-      if (!tookTurn(result)) return result;
+        const { decisions } = result;
+        if (decisions.failure) {
+          // The provider's own lines (component `llm` or `embedding`) carry the
+          // status and the code but not the conversation; this one, on the
+          // turn's logger, ties the failure to the chat a human now has to
+          // answer (tm 255.6), and says which provider it was (tm 255.7). The
+          // customer's outcome is the same for every failure, so this line is
+          // where one is told from another (tm 255.9): transient or not, and
+          // the provider's own status, code and request id — never its words.
+          const { provider, kind, transient, status, code, requestId, reason } = decisions.failure;
+          log.warn(
+            {
+              skill_id: decisions.skillId,
+              provider,
+              kind,
+              transient,
+              ...(status !== null ? { status } : {}),
+              ...(code !== null ? { code } : {}),
+              ...(requestId !== null ? { provider_request_id: requestId } : {}),
+              ...(reason !== null ? { reason } : {}),
+            },
+            decisions.failure.provider === 'llm'
+              ? 'ai model could not answer; the conversation stays with a human'
+              : 'ai knowledge search could not run; the conversation stays with a human',
+          );
+        }
+        if (!tookTurn(result)) return result;
 
-      replyEventId = await this.#commit(turn, ref, read, result);
+        try {
+          // The last draft goes out whatever the visitor wrote meanwhile.
+          const recheck = drafts < DRAFTS_PER_TURN ? loaded.through : null;
+          replyEventId = await this.#commit(turn, ref, read, result, recheck);
+          break;
+        } catch (error) {
+          if (!(error instanceof VisitorWroteAgainError)) throw error;
+          // Overtaken (AI-01 §7): the visitor wrote again while the model was
+          // thinking, and the draft answers a conversation that has moved on.
+          // Nothing of it was sent or saved; its spend is on record as an
+          // expired turn, and the turn is taken again with the new message.
+          log.info(
+            { through_sequence: loaded.through, newest_sequence: error.newestSequence },
+            'the visitor wrote again before the ai reply went out; taking the turn again',
+          );
+          const draft = skillDecision(result);
+          if (draft) {
+            await record({
+              ...draft,
+              decision: 'expired',
+              handoffReason: null,
+              latencyMs: performance.now() - startedAt,
+              configVersionId: read?.configVersionId ?? null,
+              details: { ...draft.details, reason: 'visitor_wrote_again' },
+            });
+          }
+          result = null;
+        }
+      }
 
       // A turn that did nothing to the conversation leaves it as it was: what
       // its steps queued for a reply that never came is not applied.
-      if (decisions.outcome === 'skipped') return result;
+      if (result.decisions.outcome === 'skipped') return result;
 
       const { summary, tags, transferTo } = describeSideEffects(result.sideEffects);
       if (summary) {
@@ -290,6 +406,13 @@ export class AiResponder {
           // The configuration the turn ran on (ADR-14b §2.7) — null until tm 316.
           configVersionId: read?.configVersionId ?? null,
           ...(applyFailed ? { errorType: decided.errorType ?? 'apply_failed' } : {}),
+          details: {
+            ...decided.details,
+            // A turn that answered several messages at once, or wrote a second
+            // draft, says so (AI-01 §5, §7).
+            ...(gathered > 1 ? { messages_answered: gathered } : {}),
+            ...(drafts > 1 ? { drafts } : {}),
+          },
         });
       }
     }
@@ -304,12 +427,19 @@ export class AiResponder {
    * (version 0): a row another writer opened *and* wrote in the meantime is a
    * lost race too. Throws {@link AiConversationConflictError} when the race
    * was lost, which rolls the reply back with it.
+   *
+   * With `recheck` — the visitor's newest message the turn read — the reply
+   * looks once more, in its own transaction, for a message written after it,
+   * and throws {@link VisitorWroteAgainError} if there is one: that rolls the
+   * reply back too (AI-01 §7). A turn with nothing to send has nothing to
+   * recheck; the newer message's own job answers it.
    */
   async #commit(
     turn: VisitorTurn,
     ref: ConnectionRef,
     read: AiConversationState | null,
     result: TurnResult,
+    recheck: number | null,
   ): Promise<string | null> {
     const { tenant, chatId } = turn;
     const patch = turnStatePatch(read ? toTurnState(read) : emptyTurnState(), result.nextState);
@@ -370,6 +500,12 @@ export class AiResponder {
           // once. Then the turn's own commit, in the same transaction.
           outbox: async (tx, written) => {
             await turn.replyOutbox(tx, written);
+            if (recheck !== null) {
+              const newest = await newestVisitorEvent(tx, ref);
+              if (newest && newest.sequence > recheck) {
+                throw new VisitorWroteAgainError(newest.sequence);
+              }
+            }
             await write(tx);
           },
         },
@@ -379,6 +515,61 @@ export class AiResponder {
 
     await turn.withTenant(write);
     return null;
+  }
+
+  /**
+   * What the turn knows before the gates: how far the conversation's turns
+   * have answered the visitor (0 before the first), and whether the AI has
+   * anything to run — no active skill on an active agent means no turn, so the
+   * message is not held for the window (nor is the chat's next job behind it).
+   */
+  async #lookout(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+  ): Promise<{ answeredThrough: number; runnable: boolean }> {
+    return turn.withTenant(async (tx) => {
+      const conversation = await loadConversation(tx, ref);
+      const config = await readAndCompile.forTurn(tx, {
+        aiAgentId: null,
+        pinnedVersionId: conversation?.configVersionId ?? null,
+      });
+      return {
+        answeredThrough: conversation?.lastProcessedEventSeq ?? 0,
+        runnable: config.pkg.skills.length > 0,
+      };
+    });
+  }
+
+  /**
+   * The turn's read, in one transaction: the conversation, the configuration
+   * it runs on and what the visitor said — or null when the job's message
+   * (`trigger`) is answered already.
+   *
+   * The job's message and every one the visitor wrote after it are the turn's
+   * (`through` is the newest); what came before is history — answered, or left
+   * by an earlier turn to a person, and the model reads it either way. A
+   * message that is not on the connection (`trigger` null) is answered alone.
+   */
+  async #read(
+    tx: TenantClient,
+    ref: ConnectionRef,
+    trigger: number | null,
+  ): Promise<TurnRead | null> {
+    const conversation = await loadConversation(tx, ref);
+    const state = conversation ? toTurnState(conversation) : emptyTurnState();
+    if (trigger !== null && trigger <= state.lastProcessedEventSeq) return null;
+    const config = await readAndCompile.forTurn(tx, {
+      aiAgentId: null,
+      pinnedVersionId: conversation?.configVersionId ?? null,
+    });
+    if (trigger === null) return { conversation, state, config, context: null, through: null };
+    const newest = await newestVisitorEvent(tx, ref);
+    const through = Math.max(trigger, newest?.sequence ?? trigger);
+    const context = await loadConnectionContext(tx, ref, state, {
+      through,
+      processedThrough: trigger - 1,
+    });
+    return { conversation, state, config, context, through };
   }
 
   async #transfer(turn: VisitorTurn, groupName: string): Promise<void> {
@@ -407,6 +598,16 @@ export class AiResponder {
       { chat_id: chatId, reason: 'ai_handoff', transferred_to: { group_ids: [Number(group.id)] } },
     );
   }
+}
+
+/** What a turn reads before it runs (`AiResponder.#read`). */
+interface TurnRead {
+  conversation: AiConversationState | null;
+  state: TurnState;
+  config: AiConfigRead;
+  context: ConnectionContext | null;
+  /** The visitor's newest message the turn answers; null when it answers the job's alone. */
+  through: number | null;
 }
 
 /**

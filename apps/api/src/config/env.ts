@@ -1096,6 +1096,14 @@ export const envSchema = z.object({
    */
   SCHEDULE_UNVERIFIED_SIGNUPS_MS: z.coerce.number().int().positive().default(3_600_000),
   /**
+   * The stalled-AI watchdog (tm 293.6 · AI-11 §5). Every 15 seconds: it is the
+   * one job a visitor is waiting on, its window is a minute by default
+   * (`ai_stall_timeout_seconds`), and a pass with nothing stalled is one
+   * indexed lookup of the workspace's open AI connections. A visitor waits at
+   * most the window plus one interval.
+   */
+  SCHEDULE_AI_STALL_MS: z.coerce.number().int().positive().default(15_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

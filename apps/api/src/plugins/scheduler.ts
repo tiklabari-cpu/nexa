@@ -17,6 +17,7 @@ import fp from 'fastify-plugin';
 import type { Env } from '../config/env.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { Mailer } from '../services/mail/mailer.js';
+import type { RealtimePublisher } from '../services/realtime/publisher.js';
 import { buildSchedulerJobs } from '../services/scheduler/jobs.js';
 import { Scheduler } from '../services/scheduler/scheduler.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
@@ -41,6 +42,8 @@ export interface SchedulerPluginOptions {
   automations?: WorkspaceEventDispatcher;
   /** The server's knowledge service, so the freshness sweep embeds as requests do (tm 255.7). */
   knowledge?: KnowledgeService;
+  /** The stalled-AI watchdog's push to the agent it routes to (tm 293.6). */
+  publisher?: RealtimePublisher;
 }
 
 async function schedulerPlugin(
@@ -62,6 +65,7 @@ async function schedulerPlugin(
     mailer: options.mailer,
     ...(options.automations ? { automations: options.automations } : {}),
     ...(options.knowledge ? { knowledge: options.knowledge } : {}),
+    ...(options.publisher ? { publisher: options.publisher } : {}),
   })) {
     scheduler.register(job);
   }

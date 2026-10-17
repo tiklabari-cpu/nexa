@@ -1469,7 +1469,7 @@ components:
 
     AiHandoffSettings:
       type: object
-      required: [ai_agent_id, assignment_mode]
+      required: [ai_agent_id, assignment_mode, ai_stall_timeout_seconds]
       properties:
         ai_agent_id: { type: string, format: uuid }
         assignment_mode:
@@ -1482,6 +1482,15 @@ components:
             when the agent hands it over or a person takes it. `parallel`:
             routing assigns it on open and the agent answers until a person
             writes to the visitor. Default `parallel`.
+        ai_stall_timeout_seconds:
+          type: integer
+          minimum: 15
+          maximum: 600
+          description: |
+            How long a visitor may wait on the agent before a person is sent
+            (AI-11). An unassigned conversation the agent is answering, whose
+            oldest unanswered visitor message is older than this, is routed to
+            a person as an `ai_failure` hand-over. Default 60.
 
     ChatAiMode:
       type: object

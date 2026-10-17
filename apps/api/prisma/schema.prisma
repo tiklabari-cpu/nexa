@@ -1803,12 +1803,14 @@ model AiAgent {
 /// its own licence, and `updated_at` (the trigger's) live in the migration
 /// (20261017120000_ai_handoff_settings).
 model AiHandoffSettings {
-  aiAgentId      String   @id @map("ai_agent_id") @db.Uuid
-  licenseId      BigInt   @map("license_id")
-  assignmentMode String   @default("parallel") @map("assignment_mode")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  aiAgentId             String   @id @map("ai_agent_id") @db.Uuid
+  licenseId             BigInt   @map("license_id")
+  assignmentMode        String   @default("parallel") @map("assignment_mode")
+  /// The stall watchdog's window (tm 293.6), 15–600 by CHECK.
+  aiStallTimeoutSeconds Int      @default(60) @map("ai_stall_timeout_seconds")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   /// Set by the write trigger, not by the writer.
-  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

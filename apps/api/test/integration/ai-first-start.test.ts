@@ -211,11 +211,16 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 Â
       expect((await read()).json()).toEqual({
         ai_agent_id: aiAgentId,
         assignment_mode: 'parallel',
+        ai_stall_timeout_seconds: 60,
       });
 
       const written = await putMode('ai_first');
       expect(written.statusCode).toBe(200);
-      expect(written.json()).toEqual({ ai_agent_id: aiAgentId, assignment_mode: 'ai_first' });
+      expect(written.json()).toEqual({
+        ai_agent_id: aiAgentId,
+        assignment_mode: 'ai_first',
+        ai_stall_timeout_seconds: 60,
+      });
       expect((await read()).json()).toMatchObject({ assignment_mode: 'ai_first' });
 
       // A second write updates the one row; the database keeps the time.

@@ -35,8 +35,8 @@
  *   1. does nothing when its message is answered already — an earlier turn
  *      gathered it (`last_processed_event_seq`), checked before the gates and
  *      again once the turn is ready to read;
- *   2. waits for the visitor to stop typing (`batch-window.ts`,
- *      `AI_BATCH_WINDOW_MS`) — unless the AI has no skill it could run, when
+ *   2. waits for the visitor to stop typing (`batch-window.ts`;
+ *      the agent's `batch_window_seconds`, else `AI_BATCH_WINDOW_MS`) — unless the AI has no skill it could run, when
  *      no turn could come of the wait — then answers its message and every one after it
  *      as one turn, and records the newest as processed — the jobs those
  *      messages set off find nothing left to do (point 1). The chat's jobs run
@@ -72,9 +72,11 @@ import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
 import { awaitBatchWindow } from './conversation/batch-window.js';
 import {
+  DEFAULT_HISTORY_BUDGET,
   loadConnectionContext,
   newestVisitorEvent,
   type ConnectionContext,
+  type HistoryBudget,
 } from './conversation/context-loader.js';
 import type { ConversationEngine } from './conversation/conversation-engine.js';
 import {
@@ -106,9 +108,15 @@ const DRAFTS_PER_TURN = 2;
 export interface AiResponderOptions {
   /**
    * How quiet the visitor must have been before the turn starts, in
-   * milliseconds (`AI_BATCH_WINDOW_MS`). 0, the default here: no wait.
+   * milliseconds (`AI_BATCH_WINDOW_MS`). 0, the default here: no wait. The
+   * AI agent's own `batch_window_seconds` takes this one's place when set.
    */
   readonly batchWindowMs?: number;
+  /**
+   * How much of the conversation a turn carries (`AI_HISTORY_MAX_MESSAGES`,
+   * `AI_HISTORY_MAX_CHARS`). {@link DEFAULT_HISTORY_BUDGET} when absent.
+   */
+  readonly historyBudget?: HistoryBudget;
 }
 
 /**
@@ -126,6 +134,7 @@ class VisitorWroteAgainError extends Error {
 export class AiResponder {
   readonly #engine: ConversationEngine;
   readonly #batchWindowMs: number;
+  readonly #historyBudget: HistoryBudget;
 
   constructor(
     private readonly chats: ChatService,
@@ -135,6 +144,7 @@ export class AiResponder {
   ) {
     this.#engine = engine;
     this.#batchWindowMs = options.batchWindowMs ?? 0;
+    this.#historyBudget = options.historyBudget ?? DEFAULT_HISTORY_BUDGET;
   }
 
   /**
@@ -172,6 +182,7 @@ export class AiResponder {
     // the one its job was for. Asked before the gates, which would otherwise
     // record a refusal for a message nobody is waiting on.
     let runnable = true;
+    let batchWindowMs = this.#batchWindowMs;
     try {
       if (trigger !== null) {
         const lookout = await this.#lookout(turn, ref);
@@ -180,6 +191,8 @@ export class AiResponder {
           return null;
         }
         runnable = lookout.runnable;
+        // The agent's own window, when it set one, in place of the workspace's.
+        if (lookout.batchWindowSeconds !== null) batchWindowMs = lookout.batchWindowSeconds * 1000;
       }
     } catch (error) {
       // Whatever went wrong, the message is stored and a human will see it.
@@ -243,9 +256,9 @@ export class AiResponder {
         // The visitor may still be typing (AI-01 §5): the turn starts once
         // they have been quiet for the window, so it answers all of it. Not
         // where the AI has nothing to run — no turn could come of the wait.
-        if (trigger !== null && runnable && this.#batchWindowMs > 0) {
+        if (trigger !== null && runnable && batchWindowMs > 0) {
           await awaitBatchWindow({
-            windowMs: this.#batchWindowMs,
+            windowMs: batchWindowMs,
             read: () => turn.withTenant((tx) => newestVisitorEvent(tx, ref)),
           });
         }
@@ -526,7 +539,7 @@ export class AiResponder {
   async #lookout(
     turn: VisitorTurn,
     ref: ConnectionRef,
-  ): Promise<{ answeredThrough: number; runnable: boolean }> {
+  ): Promise<{ answeredThrough: number; runnable: boolean; batchWindowSeconds: number | null }> {
     return turn.withTenant(async (tx) => {
       const conversation = await loadConversation(tx, ref);
       const config = await readAndCompile.forTurn(tx, {
@@ -536,6 +549,7 @@ export class AiResponder {
       return {
         answeredThrough: conversation?.lastProcessedEventSeq ?? 0,
         runnable: config.pkg.skills.length > 0,
+        batchWindowSeconds: config.pkg.batchWindowSeconds ?? null,
       };
     });
   }
@@ -568,6 +582,7 @@ export class AiResponder {
     const context = await loadConnectionContext(tx, ref, state, {
       through,
       processedThrough: trigger - 1,
+      budget: this.#historyBudget,
     });
     return { conversation, state, config, context, through };
   }

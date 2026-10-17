@@ -1321,13 +1321,47 @@ describe('production configuration', () => {
     it('defaults the prompt ceiling above every ordinary prompt, and refuses one no prompt fits (tm 255.9)', () => {
       // 12,361 is the longest prompt built from ordinary passages (a 10,000-
       // character message, three of them, the instructions); the default leaves
-      // room above it (`llm-provider.test.ts` measures it).
-      expect(parseEnv(BASE).LLM_MAX_PROMPT_CHARS).toBe(16_000);
+      // room above it for the conversation history too (`llm-provider.test.ts`
+      // measures it; tm 292.5 raised it from 16,000).
+      expect(parseEnv(BASE).LLM_MAX_PROMPT_CHARS).toBe(48_000);
       expect(parseEnv({ ...BASE, LLM_MAX_PROMPT_CHARS: '8000' }).LLM_MAX_PROMPT_CHARS).toBe(8_000);
       // Below the instructions and one passage every conversation would go to a
       // human — a misconfiguration, refused at boot rather than in production.
       expect(() => parseEnv({ ...BASE, LLM_MAX_PROMPT_CHARS: '500' })).toThrow(
         /LLM_MAX_PROMPT_CHARS/,
+      );
+    });
+  });
+
+  describe('the conversation memory keys (tm 292.5 · AI-01)', () => {
+    it('default to a three-second window and twenty messages / 12,000 characters of history', () => {
+      const env = parseEnv(BASE);
+      expect(env.AI_BATCH_WINDOW_MS).toBe(3_000);
+      expect(env.AI_HISTORY_MAX_MESSAGES).toBe(20);
+      expect(env.AI_HISTORY_MAX_CHARS).toBe(12_000);
+    });
+
+    it('take their own values', () => {
+      const env = parseEnv({
+        ...BASE,
+        AI_BATCH_WINDOW_MS: '0',
+        AI_HISTORY_MAX_MESSAGES: '6',
+        AI_HISTORY_MAX_CHARS: '4000',
+      });
+      expect(env.AI_BATCH_WINDOW_MS).toBe(0);
+      expect(env.AI_HISTORY_MAX_MESSAGES).toBe(6);
+      expect(env.AI_HISTORY_MAX_CHARS).toBe(4_000);
+    });
+
+    it('refuse a window past ten seconds and a history that holds no message', () => {
+      expect(() => parseEnv({ ...BASE, AI_BATCH_WINDOW_MS: '10001' })).toThrow(
+        /AI_BATCH_WINDOW_MS/,
+      );
+      expect(() => parseEnv({ ...BASE, AI_HISTORY_MAX_MESSAGES: '0' })).toThrow(
+        /AI_HISTORY_MAX_MESSAGES/,
+      );
+      expect(() => parseEnv({ ...BASE, AI_HISTORY_MAX_CHARS: '100' })).toThrow(
+        /AI_HISTORY_MAX_CHARS/,
       );
     });
   });

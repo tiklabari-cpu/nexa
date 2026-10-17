@@ -1431,6 +1431,16 @@ components:
           nullable: true
           enum: [short, medium, long, null]
           description: How long an answer the persona aims for.
+        batch_window_seconds:
+          type: integer
+          minimum: 0
+          maximum: 10
+          nullable: true
+          description: |
+            How long the agent waits for a visitor to stop typing before it
+            answers, so messages sent in quick succession get one reply. 0
+            answers at once. Null: the workspace default (the server's
+            `AI_BATCH_WINDOW_MS`).
         active: { type: boolean }
         skills_count: { type: integer }
 

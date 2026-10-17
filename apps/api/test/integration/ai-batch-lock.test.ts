@@ -273,6 +273,57 @@ describe('one answer to what the visitor said (AI-01 §4–§7 · tm 292.4)', ()
     }
   });
 
+  it("waits the agent's own window, not the server's, where the agent set one (tm 292.5)", async () => {
+    // The server's window is 0 (`testEnv`): the second a reply is held here is the agent's.
+    const ws = await seedAiWorkspace(owner);
+    await owner.aiAgent.update({
+      where: { id: ws.aiAgentId },
+      data: { persona: { batchWindowSeconds: 1 } },
+    });
+    await clearRateLimits(server.app);
+    const token = await visitorToken(server.app, ws);
+
+    const first = await send(server.app, token, 'about my delivery');
+    await sleep(300);
+    await send(server.app, token, THIRD_QUESTION);
+    await within(server.app.aiJobs.idle(), 'the batch', 10_000);
+
+    expect(await botReplies(first.chatId)).toEqual([
+      `Answer to: about my delivery\n${THIRD_QUESTION}`,
+    ]);
+    expect(model.fake.calls).toHaveLength(1);
+    const [reply, lastMessage] = await owner.$queryRaw<Array<{ created_at: Date }>>`
+      SELECT created_at FROM events
+       WHERE chat_id = ${first.chatId} AND type = 'message'
+       ORDER BY event_sequence DESC LIMIT 2`;
+    expect(reply!.created_at.getTime() - lastMessage!.created_at.getTime()).toBeGreaterThanOrEqual(
+      900,
+    );
+  });
+
+  it("answers at once where the agent set 0, whatever the server's window (tm 292.5)", async () => {
+    const windowed = heldModel();
+    const busy = await startTestServer({ AI_BATCH_WINDOW_MS: '3000' }, { llm: windowed.fake });
+    try {
+      const ws = await seedAiWorkspace(owner);
+      await owner.aiAgent.update({
+        where: { id: ws.aiAgentId },
+        data: { persona: { batchWindowSeconds: 0 } },
+      });
+      await clearRateLimits(busy.app);
+      const token = await visitorToken(busy.app, ws);
+
+      const startedAt = Date.now();
+      const sent = await send(busy.app, token, AI_QUESTION);
+      await within(busy.app.aiJobs.idle(), 'the answer, without the window', 2_000);
+      expect(Date.now() - startedAt).toBeLessThan(2_000);
+      expect(await botReplies(sent.chatId)).toEqual([`Answer to: ${AI_QUESTION}`]);
+    } finally {
+      windowed.releaseAll();
+      await busy.close();
+    }
+  });
+
   it('drops a draft the visitor overtook and answers both messages in one reply (AI-01 §7)', async () => {
     const ws = await seedAiWorkspace(owner);
     const token = await visitorToken(server.app, ws);

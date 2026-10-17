@@ -61,7 +61,7 @@ export interface HistoryBudget {
   readonly maxChars: number;
 }
 
-/** 05 AI-01's suggested defaults; the env keys arrive with tm 292.5. */
+/** 05 AI-01's defaults — `AI_HISTORY_MAX_MESSAGES` / `AI_HISTORY_MAX_CHARS` (`env.ts`) carry the same ones. */
 export const DEFAULT_HISTORY_BUDGET: HistoryBudget = Object.freeze({
   maxMessages: 20,
   maxChars: 12_000,

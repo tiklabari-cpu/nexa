@@ -20,6 +20,7 @@ interface AgentView {
   avatar_url: string | null;
   languages: string[];
   answer_length: string | null;
+  batch_window_seconds: number | null;
   active: boolean;
 }
 
@@ -130,6 +131,66 @@ describe('AI agent profile', () => {
     });
     expect(stored?.persona).toMatchObject({ signature: '— Ada' });
     expect((stored?.persona as Record<string, unknown>)['answerLength']).toBeUndefined();
+  });
+
+  it('reports no batch window until one is set, then returns it and keeps the rest of the persona (tm 292.5)', async () => {
+    const before = (
+      (await server.get('/ai-agents', await write('a'))).json() as { items: AgentView[] }
+    ).items.find((a) => a.id === agentId);
+    expect(before?.batch_window_seconds).toBeNull();
+
+    const patch = await server.patch(
+      `/ai-agents/${agentId}`,
+      { batch_window_seconds: 4 },
+      await write('a'),
+    );
+    expect(patch.statusCode).toBe(200);
+    expect((patch.json() as AgentView).batch_window_seconds).toBe(4);
+    const stored = await owner.aiAgent.findUnique({
+      where: { id: agentId },
+      select: { persona: true },
+    });
+    expect(stored?.persona).toMatchObject({
+      batchWindowSeconds: 4,
+      answerLength: 'short',
+      signature: '— Ada',
+    });
+    const after = (
+      (await server.get('/ai-agents', await write('a'))).json() as { items: AgentView[] }
+    ).items.find((a) => a.id === agentId);
+    expect(after).toMatchObject({ batch_window_seconds: 4, answer_length: 'short' });
+  });
+
+  it('accepts 0 as a window of its own — answer at once — and null as the workspace default (tm 292.5)', async () => {
+    const zero = await server.patch(
+      `/ai-agents/${agentId}`,
+      { batch_window_seconds: 0 },
+      await write('a'),
+    );
+    expect(zero.statusCode).toBe(200);
+    expect((zero.json() as AgentView).batch_window_seconds).toBe(0);
+
+    const cleared = await server.patch(
+      `/ai-agents/${agentId}`,
+      { batch_window_seconds: null },
+      await write('a'),
+    );
+    expect((cleared.json() as AgentView).batch_window_seconds).toBeNull();
+    const stored = await owner.aiAgent.findUnique({
+      where: { id: agentId },
+      select: { persona: true },
+    });
+    expect((stored?.persona as Record<string, unknown>)['batchWindowSeconds']).toBeUndefined();
+    expect(stored?.persona).toMatchObject({ answerLength: 'short', signature: '— Ada' });
+  });
+
+  it.each([11, -1, 1.5, '3'])('rejects a batch window of %j (tm 292.5)', async (value) => {
+    const response = await server.patch(
+      `/ai-agents/${agentId}`,
+      { batch_window_seconds: value },
+      await write('a'),
+    );
+    expect(response.statusCode).toBe(400);
   });
 
   it('rejects an empty name', async () => {

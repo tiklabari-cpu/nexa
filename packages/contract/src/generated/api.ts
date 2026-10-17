@@ -2912,7 +2912,8 @@ export interface paths {
     /**
      * Edit the persona, or turn the agent on and off
      * @description Sets the customer-facing persona (name, avatar, tone, languages, answer
-     *     length) the widget shows (FR-MOD-06.4), and the on/off switch.
+     *     length) the widget shows (FR-MOD-06.4), how long the agent waits for a
+     *     visitor to stop typing, and the on/off switch.
      *
      *     Deactivating an agent stops every skill under it at once, which is what an
      *     admin reaches for when automation is misbehaving. It does not delete
@@ -8984,6 +8985,13 @@ export interface components {
        * @enum {string|null}
        */
       answer_length?: 'short' | 'medium' | 'long' | null;
+      /**
+       * @description How long the agent waits for a visitor to stop typing before it
+       *     answers, so messages sent in quick succession get one reply. 0
+       *     answers at once. Null: the workspace default (the server's
+       *     `AI_BATCH_WINDOW_MS`).
+       */
+      batch_window_seconds?: number | null;
       active: boolean;
       skills_count?: number;
     };
@@ -18429,6 +18437,12 @@ export interface operations {
           languages?: string[];
           /** @enum {string|null} */
           answer_length?: 'short' | 'medium' | 'long' | null;
+          /**
+           * @description Seconds the agent waits for the visitor to stop typing before
+           *     it answers (0 answers at once). Null goes back to the
+           *     workspace default.
+           */
+          batch_window_seconds?: number | null;
         };
       };
     };

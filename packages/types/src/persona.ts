@@ -453,6 +453,34 @@ function isAnswerLength(value: string | null | undefined): value is AnswerLength
   return typeof value === 'string' && (ANSWER_LENGTHS as readonly string[]).includes(value);
 }
 
+/**
+ * How long the AI waits for the visitor to stop typing, in whole seconds
+ * (tm 292.5 · AI-01 §5). 0 answers at once. Ten at most: past that the visitor
+ * is left wondering whether anybody is there.
+ */
+export const BATCH_WINDOW_SECONDS_MAX = 10;
+
+/**
+ * The agent's own batch window from its `persona` JSON, or `null` for "none
+ * set" — the workspace default (`AI_BATCH_WINDOW_MS`) then applies.
+ *
+ * It is not part of {@link Persona}: that is what shapes an answer, and a
+ * wait before the answer shapes nothing in it. It lives in the same JSON
+ * (`batchWindowSeconds`) so no column is needed. Anything that is not a whole
+ * number of seconds in range reads as unset rather than as a number the
+ * engine would have to trust.
+ */
+export function readBatchWindowSeconds(persona: unknown): number | null {
+  if (!persona || typeof persona !== 'object' || Array.isArray(persona)) return null;
+  const value = (persona as Record<string, unknown>)['batchWindowSeconds'];
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= BATCH_WINDOW_SECONDS_MAX
+    ? value
+    : null;
+}
+
 /** True when the persona asks for nothing and can be skipped entirely. */
 export function personaIsEmpty(persona: Persona): boolean {
   return persona.tone === null && persona.languages.length === 0 && persona.answerLength === null;

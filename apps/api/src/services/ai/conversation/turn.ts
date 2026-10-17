@@ -180,6 +180,13 @@ export interface TurnSkill {
 export interface TurnConfig {
   /** In the order they are tried; the first that matches is the only one that runs. */
   readonly skills: readonly TurnSkill[];
+  /**
+   * How long the AI waits for the visitor to stop typing, in seconds — the
+   * agent's own setting (`batch_window_seconds`). Absent when no agent set one:
+   * the workspace default (`AI_BATCH_WINDOW_MS`) applies. With several agents
+   * the longest wins; the wait comes before any skill is picked.
+   */
+  readonly batchWindowSeconds?: number;
 }
 
 export interface TurnContext {

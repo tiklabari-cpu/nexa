@@ -317,7 +317,7 @@ describe('LLM_MAX_PROMPT_CHARS', () => {
     // whole, on every question it matched; the ceiling is what sends that
     // conversation to a human instead.
     const ceiling = envSchema.shape.LLM_MAX_PROMPT_CHARS.parse(undefined);
-    const [unbroken] = chunk('word '.repeat(4_000));
+    const [unbroken] = chunk('word '.repeat(12_000));
 
     expect(unbroken!.length).toBeGreaterThan(ceiling);
     expect(() =>

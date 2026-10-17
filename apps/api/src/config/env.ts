@@ -743,17 +743,19 @@ export const envSchema = z.object({
    * longer than this is never sent — the conversation goes to a human, the way
    * any other failed call does. Characters rather than tokens because the
    * server has no tokenizer, and a character is a conservative upper bound on
-   * a token. 16,000 admits every prompt built from passages the chunker cut to
-   * its 600-character target: the longest — a 10,000-character customer
-   * message, three such passages and the instructions — measures 12,361, and
-   * 14,161 when every passage character is one JSON has to escape. What it
-   * stops is the passage the chunker could not cut (it breaks only between
-   * sentences, so an unpunctuated page stays one piece of any length), which
-   * would otherwise reach the model whole on every question it matched. Below
-   * 2,000 not even the instructions and one passage fit, and every
+   * a token. 48,000 (tm 292.5, was 16,000) admits every prompt the product
+   * builds: the longest from ordinary passages — a 10,000-character customer
+   * message, three passages the chunker cut to its 600-character target and the
+   * instructions — measures 12,361 (14,161 when every passage character is one
+   * JSON has to escape), and a conversation's history now rides along:
+   * `AI_HISTORY_MAX_CHARS` (12,000) of earlier messages plus the opening one.
+   * What it stops is the passage the chunker could not cut (it breaks only
+   * between sentences, so an unpunctuated page stays one piece of any length),
+   * which would otherwise reach the model whole on every question it matched.
+   * Below 2,000 not even the instructions and one passage fit, and every
    * conversation would be refused.
    */
-  LLM_MAX_PROMPT_CHARS: z.coerce.number().int().min(2_000).max(500_000).default(16_000),
+  LLM_MAX_PROMPT_CHARS: z.coerce.number().int().min(2_000).max(500_000).default(48_000),
   /**
    * How long the AI waits for a visitor to stop typing before it answers
    * (tm 292.4 · AI-01 §5): messages written within this many milliseconds of
@@ -762,9 +764,21 @@ export const envSchema = z.object({
    * message to be this old, and never more than twice this in all. 0 answers
    * at once — what the test servers run with; whatever was already waiting is
    * still answered together. Ten seconds at most: past that the visitor is
-   * left wondering whether anybody is there.
+   * left wondering whether anybody is there. The workspace's AI agent can set
+   * its own (`batch_window_seconds`, 0–10); this is the window of an agent that
+   * has not.
    */
   AI_BATCH_WINDOW_MS: z.coerce.number().int().min(0).max(10_000).default(3_000),
+  /**
+   * How much of the conversation a turn carries (tm 292.5 · AI-01 §3): the
+   * newest this many message events, and — across the earlier ones — this many
+   * characters. The visitor's opening message is kept whatever the budget; what
+   * does not fit is left out and the model is told so, never summarised by a
+   * second model call. The prompt ceiling above is the last word: a history
+   * that still does not fit shortens, oldest first.
+   */
+  AI_HISTORY_MAX_MESSAGES: z.coerce.number().int().min(1).max(200).default(20),
+  AI_HISTORY_MAX_CHARS: z.coerce.number().int().min(500).max(200_000).default(12_000),
   /**
    * Who turns text into vectors for knowledge retrieval (tm 255.7 · ADR
    * docs/adr/pilot-llm-embedding-provider.md §9.2). Configured apart from

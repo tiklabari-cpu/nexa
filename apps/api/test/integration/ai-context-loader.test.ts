@@ -475,4 +475,53 @@ describe('the live turn reads the conversation (AI-01)', () => {
     });
     expect(decisions).toEqual([{ decision: 'answered', errorType: null }]);
   });
+  it('reads as much of the conversation as AI_HISTORY_MAX_MESSAGES and AI_HISTORY_MAX_CHARS allow, the opening message always (tm 292.5)', async () => {
+    const small = await startTestServer(
+      { AI_HISTORY_MAX_MESSAGES: '4', AI_HISTORY_MAX_CHARS: '800' },
+      { llm: model },
+    );
+    try {
+      await clearRateLimits(small.app);
+      const minted = await small.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        { origin: `https://${fx.a.trustedDomain}` },
+      );
+      const headers = { authorization: `Bearer ${(minted.json() as { token: string }).token}` };
+      const sendSmall = async (text: string) => {
+        const response = await small.post('/customer/chat/events', { text }, headers);
+        expect(response.statusCode).toBe(201);
+        return response.json() as { chat_id: string; event: { id: string; thread_id: string } };
+      };
+      const first = await sendSmall('OPENING Param yatmadı');
+      const ref = { chatId: first.chat_id, threadId: first.event.thread_id };
+      for (let index = 0; index < 20; index += 1) {
+        const [row] = await owner.$queryRaw<Array<{ event_sequence: number }>>`
+          UPDATE threads SET event_sequence = event_sequence + 1 WHERE id = ${ref.threadId}
+          RETURNING event_sequence
+        `;
+        const sequence = Number(row!.event_sequence);
+        await owner.$executeRaw`
+          INSERT INTO events (id, thread_id, chat_id, license_id, type, text, author_type, recipients)
+          VALUES (${`${ref.threadId}_${sequence}`}, ${ref.threadId}, ${ref.chatId}, ${fx.a.licenseId},
+                  'message', ${`MSG-${index} ${'Papara yatırımı '.repeat(10)}`},
+                  ${index % 2 === 0 ? 'bot' : 'customer'}, 'all')
+        `;
+      }
+      model.reset();
+
+      await sendSmall('Papara 13:40');
+
+      expect(model.calls).toHaveLength(1);
+      const sent = model.calls[0]!.messages.map((message) => message.content).join(' ');
+      expect(sent.startsWith('OPENING Param yatmadı')).toBe(true);
+      expect(sent.endsWith('Papara 13:40')).toBe(true);
+      // The newest of the twenty are in, the earliest are not.
+      expect(sent).toContain('MSG-19');
+      expect(sent).not.toContain('MSG-1 ');
+      expect(sent.match(/MSG-\d+/g)!.length).toBeLessThanOrEqual(4);
+    } finally {
+      await small.close();
+    }
+  });
 });

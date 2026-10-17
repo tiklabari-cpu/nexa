@@ -245,11 +245,14 @@ stream_task(){
   local id="$1" eff="$2" mdl="${3:-$MODEL}"
   local logf="$LOG_DIR/task-$id.jsonl"
   : > "$logf"
+  # Fast mode YALNIZ Opus'ta çalışır (Sonnet'te etkisiz). Varsayılan KAPALI; açmak: FAST_MODE=1 ./run-loop.sh
+  local FAST_ARGS=()
+  if [[ "${FAST_MODE:-0}" == "1" && "$mdl" == *opus* ]]; then FAST_ARGS=(--settings '{"fastMode": true}'); fi
   claude -p "$(cat "$RUNNER_PROMPT_FILE")
 
 # HEDEF TASK: ${id}
 Yalnız bu task'ı baştan sona tamamla, protokolü uygula, en son JSON sonucu döndür." \
-    --model "$mdl" --effort "$eff" --permission-mode "$PERM" --max-turns "$MAX_TURNS" $ALLOW "${MCP_ARGS[@]}" \
+    --model "$mdl" --effort "$eff" --permission-mode "$PERM" --max-turns "$MAX_TURNS" $ALLOW "${MCP_ARGS[@]}" "${FAST_ARGS[@]}" \
     --output-format stream-json --verbose --json-schema "$result_schema" \
     2>>"$LOG_DIR/task-$id.err" | tee -a "$logf" | pretty
 }

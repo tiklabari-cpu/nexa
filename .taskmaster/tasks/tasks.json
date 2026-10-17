@@ -12453,7 +12453,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T10:28:05.777Z",
+        "updatedAt": "2026-10-17T11:34:25.646Z",
         "subtasks": [
           {
             "id": 1,
@@ -12473,13 +12473,13 @@
             "description": "Önce-AI başlangıcı (atamasız, kuyruk dışı, ai görünümü, eşzamanlı sınır tüketilmez) + assignment_mode ayarı (ai_first|parallel)",
             "details": "Yönlendirme devir anına taşınır (AI-12 hedefi gelene kadar mevcut route()).",
             "testStrategy": "Atanmadan açılış; bekçi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "293.1"
             ],
             "parentId": "293",
             "priority": "high",
-            "updatedAt": "2026-10-17T10:28:05.777Z"
+            "updatedAt": "2026-10-17T11:34:25.646Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T10:28:05.777Z",
+      "lastModified": "2026-10-17T11:34:25.646Z",
       "taskCount": 390,
       "completedCount": 291,
       "tags": [

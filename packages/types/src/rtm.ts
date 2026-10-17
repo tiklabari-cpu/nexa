@@ -17,6 +17,7 @@ import type {
   RoutingStatus,
   TransferReason,
 } from './domain.js';
+import type { AiConversationMode, AiModeReason } from './ai-conversation.js';
 import type { ErrorType } from './errors.js';
 
 export const RTM_VERSION = '3.6';
@@ -139,6 +140,9 @@ export const RTM_PUSH_ACTIONS = [
   'chat_deactivated',
   'chat_transferred',
   'chat_taken_over',
+  // Who answers a connection changed — the AI, a person, or the AI held back
+  // (AI-11 · tm 293.5); agents only.
+  'chat_ai_mode_changed',
   'chat_access_updated',
   'user_added_to_chat',
   'user_removed_from_chat',
@@ -240,6 +244,28 @@ export interface ChatTakenOverPush {
   requester_id: string | null;
   previous_assignee_id: string | null;
   new_assignee_id: string;
+}
+
+/**
+ * Who answers a connection changed (AI-11 · tm 293.5): the AI took its first
+ * turn, a person took it over (writing to the player, a takeover, a transfer,
+ * the AI's or a rule bot's hand-off), or someone gave it back to the AI or
+ * held the AI back. Sent with the agents-only line the change leaves in the
+ * transcript, to the same agents — never to the visitor. A connection a person
+ * answered before the AI ever spoke in sends nothing: nothing changed that
+ * anyone watching it would notice.
+ */
+export interface ChatAiModeChangedPush {
+  chat_id: string;
+  /** The connection (panel "Chat ID"). */
+  thread_id: string;
+  ai_mode: AiConversationMode;
+  /** Null when the AI had not taken part until this change. */
+  previous_ai_mode: AiConversationMode | null;
+  /** An account id, or the bot's id for the AI and rule bots — never a name. */
+  by: string;
+  /** Null for the AI's own first turn, which needs no reason. */
+  reason: AiModeReason | null;
 }
 
 export interface TypingIndicatorPush {

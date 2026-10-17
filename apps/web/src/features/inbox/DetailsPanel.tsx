@@ -14,13 +14,11 @@ import {
   possibleMatchesKey,
   type PossibleMatchList,
 } from '../customers/MemberIdentity.js';
+import { SUPERVISOR_ROLES } from './roles.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
 import type { ChatDetail } from './types.js';
 import { hasAnyScope, type AppChatData } from '@siyahtus/types';
-
-/** Roles that may seize a chat from whoever holds it — mirrors the route's own gate. */
-const SUPERVISOR_ROLES = new Set(['admin', 'viceowner', 'owner']);
 
 /** Just enough of `GET /agents` to name an assignee and say whether they can take work. */
 interface RosterAgent {

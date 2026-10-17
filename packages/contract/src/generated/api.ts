@@ -8910,6 +8910,22 @@ export interface components {
       closed_at?: string | null;
       /** @description How this connection came to exist; null on a thread opened before ID-02. */
       opened_via?: components['schemas']['ConnectionOpenedVia'] | null;
+      /**
+       * @description Who answers the connection (AI-11). `ai`: the AI agent; `human`: a
+       *     person has it and the AI stays silent; `paused`: the AI is held
+       *     back without a person having taken it. Null until the AI or a
+       *     person takes part — the AI may still answer. Changes are pushed to
+       *     agents as `chat_ai_mode_changed`.
+       * @enum {string|null}
+       */
+      ai_mode?: 'ai' | 'human' | 'paused' | null;
+      /**
+       * @description Whether the AI has answered in this connection — what tells a
+       *     `human` connection the AI was taken off from one a person answered
+       *     from the start. Present only on the agent's fetch of a single chat
+       *     (`GET /chats/{chatId}`).
+       */
+      ai_took_part?: boolean;
       tags?: string[];
     };
     /**

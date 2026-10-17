@@ -30,4 +30,8 @@ describe('RTM_PUSH_ACTIONS', () => {
     // the socket.
     expect(RTM_PUSH_ACTIONS).toContain('traffic_visitor_updated');
   });
+
+  it('carries the AI mode change the inbox badge follows (AI-11)', () => {
+    expect(RTM_PUSH_ACTIONS).toContain('chat_ai_mode_changed');
+  });
 });

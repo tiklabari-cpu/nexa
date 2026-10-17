@@ -505,12 +505,15 @@ export class AiResponder {
     const patch = turnStatePatch(read ? toTurnState(read) : emptyTurnState(), result.nextState);
     const run = skillRunRecord(result.decisions);
 
+    // Set by the attempt that commits: whether this turn made the connection
+    // the AI's (`claimAiTurn`), which the inbox hears once it has (tm 293.5).
+    let joined = false;
     // Through `tx` and nowhere else: as the reply's outbox it runs again on
     // the send's race retry, whose first attempt rolled back with it.
     const write = async (tx: TenantClient): Promise<void> => {
       // Still the AI's to answer (AI-11 §4), under the thread's row lock — which
       // the reply's append already holds — so a person who wrote first wins.
-      await claimAiTurn(tx, ref);
+      joined = await claimAiTurn(tx, ref);
       const current = read ?? {
         id: (await openConversation(tx, ref, { configVersionId: null })).id,
         version: 0,
@@ -573,10 +576,12 @@ export class AiResponder {
           },
         },
       );
+      if (joined) await this.chats.announceAiJoined(tenant, ref, AI_BOT_ID);
       return sent.event.id;
     }
 
     await turn.withTenant(write);
+    if (joined) await this.chats.announceAiJoined(tenant, ref, AI_BOT_ID);
     return null;
   }
 

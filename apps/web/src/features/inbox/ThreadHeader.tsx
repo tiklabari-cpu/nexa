@@ -14,9 +14,11 @@
 import { useState, type ReactElement } from 'react';
 import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
+import { AiModeControls } from './AiModeControls.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
 import { actionClass } from './headerAction.js';
 import { useNarrow } from './useNarrow.js';
+import type { ChatDetail } from './types.js';
 
 /** Below this header width the actions drop their words (the longest Turkish row needs ~620). */
 const NARROW_BELOW = 680;
@@ -29,6 +31,7 @@ export function ThreadHeader({
   onOpenTicket,
   onOpenCopilot,
   onShowDetails,
+  chat = null,
 }: {
   chatId: string;
   /** The newest connection (`ids.chat`); null when the chat has none. */
@@ -39,6 +42,8 @@ export function ThreadHeader({
   onOpenCopilot: () => void;
   /** Present only while the Details panel is collapsed: the way back to it. */
   onShowDetails: (() => void) | null;
+  /** The open chat — who answers it (AI-11), and what the caller may do about that. */
+  chat?: ChatDetail | null;
 }): ReactElement {
   const t = useTranslate();
   const [ref, narrow] = useNarrow<HTMLElement>(NARROW_BELOW);
@@ -76,6 +81,7 @@ export function ThreadHeader({
         tone={active ? 'success' : 'neutral'}
         label={active ? t('inbox.thread.statusActive') : t('inbox.thread.statusArchived')}
       />
+      {chat && <AiModeControls chat={chat} chatId={chatId} compact={narrow} />}
       <CopyLinkButton chatId={chatId} compact={narrow} />
       <CreateTicketButton
         chatId={chatId}

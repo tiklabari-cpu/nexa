@@ -27,6 +27,7 @@ import { useTypingStore } from './typing.js';
 import { useConflictStore, type ConflictAgent } from './conflict.js';
 import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
+import { withAiModeChange, type AiReturnInput, type ChatAiModeResult } from './aiMode.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
 import {
   earlierConnections,
@@ -980,6 +981,23 @@ export function useChatAction(chatId: string | null) {
         api.post(`/chats/${chatId}/takeover`, reason ? { reason } : undefined),
       onSuccess: invalidate,
     }),
+    // Who answers the open connection (AI-11). The route decides who may — the
+    // assignee, or an admin or owner — and refuses a risk-flagged chat
+    // (`ai_return_blocked`) or a connection the AI is not answering
+    // (`ai_mode_transition_refused`); both 409s are left on `.error`.
+    returnToAi: useMutation({
+      mutationFn: (input: AiReturnInput) =>
+        api.post<ChatAiModeResult>(`/chats/${chatId}/return-to-ai`, {
+          resume: input.resume,
+          ...(input.note ? { note: input.note } : {}),
+        }),
+      onSuccess: invalidate,
+    }),
+    pauseAi: useMutation({
+      mutationFn: (note?: string) =>
+        api.post<ChatAiModeResult>(`/chats/${chatId}/pause-ai`, note ? { note } : {}),
+      onSuccess: invalidate,
+    }),
   };
 }
 
@@ -1065,6 +1083,9 @@ export function useRealtime(onPush?: PushHandler): void {
         // Taken over by a supervisor: the draft of the agent who lost the chat
         // has to go with it (tm 277.2).
         'chat_taken_over',
+        // Who answers a connection changed (AI-11): the header's badge, and the
+        // AI view a chat moves into or out of.
+        'chat_ai_mode_changed',
         'routing_status_set',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
@@ -1377,6 +1398,21 @@ export function applyPush(
         payload['previous_assignee_id'] === useAuth.getState().agent?.account_id
       ) {
         retireDraft(currentDraftScope(), chatId);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['chats'] });
+      return;
+    }
+
+    case 'chat_ai_mode_changed': {
+      // The badge moves at once (AI-11); the re-read that follows settles
+      // anything the push does not carry — and the views, whose AI and
+      // unassigned lists are drawn from the mode.
+      const chatId = payload['chat_id'];
+      if (typeof chatId === 'string') {
+        queryClient.setQueryData<ChatDetail>(['chat', chatId], (current) =>
+          withAiModeChange(current, payload),
+        );
+        void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
       }
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;

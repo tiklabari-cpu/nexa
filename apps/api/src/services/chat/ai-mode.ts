@@ -200,16 +200,19 @@ export async function writeAiMode(
  * AI was held back) after the turn read it, which rolls the turn back. Writes
  * the thread only: its conversation row is the turn's own to save, and a
  * write here would bump the version the turn is about to save against.
+ *
+ * True when this turn is the one that made the connection `ai` — the change
+ * the caller announces once the turn commits (tm 293.5).
  */
-export async function claimAiTurn(tx: TenantClient, ref: AiModeRef): Promise<void> {
+export async function claimAiTurn(tx: TenantClient, ref: AiModeRef): Promise<boolean> {
   const locked = await lockAiMode(tx, ref);
   // A thread this workspace cannot see is the reply's problem, not the mode's:
   // nothing here claims it.
-  if (!locked) return;
+  if (!locked) return false;
   if (!aiMayAnswer(locked.mode)) throw new AiModeChangedError(locked.mode!);
-  if (locked.mode === null) {
-    await tx.$executeRaw`UPDATE threads SET ai_mode = 'ai' WHERE id = ${ref.threadId}`;
-  }
+  if (locked.mode !== null) return false;
+  await tx.$executeRaw`UPDATE threads SET ai_mode = 'ai' WHERE id = ${ref.threadId}`;
+  return true;
 }
 
 /**

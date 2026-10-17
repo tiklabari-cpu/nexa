@@ -837,6 +837,7 @@ export function InboxPage(): ReactElement {
                 <>
                   <ThreadHeader
                     chatId={selectedId}
+                    chat={chat.data}
                     threadId={chat.data.thread?.id ?? null}
                     customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
                     active={chat.data.active}

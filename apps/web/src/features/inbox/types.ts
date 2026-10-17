@@ -77,6 +77,9 @@ export interface ChatVisitor {
   };
 }
 
+/** Who answers a connection (`Thread.ai_mode`, AI-11). */
+export type AiMode = 'ai' | 'human' | 'paused';
+
 export interface ChatDetail {
   id: string;
   license_id: string;
@@ -99,6 +102,14 @@ export interface ChatDetail {
     summary: string | null;
     created_at: string;
     closed_at: string | null;
+    /**
+     * Who answers the connection (AI-11): the AI, a person, or the AI held
+     * back; null until anyone takes part. Optional: fixtures and older
+     * servers omit it.
+     */
+    ai_mode?: AiMode | null;
+    /** Whether the AI ever answered in the connection — on the single-chat read only. */
+    ai_took_part?: boolean;
     tags: string[];
   } | null;
   /** The conversation day (`YYYY-MM-DD`) this chat is filed under; null before ID-02. */

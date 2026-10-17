@@ -9,31 +9,45 @@ import {
   toDecisionRow,
   type AiDecisionInput,
 } from './decision-log.js';
-import type { SkillRunResult, TenantRunner } from './skill-engine.js';
+import {
+  emptyTurnState,
+  type TenantRunner,
+  type TurnDecisions,
+  type TurnResult,
+  type TurnSideEffect,
+} from './conversation/turn.js';
 
 const LICENSE = 7n;
 const TENANT = { licenseId: LICENSE, organizationId: '6f1d3c2a-4b5e-4f60-8a71-92b3c4d5e6f7' };
 const SKILL = '0b6c7a8e-1f2d-4c3b-9a4e-5d6f7a8b9c0d';
 const SOURCE = '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f';
 
-function run(overrides: Partial<SkillRunResult> = {}): SkillRunResult {
+/** A turn: the decisions it overrides, plus its reply and side effects. */
+function run(
+  overrides: Partial<TurnDecisions> & {
+    reply?: string | null;
+    sideEffects?: TurnSideEffect[];
+  } = {},
+): TurnResult {
+  const { reply = 'Three to five days.', sideEffects = [], ...decided } = overrides;
   return {
-    outcome: 'answered',
-    skillId: SKILL,
-    skillName: 'Delivery',
-    reply: 'Three to five days.',
-    replyFrom: 'send_message',
-    tags: [],
-    transferTo: null,
-    summary: null,
-    failure: null,
-    capped: null,
-    usage: { llmInputTokens: 120, llmOutputTokens: 30, embeddingTokens: 8 },
-    log: [
-      { step: 'detect_intent', detail: 'matched "delivery"', ok: true },
-      { step: 'send_message', detail: 'answered from "Delivery" (0.91)', ok: true },
-    ],
-    ...overrides,
+    reply,
+    decisions: {
+      outcome: 'answered',
+      skillId: SKILL,
+      skillName: 'Delivery',
+      replyKind: 'answer',
+      failure: null,
+      capped: null,
+      usage: { llmInputTokens: 120, llmOutputTokens: 30, embeddingTokens: 8 },
+      log: [
+        { step: 'detect_intent', detail: 'matched "delivery"', ok: true },
+        { step: 'send_message', detail: 'answered from "Delivery" (0.91)', ok: true },
+      ],
+      ...decided,
+    },
+    nextState: emptyTurnState(),
+    sideEffects,
   };
 }
 
@@ -187,11 +201,15 @@ describe('skillDecision', () => {
     expect(skillDecision(run({ skillId: null, outcome: 'skipped', reply: null }))).toBeNull();
   });
 
-  it.each<[string, Partial<SkillRunResult>, AiDecision]>([
+  it.each<[string, Parameters<typeof run>[0], AiDecision]>([
     ['an answer', {}, 'answered'],
-    ['a question', { replyFrom: 'request_info', reply: 'Your order number?' }, 'asked'],
-    ['a transfer', { outcome: 'handed_off', transferTo: 'Support' }, 'handoff'],
-    ['a miss', { outcome: 'skipped', reply: null, replyFrom: null }, 'silent'],
+    ['a question', { replyKind: 'question', reply: 'Your order number?' }, 'asked'],
+    [
+      'a transfer',
+      { outcome: 'handed_off', sideEffects: [{ kind: 'handoff', team: 'Support' }] },
+      'handoff',
+    ],
+    ['a miss', { outcome: 'skipped', reply: null, replyKind: null }, 'silent'],
     [
       'the cap',
       { outcome: 'handed_off', reply: null, capped: new AiDailyCapError('llm', 'workspace', 60) },
@@ -206,7 +224,7 @@ describe('skillDecision', () => {
       run({
         outcome: 'handed_off',
         reply: null,
-        replyFrom: null,
+        replyKind: null,
         failure: {
           provider: 'llm',
           kind: 'timeout',
@@ -243,7 +261,7 @@ describe('skillDecision', () => {
   it('keeps no run-log wording — it can quote what the customer was asked for', () => {
     const decided = skillDecision(
       run({
-        replyFrom: 'request_info',
+        replyKind: 'question',
         reply: 'What is your date of birth?',
         log: [{ step: 'request_info', detail: 'asked for date_of_birth', ok: true }],
       }),

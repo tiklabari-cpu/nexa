@@ -1044,8 +1044,8 @@ export interface AiAgentTokens {
 /**
  * What {@link aiAgentSkillRunCount}'s runs cost, in tokens: the same rows under
  * the same filter, summed. Not a second counter — the tokens were written on
- * each run by the skill engine in the transaction that created it
- * (`skill-engine.ts`), so a window's run count and its token total are two
+ * each run in the transaction that created it (`ai-responder.ts`, from the
+ * turn's `skillRunRecord`), so a window's run count and its token total are two
  * readings of one set of rows and cannot disagree about which runs happened.
  * Tokens, not money: the price is the owner's contract with the provider.
  */

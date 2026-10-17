@@ -31,7 +31,12 @@ import {
   type AiDecision,
 } from '@siyahtus/types';
 import { type TenantContext, UUID_RE } from '../../lib/tenant.js';
-import type { SkillRunResult, TenantRunner } from './skill-engine.js';
+import {
+  describeSideEffects,
+  tookTurn,
+  type TenantRunner,
+  type TurnResult,
+} from './conversation/turn.js';
 
 /** What a turn decided, as its caller knows it. Only `decision` is required. */
 export interface AiDecisionInput {
@@ -166,54 +171,55 @@ export async function recordAiDecision(
 }
 
 /**
- * What a skill run decided, as the record spells it — or `null` when no skill
- * ran (no intent matched), which is not an AI turn: the message never reached
- * the AI and the conversation is a human's exactly as it would be without one.
+ * What a turn decided, as the record spells it — or `null` when no skill ran
+ * (no intent matched), which is not an AI turn: the message never reached the
+ * AI and the conversation is a human's exactly as it would be without one.
  *
  * Ids, counts and labels only. The run log's `detail` strings are left out on
  * purpose: they quote tag names, fields and source titles an admin wrote, and
  * on a `request_info` step the field the customer was asked for.
  */
 export function skillDecision(
-  result: SkillRunResult,
+  turn: TurnResult,
 ): Omit<
   AiDecisionInput,
   'chatId' | 'threadId' | 'customerId' | 'requestId' | 'triggerEventId'
 > | null {
-  if (result.skillId === null && result.capped === null) return null;
+  if (!tookTurn(turn)) return null;
+  const decisions = turn.decisions;
 
-  const decision: AiDecision = result.capped
+  const decision: AiDecision = decisions.capped
     ? 'cap_reached'
-    : result.outcome === 'handed_off'
+    : decisions.outcome === 'handed_off'
       ? 'handoff'
-      : result.outcome === 'skipped'
+      : decisions.outcome === 'skipped'
         ? 'silent'
-        : result.replyFrom === 'request_info'
+        : decisions.replyKind === 'question'
           ? 'asked'
           : 'answered';
 
-  const failure = result.failure;
+  const failure = decisions.failure;
   return {
     decision,
-    procedureId: result.skillId,
-    step: result.log.at(-1)?.step ?? null,
+    procedureId: decisions.skillId,
+    step: decisions.log.at(-1)?.step ?? null,
     handoffReason:
       decision !== 'handoff'
         ? null
         : failure
           ? `${failure.provider}_failure`
-          : result.transferTo
+          : describeSideEffects(turn.sideEffects).transferTo
             ? 'transfer_to_team'
             : null,
     errorType: failure ? `${failure.provider}:${failure.kind}` : null,
-    llmInputTokens: result.usage.llmInputTokens,
-    llmOutputTokens: result.usage.llmOutputTokens,
+    llmInputTokens: decisions.usage.llmInputTokens,
+    llmOutputTokens: decisions.usage.llmOutputTokens,
     details: {
-      outcome: result.outcome,
-      steps: result.log.map((entry) => entry.step),
-      failed_steps: result.log.filter((entry) => !entry.ok).map((entry) => entry.step),
-      embedding_tokens: result.usage.embeddingTokens,
-      ...(result.capped ? { cap_scope: result.capped.scope } : {}),
+      outcome: decisions.outcome,
+      steps: decisions.log.map((entry) => entry.step),
+      failed_steps: decisions.log.filter((entry) => !entry.ok).map((entry) => entry.step),
+      embedding_tokens: decisions.usage.embeddingTokens,
+      ...(decisions.capped ? { cap_scope: decisions.capped.scope } : {}),
       ...(failure ? { transient: failure.transient } : {}),
     },
   };

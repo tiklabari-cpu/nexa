@@ -14,8 +14,9 @@
  * So this drives the whole journey in one browser session, and finishes on the
  * only evidence that "RAG indexing" is real: a question whose answer exists
  * nowhere but in the CSV that was just uploaded, asked through the skill
- * Preview — the same `SkillEngine` → `KnowledgeService.retrieve` path a live
- * customer message takes (`skill-engine.ts` `#sendMessage`), minus the writes.
+ * Preview — the same `ConversationEngine.runTurn` → `KnowledgeService` path a
+ * live customer message takes (`conversation/conversation-engine.ts`
+ * `#answerFromKnowledge`), minus the writes.
  * The reply comes back as the imported sentence and the run log names the
  * imported source, which is the citation.
  *

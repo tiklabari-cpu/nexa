@@ -91,7 +91,14 @@ describe('the rule bot reaches no AI at all (FR-MOD-06.6)', () => {
   });
 
   it('names no AI entry point anywhere in its closure', () => {
-    const forbidden = ['matchIntent', 'embed(', 'shapeAnswer', 'SkillEngine', 'knowledgeSource'];
+    const forbidden = [
+      'matchIntent',
+      'embed(',
+      'shapeAnswer',
+      'ConversationEngine',
+      'runTurn',
+      'knowledgeSource',
+    ];
     const offenders = graph.files
       .map((file) => ({ file, source: readFileSync(join(SRC, file), 'utf8') }))
       .flatMap(({ file, source }) =>

@@ -44,7 +44,8 @@ import { crawl } from '../services/ai/web-crawler.js';
 import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
 import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
-import { SkillEngine } from '../services/ai/skill-engine.js';
+import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
+import { describeSideEffects } from '../services/ai/conversation/turn.js';
 import type { TenantClient } from '../lib/tenant.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
@@ -349,7 +350,7 @@ export default async function playbookRoutes(
   // The same provider and limits as the live path, for the reason the preview
   // shares the engine at all: a preview that answers differently is worse than
   // none (FR-MOD-06.2.5).
-  const engine = new SkillEngine({
+  const engine = new ConversationEngine({
     knowledge,
     llm,
     maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
@@ -581,21 +582,22 @@ export default async function playbookRoutes(
       const body = parse(previewBody, request.body);
       const tenant = request.tenant();
 
-      // The real engine, no writes. A preview running different logic would be
+      // The real turn, no writes. A preview running different logic would be
       // worse than no preview.
       const result = await engine.preview((fn) => request.withTenant(fn), tenant, {
         steps: body.steps,
         message: body.message,
         aiAgentId: body.ai_agent_id ?? null,
       });
+      const effects = describeSideEffects(result.sideEffects);
 
       return reply.send({
-        outcome: result.outcome,
+        outcome: result.decisions.outcome,
         reply: result.reply,
-        tags: result.tags,
-        transfer_to: result.transferTo,
-        summary: result.summary,
-        log: result.log,
+        tags: effects.tags,
+        transfer_to: effects.transferTo,
+        summary: effects.summary,
+        log: result.decisions.log,
         errors: result.errors,
         error_details: result.error_details,
       });

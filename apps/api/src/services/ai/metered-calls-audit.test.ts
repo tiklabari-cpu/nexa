@@ -57,9 +57,9 @@ const ALLOWED: Readonly<Record<string, Allowance>> = {
     why: 'prepare() and embedQuery() call the MeteredEmbeddings it holds, with the caller’s payer',
     holds: /readonly #embeddings: MeteredEmbeddings;/,
   },
-  'services/ai/skill-engine.ts': {
+  'services/ai/conversation/conversation-engine.ts': {
     calls: 1,
-    why: 'calls the MeteredLlm it holds with the run’s workspace',
+    why: 'calls the MeteredLlm it holds with the turn’s workspace, on the meter its mode names',
     holds: /readonly #llm: MeteredLlm;/,
   },
   'services/ai/copilot-summary.ts': {

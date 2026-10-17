@@ -12,7 +12,7 @@
  *   (`routes/playbook.ts`, `routes/copilot.ts`); a bulk row, the freshness sweep
  *   and `knowledge:reembed` record it against the one source.
  * - **Searching** returns nothing and hands the conversation to a human
- *   (`skill-engine.ts`): no retrieval means no grounded answer, and a model
+ *   (`conversation/conversation-engine.ts`): no retrieval means no grounded answer, and a model
  *   asked without passages is exactly the silent wrong answer this rules out.
  *
  * | kind              | what happened                                                        |

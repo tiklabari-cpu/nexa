@@ -449,6 +449,13 @@ export const playbook: Messages = {
   'playbook.profile.batchSeconds.other': '{count} seconds',
   'playbook.profile.batchWindowHint':
     'Messages written this close together get one answer instead of one each.',
+  'playbook.profile.dailyMemory': 'Same-day memory',
+  'playbook.profile.dailyMemoryOn': "Remember the visitor's earlier conversations today",
+  'playbook.profile.recall': 'Bring the earlier conversation up',
+  'playbook.profile.recallUnresolved': 'When it was not resolved',
+  'playbook.profile.recallOnTopic': 'Only when the visitor is back on the same topic',
+  'playbook.profile.dailyMemoryHint':
+    'The assistant recalls the topic, never an amount, an IBAN or a transaction number. A visitor not signed in with a member token gets no details. Earlier days are never used.',
   'playbook.profile.save': 'Save profile',
   'playbook.profile.saving': 'Saving…',
   'playbook.profile.previewTitle': 'Preview',

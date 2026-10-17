@@ -30,7 +30,7 @@
  * job, a rolled-back one has none.
  */
 import type { PrismaClient } from '@prisma/client';
-import { isAcceptableRequestId } from '@siyahtus/types';
+import { isAcceptableRequestId, type IdentityTrust } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { EventOutbox } from '../chat/chat-service.js';
 
@@ -85,6 +85,11 @@ export interface EnqueueAiJobInput {
   pageUrl?: string | null;
   /** The message opened its connection (the assignee's notice says "new chat"). */
   openedConnection?: boolean;
+  /**
+   * How the visitor who wrote it proved who they are (tm 294 · K4), for the
+   * same-day memory the turn may read. Absent: unproven (`claimed`).
+   */
+  identityTrust?: IdentityTrust | null;
 }
 
 /** The job the outbox wrote: `pending`, or `expired` when its chat was backed up. */
@@ -122,13 +127,14 @@ export async function enqueueAiJob(
   const rows = await tx.$queryRaw<EnqueuedAiJob[]>`
     INSERT INTO ai_jobs (id, license_id, organization_id, chat_id, thread_id,
                          trigger_event_id, kind, state, finished_at, outcome, request_id,
-                         page_url, opened_connection)
+                         page_url, opened_connection, identity_trust)
     SELECT gen_random_uuid(), ${tenant.licenseId}, ${tenant.organizationId}::uuid,
            ${input.chatId}, ${input.threadId}, ${input.triggerEventId}, ${kind},
            CASE WHEN backlog.at_limit THEN 'expired' ELSE 'pending' END,
            CASE WHEN backlog.at_limit THEN clock_timestamp() END,
            CASE WHEN backlog.at_limit THEN ${AI_JOB_BACKLOG_OUTCOME}::text END,
-           ${requestId}::text, ${pageUrl}::text, ${input.openedConnection ?? false}
+           ${requestId}::text, ${pageUrl}::text, ${input.openedConnection ?? false},
+           ${input.identityTrust ?? null}::text
       FROM (SELECT count(*) >= ${AI_JOB_MAX_UNFINISHED_PER_CHAT}::int AS at_limit
               FROM (SELECT 1 FROM ai_jobs
                      WHERE chat_id = ${input.chatId} AND state IN ('pending', 'running')
@@ -150,6 +156,7 @@ export function aiJobOutbox(
     requestId?: string | null;
     kind?: AiJobKind;
     pageUrl?: string | null;
+    identityTrust?: IdentityTrust | null;
     onEnqueued?: (job: EnqueuedAiJob) => void;
   } = {},
 ): EventOutbox {
@@ -162,6 +169,7 @@ export function aiJobOutbox(
       requestId: options.requestId ?? null,
       pageUrl: options.pageUrl ?? null,
       openedConnection: written.openedVia !== null,
+      identityTrust: options.identityTrust ?? null,
     });
     options.onEnqueued?.(job);
   };

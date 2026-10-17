@@ -17,9 +17,11 @@ import {
   AI_STALL_TIMEOUT_SECONDS_MIN,
   ANSWER_LENGTHS,
   BATCH_WINDOW_SECONDS_MAX,
+  DAILY_MEMORY_RECALLS,
   DEFAULT_AI_ASSIGNMENT_MODE,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   readBatchWindowSeconds,
+  readDailyMemory,
   type AiAssignmentMode,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
@@ -317,6 +319,15 @@ const updateAgentBody = z
       .max(BATCH_WINDOW_SECONDS_MAX)
       .nullable()
       .optional(),
+    // Either field alone; the one left out keeps its value (tm 294).
+    daily_memory: z
+      .object({
+        enabled: z.boolean().optional(),
+        recall: z.enum(DAILY_MEMORY_RECALLS).optional(),
+      })
+      .strict()
+      .refine((memory) => Object.keys(memory).length > 0, 'at least one field is required')
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -416,11 +427,16 @@ export default async function playbookRoutes(
         });
         if (!existing) throw ApiError.notFound('AI agent not found.');
 
-        // `answer_length` and `batch_window_seconds` live inside the persona
-        // JSON alongside anything else an admin has set (a signature, say), so
-        // merge rather than overwrite — clearing one removes just that key.
+        // `answer_length`, `batch_window_seconds` and `daily_memory` live
+        // inside the persona JSON alongside anything else an admin has set (a
+        // signature, say), so merge rather than overwrite — clearing one
+        // removes just that key.
         let persona: Prisma.InputJsonValue | undefined;
-        if (body.answer_length !== undefined || body.batch_window_seconds !== undefined) {
+        if (
+          body.answer_length !== undefined ||
+          body.batch_window_seconds !== undefined ||
+          body.daily_memory !== undefined
+        ) {
           const current =
             existing.persona &&
             typeof existing.persona === 'object' &&
@@ -433,6 +449,9 @@ export default async function playbookRoutes(
           if (body.batch_window_seconds === null) delete next['batchWindowSeconds'];
           else if (body.batch_window_seconds !== undefined) {
             next['batchWindowSeconds'] = body.batch_window_seconds;
+          }
+          if (body.daily_memory !== undefined) {
+            next['dailyMemory'] = { ...readDailyMemory(current), ...body.daily_memory };
           }
           persona = next as Prisma.InputJsonValue;
         }
@@ -1560,6 +1579,7 @@ function serialiseAgent(agent: {
     languages: agent.languages,
     answer_length: typeof answerLength === 'string' ? answerLength : null,
     batch_window_seconds: readBatchWindowSeconds(persona),
+    daily_memory: readDailyMemory(persona),
     active: agent.active,
     skills_count: agent._count.skills,
   };

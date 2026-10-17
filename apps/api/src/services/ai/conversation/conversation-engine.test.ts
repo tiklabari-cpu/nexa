@@ -975,8 +975,29 @@ describe('the turn returns what it would do and does none of it (AI-19)', () => 
       skillId: 'skill-1',
       replyKind: 'answer',
     });
-    // One more turn counted; the other counters and every other field as they were.
-    expect(result.nextState).toEqual({ ...before, counters: { turns: 3, clarify: 1 } });
+    // One more turn counted, the connection's summary rebuilt (tm 294); the
+    // other counters and every other field as they were.
+    expect(result.nextState).toEqual({
+      ...before,
+      counters: { turns: 3, clarify: 1 },
+      digest: {
+        procedure_key: 'skill-1',
+        procedure_name: expect.any(String),
+        intent_label: 'delivery',
+        slots: {},
+        outcome: 'handed_off',
+        awaiting_answer: false,
+        handoff: {
+          id: null,
+          team_id: null,
+          team_name: 'Logistics',
+          reason_codes: ['ai_handoff'],
+          agent_replied: false,
+        },
+        risk_flags: [],
+        last_ai_excerpt: 'Passing you to logistics.',
+      },
+    });
     // The state it was given is not touched.
     expect(before).toEqual(frozen);
   });

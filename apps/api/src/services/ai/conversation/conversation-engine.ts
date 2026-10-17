@@ -114,12 +114,22 @@ import {
 } from '../provider/llm-provider.js';
 import { GAP_MARKER, shortenHistory } from './context-loader.js';
 import {
+  buildDigest,
+  earlierTodayLines,
+  recallLine,
+  recallTarget,
+  repeatsEarlierDetail,
+  slotKnown,
+  withEarlierToday,
+} from './daily-memory.js';
+import {
   adaptLegacySkill,
   stepLogName,
   type IntentGate,
   type ProcedureStep,
   type SingleTurnProcedure,
 } from './legacy-skill.js';
+import type { AiStateObject } from './state-store.js';
 import { readAndCompile } from './turn-config.js';
 import {
   emptyTurnState,
@@ -242,6 +252,22 @@ export class ConversationEngine {
 
       const language = personaLanguageVerdict(message.text, skill.persona);
       const identity = { id: skill.id, name: skill.name, aiAgentId: skill.aiAgentId };
+      const intent = procedure.whenToUse[0]?.intent ?? null;
+
+      if (language.unsupported) {
+        const executed = declined(identity, gate.log, language.detected);
+        return { ...executed, nextState: afterTurn(state, message, executed, identity, intent) };
+      }
+
+      // The day's earlier connections (tm 294 · AI-02), on the connection's
+      // first turn: the slots an earlier one on this topic collected are the
+      // turn's from its start, and the recall — written here, not by the model
+      // (K5) — opens whatever the turn says.
+      const earlier = message.earlierToday;
+      const before = earlier ? withEarlierToday(state, earlier, skill.id) : state;
+      const target = earlier ? recallTarget(earlier, skill.id) : null;
+      const recall =
+        earlier && target ? recallLine(target, earlier.trust, language.answerIn) : null;
 
       // The persona names the languages this assistant speaks. A message
       // confidently in another one is the case the setting exists for, and the
@@ -249,18 +275,21 @@ export class ConversationEngine {
       // translation here, only knowledge in whatever language the admin loaded.
       // Declining leaves the outcome `skipped`, so routing proceeds exactly as
       // it would with no AI and a human picks the conversation up.
-      const executed = language.unsupported
-        ? declined(identity, gate.log, language.detected)
-        : await this.#execute(procedure, {
-            skill: identity,
-            message,
-            gateLog: gate.log,
-            persona: skill.persona,
-            answerIn: language.answerIn,
-            ctx,
-          });
+      const executed = withRecall(
+        await this.#execute(procedure, {
+          skill: identity,
+          message,
+          gateLog: gate.log,
+          persona: skill.persona,
+          answerIn: language.answerIn,
+          ctx,
+          slots: before.slots,
+          recalled: recall !== null,
+        }),
+        recall,
+      );
 
-      return { ...executed, nextState: afterTurn(state, message) };
+      return { ...executed, nextState: afterTurn(before, message, executed, identity, intent) };
     }
 
     return { reply: null, decisions: NOTHING_DECIDED, nextState: state, sideEffects: [] };
@@ -335,6 +364,10 @@ export class ConversationEngine {
       persona: Persona;
       answerIn: PersonaLanguage | null;
       ctx: TurnContext;
+      /** What the conversation knows already — collected, or carried from earlier today. */
+      slots: AiStateObject;
+      /** The reply will open with the recall line (tm 294). */
+      recalled: boolean;
     },
   ): Promise<Executed> {
     const log = [...input.gateLog];
@@ -377,10 +410,13 @@ export class ConversationEngine {
           break;
 
         case 'collect': {
-          // Only ask if the answer is not already in the message. Asking a
-          // customer for an order number they just gave is the single most
-          // irritating thing an automated agent does.
-          if (looksSupplied(input.message.text, step.slot)) {
+          // Only ask if the answer is not already known — collected, or
+          // carried from an earlier connection today (tm 294) — or in the
+          // message. Asking a customer for an order number they just gave is
+          // the single most irritating thing an automated agent does.
+          if (slotKnown(input.slots, step.slot)) {
+            log.push({ step: name, detail: `${step.slot} already known`, ok: true });
+          } else if (looksSupplied(input.message.text, step.slot)) {
             log.push({ step: name, detail: `${step.slot} already provided`, ok: true });
           } else {
             reply = step.prompt;
@@ -393,7 +429,11 @@ export class ConversationEngine {
         case 'summarize':
           sideEffects.push({
             kind: 'summary',
-            text: buildSummary(input.message.text, input.message.history),
+            text: buildSummary(
+              input.message.text,
+              input.message.history,
+              input.message.earlierToday?.contact ?? 1,
+            ),
           });
           log.push({ step: name, detail: 'summary written', ok: true });
           break;
@@ -414,6 +454,9 @@ export class ConversationEngine {
           const answer = await this.#answerFromKnowledge({
             message: input.message.text,
             history: input.message.history,
+            earlierToday: input.message.earlierToday
+              ? earlierTodayLines(input.message.earlierToday, input.recalled)
+              : [],
             skill: input.skill,
             persona: input.persona,
             answerIn: input.answerIn,
@@ -429,6 +472,23 @@ export class ConversationEngine {
             reply = null;
             replyKind = null;
           } else if (answer.text) {
+            // K5: an amount, an IBAN or a transaction id from an earlier
+            // connection the player has not given again is not the AI's to say
+            // (the AI-08 output check's hook). The answer is withheld and a
+            // person answers, as with a knowledge miss.
+            const leaked = repeatsEarlierDetail(
+              answer.text,
+              input.message.earlierToday,
+              saidSoFar(input.message),
+            );
+            if (leaked.length > 0) {
+              log.push({
+                step: name,
+                detail: `withheld — it repeated ${leaked.length} detail(s) from an earlier conversation today the player has not given again`,
+                ok: false,
+              });
+              break;
+            }
             reply = answer.text;
             replyKind = 'answer';
           }
@@ -463,6 +523,8 @@ export class ConversationEngine {
   async #answerFromKnowledge(input: {
     message: string;
     history: TurnHistory | undefined;
+    /** What the model is told of the day's earlier connections (tm 294). */
+    earlierToday: readonly string[];
     skill: { aiAgentId: string | null };
     persona: Persona;
     answerIn: PersonaLanguage | null;
@@ -543,6 +605,7 @@ export class ConversationEngine {
           persona: input.persona,
           answerIn: input.answerIn,
           ...(history ? { history } : {}),
+          ...(input.earlierToday.length > 0 ? { earlierToday: input.earlierToday } : {}),
         }),
       input.history,
       this.#maxPromptChars,
@@ -645,15 +708,53 @@ function speaks(step: ProcedureStep): boolean {
 /**
  * The state after a turn the AI took: one more turn counted (AI-03 §6), and
  * the visitor's messages it answered marked processed (AI-01 §5 — never moved
- * back). A one-turn procedure leaves nothing active behind it — no step waits
- * for an answer — so nothing else moves.
+ * back). A one-turn procedure leaves no step active behind it; what it did
+ * goes into the connection's summary (`digest`, tm 294).
  */
-function afterTurn(state: TurnState, message: TurnMessage): TurnState {
-  return {
+function afterTurn(
+  state: TurnState,
+  message: TurnMessage,
+  executed: Executed,
+  skill: { id: string; name: string },
+  intent: string | null,
+): TurnState {
+  const next: TurnState = {
     ...state,
     counters: { ...state.counters, turns: turnsTaken(state) + 1 },
     lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
   };
+  // The connection's summary for the day's later connections (tm 294 · AI-02),
+  // rebuilt every turn so a connection that dies mid-way still leaves one.
+  const digest = buildDigest(state.digest, next, {
+    skill,
+    intent,
+    outcome: executed.decisions.outcome,
+    reply: executed.reply,
+    replyKind: executed.decisions.replyKind,
+    sideEffects: executed.sideEffects,
+  });
+  return { ...next, digest: digest as unknown as AiStateObject };
+}
+
+/**
+ * The turn with the recall line in front of what it says (tm 294 · AI-02 §6):
+ * before its reply, or alone when it hands over without one. Nothing when the
+ * AI could not answer — a person starts clean (the file header).
+ */
+function withRecall(executed: Executed, recall: string | null): Executed {
+  const { decisions } = executed;
+  if (!recall || decisions.failure || decisions.capped) return executed;
+  if (executed.reply) return { ...executed, reply: `${recall}\n${executed.reply}` };
+  if (decisions.outcome !== 'handed_off') return executed;
+  return { ...executed, reply: recall, decisions: { ...decisions, replyKind: 'answer' } };
+}
+
+/** What the player has said in this connection: the message and their earlier lines. */
+function saidSoFar(message: TurnMessage): string {
+  const earlier = (message.history?.messages ?? [])
+    .filter((entry) => entry.role === 'user')
+    .map((entry) => entry.content);
+  return [...earlier, message.text].join('\n');
 }
 
 /**
@@ -775,7 +876,7 @@ function fitHistory(
  * visitor's opening message — the history's first visitor line — and how many
  * messages they have written.
  */
-function buildSummary(message: string, history: TurnHistory | undefined): string {
+function buildSummary(message: string, history: TurnHistory | undefined, contact: number): string {
   const opened = history?.messages
     .find((entry) => entry.role === 'user')
     ?.content.split('\n')
@@ -783,7 +884,10 @@ function buildSummary(message: string, history: TurnHistory | undefined): string
   const count = (history?.visitorMessages ?? 0) + 1;
   const first = opened ?? message;
   const opening = first.length > 160 ? `${first.slice(0, 157)}…` : first;
-  return count > 1
-    ? `Customer opened with: ${opening} (${count} messages so far)`
-    : `Customer asked: ${opening}`;
+  const said =
+    count > 1
+      ? `Customer opened with: ${opening} (${count} messages so far)`
+      : `Customer asked: ${opening}`;
+  // The card says when the member is back the same day (tm 294 · AI-02).
+  return contact > 1 ? `Same day, contact ${contact} · ${said}` : said;
 }

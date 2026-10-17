@@ -22,12 +22,13 @@
  * writes ({@link TurnState}); the row's identity, its lock counter and its
  * pinned configuration version stay with the store (`state-store.ts`).
  */
-import type { Persona } from '@siyahtus/types';
+import type { DailyMemorySettings, Persona } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../../lib/tenant.js';
 import type { AiDailyCapError } from '../ai-daily-budget.js';
 import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
+import type { EarlierToday } from './daily-memory.js';
 import type {
   AiConversationPatch,
   AiConversationPatchField,
@@ -145,6 +146,13 @@ export interface TurnMessage {
    * they set off find nothing left to do. Absent outside a live connection.
    */
   readonly throughSeq?: number;
+  /**
+   * The day's earlier connections, on a connection's first turn (tm 294 ·
+   * AI-02), already cut to what the visitor's identity allows. Absent on
+   * later turns, outside a live connection, and with the agent's same-day
+   * memory off.
+   */
+  readonly earlierToday?: EarlierToday;
 }
 
 /**
@@ -187,6 +195,12 @@ export interface TurnConfig {
    * the longest wins; the wait comes before any skill is picked.
    */
   readonly batchWindowSeconds?: number;
+  /**
+   * The agents' same-day memory setting (`daily_memory`, tm 294). Absent: the
+   * default (`DEFAULT_DAILY_MEMORY`). With several agents the stricter one
+   * wins — off if any is off, `on_topic_only` if any asks for it.
+   */
+  readonly dailyMemory?: DailyMemorySettings;
 }
 
 export interface TurnContext {

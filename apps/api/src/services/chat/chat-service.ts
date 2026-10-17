@@ -68,6 +68,7 @@ import {
   type RoutingContext,
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
+import { loadDailyDigests, settleDailyDigest, type DailyDigest } from './ai-digest.js';
 import {
   AI_MODE_SYSTEM_ACTOR,
   aiModeNoteText,
@@ -477,6 +478,25 @@ export class ChatService {
         }
       }
       return detail;
+    });
+  }
+
+  /**
+   * The AI's summaries of the chat's connections (tm 294 · AI-02), newest
+   * first — what the AI recalls of the member's day, for the agent's screen
+   * (shown by IN-02, tm 331). Every connection the AI took part in, the open
+   * one included, with its details: the identity filter (K4) is the AI's, an
+   * agent reads the transcript anyway.
+   */
+  async listAiDigests(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+  ): Promise<DailyDigest[]> {
+    return withTenant(this.db, tenant, async (tx) => {
+      const visibility = await resolveVisibility(tx, principal, 'read');
+      await this.#loadVisibleChat(tx, visibility, chatId);
+      return loadDailyDigests(tx, chatId, { limit: null });
     });
   }
 
@@ -2239,6 +2259,9 @@ export class ChatService {
       data: { active: false, closedAt, queuePosition: null, queuedAt: null },
     });
     await leaveQueue(tx, thread.id, close.queueOutcome, closedAt);
+    // How the connection ended for the AI, for the day's later connections
+    // (tm 294 · AI-02): handed over, left mid-question, or answered.
+    await settleDailyDigest(tx, thread.id, closedAt);
 
     // Both clocks stop here (FR-MOD-11.5 · 11.5-d). Resolution is obvious; the
     // first-response one is the case that would otherwise never be judged from a

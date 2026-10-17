@@ -14,7 +14,12 @@
  * The tenant is the transaction's: row level security decides the workspace,
  * so the seam takes no tenant beside it.
  */
-import { readBatchWindowSeconds, readPersona } from '@siyahtus/types';
+import {
+  readBatchWindowSeconds,
+  readDailyMemory,
+  readPersona,
+  type DailyMemorySettings,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
 import type { TurnConfig } from './turn.js';
 
@@ -98,6 +103,23 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
     })),
     // Unset stays absent, so a configuration nobody tuned is what it was.
     ...(waits.length > 0 ? { batchWindowSeconds: Math.max(...waits) } : {}),
+    ...(skills.length > 0
+      ? { dailyMemory: strictest(skills.map((skill) => readDailyMemory(skill.aiAgent?.persona))) }
+      : {}),
+  };
+}
+
+/**
+ * The same-day memory of several agents at once (tm 294): the turn picks its
+ * skill only after the memory is read, so the setting that discloses least
+ * applies — off if any agent turned it off, topic-only if any asked for it.
+ */
+function strictest(settings: readonly DailyMemorySettings[]): DailyMemorySettings {
+  return {
+    enabled: settings.every((setting) => setting.enabled),
+    recall: settings.some((setting) => setting.recall === 'on_topic_only')
+      ? 'on_topic_only'
+      : 'auto_if_unresolved',
   };
 }
 

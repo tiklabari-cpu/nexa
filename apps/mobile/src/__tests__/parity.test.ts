@@ -930,7 +930,11 @@ describe('module parity matrix — what is still owed', () => {
       // (tm 293.3) — giving a conversation back to the AI agent or holding the
       // AI back on it, from the web inbox's header (tm 293.5). The app's chat
       // screen has no AI controls; nothing here re-scopes.
-      contractEndpoints: 237,
+      // 237 -> 238 with `/chats/{chatId}/ai-digests` (tm 294) — what the AI
+      // recalls of a member's day, for the web inbox's right pane (IN-02,
+      // tm 331). The app's chat screen shows no AI summary; nothing here
+      // re-scopes.
+      contractEndpoints: 238,
       scopeBoundaries: 1,
     });
   });

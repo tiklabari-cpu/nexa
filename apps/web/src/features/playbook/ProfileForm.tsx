@@ -13,10 +13,14 @@ import { useState, type ReactElement } from 'react';
 import {
   ANSWER_LENGTHS,
   BATCH_WINDOW_SECONDS_MAX,
+  DAILY_MEMORY_RECALLS,
+  DEFAULT_DAILY_MEMORY,
   isPersonaLanguage,
   readPersona,
   shapeAnswer,
   type AnswerLength,
+  type DailyMemoryRecall,
+  type DailyMemorySettings,
 } from '@siyahtus/types';
 import { Card } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -36,6 +40,11 @@ const LANGUAGE_OPTIONS: [string, string][] = [
 
 /** 1…10 — 0 is its own option ("answer at once") and the empty one is the default. */
 const BATCH_WINDOW_STEPS = Array.from({ length: BATCH_WINDOW_SECONDS_MAX }, (_, i) => i + 1);
+
+const RECALL_LABEL_KEYS: Record<DailyMemoryRecall, string> = {
+  auto_if_unresolved: 'playbook.profile.recallUnresolved',
+  on_topic_only: 'playbook.profile.recallOnTopic',
+};
 
 const ANSWER_LENGTH_LABEL_KEYS: Record<AnswerLength, string> = {
   short: 'playbook.profile.lengthShort',
@@ -83,6 +92,7 @@ export function ProfileForm({
       languages: string[];
       answer_length: AnswerLength | null;
       batch_window_seconds: number | null;
+      daily_memory?: DailyMemorySettings;
     }) => api.patch<AiAgent>(`/ai-agents/${agent.id}`, body),
     onSuccess: onSaved,
   });
@@ -94,6 +104,10 @@ export function ProfileForm({
     answerLength: agent.answer_length ?? '',
     // Whole seconds as a string, '' for the workspace default.
     batchWindow: agent.batch_window_seconds === null ? '' : String(agent.batch_window_seconds),
+    // Same-day memory (tm 294 · AI-02): 'on' / 'off', and when it brings the
+    // earlier conversation up.
+    memory: (agent.daily_memory ?? DEFAULT_DAILY_MEMORY).enabled ? 'on' : 'off',
+    recall: (agent.daily_memory ?? DEFAULT_DAILY_MEMORY).recall as string,
   };
 
   const form = useForm({
@@ -118,6 +132,14 @@ export function ProfileForm({
         languages,
         answer_length: (values.answerLength || null) as AnswerLength | null,
         batch_window_seconds: values.batchWindow === '' ? null : Number(values.batchWindow),
+        ...(values.memory !== initialValues.memory || values.recall !== initialValues.recall
+          ? {
+              daily_memory: {
+                enabled: values.memory === 'on',
+                recall: values.recall as DailyMemoryRecall,
+              },
+            }
+          : {}),
       });
     },
   });
@@ -260,6 +282,43 @@ export function ProfileForm({
               {t('playbook.profile.batchWindowHint')}
             </p>
           </div>
+
+          <fieldset className="flex flex-col gap-1.5" disabled={!canEdit}>
+            <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('playbook.profile.dailyMemory')}
+            </legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.values.memory === 'on'}
+                onChange={(event) => form.setValue('memory', event.target.checked ? 'on' : 'off')}
+              />
+              {t('playbook.profile.dailyMemoryOn')}
+            </label>
+            {/* Sibling label, for the same reason as the answer length above. */}
+            <label
+              htmlFor="persona-recall"
+              className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+            >
+              {t('playbook.profile.recall')}
+            </label>
+            <select
+              id="persona-recall"
+              value={form.values.recall}
+              disabled={!canEdit || form.values.memory !== 'on'}
+              onChange={(event) => form.setValue('recall', event.target.value)}
+              className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+            >
+              {DAILY_MEMORY_RECALLS.map((value) => (
+                <option key={value} value={value}>
+                  {t(RECALL_LABEL_KEYS[value])}
+                </option>
+              ))}
+            </select>
+            <p className="text-2xs text-content-tertiary">
+              {t('playbook.profile.dailyMemoryHint')}
+            </p>
+          </fieldset>
 
           {canEdit && (
             <div className="flex items-center gap-3">

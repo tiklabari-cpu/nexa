@@ -445,6 +445,13 @@ export const playbook: Messages = {
   'playbook.profile.batchSeconds.other': '{count} saniye',
   'playbook.profile.batchWindowHint':
     'Birbirine bu kadar yakın yazılan mesajlara her biri için ayrı değil, tek yanıt verilir.',
+  'playbook.profile.dailyMemory': 'Gün içi hafıza',
+  'playbook.profile.dailyMemoryOn': 'Ziyaretçinin bugünkü önceki konuşmalarını hatırla',
+  'playbook.profile.recall': 'Önceki konuşmayı kendiliğinden an',
+  'playbook.profile.recallUnresolved': 'Çözülmeden bittiyse',
+  'playbook.profile.recallOnTopic': 'Yalnız ziyaretçi aynı konuyla döndüğünde',
+  'playbook.profile.dailyMemoryHint':
+    'Asistan konuyu hatırlatır; tutar, IBAN ya da işlem numarasını asla tekrar etmez. Üye tokenıyla tanınmayan ziyaretçiye ayrıntı verilmez. Önceki günler kullanılmaz.',
   'playbook.profile.save': 'Profili kaydet',
   'playbook.profile.saving': 'Kaydediliyor…',
   'playbook.profile.previewTitle': 'Önizleme',

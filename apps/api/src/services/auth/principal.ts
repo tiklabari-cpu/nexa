@@ -7,7 +7,7 @@
  * treating widget traffic as an agent (I4 — a customer token must never reach
  * beyond the Customer Chat API).
  */
-import type { AgentRole } from '@siyahtus/types';
+import type { AgentRole, IdentityTrust } from '@siyahtus/types';
 import type { TenantContext } from '../../lib/tenant.js';
 
 export interface AgentPrincipal {
@@ -42,6 +42,11 @@ export interface CustomerPrincipal {
    * widget settings the chat path enforces. Never a tenant/RLS scope.
    */
   brandId?: string;
+  /**
+   * How the visitor proved who they are when the token was minted (tm 294 ·
+   * K4). Absent on a token that does not say — read as `claimed`.
+   */
+  identity?: IdentityTrust;
 }
 
 /**

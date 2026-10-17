@@ -332,6 +332,13 @@ const TRACKED = [
     owner: 'tm 303.5',
     reason: 'the write half of the same settings — the same screen (HandoffSettings.tsx).',
   },
+  {
+    op: 'GET /chats/{chatId}/ai-digests',
+    owner: 'tm 331',
+    reason:
+      "what the AI recalls of a member's day (tm 294 · AI-02) — the inbox's right pane " +
+      '"Bugünkü önceki bağlantılar" list, which IN-02 (tm 331) draws.',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

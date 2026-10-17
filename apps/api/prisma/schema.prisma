@@ -2090,6 +2090,10 @@ model AiJob {
   pageUrl          String?  @map("page_url")
   /// The message opened its connection — the assignee's notice says "new chat".
   openedConnection Boolean  @default(false) @map("opened_connection")
+  /// How the visitor who wrote the message proved who they are (tm 294 ·
+  /// AI-02, K4): one of `IDENTITY_TRUSTS`, enforced by `ai_jobs_identity_trust_check`.
+  /// Null reads as `claimed`.
+  identityTrust    String?  @map("identity_trust")
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)

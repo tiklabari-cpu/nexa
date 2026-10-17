@@ -5531,8 +5531,10 @@ components:
             used:
               type: integer
               description: |
-                Threads that closed with no agent-authored event (ADR-09). The
-                same query backs the "automated" figure in reports.
+                Threads that closed with no agent-authored event and, for
+                threads closed from 2026-11-01 on, no automatic hand-off by the
+                AI or a rule bot (ADR-09a). The same query backs the
+                "automated" figure in reports.
             included: { type: integer }
             overage: { type: integer }
             overage_cents: { type: integer }
@@ -6060,11 +6062,11 @@ components:
             # PRD 07.3.2 splits every *closed* case three ways, and the three
             # always sum back to `closed` — so a client can trust the parts
             # against the whole:
-            #   manual    — an agent replied and no skill ran.
-            #   assisted  — an agent replied *and* a skill ran on the chat.
-            #   automated — no agent-authored event at all (ADR-09). This is the
-            #     same definition the invoice's AI-resolution counter uses, so
-            #     the two never drift.
+            #   manual    — not automated, and no skill ran on the chat.
+            #   assisted  — not automated, and a skill ran on the chat.
+            #   automated — no agent-authored event and no automatic hand-off
+            #     (ADR-09a). This is the same definition the invoice's
+            #     AI-resolution counter uses, so the two never drift.
             manual: { type: integer }
             assisted: { type: integer }
             automated: { type: integer }
@@ -6292,7 +6294,7 @@ components:
       type: object
       description: |
         AI Agent performance for its own report tab (FR-MOD-07.4). `resolutions`
-        is ADR-09's figure — the same one the invoice's AI-resolution counter
+        is ADR-09a's figure — the same one the invoice's AI-resolution counter
         uses — so this surface never disagrees with the bill.
       required: [range, previous_period, resolutions, transfers, skill_runs, tokens]
       properties:
@@ -6321,7 +6323,9 @@ components:
                 skill_runs: { type: integer }
         resolutions:
           type: integer
-          description: Chats closed with no agent-authored event (ADR-09).
+          description: |
+            Chats closed with no agent-authored event and no automatic hand-off
+            (ADR-09a) — a hand-off counts for threads closed from 2026-11-01 on.
         resolution_rate:
           type: number
           nullable: true

@@ -638,7 +638,7 @@ export async function buildOverviewReport(
         // construction manual + assisted + automated === closed.
         manual,
         assisted,
-        // `automated` keeps ADR-09 unchanged — it is the invoice's number too.
+        // `automated` is ADR-09a's predicate — it is the invoice's number too.
         automated,
         // Shares of *closed* conversations, not all of them: an open chat has
         // not resolved either way, and counting it would make the figures drop
@@ -846,13 +846,15 @@ export async function buildAiAgentReport(
   const automated = Number(totals.automated);
   const closed = Number(totals.closed_chats);
   // Of the chats the AI *finished* — resolved outright or handed off — the
-  // share it handed off. Null when it finished none either way.
+  // share it handed off. Null when it finished none either way. Since ADR-09a
+  // a handed-off thread is not also a resolution, so none is counted twice
+  // (threads closed before `ADR_09A_EFFECTIVE_AT` still can be).
   const finished = automated + transfers;
 
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
-      // ADR-09's figure, the same one the invoice's AI-resolution counter uses.
+      // ADR-09a's figure, the same one the invoice's AI-resolution counter uses.
       resolutions: automated,
       resolution_rate: resolutionRate(automated, closed),
       transfers,

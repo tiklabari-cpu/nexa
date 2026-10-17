@@ -37,8 +37,9 @@ chats:
           bounded by the heartbeat window · `archived` — closed ·
           `ai` — the AI agent is handling it (a bot has replied and no human
           has), kept out of the human queue · `ai_solved` — closed with no
-          human reply, i.e. an AI resolution (ADR-09, the same line billing
-          counts) · `all` — every chat the caller may see.
+          human reply and not handed off by the AI or a rule bot, i.e. an AI
+          resolution (ADR-09a, the same line billing counts) · `all` — every
+          chat the caller may see.
         schema:
           type: string
           enum: [all, my, queued, unassigned, supervised, archived, ai, ai_solved]
@@ -99,7 +100,7 @@ chats:
                     would also double the console's rail from seven requests to
                     fourteen — the sidebar mounts one list per view.
 
-                    For `ai_solved` this is the AI-resolution count (ADR-09), so
+                    For `ai_solved` this is the AI-resolution count (ADR-09a), so
                     it is the same predicate the invoice meters. Counting the
                     rows the browser happened to load instead — the console did,
                     up to `limit` — is silently wrong from the 51st resolution

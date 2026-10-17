@@ -312,6 +312,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ℹ tm 272 · ADR-09a eki: AI çözümü yüklemi "ajan olayı yok VE otomatik devir (`ai_handoff`/`bot_handoff`, `ai_handoffs`) yok"; sayaç, `ai_solved`, Reports "Automated", arşiv "AI çözdü" tek tanımdan; yürürlük tm 293.4'ten sonraki ilk fatura dönemi, geçmiş faturalar değişmez — damga `✅` kaldı, kod değişmedi (uygulama tm 293.4) · PLAN.md §0 (ADR tablosunun altı) · `docs/adr/ai-resolution-handoff.md` · test yok (yalnız doküman) · §D221
 
+- ✅ tm 283.2 · Günlük AI tavanı kiracı bazlı oldu: `override ?? plan ?? env` (lisans kolonları yalnız platformca yazılır, 60 sn önbellek + `ai.caps_changed`), simülasyon `llm_test`/`embedding_test`'te (canlının %20'si, dağıtım satırı canlı meter), her ücretli çağrı settle ile aynı ifadede `ai_usage_events`'e — metre ve fatura değişmedi, damga `✅` kaldı · `services/ai/ai-caps.ts:68`, `ai-daily-budget.ts:267` (`reserve`), `:337` (`settle`), `ai-caps-events.ts`, migration `20261015130000_ai_caps_usage_ledger` · `ai-tenant-caps.test.ts` (13), `ai-caps.test.ts` (12), `metered-llm.test.ts` (+1), `metered-embeddings.test.ts` (+2), `@siyahtus/types` `ai-usage.test.ts` (2) · tm 283.2 commit · §D231
+
 #### K10.3 — 10.3 · Invoices + payment details yönetimi
 
 - ✅ Faturalar + ödeme yöntemi yönetimi (maskeli kart: marka/son dört/son kullanma/ad; tam kart numarası için alan YOK — PRD §11.1/1) — `services/billing/{invoice-service.ts,payment-method-service.ts}` · `routes/reports.ts` (`/billing/invoices`, `/billing/payment-method` GET+PUT) · tm 56

@@ -12446,14 +12446,14 @@
         "description": "Bugün sohbet açılır açılmaz ajana atanıyor (chat-service.ts:394-412) ve AI her mesajda çalışıyor (customer.ts:380-389) — AI ve insan aynı oyuncuya paralel konuşuyor; takeover (chat-service.ts:1632) AI'ı susturmuyor; devredilip ajan yazmadan kapanan sohbetler \"AI çözümü\" diye faturalanıyor. K9: \"Önce AI\" — AI konuşurken atama yok, atama devir anında; ajan araya yazarsa devralmış sayılır. K10: devredilen sohbet AI çözümü sayılmaz. Kaynak: AI-11.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: AI-11. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).\n\nXHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): yönlendirme zamanlaması + eşzamanlılık. ADR-08a (#271), ADR-09a (#272).\nDURUM MAKİNESİ (bağlantı başına): ai → (AI devri | ajan mesajı | takeover | AI kapalı/tavan) → human; human → (yetkili \"AI'a geri ver\", bayrak engeli yok) → ai; ai → (gözetmen \"duraklat\") → paused.\nKAPI: AiResponder.handle en başta modu okur (threads.ai_mode); ai değilse model çağrısı yok. Kural botu sırası korunur; kural botu devralırsa mode=human.\nÖNCE AI BAŞLANGICI: AI ajanı etkinken chat-service.start thread'i atamasız, kuyruk dışı (queue_position=null), ai_mode='ai' açar; \"atanmamış\"/\"kuyrukta\" görünümlerine girmez, ai görünümüne girer; eşzamanlı sınır tüketilmez; yönlendirme devir anında (AI-12). \"Paralel\" mod kiracı ayarı (ai_handoff_settings.assignment_mode 'ai_first'|'parallel').\nÖRTÜK DEVRALMA: ai thread'ine ajan recipients='all' yazarsa aynı transaction'da mode=human, ai_conversations.version++; yürüyen AI turu iyimser kilitle yazamaz.\nBEKÇİ: oyuncu mesajından sonra ai_stall_timeout_seconds (60) içinde bot olayı/devir yoksa zamanlanmış iş ai_failure ile insana yönlendirir (jobs.ts).\nAI'A GERİ VER: POST /chats/{chatId}/return-to-ai {note?, resume:'continue'|'fresh'}; isteğe bağlı POST /pause-ai. Yetki varsayılanı: sohbetin sahibi ajan + EL/Y/K (AI-11-S3; RL-02 gelene kadar admin+ ve kendi sohbeti). Sorumlu oyun/kendine zarar/reşit olmayan bayrağı varsa 409 ai_return_blocked (bayrak kontrolü AI-27 #302 ile etkinleşir; arayüz burada). Önce-AI'da geri verilen thread atamadan çıkar, geri veren ajan otomatik gözetmen (chat_supervisions).\nADR-09a: yüklem \"kapanışta ajan olayı yok VE ai_handoffs/devir olayı yok\" tek yardımcıda; faturalama sayacı, ai_solved görünümü (chat-service.ts:2389-2417), Reports \"Automated\" aynı anda geçer.\nPrisma: threads.ai_mode text null + indeks (license_id, active, ai_mode); ai_handoff_settings.assignment_mode, ai_stall_timeout_seconds (tablo AI-09'da; burada minimal açılır, AI-09 genişletir).\nRTM: chat_ai_mode_changed {chat_id, thread_id, ai_mode, by, reason} (ADR-15 zarfı, types/rtm.ts listesi). Her mod değişikliği ID-08 olayı + agents-only sistem olayı.\nWeb: ThreadHeader rozeti (\"AI görüşüyor\"/\"İnsanda\"/\"AI duraklatıldı\"), Devral (takeover ile birleşik), AI'a geri ver.\nNOT: kuyruk süresi raporları önce-AI modunda devir anından başlar (RP-02/04).\n\nKABUL KRİTERLERİ:\n- Devirden sonra oyuncunun her mesajı sıfır model çağrısı ve sıfır bot mesajı (mock sayaç).\n- AI turu sürerken ajan yazarsa mode=human ve AI taslağı gönderilmez (yarış testi).\n- Başkasının sohbetini Ekip Üyesi geri veremez (403); bayraklı sohbet geri verilemez (409, #302 sonrası).\n- Önce-AI modunda sohbet devre kadar atanmaz; bekçi takılan sohbeti süresinde insana yönlendirir.\n- Mod değişikliği RTM ile rozeti anında günceller.\n- Devredilmiş thread'ler ai_solved'da ve faturalama sayacında yok; ADR-09 regresyon testi (devirsiz sayılar aynı).\n\nKULLANILAN VARSAYIMLAR:\n- K9, K10.\n- AI-11-S2: ajan mesajı = devralma.\n- AI-11-S3 yetki varsayılanı.",
         "testStrategy": "Entegrasyon (sıfır model çağrısı, örtük devralma yarışı, yetkisiz geri verme, bekçi, ADR-09a sayaçları), e2e (ajan devralır, geri verir); `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "271",
           "272",
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T17:10:52.223Z",
+        "updatedAt": "2026-10-17T18:17:18.085Z",
         "subtasks": [
           {
             "id": 1,
@@ -12530,13 +12530,13 @@
             "description": "Bekçi işi: oyuncu mesajından sonra ai_stall_timeout_seconds (60) içinde bot olayı/devir yoksa zamanlanmış iş ai_failure ile insana yönlendirir",
             "details": "Üst görev BEKÇİ maddesi (jobs.ts); ai_handoff_settings.ai_stall_timeout_seconds; yönlendirme devir yolundan (AI-12 gelene kadar mevcut route). Ayrıntı ve kabul maddeleri: üst görev #293 details (tek kaynak).",
             "testStrategy": "Entegrasyon (takılan sohbet süresinde insana; cevap gelmişse dokunulmaz); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "293.2"
             ],
             "parentId": "293",
             "priority": "high",
-            "updatedAt": "2026-10-17T17:10:52.223Z"
+            "updatedAt": "2026-10-17T18:17:18.085Z"
           }
         ]
       },
@@ -16132,9 +16132,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T17:10:52.223Z",
+      "lastModified": "2026-10-17T18:17:18.086Z",
       "taskCount": 390,
-      "completedCount": 291,
+      "completedCount": 292,
       "tags": [
         "master"
       ]

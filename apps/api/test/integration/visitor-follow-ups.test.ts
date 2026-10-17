@@ -14,9 +14,10 @@
  *     is stored afterwards, as a bot event, the way it always was;
  *   - a replay is not answered a second time, even while the first answer is
  *     still being written;
- *   - one chat's messages are answered one at a time, in the order they came;
+ *   - one chat's messages reach the model one at a time, and one written while
+ *     the answer is being written joins that answer (tm 292.4 · AI-01 §7);
  *   - an AI Agent that is switched off still answers nothing;
- *   - a chat too far behind leaves the next message for a human;
+ *   - a chat too far behind gives the next message no job of its own;
  *   - a shutdown waits for an answer already on its way.
  *
  * `app.inject` directly wherever the gap matters: the `TestServer` helpers
@@ -244,7 +245,7 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
     ]);
   });
 
-  it("answers one chat's messages one at a time, in the order they came", async () => {
+  it("answers one chat's messages one at a time, and one written while the answer is being written joins it (AI-01 §7)", async () => {
     const ws = await seedAiWorkspace(owner);
     const token = await visitorToken(server.app, ws);
     const second = SECOND_QUESTION;
@@ -258,16 +259,16 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
     const next = await within(send(server.app, token, { text: second }), 'the second send');
     expect(next.statusCode).toBe(201);
     await new Promise((resolve) => setTimeout(resolve, 100));
-    // The second message's answer has not gone to the model yet.
+    // The second message has not gone to the model beside the first.
     expect(model.fake.calls).toHaveLength(1);
 
     model.release(0);
     await within(model.started(1), 'the second model call');
-    // It went once the first answer was stored, not merely produced.
+    // The first answer was dropped, not stored: the visitor had written again
+    // before it went out, so the turn is taken again with both (tm 292.4).
     const atSecondCall = await eventsOf(chatId);
-    expect(atSecondCall.filter((event) => event.authorType === 'bot')).toEqual([
-      { text: `Answer to: ${AI_QUESTION}`, authorType: 'bot' },
-    ]);
+    expect(atSecondCall.filter((event) => event.authorType === 'bot')).toEqual([]);
+    expect(model.fake.calls[1]!.messages.at(-1)?.content).toBe(`${AI_QUESTION}\n${second}`);
     model.release(1);
     await within(server.app.aiJobs.idle(), 'the follow-ups');
 
@@ -275,8 +276,7 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
     expect(await eventsOf(chatId)).toEqual([
       { text: AI_QUESTION, authorType: 'customer' },
       { text: second, authorType: 'customer' },
-      { text: `Answer to: ${AI_QUESTION}`, authorType: 'bot' },
-      { text: `Answer to: ${second}`, authorType: 'bot' },
+      { text: `Answer to: ${AI_QUESTION}\n${second}`, authorType: 'bot' },
     ]);
   });
 
@@ -337,23 +337,26 @@ describe('a visitor message is answered after its response (tm 256.10)', () => {
       expect(refused[0]).toMatchObject({ outcome: AI_JOB_BACKLOG_OUTCOME, attempts: 0 });
 
       backlog.release(0);
-      // Twenty jobs one after another, each a claim, a model call and a settle:
-      // a correctness check, not a latency one, so not held to PROMPTLY_MS.
+      // Twenty jobs one after another, each a claim and a settle: a
+      // correctness check, not a latency one, so not held to PROMPTLY_MS.
       await within(busy.app.aiJobs.idle(), 'the backlog', 20_000);
 
       const events = await eventsOf(chatId);
       expect(events.filter((event) => event.authorType === 'customer')).toHaveLength(
         AI_JOB_MAX_UNFINISHED_PER_CHAT + 1,
       );
+      // What piled up behind the running answer is answered with it (tm 292.4 ·
+      // AI-01 §7): its draft was dropped once the visitor had written again,
+      // and the turn taken again with every message — the refused one too, for
+      // a turn answers what the visitor said, not what was queued.
       const answers = events.filter((event) => event.authorType === 'bot').map((e) => e.text);
-      expect(answers).toHaveLength(AI_JOB_MAX_UNFINISHED_PER_CHAT);
-      // The last message is the one nobody answered.
-      expect(answers).not.toContain(
-        `Answer to: ${SECOND_QUESTION} #${AI_JOB_MAX_UNFINISHED_PER_CHAT}`,
-      );
-      expect(answers.at(-1)).toBe(
-        `Answer to: ${SECOND_QUESTION} #${AI_JOB_MAX_UNFINISHED_PER_CHAT - 1}`,
-      );
+      expect(answers).toHaveLength(1);
+      expect(answers[0]).toContain(`${SECOND_QUESTION} #${AI_JOB_MAX_UNFINISHED_PER_CHAT}`);
+      expect(backlog.fake.calls).toHaveLength(2);
+      // The jobs behind it found their message answered and did nothing.
+      expect(
+        await owner.aiJob.count({ where: { chatId, state: 'done', outcome: 'no_reply' } }),
+      ).toBe(AI_JOB_MAX_UNFINISHED_PER_CHAT - 1);
     } finally {
       backlog.release(0);
       await busy.close();

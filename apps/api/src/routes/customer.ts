@@ -336,6 +336,8 @@ export default async function customerRoutes(
       timeoutMs: env.LLM_TIMEOUT_MS,
       maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
     }),
+    // Messages written this close together get one answer (tm 292.4 · AI-01 §5).
+    { batchWindowMs: env.AI_BATCH_WINDOW_MS },
   );
   const ruleBots = new RuleBotResponder(chats, publisher);
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);

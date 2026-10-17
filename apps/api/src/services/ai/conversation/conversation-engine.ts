@@ -260,7 +260,7 @@ export class ConversationEngine {
             ctx,
           });
 
-      return { ...executed, nextState: afterTurn(state) };
+      return { ...executed, nextState: afterTurn(state, message) };
     }
 
     return { reply: null, decisions: NOTHING_DECIDED, nextState: state, sideEffects: [] };
@@ -643,12 +643,17 @@ function speaks(step: ProcedureStep): boolean {
 }
 
 /**
- * The state after a turn the AI took: one more turn counted (AI-03 §6). A
- * one-turn procedure leaves nothing active behind it — no step waits for an
- * answer — so nothing else moves.
+ * The state after a turn the AI took: one more turn counted (AI-03 §6), and
+ * the visitor's messages it answered marked processed (AI-01 §5 — never moved
+ * back). A one-turn procedure leaves nothing active behind it — no step waits
+ * for an answer — so nothing else moves.
  */
-function afterTurn(state: TurnState): TurnState {
-  return { ...state, counters: { ...state.counters, turns: turnsTaken(state) + 1 } };
+function afterTurn(state: TurnState, message: TurnMessage): TurnState {
+  return {
+    ...state,
+    counters: { ...state.counters, turns: turnsTaken(state) + 1 },
+    lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+  };
 }
 
 /**

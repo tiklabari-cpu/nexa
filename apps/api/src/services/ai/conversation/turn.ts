@@ -130,11 +130,21 @@ export interface TurnHistory {
   readonly visitorMessages: number;
 }
 
-/** The visitor's message the turn answers. Masked at the source; never logged. */
+/**
+ * What the visitor said that the turn answers — every message they wrote since
+ * the last turn, merged (AI-01 §4). Masked at the source; never logged.
+ */
 export interface TurnMessage {
   readonly text: string;
   /** The conversation so far; absent on a turn with none (a preview, a first message). */
   readonly history?: TurnHistory;
+  /**
+   * The connection's `event_sequence` of the newest visitor message in `text`
+   * (tm 292.4). A turn the AI takes records it as the next state's
+   * `lastProcessedEventSeq` — the messages up to it are answered, and the jobs
+   * they set off find nothing left to do. Absent outside a live connection.
+   */
+  readonly throughSeq?: number;
 }
 
 /**

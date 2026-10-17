@@ -999,6 +999,23 @@ describe('the turn returns what it would do and does none of it (AI-19)', () => 
     expect(result.nextState).toBe(before);
   });
 
+  it('marks the visitor messages it answered processed, and never moves the mark back (tm 292.4)', async () => {
+    const run = (state: TurnState, text: string, throughSeq?: number) =>
+      engine(new FakeLlmProvider()).runTurn(
+        state,
+        { text, ...(throughSeq !== undefined ? { throughSeq } : {}) },
+        context(workspace(STEPS)),
+      );
+
+    expect((await run(emptyTurnState(), MESSAGE, 7)).nextState.lastProcessedEventSeq).toBe(7);
+    // A turn behind the mark — or one outside a live connection — leaves it.
+    const ahead: TurnState = { ...emptyTurnState(), lastProcessedEventSeq: 9 };
+    expect((await run(ahead, MESSAGE, 7)).nextState.lastProcessedEventSeq).toBe(9);
+    expect((await run(ahead, MESSAGE)).nextState.lastProcessedEventSeq).toBe(9);
+    // A message no skill matched is not a turn: nothing is marked.
+    expect((await run(emptyTurnState(), 'Hello there', 7)).nextState.lastProcessedEventSeq).toBe(0);
+  });
+
   it('runs the first skill that matches, past a malformed one and one whose gate does not', async () => {
     const result = await engine(new FakeLlmProvider()).runTurn(
       emptyTurnState(),

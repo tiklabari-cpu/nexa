@@ -93,6 +93,7 @@ describe('the conversation a turn reads (AI-01)', () => {
       { role: 'assistant', content: 'Yöntem?' },
     ]);
     expect(context.newCustomerText).toBe('Papara\n13:40');
+    expect(context.freshMessages).toBe(2);
     expect(context.visitorMessages).toBe(2);
   });
 

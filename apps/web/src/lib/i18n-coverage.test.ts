@@ -63,6 +63,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/auth/ReconnectingPage.tsx',
   'src/features/auth/SignInPage.tsx',
   'src/features/onboarding/OnboardingWizard.tsx',
+  'src/features/inbox/AiModeControls.tsx',
   'src/features/inbox/Attachment.tsx',
   'src/features/inbox/Composer.tsx',
   'src/features/inbox/ConflictBanner.tsx',

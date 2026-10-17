@@ -34,6 +34,7 @@ import {
   type AgentConflictWarningPush,
   type AiConversationMode,
   type AiReturnResume,
+  type ChatAiModeChangedPush,
   type ChatTakenOverPush,
   type ConnectionOpenedVia,
   type EventRecipients,
@@ -302,6 +303,14 @@ interface AnnouncedEvent {
   audience: { groupIds: number[]; agentIds: string[]; customerId: string };
 }
 
+/**
+ * The agents-only line a change of AI mode leaves (`#changeAiMode`), with the
+ * change itself: `#announceAiMode` pushes both after commit.
+ */
+interface AiModeNote extends AnnouncedEvent {
+  change: AiModeChange;
+}
+
 /** `resume`'s transaction answer: the chat the conversation continues in, and the connection. */
 interface ResumeOutcome {
   chat: ChatRow;
@@ -453,6 +462,17 @@ export class ChatService {
       // the customer (NFR-S9) — so it is attached only for agent/bot principals.
       if (principal.kind !== 'customer') {
         detail.visitor = await this.#latestVisitor(tx, tenant.licenseId, chat.customerId);
+        // A `human` connection the AI was taken off, or one a person answered
+        // from the start (AI-11): only the first is the AI's to be given back,
+        // and only it earns the inbox's badge. The AI's conversation row opens
+        // with its first turn (`AiResponder`).
+        if (detail.thread) {
+          const turn = await tx.aiConversation.findFirst({
+            where: { threadId: detail.thread.id },
+            select: { id: true },
+          });
+          detail.thread.ai_took_part = turn !== null;
+        }
       }
       return detail;
     });
@@ -1457,7 +1477,7 @@ export class ChatService {
     // After the transaction, never inside it: announcing an event a subscriber
     // could then fail to read would be worse than announcing it a moment late.
     await this.#announceEvent(tenant, result);
-    if (result.mode?.note) await this.#announceEvent(tenant, result.mode.note);
+    if (result.mode?.note) await this.#announceAiMode(tenant, result.mode.note);
     await this.#announceHandover(tenant, result.mode?.assigned ?? null);
     return {
       event: result.event,
@@ -1492,7 +1512,7 @@ export class ChatService {
     line: { note?: string | null; properties?: Record<string, unknown> } = {},
   ): Promise<{
     change: AiModeChange;
-    note: AnnouncedEvent | null;
+    note: AiModeNote | null;
     assigned: DrainedAssignment | null;
   } | null> {
     const change = await writeAiMode(tx, { chatId: chat.id, threadId }, { ...request, by });
@@ -1524,7 +1544,7 @@ export class ChatService {
     });
     return {
       change,
-      note: { event, recipients: 'agents', audience: this.#audienceFor(chat) },
+      note: { event, recipients: 'agents', audience: this.#audienceFor(chat), change },
       assigned,
     };
   }
@@ -1708,6 +1728,68 @@ export class ChatService {
 
     await this.#announceEvent(tenant, result);
     return result.event;
+  }
+
+  /**
+   * The AI's first turn in a connection made it `ai` (`claimAiTurn`, inside
+   * the turn's own commit, AI-11 · tm 293.5): `chat_ai_mode_changed` to the
+   * chat's agents, after that commit. No line in the transcript — the AI's
+   * answer is the news — and no reason: none is asked for.
+   */
+  async announceAiJoined(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string },
+    /** The AI's bot id — the `by` its other events carry. */
+    by: string,
+  ): Promise<void> {
+    const chat = await withTenant(this.db, tenant, (tx) =>
+      tx.chat.findUnique({
+        where: { id: ref.chatId },
+        select: {
+          customerId: true,
+          access: { select: { groupId: true } },
+          users: { select: { userId: true, userType: true } },
+        },
+      }),
+    );
+    if (!chat) return;
+    const audience = this.#audienceFor(chat);
+    await this.publisher?.publish(
+      tenant,
+      'chat_ai_mode_changed',
+      { groupIds: audience.groupIds, agentIds: audience.agentIds },
+      {
+        chat_id: ref.chatId,
+        thread_id: ref.threadId,
+        ai_mode: 'ai',
+        previous_ai_mode: null,
+        by,
+        reason: null,
+      } satisfies ChatAiModeChangedPush,
+    );
+  }
+
+  /**
+   * A change of AI mode, after commit (AI-11 · tm 293.5): its agents-only line,
+   * and `chat_ai_mode_changed` to the same agents, which is what moves the
+   * inbox's badge without a re-read. Never to the visitor — the audience drops
+   * the customer, as the line's own does.
+   */
+  async #announceAiMode(tenant: TenantContext, note: AiModeNote): Promise<void> {
+    await this.#announceEvent(tenant, note);
+    await this.publisher?.publish(
+      tenant,
+      'chat_ai_mode_changed',
+      { groupIds: note.audience.groupIds, agentIds: note.audience.agentIds },
+      {
+        chat_id: note.event.chat_id,
+        thread_id: note.event.thread_id,
+        ai_mode: note.change.to,
+        previous_ai_mode: note.change.from,
+        by: note.change.by,
+        reason: note.change.reason,
+      } satisfies ChatAiModeChangedPush,
+    );
   }
 
   /**
@@ -2848,7 +2930,7 @@ export class ChatService {
     // To both teams, as the transfer itself is: the losing team's open view
     // should hear the AI stopped as much as the winning team's.
     if (result.modeNote) {
-      await this.#announceEvent(tenant, { ...result.modeNote, audience: result.audience });
+      await this.#announceAiMode(tenant, { ...result.modeNote, audience: result.audience });
     }
     await this.#announceHandover(tenant, result.handover);
 
@@ -3097,7 +3179,7 @@ export class ChatService {
     } satisfies ChatTakenOverPush);
     // To the supervisor who just arrived as well as the agent who lost the chat.
     if (result.modeNote) {
-      await this.#announceEvent(tenant, { ...result.modeNote, audience: result.audience });
+      await this.#announceAiMode(tenant, { ...result.modeNote, audience: result.audience });
     }
 
     // Same reason as the hand-off above: **Chatting with** now names somebody
@@ -3305,7 +3387,7 @@ export class ChatService {
     const announce = result.announce;
     if (announce) {
       if (announce.note) {
-        await this.#announceEvent(tenant, { ...announce.note, audience: announce.audience });
+        await this.#announceAiMode(tenant, { ...announce.note, audience: announce.audience });
       }
       for (const assignment of announce.drained) await this.#announceHandover(tenant, assignment);
       // **Chatting with** no longer names the agent who held it (FR-MOD-03.1.3).
@@ -4346,6 +4428,10 @@ export interface ChatDetail {
     created_at: string;
     closed_at: string | null;
     opened_via: string | null;
+    /** Who answers the connection (`threads.ai_mode`, AI-11); null until anyone takes part. */
+    ai_mode: AiConversationMode | null;
+    /** Whether the AI answered in the connection — only on an agent's `get`. */
+    ai_took_part?: boolean;
     tags: string[];
   } | null;
   /**
@@ -4373,6 +4459,8 @@ interface ThreadRow {
   closedAt: Date | null;
   openedVia: string | null;
   groupId: bigint | null;
+  /** One of `AI_CONVERSATION_MODES` (the column's CHECK), or null. */
+  aiMode: string | null;
   tags: Array<{ tag: { name: string } }>;
 }
 
@@ -4416,6 +4504,7 @@ function serialiseChat(chat: ChatRow): ChatDetail {
           created_at: thread.createdAt.toISOString(),
           closed_at: thread.closedAt?.toISOString() ?? null,
           opened_via: thread.openedVia,
+          ai_mode: thread.aiMode as AiConversationMode | null,
           tags: thread.tags.map((t) => t.tag.name).sort(),
         }
       : null,

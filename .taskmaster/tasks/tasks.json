@@ -12453,7 +12453,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T14:54:50.472Z",
+        "updatedAt": "2026-10-17T14:56:07.693Z",
         "subtasks": [
           {
             "id": 1,
@@ -12515,14 +12515,14 @@
             "description": "RTM chat_ai_mode_changed + Inbox rozet/butonlar + useInbox mutasyonları",
             "details": "Üst görev 293 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "293.2",
               "293.3"
             ],
             "parentId": "293",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-17T14:56:07.693Z"
           },
           {
             "id": 6,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T14:54:50.472Z",
+      "lastModified": "2026-10-17T14:56:07.693Z",
       "taskCount": 390,
       "completedCount": 291,
       "tags": [

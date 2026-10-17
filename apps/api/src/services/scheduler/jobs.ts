@@ -33,6 +33,12 @@
  * verified would delete a working account. What may go, and the locking that
  * keeps a concurrent verification safe, live in its database function; it has
  * no CLI script either.
+ *
+ * `ai_stall` (tm 293.6) is the one job a visitor is waiting on, and the one that
+ * pushes: it routes a conversation the AI left unanswered to a person, who has
+ * to hear about it now rather than on their next poll — so it is the only
+ * sweep given the server's realtime publisher. No CLI script: a watchdog
+ * measured in seconds has no hand-run equivalent.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -47,10 +53,12 @@ import {
   UnverifiedSignupSweeper,
 } from '../auth/unverified-signup-sweep.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
+import { AiStallWatchdog } from '../chat/ai-stall.js';
 import { ChatService } from '../chat/chat-service.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
 import type { Mailer } from '../mail/mailer.js';
+import type { RealtimePublisher } from '../realtime/publisher.js';
 import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
 import { resolveRetentionPolicy } from '../retention/policy.js';
 import { RetentionRunner } from '../retention/retention.js';
@@ -103,6 +111,13 @@ export interface SchedulerJobsOptions {
    * caps over `db` (tm 257.20).
    */
   knowledge?: KnowledgeService;
+  /**
+   * Realtime fan-out for the stalled-AI watchdog's hand-over (tm 293.6): the
+   * agent it routes to gets `incoming_chat` and the inbox's badge moves, as
+   * when a person hands a chat over. Omitted — every test, both CLI entry
+   * points — the hand-over is written all the same and seen on the next poll.
+   */
+  publisher?: RealtimePublisher;
 }
 
 /**
@@ -115,6 +130,7 @@ export function buildSchedulerJobs({
   env,
   mailer,
   automations,
+  publisher,
   knowledge = new KnowledgeService({
     embeddings: createMeteredEmbeddings(db, env),
     retrievalThreshold: env.RETRIEVAL_THRESHOLD,
@@ -129,6 +145,17 @@ export function buildSchedulerJobs({
     db,
     NO_REDIS,
     undefined,
+    undefined,
+    { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
+    mailer,
+    undefined,
+    automations,
+  );
+  // The watchdog's own, with the publisher: the sweeps above stay as they were.
+  const aiChats = new ChatService(
+    db,
+    NO_REDIS,
+    publisher,
     undefined,
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
     mailer,
@@ -327,6 +354,29 @@ export function buildSchedulerJobs({
             purged: report.totals.purged,
             batches: report.totals.batches,
             invitees: invitees.totals.purged,
+          },
+        };
+      },
+    },
+    {
+      // Sends a person to a visitor the AI left unanswered (tm 293.6 · AI-11
+      // §5) — the safety net "Önce AI" takes away. Not gated: a workspace with
+      // no AI-first conversation has nothing for it to find.
+      name: 'ai_stall',
+      intervalMs: intervals.ai_stall,
+      async run(context) {
+        const report = await new AiStallWatchdog(db, aiChats).run({ signal: context.signal });
+        if (report.totals.handedOver > 0) {
+          context.logger.info(
+            { event: 'ai.stall_handed_over', count: report.totals.handedOver },
+            'stalled ai conversations handed to a person',
+          );
+        }
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            stalled: report.totals.stalled,
+            handed_over: report.totals.handedOver,
           },
         };
       },

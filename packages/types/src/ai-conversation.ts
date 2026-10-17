@@ -68,11 +68,29 @@ export const AI_ASSIGNMENT_MODES = ['ai_first', 'parallel'] as const;
 export type AiAssignmentMode = (typeof AI_ASSIGNMENT_MODES)[number];
 
 /**
- * An AI agent with no settings row. `parallel` — today's behaviour — until
- * the stalled-conversation watchdog (tm 293.6) gives an unassigned AI
- * conversation its way back to a person.
+ * An AI agent with no settings row. `parallel` — today's behaviour. The
+ * stalled-conversation watchdog (tm 293.6) now gives an unassigned AI
+ * conversation its way back to a person; making `ai_first` the default is the
+ * owner's call, not a side effect of that.
  */
 export const DEFAULT_AI_ASSIGNMENT_MODE: AiAssignmentMode = 'parallel';
+
+/**
+ * How long a visitor may wait on the AI before a person is sent (tm 293.6 ·
+ * AI-11 §5) — `ai_handoff_settings.ai_stall_timeout_seconds`. Counted from
+ * the oldest visitor message nothing from the AI has followed; past it, the
+ * `ai_stall` job hands an unassigned AI conversation to a person with reason
+ * `ai_failure` — a worker that died, a job that went missing (GV-02), a turn
+ * the caps or residency refused.
+ *
+ * The bounds are the column's CHECK and the route's validation. The floor is
+ * above the batch window's ceiling (`BATCH_WINDOW_SECONDS_MAX`, 10 s) so a
+ * visitor still typing is never mistaken for a stall; the ceiling keeps it a
+ * watchdog rather than a second queue.
+ */
+export const DEFAULT_AI_STALL_TIMEOUT_SECONDS = 60;
+export const AI_STALL_TIMEOUT_SECONDS_MIN = 15;
+export const AI_STALL_TIMEOUT_SECONDS_MAX = 600;
 
 /**
  * How the AI takes a connection back (tm 293.3 · AI-11 §6) — the `resume` of

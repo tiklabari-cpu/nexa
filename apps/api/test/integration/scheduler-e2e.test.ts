@@ -112,6 +112,7 @@ const UNCONDITIONAL = [
   'webhook_redelivery',
   'knowledge_refresh',
   'invoice_close',
+  'ai_stall',
 ];
 
 /**
@@ -385,6 +386,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_KNOWLEDGE_REFRESH_MS: TICK_MS,
         SCHEDULE_INVOICE_CLOSE_MS: TICK_MS,
         SCHEDULE_UNVERIFIED_SIGNUPS_MS: TICK_MS,
+        SCHEDULE_AI_STALL_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -506,7 +508,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     expect(sweep?.last_run_at).toBeNull();
   });
 
-  it("says so on /health — enabled, nine jobs, and what each one's last pass did", () => {
+  it("says so on /health — enabled, ten jobs, and what each one's last pass did", () => {
     expect(health.scheduler.enabled).toBe(true);
     expect(health.scheduler.jobs.map((job) => job.name)).toEqual([
       'chat_timeout',
@@ -518,6 +520,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'knowledge_refresh',
       'invoice_close',
       'unverified_signups',
+      'ai_stall',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -679,6 +682,7 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
       SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
       SCHEDULE_UNVERIFIED_SIGNUPS_MS: NEVER_MS,
+      SCHEDULE_AI_STALL_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 
@@ -759,6 +763,7 @@ describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICA
       SCHEDULE_WEBHOOK_REDELIVERY_MS: NEVER_MS,
       SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
       SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
+      SCHEDULE_AI_STALL_MS: NEVER_MS,
     });
 
     await waitForAll({

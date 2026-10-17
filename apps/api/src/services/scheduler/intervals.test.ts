@@ -44,6 +44,7 @@ describe('the job list', () => {
       'knowledge_refresh',
       'invoice_close',
       'unverified_signups',
+      'ai_stall',
     ]);
   });
 
@@ -55,7 +56,7 @@ describe('the job list', () => {
 });
 
 describe('intervals', () => {
-  it('defaults to a minute for the ones a person can feel, and an hour for retention, knowledge refresh, the period close and the unverified sign-up sweep', () => {
+  it('defaults to a minute for the ones a person can feel, an hour for retention, knowledge refresh, the period close and the unverified sign-up sweep, and 15 s for the stalled-AI watchdog', () => {
     expect(jobIntervals(parseEnv(BASE))).toEqual({
       chat_timeout: 60_000,
       sla: 60_000,
@@ -66,6 +67,7 @@ describe('intervals', () => {
       knowledge_refresh: 3_600_000,
       invoice_close: 3_600_000,
       unverified_signups: 3_600_000,
+      ai_stall: 15_000,
     });
   });
 

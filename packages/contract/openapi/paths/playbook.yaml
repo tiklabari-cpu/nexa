@@ -120,16 +120,21 @@ aiAgentHandoffSettings:
       agent's concurrent-chat limit, and is routed to a person when it leaves
       the AI. `parallel` assigns it when it opens, as before. Applies to
       conversations that open after the change.
+
+      `ai_stall_timeout_seconds` is how long a visitor may wait on the agent
+      in such a conversation before a person is sent. Either field may be
+      sent alone; the other keeps its value.
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required: [assignment_mode]
+            minProperties: 1
             additionalProperties: false
             properties:
               assignment_mode: { type: string, enum: [ai_first, parallel] }
+              ai_stall_timeout_seconds: { type: integer, minimum: 15, maximum: 600 }
     responses:
       "200":
         description: Updated

@@ -3016,6 +3016,10 @@ export interface paths {
      *     agent's concurrent-chat limit, and is routed to a person when it leaves
      *     the AI. `parallel` assigns it when it opens, as before. Applies to
      *     conversations that open after the change.
+     *
+     *     `ai_stall_timeout_seconds` is how long a visitor may wait on the agent
+     *     in such a conversation before a person is sent. Either field may be
+     *     sent alone; the other keeps its value.
      */
     put: operations['updateAiAgentHandoffSettings'];
     post?: never;
@@ -9127,6 +9131,13 @@ export interface components {
        * @enum {string}
        */
       assignment_mode: 'ai_first' | 'parallel';
+      /**
+       * @description How long a visitor may wait on the agent before a person is sent
+       *     (AI-11). An unassigned conversation the agent is answering, whose
+       *     oldest unanswered visitor message is older than this, is routed to
+       *     a person as an `ai_failure` hand-over. Default 60.
+       */
+      ai_stall_timeout_seconds: number;
     };
     /**
      * @description Who answers a chat's open connection after `return-to-ai` or
@@ -18764,7 +18775,8 @@ export interface operations {
       content: {
         'application/json': {
           /** @enum {string} */
-          assignment_mode: 'ai_first' | 'parallel';
+          assignment_mode?: 'ai_first' | 'parallel';
+          ai_stall_timeout_seconds?: number;
         };
       };
     };

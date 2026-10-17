@@ -69,6 +69,7 @@ import {
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import {
+  AI_MODE_SYSTEM_ACTOR,
   aiModeNoteText,
   aiModeStep,
   aiReturnBlockers,
@@ -78,6 +79,7 @@ import {
   type AiModeRequest,
 } from './ai-mode.js';
 import { opensAiFirst } from './ai-first.js';
+import { aiStalled } from './ai-stall.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { SupervisionService } from '../traffic/supervision-service.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
@@ -1527,7 +1529,7 @@ export class ChatService {
       licenseId: tenant.licenseId,
       chatId: chat.id,
       threadId,
-      authorId: by,
+      authorId: by === AI_MODE_SYSTEM_ACTOR ? null : by,
       authorType: 'system',
       input: {
         type: 'system_message',
@@ -3396,6 +3398,67 @@ export class ChatService {
       }
     }
     return result.body;
+  }
+
+  /**
+   * Send a person to a connection the AI left unanswered (tm 293.6 · AI-11 §5)
+   * — the `ai_stall` job's one write (`ai-stall.ts`). The connection moves to
+   * `human` with reason `ai_failure` and is routed in the same transaction
+   * (`#routeHandover`: the agent the member had earlier today if they can take
+   * it, else the routing engine in its team, the queue included).
+   *
+   * Asked again under the thread's row lock, the lock the AI's own commit takes
+   * (`claimAiTurn`): an answer that committed after the job listed the
+   * connection, or a person who took it meanwhile, leaves it as it is — false.
+   * An answer still being drafted loses: its commit finds the connection
+   * `human` and rolls back unsent.
+   *
+   * No audit entry: nobody acted, and the line in the transcript plus the
+   * conversation's `mode_reason` are the record, as for the AI's own hand-over.
+   */
+  async handOverStalledAi(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string },
+    cutoff: Date,
+  ): Promise<boolean> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const chat = await tx.chat.findUnique({ where: { id: ref.chatId }, include: chatInclude });
+      const thread = chat?.threads.find((t) => t.id === ref.threadId);
+      if (!chat?.active || !thread?.active) return null;
+
+      await tx.$queryRaw`SELECT 1 FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+      if (!(await aiStalled(tx, thread.id, cutoff))) return null;
+
+      const mode = await this.#changeAiMode(tx, tenant, chat, thread.id, AI_MODE_SYSTEM_ACTOR, {
+        to: 'human',
+        reason: 'ai_failure',
+      });
+      if (!mode?.note) return mode;
+      // Before and after the routing, as a takeover's: the agent it went to
+      // hears the AI stopped as well as the team that watched it.
+      const reloaded = await tx.chat.findUniqueOrThrow({
+        where: { id: chat.id },
+        include: chatInclude,
+      });
+      const before = mode.note.audience;
+      const after = this.#audienceFor(reloaded);
+      return {
+        ...mode,
+        note: {
+          ...mode.note,
+          audience: {
+            groupIds: [...new Set([...before.groupIds, ...after.groupIds])],
+            agentIds: [...new Set([...before.agentIds, ...after.agentIds])],
+            customerId: before.customerId,
+          },
+        },
+      };
+    });
+    if (!result) return false;
+
+    if (result.note) await this.#announceAiMode(tenant, result.note);
+    await this.#announceHandover(tenant, result.assigned);
+    return true;
   }
 
   async tagThread(

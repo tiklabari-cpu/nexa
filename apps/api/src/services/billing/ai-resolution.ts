@@ -6,8 +6,10 @@
  *
  *   (a) no `author_type = 'agent'` event in it (ADR-09, unchanged), and
  *   (b) no automatic hand-off: no `chat_transferred` system event whose reason
- *       is one of {@link AUTOMATIC_HANDOFF_REASONS}. Condition (b) applies only
- *       to threads closed at or after {@link ADR_09A_EFFECTIVE_AT}.
+ *       is one of {@link AUTOMATIC_HANDOFF_REASONS}, and no `ai_mode_changed`
+ *       system event whose reason is one of {@link AUTOMATIC_MODE_HANDOVERS}
+ *       (the stall watchdog's, tm 293.6). Condition (b) applies only to
+ *       threads closed at or after {@link ADR_09A_EFFECTIVE_AT}.
  *
  * Every surface reads this module and nothing else: the billing counter
  * (`usage_records`, `metric = 'ai_resolutions'`) at close, the inbox's
@@ -22,7 +24,7 @@
  * invoice start to disagree.
  */
 import { Prisma } from '@prisma/client';
-import type { TransferReason } from '@siyahtus/types';
+import type { AiModeReason, TransferReason } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 /**
@@ -47,14 +49,23 @@ export const ADR_09A_EFFECTIVE_AT = new Date('2026-11-01T00:00:00.000Z');
  * The `chat_transferred` reasons that are a hand-off rather than a transfer
  * between people: the AI's (`ai-responder.ts`) and a rule bot's
  * (`rule-bot-responder.ts`). `manual`, `routing` and `agent_disconnected` move a
- * conversation between agents and leave the predicate alone. An automatic
- * hand-over added later (the stall watchdog, AI-11) joins this list in the same
- * change that writes it.
+ * conversation between agents and leave the predicate alone.
  */
 export const AUTOMATIC_HANDOFF_REASONS = [
   'ai_handoff',
   'bot_handoff',
 ] as const satisfies readonly TransferReason[];
+
+/**
+ * The AI mode changes that are a hand-off with no transfer behind them: the
+ * stall watchdog sending a person to a conversation the AI left unanswered
+ * (`ai_failure`, `ai-stall.ts` · tm 293.6). It routes the connection without a
+ * `chat_transferred` event — nobody moved it between teams — so the one line
+ * it leaves, `system_event: 'ai_mode_changed'`, is what the predicate reads.
+ * The other reasons either come with a transfer (counted above) or are a
+ * person's doing (an agent writing is condition (a)).
+ */
+export const AUTOMATIC_MODE_HANDOVERS = ['ai_failure'] as const satisfies readonly AiModeReason[];
 
 /** (a) A person wrote in the thread — an internal note included. */
 const AGENT_WROTE = Prisma.sql`EXISTS (
@@ -68,16 +79,21 @@ const AGENT_WROTE = Prisma.sql`EXISTS (
  * about what happened after the last hand-off.
  *
  * `author_type = 'system'` because the server is the only writer of a transfer
- * event (`ChatService.transfer`); a message whose properties merely read like
- * one cannot take a thread off the invoice. Looked up by `thread_id` (the
- * `(thread_id, created_at)` index), like {@link AGENT_WROTE}.
+ * event (`ChatService.transfer`) and of a mode line (`#changeAiMode`); a
+ * message whose properties merely read like one cannot take a thread off the
+ * invoice. Looked up by `thread_id` (the `(thread_id, created_at)` index),
+ * like {@link AGENT_WROTE}.
  */
 const HANDED_OFF = Prisma.sql`EXISTS (
   SELECT 1 FROM events e
   WHERE e.thread_id = t.id
     AND e.author_type = 'system'
-    AND e.properties ->> 'system_event' = 'chat_transferred'
-    AND e.properties ->> 'reason' = ANY(${[...AUTOMATIC_HANDOFF_REASONS]}::text[])
+    AND (
+      (e.properties ->> 'system_event' = 'chat_transferred'
+        AND e.properties ->> 'reason' = ANY(${[...AUTOMATIC_HANDOFF_REASONS]}::text[]))
+      OR (e.properties ->> 'system_event' = 'ai_mode_changed'
+        AND e.properties ->> 'reason' = ANY(${[...AUTOMATIC_MODE_HANDOVERS]}::text[]))
+    )
 )`;
 
 /**
@@ -114,13 +130,23 @@ export function aiResolvedThreadWhere(
         events: {
           none: {
             authorType: 'system',
-            properties: { path: ['system_event'], equals: 'chat_transferred' },
-            OR: AUTOMATIC_HANDOFF_REASONS.map((reason) => ({
-              properties: { path: ['reason'], equals: reason },
-            })),
+            OR: [
+              ...AUTOMATIC_HANDOFF_REASONS.map((reason) => systemLine('chat_transferred', reason)),
+              ...AUTOMATIC_MODE_HANDOVERS.map((reason) => systemLine('ai_mode_changed', reason)),
+            ],
           },
         },
       },
+    ],
+  };
+}
+
+/** One system line by its `system_event` and `reason`, as {@link HANDED_OFF} reads it. */
+function systemLine(systemEvent: string, reason: string): Prisma.EventWhereInput {
+  return {
+    AND: [
+      { properties: { path: ['system_event'], equals: systemEvent } },
+      { properties: { path: ['reason'], equals: reason } },
     ],
   };
 }

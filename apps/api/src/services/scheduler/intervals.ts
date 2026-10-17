@@ -22,7 +22,8 @@ import type { Env } from '../../config/env.js';
  * freshness window (FR-MOD-06.3.3, tm 198.4); the eighth freezes a closed
  * billing period into a statement so it stops being re-priced from today's
  * subscription (FR-MOD-10.3, tm 230); the ninth deletes a sign-up nobody
- * verified, once it has expired with its workspace still empty (tm 257.19).
+ * verified, once it has expired with its workspace still empty (tm 257.19);
+ * the tenth sends a person to a visitor the AI left unanswered (tm 293.6).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -34,6 +35,7 @@ export const SCHEDULER_JOB_NAMES = [
   'knowledge_refresh',
   'invoice_close',
   'unverified_signups',
+  'ai_stall',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -55,6 +57,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_KNOWLEDGE_REFRESH_MS'
   | 'SCHEDULE_INVOICE_CLOSE_MS'
   | 'SCHEDULE_UNVERIFIED_SIGNUPS_MS'
+  | 'SCHEDULE_AI_STALL_MS'
 >;
 
 /**
@@ -75,6 +78,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     knowledge_refresh: env.SCHEDULE_KNOWLEDGE_REFRESH_MS,
     invoice_close: env.SCHEDULE_INVOICE_CLOSE_MS,
     unverified_signups: env.SCHEDULE_UNVERIFIED_SIGNUPS_MS,
+    ai_stall: env.SCHEDULE_AI_STALL_MS,
   };
 }
 

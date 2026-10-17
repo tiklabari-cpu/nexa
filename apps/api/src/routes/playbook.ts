@@ -13,9 +13,12 @@ import { z } from 'zod';
 import { compileInstruction, stepProblemDetails, validateSteps } from '@siyahtus/ai-mock';
 import {
   AI_ASSIGNMENT_MODES,
+  AI_STALL_TIMEOUT_SECONDS_MAX,
+  AI_STALL_TIMEOUT_SECONDS_MIN,
   ANSWER_LENGTHS,
   BATCH_WINDOW_SECONDS_MAX,
   DEFAULT_AI_ASSIGNMENT_MODE,
+  DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   readBatchWindowSeconds,
   type AiAssignmentMode,
 } from '@siyahtus/types';
@@ -317,7 +320,19 @@ const updateAgentBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
-const handoffSettingsBody = z.object({ assignment_mode: z.enum(AI_ASSIGNMENT_MODES) }).strict();
+/** Either field alone; the one left out keeps its value (tm 293.6). */
+const handoffSettingsBody = z
+  .object({
+    assignment_mode: z.enum(AI_ASSIGNMENT_MODES).optional(),
+    ai_stall_timeout_seconds: z
+      .number()
+      .int()
+      .min(AI_STALL_TIMEOUT_SECONDS_MIN)
+      .max(AI_STALL_TIMEOUT_SECONDS_MAX)
+      .optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -466,7 +481,7 @@ export default async function playbookRoutes(
         await customerFacingAgent(tx, id);
         return tx.aiHandoffSettings.findUnique({
           where: { aiAgentId: id },
-          select: { assignmentMode: true },
+          select: HANDOFF_SETTINGS_SELECT,
         });
       });
       return reply.send(serialiseHandoffSettings(id, settings));
@@ -480,17 +495,19 @@ export default async function playbookRoutes(
       const id = parse(uuid, request.params.aiAgentId);
       const body = parse(handoffSettingsBody, request.body);
       const tenant = request.tenant();
+      const fields = {
+        ...(body.assignment_mode !== undefined ? { assignmentMode: body.assignment_mode } : {}),
+        ...(body.ai_stall_timeout_seconds !== undefined
+          ? { aiStallTimeoutSeconds: body.ai_stall_timeout_seconds }
+          : {}),
+      };
       const settings = await request.withTenant(async (tx) => {
         await customerFacingAgent(tx, id);
         return tx.aiHandoffSettings.upsert({
           where: { aiAgentId: id },
-          create: {
-            aiAgentId: id,
-            licenseId: tenant.licenseId,
-            assignmentMode: body.assignment_mode,
-          },
-          update: { assignmentMode: body.assignment_mode },
-          select: { assignmentMode: true },
+          create: { aiAgentId: id, licenseId: tenant.licenseId, ...fields },
+          update: fields,
+          select: HANDOFF_SETTINGS_SELECT,
         });
       });
       return reply.send(serialiseHandoffSettings(id, settings));
@@ -1502,16 +1519,19 @@ function serialiseIndexedSource(
 }
 
 /** One shape for an AI agent, so a read and the reply after a PATCH never drift. */
+const HANDOFF_SETTINGS_SELECT = { assignmentMode: true, aiStallTimeoutSeconds: true } as const;
+
 /** `AiHandoffSettings` (contract): an agent with no row has the defaults. */
 function serialiseHandoffSettings(
   aiAgentId: string,
-  row: { assignmentMode: string } | null,
-): { ai_agent_id: string; assignment_mode: AiAssignmentMode } {
+  row: { assignmentMode: string; aiStallTimeoutSeconds: number } | null,
+): { ai_agent_id: string; assignment_mode: AiAssignmentMode; ai_stall_timeout_seconds: number } {
   return {
     ai_agent_id: aiAgentId,
     // The CHECK holds the column to `AI_ASSIGNMENT_MODES`.
     assignment_mode:
       (row?.assignmentMode as AiAssignmentMode | undefined) ?? DEFAULT_AI_ASSIGNMENT_MODE,
+    ai_stall_timeout_seconds: row?.aiStallTimeoutSeconds ?? DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   };
 }
 

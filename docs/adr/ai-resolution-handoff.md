@@ -63,6 +63,7 @@ Sonuç: AI sohbeti insana devreder, oyuncu ajan yazmadan ayrılır, thread kapan
 - Raporun üçlü ayrımında devredilip kimsenin yazmadığı thread "handled" sayılır (skill çalıştıysa `assisted`, yoksa `manual`); `manual + assisted + automated === closed` korunur.
 - Testler kendi anlarını verir: `ChatService` `billing.adr09aEffectiveAt` (yalnız testler) ve thread'lerin `closed_at`'ini sabitin iki yanına taşıyan rapor testleri (`apps/api/test/integration/ai-resolution-handoff.test.ts`).
 - Varsayım: tm 293.4 Ekim 2026'da dağıtılır; daha geç dağıtılırsa sabit aynı değişiklikte sonraki ayın 1'ine alınır.
+- Bekçi devri (tm 293.6 · PLAN §D264): `ai_stall` işi transfer olayı yazmaz (bağlantıyı ekipler arasında kimse taşımadı); bıraktığı tek iz `system_event = 'ai_mode_changed'`, `reason = 'ai_failure'` satırıdır. Yüklem bunu da otomatik devir sayar: `AUTOMATIC_MODE_HANDOVERS` (`['ai_failure']`), üç yazımda aynı (`ai-stall-watchdog.test.ts`).
 
 ## 5. Kaynaklar
 

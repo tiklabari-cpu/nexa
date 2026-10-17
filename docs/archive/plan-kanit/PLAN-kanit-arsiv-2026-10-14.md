@@ -453,6 +453,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ✅ **e2e nöbetçisi kendi önkoşulunu söylüyor** — `skills-routing.spec.ts:149`'un `freeARoutingSlot`'u `fixtures.ts`'e taşındı (ikiz kopya `team.spec.ts` ile birleşti) ve önce **insan kuyruğunu boşaltıyor**, sonra hedef ajanı kırpıyor; eski sıra tam süitte `Received: null` veriyordu çünkü her arşiv `drainQueue`'yu tetikleyip slotu geri veriyordu. — `apps/e2e/tests/fixtures.ts` · test `apps/e2e/tests/skills-routing.spec.ts` (tam süitte 2 ardışık yeşil koşu) · tm 233
 
+- ℹ tm 293.1 · AI-11 1/6 (önce AI ve devirden sonra susma #293): bağlantı başına AI modu `threads.ai_mode` (null/ai/human/paused) + durum makinesi tek yerde; ajan oyuncuya yazınca, takeover, her transfer (AI'ın kendi devri dahil) ve kural botunun cevabı bağlantıyı aynı transaction'da `human` yapar, AI'ın konuşma satırını çitler ve agents-only not bırakır; AI modu ilk okur, model öncesi yeniden, commit'te thread kilidi altında üçüncü kez — devirden sonra sıfır model çağrısı, model düşünürken yazan ajan kazanır (taslak gitmez, `expired`); damga `✅` kaldı · `chat/ai-mode.ts:88` · `ai-mode.ts:168` · `chat-service.ts:1330` · `ai-responder.ts:201` · `ai-responder.ts:513` · migration `20261017100000_thread_ai_mode` · `ai-mode-gate.test.ts` (11) · `ai-mode.test.ts` (6) · `rule-bots.test.ts` (+1) · §D259
+
 #### K08.8.4 — 08.8.4 · Webhooks (register/list/unregister + HMAC + SSRF + retry)
 
 - ✅ register/list/unregister API · HMAC-SHA256 imzalama + timestamp/nonce/SSRF · 3× retry + delivery log — tm 34 · §D36

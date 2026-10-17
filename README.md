@@ -338,7 +338,7 @@ stack's `minio` on 9000/9001.
 
 ## Background jobs
 
-`apps/api` runs nine sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
+`apps/api` runs ten sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
 default: on outside tests). A Redis lock (`SET NX`, one key per job) keeps two running
 instances from double-running the same pass; `GET /health` reports each job's interval,
 enabled flag, and last run's time/status.
@@ -354,16 +354,18 @@ enabled flag, and last run's time/status.
 | `knowledge_refresh`  | 1 h              | Re-crawls a `website` knowledge source past its freshness window (FR-MOD-06.3.3) |
 | `invoice_close`      | 1 h              | Freezes a closed billing period into a statement (FR-MOD-10.3)                   |
 | `unverified_signups` | 1 h              | Deletes an expired sign-up nobody verified, with its empty workspace (tm 257.19) |
+| `ai_stall`           | 15 s             | Sends a person to an AI-first conversation the AI left unanswered (tm 293.6)     |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
 `.env.example` for every key. To turn a background sweep off entirely and drive it from
 outside the app instead (a host cron, a managed job runner), set `SCHEDULER_ENABLED=false`;
-every job but two keeps its own `pnpm --filter @siyahtus/api <job>:run` CLI script, which is
+every job but three keeps its own `pnpm --filter @siyahtus/api <job>:run` CLI script, which is
 what that outside trigger calls. Webhook redelivery has no CLI equivalent — it is not a pass
 an operator would ever want to force, and a hand-run one would race the scheduled one for the
 same rows. Nor has `unverified_signups`: it only matters on a deployment that verifies
-sign-ups, which is one with the scheduler on.
+sign-ups, which is one with the scheduler on. Nor has `ai_stall`: it is a watchdog measured in
+seconds, which no outside trigger driven by hand could stand in for.
 
 `unverified_signups` (tm 257.19) runs only while `SIGNUP_EMAIL_VERIFICATION=true` — off, an
 unverified account signs in like any other, and `/health` lists the job as `disabled`. On, it

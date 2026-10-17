@@ -70,6 +70,12 @@ export interface AiModeChange {
   readonly reason: AiModeReason;
 }
 
+/**
+ * The `by` of a change nobody asked for — the stall watchdog's (tm 293.6). Its
+ * transcript line has no author, as the idle-chat sweep's close has none.
+ */
+export const AI_MODE_SYSTEM_ACTOR = 'system';
+
 /** What a caller asks for; who asks is the caller's principal. */
 export interface AiModeRequest {
   readonly to: AiConversationMode;

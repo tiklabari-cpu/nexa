@@ -211,6 +211,10 @@ paths:
     $ref: "./paths/chats.yaml#/transfer"
   /chats/{chatId}/takeover:
     $ref: "./paths/chats.yaml#/takeover"
+  /chats/{chatId}/return-to-ai:
+    $ref: "./paths/chats.yaml#/returnToAi"
+  /chats/{chatId}/pause-ai:
+    $ref: "./paths/chats.yaml#/pauseAi"
   /chats/{chatId}/supervise:
     $ref: "./paths/chats.yaml#/supervise"
   /chats/{chatId}/tags:
@@ -1461,6 +1465,36 @@ components:
             when the agent hands it over or a person takes it. `parallel`:
             routing assigns it on open and the agent answers until a person
             writes to the visitor. Default `parallel`.
+
+    ChatAiMode:
+      type: object
+      description: |
+        Who answers a chat's open connection after `return-to-ai` or
+        `pause-ai` (AI-11). `ai`: the AI agent; `human`: a person has it and
+        the AI stays silent; `paused`: the AI is held back without a person
+        having taken it.
+      required: [chat_id, thread_id, ai_mode, previous_ai_mode, changed, assignee_id]
+      properties:
+        chat_id: { type: string }
+        thread_id: { type: string, description: The open connection. }
+        ai_mode:
+          type: string
+          enum: [ai, human, paused]
+        previous_ai_mode:
+          type: string
+          enum: [ai, human, paused]
+          nullable: true
+          description: Null when the AI had not taken part in the connection.
+        changed:
+          type: boolean
+          description: False when the connection was already in `ai_mode`; nothing was written.
+        assignee_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            The connection's assignee after the change — null once an AI-first
+            connection is the AI's again.
 
     SkillStep:
       type: object
@@ -7562,6 +7596,8 @@ components:
       type: string
       description: Machine-readable error category (v2-03 §1.8).
       enum:
+        - ai_mode_transition_refused
+        - ai_return_blocked
         - authentication
         - authorization
         - brand_exists

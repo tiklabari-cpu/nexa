@@ -338,6 +338,13 @@ export const AUDIT_ACTIONS = [
   // so it is recorded. The entry names the actor, the chat and the previous
   // assignee; never the transcript or any message content.
   'chat.taken_over',
+  // Who answers the conversation (AI-11 · tm 293.3): a person gave its open
+  // connection back to the AI, or held the AI back on it. An authority action
+  // on the conversation, as a takeover is. Metadata is the connection, the mode
+  // it left, the `resume` choice and, when an AI-first hand-back unassigned
+  // it, the agent it left; never the note, which stays in the transcript.
+  'chat.ai_returned',
+  'chat.ai_paused',
   // Conversation lifecycle (FR-MOD-02.8). Archiving a conversation is the
   // moment its transcript becomes read-only, and reopening it is the moment it
   // stops being — the two points at which the record of what was said starts or

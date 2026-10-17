@@ -3,6 +3,9 @@ import type { Messages } from '../merge.js';
 /** Shared text — the ADR-06 error taxonomy rendered for a human. See the English file. */
 export const common: Messages = {
   'common.errors.account_exists': 'Bu e-posta adresine ait bir hesap zaten var.',
+  'common.errors.ai_mode_transition_refused': 'Bu sohbeti AI yanıtlamıyor.',
+  'common.errors.ai_return_blocked':
+    "Bu sohbet işaretli ve bir kişide kalmalı; AI'a geri verilemez.",
   'common.errors.authentication': 'Oturumunuzun süresi doldu — yeniden giriş yapın.',
   'common.errors.authorization': 'Bunu yapma yetkiniz yok.',
   'common.errors.brand_exists': 'Bu adda bir marka zaten var.',

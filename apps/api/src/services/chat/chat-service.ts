@@ -32,6 +32,8 @@ import {
   stripEditMarkers,
   type AdapterChannelType,
   type AgentConflictWarningPush,
+  type AiConversationMode,
+  type AiReturnResume,
   type ChatTakenOverPush,
   type ConnectionOpenedVia,
   type EventRecipients,
@@ -48,7 +50,7 @@ import {
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
-import type { Principal } from '../auth/principal.js';
+import { roleAtLeast, type Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { recordAiResolution, threadWasAiResolved } from '../billing/metering.js';
 import { deliver } from '../mail/delivery.js';
@@ -64,9 +66,18 @@ import {
   type RoutingContext,
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
-import { aiModeNoteText, writeAiMode, type AiModeChange, type AiModeRequest } from './ai-mode.js';
+import {
+  aiModeNoteText,
+  aiModeStep,
+  aiReturnBlockers,
+  endAiProcedure,
+  writeAiMode,
+  type AiModeChange,
+  type AiModeRequest,
+} from './ai-mode.js';
 import { opensAiFirst } from './ai-first.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
+import { SupervisionService } from '../traffic/supervision-service.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
 import {
   canSeeChat,
@@ -314,7 +325,28 @@ export interface ChannelDispatcher {
   dispatchAgentReply(tenant: TenantContext, chatId: string, text: string): Promise<void>;
 }
 
+/**
+ * Who answers a chat's open connection after a person gave it back to the AI
+ * or held the AI back on it (tm 293.3) — the `ChatAiMode` body.
+ */
+export interface ChatAiModeResult {
+  chat_id: string;
+  thread_id: string;
+  ai_mode: AiConversationMode;
+  /** Null when the AI had not taken part in the connection. */
+  previous_ai_mode: AiConversationMode | null;
+  /** False when the connection was already in `ai_mode`; nothing was written. */
+  changed: boolean;
+  assignee_id: string | null;
+}
+
 export class ChatService {
+  /**
+   * The hand-back's watch (tm 293.3): whoever gave an AI-first connection back
+   * keeps it on their Supervised list.
+   */
+  readonly #supervisions = new SupervisionService();
+
   constructor(
     private readonly db: PrismaClient,
     private readonly redis: RedisLike,
@@ -1434,6 +1466,9 @@ export class ChatService {
    * one opened AI-first (tm 293.2) — is routed to a person here, in the same
    * transaction (`#routeHandover`).
    *
+   * `line` is what a person asked for besides the change (tm 293.3): their note,
+   * written into the line after its words, and properties the line carries.
+   *
    * Returns the change, the line to announce after commit and the assignment
    * the hand-over made, or null when there was no change to make.
    */
@@ -1444,6 +1479,7 @@ export class ChatService {
     threadId: string,
     by: string,
     request: AiModeRequest,
+    line: { note?: string | null; properties?: Record<string, unknown> } = {},
   ): Promise<{
     change: AiModeChange;
     note: AnnouncedEvent | null;
@@ -1451,9 +1487,12 @@ export class ChatService {
   } | null> {
     const change = await writeAiMode(tx, { chatId: chat.id, threadId }, { ...request, by });
     if (!change) return null;
-    if (change.from === null) return { change, note: null, assigned: null };
+    // A person handing the AI a connection it never spoke in is still news (tm 293.3).
+    if (change.from === null && change.to === 'human')
+      return { change, note: null, assigned: null };
     const assigned =
       change.to === 'human' ? await this.#routeHandover(tx, tenant, chat, threadId, change) : null;
+    const words = aiModeNoteText(change);
     const event = await this.#appendEvent(tx, {
       licenseId: tenant.licenseId,
       chatId: chat.id,
@@ -1462,9 +1501,10 @@ export class ChatService {
       authorType: 'system',
       input: {
         type: 'system_message',
-        text: aiModeNoteText(change),
+        text: line.note ? `${words}. Note: ${line.note}` : words,
         recipients: 'agents',
         properties: {
+          ...line.properties,
           system_event: 'ai_mode_changed',
           ai_mode: change.to,
           previous_ai_mode: change.from,
@@ -3054,6 +3094,215 @@ export class ChatService {
     await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
 
     return result.detail;
+  }
+
+  /**
+   * Give a chat's open connection back to the AI (tm 293.3 · AI-11 §6) —
+   * `POST /chats/{chatId}/return-to-ai`. The AI answers the visitor's next
+   * message; `note` reaches it with the conversation (the agents-only line,
+   * which the AI's context loader reads), and `resume: 'fresh'` ends the
+   * procedure it was in. Refused for a connection a risk flag keeps with a
+   * person ({@link aiReturnBlockers}), whoever asks.
+   *
+   * In an AI-first workspace (tm 293.2) the connection leaves its assignee and
+   * the queue as well — it is the AI's again, routed at the next hand-over
+   * (`#routeHandover`) — and the caller becomes its supervisor, so it stays on
+   * their Supervised list (05 AI-11 §6).
+   */
+  async returnToAi(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    request: { note: string | null; resume: AiReturnResume },
+    audit: AuditContext,
+  ): Promise<ChatAiModeResult> {
+    return this.#handAiMode(tenant, principal, chatId, { to: 'ai', ...request }, audit);
+  }
+
+  /**
+   * Hold the AI back on a chat's open connection (tm 293.3 · AI-11 §1) —
+   * `POST /chats/{chatId}/pause-ai`. The AI stops answering; nobody is routed
+   * and the assignment stays as it was. Only a connection the AI is answering
+   * can be paused.
+   */
+  async pauseAi(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    request: { note: string | null },
+    audit: AuditContext,
+  ): Promise<ChatAiModeResult> {
+    return this.#handAiMode(
+      tenant,
+      principal,
+      chatId,
+      { to: 'paused', note: request.note, resume: null },
+      audit,
+    );
+  }
+
+  /**
+   * The two requests' one path. Who may (AI-11-S3, until RL-02's capability
+   * `ai.conversation.return_to_ai`): the connection's assignee, or an admin or
+   * owner — a team member cannot hand a colleague's chat to the AI. Checked
+   * against the assignee read under the thread's row lock, the lock every mode
+   * write takes (`ai-mode.ts`), so the person checked is the one whose
+   * connection changes. In order: not found (404), closed (409), not theirs
+   * (403), flagged (409), not an edge of the state machine (409).
+   */
+  async #handAiMode(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    request: { to: 'ai' | 'paused'; note: string | null; resume: AiReturnResume | null },
+    audit: AuditContext,
+  ): Promise<ChatAiModeResult> {
+    if (principal.kind !== 'agent') {
+      throw ApiError.authorization('Only a signed-in teammate can hand a chat to the AI.');
+    }
+    const actorId = principal.accountId;
+
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const visibility = await resolveVisibility(tx, principal, 'write');
+      const chat = await this.#loadVisibleChat(tx, visibility, chatId);
+      const thread = chat.threads.find((t) => t.active);
+      if (!chat.active || !thread) throw ApiError.chatInactive('The chat is closed.');
+      const ref = { chatId: chat.id, threadId: thread.id };
+
+      const [locked] = await tx.$queryRaw<
+        Array<{ assignee_id: string | null; queue_position: number | null; ai_mode: string | null }>
+      >`SELECT assignee_id, queue_position, ai_mode FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+      if (!locked) throw ApiError.notFound('Chat not found.');
+
+      if (!roleAtLeast(principal.role, 'admin') && locked.assignee_id !== actorId) {
+        throw ApiError.authorization(
+          request.to === 'ai'
+            ? "Only the chat's assignee or an admin can give it back to the AI."
+            : "Only the chat's assignee or an admin can pause the AI on it.",
+        );
+      }
+
+      if (request.to === 'ai') {
+        const flags = await aiReturnBlockers(tx, ref);
+        if (flags.length > 0) {
+          throw new ApiError('ai_return_blocked', 'A risk flag keeps this chat with a person.', {
+            details: { risk_flags: flags },
+          });
+        }
+      }
+
+      const from = locked.ai_mode as AiConversationMode | null;
+      const step = aiModeStep(from, request.to);
+      if (step === 'refused') {
+        throw new ApiError(
+          'ai_mode_transition_refused',
+          from === 'human'
+            ? 'A person has this chat; the AI is not answering it.'
+            : 'The AI has not answered in this chat.',
+          { details: { ai_mode: from } },
+        );
+      }
+      const unchanged: ChatAiModeResult = {
+        chat_id: chat.id,
+        thread_id: thread.id,
+        ai_mode: request.to,
+        previous_ai_mode: from,
+        changed: false,
+        assignee_id: locked.assignee_id,
+      };
+      if (step === 'same') return { body: unchanged, announce: null };
+
+      const mode = await this.#changeAiMode(
+        tx,
+        tenant,
+        chat,
+        thread.id,
+        actorId,
+        { to: request.to, reason: request.to === 'ai' ? 'return_to_ai' : 'pause' },
+        { note: request.note, properties: request.resume ? { resume: request.resume } : {} },
+      );
+      if (request.resume === 'fresh') await endAiProcedure(tx, ref);
+
+      // AI-first: the connection is the AI's again, nobody's to answer and
+      // nobody's to queue — the next hand-over routes it. Whoever held it
+      // frees their slot, which the queue may fill as a close's does.
+      let released: string | null = null;
+      let drained: DrainedAssignment[] = [];
+      if (request.to === 'ai' && (await opensAiFirst(tx))) {
+        if (locked.assignee_id !== null || locked.queue_position !== null) {
+          await tx.thread.update({
+            where: { id: thread.id },
+            data: { assigneeId: null, queuePosition: null, queuedAt: null },
+          });
+          await leaveQueue(tx, thread.id, 'transferred');
+        }
+        if (locked.assignee_id !== null) {
+          released = locked.assignee_id;
+          await tx.chatUser.updateMany({
+            where: { chatId: chat.id, userId: released, userType: 'agent' },
+            data: { present: false },
+          });
+          drained = await this.routing.drainQueue(tx, tenant.licenseId);
+        }
+        await this.#supervisions.register(tx, tenant.licenseId, principal, chat.id);
+      }
+
+      // An authority action on the conversation, as a takeover is: in the trail,
+      // in its transaction. Ids and codes only — the note stays in the transcript.
+      await writeAuditEntry(tx, audit, {
+        action: request.to === 'ai' ? 'chat.ai_returned' : 'chat.ai_paused',
+        target: `chat:${chat.id}`,
+        metadata: {
+          thread_id: thread.id,
+          previous_ai_mode: from,
+          ...(request.resume ? { resume: request.resume } : {}),
+          ...(released ? { previous_assignee_id: released } : {}),
+        },
+      });
+
+      const reloaded = await tx.chat.findUniqueOrThrow({
+        where: { id: chat.id },
+        include: chatInclude,
+      });
+      return {
+        body: {
+          ...unchanged,
+          changed: true,
+          assignee_id: released ? null : locked.assignee_id,
+        },
+        announce: {
+          // Before and after, as a takeover's: the agent the connection left
+          // hears the AI has it as much as the supervisor who gave it back.
+          audience: {
+            groupIds: [
+              ...this.#audienceFor(chat).groupIds,
+              ...this.#audienceFor(reloaded).groupIds,
+            ],
+            agentIds: [
+              ...this.#audienceFor(chat).agentIds,
+              ...this.#audienceFor(reloaded).agentIds,
+            ],
+            customerId: chat.customerId,
+          },
+          note: mode?.note ?? null,
+          released,
+          drained,
+        },
+      };
+    });
+
+    const announce = result.announce;
+    if (announce) {
+      if (announce.note) {
+        await this.#announceEvent(tenant, { ...announce.note, audience: announce.audience });
+      }
+      for (const assignment of announce.drained) await this.#announceHandover(tenant, assignment);
+      // **Chatting with** no longer names the agent who held it (FR-MOD-03.1.3).
+      if (announce.released) {
+        await publishTrafficChange(this.publisher, tenant, announce.audience.customerId);
+      }
+    }
+    return result.body;
   }
 
   async tagThread(

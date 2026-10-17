@@ -1,7 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   ADAPTER_CHANNEL_TYPES,
+  AI_RETURN_RESUMES,
   EVENT_RECIPIENTS,
   EVENT_TYPES,
   TRANSFER_REASONS,
@@ -11,7 +12,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskCardNumbers } from '../lib/cc-mask.js';
-import { ChatService } from '../services/chat/chat-service.js';
+import { ChatService, type ChatAiModeResult } from '../services/chat/chat-service.js';
 import { ChannelService } from '../services/channels/channel-service.js';
 import { createLiveTelegram } from '../services/channels/telegram-live.js';
 import { createSafeHttp, type SafeHttp } from '../lib/safe-fetch.js';
@@ -97,6 +98,16 @@ const takeoverSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+/** A note for the AI and how it picks the conversation up (tm 293.3 · AI-11 §6). */
+const returnToAiSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+  resume: z.enum(AI_RETURN_RESUMES).default('continue'),
+});
+
+const pauseAiSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});
+
 const tagSchema = z.object({ tag: z.string().trim().min(1).max(64) });
 const seenSchema = z.object({ seen_up_to: z.coerce.date() });
 
@@ -118,6 +129,27 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
     );
   }
   return result.data;
+}
+
+/**
+ * The line that ties a mode change to the request that made it (AI-11 ·
+ * ID-08), in the words of the agent-message route's (`sendEvent` below).
+ */
+function logAiModeChange(
+  log: FastifyBaseLogger,
+  mode: ChatAiModeResult,
+  reason: 'return_to_ai' | 'pause',
+): void {
+  log.info(
+    {
+      chat_id: mode.chat_id,
+      thread_id: mode.thread_id,
+      ai_mode: mode.ai_mode,
+      previous_ai_mode: mode.previous_ai_mode,
+      mode_reason: reason,
+    },
+    'ai mode changed',
+  );
 }
 
 export default async function chatRoutes(
@@ -493,6 +525,51 @@ export default async function chatRoutes(
         request.auditContext(),
       );
       return reply.send(chat);
+    },
+  );
+
+  // --- Who answers the connection (AI-11 · tm 293.3) -------------------------
+  //
+  // A person gives the connection back to the AI, or holds the AI back on it.
+  // The chat write scopes say the token may change the chat; who may — the
+  // assignee, or an admin or owner (AI-11-S3) — needs the connection, so the
+  // service decides it under the thread's lock. `principals: ['agent']`: a bot
+  // token is not a person, and the AI-first hand-back makes its caller a
+  // supervisor (`chat_supervisions.agent_id` references `accounts`).
+
+  app.post<{ Params: { chatId: string } }>(
+    '/chats/:chatId/return-to-ai',
+    { config: { scopes: ['chats--all:rw', 'chats--access:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const body = parse(returnToAiSchema, request.body ?? {});
+      const mode = await chats.returnToAi(
+        request.tenant(),
+        request.requirePrincipal(),
+        chatId,
+        { note: body.note || null, resume: body.resume },
+        request.auditContext(),
+      );
+      if (mode.changed) logAiModeChange(request.log, mode, 'return_to_ai');
+      return reply.send(mode);
+    },
+  );
+
+  app.post<{ Params: { chatId: string } }>(
+    '/chats/:chatId/pause-ai',
+    { config: { scopes: ['chats--all:rw', 'chats--access:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const body = parse(pauseAiSchema, request.body ?? {});
+      const mode = await chats.pauseAi(
+        request.tenant(),
+        request.requirePrincipal(),
+        chatId,
+        { note: body.note || null },
+        request.auditContext(),
+      );
+      if (mode.changed) logAiModeChange(request.log, mode, 'pause');
+      return reply.send(mode);
     },
   );
 

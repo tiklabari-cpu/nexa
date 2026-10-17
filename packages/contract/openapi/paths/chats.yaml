@@ -487,6 +487,117 @@ takeover:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
+returnToAi:
+  post:
+    tags: [Chats]
+    operationId: returnChatToAi
+    summary: Give the open connection back to the AI agent
+    description: |
+      Moves the chat's open connection from a person (`human`) or a held-back
+      AI (`paused`) back to the AI agent (`ai`), which answers the visitor's
+      next message (AI-11). The change leaves an agents-only line in the
+      transcript and an audit entry.
+
+      **Who may.** A signed-in teammate who is the connection's assignee, or
+      an admin or owner for any chat they can reach. Anyone else is refused
+      with `403` — a team member cannot give a colleague's chat back.
+
+      **Blocked by risk.** A connection flagged for responsible gaming,
+      self-harm or a suspected minor never goes back to the AI: `409
+      ai_return_blocked`, whoever asks.
+
+      **AI-first workspaces.** When the AI agent answers before anyone is
+      assigned (`assignment_mode: ai_first`), the connection also leaves its
+      assignee and the queue — it is the AI's again, routed to a person at the
+      next hand-over — and the caller is registered as its supervisor so it
+      stays on their Supervised list.
+
+      `note` is told to the AI with the conversation. `resume: continue`
+      (default) keeps the procedure the AI was in and what it collected;
+      `fresh` ends the procedure, keeping what was collected.
+
+      Already the AI's: `200` with `changed: false`, nothing written.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              note:
+                type: string
+                maxLength: 500
+                description: >-
+                  What the AI should know taking the conversation back. Agents
+                  see it in the transcript; the visitor never does.
+              resume:
+                type: string
+                enum: [continue, fresh]
+                default: continue
+    responses:
+      "200":
+        description: The connection is the AI's
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ChatAiMode" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: |
+          The chat is closed (`chat_inactive`), or a risk flag keeps it from the
+          AI (`ai_return_blocked`).
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+pauseAi:
+  post:
+    tags: [Chats]
+    operationId: pauseChatAi
+    summary: Hold the AI agent back on the open connection
+    description: |
+      Moves the chat's open connection from the AI (`ai`) to `paused`: the AI
+      stops answering, nobody is routed and the assignment stays as it was
+      (AI-11). Giving it back is `POST /chats/{chatId}/return-to-ai`; a person
+      writing to the visitor takes it (`human`).
+
+      Who may: as for `return-to-ai` — the assignee, or an admin or owner.
+      A connection the AI is not answering (a person has it, or the AI has not
+      spoken in it yet) cannot be paused: `409 ai_mode_transition_refused`.
+      Already paused: `200` with `changed: false`.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              note:
+                type: string
+                maxLength: 500
+                description: Why, for the agents. The visitor never sees it.
+    responses:
+      "200":
+        description: The AI is held back on the connection
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ChatAiMode" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: |
+          The chat is closed (`chat_inactive`), or the AI is not answering the
+          connection (`ai_mode_transition_refused`).
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
 supervise:
   post:
     tags: [Chats]

@@ -332,6 +332,19 @@ const TRACKED = [
     owner: 'tm 303.5',
     reason: 'the write half of the same settings — the same screen (HandoffSettings.tsx).',
   },
+  {
+    op: 'POST /chats/{chatId}/return-to-ai',
+    owner: 'tm 293.5',
+    reason:
+      "giving a conversation back to the AI agent (tm 293.3). Its button is the inbox header's " +
+      '"AI\'a geri ver" beside the AI-mode badge, which tm 293.5 builds with the ' +
+      '`chat_ai_mode_changed` push that keeps the badge current; until then it is called over the API.',
+  },
+  {
+    op: 'POST /chats/{chatId}/pause-ai',
+    owner: 'tm 293.5',
+    reason: 'holding the AI back on a conversation — the same header (tm 293.5).',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

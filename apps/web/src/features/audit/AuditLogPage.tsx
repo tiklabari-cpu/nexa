@@ -237,12 +237,16 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     // writable again — a member back the same day, or an agent starting a
     // conversation with them, reopening their day's chat — so it sits beside
     // the archive/reopen pair it completes.
+    // `chat.ai_returned` / `chat.ai_paused` (AI-11) sit beside the takeover:
+    // the three say who answers the conversation now.
     labelKey: 'audit.group.conversations',
     actions: [
       'chat.archived',
       'chat.reopened',
       'chat.connection_opened',
       'chat.taken_over',
+      'chat.ai_returned',
+      'chat.ai_paused',
       'chat.message_edited',
     ],
   },

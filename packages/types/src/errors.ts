@@ -9,6 +9,15 @@
  */
 
 export const ERROR_TYPES = [
+  // SiyahTuş additions — who answers a connection (AI-11 · tm 293.3). A move the
+  // connection's AI mode cannot make — pausing an AI that is not answering it —
+  // and a connection a risk flag (responsible gaming, self-harm, a suspected
+  // minor) keeps from going back to the AI. Both 409: the request was fine and
+  // allowed, the connection's state refused it. Kept apart because the screen
+  // answers them differently — "the AI is not on this chat" against "this chat
+  // must stay with a person" — and kept narrow like `takeover_conflict`.
+  'ai_mode_transition_refused',
+  'ai_return_blocked',
   // SiyahTuş addition. Signup is not in the source catalogue at all — that API
   // assumes a workspace already exists — and "this email is taken" is a
   // conflict, not a malformed request.
@@ -111,6 +120,8 @@ export type ErrorType = (typeof ERROR_TYPES)[number];
  */
 export const ERROR_STATUS: Record<ErrorType, number> = {
   account_exists: 409,
+  ai_mode_transition_refused: 409,
+  ai_return_blocked: 409,
   authentication: 401,
   authorization: 403,
   brand_exists: 409,

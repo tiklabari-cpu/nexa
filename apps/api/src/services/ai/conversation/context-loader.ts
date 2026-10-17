@@ -13,13 +13,17 @@
  * as `customer → user`, `bot → assistant` and `agent → assistant` behind an
  * `[Agent]` marker (a person said it, not the AI — AI-11's hand-back makes that
  * matter). A few system events — the connection opening, a transfer, a resume
- * — go in as short timed notes, not as messages. Consecutive messages of one
- * role are merged into one, a line apiece. An attachment is a placeholder
+ * — go in as short timed notes, not as messages, and so does the line a person
+ * leaves giving the connection back to the AI (tm 293.3 · AI-11 §6): kept to
+ * the agents, but written for the AI — it carries their note. Consecutive
+ * messages of one role are merged into one, a line apiece. An attachment is a placeholder
  * naming its kind, never its bytes. The text is the stored text, which the
  * customer route masked before it was written (AI-26); nothing here unmasks it.
  *
  * **What never goes in.** An internal note (`recipients = 'agents'`) — filtered
- * in SQL, so no code below could pass one on if it tried; the copilot's
+ * in SQL, so no code below could pass one on if it tried (the hand-back line
+ * is let through there by name: a `system_message` the system wrote, never a
+ * person's `message`); the copilot's
  * output, which reaches a conversation only as a note or as an agent's own
  * message; any other connection's events, the day's other connections
  * included (that is AI-02's digest, not a transcript).
@@ -77,6 +81,13 @@ export const CONTEXT_SYSTEM_EVENTS: readonly string[] = [
   'chat_transferred',
   'chat_resumed',
 ];
+
+/**
+ * The agents-only system event a turn is told about: a person gave the
+ * connection back to the AI (`ai_mode` `ai`, `chat-service.ts` `#changeAiMode`).
+ * Its text is the line agents see, with their note for the AI after it.
+ */
+const HAND_BACK_SYSTEM_EVENT = 'ai_mode_changed';
 
 /** Written where earlier messages were left out. */
 export const GAP_MARKER = '[… earlier messages not shown …]';
@@ -156,10 +167,14 @@ export async function loadConnectionEvents(
     WHERE thread_id = ${ref.threadId}
       AND chat_id = ${ref.chatId}
       AND (author_type <> 'customer' OR event_sequence <= ${through})
-      AND recipients = 'all'
-      AND (type IN ('message', 'file')
+      AND ((recipients = 'all'
+            AND (type IN ('message', 'file')
+                 OR (type = 'system_message'
+                     AND properties->>'system_event' IN (${Prisma.join([...CONTEXT_SYSTEM_EVENTS])}))))
            OR (type = 'system_message'
-               AND properties->>'system_event' IN (${Prisma.join([...CONTEXT_SYSTEM_EVENTS])})))
+               AND author_type = 'system'
+               AND properties->>'system_event' = ${HAND_BACK_SYSTEM_EVENT}
+               AND properties->>'ai_mode' = 'ai'))
     ORDER BY event_sequence DESC
     LIMIT ${maxMessages + 1}
   `);

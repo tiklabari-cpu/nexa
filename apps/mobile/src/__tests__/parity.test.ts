@@ -926,7 +926,11 @@ describe('module parity matrix — what is still owed', () => {
       // whether the AI agent answers a visitor before anyone is assigned
       // ("Önce AI"), set by an admin with the rest of the agent's settings in
       // the web panel. The app configures no AI agent; nothing here re-scopes.
-      contractEndpoints: 235,
+      // 235 -> 237 with `/chats/{chatId}/return-to-ai` and `/pause-ai`
+      // (tm 293.3) — giving a conversation back to the AI agent or holding the
+      // AI back on it, from the web inbox's header (tm 293.5). The app's chat
+      // screen has no AI controls; nothing here re-scopes.
+      contractEndpoints: 237,
       scopeBoundaries: 1,
     });
   });

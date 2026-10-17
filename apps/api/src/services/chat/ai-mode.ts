@@ -48,7 +48,11 @@
  * rule bot both reach it, and the rule bot reaches no AI module at all
  * (FR-MOD-06.6, `bots/rule-bot-isolation.test.ts`).
  */
-import type { AiConversationMode, AiModeReason } from '@siyahtus/types';
+import {
+  AI_RETURN_BLOCKING_RISK_FLAGS,
+  type AiConversationMode,
+  type AiModeReason,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 /** One connection: `threadId` the connection (panel "Chat ID"), `chatId` its day (panel "Thread ID"). */
@@ -206,6 +210,41 @@ export async function claimAiTurn(tx: TenantClient, ref: AiModeRef): Promise<voi
   if (locked.mode === null) {
     await tx.$executeRaw`UPDATE threads SET ai_mode = 'ai' WHERE id = ${ref.threadId}`;
   }
+}
+
+/**
+ * The risk flags that keep a connection from going back to the AI (tm 293.3 ·
+ * AI-11 §6, AI-11-S3) — the one place a hand-back asks, so the check has one
+ * definition whoever gives the connection back. Empty: nothing blocks it.
+ *
+ * Today the flags are what the connection's conversation carries in its state,
+ * `ai_conversations.signals.risk_flags` (05 AI-01's `signals`); AI-27 (#302)
+ * raises them as rows of its own, chat- and member-scoped, and reads those
+ * here too. A connection the AI never opened a conversation on carries none.
+ */
+export async function aiReturnBlockers(tx: TenantClient, ref: AiModeRef): Promise<string[]> {
+  const conversation = await tx.aiConversation.findFirst({
+    where: { threadId: ref.threadId, chatId: ref.chatId },
+    select: { signals: true },
+  });
+  const signals = conversation?.signals as { risk_flags?: unknown } | null | undefined;
+  const raised = Array.isArray(signals?.risk_flags) ? (signals.risk_flags as unknown[]) : [];
+  return AI_RETURN_BLOCKING_RISK_FLAGS.filter((flag) => raised.includes(flag));
+}
+
+/**
+ * End the procedure the AI was in on this connection, for a hand-back that
+ * starts a new topic (`resume: 'fresh'`, tm 293.3 · AI-11 §6). What it
+ * collected stays in `slots`, which the AI still reads with the conversation.
+ * In the caller's transaction; the row's trigger bumps its `version`, as
+ * {@link writeAiMode}'s write does.
+ */
+export async function endAiProcedure(tx: TenantClient, ref: AiModeRef): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE ai_conversations
+       SET active_skill_id = NULL, procedure_snapshot = NULL, procedure_snapshot_hash = NULL,
+           step_id = NULL, step_status = NULL
+     WHERE thread_id = ${ref.threadId} AND chat_id = ${ref.chatId}`;
 }
 
 /**

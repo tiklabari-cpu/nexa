@@ -75,6 +75,32 @@ export type AiAssignmentMode = (typeof AI_ASSIGNMENT_MODES)[number];
 export const DEFAULT_AI_ASSIGNMENT_MODE: AiAssignmentMode = 'parallel';
 
 /**
+ * How the AI takes a connection back (tm 293.3 · AI-11 §6) — the `resume` of
+ * `POST /chats/{chatId}/return-to-ai`:
+ *
+ *   - `continue` — where it left off: the procedure in progress and what it
+ *                  collected stay.
+ *   - `fresh`    — a new topic: the procedure in progress ends; what it
+ *                  collected stays in the conversation's state.
+ */
+export const AI_RETURN_RESUMES = ['continue', 'fresh'] as const;
+export type AiReturnResume = (typeof AI_RETURN_RESUMES)[number];
+
+/**
+ * The risk flags that keep a connection from going back to the AI, whoever
+ * asks (tm 293.3 · AI-11 §6, AI-11-S3): responsible gaming, a self-exclusion
+ * request, a suspected minor, self-harm. Names from AI-27's flag types (#302),
+ * which raises them; until then a connection carries them in its
+ * conversation's `signals.risk_flags`.
+ */
+export const AI_RETURN_BLOCKING_RISK_FLAGS = [
+  'rg_signal',
+  'self_exclusion_request',
+  'underage_suspected',
+  'self_harm',
+] as const;
+
+/**
  * Where the active procedure step stands (AI-03). Null on the row when no
  * step is active.
  *

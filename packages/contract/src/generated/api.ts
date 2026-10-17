@@ -1283,6 +1283,77 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/return-to-ai': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Give the open connection back to the AI agent
+     * @description Moves the chat's open connection from a person (`human`) or a held-back
+     *     AI (`paused`) back to the AI agent (`ai`), which answers the visitor's
+     *     next message (AI-11). The change leaves an agents-only line in the
+     *     transcript and an audit entry.
+     *
+     *     **Who may.** A signed-in teammate who is the connection's assignee, or
+     *     an admin or owner for any chat they can reach. Anyone else is refused
+     *     with `403` — a team member cannot give a colleague's chat back.
+     *
+     *     **Blocked by risk.** A connection flagged for responsible gaming,
+     *     self-harm or a suspected minor never goes back to the AI: `409
+     *     ai_return_blocked`, whoever asks.
+     *
+     *     **AI-first workspaces.** When the AI agent answers before anyone is
+     *     assigned (`assignment_mode: ai_first`), the connection also leaves its
+     *     assignee and the queue — it is the AI's again, routed to a person at the
+     *     next hand-over — and the caller is registered as its supervisor so it
+     *     stays on their Supervised list.
+     *
+     *     `note` is told to the AI with the conversation. `resume: continue`
+     *     (default) keeps the procedure the AI was in and what it collected;
+     *     `fresh` ends the procedure, keeping what was collected.
+     *
+     *     Already the AI's: `200` with `changed: false`, nothing written.
+     */
+    post: operations['returnChatToAi'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/pause-ai': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Hold the AI agent back on the open connection
+     * @description Moves the chat's open connection from the AI (`ai`) to `paused`: the AI
+     *     stops answering, nobody is routed and the assignment stays as it was
+     *     (AI-11). Giving it back is `POST /chats/{chatId}/return-to-ai`; a person
+     *     writing to the visitor takes it (`human`).
+     *
+     *     Who may: as for `return-to-ai` — the assignee, or an admin or owner.
+     *     A connection the AI is not answering (a person has it, or the AI has not
+     *     spoken in it yet) cannot be paused: `409 ai_mode_transition_refused`.
+     *     Already paused: `200` with `changed: false`.
+     */
+    post: operations['pauseChatAi'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/supervise': {
     parameters: {
       query?: never;
@@ -9042,6 +9113,32 @@ export interface components {
       assignment_mode: 'ai_first' | 'parallel';
     };
     /**
+     * @description Who answers a chat's open connection after `return-to-ai` or
+     *     `pause-ai` (AI-11). `ai`: the AI agent; `human`: a person has it and
+     *     the AI stays silent; `paused`: the AI is held back without a person
+     *     having taken it.
+     */
+    ChatAiMode: {
+      chat_id: string;
+      /** @description The open connection. */
+      thread_id: string;
+      /** @enum {string} */
+      ai_mode: 'ai' | 'human' | 'paused';
+      /**
+       * @description Null when the AI had not taken part in the connection.
+       * @enum {string|null}
+       */
+      previous_ai_mode: 'ai' | 'human' | 'paused' | null;
+      /** @description False when the connection was already in `ai_mode`; nothing was written. */
+      changed: boolean;
+      /**
+       * Format: uuid
+       * @description The connection's assignee after the change — null once an AI-first
+       *     connection is the AI's again.
+       */
+      assignee_id: string | null;
+    };
+    /**
      * @description A discriminated union on `type`. Steps are validated before they are
      *     stored, so a step the engine cannot run is refused at save time rather
      *     than skipped silently when a customer is waiting.
@@ -13787,6 +13884,8 @@ export interface components {
      * @enum {string}
      */
     ErrorType:
+      | 'ai_mode_transition_refused'
+      | 'ai_return_blocked'
       | 'authentication'
       | 'authorization'
       | 'brand_exists'
@@ -16228,6 +16327,101 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       /** @description The chat is closed, or another supervisor took it over first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  returnChatToAi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @description What the AI should know taking the conversation back. Agents see it in the transcript; the visitor never does. */
+          note?: string;
+          /**
+           * @default continue
+           * @enum {string}
+           */
+          resume?: 'continue' | 'fresh';
+        };
+      };
+    };
+    responses: {
+      /** @description The connection is the AI's */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatAiMode'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The chat is closed (`chat_inactive`), or a risk flag keeps it from the
+       *     AI (`ai_return_blocked`).
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  pauseChatAi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @description Why, for the agents. The visitor never sees it. */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The AI is held back on the connection */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatAiMode'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The chat is closed (`chat_inactive`), or the AI is not answering the
+       *     connection (`ai_mode_transition_refused`).
+       */
       409: {
         headers: {
           [name: string]: unknown;

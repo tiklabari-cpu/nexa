@@ -83,6 +83,8 @@ export const auditLabels: Messages = {
   'audit.action.ticket.follower_removed': 'Ticket follower removed',
   'audit.action.ticket.email_sent': 'Ticket email sent to the customer',
   'audit.action.chat.taken_over': 'Chat taken over',
+  'audit.action.chat.ai_returned': 'Chat given back to the AI',
+  'audit.action.chat.ai_paused': 'AI paused on a chat',
   'audit.action.chat.archived': 'Chat archived',
   'audit.action.chat.reopened': 'Chat reopened',
   'audit.action.chat.connection_opened': 'Chat connection opened',

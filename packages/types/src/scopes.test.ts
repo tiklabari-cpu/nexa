@@ -148,6 +148,10 @@ describe('error taxonomy', () => {
     // kind that already has one. Two of them would make the team an unmatched
     // conversation lands in depend on row order.
     'fallback_rule_exists',
+    // Who answers a connection (AI-11 · tm 293.3): pausing an AI that is not
+    // answering it, and giving the AI a connection a risk flag keeps from it.
+    'ai_mode_transition_refused',
+    'ai_return_blocked',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

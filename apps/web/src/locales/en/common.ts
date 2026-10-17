@@ -17,6 +17,9 @@ import type { Messages } from '../merge.js';
  */
 export const common: Messages = {
   'common.errors.account_exists': 'That email address already has an account.',
+  'common.errors.ai_mode_transition_refused': 'The AI is not answering this conversation.',
+  'common.errors.ai_return_blocked':
+    'This conversation is flagged and has to stay with a person; it cannot go back to the AI.',
   'common.errors.authentication': 'Your session has expired — sign in again.',
   'common.errors.authorization': 'You do not have permission to do that.',
   'common.errors.brand_exists': 'A brand with that name already exists.',

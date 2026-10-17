@@ -207,6 +207,9 @@ describe('AuditLogPage', () => {
       // A member back the same day reopens their day's chat (ID-02).
       'chat.connection_opened',
       'chat.taken_over',
+      // Who answers the conversation now (AI-11 · tm 293.3).
+      'chat.ai_returned',
+      'chat.ai_paused',
       // The correction entry (FR-MOD-02.3.7). It belongs in this group for the
       // reason the others do, and it is the only one whose subject — the words
       // in the transcript — no longer exists anywhere else once it is written.

@@ -11,7 +11,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { compileInstruction, stepProblemDetails, validateSteps } from '@siyahtus/ai-mock';
-import { ANSWER_LENGTHS } from '@siyahtus/types';
+import { ANSWER_LENGTHS, BATCH_WINDOW_SECONDS_MAX, readBatchWindowSeconds } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';
@@ -300,6 +300,13 @@ const updateAgentBody = z
     avatar_url: z.string().trim().max(2048).nullable().optional(),
     languages: z.array(z.string().trim().min(1).max(20)).max(20).optional(),
     answer_length: z.enum(ANSWER_LENGTHS).nullable().optional(),
+    batch_window_seconds: z
+      .number()
+      .int()
+      .min(0)
+      .max(BATCH_WINDOW_SECONDS_MAX)
+      .nullable()
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -385,11 +392,11 @@ export default async function playbookRoutes(
         });
         if (!existing) throw ApiError.notFound('AI agent not found.');
 
-        // `answer_length` lives inside the persona JSON alongside anything else
-        // an admin has set (a signature, say), so merge rather than overwrite —
-        // clearing it removes just that key.
+        // `answer_length` and `batch_window_seconds` live inside the persona
+        // JSON alongside anything else an admin has set (a signature, say), so
+        // merge rather than overwrite — clearing one removes just that key.
         let persona: Prisma.InputJsonValue | undefined;
-        if (body.answer_length !== undefined) {
+        if (body.answer_length !== undefined || body.batch_window_seconds !== undefined) {
           const current =
             existing.persona &&
             typeof existing.persona === 'object' &&
@@ -398,7 +405,11 @@ export default async function playbookRoutes(
               : {};
           const next = { ...current };
           if (body.answer_length === null) delete next['answerLength'];
-          else next['answerLength'] = body.answer_length;
+          else if (body.answer_length !== undefined) next['answerLength'] = body.answer_length;
+          if (body.batch_window_seconds === null) delete next['batchWindowSeconds'];
+          else if (body.batch_window_seconds !== undefined) {
+            next['batchWindowSeconds'] = body.batch_window_seconds;
+          }
           persona = next as Prisma.InputJsonValue;
         }
 
@@ -1449,6 +1460,7 @@ function serialiseAgent(agent: {
     avatar_url: agent.avatarUrl,
     languages: agent.languages,
     answer_length: typeof answerLength === 'string' ? answerLength : null,
+    batch_window_seconds: readBatchWindowSeconds(persona),
     active: agent.active,
     skills_count: agent._count.skills,
   };

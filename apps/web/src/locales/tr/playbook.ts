@@ -438,6 +438,13 @@ export const playbook: Messages = {
   'playbook.profile.lengthShort': 'Kısa',
   'playbook.profile.lengthMedium': 'Orta',
   'playbook.profile.lengthLong': 'Uzun',
+  'playbook.profile.batchWindow': 'Ziyaretçi yazmayı bırakana dek bekle',
+  'playbook.profile.batchWindowDefault': 'Çalışma alanı varsayılanı',
+  'playbook.profile.batchWindowNow': 'Hemen yanıtla',
+  'playbook.profile.batchSeconds.one': '{count} saniye',
+  'playbook.profile.batchSeconds.other': '{count} saniye',
+  'playbook.profile.batchWindowHint':
+    'Birbirine bu kadar yakın yazılan mesajlara her biri için ayrı değil, tek yanıt verilir.',
   'playbook.profile.save': 'Profili kaydet',
   'playbook.profile.saving': 'Kaydediliyor…',
   'playbook.profile.previewTitle': 'Önizleme',

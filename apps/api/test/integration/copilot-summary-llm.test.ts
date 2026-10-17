@@ -145,7 +145,9 @@ describe('copilot summary written by a model (tm 257.5)', () => {
         },
       });
       server = await startTestServer(
-        { LOG_LEVEL: 'warn' },
+        // The ceiling this suite's long-conversation case is written against
+        // (the default is 48,000 since tm 292.5, for the AI's history).
+        { LOG_LEVEL: 'warn', LLM_MAX_PROMPT_CHARS: '16000' },
         { llm: fake, logStream: log as unknown as NodeJS.WritableStream },
       );
     });

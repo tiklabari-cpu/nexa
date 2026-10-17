@@ -37,6 +37,8 @@ export interface AiAgent {
   avatar_url: string | null;
   languages: string[];
   answer_length: AnswerLength | null;
+  /** Seconds the agent waits for the visitor to stop typing; null is the workspace default. */
+  batch_window_seconds: number | null;
   active: boolean;
   skills_count: number;
 }

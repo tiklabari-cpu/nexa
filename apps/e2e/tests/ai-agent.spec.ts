@@ -7,7 +7,14 @@
  * crawls a URL into a searchable source — all in a real browser against the
  * real API.
  */
-import { expect, test } from './fixtures.js';
+import {
+  expect,
+  openWidget,
+  tenantSubdomain,
+  test,
+  visitorSends,
+  widgetFrame,
+} from './fixtures.js';
 
 test.describe('AI Agent (MOD-06)', () => {
   test('switches between the four tabs, each showing its own surface', async ({ agentPage }) => {
@@ -173,6 +180,79 @@ The **flugelbrace${run}** warranty covers cracked welds for ten years.
    * raises a dialog and that declining it leaves you where you were. jsdom can
    * assert the router did not move; it cannot assert a browser dialog existed.
    */
+  test('the batch window saved in Profile is what a visitor waits: two turns, then a burst answered once (AI-01)', async ({
+    agentPage,
+    browser,
+    organizationId,
+  }) => {
+    test.setTimeout(180_000);
+
+    const run = Date.now().toString().slice(-6);
+    const marker = `parcelwait${run}`;
+    const passage =
+      `Standard ${marker} delivery takes 3 to 5 working days. ` +
+      `Tracking for a ${marker} order is emailed the moment it dispatches.`;
+
+    // --- A knowledge source only this run's questions can match --------------
+    await agentPage.goto('/app/playbook');
+    const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
+    await tabs.getByRole('tab', { name: 'Knowledge' }).click();
+    await agentPage.getByLabel('Title').fill(`Batch window proof ${run}`);
+    await agentPage.getByLabel('Content').fill(passage);
+    await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' && response.url().endsWith('/knowledge-sources'),
+      ),
+      agentPage.getByRole('button', { name: 'Add source' }).click(),
+    ]);
+
+    // --- The window: two seconds, set where an admin sets it, and kept --------
+    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    const waitFor = agentPage.getByLabel('Wait for the visitor to stop typing');
+    const save = agentPage.getByRole('button', { name: 'Save profile' });
+    await waitFor.selectOption('2');
+    await save.click();
+    await expect(save).toBeDisabled();
+    await agentPage.reload();
+    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await expect(agentPage.getByLabel('Wait for the visitor to stop typing')).toHaveValue('2');
+
+    const context = await browser.newContext();
+    try {
+      const visitor = await context.newPage();
+      await openWidget(visitor, organizationId, {
+        host: tenantSubdomain(`batch-window-${run}`).origin,
+      });
+      const replies = widgetFrame(visitor).locator('.nx-row--bot .nx-bubble');
+
+      // --- Turn one, and turn two once it was answered: a reply each ---------
+      await visitorSends(visitor, `How long does ${marker} delivery take?`);
+      await expect(replies).toHaveCount(1, { timeout: 30_000 });
+      await expect(replies.last()).toContainText(marker);
+
+      await visitorSends(visitor, `And is a ${marker} order tracked?`);
+      await expect(replies).toHaveCount(2, { timeout: 30_000 });
+      await expect(replies.last()).toContainText(marker);
+
+      // --- A burst: two messages inside the window get one answer ------------
+      await visitorSends(visitor, `Do ${marker} orders ship at weekends?`);
+      await visitorSends(visitor, `How many working days does ${marker} delivery take?`);
+      await expect(replies).toHaveCount(3, { timeout: 30_000 });
+      // Well past the window: no second answer follows, one per message.
+      await visitor.waitForTimeout(4_000);
+      await expect(replies).toHaveCount(3);
+
+      await visitor.screenshot({ path: 'kanit/06.4-batch-window-widget.png', fullPage: true });
+    } finally {
+      await context.close();
+      // Put the fixture back the way it was found: the workspace default.
+      await agentPage.getByLabel('Wait for the visitor to stop typing').selectOption('');
+      await save.click();
+      await expect(save).toBeDisabled();
+    }
+  });
+
   test('opens the run log, and warns before leaving unsaved edits (FR-MOD-06.2.1)', async ({
     agentPage,
   }) => {

@@ -336,8 +336,15 @@ export default async function customerRoutes(
       timeoutMs: env.LLM_TIMEOUT_MS,
       maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
     }),
-    // Messages written this close together get one answer (tm 292.4 · AI-01 §5).
-    { batchWindowMs: env.AI_BATCH_WINDOW_MS },
+    {
+      // Messages written this close together get one answer (tm 292.4 · AI-01
+      // §5); an agent's own `batch_window_seconds` replaces this (tm 292.5).
+      batchWindowMs: env.AI_BATCH_WINDOW_MS,
+      historyBudget: {
+        maxMessages: env.AI_HISTORY_MAX_MESSAGES,
+        maxChars: env.AI_HISTORY_MAX_CHARS,
+      },
+    },
   );
   const ruleBots = new RuleBotResponder(chats, publisher);
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);

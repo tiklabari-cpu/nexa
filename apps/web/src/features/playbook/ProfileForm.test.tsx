@@ -29,6 +29,7 @@ const AGENT: AiAgent = {
   avatar_url: null,
   languages: ['en'],
   answer_length: 'short',
+  batch_window_seconds: null,
   active: true,
   skills_count: 2,
 };
@@ -77,6 +78,48 @@ describe('ProfileForm', () => {
     expect(api.patch).toHaveBeenCalledWith(
       '/ai-agents/agent-1',
       expect.objectContaining({ answer_length: 'long', name: 'Ada' }),
+    );
+  });
+
+  it('offers the batch window as the workspace default, an immediate answer, or 1–10 seconds', () => {
+    renderForm();
+
+    const select = screen.getByLabelText('Wait for the visitor to stop typing');
+    const options = Array.from(select.querySelectorAll('option')).map((o) => [o.value, o.text]);
+    expect(options[0]).toEqual(['', 'Workspace default']);
+    expect(options[1]).toEqual(['0', 'Answer at once']);
+    expect(options[2]).toEqual(['1', '1 second']);
+    expect(options.at(-1)).toEqual(['10', '10 seconds']);
+    expect(options).toHaveLength(12);
+    // No value saved: the default is the one shown.
+    expect(select).toHaveValue('');
+  });
+
+  it('PATCHes the batch window as whole seconds, and 0 is not the default', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, batch_window_seconds: 3 });
+
+    const select = screen.getByLabelText('Wait for the visitor to stop typing');
+    expect(select).toHaveValue('3');
+    await user.selectOptions(select, '0');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({ batch_window_seconds: 0 }),
+    );
+  });
+
+  it('clears the batch window back to the workspace default with null', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, batch_window_seconds: 5 });
+
+    await user.selectOptions(screen.getByLabelText('Wait for the visitor to stop typing'), '');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({ batch_window_seconds: null }),
     );
   });
 

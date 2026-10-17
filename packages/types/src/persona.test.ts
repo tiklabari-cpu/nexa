@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ANSWER_BUDGETS,
+  BATCH_WINDOW_SECONDS_MAX,
   NO_PERSONA,
   detectLanguage,
   normaliseLanguage,
@@ -17,6 +18,7 @@ import {
   personaIsEmpty,
   personaLanguageVerdict,
   personaOpener,
+  readBatchWindowSeconds,
   readPersona,
   shapeAnswer,
   type Persona,
@@ -63,6 +65,28 @@ describe('persona — reading what was stored (FR-MOD-06.4)', () => {
     expect(readPersona(null)).toEqual(NO_PERSONA);
     expect(personaIsEmpty(readPersona(undefined))).toBe(true);
     expect(personaIsEmpty(readPersona({ tone: 'friendly' }))).toBe(false);
+  });
+});
+
+describe('persona — the batch window (tm 292.5)', () => {
+  it('reads whole seconds from 0 to the maximum out of the persona JSON', () => {
+    expect(readBatchWindowSeconds({ batchWindowSeconds: 0 })).toBe(0);
+    expect(readBatchWindowSeconds({ batchWindowSeconds: 3, signature: '— Ada' })).toBe(3);
+    expect(readBatchWindowSeconds({ batchWindowSeconds: BATCH_WINDOW_SECONDS_MAX })).toBe(10);
+  });
+
+  it('reads anything else as unset, so the workspace default applies', () => {
+    expect(readBatchWindowSeconds({})).toBeNull();
+    expect(readBatchWindowSeconds(null)).toBeNull();
+    expect(readBatchWindowSeconds([3])).toBeNull();
+    expect(readBatchWindowSeconds({ batchWindowSeconds: 11 })).toBeNull();
+    expect(readBatchWindowSeconds({ batchWindowSeconds: -1 })).toBeNull();
+    expect(readBatchWindowSeconds({ batchWindowSeconds: 1.5 })).toBeNull();
+    expect(readBatchWindowSeconds({ batchWindowSeconds: '3' })).toBeNull();
+  });
+
+  it('is not part of the persona that shapes an answer', () => {
+    expect(readPersona({ persona: { batchWindowSeconds: 5 } })).toEqual(NO_PERSONA);
   });
 });
 

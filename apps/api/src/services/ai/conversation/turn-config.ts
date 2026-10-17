@@ -14,7 +14,7 @@
  * The tenant is the transaction's: row level security decides the workspace,
  * so the seam takes no tenant beside it.
  */
-import { readPersona } from '@siyahtus/types';
+import { readBatchWindowSeconds, readPersona } from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
 import type { TurnConfig } from './turn.js';
 
@@ -85,6 +85,9 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       aiAgent: { select: { tone: true, languages: true, persona: true } },
     },
   });
+  const waits = skills
+    .map((skill) => readBatchWindowSeconds(skill.aiAgent?.persona))
+    .filter((seconds): seconds is number => seconds !== null);
   return {
     skills: skills.map((skill) => ({
       id: skill.id,
@@ -93,6 +96,8 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       steps: skill.steps,
       persona: readPersona(skill.aiAgent),
     })),
+    // Unset stays absent, so a configuration nobody tuned is what it was.
+    ...(waits.length > 0 ? { batchWindowSeconds: Math.max(...waits) } : {}),
   };
 }
 

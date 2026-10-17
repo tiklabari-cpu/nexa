@@ -12,6 +12,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import {
   ANSWER_LENGTHS,
+  BATCH_WINDOW_SECONDS_MAX,
   isPersonaLanguage,
   readPersona,
   shapeAnswer,
@@ -32,6 +33,9 @@ const LANGUAGE_OPTIONS: [string, string][] = [
   ['fr', 'Français'],
   ['es', 'Español'],
 ];
+
+/** 1…10 — 0 is its own option ("answer at once") and the empty one is the default. */
+const BATCH_WINDOW_STEPS = Array.from({ length: BATCH_WINDOW_SECONDS_MAX }, (_, i) => i + 1);
 
 const ANSWER_LENGTH_LABEL_KEYS: Record<AnswerLength, string> = {
   short: 'playbook.profile.lengthShort',
@@ -78,6 +82,7 @@ export function ProfileForm({
       tone: string | null;
       languages: string[];
       answer_length: AnswerLength | null;
+      batch_window_seconds: number | null;
     }) => api.patch<AiAgent>(`/ai-agents/${agent.id}`, body),
     onSuccess: onSaved,
   });
@@ -87,6 +92,8 @@ export function ProfileForm({
     avatarUrl: agent.avatar_url ?? '',
     tone: agent.tone ?? '',
     answerLength: agent.answer_length ?? '',
+    // Whole seconds as a string, '' for the workspace default.
+    batchWindow: agent.batch_window_seconds === null ? '' : String(agent.batch_window_seconds),
   };
 
   const form = useForm({
@@ -110,6 +117,7 @@ export function ProfileForm({
         tone: values.tone.trim() || null,
         languages,
         answer_length: (values.answerLength || null) as AnswerLength | null,
+        batch_window_seconds: values.batchWindow === '' ? null : Number(values.batchWindow),
       });
     },
   });
@@ -223,6 +231,34 @@ export function ProfileForm({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Sibling label, for the same reason as the answer length above. */}
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="persona-batch-window"
+              className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+            >
+              {t('playbook.profile.batchWindow')}
+            </label>
+            <select
+              id="persona-batch-window"
+              value={form.values.batchWindow}
+              disabled={!canEdit}
+              onChange={(event) => form.setValue('batchWindow', event.target.value)}
+              className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+            >
+              <option value="">{t('playbook.profile.batchWindowDefault')}</option>
+              <option value="0">{t('playbook.profile.batchWindowNow')}</option>
+              {BATCH_WINDOW_STEPS.map((seconds) => (
+                <option key={seconds} value={String(seconds)}>
+                  {t('playbook.profile.batchSeconds', { count: seconds })}
+                </option>
+              ))}
+            </select>
+            <p className="text-2xs text-content-tertiary">
+              {t('playbook.profile.batchWindowHint')}
+            </p>
           </div>
 
           {canEdit && (

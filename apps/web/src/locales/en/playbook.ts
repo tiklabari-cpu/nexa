@@ -442,6 +442,13 @@ export const playbook: Messages = {
   'playbook.profile.lengthShort': 'Short',
   'playbook.profile.lengthMedium': 'Medium',
   'playbook.profile.lengthLong': 'Long',
+  'playbook.profile.batchWindow': 'Wait for the visitor to stop typing',
+  'playbook.profile.batchWindowDefault': 'Workspace default',
+  'playbook.profile.batchWindowNow': 'Answer at once',
+  'playbook.profile.batchSeconds.one': '{count} second',
+  'playbook.profile.batchSeconds.other': '{count} seconds',
+  'playbook.profile.batchWindowHint':
+    'Messages written this close together get one answer instead of one each.',
   'playbook.profile.save': 'Save profile',
   'playbook.profile.saving': 'Saving…',
   'playbook.profile.previewTitle': 'Preview',

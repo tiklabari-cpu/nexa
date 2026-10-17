@@ -12,7 +12,7 @@
  * are checked per request against live data rather than trusted from the token.
  */
 import { createHmac } from 'node:crypto';
-import { REGIONS, type Region } from '@siyahtus/types';
+import { isIdentityTrust, REGIONS, type IdentityTrust, type Region } from '@siyahtus/types';
 import { constantTimeEqual } from '../../lib/crypto.js';
 import type { CustomerPrincipal } from './principal.js';
 
@@ -42,6 +42,14 @@ interface CustomerTokenPayload {
    * context. Absent on tokens minted before it; those read the default brand.
    */
   brd?: string;
+  /**
+   * How the visitor proved who they are when this token was minted (tm 294 ·
+   * AI-02, K4): a member token (`verified`), a new customer (`session`), or the
+   * one-time adoption of a bare `customer_id` (`claimed`). Inside the HMAC, so
+   * the holder cannot raise it. Absent on tokens minted before it; those read
+   * as unproven.
+   */
+  idv?: IdentityTrust;
   /** Issued at / expires at, seconds since epoch. */
   iat: number;
   exp: number;
@@ -82,6 +90,8 @@ export class CustomerTokenService {
     region: Region;
     /** The brand the embedding website belongs to (`resolveWidgetBrandId`). */
     brandId?: string;
+    /** How the visitor proved who they are (`MemberResolution.via`, mapped). */
+    identity?: IdentityTrust;
   }): {
     token: string;
     expiresIn: number;
@@ -93,6 +103,7 @@ export class CustomerTokenService {
       lic: input.licenseId.toString(),
       rgn: input.region,
       ...(input.brandId ? { brd: input.brandId } : {}),
+      ...(input.identity ? { idv: input.identity } : {}),
       iat: now,
       exp: now + this.ttlSeconds,
     };
@@ -142,6 +153,9 @@ export class CustomerTokenService {
     if (payload.brd !== undefined && typeof payload.brd !== 'string') {
       return { ok: false, reason: 'malformed' };
     }
+    if (payload.idv !== undefined && !isIdentityTrust(payload.idv)) {
+      return { ok: false, reason: 'malformed' };
+    }
     if (payload.exp * 1000 <= Date.now()) {
       return { ok: false, reason: 'expired' };
     }
@@ -162,6 +176,7 @@ export class CustomerTokenService {
         organizationId: payload.org,
         licenseId,
         ...(payload.brd ? { brandId: payload.brd } : {}),
+        ...(payload.idv ? { identity: payload.idv } : {}),
       },
     };
   }

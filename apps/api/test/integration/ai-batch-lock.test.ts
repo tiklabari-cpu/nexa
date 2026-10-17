@@ -494,6 +494,7 @@ describe('one answer to what the visitor said (AI-01 §4–§7 · tm 292.4)', ()
         requireAiBudget: async () => {},
         replyProperties: { reply_to_event_id: message.eventId },
         replyOutbox: async () => {},
+        identityTrust: 'verified',
       };
     }
 

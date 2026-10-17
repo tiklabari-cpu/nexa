@@ -36,7 +36,10 @@ import {
   type AuditEntry,
 } from '../services/audit/audit-log.js';
 import { registerConsoleRedirect } from '../services/auth/console-redirect-sync.js';
-import type { MemberTokenSource } from '../services/auth/member-recognition.js';
+import {
+  MEMBER_IDENTITY_TRUST,
+  type MemberTokenSource,
+} from '../services/auth/member-recognition.js';
 import { MEMBER_TOKEN_MAX_LENGTH } from '../services/auth/member-token.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
 import type { IssuedToken } from '../services/auth/token-service.js';
@@ -1770,6 +1773,10 @@ export default async function authRoutes(
       // `REGIONS` so the two cannot drift apart unnoticed.
       region: region as Region,
       ...(brandId ? { brandId } : {}),
+      // How sure the AI may be that this is the member of the day's earlier
+      // conversations (tm 294 · K4): only a token this workspace signed proves
+      // it; a bare `customer_id` adopted once proves nothing.
+      identity: MEMBER_IDENTITY_TRUST[member.via],
     });
 
     // The widget just proved it is live on this origin, so a website added for

@@ -306,4 +306,51 @@ describe('CustomerTokenService', () => {
     });
     expect(service().verify(token)).toEqual({ ok: false, reason: 'malformed' });
   });
+
+  it('carries how the visitor proved who they are, and nothing for a token that does not say (tm 294 · K4)', () => {
+    const svc = service();
+    for (const identity of ['verified', 'session', 'claimed'] as const) {
+      const verified = svc.verify(
+        svc.issue({
+          customerId: CUSTOMER,
+          organizationId: ORG,
+          licenseId: 1n,
+          region: 'eu',
+          identity,
+        }).token,
+      );
+      expect(verified.ok && verified.principal.identity).toBe(identity);
+    }
+    const unsaid = svc.verify(
+      svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' }).token,
+    );
+    expect(unsaid.ok && 'identity' in unsaid.principal).toBe(false);
+  });
+
+  it('cannot have its identity proof raised by whoever holds it, and refuses one it does not know', () => {
+    const svc = service();
+    const token = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'eu',
+      identity: 'claimed',
+    }).token;
+    const [prefix, body, signature] = token.split('.');
+    const payload = JSON.parse(Buffer.from(body!, 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+    const raised = Buffer.from(JSON.stringify({ ...payload, idv: 'verified' })).toString(
+      'base64url',
+    );
+    expect(svc.verify(`${prefix}.${raised}.${signature}`)).toEqual({
+      ok: false,
+      reason: 'bad_signature',
+    });
+    expect(svc.verify(resign({ ...payload, idv: 'member' }))).toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+  });
 });

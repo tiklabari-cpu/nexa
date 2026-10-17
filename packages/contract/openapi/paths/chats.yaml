@@ -599,6 +599,35 @@ pauseAi:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
+aiDigests:
+  get:
+    tags: [Chats]
+    operationId: listChatAiDigests
+    summary: What the AI recalls of the member's day
+    description: |
+      One summary per connection of the chat's day the AI took part in, newest
+      first, the open one included (AI-02): the topic, what was collected, how
+      it ended. The AI reads the newest three on a later connection's first
+      turn, cut to what the visitor's identity allows; agents see them whole.
+      A chat filed under no day offers its newest connection only.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "200":
+        description: The summaries
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiDailyDigest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
 supervise:
   post:
     tags: [Chats]

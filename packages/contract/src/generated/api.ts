@@ -1354,6 +1354,30 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/ai-digests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What the AI recalls of the member's day
+     * @description One summary per connection of the chat's day the AI took part in, newest
+     *     first, the open one included (AI-02): the topic, what was collected, how
+     *     it ended. The AI reads the newest three on a later connection's first
+     *     turn, cut to what the visitor's identity allows; agents see them whole.
+     *     A chat filed under no day offers its newest connection only.
+     */
+    get: operations['listChatAiDigests'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/supervise': {
     parameters: {
       query?: never;
@@ -2984,7 +3008,7 @@ export interface paths {
      * Edit the persona, or turn the agent on and off
      * @description Sets the customer-facing persona (name, avatar, tone, languages, answer
      *     length) the widget shows (FR-MOD-06.4), how long the agent waits for a
-     *     visitor to stop typing, and the on/off switch.
+     *     visitor to stop typing, its same-day memory, and the on/off switch.
      *
      *     Deactivating an agent stops every skill under it at once, which is what an
      *     admin reaches for when automation is misbehaving. It does not delete
@@ -9115,8 +9139,74 @@ export interface components {
        *     `AI_BATCH_WINDOW_MS`).
        */
       batch_window_seconds?: number | null;
+      daily_memory?: components['schemas']['AiDailyMemorySettings'];
       active: boolean;
       skills_count?: number;
+    };
+    /**
+     * @description Same-day memory (AI-02): on a member's later connection of the day the
+     *     agent reads short summaries of their earlier ones — the topic, what was
+     *     collected, how it ended. It recalls the topic, never an amount, an IBAN
+     *     or a transaction id (K5), and a visitor whose identity is not proven by
+     *     a member token gets no detail at all (K4). Earlier days are never read.
+     */
+    AiDailyMemorySettings: {
+      /** @description Read the day's earlier connections. Default on. */
+      enabled: boolean;
+      /**
+       * @description When the agent brings the earlier conversation up itself:
+       *     `auto_if_unresolved` (default) in its first answer when the day's
+       *     latest conversation was handed over, left unfinished or is waiting
+       *     on something; `on_topic_only` only when the visitor is back on the
+       *     same topic.
+       * @enum {string}
+       */
+      recall: 'auto_if_unresolved' | 'on_topic_only';
+    };
+    /**
+     * @description One connection's summary as the AI keeps it (AI-02), built from the
+     *     conversation's state without a model on every turn and settled when the
+     *     connection closes.
+     */
+    AiDailyDigest: {
+      connection: {
+        /** @description The day (panel "Thread ID"). */
+        chat_id: string;
+        /** @description The connection (panel "Chat ID"). */
+        thread_id: string;
+      };
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      ended_at: string | null;
+      /** @description The procedure the AI ran (today the skill's id). */
+      procedure_key: string | null;
+      procedure_name: string | null;
+      intent_label: string | null;
+      /** @description What the AI collected, by slot name. Personal data. */
+      slots: {
+        [key: string]: {
+          display: string;
+          /** @description `filled`, `carried`, … */
+          status: string;
+        };
+      };
+      /**
+       * @description How it ended; null while it is open and nothing is settled.
+       * @enum {string|null}
+       */
+      outcome: 'resolved' | 'resolved_waiting' | 'handed_off' | 'abandoned' | 'no_ai' | null;
+      /** @description The AI's newest message was a question the visitor has not answered. */
+      awaiting_answer: boolean;
+      handoff: {
+        id: string | null;
+        team_id: string | null;
+        team_name: string | null;
+        reason_codes: string[];
+        agent_replied: boolean;
+      } | null;
+      risk_flags: string[];
+      last_ai_excerpt: string | null;
     };
     AiHandoffSettings: {
       /** Format: uuid */
@@ -16465,6 +16555,34 @@ export interface operations {
       };
     };
   };
+  listChatAiDigests: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The summaries */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiDailyDigest'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
   superviseChat: {
     parameters: {
       query?: never;
@@ -18716,6 +18834,12 @@ export interface operations {
            *     workspace default.
            */
           batch_window_seconds?: number | null;
+          /** @description Either field alone; the one left out keeps its value. */
+          daily_memory?: {
+            enabled?: boolean;
+            /** @enum {string} */
+            recall?: 'auto_if_unresolved' | 'on_topic_only';
+          };
         };
       };
     };

@@ -13,6 +13,7 @@
  * takes it too, and the rule bot reaches no AI module at all (FR-MOD-06.6,
  * `bots/rule-bot-isolation.test.ts`). So does the refusal a reply can meet.
  */
+import type { IdentityTrust } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { EventOutbox } from './chat-service.js';
 
@@ -49,6 +50,12 @@ export interface VisitorTurn {
    * back) and settles the job with the first.
    */
   readonly replyOutbox: EventOutbox;
+  /**
+   * How the visitor who wrote the message proved who they are (tm 294 · K4),
+   * as the job recorded it: what the turn may recall of the day's earlier
+   * connections. `claimed` when nothing was recorded.
+   */
+  readonly identityTrust: IdentityTrust;
 }
 
 /** Why a reply was refused. */

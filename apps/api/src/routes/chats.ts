@@ -319,6 +319,26 @@ export default async function chatRoutes(
     },
   );
 
+  // --- GET /chats/:chatId/ai-digests ----------------------------------------
+  // What the AI recalls of the member's day (tm 294 · AI-02): one summary per
+  // connection it took part in, newest first. Agents only — the widget never
+  // reads what the AI noted about its visitor.
+
+  app.get<{ Params: { chatId: string } }>(
+    '/chats/:chatId/ai-digests',
+    {
+      config: {
+        scopes: ['chats--all:ro', 'chats--access:ro'],
+        principals: ['agent', 'bot'],
+      },
+    },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const items = await chats.listAiDigests(request.tenant(), request.requirePrincipal(), chatId);
+      return reply.send({ items });
+    },
+  );
+
   // --- Events ---------------------------------------------------------------
 
   app.get<{ Params: { chatId: string } }>(

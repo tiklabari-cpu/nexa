@@ -27,7 +27,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
 import type { MemberTokenKey } from '@prisma/client';
-import { MEMBER_TOKEN_TTL } from '@siyahtus/types';
+import { MEMBER_TOKEN_TTL, type IdentityTrust } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import {
   MEMBER_TOKEN_FORMAT,
@@ -83,6 +83,19 @@ export interface MemberResolution {
   /** Credentials presented and not believed, for the caller's log. */
   refusals: MemberRefusal[];
 }
+
+/**
+ * What each way of reaching the customer proves about the visitor (tm 294 ·
+ * AI-02, K4) — signed into their customer token and carried to the AI job that
+ * answers them. A member token this workspace signed is the member; a new
+ * customer is nobody else's; a bare `customer_id` adopted once was a claim the
+ * browser made, never a signature, so the AI recalls nothing in detail for it.
+ */
+export const MEMBER_IDENTITY_TRUST: Readonly<Record<MemberResolution['via'], IdentityTrust>> = {
+  token: 'verified',
+  created: 'session',
+  adopted: 'claimed',
+};
 
 /** Settings › Security › Member recognition, as the contract shapes it. */
 export interface MemberRecognitionView {

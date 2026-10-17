@@ -215,6 +215,8 @@ paths:
     $ref: "./paths/chats.yaml#/returnToAi"
   /chats/{chatId}/pause-ai:
     $ref: "./paths/chats.yaml#/pauseAi"
+  /chats/{chatId}/ai-digests:
+    $ref: "./paths/chats.yaml#/aiDigests"
   /chats/{chatId}/supervise:
     $ref: "./paths/chats.yaml#/supervise"
   /chats/{chatId}/tags:
@@ -1464,8 +1466,105 @@ components:
             answers, so messages sent in quick succession get one reply. 0
             answers at once. Null: the workspace default (the server's
             `AI_BATCH_WINDOW_MS`).
+        daily_memory: { $ref: "#/components/schemas/AiDailyMemorySettings" }
         active: { type: boolean }
         skills_count: { type: integer }
+
+    AiDailyMemorySettings:
+      type: object
+      required: [enabled, recall]
+      description: |
+        Same-day memory (AI-02): on a member's later connection of the day the
+        agent reads short summaries of their earlier ones — the topic, what was
+        collected, how it ended. It recalls the topic, never an amount, an IBAN
+        or a transaction id (K5), and a visitor whose identity is not proven by
+        a member token gets no detail at all (K4). Earlier days are never read.
+      properties:
+        enabled:
+          type: boolean
+          description: Read the day's earlier connections. Default on.
+        recall:
+          type: string
+          enum: [auto_if_unresolved, on_topic_only]
+          description: |
+            When the agent brings the earlier conversation up itself:
+            `auto_if_unresolved` (default) in its first answer when the day's
+            latest conversation was handed over, left unfinished or is waiting
+            on something; `on_topic_only` only when the visitor is back on the
+            same topic.
+
+    AiDailyDigest:
+      type: object
+      required:
+        [
+          connection,
+          started_at,
+          ended_at,
+          procedure_key,
+          procedure_name,
+          intent_label,
+          slots,
+          outcome,
+          awaiting_answer,
+          handoff,
+          risk_flags,
+          last_ai_excerpt,
+        ]
+      description: |
+        One connection's summary as the AI keeps it (AI-02), built from the
+        conversation's state without a model on every turn and settled when the
+        connection closes.
+      properties:
+        connection:
+          type: object
+          required: [chat_id, thread_id]
+          properties:
+            chat_id: { type: string, description: The day (panel "Thread ID"). }
+            thread_id: { type: string, description: The connection (panel "Chat ID"). }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+        procedure_key:
+          type: string
+          nullable: true
+          description: The procedure the AI ran (today the skill's id).
+        procedure_name: { type: string, nullable: true }
+        intent_label: { type: string, nullable: true }
+        slots:
+          type: object
+          description: What the AI collected, by slot name. Personal data.
+          additionalProperties:
+            type: object
+            required: [display, status]
+            properties:
+              display: { type: string }
+              status: { type: string, description: "`filled`, `carried`, …" }
+        outcome:
+          type: string
+          nullable: true
+          enum: [resolved, resolved_waiting, handed_off, abandoned, no_ai, null]
+          description: How it ended; null while it is open and nothing is settled.
+        awaiting_answer:
+          type: boolean
+          description: The AI's newest message was a question the visitor has not answered.
+        handoff:
+          type: object
+          nullable: true
+          required: [id, team_id, team_name, reason_codes, agent_replied]
+          properties:
+            id: { type: string, nullable: true }
+            team_id: { type: string, nullable: true }
+            team_name: { type: string, nullable: true }
+            reason_codes:
+              type: array
+              items: { type: string }
+            agent_replied: { type: boolean }
+        risk_flags:
+          type: array
+          items: { type: string }
+        last_ai_excerpt:
+          type: string
+          nullable: true
+          maxLength: 200
 
     AiHandoffSettings:
       type: object

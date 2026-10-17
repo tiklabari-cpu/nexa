@@ -1,4 +1,4 @@
-import type { AnswerLength } from '@siyahtus/types';
+import type { AnswerLength, DailyMemorySettings } from '@siyahtus/types';
 
 export type { AnswerLength };
 
@@ -39,6 +39,8 @@ export interface AiAgent {
   answer_length: AnswerLength | null;
   /** Seconds the agent waits for the visitor to stop typing; null is the workspace default. */
   batch_window_seconds: number | null;
+  /** Same-day memory (tm 294 · AI-02); absent reads as the default. */
+  daily_memory?: DailyMemorySettings;
   active: boolean;
   skills_count: number;
 }

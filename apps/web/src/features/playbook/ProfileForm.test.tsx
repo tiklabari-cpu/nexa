@@ -123,6 +123,58 @@ describe('ProfileForm', () => {
     );
   });
 
+  it('shows same-day memory on, recalling an unresolved topic, when the agent never set it (tm 294)', () => {
+    renderForm();
+
+    expect(
+      screen.getByLabelText("Remember the visitor's earlier conversations today"),
+    ).toBeChecked();
+    const recall = screen.getByLabelText('Bring the earlier conversation up');
+    expect(recall).toHaveValue('auto_if_unresolved');
+    expect(Array.from(recall.querySelectorAll('option')).map((o) => o.value)).toEqual([
+      'auto_if_unresolved',
+      'on_topic_only',
+    ]);
+  });
+
+  it('PATCHes same-day memory only when it changed, both fields together (tm 294)', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.selectOptions(
+      screen.getByLabelText('Bring the earlier conversation up'),
+      'on_topic_only',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(api.patch).toHaveBeenLastCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({ daily_memory: { enabled: true, recall: 'on_topic_only' } }),
+    );
+  });
+
+  it('leaves same-day memory out of a save that did not touch it (tm 294)', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.selectOptions(screen.getByLabelText('Answer length'), 'long');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(api.patch.mock.calls.at(-1)![1]).not.toHaveProperty('daily_memory');
+  });
+
+  it('turns same-day memory off and greys the recall choice out (tm 294)', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, daily_memory: { enabled: true, recall: 'on_topic_only' } });
+
+    await user.click(screen.getByLabelText("Remember the visitor's earlier conversations today"));
+    expect(screen.getByLabelText('Bring the earlier conversation up')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({ daily_memory: { enabled: false, recall: 'on_topic_only' } }),
+    );
+  });
+
   it('reflects the name in the live preview as it is typed', async () => {
     const user = userEvent.setup();
     renderForm();

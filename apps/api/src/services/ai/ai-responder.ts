@@ -37,7 +37,10 @@
  * **The turn reads the conversation (tm 292.3 · AI-01).** With the state and
  * the configuration (`AiConfigSource`, ADR-14b §2.6) the same read loads the
  * connection's transcript (`context-loader.ts`): what came before the job's
- * message is the turn's history, which the model reads.
+ * message is the turn's history, which the model reads. On the connection's
+ * first turn it also loads the summaries of the day's earlier connections
+ * (tm 294 · AI-02, `daily-memory.ts`), cut to what the identity the visitor's
+ * job carries allows (K4).
  *
  * **One answer to what the visitor said, not one per message (tm 292.4 ·
  * AI-01 §4–§7).** A visitor who writes "hi", "my deposit", "has not arrived"
@@ -75,7 +78,7 @@
  * job, not the request: its tenant, its logger, a runner over the server's
  * pool, the two gates, and the job's mark and fence for the reply.
  */
-import { AI_BOT_ID, parseEventId } from '@siyahtus/types';
+import { AI_BOT_ID, DEFAULT_DAILY_MEMORY, parseEventId, type IdentityTrust } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
@@ -90,6 +93,7 @@ import {
   type HistoryBudget,
 } from './conversation/context-loader.js';
 import type { ConversationEngine } from './conversation/conversation-engine.js';
+import { loadEarlierToday, type EarlierToday } from './conversation/daily-memory.js';
 import {
   AiConversationConflictError,
   loadConversation,
@@ -105,6 +109,7 @@ import {
   toTurnState,
   tookTurn,
   turnStatePatch,
+  turnsTaken,
   type TurnHistory,
   type TurnResult,
   type TurnState,
@@ -284,7 +289,9 @@ export class AiResponder {
         // said, read together; then the turn, over a runner rather than one
         // transaction around it — the engine opens a short one per read so the
         // model call waits in none.
-        const loaded = await turn.withTenant((tx) => this.#read(tx, ref, trigger));
+        const loaded = await turn.withTenant((tx) =>
+          this.#read(tx, ref, trigger, turn.identityTrust),
+        );
         if (loaded === 'answered') {
           // Answered while this turn waited — by another engine on the same
           // connection, which owns the reply.
@@ -308,6 +315,7 @@ export class AiResponder {
             text: loaded.context?.newCustomerText || message,
             ...(history ? { history } : {}),
             ...(loaded.through !== null ? { throughSeq: loaded.through } : {}),
+            ...(loaded.earlierToday ? { earlierToday: loaded.earlierToday } : {}),
           },
           {
             tenant,
@@ -626,11 +634,16 @@ export class AiResponder {
    * (`through` is the newest); what came before is history — answered, or left
    * by an earlier turn to a person, and the model reads it either way. A
    * message that is not on the connection (`trigger` null) is answered alone.
+   *
+   * On the connection's first turn the day's earlier connections come too
+   * (tm 294 · AI-02), cut to what the visitor's identity allows (`trust`) —
+   * unless the agent turned its same-day memory off.
    */
   async #read(
     tx: TenantClient,
     ref: ConnectionRef,
     trigger: number | null,
+    trust: IdentityTrust,
   ): Promise<TurnRead | 'answered' | 'not_ai'> {
     if (!aiMayAnswer(await readAiMode(tx, ref))) return 'not_ai';
     const conversation = await loadConversation(tx, ref);
@@ -640,7 +653,9 @@ export class AiResponder {
       aiAgentId: null,
       pinnedVersionId: conversation?.configVersionId ?? null,
     });
-    if (trigger === null) return { conversation, state, config, context: null, through: null };
+    if (trigger === null) {
+      return { conversation, state, config, context: null, through: null, earlierToday: null };
+    }
     const newest = await newestVisitorEvent(tx, ref);
     const through = Math.max(trigger, newest?.sequence ?? trigger);
     const context = await loadConnectionContext(tx, ref, state, {
@@ -648,7 +663,12 @@ export class AiResponder {
       processedThrough: trigger - 1,
       budget: this.#historyBudget,
     });
-    return { conversation, state, config, context, through };
+    const memory = config.pkg.dailyMemory ?? DEFAULT_DAILY_MEMORY;
+    const earlierToday =
+      memory.enabled && turnsTaken(state) === 0
+        ? await loadEarlierToday(tx, ref, { trust, recall: memory.recall })
+        : null;
+    return { conversation, state, config, context, through, earlierToday };
   }
 
   async #transfer(turn: VisitorTurn, groupName: string): Promise<void> {
@@ -687,6 +707,8 @@ interface TurnRead {
   context: ConnectionContext | null;
   /** The visitor's newest message the turn answers; null when it answers the job's alone. */
   through: number | null;
+  /** The day's earlier connections, on the connection's first turn (tm 294). */
+  earlierToday: EarlierToday | null;
 }
 
 /**

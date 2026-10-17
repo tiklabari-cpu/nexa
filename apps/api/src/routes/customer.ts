@@ -16,6 +16,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
+  isIdentityTrust,
   REFERRER_MAX_LENGTH,
   SALES_TRACKER_EXTERNAL_ORDER_ID_MAX_LENGTH,
   SALES_TRACKER_EXTERNAL_ORDER_ID_RE,
@@ -392,7 +393,7 @@ export default async function customerRoutes(
       });
       const row = await tx.aiJob.findUnique({
         where: { id: job.id },
-        select: { pageUrl: true, openedConnection: true },
+        select: { pageUrl: true, openedConnection: true, identityTrust: true },
       });
       return event && row ? { text: event.text, ...row } : null;
     });
@@ -440,6 +441,9 @@ export default async function customerRoutes(
       requireAiBudget: () => app.requireAiBudget(tenant),
       replyProperties: run.replyProperties,
       replyOutbox: run.replyOutbox,
+      // `ai_jobs_identity_trust_check` holds the column to `IDENTITY_TRUSTS`;
+      // a job that recorded none is unproven.
+      identityTrust: isIdentityTrust(message.identityTrust) ? message.identityTrust : 'claimed',
     };
 
     if (message.text?.trim()) {
@@ -971,6 +975,9 @@ export default async function customerRoutes(
         outbox: aiJobOutbox({
           requestId: request.id,
           pageUrl: body.url ?? null,
+          // Who wrote it, as their token says (tm 294 · K4): what the AI may
+          // recall of their day depends on it.
+          identityTrust: principal.identity ?? null,
           onEnqueued: (job) => {
             enqueued.job = job;
           },

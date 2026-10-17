@@ -56,6 +56,11 @@ export interface AnswerPromptInput {
   answerIn: PersonaLanguage | null;
   /** The conversation before `message` (`TurnHistory`); none on a first message. */
   history?: AnswerHistory;
+  /**
+   * What the model is told of the day's earlier connections (tm 294 · AI-02),
+   * already cut to the visitor's identity and worded by `daily-memory.ts`.
+   */
+  earlierToday?: readonly string[];
 }
 
 /** The part of a turn's history the prompt carries. */
@@ -87,6 +92,7 @@ export function buildAnswerPrompt(
       ? `Reply in this language: ${grounding.answerIn}.`
       : 'Reply in the language the customer wrote in.',
     'Write plain text: no markdown, no links the passages do not contain.',
+    ...(input.earlierToday ?? []),
     ...historyLines(input.history),
     GROUNDING_MARKER,
     JSON.stringify(grounding),

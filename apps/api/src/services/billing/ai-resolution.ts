@@ -1,0 +1,147 @@
+/**
+ * What an "AI resolution" is — ADR-09 as narrowed by ADR-09a
+ * (`docs/adr/ai-resolution-handoff.md`, owner decision K10 · tm 293.4).
+ *
+ * A thread is one when it closed with
+ *
+ *   (a) no `author_type = 'agent'` event in it (ADR-09, unchanged), and
+ *   (b) no automatic hand-off: no `chat_transferred` system event whose reason
+ *       is one of {@link AUTOMATIC_HANDOFF_REASONS}. Condition (b) applies only
+ *       to threads closed at or after {@link ADR_09A_EFFECTIVE_AT}.
+ *
+ * Every surface reads this module and nothing else: the billing counter
+ * (`usage_records`, `metric = 'ai_resolutions'`) at close, the inbox's
+ * `ai_solved` view (and MCP `list_chats` through it), and Reports "Automated"
+ * — Overview, Breakdown, the AI Agent report's `resolutions`, CSV and the
+ * scheduled reports, which Home, Copilot BI and the command palette read in
+ * turn. The predicate has two spellings because Prisma cannot take raw SQL
+ * inside a `where`: {@link aiResolvedSql} for every aggregate and for the
+ * close-time check, {@link aiResolvedThreadWhere} for the view. They sit next to
+ * each other and one test (`ai-resolution-handoff.test.ts`) holds them to the
+ * same set of threads; a third spelling anywhere else is how the report and the
+ * invoice start to disagree.
+ */
+import { Prisma } from '@prisma/client';
+import type { TransferReason } from '@siyahtus/types';
+import type { TenantClient } from '../../lib/tenant.js';
+
+/**
+ * When condition (b) starts to count: the first billing period after tm 293.4
+ * is deployed — the start of a UTC month, because a period is a UTC month
+ * (`currentPeriod`) and each period is counted under one definition, never
+ * switched halfway through. Threads that closed earlier keep ADR-09's reading
+ * everywhere, so a past period's report still matches the invoice it produced;
+ * usage records already written and invoices already issued are not
+ * recomputed.
+ *
+ * Assumption (PLAN §D262): tm 293.4 is deployed in October 2026. Deployed in
+ * November or later, this moves to the first of the following month in the
+ * same change — a value in the past would switch the rule mid-period.
+ *
+ * Production only ever uses this value. The functions below take the moment as
+ * a parameter so a test can put its own threads on either side of it.
+ */
+export const ADR_09A_EFFECTIVE_AT = new Date('2026-11-01T00:00:00.000Z');
+
+/**
+ * The `chat_transferred` reasons that are a hand-off rather than a transfer
+ * between people: the AI's (`ai-responder.ts`) and a rule bot's
+ * (`rule-bot-responder.ts`). `manual`, `routing` and `agent_disconnected` move a
+ * conversation between agents and leave the predicate alone. An automatic
+ * hand-over added later (the stall watchdog, AI-11) joins this list in the same
+ * change that writes it.
+ */
+export const AUTOMATIC_HANDOFF_REASONS = [
+  'ai_handoff',
+  'bot_handoff',
+] as const satisfies readonly TransferReason[];
+
+/** (a) A person wrote in the thread — an internal note included. */
+const AGENT_WROTE = Prisma.sql`EXISTS (
+  SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent'
+)`;
+
+/**
+ * (b) The thread was handed off automatically, at any point. "Once handed off,
+ * never an AI resolution" (ADR-09a §2.5): the AI being given the conversation
+ * back later does not undo it, so this is one existence check, not a question
+ * about what happened after the last hand-off.
+ *
+ * `author_type = 'system'` because the server is the only writer of a transfer
+ * event (`ChatService.transfer`); a message whose properties merely read like
+ * one cannot take a thread off the invoice. Looked up by `thread_id` (the
+ * `(thread_id, created_at)` index), like {@link AGENT_WROTE}.
+ */
+const HANDED_OFF = Prisma.sql`EXISTS (
+  SELECT 1 FROM events e
+  WHERE e.thread_id = t.id
+    AND e.author_type = 'system'
+    AND e.properties ->> 'system_event' = 'chat_transferred'
+    AND e.properties ->> 'reason' = ANY(${[...AUTOMATIC_HANDOFF_REASONS]}::text[])
+)`;
+
+/**
+ * The predicate over a `threads` row aliased `t`, closed included — true only
+ * for a closed thread the AI resolved.
+ *
+ * Never NULL, so `NOT (…)` is its exact complement among closed threads: the
+ * report's manual / assisted / automated split relies on that to keep
+ * `manual + assisted + automated === closed`. It holds because a closed thread
+ * always has a `closed_at` (`threads_closed_consistency_check`). The time test
+ * comes first so the hand-off lookup runs only for threads it can decide.
+ */
+export function aiResolvedSql(effectiveAt: Date = ADR_09A_EFFECTIVE_AT): Prisma.Sql {
+  return Prisma.sql`(
+    NOT t.active
+    AND NOT ${AGENT_WROTE}
+    AND (t.closed_at < ${effectiveAt}::timestamptz OR NOT ${HANDED_OFF})
+  )`;
+}
+
+/**
+ * {@link aiResolvedSql} as a Prisma filter on one thread, for the inbox's
+ * `ai_solved` view. Same three conditions.
+ */
+export function aiResolvedThreadWhere(
+  effectiveAt: Date = ADR_09A_EFFECTIVE_AT,
+): Prisma.ThreadWhereInput {
+  return {
+    active: false,
+    events: { none: { authorType: 'agent' } },
+    OR: [
+      { closedAt: { lt: effectiveAt } },
+      {
+        events: {
+          none: {
+            authorType: 'system',
+            properties: { path: ['system_event'], equals: 'chat_transferred' },
+            OR: AUTOMATIC_HANDOFF_REASONS.map((reason) => ({
+              properties: { path: ['reason'], equals: reason },
+            })),
+          },
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Did this thread resolve without a human? Asked at close, in the transaction
+ * that closes it (after `active`/`closed_at` are written), by running
+ * {@link aiResolvedSql} on the row — so the counter cannot read the thread
+ * differently from the reports that later count it.
+ *
+ * Asked at close rather than tracked incrementally: an incremental flag would
+ * have to be un-set correctly every time an agent joins late, and getting that
+ * wrong bills the customer for work a person did.
+ */
+export async function threadWasAiResolved(
+  tx: TenantClient,
+  threadId: string,
+  effectiveAt: Date = ADR_09A_EFFECTIVE_AT,
+): Promise<boolean> {
+  const rows = await tx.$queryRaw<Array<{ resolved: boolean }>>`
+    SELECT ${aiResolvedSql(effectiveAt)} AS resolved FROM threads t WHERE t.id = ${threadId}
+  `;
+  return rows[0]?.resolved === true;
+}

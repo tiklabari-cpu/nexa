@@ -52,7 +52,8 @@ import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import { roleAtLeast, type Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
-import { recordAiResolution, threadWasAiResolved } from '../billing/metering.js';
+import { recordAiResolution } from '../billing/metering.js';
+import { aiResolvedThreadWhere, threadWasAiResolved } from '../billing/ai-resolution.js';
 import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import {
@@ -357,8 +358,17 @@ export class ChatService {
      */
     private readonly publisher?: RealtimePublisher,
     private readonly routing: RoutingService = new RoutingService(),
-    /** ADR-13 — overage price and monthly allowance, from env. */
-    private readonly billing: { aiOverageCents: number; aiIncluded: number } = {
+    /**
+     * ADR-13 — overage price and monthly allowance, from env. `adr09aEffectiveAt`
+     * is a test's own moment for the counter's hand-off rule (ADR-09a); left
+     * out — as every route and job leaves it — the counter reads the one
+     * constant the reports read (`ai-resolution.ts`).
+     */
+    private readonly billing: {
+      aiOverageCents: number;
+      aiIncluded: number;
+      adr09aEffectiveAt?: Date;
+    } = {
       aiOverageCents: 50,
       aiIncluded: 200,
     },
@@ -2210,10 +2220,11 @@ export class ChatService {
       where: { id: chat.id },
       include: chatInclude,
     });
-    // ADR-09: a thread that closes with no agent-authored event resolved without
-    // a human. Counted here, in the same transaction that closes it, so the
-    // billing figure and the conversation can never disagree.
-    if (await threadWasAiResolved(tx, thread.id)) {
+    // ADR-09 / ADR-09a: a thread that closes with no agent-authored event and
+    // no automatic hand-off resolved without a human. Counted here, in the same
+    // transaction that closes it, so the billing figure and the conversation can
+    // never disagree.
+    if (await threadWasAiResolved(tx, thread.id, this.billing.adr09aEffectiveAt)) {
       await recordAiResolution(tx, tenant, this.billing.aiOverageCents, this.billing.aiIncluded);
     }
 
@@ -4062,15 +4073,12 @@ function viewFilter(view: ChatListOptions['view'], actorId: string): Record<stri
         },
       };
     case 'ai_solved':
-      // AI resolutions: closed with no agent-authored event. This is ADR-09's
-      // exact predicate — the same line Reports "Automated" and the invoice
-      // read (reports.ts `automated = NOT active AND NOT agent-event`). The
-      // Solved list and the billing counter must never disagree, so this must
-      // not gain an extra condition (e.g. "has a bot event") the counter lacks.
-      return {
-        active: false,
-        threads: { some: { events: { none: { authorType: 'agent' } } } },
-      };
+      // AI resolutions: chats with a thread the AI resolved — ADR-09a's
+      // predicate, the one Reports "Automated" and the invoice read
+      // (`ai-resolution.ts`). The Solved list and the billing counter must
+      // never disagree, so the condition lives there and nowhere here: no extra
+      // clause (e.g. "has a bot event") the counter lacks.
+      return { active: false, threads: { some: aiResolvedThreadWhere() } };
     case 'all':
     default:
       return {};

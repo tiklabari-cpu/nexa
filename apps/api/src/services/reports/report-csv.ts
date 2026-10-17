@@ -39,6 +39,7 @@ import {
 } from '../../routes/reports-metrics.js';
 import { type CsvCell } from '../../routes/reports-export.js';
 import { reviewInsights, type ReviewInsight } from './review-insights.js';
+import { aiResolvedSql } from '../billing/ai-resolution.js';
 import { entitlementsForPlan } from '../billing/subscription-service.js';
 
 // ===========================================================================
@@ -49,10 +50,11 @@ import { entitlementsForPlan } from '../billing/subscription-service.js';
 // and can never drift — the same reason ADR-09 keeps a single automated query.
 // ===========================================================================
 
-/** A human wrote in the thread — ADR-09's line between automated and handled. */
-const AGENT_EVENT = Prisma.sql`EXISTS (
-  SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent'
-)`;
+/**
+ * The AI resolved this closed thread — ADR-09a's line between automated and
+ * handled, the invoice's own predicate (`ai-resolution.ts`), not a copy of it.
+ */
+const AI_RESOLVED = aiResolvedSql();
 
 /** A skill ran on the chat — what turns a handled case from manual to assisted. */
 const SKILL_RUN = Prisma.sql`EXISTS (
@@ -62,14 +64,17 @@ const SKILL_RUN = Prisma.sql`EXISTS (
 /**
  * The three-way split as `chats / closed / automated / assisted / manual`, for a
  * `GROUP BY` dimension (day, agent). The predicates are mutually exclusive and
- * cover all of closed, so manual + assisted + automated === closed in every row.
+ * cover all of closed, so manual + assisted + automated === closed in every row:
+ * everything closed the AI did not resolve is handled, and a thread handed off
+ * that nobody then wrote in (ADR-09a) is handled too — assisted when a skill
+ * ran on the chat, manual when none did.
  */
 export const SPLIT_COUNTS = Prisma.sql`
   count(*)                             AS chats,
   count(*) FILTER (WHERE NOT t.active) AS closed,
-  count(*) FILTER (WHERE NOT t.active AND NOT ${AGENT_EVENT})                  AS automated,
-  count(*) FILTER (WHERE NOT t.active AND ${AGENT_EVENT} AND ${SKILL_RUN})     AS assisted,
-  count(*) FILTER (WHERE NOT t.active AND ${AGENT_EVENT} AND NOT ${SKILL_RUN}) AS manual
+  count(*) FILTER (WHERE ${AI_RESOLVED})                                       AS automated,
+  count(*) FILTER (WHERE NOT t.active AND NOT ${AI_RESOLVED} AND ${SKILL_RUN})     AS assisted,
+  count(*) FILTER (WHERE NOT t.active AND NOT ${AI_RESOLVED} AND NOT ${SKILL_RUN}) AS manual
 `;
 
 interface WindowRow {
@@ -111,15 +116,15 @@ export async function windowTotals(
     SELECT
       count(*)                             AS total_chats,
       count(*) FILTER (WHERE NOT t.active) AS closed_chats,
-      count(*) FILTER (WHERE NOT t.active AND NOT ${AGENT_EVENT})                  AS automated,
-      count(*) FILTER (WHERE NOT t.active AND ${AGENT_EVENT} AND ${SKILL_RUN})     AS assisted,
-      count(*) FILTER (WHERE NOT t.active AND ${AGENT_EVENT} AND NOT ${SKILL_RUN}) AS manual,
+      count(*) FILTER (WHERE ${AI_RESOLVED})                                       AS automated,
+      count(*) FILTER (WHERE NOT t.active AND NOT ${AI_RESOLVED} AND ${SKILL_RUN})     AS assisted,
+      count(*) FILTER (WHERE NOT t.active AND NOT ${AI_RESOLVED} AND NOT ${SKILL_RUN}) AS manual,
       avg(EXTRACT(EPOCH FROM (t.first_response_at - t.created_at)))
         FILTER (WHERE t.first_response_at IS NOT NULL)   AS avg_first_response_seconds,
       avg(EXTRACT(EPOCH FROM (t.closed_at - t.created_at)))
         FILTER (WHERE t.closed_at IS NOT NULL)           AS avg_duration_seconds,
       avg(EXTRACT(EPOCH FROM (t.closed_at - t.created_at)))
-        FILTER (WHERE NOT t.active AND NOT ${AGENT_EVENT} AND t.closed_at IS NOT NULL)
+        FILTER (WHERE ${AI_RESOLVED} AND t.closed_at IS NOT NULL)
                                                          AS avg_automated_duration_seconds,
       coalesce(sum(EXTRACT(EPOCH FROM (t.closed_at - t.created_at)))
         FILTER (WHERE t.closed_at IS NOT NULL), 0)       AS total_duration_seconds

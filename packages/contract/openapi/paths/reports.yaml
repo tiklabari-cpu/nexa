@@ -1,7 +1,8 @@
 # Reports and billing.
 #
 # The "automated" figure here and the AI-resolution counter on the invoice are
-# the same query (ADR-09): a thread that closed with no agent-authored event.
+# the same query (ADR-09a): a thread that closed with no agent-authored event
+# and no automatic hand-off.
 # Two independent counters would drift, and the first person to notice would be
 # a customer disputing a bill.
 
@@ -73,7 +74,7 @@ aiAgent:
     operationId: getReportsAiAgent
     summary: AI Agent performance
     description: |
-      AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09,
+      AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09a,
       the invoice's number), the share of closed chats resolved without a human,
       hand-offs to a human, how many skills ran and the provider tokens those runs
       reported. Defaults to the last 30 days.

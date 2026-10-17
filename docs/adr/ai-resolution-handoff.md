@@ -5,7 +5,7 @@
 - **Durum:** Kabul edildi — sahip kararı **K10** ("AI'ın devrettiği ama ajanın hiç yazmadığı sohbetler 'AI çözümü' sayılıp faturalansın mı?" → **Hayır**, varsayılan onaylandı) ve **K27** (ADR başına bir görev) (`SiyahTus-Analiz/04-gerekceler-ve-sorular.md`, Karar kaydı). Fatura tanımı için **AI-25-S1** varsayılanı (F1'de fatura ADR-09 tanımında kalır).
 - **Değiştirdiği karar:** ADR-09 (PLAN.md §0) — lafzı aynen kalır, bu ek yüklemi bir şartla daraltır. ADR tablosunun satırı değişmedi.
 - **Bağlı görevler:** tm 293 AI-FIRST-AND-SILENCE (AI-11; alt görev 293.4 ADR09A-PREDICATE yüklemi uygular) · tm 320 AI-QUALITY-METRICS (AI-25) · tm 335 ARCHIVE-SCREEN (AR-01, `threads.handled_by`) · tm 336 ARCHIVE-FILTERS (AR-02, "AI çözdü" filtresi) · tm 304 AI-HANDOFF-CARD (AI-10, `ai_handoffs` tablosu).
-- **Kod değişikliği:** yok. Bu dosya yalnız kararı kayda geçirir; uygulamayı tm 293.4 yapar.
+- **Kod değişikliği:** bu dosyanın yazıldığı turda yok; uygulama tm 293.4'te (§4, PLAN §D262).
 
 ## 1. Bağlam
 
@@ -56,7 +56,15 @@ Sonuç: AI sohbeti insana devreder, oyuncu ajan yazmadan ayrılır, thread kapan
 - **Açık kalan (bu ekin kapsamı dışında, sahip kararı ister):** hem ajan hem bot olayı olmayan thread — AI kapalı bir çalışma alanında oyuncunun kuyrukta beklerken ayrıldığı sohbet — bugün de, bu ekten sonra da AI çözümü sayılır ve faturalanır. K10 yalnız devredilmiş thread'i sorar. Bu durumun sayaçtan çıkarılması bütün yüzeylerde birlikte, yeni bir ADR eki ile yapılır; tek bir yüzeye (ör. yalnız arşiv) eklenmez.
 - **Bu eki delen bir değişiklik** (yüklemin bir yüzeyde farklılaşması, geçmiş dönemlerin yeniden hesaplanması, faturanın AI-25 metriklerine geçmesi) yeni bir ADR eki ve sahip kararı ister.
 
-## 4. Kaynaklar
+## 4. Uygulama (tm 293.4 · 2026-10-17 · PLAN §D262)
+
+- Tek modül `apps/api/src/services/billing/ai-resolution.ts`: `ADR_09A_EFFECTIVE_AT = 2026-11-01T00:00:00Z`, `AUTOMATIC_HANDOFF_REASONS`, `aiResolvedSql()` (raporlar), `aiResolvedThreadWhere()` (`ai_solved` görünümü — Prisma süzgeci SQL alamadığı için), `threadWasAiResolved()` (kapanıştaki sayaç; aynı SQL parçasını satır üzerinde koşar). `report-csv.ts` `AGENT_EVENT` ve `metering.ts`'teki eski yardımcı kalktı.
+- Devir olayı yalnız sunucunun yazdığı olaydır: `author_type = 'system'`, `system_event = 'chat_transferred'`, `reason` listede. Yürürlük kapsayıcıdır (`closed_at >= ADR_09A_EFFECTIVE_AT`).
+- Raporun üçlü ayrımında devredilip kimsenin yazmadığı thread "handled" sayılır (skill çalıştıysa `assisted`, yoksa `manual`); `manual + assisted + automated === closed` korunur.
+- Testler kendi anlarını verir: `ChatService` `billing.adr09aEffectiveAt` (yalnız testler) ve thread'lerin `closed_at`'ini sabitin iki yanına taşıyan rapor testleri (`apps/api/test/integration/ai-resolution-handoff.test.ts`).
+- Varsayım: tm 293.4 Ekim 2026'da dağıtılır; daha geç dağıtılırsa sabit aynı değişiklikte sonraki ayın 1'ine alınır.
+
+## 5. Kaynaklar
 
 - `SiyahTus-Analiz/03-eklenebilecekler.md` — AI-11, AI-25, AR-02 satırları.
 - `SiyahTus-Analiz/04-gerekceler-ve-sorular.md` — Karar kaydı K10, K27; § AI-11 ("Kilitli kararla ilişkisi", soru 4), § AI-25 (AI-25-S1), § AR-02 (soru 2).

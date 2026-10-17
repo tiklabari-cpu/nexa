@@ -6830,7 +6830,7 @@ export interface paths {
     };
     /**
      * AI Agent performance
-     * @description AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09,
+     * @description AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09a,
      *     the invoice's number), the share of closed chats resolved without a human,
      *     hand-offs to a human, how many skills ran and the provider tokens those runs
      *     reported. Defaults to the last 30 days.
@@ -12246,8 +12246,10 @@ export interface components {
       period: string;
       ai_resolutions: {
         /**
-         * @description Threads that closed with no agent-authored event (ADR-09). The
-         *     same query backs the "automated" figure in reports.
+         * @description Threads that closed with no agent-authored event and, for
+         *     threads closed from 2026-11-01 on, no automatic hand-off by the
+         *     AI or a rule bot (ADR-09a). The same query backs the
+         *     "automated" figure in reports.
          */
         used: number;
         included: number;
@@ -12841,7 +12843,7 @@ export interface components {
     };
     /**
      * @description AI Agent performance for its own report tab (FR-MOD-07.4). `resolutions`
-     *     is ADR-09's figure — the same one the invoice's AI-resolution counter
+     *     is ADR-09a's figure — the same one the invoice's AI-resolution counter
      *     uses — so this surface never disagrees with the bill.
      */
     ReportsAiAgent: {
@@ -12863,7 +12865,10 @@ export interface components {
         transfers: number;
         skill_runs: number;
       };
-      /** @description Chats closed with no agent-authored event (ADR-09). */
+      /**
+       * @description Chats closed with no agent-authored event and no automatic hand-off
+       *     (ADR-09a) — a hand-off counts for threads closed from 2026-11-01 on.
+       */
       resolutions: number;
       /** @description Share of *closed* chats the AI resolved. Null when nothing closed. */
       resolution_rate?: number | null;
@@ -15899,8 +15904,9 @@ export interface operations {
          *     bounded by the heartbeat window · `archived` — closed ·
          *     `ai` — the AI agent is handling it (a bot has replied and no human
          *     has), kept out of the human queue · `ai_solved` — closed with no
-         *     human reply, i.e. an AI resolution (ADR-09, the same line billing
-         *     counts) · `all` — every chat the caller may see.
+         *     human reply and not handed off by the AI or a rule bot, i.e. an AI
+         *     resolution (ADR-09a, the same line billing counts) · `all` — every
+         *     chat the caller may see.
          */
         view?:
           'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
@@ -15953,7 +15959,7 @@ export interface operations {
              *     would also double the console's rail from seven requests to
              *     fourteen — the sidebar mounts one list per view.
              *
-             *     For `ai_solved` this is the AI-resolution count (ADR-09), so
+             *     For `ai_solved` this is the AI-resolution count (ADR-09a), so
              *     it is the same predicate the invoice meters. Counting the
              *     rows the browser happened to load instead — the console did,
              *     up to `limit` — is silently wrong from the 51st resolution

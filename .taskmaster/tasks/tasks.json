@@ -12453,7 +12453,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T13:21:13.853Z",
+        "updatedAt": "2026-10-17T13:23:53.861Z",
         "subtasks": [
           {
             "id": 1,
@@ -12501,13 +12501,13 @@
             "description": "ADR-09a yüklemi tek yardımcıda: faturalama sayacı, ai_solved, Reports Automated",
             "details": "XHIGH GEREKÇESİ: (2) para doğruluğu — faturaya giden ölçüm.",
             "testStrategy": "Fatura = rapor regresyonu.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "293.1"
             ],
             "parentId": "293",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-17T13:23:53.861Z"
           },
           {
             "id": 5,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T13:21:13.853Z",
+      "lastModified": "2026-10-17T13:23:53.862Z",
       "taskCount": 390,
       "completedCount": 291,
       "tags": [

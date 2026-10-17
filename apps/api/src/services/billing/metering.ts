@@ -1,11 +1,11 @@
 /**
  * Usage metering and trial state (ADR-09, ADR-10, ADR-13).
  *
- * The definition of an "AI resolution" lives here and nowhere else: a thread
- * that closed with no `author_type = 'agent'` event in it. Both billing and the
- * Reports "Automated" figure read this one function, because two counters that
- * are supposed to agree eventually will not, and the one that decides the
- * invoice is the wrong one to discover was drifting.
+ * What counts as an "AI resolution" is not decided here: `ai-resolution.ts`
+ * holds that one definition (ADR-09a), and billing, the inbox's Solved view and
+ * the Reports "Automated" figure all read it — two counters that are supposed
+ * to agree eventually will not, and the one that decides the invoice is the
+ * wrong one to discover was drifting. This module only records the count.
  */
 import { Prisma } from '@prisma/client';
 import { AI_RESOLUTION_PACK_SIZE } from '@siyahtus/types';
@@ -96,22 +96,6 @@ export interface UsageSummary {
 /** `yyyymm` for the current UTC month. */
 export function currentPeriod(now = new Date()): string {
   return `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-/**
- * Did this thread resolve without a human?
- *
- * Asked at close time rather than tracked incrementally: an incremental flag
- * would have to be un-set correctly every time an agent joins late, and getting
- * that wrong bills the customer for work a person did.
- */
-export async function threadWasAiResolved(tx: TenantClient, threadId: string): Promise<boolean> {
-  const rows = await tx.$queryRaw<Array<{ agent_events: bigint }>>`
-    SELECT count(*) AS agent_events
-    FROM events
-    WHERE thread_id = ${threadId} AND author_type = 'agent'
-  `;
-  return Number(rows[0]?.agent_events ?? 0) === 0;
 }
 
 /**

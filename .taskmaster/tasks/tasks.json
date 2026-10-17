@@ -12567,7 +12567,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T21:55:01.676Z",
+        "updatedAt": "2026-10-17T23:10:27.692Z",
         "subtasks": [
           {
             "id": 1,
@@ -12587,13 +12587,13 @@
             "description": "normalize-tr.ts + validators.ts (tutar, tarih/saat, evet/hayır, TXID/ağ, IBAN son 4) + ≥40 örnek",
             "details": "Saat dilimi localDayKey/tz ile.",
             "testStrategy": "Tablo güdümlü birim testleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "295.1"
             ],
             "parentId": "295",
             "priority": "high",
-            "updatedAt": "2026-10-17T21:55:01.676Z"
+            "updatedAt": "2026-10-17T23:10:27.692Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T21:55:01.677Z",
+      "lastModified": "2026-10-17T23:10:27.693Z",
       "taskCount": 390,
       "completedCount": 293,
       "tags": [

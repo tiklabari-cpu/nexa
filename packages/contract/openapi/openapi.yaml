@@ -316,6 +316,8 @@ paths:
     $ref: "./paths/playbook.yaml#/aiAgents"
   /ai-agents/{aiAgentId}:
     $ref: "./paths/playbook.yaml#/aiAgent"
+  /ai-agents/{aiAgentId}/handoff-settings:
+    $ref: "./paths/playbook.yaml#/aiAgentHandoffSettings"
   /skills:
     $ref: "./paths/playbook.yaml#/skills"
   /skills/compile:
@@ -1443,6 +1445,22 @@ components:
             `AI_BATCH_WINDOW_MS`).
         active: { type: boolean }
         skills_count: { type: integer }
+
+    AiHandoffSettings:
+      type: object
+      required: [ai_agent_id, assignment_mode]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        assignment_mode:
+          type: string
+          enum: [ai_first, parallel]
+          description: |
+            When a visitor's conversation gets a person (AI-11). `ai_first`:
+            the agent answers first — the conversation opens unassigned, in
+            the AI view rather than the unassigned or queued ones, and is routed
+            when the agent hands it over or a person takes it. `parallel`:
+            routing assigns it on open and the agent answers until a person
+            writes to the visitor. Default `parallel`.
 
     SkillStep:
       type: object

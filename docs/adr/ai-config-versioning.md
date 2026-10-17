@@ -38,6 +38,7 @@ Sorun şu: AI-03 (prosedür), AI-07 (talimat), AI-08 (koruma), AI-09/12 (devir),
 - Platformun kilitli G1–G19 koruma kataloğu (tm 301) — kodda durur, dağıtımla değişir. Paket yalnız hangi katalog sürümüyle derlendiğini kaydeder (`guardrail_catalog_version`).
 - **Copilot** — ajan-yüzlüdür, oyuncuya gitmez. Tek depodaki `audiences @> '{copilot}'` kaynakları taslak görünümünden okur (§2.8 madde 5).
 - **İnsan yönlendirmesi** (AU-01) `handoff_routes`'u canlı okur; sürümlenen yalnız AI devir hedefi çözümüdür (§2.12, tm 307).
+- **Atama modu** (`ai_handoff_settings.assignment_mode`, "Önce AI / Paralel", tm 293.2 · §D260). Bağlantı açılırken canlı okunur. O anda sabitlenecek bir konuşma yoktur ve sorulan şey insanın ne zaman yönlendirileceğidir. Pakete girmez; tablonun tm 303'te gelen alanları (tetikleyiciler, mesajlar) girer.
 - Yardım merkezi makalelerinin (`kb_articles`) widget yayın durumu. Makale AI'a bağlıysa AI'ın gördüğü hâli bilgi parçası olarak sürümlenir (tm 309).
 - **Kayıtlar:** `ai_decision_logs`, `ai_usage_events`, `ai_guardrail_hits`, `ai_conversations`, `skill_runs`. Bunlar yapılandırma değil, sürüme **atıf yapan** satırlardır.
 - **Meta alanlar.** AI davranışını değiştirmeyen alanlar pakete girmez ve taslak revizyonunu artırmaz: `owner_id`, `reviewed_at`, `review_interval_days`, `created_by`/`updated_by`. Değişiklik geçmişine (AI-21) yine de düşerler. `valid_until` davranışı değiştirir; pakete girer ve turda o anki saatle değerlendirilir.

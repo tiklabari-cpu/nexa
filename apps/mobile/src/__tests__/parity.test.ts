@@ -922,7 +922,11 @@ describe('module parity matrix — what is still owed', () => {
       // links an admin confirms between them, read and set in the web panel's
       // Customers page. The app has no customer profile screen; nothing here
       // re-scopes.
-      contractEndpoints: 234,
+      // 234 -> 235 with `/ai-agents/{aiAgentId}/handoff-settings` (tm 293.2) —
+      // whether the AI agent answers a visitor before anyone is assigned
+      // ("Önce AI"), set by an admin with the rest of the agent's settings in
+      // the web panel. The app configures no AI agent; nothing here re-scopes.
+      contractEndpoints: 235,
       scopeBoundaries: 1,
     });
   });

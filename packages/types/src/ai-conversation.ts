@@ -5,7 +5,8 @@
  * API's state store (`services/ai/conversation/state-store.ts`) and the engine
  * tasks that give each column its logic (#293 the mode, #294 the outcome, #296
  * the step). The mode is also kept on the connection itself, `threads.ai_mode`
- * (`20261017100000_thread_ai_mode`), which the same list holds.
+ * (`20261017100000_thread_ai_mode`), which the same list holds. When a person
+ * is assigned at all is the AI agent's `assignment_mode` (tm 293.2).
  *
  * One row per connection (panel "Chat ID" = `thread_id`; its day container,
  * panel "Thread ID", is `chat_id` — K1=A). It is a record of where the AI is in
@@ -51,6 +52,27 @@ export const AI_MODE_REASONS = [
   'ai_failure',
 ] as const;
 export type AiModeReason = (typeof AI_MODE_REASONS)[number];
+
+/**
+ * When a person is assigned to a visitor's connection (tm 293.2 · AI-11 §3,
+ * §7; owner decision K9) — `ai_handoff_settings.assignment_mode`, one per AI
+ * agent:
+ *
+ *   - `ai_first` — the AI answers first: the connection opens unassigned and
+ *                  outside the queue, in `ai` mode, and is routed to a person
+ *                  only when the AI hands it over (or a person takes it).
+ *   - `parallel` — routing assigns the connection when it opens, as it always
+ *                  has; the AI answers until a person writes to the player.
+ */
+export const AI_ASSIGNMENT_MODES = ['ai_first', 'parallel'] as const;
+export type AiAssignmentMode = (typeof AI_ASSIGNMENT_MODES)[number];
+
+/**
+ * An AI agent with no settings row. `parallel` — today's behaviour — until
+ * the stalled-conversation watchdog (tm 293.6) gives an unassigned AI
+ * conversation its way back to a person.
+ */
+export const DEFAULT_AI_ASSIGNMENT_MODE: AiAssignmentMode = 'parallel';
 
 /**
  * Where the active procedure step stands (AI-03). Null on the row when no

@@ -170,6 +170,18 @@ export class RoutingService {
   }
 
   /**
+   * The team a new conversation belongs to, with nobody chosen in it: the
+   * first step of `route()` alone — the rules, the fallback rule, the only
+   * team. For a connection the AI answers first (tm 293.2 · `ai-first.ts`):
+   * that team sees it while nobody is assigned, and `route()` runs when it
+   * leaves the AI. Writes nothing, so no `last_assigned_at` moves either.
+   */
+  async team(tx: TenantClient, licenseId: bigint, context: RoutingContext = {}): Promise<bigint[]> {
+    const selection = await this.#selectGroup(tx, licenseId, context);
+    return selection ? [selection.groupId] : [];
+  }
+
+  /**
    * Give a returning member's new connection back to the agent who had their
    * earlier one that day (ID-02-S5), if that agent can take a chat right now.
    *

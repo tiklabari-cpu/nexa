@@ -65,6 +65,7 @@ import {
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import { aiModeNoteText, writeAiMode, type AiModeChange, type AiModeRequest } from './ai-mode.js';
+import { opensAiFirst } from './ai-first.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
 import {
@@ -149,6 +150,13 @@ export interface ConnectionInput {
   event: NewEventInput;
   /** Where the visitor wrote from, for the routing rules of a connection it opens. */
   routing?: RoutingContext;
+  /**
+   * The AI is asked to answer the message — the widget's path, whose `outbox`
+   * writes its job. Only then may a connection it opens open AI-first (tm
+   * 293.2): a channel message no AI turn follows is routed on open, or nobody
+   * would ever answer it.
+   */
+  aiAnswers?: boolean;
   /**
    * The request's audit context. A connection the message opens under the
    * day's chat is recorded against it (`chat.connection_opened`); a rollover
@@ -239,6 +247,11 @@ interface ConnectionRoute {
   queuePosition: number | null;
   /** The one team the connection went to — `threads.group_id` (`connectionGroup`). */
   groupId: bigint | null;
+  /**
+   * Opened for the AI to answer first (tm 293.2 · `ai-first.ts`): nobody
+   * assigned, nothing queued, the connection in `ai` mode.
+   */
+  aiFirst?: true;
 }
 
 /** The line a further connection opens with, if any — how the transcript marks where it begins. */
@@ -863,6 +876,34 @@ export class ChatService {
   }
 
   /**
+   * Who a connection a visitor's message opens goes to: nobody yet when the AI
+   * answers first (tm 293.2 · K9, `ai-first.ts`), else `route` — the routing
+   * this kind of opening has always had (a new chat's, or a same-day return's).
+   *
+   * AI-first, the connection keeps the team the routing rules pick for it —
+   * its access is written as on any open, so that team's agents see it under
+   * the AI view — but no agent is chosen and nothing is queued: no concurrent
+   * limit is spent, the drain does not hand it out, and `last_assigned_at`
+   * does not move. It is routed when it leaves the AI (`#routeHandover`).
+   */
+  async #routeVisitor(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: ConnectionInput,
+    route: () => Promise<ConnectionRoute>,
+  ): Promise<ConnectionRoute> {
+    if (!input.aiAnswers || !(await opensAiFirst(tx))) return route();
+    const groupIds = await this.routing.team(tx, tenant.licenseId, input.routing ?? {});
+    return {
+      groupIds,
+      assigneeId: null,
+      queuePosition: null,
+      groupId: connectionGroup(groupIds),
+      aiFirst: true,
+    };
+  }
+
+  /**
    * Would a message from this visitor, sent now, open a connection rather than
    * continue one (ID-02)? Asked before anything is written, because what
    * screens an opening message — the spam filter, the brand's pre-chat form —
@@ -1081,7 +1122,10 @@ export class ChatService {
       if (dayChat) {
         const { threadId } = await this.#openFurtherConnection(tx, tenant, dayChat, {
           openedVia,
-          route: () => this.#routeReturn(tx, tenant, dayChat, input.routing),
+          route: () =>
+            this.#routeVisitor(tx, tenant, input, () =>
+              this.#routeReturn(tx, tenant, dayChat, input.routing),
+            ),
           // For the agents only: the visitor is simply talking, and a line
           // telling them they came back would be the product narrating them to
           // themselves. Before the message, so the connection reads in the
@@ -1113,11 +1157,9 @@ export class ChatService {
       const created = await this.#createChatWithThread(tx, {
         licenseId: tenant.licenseId,
         customerId: input.customerId,
-        ...(await this.#routeNewChat(tx, tenant, {
-          assignToMe: false,
-          actorId,
-          routing: input.routing,
-        })),
+        ...(await this.#routeVisitor(tx, tenant, input, () =>
+          this.#routeNewChat(tx, tenant, { assignToMe: false, actorId, routing: input.routing }),
+        )),
         day,
         openedVia,
       });
@@ -1216,6 +1258,7 @@ export class ChatService {
         groupId: route.groupId,
         openedVia: opening.openedVia,
         ...(route.queuePosition != null ? { queuePosition: route.queuePosition, queuedAt } : {}),
+        ...(route.aiFirst ? { aiMode: 'ai' } : {}),
       },
     });
     if (route.queuePosition != null) {
@@ -1373,6 +1416,7 @@ export class ChatService {
     // could then fail to read would be worse than announcing it a moment late.
     await this.#announceEvent(tenant, result);
     if (result.mode?.note) await this.#announceEvent(tenant, result.mode.note);
+    await this.#announceHandover(tenant, result.mode?.assigned ?? null);
     return {
       event: result.event,
       replayed: false,
@@ -1386,20 +1430,30 @@ export class ChatService {
    * had not taken part, when there is nothing for anyone to notice: a person
    * answering a connection the AI never spoke in is how every chat used to go.
    *
-   * Returns the change and the line to announce after commit, or null when
-   * there was no change to make.
+   * A connection that leaves the AI with nobody assigned and nothing queued —
+   * one opened AI-first (tm 293.2) — is routed to a person here, in the same
+   * transaction (`#routeHandover`).
+   *
+   * Returns the change, the line to announce after commit and the assignment
+   * the hand-over made, or null when there was no change to make.
    */
   async #changeAiMode(
     tx: TenantClient,
     tenant: TenantContext,
-    chat: { id: string } & AudienceSource,
+    chat: ChatRow,
     threadId: string,
     by: string,
     request: AiModeRequest,
-  ): Promise<{ change: AiModeChange; note: AnnouncedEvent | null } | null> {
+  ): Promise<{
+    change: AiModeChange;
+    note: AnnouncedEvent | null;
+    assigned: DrainedAssignment | null;
+  } | null> {
     const change = await writeAiMode(tx, { chatId: chat.id, threadId }, { ...request, by });
     if (!change) return null;
-    if (change.from === null) return { change, note: null };
+    if (change.from === null) return { change, note: null, assigned: null };
+    const assigned =
+      change.to === 'human' ? await this.#routeHandover(tx, tenant, chat, threadId, change) : null;
     const event = await this.#appendEvent(tx, {
       licenseId: tenant.licenseId,
       chatId: chat.id,
@@ -1418,7 +1472,139 @@ export class ChatService {
         },
       },
     });
-    return { change, note: { event, recipients: 'agents', audience: this.#audienceFor(chat) } };
+    return {
+      change,
+      note: { event, recipients: 'agents', audience: this.#audienceFor(chat) },
+      assigned,
+    };
+  }
+
+  /**
+   * Route a connection to a person at the moment it leaves the AI (tm 293.2 ·
+   * K9: "atama devir anında"). Only a connection that is still nobody's — no
+   * assignee, not queued — is touched: one opened AI-first. Every other one
+   * was routed when it opened, or the change itself just routed it (a
+   * takeover seats the supervisor, a hand-off to a named agent seats them, a
+   * transfer of a queued connection keeps its place).
+   *
+   *   - **An agent wrote to the player** (`agent_message`, AI-11-S2): they
+   *     took it, so it is theirs — whatever their load, as a chat they start
+   *     for themselves is.
+   *   - **Handed to a team** (a transfer, the AI's or a rule bot's hand-off):
+   *     someone in that team, by today's routing — its fallback team and the
+   *     queue included (`route()` with the team requested).
+   *   - **Nobody named a team** (a rule bot answered; the watchdog, tm 293.6):
+   *     routed as the connection would have been on open — the agent the
+   *     member had earlier today if they can take it now (ID-02-S5), else
+   *     `route()` in the team the rules gave it then.
+   *
+   * `route()` stands in for AI-12's hand-over target (tm 307). A queued
+   * connection's wait starts here, so in AI-first the queue reports count from
+   * the hand-over (RP-02/04). The team request carries no expertise
+   * requirement — the drain has the same limit (`routing-service.ts`).
+   *
+   * Returns the assignment to announce after commit; null when nobody was
+   * assigned (it waits in the queue, or the workspace has no team).
+   */
+  async #routeHandover(
+    tx: TenantClient,
+    tenant: TenantContext,
+    chat: ChatRow,
+    threadId: string,
+    change: AiModeChange,
+  ): Promise<DrainedAssignment | null> {
+    // Read after the change's own writes, under the row lock `writeAiMode` took.
+    const thread = await tx.thread.findUnique({
+      where: { id: threadId },
+      select: { assigneeId: true, queuePosition: true, groupId: true },
+    });
+    if (!thread || thread.assigneeId !== null || thread.queuePosition !== null) return null;
+
+    const inTeam: RoutingContext =
+      thread.groupId !== null ? { requestedGroupId: thread.groupId } : {};
+    let route: ConnectionRoute;
+    if (change.reason === 'agent_message') {
+      route = { groupIds: [], assigneeId: change.by, queuePosition: null, groupId: thread.groupId };
+      // As `route()` records an assignment, so the longest-waiting tie-break stays honest.
+      await tx.agentMembership.updateMany({
+        where: { licenseId: tenant.licenseId, agentId: change.by },
+        data: { lastAssignedAt: new Date() },
+      });
+    } else if (
+      change.reason === 'transfer' ||
+      change.reason === 'ai_handoff' ||
+      change.reason === 'bot_handoff'
+    ) {
+      const decision = await this.routing.route(tx, tenant.licenseId, inTeam);
+      route = {
+        groupIds: decision.groupIds,
+        assigneeId: decision.assigneeId,
+        queuePosition: decision.queuePosition,
+        groupId: connectionGroup(decision.groupIds) ?? thread.groupId,
+      };
+    } else {
+      const returned = await this.#routeReturn(tx, tenant, chat, inTeam);
+      route = { ...returned, groupId: returned.groupId ?? thread.groupId };
+    }
+
+    // Additive, as on open (ID-02-S7): a fallback team that took it joins the
+    // chat's access beside the team it was in.
+    if (route.groupIds.length > 0) {
+      await tx.chatAccess.createMany({
+        data: route.groupIds.map((groupId) => ({ chatId: chat.id, groupId })),
+        skipDuplicates: true,
+      });
+    }
+    if (route.assigneeId) {
+      await tx.thread.update({
+        where: { id: threadId },
+        data: { assigneeId: route.assigneeId, groupId: route.groupId },
+      });
+      await tx.chatUser.upsert({
+        where: { chatId_userId: { chatId: chat.id, userId: route.assigneeId } },
+        create: { chatId: chat.id, userId: route.assigneeId, userType: 'agent', present: true },
+        update: { present: true },
+      });
+      return {
+        chatId: chat.id,
+        threadId,
+        assigneeId: route.assigneeId,
+        customerId: chat.customerId,
+      };
+    }
+    if (route.queuePosition != null) {
+      const queuedAt = new Date();
+      await tx.thread.update({
+        where: { id: threadId },
+        data: { queuePosition: route.queuePosition, queuedAt, groupId: route.groupId },
+      });
+      await enterQueue(tx, {
+        licenseId: tenant.licenseId,
+        threadId,
+        groupId: queueGroup(route),
+        enteredAt: queuedAt,
+      });
+    }
+    return null;
+  }
+
+  /**
+   * Tell the agent a hand-over just gave a connection to (`#routeHandover`),
+   * the way a drained queue's assignment is told (`#publishDeactivation`): their
+   * inbox, and the board, where the visitor moved from the AI to a person.
+   */
+  async #announceHandover(
+    tenant: TenantContext,
+    assigned: DrainedAssignment | null,
+  ): Promise<void> {
+    if (!assigned) return;
+    await this.publisher?.publish(
+      tenant,
+      'incoming_chat',
+      { agentIds: [assigned.assigneeId] },
+      { requester_id: null, chat: { id: assigned.chatId, thread: { id: assigned.threadId } } },
+    );
+    await publishTrafficChange(this.publisher, tenant, assigned.customerId);
   }
 
   /**
@@ -2594,6 +2780,7 @@ export class ChatService {
         oldAssigneeId: thread.assigneeId ?? null,
         newAssigneeId: target.agentId ?? null,
         modeNote: mode?.note ?? null,
+        handover: mode?.assigned ?? null,
       };
     });
 
@@ -2612,6 +2799,7 @@ export class ChatService {
     if (result.modeNote) {
       await this.#announceEvent(tenant, { ...result.modeNote, audience: result.audience });
     }
+    await this.#announceHandover(tenant, result.handover);
 
     // The board's headline column is **Chatting with** (FR-MOD-03.1.3), and a
     // hand-off is precisely what changes the name in it; a transfer to a team
@@ -3152,6 +3340,7 @@ export class ChatService {
         groupId: input.groupId,
         openedVia: input.openedVia,
         ...(input.queuePosition != null ? { queuePosition: input.queuePosition, queuedAt } : {}),
+        ...(input.aiFirst ? { aiMode: 'ai' } : {}),
       },
     });
     if (input.queuePosition != null) {
@@ -3545,9 +3734,19 @@ function viewFilter(view: ChatListOptions['view'], actorId: string): Record<stri
     case 'queued':
       return { active: true, threads: { some: { active: true, queuePosition: { not: null } } } };
     case 'unassigned':
+      // Nobody has it and it is not waiting for anyone — unless the AI is
+      // holding it (tm 293.2): an AI-first connection is just as unassigned and
+      // unqueued, and it is the AI view's, not a person's to pick up.
       return {
         active: true,
-        threads: { some: { active: true, assigneeId: null, queuePosition: null } },
+        threads: {
+          some: {
+            active: true,
+            assigneeId: null,
+            queuePosition: null,
+            OR: [{ aiMode: null }, { aiMode: 'human' }],
+          },
+        },
       };
     // The Chats group's sixth bucket (PRD 02.1.1). `rapor-1-fonksiyonel.md:339`
     // defines it in one clause — «"Supervised" ajanin izledigi (supervise)
@@ -3587,18 +3786,28 @@ function viewFilter(view: ChatListOptions['view'], actorId: string): Record<stri
     // The AI Agents group (PRD 02.1.2): the two views that keep AI-handled
     // conversations out of the human queue and surface the AI's own workload.
     case 'ai':
-      // The AI is actively handling it: the bot has spoken and no human agent
-      // has. Requiring a bot event is what separates this from a chat merely
-      // waiting in the human queue (queued/unassigned), which also has no agent
-      // event yet — the KK is "AI konuşmalarını insan kuyruğundan ayırır".
+      // The AI is handling it — the KK is "AI konuşmalarını insan kuyruğundan
+      // ayırır". Since tm 293.2 the connection's mode says so (`threads.ai_mode`,
+      // the `(license_id, active, ai_mode)` index): `ai`, or held back
+      // (`paused`) with nobody having taken it — an AI-first connection is here
+      // from the moment it opens, before the AI's first reply. A person taking
+      // it (`human`) moves it out. A connection with no mode keeps the older
+      // reading — a bot has spoken and no agent has — which is what still
+      // describes one from before modes, or a bot writing over the API.
       return {
         active: true,
         threads: {
           some: {
             active: true,
-            AND: [
-              { events: { some: { authorType: 'bot' } } },
-              { events: { none: { authorType: 'agent' } } },
+            OR: [
+              { aiMode: { in: ['ai', 'paused'] } },
+              {
+                aiMode: null,
+                AND: [
+                  { events: { some: { authorType: 'bot' } } },
+                  { events: { none: { authorType: 'agent' } } },
+                ],
+              },
             ],
           },
         },

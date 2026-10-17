@@ -2922,6 +2922,38 @@ export interface paths {
     patch: operations['updateAiAgent'];
     trace?: never;
   };
+  '/ai-agents/{aiAgentId}/handoff-settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * When a person takes the agent's conversations
+     * @description The customer-facing agent's hand-over settings (AI-11). An agent nobody
+     *     has configured answers with the defaults. Copilot has none: it never
+     *     talks to a visitor.
+     */
+    get: operations['getAiAgentHandoffSettings'];
+    /**
+     * Choose when a person takes the agent's conversations
+     * @description `ai_first` lets the agent answer a visitor's conversation before anyone
+     *     is assigned: it opens unassigned and outside the queue, consumes no
+     *     agent's concurrent-chat limit, and is routed to a person when it leaves
+     *     the AI. `parallel` assigns it when it opens, as before. Applies to
+     *     conversations that open after the change.
+     */
+    put: operations['updateAiAgentHandoffSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/skills': {
     parameters: {
       query?: never;
@@ -8994,6 +9026,20 @@ export interface components {
       batch_window_seconds?: number | null;
       active: boolean;
       skills_count?: number;
+    };
+    AiHandoffSettings: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      /**
+       * @description When a visitor's conversation gets a person (AI-11). `ai_first`:
+       *     the agent answers first — the conversation opens unassigned, in
+       *     the AI view rather than the unassigned or queued ones, and is routed
+       *     when the agent hands it over or a person takes it. `parallel`:
+       *     routing assigns it on open and the agent answers until a person
+       *     writes to the visitor. Default `parallel`.
+       * @enum {string}
+       */
+      assignment_mode: 'ai_first' | 'parallel';
     };
     /**
      * @description A discriminated union on `type`. Steps are validated before they are
@@ -18454,6 +18500,66 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AiAgent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiAgentHandoffSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Hand-over settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiHandoffSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiAgentHandoffSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          assignment_mode: 'ai_first' | 'parallel';
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiHandoffSettings'];
         };
       };
       400: components['responses']['BadRequest'];

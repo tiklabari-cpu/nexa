@@ -84,6 +84,64 @@ aiAgent:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+aiAgentHandoffSettings:
+  parameters:
+    - name: aiAgentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiAgentHandoffSettings
+    summary: When a person takes the agent's conversations
+    description: |
+      The customer-facing agent's hand-over settings (AI-11). An agent nobody
+      has configured answers with the defaults. Copilot has none: it never
+      talks to a visitor.
+    responses:
+      "200":
+        description: Hand-over settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiHandoffSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Playbook]
+    operationId: updateAiAgentHandoffSettings
+    summary: Choose when a person takes the agent's conversations
+    description: |
+      `ai_first` lets the agent answer a visitor's conversation before anyone
+      is assigned: it opens unassigned and outside the queue, consumes no
+      agent's concurrent-chat limit, and is routed to a person when it leaves
+      the AI. `parallel` assigns it when it opens, as before. Applies to
+      conversations that open after the change.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [assignment_mode]
+            additionalProperties: false
+            properties:
+              assignment_mode: { type: string, enum: [ai_first, parallel] }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiHandoffSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 skills:
   get:
     tags: [Playbook]

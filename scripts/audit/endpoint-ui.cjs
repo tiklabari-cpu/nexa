@@ -317,7 +317,22 @@ const INDIRECT = [
  * collection endpoint has a screen and one verb on the item does not, so a
  * thing can be made but not changed, or made but not removed.
  */
-const TRACKED = [];
+const TRACKED = [
+  {
+    op: 'GET /ai-agents/{aiAgentId}/handoff-settings',
+    owner: 'tm 303.5',
+    reason:
+      'the AI agent\'s hand-over settings — today the "Önce AI / Paralel" assignment mode ' +
+      '(tm 293.2). Its screen is the agent\'s "Devir ve Yönlendirme" tab, HandoffSettings.tsx, ' +
+      'which tm 303 builds once the triggers and messages it shows exist; until then it is set ' +
+      'over the API.',
+  },
+  {
+    op: 'PUT /ai-agents/{aiAgentId}/handoff-settings',
+    owner: 'tm 303.5',
+    reason: 'the write half of the same settings — the same screen (HandoffSettings.tsx).',
+  },
+];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
 function pathMatcher(path) {

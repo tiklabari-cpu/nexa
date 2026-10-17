@@ -11,7 +11,14 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { compileInstruction, stepProblemDetails, validateSteps } from '@siyahtus/ai-mock';
-import { ANSWER_LENGTHS, BATCH_WINDOW_SECONDS_MAX, readBatchWindowSeconds } from '@siyahtus/types';
+import {
+  AI_ASSIGNMENT_MODES,
+  ANSWER_LENGTHS,
+  BATCH_WINDOW_SECONDS_MAX,
+  DEFAULT_AI_ASSIGNMENT_MODE,
+  readBatchWindowSeconds,
+  type AiAssignmentMode,
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';
@@ -310,6 +317,8 @@ const updateAgentBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
+const handoffSettingsBody = z.object({ assignment_mode: z.enum(AI_ASSIGNMENT_MODES) }).strict();
+
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -428,6 +437,63 @@ export default async function playbookRoutes(
       });
 
       return reply.send(serialiseAgent(updated));
+    },
+  );
+
+  // --- Hand-over settings (tm 293.2 · AI-11; widened by tm 303) ---------------
+  //
+  // When a person takes the agent's conversations: `ai_first` opens a
+  // visitor's connection unassigned for the AI to answer and routes it when it
+  // leaves the AI, `parallel` routes it on open (`services/chat/ai-first.ts`).
+  // One row per customer-facing agent; none reads as the default. Copilot has
+  // no hand-over — it never talks to a visitor — so it is not found here.
+
+  /** The customer-facing agent, under the caller's RLS; 404 for Copilot or another workspace's. */
+  async function customerFacingAgent(tx: TenantClient, id: string): Promise<void> {
+    const agent = await tx.aiAgent.findFirst({
+      where: { id, kind: 'ai_agent' },
+      select: { id: true },
+    });
+    if (!agent) throw ApiError.notFound('AI agent not found.');
+  }
+
+  app.get<{ Params: { aiAgentId: string } }>(
+    '/ai-agents/:aiAgentId/handoff-settings',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.aiAgentId);
+      const settings = await request.withTenant(async (tx) => {
+        await customerFacingAgent(tx, id);
+        return tx.aiHandoffSettings.findUnique({
+          where: { aiAgentId: id },
+          select: { assignmentMode: true },
+        });
+      });
+      return reply.send(serialiseHandoffSettings(id, settings));
+    },
+  );
+
+  app.put<{ Params: { aiAgentId: string } }>(
+    '/ai-agents/:aiAgentId/handoff-settings',
+    { config: { scopes: WRITE } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.aiAgentId);
+      const body = parse(handoffSettingsBody, request.body);
+      const tenant = request.tenant();
+      const settings = await request.withTenant(async (tx) => {
+        await customerFacingAgent(tx, id);
+        return tx.aiHandoffSettings.upsert({
+          where: { aiAgentId: id },
+          create: {
+            aiAgentId: id,
+            licenseId: tenant.licenseId,
+            assignmentMode: body.assignment_mode,
+          },
+          update: { assignmentMode: body.assignment_mode },
+          select: { assignmentMode: true },
+        });
+      });
+      return reply.send(serialiseHandoffSettings(id, settings));
     },
   );
 
@@ -1436,6 +1502,19 @@ function serialiseIndexedSource(
 }
 
 /** One shape for an AI agent, so a read and the reply after a PATCH never drift. */
+/** `AiHandoffSettings` (contract): an agent with no row has the defaults. */
+function serialiseHandoffSettings(
+  aiAgentId: string,
+  row: { assignmentMode: string } | null,
+): { ai_agent_id: string; assignment_mode: AiAssignmentMode } {
+  return {
+    ai_agent_id: aiAgentId,
+    // The CHECK holds the column to `AI_ASSIGNMENT_MODES`.
+    assignment_mode:
+      (row?.assignmentMode as AiAssignmentMode | undefined) ?? DEFAULT_AI_ASSIGNMENT_MODE,
+  };
+}
+
 function serialiseAgent(agent: {
   id: string;
   name: string;

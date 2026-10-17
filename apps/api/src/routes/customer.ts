@@ -964,6 +964,9 @@ export default async function customerRoutes(
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         },
         ...(body.url ? { routing: { url: body.url } } : {}),
+        // The job below asks the AI to answer — when there is text to answer
+        // (`answerVisitorMessage`); only then may an opening be AI-first (tm 293.2).
+        aiAnswers: Boolean(maskedText?.trim()),
         audit: request.auditContext(),
         outbox: aiJobOutbox({
           requestId: request.id,

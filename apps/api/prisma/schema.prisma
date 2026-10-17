@@ -188,6 +188,7 @@ model License {
   aiJobs                 AiJob[]
   queueEntries           QueueEntry[]
   aiConversations        AiConversation[]
+  aiHandoffSettings      AiHandoffSettings[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -1784,9 +1785,36 @@ model AiAgent {
   license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   skills           Skill[]
   knowledgeSources KnowledgeSource[]
+  handoffSettings  AiHandoffSettings?
 
   @@index([licenseId, kind])
   @@map("ai_agents")
+}
+
+/// An AI agent's hand-over settings (tm 293.2 · AI-11 §3; 05 AI-09 — tm 303
+/// widens it with triggers and messages, tm 293.6 with the stall timeout).
+/// One row per agent; no row is `DEFAULT_AI_ASSIGNMENT_MODE`.
+///
+/// `assignment_mode` (`AI_ASSIGNMENT_MODES`) decides when a visitor's
+/// connection gets a person: `ai_first` opens it unassigned in `ai` mode and
+/// routes it when it leaves the AI, `parallel` routes it on open. Read live
+/// when a connection opens (`services/chat/ai-first.ts`), never from a pinned
+/// configuration version. The CHECK, the trigger holding the row to an agent of
+/// its own licence, and `updated_at` (the trigger's) live in the migration
+/// (20261017120000_ai_handoff_settings).
+model AiHandoffSettings {
+  aiAgentId      String   @id @map("ai_agent_id") @db.Uuid
+  licenseId      BigInt   @map("license_id")
+  assignmentMode String   @default("parallel") @map("assignment_mode")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Set by the write trigger, not by the writer.
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId])
+  @@map("ai_handoff_settings")
 }
 
 // ===========================================================================

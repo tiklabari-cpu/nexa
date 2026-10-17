@@ -12453,7 +12453,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T09:16:20.485Z",
+        "updatedAt": "2026-10-17T10:26:32.833Z",
         "subtasks": [
           {
             "id": 1,
@@ -12461,11 +12461,11 @@
             "description": "threads.ai_mode + mod durum makinesi + AiResponder kapısı + örtük devralma (aynı transaction)",
             "details": "Takeover ve kural botu devralma da human yapar.",
             "testStrategy": "Sıfır model çağrısı; yarış testi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "293",
             "priority": "high",
-            "updatedAt": "2026-10-17T09:16:20.485Z"
+            "updatedAt": "2026-10-17T10:26:32.833Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T09:16:20.486Z",
+      "lastModified": "2026-10-17T10:26:32.833Z",
       "taskCount": 390,
       "completedCount": 291,
       "tags": [

@@ -48,6 +48,7 @@ import {
   type TenantRunner,
   type TurnConfig,
   type TurnContext,
+  type TurnHistory,
   type TurnResult,
   type TurnState,
 } from './turn.js';
@@ -1090,5 +1091,108 @@ describe('the turn returns what it would do and does none of it (AI-19)', () => 
     ];
     expect(charged).toEqual(expected);
     expect(embeddedFor).toEqual(expected);
+  });
+});
+
+describe('the model reads the conversation, not just the message (AI-01 · tm 292.3)', () => {
+  const HISTORY: TurnHistory = {
+    messages: [
+      { role: 'user', content: 'Param yatmadı' },
+      { role: 'assistant', content: 'Hangi yöntemle ve saat kaçta yatırdınız?' },
+    ],
+    systemNotes: ['13:41 UTC — Chat transferred'],
+    stateDigest: 'Collected so far: method = Papara',
+    omitted: false,
+    visitorMessages: 1,
+  };
+  const CATCH_ALL = [{ type: 'send_message', source: 'knowledge' }];
+
+  it('asks with the earlier exchange before the latest message, and the events and state in the instructions', async () => {
+    const model = new FakeLlmProvider({ reply: ANSWER });
+
+    const result = await engine(model).runTurn(
+      emptyTurnState(),
+      { text: 'Papara 13:40', history: HISTORY },
+      context(workspace(CATCH_ALL)),
+    );
+
+    expect(result.decisions.outcome).toBe('answered');
+    const [request] = model.calls;
+    expect(request!.messages).toEqual([
+      { role: 'user', content: 'Param yatmadı' },
+      { role: 'assistant', content: 'Hangi yöntemle ve saat kaçta yatırdınız?' },
+      { role: 'user', content: 'Papara 13:40' },
+    ]);
+    expect(request!.system).toContain('Conversation events: 13:41 UTC — Chat transferred.');
+    expect(request!.system).toContain('Conversation state:\nCollected so far: method = Papara');
+    // The stub still finds its grounding on the last line, so it still answers.
+    const stubbed = await engine(new MockLlmProvider()).runTurn(
+      emptyTurnState(),
+      { text: 'Papara 13:40', history: HISTORY },
+      context(workspace(CATCH_ALL)),
+    );
+    expect(stubbed.decisions.outcome).toBe('answered');
+  });
+
+  it('joins the latest message to an unanswered one before it, so the roles alternate', async () => {
+    const model = new FakeLlmProvider({ reply: ANSWER });
+    await engine(model).runTurn(
+      emptyTurnState(),
+      {
+        text: 'Papara 13:40',
+        history: { ...HISTORY, messages: [{ role: 'user', content: 'Param yatmadı' }] },
+      },
+      context(workspace(CATCH_ALL)),
+    );
+    expect(model.calls[0]!.messages).toEqual([
+      { role: 'user', content: 'Param yatmadı\nPapara 13:40' },
+    ]);
+  });
+
+  it('shortens a history over LLM_MAX_PROMPT_CHARS rather than refusing the prompt, keeping the opening message', async () => {
+    const model = new FakeLlmProvider({ reply: ANSWER });
+    const long: TurnHistory = {
+      ...HISTORY,
+      messages: Array.from({ length: 30 }, (_, index) => ({
+        role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+        content: index === 0 ? 'OPENING question' : `${index} ${'z'.repeat(300)}`,
+      })),
+      visitorMessages: 15,
+    };
+
+    const result = await engine(model, 20_000, knowledge, 4_000).runTurn(
+      emptyTurnState(),
+      { text: MESSAGE, history: long },
+      context(workspace(CATCH_ALL)),
+    );
+
+    expect(result.decisions).toMatchObject({ outcome: 'answered', failure: null });
+    const [request] = model.calls;
+    expect(promptLength(request!)).toBeLessThanOrEqual(4_000);
+    expect(request!.messages.length).toBeLessThan(long.messages.length);
+    expect(request!.messages[0]!.content.startsWith('OPENING question')).toBe(true);
+    expect(request!.messages.at(-1)!.content.endsWith(MESSAGE)).toBe(true);
+  });
+
+  it('still refuses a prompt the passages and message alone do not fit', async () => {
+    const model = new FakeLlmProvider({ reply: ANSWER });
+    const result = await engine(model, 20_000, knowledge, 2_000).runTurn(
+      emptyTurnState(),
+      { text: `${MESSAGE} ${'Please check parcel QX-44917. '.repeat(60)}`, history: HISTORY },
+      context(workspace(CATCH_ALL)),
+    );
+    expect(result.decisions.failure).toMatchObject({ provider: 'llm', kind: 'prompt_too_long' });
+    expect(model.calls).toHaveLength(0);
+  });
+
+  it('summarises from the visitor’s opening message and counts what they wrote', async () => {
+    const result = await engine(new FakeLlmProvider()).runTurn(
+      emptyTurnState(),
+      { text: 'Papara 13:40', history: HISTORY },
+      context(workspace([{ type: 'summarize' }])),
+    );
+    expect(describeSideEffects(result.sideEffects).summary).toBe(
+      'Customer opened with: Param yatmadı (2 messages so far)',
+    );
   });
 });

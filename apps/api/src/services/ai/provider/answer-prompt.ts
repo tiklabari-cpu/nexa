@@ -16,6 +16,13 @@
  * anything, newlines and quote marks included, and `JSON.stringify` keeps it on
  * one line whatever it holds; last because that is the one position no passage
  * content can push anything past.
+ *
+ * **The conversation so far (tm 292.3 · AI-01).** The earlier exchange travels
+ * as the messages before the customer's latest one, in the roles the context
+ * loader gave them; what happened to the connection and what the conversation
+ * has settled go into the instructions, before the grounding. The answer is
+ * still drawn from the passages alone — the history says what the customer
+ * means, not what is true.
  */
 import {
   ANSWER_BUDGETS,
@@ -27,7 +34,7 @@ import {
   type PersonaLanguage,
   type PersonaTone,
 } from '@siyahtus/types';
-import type { LlmCompletionRequest } from './llm-provider.js';
+import type { LlmCompletionRequest, LlmMessage } from './llm-provider.js';
 
 export const GROUNDING_MARKER = '--- grounding (JSON, last line) ---';
 
@@ -47,6 +54,15 @@ export interface AnswerPromptInput {
   passages: readonly string[];
   persona: Persona;
   answerIn: PersonaLanguage | null;
+  /** The conversation before `message` (`TurnHistory`); none on a first message. */
+  history?: AnswerHistory;
+}
+
+/** The part of a turn's history the prompt carries. */
+export interface AnswerHistory {
+  messages: readonly LlmMessage[];
+  systemNotes: readonly string[];
+  stateDigest: string;
 }
 
 export function buildAnswerPrompt(
@@ -71,14 +87,43 @@ export function buildAnswerPrompt(
       ? `Reply in this language: ${grounding.answerIn}.`
       : 'Reply in the language the customer wrote in.',
     'Write plain text: no markdown, no links the passages do not contain.',
+    ...historyLines(input.history),
     GROUNDING_MARKER,
     JSON.stringify(grounding),
   ];
 
   return {
     system: lines.join('\n'),
-    messages: [{ role: 'user', content: input.message }],
+    messages: conversation(input.history?.messages ?? [], input.message),
   };
+}
+
+/** The instructions the history adds; none when there is no history. */
+function historyLines(history: AnswerHistory | undefined): string[] {
+  if (!history) return [];
+  const lines: string[] = [];
+  if (history.messages.length > 0) {
+    lines.push(
+      "The earlier messages of this conversation come before the customer's latest one. Use them to understand what the customer means; an agent's message is marked [Agent].",
+    );
+  }
+  if (history.systemNotes.length > 0) {
+    lines.push(`Conversation events: ${history.systemNotes.join('; ')}.`);
+  }
+  if (history.stateDigest) lines.push(`Conversation state:\n${history.stateDigest}`);
+  return lines;
+}
+
+/**
+ * The earlier messages, then the customer's latest — merged into the last one
+ * when that was the customer's too, so the roles alternate.
+ */
+function conversation(earlier: readonly LlmMessage[], message: string): LlmMessage[] {
+  const messages = earlier.map((entry) => ({ ...entry }));
+  const last = messages.at(-1);
+  if (last?.role === 'user') last.content = `${last.content}\n${message}`;
+  else messages.push({ role: 'user', content: message });
+  return messages;
 }
 
 /**

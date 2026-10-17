@@ -23,6 +23,13 @@
  * a person taking it over (AI-11) — the save throws, the reply rolls back with
  * it, and nothing of this turn is applied. Whoever saved first owns the reply.
  *
+ * **The turn reads the conversation (tm 292.3 · AI-01).** With the state and
+ * the configuration (`AiConfigSource`, ADR-14b §2.6) the same read loads the
+ * connection's transcript up to the message being answered
+ * (`context-loader.ts`): what came before it is the turn's history, which the
+ * model reads; the message itself is still the one the job names. Gathering
+ * several unanswered messages into one turn is tm 292.4's.
+ *
  * It is not the first thing an incoming message meets. The deterministic rule
  * bot (FR-MOD-06.6, `services/bots/rule-bot-responder.ts`) is tried first and
  * this runs only when no rule took the conversation over; the ordering, and why
@@ -36,12 +43,13 @@
  * job, not the request: its tenant, its logger, a runner over the server's
  * pool, the two gates, and the job's mark and fence for the reply.
  */
-import { AI_BOT_ID } from '@siyahtus/types';
+import { AI_BOT_ID, parseEventId } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
+import { loadConnectionContext, type ConnectionContext } from './conversation/context-loader.js';
 import type { ConversationEngine } from './conversation/conversation-engine.js';
 import {
   AiConversationConflictError,
@@ -58,9 +66,10 @@ import {
   toTurnState,
   tookTurn,
   turnStatePatch,
+  type TurnHistory,
   type TurnResult,
 } from './conversation/turn.js';
-import { liveTurnConfig } from './conversation/turn-config.js';
+import { readAndCompile } from './conversation/turn-config.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 
@@ -148,25 +157,41 @@ export class AiResponder {
     let applyFailed = false;
     let unrecorded = false;
     try {
-      // Where the conversation stands and what the AI may run, read together;
-      // then the turn, over a runner rather than one transaction around it —
-      // the engine opens a short one per read so the model call waits in none.
-      const loaded = await turn.withTenant(async (tx) => ({
-        conversation: await loadConversation(tx, ref),
-        config: await liveTurnConfig(tx),
-      }));
+      // Where the conversation stands, what the AI may run and what was said
+      // before this message, read together; then the turn, over a runner
+      // rather than one transaction around it — the engine opens a short one
+      // per read so the model call waits in none.
+      const answering = parseEventId(turn.triggerEventId);
+      const loaded = await turn.withTenant(async (tx) => {
+        const conversation = await loadConversation(tx, ref);
+        const state = conversation ? toTurnState(conversation) : emptyTurnState();
+        const config = await readAndCompile.forTurn(tx, {
+          aiAgentId: null,
+          pinnedVersionId: conversation?.configVersionId ?? null,
+        });
+        // Everything before the message is history; the message is the turn's.
+        const context =
+          answering && answering.threadId === ref.threadId
+            ? await loadConnectionContext(tx, ref, state, {
+                through: answering.sequence,
+                processedThrough: answering.sequence - 1,
+              })
+            : null;
+        return { conversation, state, config, context };
+      });
       read = loaded.conversation;
+      const history = historyOf(loaded.context);
       result = await this.#engine.runTurn(
-        read ? toTurnState(read) : emptyTurnState(),
-        { text: message },
+        loaded.state,
+        { text: message, ...(history ? { history } : {}) },
         {
           tenant,
           db: turn.withTenant,
           now: new Date(),
           mode: 'live',
           chatId,
-          configVersionId: read?.configVersionId ?? null,
-          config: loaded.config,
+          configVersionId: read?.configVersionId ?? loaded.config.versionId,
+          config: loaded.config.pkg,
           toolStubs: {},
         },
       );
@@ -382,6 +407,17 @@ export class AiResponder {
       { chat_id: chatId, reason: 'ai_handoff', transferred_to: { group_ids: [Number(group.id)] } },
     );
   }
+}
+
+/**
+ * The turn's history, or none when the connection held nothing before the
+ * message — a first message reads exactly as it did before there was history.
+ */
+function historyOf(context: ConnectionContext | null): TurnHistory | null {
+  if (!context) return null;
+  const { messages, systemNotes, stateDigest, omitted, visitorMessages } = context;
+  if (messages.length === 0 && systemNotes.length === 0 && !stateDigest) return null;
+  return { messages, systemNotes, stateDigest, omitted, visitorMessages };
 }
 
 /**

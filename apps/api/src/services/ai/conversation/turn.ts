@@ -27,6 +27,7 @@ import type { TenantClient, TenantContext } from '../../../lib/tenant.js';
 import type { AiDailyCapError } from '../ai-daily-budget.js';
 import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
+import type { LlmMessage } from '../provider/llm-provider.js';
 import type {
   AiConversationPatch,
   AiConversationPatchField,
@@ -107,14 +108,33 @@ export function turnsTaken(state: TurnState): number {
   return typeof turns === 'number' && Number.isInteger(turns) && turns >= 0 ? turns : 0;
 }
 
+/**
+ * What came before the message on its connection, as the context loader
+ * (`context-loader.ts`, tm 292.3) built it. Masked at the source; never logged.
+ */
+export interface TurnHistory {
+  /**
+   * The earlier exchange, oldest first, cut to the history budget: the
+   * visitor's messages as `user`, the AI's and agents' as `assistant`,
+   * consecutive ones of a role merged. The visitor's opening message is first
+   * whenever the connection has one.
+   */
+  readonly messages: readonly LlmMessage[];
+  /** Short timed notes of what happened to the connection ("Chat transferred"). */
+  readonly systemNotes: readonly string[];
+  /** What the conversation has settled — the step and the slots; empty when nothing is. */
+  readonly stateDigest: string;
+  /** Earlier messages were left out to fit the budget. */
+  readonly omitted: boolean;
+  /** How many of the visitor's earlier messages the history holds, before merging. */
+  readonly visitorMessages: number;
+}
+
 /** The visitor's message the turn answers. Masked at the source; never logged. */
 export interface TurnMessage {
   readonly text: string;
-  /**
-   * The visitor's earlier messages on the connection, oldest first — read by
-   * the summary step. The context loader fills it (tm 292.3); empty until then.
-   */
-  readonly history?: readonly string[];
+  /** The conversation so far; absent on a turn with none (a preview, a first message). */
+  readonly history?: TurnHistory;
 }
 
 /**

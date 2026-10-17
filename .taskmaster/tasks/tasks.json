@@ -12368,7 +12368,7 @@
           "290"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T02:34:54.339Z",
+        "updatedAt": "2026-10-17T02:36:29.878Z",
         "subtasks": [
           {
             "id": 1,
@@ -12402,13 +12402,13 @@
             "description": "context-loader: loadConnectionEvents, rol eşlemesi, bütçe, iç not hariç, ek yer tutucu",
             "details": "TurnContext {messages, systemNotes, stateDigest, newCustomerText, lastSeq}; (thread_id, event_sequence) tek indeksli sorgu, LIMIT N+1.",
             "testStrategy": "Birim + entegrasyon (iç not hiç girmez).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "292.2"
             ],
             "parentId": "292",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-17T02:36:29.878Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T02:34:54.339Z",
+      "lastModified": "2026-10-17T02:36:29.878Z",
       "taskCount": 390,
       "completedCount": 290,
       "tags": [

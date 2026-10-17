@@ -69,6 +69,16 @@
  * refusal, which its route answers with a 429. The question's embedding is
  * counted the same way on the embedding meter (tm 257.20), and a refusal there
  * ends the turn the same way, having cost nothing.
+ *
+ * **The model reads the conversation, not just the message (tm 292.3 ·
+ * AI-01).** The turn's message carries its history (`TurnMessage.history`,
+ * built by `context-loader.ts`), and the knowledge answer is asked with it: the
+ * earlier exchange before the latest message, the connection's events and the
+ * state digest in the instructions. The knowledge search still embeds the
+ * latest message alone. The history is the part of the prompt that yields to
+ * `LLM_MAX_PROMPT_CHARS`: a prompt over it is shortened, oldest message first,
+ * the visitor's opening message last, before anything is refused — so a long
+ * conversation never becomes a `prompt_too_long` hand-off on its own.
  */
 import {
   matchIntent,
@@ -96,10 +106,13 @@ import { buildAnswerPrompt } from '../provider/answer-prompt.js';
 import { EmbeddingProviderError } from '../provider/embedding-error.js';
 import { LlmProviderError } from '../provider/llm-error.js';
 import {
+  promptLength,
   refuseOverlongPrompt,
   type LlmCompletion,
+  type LlmPrompt,
   type LlmProvider,
 } from '../provider/llm-provider.js';
+import { GAP_MARKER, shortenHistory } from './context-loader.js';
 import {
   adaptLegacySkill,
   stepLogName,
@@ -107,7 +120,7 @@ import {
   type ProcedureStep,
   type SingleTurnProcedure,
 } from './legacy-skill.js';
-import { previewTurnConfig } from './turn-config.js';
+import { readAndCompile } from './turn-config.js';
 import {
   emptyTurnState,
   turnsTaken,
@@ -117,6 +130,7 @@ import {
   type TenantRunner,
   type TurnContext,
   type TurnDecisions,
+  type TurnHistory,
   type TurnMessage,
   type TurnMode,
   type TurnResult,
@@ -286,8 +300,8 @@ export class ConversationEngine {
     const gate = intentGate(adaptLegacySkill(parsed.steps).whenToUse, input.message);
     if (!gate.matched) return { ...nothing(gate.log), errors: [], error_details: [] };
 
-    const config = await db((tx) =>
-      previewTurnConfig(tx, { steps: input.steps, aiAgentId: input.aiAgentId ?? null }),
+    const draft = await db((tx) =>
+      readAndCompile.forDraft(tx, { steps: input.steps, aiAgentId: input.aiAgentId ?? null }),
     );
     const result = await this.runTurn(
       emptyTurnState(),
@@ -299,8 +313,8 @@ export class ConversationEngine {
         mode: 'preview',
         // A preview answers no conversation; its spend is the AI agent's.
         chatId: null,
-        configVersionId: null,
-        config,
+        configVersionId: draft.versionId,
+        config: draft.pkg,
         toolStubs: {},
       },
     );
@@ -379,7 +393,7 @@ export class ConversationEngine {
         case 'summarize':
           sideEffects.push({
             kind: 'summary',
-            text: buildSummary(input.message.text, input.message.history ?? []),
+            text: buildSummary(input.message.text, input.message.history),
           });
           log.push({ step: name, detail: 'summary written', ok: true });
           break;
@@ -399,6 +413,7 @@ export class ConversationEngine {
         case 'answer_from_knowledge': {
           const answer = await this.#answerFromKnowledge({
             message: input.message.text,
+            history: input.message.history,
             skill: input.skill,
             persona: input.persona,
             answerIn: input.answerIn,
@@ -447,6 +462,7 @@ export class ConversationEngine {
 
   async #answerFromKnowledge(input: {
     message: string;
+    history: TurnHistory | undefined;
     skill: { aiAgentId: string | null };
     persona: Persona;
     answerIn: PersonaLanguage | null;
@@ -519,12 +535,18 @@ export class ConversationEngine {
     // Outside any transaction (see the file header). The persona travels in the
     // prompt: the provider — model or stub — is what applies it now, so the
     // run log records what was *asked for* rather than what a trimmer did.
-    const prompt = buildAnswerPrompt({
-      message: input.message,
-      passages: hits.map((hit) => hit.text),
-      persona: input.persona,
-      answerIn: input.answerIn,
-    });
+    const prompt = fitHistory(
+      (history) =>
+        buildAnswerPrompt({
+          message: input.message,
+          passages: hits.map((hit) => hit.text),
+          persona: input.persona,
+          answerIn: input.answerIn,
+          ...(history ? { history } : {}),
+        }),
+      input.history,
+      this.#maxPromptChars,
+    );
     let completion: LlmCompletion;
     try {
       // Measured where the prompt is whole, so the refusal comes before the
@@ -724,12 +746,39 @@ function looksSupplied(message: string, field: string): boolean {
   return false;
 }
 
-/** A one-line summary for the agent who picks the conversation up. */
-function buildSummary(message: string, history: readonly string[]): string {
-  const lines = [...history, message].filter(Boolean);
-  const first = lines[0] ?? message;
+/**
+ * The prompt with as much of the history as fits `maxPromptChars` — all of it
+ * when it fits, none when not even the shortest does (the refusal is then the
+ * passages' and the message's, and `refuseOverlongPrompt` makes it).
+ */
+function fitHistory(
+  build: (history: TurnHistory | undefined) => LlmPrompt,
+  history: TurnHistory | undefined,
+  maxPromptChars: number,
+): LlmPrompt {
+  let current = history;
+  let prompt = build(current);
+  while (current && promptLength(prompt) > maxPromptChars) {
+    current = shortenHistory(current);
+    prompt = build(current);
+  }
+  return prompt;
+}
+
+/**
+ * A one-line summary for the agent who picks the conversation up: the
+ * visitor's opening message — the history's first visitor line — and how many
+ * messages they have written.
+ */
+function buildSummary(message: string, history: TurnHistory | undefined): string {
+  const opened = history?.messages
+    .find((entry) => entry.role === 'user')
+    ?.content.split('\n')
+    .find((line) => line.trim() && line !== GAP_MARKER);
+  const count = (history?.visitorMessages ?? 0) + 1;
+  const first = opened ?? message;
   const opening = first.length > 160 ? `${first.slice(0, 157)}…` : first;
-  return lines.length > 1
-    ? `Customer opened with: ${opening} (${lines.length} messages so far)`
+  return count > 1
+    ? `Customer opened with: ${opening} (${count} messages so far)`
     : `Customer asked: ${opening}`;
 }

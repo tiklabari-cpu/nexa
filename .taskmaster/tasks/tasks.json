@@ -12453,7 +12453,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-17T11:36:13.872Z",
+        "updatedAt": "2026-10-17T13:21:13.853Z",
         "subtasks": [
           {
             "id": 1,
@@ -12487,13 +12487,13 @@
             "description": "POST return-to-ai / pause-ai + yetki + bayrak engeli kancası",
             "details": "XHIGH GEREKÇESİ: (1) yeni yetkili endpoint.",
             "testStrategy": "403/409 yolları.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "293.1"
             ],
             "parentId": "293",
             "priority": "high",
-            "updatedAt": "2026-10-17T11:36:13.872Z"
+            "updatedAt": "2026-10-17T13:21:13.853Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-17T11:36:13.872Z",
+      "lastModified": "2026-10-17T13:21:13.853Z",
       "taskCount": 390,
       "completedCount": 291,
       "tags": [

@@ -4,7 +4,8 @@
  * by the table's CHECK constraints (`20261016200000_ai_conversations`), the
  * API's state store (`services/ai/conversation/state-store.ts`) and the engine
  * tasks that give each column its logic (#293 the mode, #294 the outcome, #296
- * the step).
+ * the step). The mode is also kept on the connection itself, `threads.ai_mode`
+ * (`20261017100000_thread_ai_mode`), which the same list holds.
  *
  * One row per connection (panel "Chat ID" = `thread_id`; its day container,
  * panel "Thread ID", is `chat_id` — K1=A). It is a record of where the AI is in
@@ -23,6 +24,33 @@
  */
 export const AI_CONVERSATION_MODES = ['ai', 'human', 'paused'] as const;
 export type AiConversationMode = (typeof AI_CONVERSATION_MODES)[number];
+
+/**
+ * Why a connection's mode changed (tm 293.1 · AI-11) — `ai_conversations.mode_reason`
+ * and the `reason` of the agents-only note the change leaves in the transcript.
+ *
+ *   - `agent_message`  — an agent wrote to the player: they took it over (AI-11-S2).
+ *   - `takeover`       — a supervisor took the chat over.
+ *   - `transfer`       — a person handed the chat to a team or an agent.
+ *   - `ai_handoff`     — the AI handed the chat over.
+ *   - `bot_handoff`    — a rule bot handed the chat to a team.
+ *   - `rule_bot_reply` — a rule bot answered the player's message.
+ *   - `return_to_ai`   — an authorised person gave the chat back to the AI (tm 293.3).
+ *   - `pause`          — a supervisor held the AI back (tm 293.3).
+ *   - `ai_failure`     — the AI did not answer in time and a person was sent (tm 293.6).
+ */
+export const AI_MODE_REASONS = [
+  'agent_message',
+  'takeover',
+  'transfer',
+  'ai_handoff',
+  'bot_handoff',
+  'rule_bot_reply',
+  'return_to_ai',
+  'pause',
+  'ai_failure',
+] as const;
+export type AiModeReason = (typeof AI_MODE_REASONS)[number];
 
 /**
  * Where the active procedure step stands (AI-03). Null on the row when no

@@ -64,6 +64,7 @@ import {
   type RoutingContext,
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
+import { aiModeNoteText, writeAiMode, type AiModeChange, type AiModeRequest } from './ai-mode.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
 import {
@@ -262,6 +263,20 @@ type StartOutcome =
       registration: { key: string; eventId: string } | null;
     };
 
+/** What a chat's audience is computed from (`#audienceFor`). */
+interface AudienceSource {
+  customerId: string;
+  access: Array<{ groupId: bigint }>;
+  users: Array<{ userId: string; userType: string }>;
+}
+
+/** A committed event and who it is announced to (`#announceEvent`). */
+interface AnnouncedEvent {
+  event: SerialisedEvent;
+  recipients: EventRecipients;
+  audience: { groupIds: number[]; agentIds: string[]; customerId: string };
+}
+
 /** `resume`'s transaction answer: the chat the conversation continues in, and the connection. */
 interface ResumeOutcome {
   chat: ChatRow;
@@ -353,11 +368,7 @@ export class ChatService {
    * Computed here, where team membership and tenant context are available, and
    * carried in the envelope — the gateway has neither and could only guess.
    */
-  #audienceFor(chat: {
-    customerId: string;
-    access: Array<{ groupId: bigint }>;
-    users: Array<{ userId: string; userType: string }>;
-  }) {
+  #audienceFor(chat: AudienceSource) {
     return {
       groupIds: chat.access.map((a) => Number(a.groupId)),
       agentIds: chat.users.filter((u) => u.userType === 'agent').map((u) => u.userId),
@@ -705,6 +716,16 @@ export class ChatService {
           event: initial,
           openedVia: 'agent_start',
         });
+        // An agent who opens the connection by writing to the player has it
+        // (AI-11-S2). The connection is new, so the AI was never in it and
+        // there is no line to leave.
+        if (initial.author_type === 'agent' && initial.recipients === 'all') {
+          await writeAiMode(
+            tx,
+            { chatId, threadId },
+            { to: 'human', reason: 'agent_message', by: actorId },
+          );
+        }
 
         // Registered under the same key `sendEvent` checks.
         //
@@ -1244,14 +1265,24 @@ export class ChatService {
     return null;
   }
 
+  /**
+   * Append an event to the chat's open connection.
+   *
+   * An agent writing to the player (`recipients = 'all'`) takes the connection
+   * over from the AI, in the event's own transaction (AI-11 · K9, AI-11-S2):
+   * the connection turns `human` and the AI stays silent on it from then on.
+   * An internal note does not — the player never saw it. `aiMode` asks for a
+   * change of its own in the same transaction (a rule bot that answered). The
+   * change is returned as `aiMode` when one was made.
+   */
   async sendEvent(
     tenant: TenantContext,
     principal: Principal,
     chatId: string,
     input: NewEventInput,
     /** `outbox` is written with the event, in its transaction ({@link EventOutbox}). */
-    options: { outbox?: EventOutbox } = {},
-  ): Promise<{ event: SerialisedEvent; replayed: boolean }> {
+    options: { outbox?: EventOutbox; aiMode?: AiModeRequest } = {},
+  ): Promise<{ event: SerialisedEvent; replayed: boolean; aiMode?: AiModeChange }> {
     // Idempotency is checked before the transaction so a retry costs one Redis
     // read rather than a write transaction that then has to be rolled back.
     const idempotencyKey = input.idempotencyKey
@@ -1296,6 +1327,18 @@ export class ChatService {
         openedVia: null,
       });
 
+      // The implicit takeover (AI-11 §4): the thread's row is locked by the
+      // append above, so an AI reply racing this one either committed before it
+      // or finds the connection `human` in its own transaction and is not sent.
+      const modeRequest: AiModeRequest | null =
+        options.aiMode ??
+        (authorType === 'agent' && recipients === 'all'
+          ? { to: 'human', reason: 'agent_message' }
+          : null);
+      const mode = modeRequest
+        ? await this.#changeAiMode(tx, tenant, chat, thread.id, actorOf(principal), modeRequest)
+        : null;
+
       // First agent reply drives the first-response-time report; recorded here
       // so it cannot drift from the events it summarises.
       if (authorType === 'agent' && recipients === 'all' && !thread.firstResponseAt) {
@@ -1318,7 +1361,7 @@ export class ChatService {
         });
       }
 
-      return { event, recipients, audience: this.#audienceFor(chat), id: event.id };
+      return { event, recipients, audience: this.#audienceFor(chat), id: event.id, mode };
     });
 
     if (idempotencyKey) {
@@ -1329,7 +1372,53 @@ export class ChatService {
     // After the transaction, never inside it: announcing an event a subscriber
     // could then fail to read would be worse than announcing it a moment late.
     await this.#announceEvent(tenant, result);
-    return { event: result.event, replayed: false };
+    if (result.mode?.note) await this.#announceEvent(tenant, result.mode.note);
+    return {
+      event: result.event,
+      replayed: false,
+      ...(result.mode ? { aiMode: result.mode.change } : {}),
+    };
+  }
+
+  /**
+   * Move a connection's AI mode (`ai-mode.ts`) inside the caller's transaction,
+   * and leave the agents-only line that says so (05 AI-11 §9) — unless the AI
+   * had not taken part, when there is nothing for anyone to notice: a person
+   * answering a connection the AI never spoke in is how every chat used to go.
+   *
+   * Returns the change and the line to announce after commit, or null when
+   * there was no change to make.
+   */
+  async #changeAiMode(
+    tx: TenantClient,
+    tenant: TenantContext,
+    chat: { id: string } & AudienceSource,
+    threadId: string,
+    by: string,
+    request: AiModeRequest,
+  ): Promise<{ change: AiModeChange; note: AnnouncedEvent | null } | null> {
+    const change = await writeAiMode(tx, { chatId: chat.id, threadId }, { ...request, by });
+    if (!change) return null;
+    if (change.from === null) return { change, note: null };
+    const event = await this.#appendEvent(tx, {
+      licenseId: tenant.licenseId,
+      chatId: chat.id,
+      threadId,
+      authorId: by,
+      authorType: 'system',
+      input: {
+        type: 'system_message',
+        text: aiModeNoteText(change),
+        recipients: 'agents',
+        properties: {
+          system_event: 'ai_mode_changed',
+          ai_mode: change.to,
+          previous_ai_mode: change.from,
+          reason: change.reason,
+        },
+      },
+    });
+    return { change, note: { event, recipients: 'agents', audience: this.#audienceFor(chat) } };
   }
 
   /**
@@ -1392,14 +1481,7 @@ export class ChatService {
    * continues an open connection, so the two cannot drift into announcing the
    * same message differently.
    */
-  async #announceEvent(
-    tenant: TenantContext,
-    result: {
-      event: SerialisedEvent;
-      recipients: EventRecipients;
-      audience: { groupIds: number[]; agentIds: string[]; customerId: string };
-    },
-  ): Promise<void> {
+  async #announceEvent(tenant: TenantContext, result: AnnouncedEvent): Promise<void> {
     await this.publisher?.publish(
       tenant,
       'incoming_event',
@@ -2483,6 +2565,16 @@ export class ChatService {
         },
       });
 
+      // A transferred chat is a person's: the AI stays silent on it (AI-11),
+      // the AI's own hand-over included.
+      const mode = await this.#changeAiMode(tx, tenant, chat, thread.id, actorOf(principal), {
+        to: 'human',
+        reason:
+          target.reason === 'ai_handoff' || target.reason === 'bot_handoff'
+            ? target.reason
+            : 'transfer',
+      });
+
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: chat.id },
         include: chatInclude,
@@ -2501,6 +2593,7 @@ export class ChatService {
         // warning below only fires when this actually changed to a new agent.
         oldAssigneeId: thread.assigneeId ?? null,
         newAssigneeId: target.agentId ?? null,
+        modeNote: mode?.note ?? null,
       };
     });
 
@@ -2514,6 +2607,11 @@ export class ChatService {
         agent_ids: target.agentId !== undefined ? [target.agentId] : [],
       },
     });
+    // To both teams, as the transfer itself is: the losing team's open view
+    // should hear the AI stopped as much as the winning team's.
+    if (result.modeNote) {
+      await this.#announceEvent(tenant, { ...result.modeNote, audience: result.audience });
+    }
 
     // The board's headline column is **Chatting with** (FR-MOD-03.1.3), and a
     // hand-off is precisely what changes the name in it; a transfer to a team
@@ -2726,6 +2824,12 @@ export class ChatService {
         },
       });
 
+      // A person has the connection now: the AI stays silent on it (AI-11).
+      const mode = await this.#changeAiMode(tx, tenant, chat, thread.id, supervisorId, {
+        to: 'human',
+        reason: 'takeover',
+      });
+
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: chat.id },
         include: chatInclude,
@@ -2741,6 +2845,7 @@ export class ChatService {
         },
         threadId: thread.id,
         previousAssigneeId,
+        modeNote: mode?.note ?? null,
       };
     });
 
@@ -2751,6 +2856,10 @@ export class ChatService {
       previous_assignee_id: result.previousAssigneeId,
       new_assignee_id: supervisorId,
     } satisfies ChatTakenOverPush);
+    // To the supervisor who just arrived as well as the agent who lost the chat.
+    if (result.modeNote) {
+      await this.#announceEvent(tenant, { ...result.modeNote, audience: result.audience });
+    }
 
     // Same reason as the hand-off above: **Chatting with** now names somebody
     // else (FR-MOD-03.1.1 · FR-MOD-03.1.3).

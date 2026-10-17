@@ -333,12 +333,26 @@ export default async function chatRoutes(
 
       if (body.attachment_url) await assertAttachment(principal.licenseId, body.attachment_url);
 
-      const { event, replayed } = await chats.sendEvent(
+      const { event, replayed, aiMode } = await chats.sendEvent(
         request.tenant(),
         principal,
         chatId,
         normaliseEvent(body),
       );
+      // The agent took the connection from the AI by writing to the player
+      // (AI-11 · tm 293.1) — one line that ties the change to the request.
+      if (aiMode) {
+        request.log.info(
+          {
+            chat_id: chatId,
+            thread_id: event.thread_id,
+            ai_mode: aiMode.to,
+            previous_ai_mode: aiMode.from,
+            mode_reason: aiMode.reason,
+          },
+          'ai mode changed',
+        );
+      }
 
       // 200 rather than 201 on replay: nothing was created this time.
       return reply.status(replayed ? 200 : 201).send(event);

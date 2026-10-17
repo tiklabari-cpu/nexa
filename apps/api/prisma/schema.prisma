@@ -1001,6 +1001,11 @@ model Thread {
   /// on purpose — the `chat_access.group_id` rule: a deleted team must not
   /// erase the record of what it handled (20261015170000_thread_group).
   groupId          BigInt?   @map("group_id")
+  /// Who answers the connection (AI-11 · tm 293.1): one of
+  /// `AI_CONVERSATION_MODES` (`@siyahtus/types`), enforced by the CHECK
+  /// `threads_ai_mode_check`. Null until the AI or a person takes part — the
+  /// AI may still answer. Written only by `services/chat/ai-mode.ts`.
+  aiMode           String?   @map("ai_mode")
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]
@@ -1014,6 +1019,7 @@ model Thread {
   @@index([chatId, createdAt])
   @@index([licenseId, active, createdAt(sort: Desc)])
   @@index([assigneeId])
+  @@index([licenseId, active, aiMode])
   @@map("threads")
 }
 

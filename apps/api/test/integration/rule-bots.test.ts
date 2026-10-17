@@ -660,6 +660,35 @@ describe('rule bots (FR-MOD-06.6)', () => {
       expect(tags.map((t) => t.tag.name)).toContain('billing');
     });
 
+    it('keeps the AI silent on a connection a rule answered, while its rules go on answering (AI-11 · tm 293.1)', async () => {
+      await activeAiThatAlwaysAnswers();
+      await seedBot({
+        conditions: { message_word: 'hours' },
+        actions: { send_message: 'We are open 09:00-18:00.' },
+      });
+      const headers = await visitorToken();
+      const write = async (text: string) => {
+        const response = await server.post('/customer/chat/events', { text }, headers);
+        expect(response.statusCode).toBe(201);
+        return response.json() as { chat_id: string; event: { thread_id: string } };
+      };
+
+      const first = await write('what are your hours?');
+      const thread = await owner.thread.findUniqueOrThrow({
+        where: { id: first.event.thread_id },
+        select: { aiMode: true },
+      });
+      // The rule took the conversation; nobody was told — the AI had not spoken.
+      expect(thread.aiMode).toBe('human');
+
+      await write('where is my parcel?');
+      await write('and your hours on sunday?');
+      expect(await botReplies(first.chat_id)).toEqual([
+        'We are open 09:00-18:00.',
+        'We are open 09:00-18:00.',
+      ]);
+    });
+
     it('leaves the AI its turn when no rule matches at all', async () => {
       await activeAiThatAlwaysAnswers();
       await seedBot({

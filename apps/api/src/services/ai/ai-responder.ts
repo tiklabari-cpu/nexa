@@ -23,6 +23,17 @@
  * a person taking it over (AI-11) — the save throws, the reply rolls back with
  * it, and nothing of this turn is applied. Whoever saved first owns the reply.
  *
+ * **The AI answers only a connection that is its own (tm 293.1 · AI-11).** The
+ * connection's mode (`threads.ai_mode`, `services/chat/ai-mode.ts`) is the
+ * first thing read: once a person has it — an agent wrote to the player, a
+ * takeover, a transfer, a rule bot that took it — or the AI is held back, a
+ * visitor message costs no model call and leaves no record. It is read again
+ * before the model is asked (the batch window may have passed meanwhile) and
+ * once more in the commit, under the thread's row lock: a person who wrote
+ * while the model was thinking got there first, and the draft rolls back
+ * unsent, on record as `expired`. The AI's first commit is what turns a
+ * connection nobody had yet into `ai`.
+ *
  * **The turn reads the conversation (tm 292.3 · AI-01).** With the state and
  * the configuration (`AiConfigSource`, ADR-14b §2.6) the same read loads the
  * connection's transcript (`context-loader.ts`): what came before the job's
@@ -101,6 +112,7 @@ import {
 import { readAndCompile, type AiConfigRead } from './conversation/turn-config.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
+import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
 
 /** How many drafts one turn may write: the first, and one after the visitor wrote again. */
 const DRAFTS_PER_TURN = 2;
@@ -178,14 +190,20 @@ export class AiResponder {
     const answering = parseEventId(turn.triggerEventId);
     const trigger = answering && answering.threadId === ref.threadId ? answering.sequence : null;
 
-    // Answered already (AI-01 §5): an earlier turn gathered this message with
-    // the one its job was for. Asked before the gates, which would otherwise
-    // record a refusal for a message nobody is waiting on.
+    // Whose the connection is, first of all (AI-11 · tm 293.1): one a person
+    // has — or where the AI is held back — costs no model call and no record.
+    // Then answered already (AI-01 §5): an earlier turn gathered this message
+    // with the one its job was for. Both asked before the gates, which would
+    // otherwise record a refusal for a message nobody is waiting on.
     let runnable = true;
     let batchWindowMs = this.#batchWindowMs;
     try {
+      const lookout = await this.#lookout(turn, ref);
+      if (!lookout) {
+        log.info({}, 'a person has this conversation; the ai stays silent');
+        return null;
+      }
       if (trigger !== null) {
-        const lookout = await this.#lookout(turn, ref);
         if (lookout.answeredThrough >= trigger) {
           log.info({}, 'an earlier ai turn answered this message; nothing to do');
           return null;
@@ -267,10 +285,16 @@ export class AiResponder {
         // transaction around it — the engine opens a short one per read so the
         // model call waits in none.
         const loaded = await turn.withTenant((tx) => this.#read(tx, ref, trigger));
-        if (!loaded) {
+        if (loaded === 'answered') {
           // Answered while this turn waited — by another engine on the same
           // connection, which owns the reply.
           log.info({}, 'an earlier ai turn answered this message; nothing to do');
+          return null;
+        }
+        if (loaded === 'not_ai') {
+          // A person took the conversation while this turn waited for the
+          // visitor to stop typing — before any model was asked.
+          log.info({}, 'a person has this conversation; the ai stays silent');
           return null;
         }
         read = loaded.conversation;
@@ -388,6 +412,29 @@ export class AiResponder {
         unrecorded = true;
         throw error;
       }
+      // Not a failure either: a person took the conversation while the model
+      // was thinking (AI-11 §4) — an agent wrote to the player, a takeover, a
+      // transfer. Nothing of this turn was sent, saved or applied; its spend
+      // is on record as a turn overtaken before its reply went out.
+      if (error instanceof AiModeChangedError) {
+        unrecorded = true;
+        log.info(
+          { ai_mode: error.mode },
+          'a person took the conversation; the ai reply was not sent',
+        );
+        const draft = result ? skillDecision(result) : null;
+        if (draft) {
+          await record({
+            ...draft,
+            decision: 'expired',
+            handoffReason: null,
+            latencyMs: performance.now() - startedAt,
+            configVersionId: read?.configVersionId ?? null,
+            details: { ...draft.details, reason: 'human_took_over' },
+          });
+        }
+        return null;
+      }
       // Not a failure either: the conversation moved on while the model was
       // thinking, and the writer that moved it owns what happens next. Nothing
       // of this turn was sent or saved; another attempt would answer a
@@ -461,6 +508,9 @@ export class AiResponder {
     // Through `tx` and nowhere else: as the reply's outbox it runs again on
     // the send's race retry, whose first attempt rolled back with it.
     const write = async (tx: TenantClient): Promise<void> => {
+      // Still the AI's to answer (AI-11 §4), under the thread's row lock — which
+      // the reply's append already holds — so a person who wrote first wins.
+      await claimAiTurn(tx, ref);
       const current = read ?? {
         id: (await openConversation(tx, ref, { configVersionId: null })).id,
         version: 0,
@@ -531,16 +581,23 @@ export class AiResponder {
   }
 
   /**
-   * What the turn knows before the gates: how far the conversation's turns
-   * have answered the visitor (0 before the first), and whether the AI has
-   * anything to run — no active skill on an active agent means no turn, so the
-   * message is not held for the window (nor is the chat's next job behind it).
+   * What the turn knows before the gates — or null when the connection is not
+   * the AI's to answer (`threads.ai_mode`, AI-11), which is read first and
+   * ends the look there: how far the conversation's turns have answered the
+   * visitor (0 before the first), and whether the AI has anything to run — no
+   * active skill on an active agent means no turn, so the message is not held
+   * for the window (nor is the chat's next job behind it).
    */
   async #lookout(
     turn: VisitorTurn,
     ref: ConnectionRef,
-  ): Promise<{ answeredThrough: number; runnable: boolean; batchWindowSeconds: number | null }> {
+  ): Promise<{
+    answeredThrough: number;
+    runnable: boolean;
+    batchWindowSeconds: number | null;
+  } | null> {
     return turn.withTenant(async (tx) => {
+      if (!aiMayAnswer(await readAiMode(tx, ref))) return null;
       const conversation = await loadConversation(tx, ref);
       const config = await readAndCompile.forTurn(tx, {
         aiAgentId: null,
@@ -556,8 +613,9 @@ export class AiResponder {
 
   /**
    * The turn's read, in one transaction: the conversation, the configuration
-   * it runs on and what the visitor said — or null when the job's message
-   * (`trigger`) is answered already.
+   * it runs on and what the visitor said — or `answered` when the job's
+   * message (`trigger`) is answered already, `not_ai` when a person took the
+   * connection meanwhile (AI-11).
    *
    * The job's message and every one the visitor wrote after it are the turn's
    * (`through` is the newest); what came before is history — answered, or left
@@ -568,10 +626,11 @@ export class AiResponder {
     tx: TenantClient,
     ref: ConnectionRef,
     trigger: number | null,
-  ): Promise<TurnRead | null> {
+  ): Promise<TurnRead | 'answered' | 'not_ai'> {
+    if (!aiMayAnswer(await readAiMode(tx, ref))) return 'not_ai';
     const conversation = await loadConversation(tx, ref);
     const state = conversation ? toTurnState(conversation) : emptyTurnState();
-    if (trigger !== null && trigger <= state.lastProcessedEventSeq) return null;
+    if (trigger !== null && trigger <= state.lastProcessedEventSeq) return 'answered';
     const config = await readAndCompile.forTurn(tx, {
       aiAgentId: null,
       pinnedVersionId: conversation?.configVersionId ?? null,

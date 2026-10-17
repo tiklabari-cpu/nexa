@@ -26,6 +26,13 @@
  * assignee's notice (tm 289.5): its reply carries the job's mark and is written
  * with the job's fence (`turn.replyProperties`, `turn.replyOutbox`), so a
  * message is answered once whichever of the two answers it.
+ *
+ * A rule that took the conversation over turns the connection `human` (AI-11 ·
+ * tm 293.1): the reply in its own transaction, the transfer in the transfer's.
+ * The AI Agent then stays silent on that connection. The rule bot itself is not
+ * held back by the mode: its rules are sentences the workspace wrote for every
+ * message, and since its own reply sets `human`, a bot that obeyed the mode
+ * would answer one rule per connection.
  */
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import type { BotPrincipal } from '../auth/principal.js';
@@ -73,6 +80,8 @@ export class RuleBotResponder {
       let tookOver = false;
 
       if (match.actions.send_message) {
+        // A rule that answered took the conversation: the AI Agent stays silent
+        // on the connection from here (AI-11), in the reply's own transaction.
         await this.chats.sendEvent(
           tenant,
           principal,
@@ -83,7 +92,7 @@ export class RuleBotResponder {
             recipients: 'all',
             properties: { ...turn.replyProperties },
           },
-          { outbox: turn.replyOutbox },
+          { outbox: turn.replyOutbox, aiMode: { to: 'human', reason: 'rule_bot_reply' } },
         );
         tookOver = true;
       }

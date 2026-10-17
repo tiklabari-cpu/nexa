@@ -116,7 +116,7 @@ describe('ProfileForm', () => {
 describe('PersonaPreview shapes a sample reply with the same helper as the engine (FR-MOD-06.4)', () => {
   it('shows exactly what shapeAnswer(readPersona(...)) produces for the current fields', () => {
     // Not a second, hand-rolled approximation of the rule: the same functions
-    // the engine calls (`skill-engine.ts`), given the same persona shape, must
+    // the engine calls (`conversation-engine.ts`), given the same persona shape, must
     // produce the exact string this component renders.
     renderForm({ ...AGENT, tone: 'friendly', languages: ['en'], answer_length: 'short' });
 

@@ -1,5 +1,12 @@
 /**
- * The bridge between an incoming customer message and the skill engine.
+ * The live adapter between an incoming customer message and the conversation
+ * engine (tm 292.2).
+ *
+ * The engine decides a turn and writes nothing (`conversation/turn.ts`); this
+ * is where the turn happens to the real conversation: the reply is sent as
+ * the bot, the conversation state is saved, the run is recorded, and the
+ * summary, tags and hand-over the turn asked for are applied. A preview shows
+ * the same turn and a simulation (AI-19) records it; neither comes through here.
  *
  * Kept out of the route because the ordering here is load-bearing and easy to
  * get wrong: the customer's message must be durable *before* the AI reacts to
@@ -7,6 +14,14 @@
  * after the message is committed, and every failure path leaves the
  * conversation exactly as it would have been with no AI at all — which is a
  * working conversation waiting for a human.
+ *
+ * **One turn commits once (AI-01 §6).** The state is read before the engine
+ * runs and the model works outside any transaction; the reply, the saved state
+ * and the run row then go in together — in the reply's own transaction when
+ * there is a reply. The save is the optimistic lock (`state-store.ts`): if the
+ * conversation moved on while the model was thinking — another worker's turn,
+ * a person taking it over (AI-11) — the save throws, the reply rolls back with
+ * it, and nothing of this turn is applied. Whoever saved first owns the reply.
  *
  * It is not the first thing an incoming message meets. The deterministic rule
  * bot (FR-MOD-06.6, `services/bots/rule-bot-responder.ts`) is tried first and
@@ -22,37 +37,57 @@
  * pool, the two gates, and the job's mark and fence for the reply.
  */
 import { AI_BOT_ID } from '@siyahtus/types';
+import type { TenantClient } from '../../lib/tenant.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
+import type { ConversationEngine } from './conversation/conversation-engine.js';
+import {
+  AiConversationConflictError,
+  loadConversation,
+  openConversation,
+  saveConversation,
+  type AiConversationState,
+  type ConnectionRef,
+} from './conversation/state-store.js';
+import {
+  describeSideEffects,
+  emptyTurnState,
+  skillRunRecord,
+  toTurnState,
+  tookTurn,
+  turnStatePatch,
+  type TurnResult,
+} from './conversation/turn.js';
+import { liveTurnConfig } from './conversation/turn-config.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
-import type { SkillEngine, SkillRunResult } from './skill-engine.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 
 export class AiResponder {
-  readonly #engine: SkillEngine;
+  readonly #engine: ConversationEngine;
 
   constructor(
     private readonly chats: ChatService,
     private readonly publisher: RealtimePublisher,
-    engine: SkillEngine,
+    engine: ConversationEngine,
   ) {
     this.#engine = engine;
   }
 
   /**
-   * Run any matching skill and apply its outcome.
+   * Take the AI's turn on a visitor message and apply it.
    *
-   * Returns the result for tests and callers that care; the route does not,
+   * Returns the turn for tests and callers that care; the route does not,
    * because there is nothing useful it could do differently.
    *
    * Every turn the AI takes leaves one decision record (tm 288.2 · ID-08) —
-   * after the outcome is applied, so the record names the reply it wrote. A
-   * message no skill matched is not a turn and leaves none; a record that
-   * cannot be written is one log line, never a lost reply.
+   * after the turn is applied, so the record names the reply it wrote. A
+   * message no skill matched is not a turn and leaves none; nor does a turn
+   * that lost the conversation to another writer, whose own turn is the one on
+   * record. A record that cannot be written is one log line, never a lost reply.
    */
-  async handle(turn: VisitorTurn, message: string): Promise<SkillRunResult | null> {
+  async handle(turn: VisitorTurn, message: string): Promise<TurnResult | null> {
     const { tenant, chatId, log } = turn;
     const ids = {
       chatId,
@@ -105,20 +140,38 @@ export class AiResponder {
       return null;
     }
 
+    const ref: ConnectionRef = { chatId, threadId: turn.threadId };
     const startedAt = performance.now();
-    let result: SkillRunResult | null = null;
+    let read: AiConversationState | null = null;
+    let result: TurnResult | null = null;
     let replyEventId: string | null = null;
     let applyFailed = false;
-    let refused = false;
+    let unrecorded = false;
     try {
-      // A runner, not one transaction around the whole run: the engine opens a
-      // short one per database step so the model call waits in none of them.
-      result = await this.#engine.run(turn.withTenant, tenant, {
-        message,
-        chatId,
-        threadId: ids.threadId,
-      });
-      if (result.failure) {
+      // Where the conversation stands and what the AI may run, read together;
+      // then the turn, over a runner rather than one transaction around it —
+      // the engine opens a short one per read so the model call waits in none.
+      const loaded = await turn.withTenant(async (tx) => ({
+        conversation: await loadConversation(tx, ref),
+        config: await liveTurnConfig(tx),
+      }));
+      read = loaded.conversation;
+      result = await this.#engine.runTurn(
+        read ? toTurnState(read) : emptyTurnState(),
+        { text: message },
+        {
+          tenant,
+          db: turn.withTenant,
+          now: new Date(),
+          mode: 'live',
+          chatId,
+          configVersionId: read?.configVersionId ?? null,
+          config: loaded.config,
+          toolStubs: {},
+        },
+      );
+      const { decisions } = result;
+      if (decisions.failure) {
         // The provider's own lines (component `llm` or `embedding`) carry the
         // status and the code but not the conversation; this one, on the
         // turn's logger, ties the failure to the chat a human now has to
@@ -126,10 +179,10 @@ export class AiResponder {
         // customer's outcome is the same for every failure, so this line is
         // where one is told from another (tm 255.9): transient or not, and the
         // provider's own status, code and request id — never its words.
-        const { provider, kind, transient, status, code, requestId, reason } = result.failure;
+        const { provider, kind, transient, status, code, requestId, reason } = decisions.failure;
         log.warn(
           {
-            skill_id: result.skillId,
+            skill_id: decisions.skillId,
             provider,
             kind,
             transient,
@@ -138,38 +191,20 @@ export class AiResponder {
             ...(requestId !== null ? { provider_request_id: requestId } : {}),
             ...(reason !== null ? { reason } : {}),
           },
-          result.failure.provider === 'llm'
+          decisions.failure.provider === 'llm'
             ? 'ai model could not answer; the conversation stays with a human'
             : 'ai knowledge search could not run; the conversation stays with a human',
         );
       }
-      if (result.outcome === 'skipped') return result;
+      if (!tookTurn(result)) return result;
 
-      // Sent as a *bot* principal, which is what makes the event
-      // `author_type: 'bot'` rather than `'agent'`. Two things hang off that
-      // distinction: ADR-09 counts a thread closing with no agent-authored
-      // event as an AI resolution, and Reports' "first response" only starts
-      // the clock on a human. Sending this as an agent would quietly stop the
-      // workspace being billed for the automation it used, and would report
-      // response times no human achieved.
-      if (result.reply) {
-        // With the job's mark and fence (tm 289.5): a message is answered once.
-        const sent = await this.chats.sendEvent(
-          tenant,
-          botPrincipal(tenant),
-          chatId,
-          {
-            type: 'message',
-            text: result.reply,
-            recipients: 'all',
-            properties: { ...turn.replyProperties },
-          },
-          { outbox: turn.replyOutbox },
-        );
-        replyEventId = sent.event.id;
-      }
+      replyEventId = await this.#commit(turn, ref, read, result);
 
-      const summary = result.summary;
+      // A turn that did nothing to the conversation leaves it as it was: what
+      // its steps queued for a reply that never came is not applied.
+      if (decisions.outcome === 'skipped') return result;
+
+      const { summary, tags, transferTo } = describeSideEffects(result.sideEffects);
       if (summary) {
         await turn.withTenant((tx) =>
           tx.thread.updateMany({
@@ -179,15 +214,15 @@ export class AiResponder {
         );
       }
 
-      for (const tag of result.tags) {
+      for (const tag of tags) {
         await this.chats
           .tagThread(tenant, botPrincipal(tenant), chatId, tag)
           // A tag that cannot be applied is not worth abandoning the reply for.
           .catch((error: unknown) => log.warn({ err: error, tag }, 'skill could not apply tag'));
       }
 
-      if (result.transferTo) {
-        await this.#transfer(turn, result.transferTo);
+      if (transferTo) {
+        await this.#transfer(turn, transferTo);
       }
 
       return result;
@@ -196,29 +231,129 @@ export class AiResponder {
       // answer, or another claim holds the job and records its own turn. The
       // worker decides what that means.
       if (error instanceof AiJobReplyRefusedError) {
-        refused = true;
+        unrecorded = true;
         throw error;
+      }
+      // Not a failure either: the conversation moved on while the model was
+      // thinking, and the writer that moved it owns what happens next. Nothing
+      // of this turn was sent or saved; another attempt would answer a
+      // conversation that is no longer the one it read.
+      if (error instanceof AiConversationConflictError) {
+        unrecorded = true;
+        log.info(
+          { conversation_id: error.conversationId, expected_version: error.expectedVersion },
+          'ai turn lost the conversation to another writer; nothing was sent',
+        );
+        return null;
       }
       // The customer's message is already stored. Whatever went wrong here, the
       // conversation is intact and a human will pick it up — which is exactly
       // what would have happened without any AI.
-      log.error({ err: error }, 'skill engine failed');
+      log.error({ err: error }, 'ai turn failed');
       applyFailed = result !== null;
       return null;
     } finally {
-      // Recorded once the outcome is applied (or failed to apply), so the row
-      // can name the reply it wrote. An engine that threw before deciding
-      // anything leaves no result and no row — its log line above is the record.
-      const decided = result && !refused ? skillDecision(result) : null;
+      // Recorded once the turn is applied (or failed to apply), so the row can
+      // name the reply it wrote. An engine that threw before deciding anything
+      // leaves no result and no row — its log line above is the record.
+      const decided = result && !unrecorded ? skillDecision(result) : null;
       if (decided) {
         await record({
           ...decided,
           replyEventId,
           latencyMs: performance.now() - startedAt,
+          // The configuration the turn ran on (ADR-14b §2.7) — null until tm 316.
+          configVersionId: read?.configVersionId ?? null,
           ...(applyFailed ? { errorType: decided.errorType ?? 'apply_failed' } : {}),
         });
       }
     }
+  }
+
+  /**
+   * The turn's one commit: the reply (if any), the conversation state and the
+   * run row, in one transaction. Returns the reply's event id.
+   *
+   * The state is saved against the version the turn read — or, when the
+   * connection had no conversation yet, against the row as it was opened
+   * (version 0): a row another writer opened *and* wrote in the meantime is a
+   * lost race too. Throws {@link AiConversationConflictError} when the race
+   * was lost, which rolls the reply back with it.
+   */
+  async #commit(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    read: AiConversationState | null,
+    result: TurnResult,
+  ): Promise<string | null> {
+    const { tenant, chatId } = turn;
+    const patch = turnStatePatch(read ? toTurnState(read) : emptyTurnState(), result.nextState);
+    const run = skillRunRecord(result.decisions);
+
+    // Through `tx` and nowhere else: as the reply's outbox it runs again on
+    // the send's race retry, whose first attempt rolled back with it.
+    const write = async (tx: TenantClient): Promise<void> => {
+      const current = read ?? {
+        id: (await openConversation(tx, ref, { configVersionId: null })).id,
+        version: 0,
+      };
+      if (Object.keys(patch).length > 0) await saveConversation(tx, current, patch);
+      if (run) {
+        await tx.skillRun.create({
+          data: {
+            skillId: run.skillId,
+            chatId,
+            // The connection beside the day container (tm 288.2 · ID-08).
+            threadId: ref.threadId,
+            licenseId: tenant.licenseId,
+            status: run.status,
+            log: run.log as unknown as object,
+            llmInputTokens: run.llmInputTokens,
+            llmOutputTokens: run.llmOutputTokens,
+            embeddingTokens: run.embeddingTokens,
+          },
+        });
+        // The count an admin sees in the Playbook list. Incremented in the same
+        // transaction so it cannot drift from the run log beside it.
+        await tx.skill.update({
+          where: { id: run.skillId },
+          data: { runsCount: { increment: 1 } },
+        });
+      }
+    };
+
+    // Sent as a *bot* principal, which is what makes the event
+    // `author_type: 'bot'` rather than `'agent'`. Two things hang off that
+    // distinction: ADR-09 counts a thread closing with no agent-authored
+    // event as an AI resolution, and Reports' "first response" only starts
+    // the clock on a human. Sending this as an agent would quietly stop the
+    // workspace being billed for the automation it used, and would report
+    // response times no human achieved.
+    if (result.reply) {
+      const sent = await this.chats.sendEvent(
+        tenant,
+        botPrincipal(tenant),
+        chatId,
+        {
+          type: 'message',
+          text: result.reply,
+          recipients: 'all',
+          properties: { ...turn.replyProperties },
+        },
+        {
+          // With the job's mark and fence (tm 289.5): a message is answered
+          // once. Then the turn's own commit, in the same transaction.
+          outbox: async (tx, written) => {
+            await turn.replyOutbox(tx, written);
+            await write(tx);
+          },
+        },
+      );
+      return sent.event.id;
+    }
+
+    await turn.withTenant(write);
+    return null;
   }
 
   async #transfer(turn: VisitorTurn, groupName: string): Promise<void> {

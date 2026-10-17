@@ -1,10 +1,11 @@
 /**
  * How a model call fails (tm 255.6), or is refused before it is made (tm 255.9).
  *
- * One error class and a closed list of reasons. Whatever the reason, the skill
- * engine does the same thing with it — the AI stops and the conversation stays
- * with a human (`skill-engine.ts`) — so the kinds are not there to change the
- * product's behaviour. They are for the two readers who do have to tell
+ * One error class and a closed list of reasons. Whatever the reason, the
+ * conversation engine does the same thing with it — the AI stops and the
+ * conversation stays with a human (`conversation/conversation-engine.ts`) — so
+ * the kinds are not there to change the product's behaviour. They are for the
+ * two readers who do have to tell
  * failures apart: the adapter's retry loop and circuit breaker
  * (`openai-llm-provider.ts`), and the operator reading the log afterwards.
  *

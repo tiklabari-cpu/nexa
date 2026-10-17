@@ -23,7 +23,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { AI_DECISION_DETAILS_MAX_BYTES, AI_DECISIONS } from '@siyahtus/types';
 import { withTenant, type TenantContext } from '../../src/lib/tenant.js';
 import { recordAiDecision } from '../../src/services/ai/decision-log.js';
-import type { TenantRunner } from '../../src/services/ai/skill-engine.js';
+import type { TenantRunner } from '../../src/services/ai/conversation/turn.js';
 import { eraseCustomer } from '../../src/services/retention/erasure.js';
 import { type RetentionPolicy } from '../../src/services/retention/policy.js';
 import { RetentionRunner } from '../../src/services/retention/retention.js';

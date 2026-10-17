@@ -273,7 +273,7 @@ function PersonaPreview({
   const trimmed = name.trim();
   const initial = (trimmed || '?').charAt(0).toUpperCase();
 
-  // Same helper, same input shape the engine reads off the row (`skill-engine.ts`
+  // Same helper, same input shape the engine reads off the row (`turn-config.ts`
   // `readPersona(skill.aiAgent)`), so the reply below is what this persona would
   // actually produce — not a second, hand-rolled approximation of the rule.
   const persona = readPersona({ tone, languages, answerLength: answerLength || null });

@@ -51,7 +51,8 @@ import type { VisitorTurn } from '../services/chat/visitor-turn.js';
 import { withTenant } from '../lib/tenant.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
-import { SkillEngine, type TenantRunner } from '../services/ai/skill-engine.js';
+import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
+import type { TenantRunner } from '../services/ai/conversation/turn.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -328,7 +329,7 @@ export default async function customerRoutes(
   const ai = new AiResponder(
     chats,
     publisher,
-    new SkillEngine({
+    new ConversationEngine({
       llm,
       knowledge,
       maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,

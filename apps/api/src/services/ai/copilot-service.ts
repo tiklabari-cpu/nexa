@@ -39,7 +39,7 @@ import {
 } from './knowledge-service.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
 import type { LlmUsage } from './provider/llm-provider.js';
-import type { TenantRunner } from './skill-engine.js';
+import type { TenantRunner } from './conversation/turn.js';
 
 const COPILOT_KIND = 'copilot';
 /**

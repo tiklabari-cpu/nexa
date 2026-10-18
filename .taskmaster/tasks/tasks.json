@@ -12625,7 +12625,7 @@
           "295"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T04:08:22.589Z",
+        "updatedAt": "2026-10-18T07:41:02.548Z",
         "subtasks": [
           {
             "id": 1,
@@ -12659,14 +12659,14 @@
             "description": "executor.ts: adım döngüsü (tur başına ≤8 iç adım), procedure_snapshot, konu değişimi/askı, max_turns",
             "details": "facts arayüzü (AI-13 öncesi stub).",
             "testStrategy": "§3.1 akışı entegrasyon; askıya alma.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "296.1",
               "296.7"
             ],
             "parentId": "296",
             "priority": "high",
-            "updatedAt": "2026-10-18T04:08:22.589Z"
+            "updatedAt": "2026-10-18T07:41:02.548Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T04:08:22.589Z",
+      "lastModified": "2026-10-18T07:41:02.549Z",
       "taskCount": 390,
       "completedCount": 294,
       "tags": [

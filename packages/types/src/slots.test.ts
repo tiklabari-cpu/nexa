@@ -295,6 +295,57 @@ describe('sensitive slots are refused on save (AI-04 §3 · G11)', () => {
   });
 });
 
+describe('an identity document is not taken through the chat (AI-04-S1 · G12)', () => {
+  const receipt = {
+    name: 'dekont',
+    label: 'Dekont',
+    type: 'file',
+    ask: 'Dekontu ya da ekran görüntüsünü paylaşabilir misiniz?',
+  };
+
+  it.each([
+    ['ask', 'Kimliğinizin ön yüzünün fotoğrafını gönderir misiniz?'],
+    ['ask', 'Nüfus cüzdanınızı yükler misiniz?'],
+    ['label', 'Pasaport'],
+    ['label', 'Ehliyet fotoğrafı'],
+    ['ask', 'Kimliğinizle bir özçekim (selfie) gönderin.'],
+    ['label', 'İkametgah belgesi'],
+    ['ask', 'Please upload a photo of your ID card.'],
+    ['ask', "Send us your driver's license."],
+    ['card_label', 'Proof of address'],
+    ['ask_variants', 'KYC belgenizi buradan iletin.'],
+  ])('refuses a file slot whose %s reads "%s"', (field, text) => {
+    const def =
+      field === 'ask_variants'
+        ? { ...receipt, ask_variants: [text] }
+        : { ...receipt, [field]: text };
+    expect(problemsOf(def)).toEqual([
+      {
+        code: 'slot_identity_document_forbidden',
+        index: 0,
+        name: 'dekont',
+        field,
+        message: `slot dekont: ${field} asks for an identity document, which the AI never takes through the chat`,
+      },
+    ]);
+  });
+
+  it('takes a receipt or a screenshot, and lets a non-file slot name an identity', () => {
+    expect(codesOf(receipt)).toEqual([]);
+    expect(codesOf({ ...receipt, ask: 'Ödeme ekranının görüntüsünü paylaşır mısınız?' })).toEqual(
+      [],
+    );
+    expect(
+      codesOf({
+        name: 'kimlik_turu',
+        label: 'Kimlik türü',
+        type: 'text',
+        ask: 'Hangi kimlikle kayıt oldunuz?',
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe('validateSlotDef — fields', () => {
   it('refuses a name that is not lower snake_case', () => {
     for (const name of ['Tutar', '1tutar', 'tutar-x', '', 'a'.repeat(41), 42]) {
@@ -489,6 +540,7 @@ describe('validateSlotDefs — the list', () => {
       [{ ...amount, type: 'enum', validate: undefined }],
       [{ ...amount, type: 'enum', validate: { enum_source: 'x' } }],
       [{ ...amount, label: 'Şifre' }],
+      [{ ...amount, type: 'file', validate: undefined, label: 'Pasaport' }],
     ];
     const seen = new Set<SlotProblemCode>();
     for (const fixture of fixtures) {

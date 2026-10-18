@@ -38,6 +38,7 @@ import {
   openAiProblem,
   type FakeOpenAiFetch,
 } from '../helpers/fake-openai.js';
+import { knowledgeAnswerJson } from '../helpers/knowledge-answer.js';
 import { ownerClient, seedFixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -119,7 +120,7 @@ describe('AI usage and per-call limits through the real server (tm 255.9)', () =
 
   describe('the cost of an answer is counted on the run the report already counted', () => {
     it('writes each answer’s tokens on its run, sums them in the AI Agent report, and adds nothing to the invoice’s table', async () => {
-      const llm = fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER));
+      const llm = fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER)));
       const { server } = await start({ llm });
       try {
         const ws = await seedAiWorkspace(owner, { embeddingSpace: OPENAI_SPACE });
@@ -179,7 +180,9 @@ describe('AI usage and per-call limits through the real server (tm 255.9)', () =
     });
 
     it('keeps one workspace’s tokens out of another’s report', async () => {
-      const { server } = await start({ llm: fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER)) });
+      const { server } = await start({
+        llm: fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER))),
+      });
       try {
         const busy = await seedAiWorkspace(owner, { embeddingSpace: OPENAI_SPACE });
         const quiet = await seedAiWorkspace(owner, { embeddingSpace: OPENAI_SPACE });
@@ -202,7 +205,7 @@ describe('AI usage and per-call limits through the real server (tm 255.9)', () =
 
   describe('the per-call ceilings', () => {
     it('sends LLM_MAX_OUTPUT_TOKENS to the provider as max_completion_tokens', async () => {
-      const llm = fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER));
+      const llm = fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER)));
       const { server } = await start({ llm }, { LLM_MAX_OUTPUT_TOKENS: '123' });
       try {
         const ws = await seedAiWorkspace(owner, { embeddingSpace: OPENAI_SPACE });
@@ -220,7 +223,7 @@ describe('AI usage and per-call limits through the real server (tm 255.9)', () =
     });
 
     it('never sends a prompt over LLM_MAX_PROMPT_CHARS: no request, no tokens, a human answers (FR-05-06.EK1)', async () => {
-      const llm = fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER));
+      const llm = fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER)));
       const { server, log, embeddings } = await start({ llm }, { LLM_MAX_PROMPT_CHARS: '2000' });
       try {
         const ws = await seedAiWorkspace(owner, { embeddingSpace: OPENAI_SPACE });

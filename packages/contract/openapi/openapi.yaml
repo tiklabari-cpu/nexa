@@ -1592,7 +1592,7 @@ components:
 
     AiHandoffSettings:
       type: object
-      required: [ai_agent_id, assignment_mode, ai_stall_timeout_seconds]
+      required: [ai_agent_id, assignment_mode, ai_stall_timeout_seconds, no_answer]
       properties:
         ai_agent_id: { type: string, format: uuid }
         assignment_mode:
@@ -1614,6 +1614,43 @@ components:
             (AI-11). An unassigned conversation the agent is answering, whose
             oldest unanswered visitor message is older than this, is routed to
             a person as an `ai_failure` hand-over. Default 60.
+        no_answer: { $ref: "#/components/schemas/AiNoAnswerSettings" }
+
+    AiNoAnswerSettings:
+      type: object
+      required: [policy_by_category, text]
+      additionalProperties: false
+      description: |
+        What the agent does when the knowledge base has no answer to a
+        question no procedure takes (AI-06). It says so — it never stays
+        silent and never guesses — and then, by what the question is about,
+        either hands the conversation to a person at once (`handoff`) or asks
+        once whether to (`ask`; a second miss hands over without asking).
+        Defaults: money, account, bonus and responsible gaming `handoff`,
+        anything else `ask`.
+      properties:
+        policy_by_category:
+          type: object
+          required: [money, account, bonus, rg, other]
+          additionalProperties: false
+          properties:
+            money: { $ref: "#/components/schemas/AiNoAnswerPolicy" }
+            account: { $ref: "#/components/schemas/AiNoAnswerPolicy" }
+            bonus: { $ref: "#/components/schemas/AiNoAnswerPolicy" }
+            rg: { $ref: "#/components/schemas/AiNoAnswerPolicy" }
+            other: { $ref: "#/components/schemas/AiNoAnswerPolicy" }
+        text:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: |
+            The workspace's own sentence for a hand-over at once, said as
+            written. Null: "Bu konuda size kesin bilgi veremiyorum. Sizi bir
+            temsilcimize aktarıyorum." in the reply's language.
+
+    AiNoAnswerPolicy:
+      type: string
+      enum: [handoff, ask]
 
     AiConversationState:
       type: object

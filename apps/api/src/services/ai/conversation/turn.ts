@@ -23,6 +23,8 @@
  * pinned configuration version stay with the store (`state-store.ts`).
  */
 import type {
+  AiConversationMode,
+  AiNoAnswerSettings,
   ClarifyThresholds,
   DailyMemorySettings,
   Persona,
@@ -35,6 +37,7 @@ import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
 import type { EarlierToday } from './daily-memory.js';
+import type { KnowledgeRecord, UnansweredRecord } from './knowledge-answer.js';
 import type { PolicyRecord } from './policy.js';
 import type { ProcedureFacts } from './procedure/conditions.js';
 import type { StepDecision } from './procedure/executor.js';
@@ -218,6 +221,15 @@ export interface TurnSkill {
  * versions exist (tm 316), the draft for a simulation — so the turn never
  * reads configuration tables itself.
  */
+/**
+ * The agent a turn with no skill answers for (tm 298): its first skill's —
+ * whose persona it speaks in, whose knowledge is searched and whose
+ * `no_answer` setting applies.
+ */
+export function turnAgentId(skills: readonly TurnSkill[]): string | null {
+  return skills[0]?.aiAgentId ?? null;
+}
+
 export interface TurnConfig {
   /** In the order they are tried; the first that matches is the only one that runs. */
   readonly skills: readonly TurnSkill[];
@@ -268,6 +280,19 @@ export interface TurnContext {
   readonly timeZone?: string;
   /** What a procedure turn reads besides the conversation (tm 296.3). */
   readonly procedure?: ProcedureTurnData;
+  /**
+   * Who answers the connection (`threads.ai_mode`, AI-11) as the turn read it.
+   * `ai`: the silence rule holds (tm 298 · AI-06 §9) — the turn ends with a
+   * message or a hand-over. Absent or null (no connection, or nobody has it
+   * yet — routing gave it to a person when it opened): a message nothing
+   * takes is still no turn.
+   */
+  readonly aiMode?: AiConversationMode | null;
+  /**
+   * The turn's agent's `no_answer` setting (tm 298 · AI-06 §8), read live
+   * with the turn (`ai_handoff_settings`). Absent: `DEFAULT_NO_ANSWER`.
+   */
+  readonly noAnswer?: AiNoAnswerSettings;
 }
 
 /**
@@ -376,6 +401,16 @@ export interface TurnDecisions {
    * absent when the understanding call was not made.
    */
   policy?: PolicyRecord;
+  /**
+   * The knowledge answer's grounding and the chunks and sources it cites
+   * (tm 298 · AI-06 §10, G18) — absent when nothing was searched.
+   */
+  knowledge?: KnowledgeRecord;
+  /**
+   * The question the AI could not answer (tm 298 · AI-06 §8): what AI-22
+   * collects (`ai.unanswered`) — absent when it answered.
+   */
+  unanswered?: UnansweredRecord;
 }
 
 /** The understanding as the decision record keeps it: keys and numbers, no words. */

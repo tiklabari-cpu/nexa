@@ -24,14 +24,18 @@ import {
   readClarifyThresholds,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   DEFAULT_SKILL_MODE,
+  NO_ANSWER_POLICIES,
+  NO_ANSWER_TEXT_MAX,
   SKILL_MODES,
   procedureProblemDetails,
   readBatchWindowSeconds,
   readDailyMemory,
+  readNoAnswerSettings,
   splitSkillProcedure,
   validateSkillProcedure,
   validateSkillSelection,
   type AiAssignmentMode,
+  type AiNoAnswerSettings,
   type Procedure,
   type ProcedureProblem,
   type SkillMode,
@@ -430,7 +434,9 @@ const updateAgentBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
-/** Either field alone; the one left out keeps its value (tm 293.6). */
+const noAnswerPolicy = z.enum(NO_ANSWER_POLICIES).optional();
+
+/** Any field alone; the ones left out keep their value (tm 293.6, tm 298). */
 const handoffSettingsBody = z
   .object({
     assignment_mode: z.enum(AI_ASSIGNMENT_MODES).optional(),
@@ -439,6 +445,25 @@ const handoffSettingsBody = z
       .int()
       .min(AI_STALL_TIMEOUT_SECONDS_MIN)
       .max(AI_STALL_TIMEOUT_SECONDS_MAX)
+      .optional(),
+    // The groups sent change; the rest keep their policy (AI-06).
+    no_answer: z
+      .object({
+        policy_by_category: z
+          .object({
+            money: noAnswerPolicy,
+            account: noAnswerPolicy,
+            bonus: noAnswerPolicy,
+            rg: noAnswerPolicy,
+            other: noAnswerPolicy,
+          })
+          .strict()
+          .refine((policies) => Object.keys(policies).length > 0, 'at least one group is required')
+          .optional(),
+        text: z.string().trim().min(1).max(NO_ANSWER_TEXT_MAX).nullable().optional(),
+      })
+      .strict()
+      .refine((value) => Object.keys(value).length > 0, 'at least one field is required')
       .optional(),
   })
   .strict()
@@ -766,14 +791,30 @@ export default async function playbookRoutes(
       const id = parse(uuid, request.params.aiAgentId);
       const body = parse(handoffSettingsBody, request.body);
       const tenant = request.tenant();
-      const fields = {
-        ...(body.assignment_mode !== undefined ? { assignmentMode: body.assignment_mode } : {}),
-        ...(body.ai_stall_timeout_seconds !== undefined
-          ? { aiStallTimeoutSeconds: body.ai_stall_timeout_seconds }
-          : {}),
-      };
       const settings = await request.withTenant(async (tx) => {
         await customerFacingAgent(tx, id);
+        // `no_answer` is merged over what is stored, under the row the upsert
+        // then writes: a group left out keeps its policy.
+        const stored = body.no_answer
+          ? await tx.aiHandoffSettings.findUnique({
+              where: { aiAgentId: id },
+              select: { noAnswer: true },
+            })
+          : null;
+        const fields = {
+          ...(body.assignment_mode !== undefined ? { assignmentMode: body.assignment_mode } : {}),
+          ...(body.ai_stall_timeout_seconds !== undefined
+            ? { aiStallTimeoutSeconds: body.ai_stall_timeout_seconds }
+            : {}),
+          ...(body.no_answer
+            ? {
+                noAnswer: mergeNoAnswer(
+                  stored?.noAnswer ?? null,
+                  body.no_answer,
+                ) as unknown as Prisma.InputJsonObject,
+              }
+            : {}),
+        };
         return tx.aiHandoffSettings.upsert({
           where: { aiAgentId: id },
           create: { aiAgentId: id, licenseId: tenant.licenseId, ...fields },
@@ -1950,19 +1991,48 @@ function serialiseIndexedSource(
 }
 
 /** One shape for an AI agent, so a read and the reply after a PATCH never drift. */
-const HANDOFF_SETTINGS_SELECT = { assignmentMode: true, aiStallTimeoutSeconds: true } as const;
+const HANDOFF_SETTINGS_SELECT = {
+  assignmentMode: true,
+  aiStallTimeoutSeconds: true,
+  noAnswer: true,
+} as const;
 
 /** `AiHandoffSettings` (contract): an agent with no row has the defaults. */
 function serialiseHandoffSettings(
   aiAgentId: string,
-  row: { assignmentMode: string; aiStallTimeoutSeconds: number } | null,
-): { ai_agent_id: string; assignment_mode: AiAssignmentMode; ai_stall_timeout_seconds: number } {
+  row: { assignmentMode: string; aiStallTimeoutSeconds: number; noAnswer: unknown } | null,
+): {
+  ai_agent_id: string;
+  assignment_mode: AiAssignmentMode;
+  ai_stall_timeout_seconds: number;
+  no_answer: AiNoAnswerSettings;
+} {
   return {
     ai_agent_id: aiAgentId,
     // The CHECK holds the column to `AI_ASSIGNMENT_MODES`.
     assignment_mode:
       (row?.assignmentMode as AiAssignmentMode | undefined) ?? DEFAULT_AI_ASSIGNMENT_MODE,
     ai_stall_timeout_seconds: row?.aiStallTimeoutSeconds ?? DEFAULT_AI_STALL_TIMEOUT_SECONDS,
+    no_answer: readNoAnswerSettings(row?.noAnswer ?? null),
+  };
+}
+
+/** The stored `no_answer` with a PUT's groups and sentence over it (tm 298). */
+function mergeNoAnswer(
+  stored: unknown,
+  change: {
+    policy_by_category?: Partial<AiNoAnswerSettings['policy_by_category']>;
+    text?: string | null;
+  },
+): AiNoAnswerSettings {
+  const current = readNoAnswerSettings(stored);
+  const policies = { ...current.policy_by_category };
+  for (const [category, policy] of Object.entries(change.policy_by_category ?? {})) {
+    if (policy) policies[category as keyof typeof policies] = policy;
+  }
+  return {
+    policy_by_category: policies,
+    text: change.text === undefined ? current.text : change.text,
   };
 }
 

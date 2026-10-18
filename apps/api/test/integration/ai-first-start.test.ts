@@ -212,6 +212,16 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 Â
         ai_agent_id: aiAgentId,
         assignment_mode: 'parallel',
         ai_stall_timeout_seconds: 60,
+        no_answer: {
+          policy_by_category: {
+            money: 'handoff',
+            account: 'handoff',
+            bonus: 'handoff',
+            rg: 'handoff',
+            other: 'ask',
+          },
+          text: null,
+        },
       });
 
       const written = await putMode('ai_first');
@@ -220,6 +230,16 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 Â
         ai_agent_id: aiAgentId,
         assignment_mode: 'ai_first',
         ai_stall_timeout_seconds: 60,
+        no_answer: {
+          policy_by_category: {
+            money: 'handoff',
+            account: 'handoff',
+            bonus: 'handoff',
+            rg: 'handoff',
+            other: 'ask',
+          },
+          text: null,
+        },
       });
       expect((await read()).json()).toMatchObject({ assignment_mode: 'ai_first' });
 
@@ -323,8 +343,10 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 Â
       expect(await viewIds('my', agentToken)).not.toContain(chatId);
     });
 
-    it('is in the AI view from the moment it opens, before the AI has said anything', async () => {
-      // A skill that matches nothing here: the AI takes no turn on this message.
+    it('is in the AI view from the moment it opens, and stays there while the AI asks whether to hand over', async () => {
+      // A skill that matches nothing here: no skill answers, the knowledge
+      // base is empty, and the AI says so â€” asking, for a question about
+      // nothing in particular, whether to hand over (tm 298 Â· AI-06-S1).
       await skill([
         { type: 'detect_intent', intent: 'refund', phrases: ['refund'] },
         { type: 'send_message', source: 'text', text: AI_ANSWER },
@@ -333,7 +355,9 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 Â
 
       const { chatId, threadId } = await send(await visitor(), 'Hello there');
 
-      expect(await botTexts(chatId)).toEqual([]);
+      expect(await botTexts(chatId)).toEqual([
+        'Bu konuda size kesin bilgi veremiyorum. Sizi bir temsilcimize aktarayÄ±m mÄ±?',
+      ]);
       expect((await thread(threadId)).aiMode).toBe('ai');
       expect(await viewIds('ai')).toEqual([chatId]);
       expect(await viewIds('unassigned')).not.toContain(chatId);

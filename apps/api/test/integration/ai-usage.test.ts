@@ -31,6 +31,7 @@ import type {
 } from '../../src/services/ai/provider/llm-provider.js';
 import { customerAsks, seedAiWorkspace, type AiWorkspace } from '../helpers/ai-workspace.js';
 import { grantToken, ownerClient, seedFixtures } from '../helpers/fixtures.js';
+import { asKnowledgeAnswer } from '../helpers/knowledge-answer.js';
 import { MemoryMailer } from '../helpers/invite-join.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -46,10 +47,10 @@ class ScriptedLlm implements LlmProvider {
   readonly id = 'openai' as const;
   calls = 0;
 
-  async complete(_request: LlmCompletionRequest): Promise<LlmCompletion> {
+  async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
     this.calls += 1;
     return {
-      text: 'Written by the scripted model.',
+      text: asKnowledgeAnswer('Written by the scripted model.', request),
       usage: { inputTokens: 100, outputTokens: 10 },
     };
   }

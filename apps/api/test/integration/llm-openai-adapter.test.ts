@@ -31,6 +31,7 @@ import {
   openAiProblem,
   type FakeOpenAiFetch,
 } from '../helpers/fake-openai.js';
+import { knowledgeAnswerJson } from '../helpers/knowledge-answer.js';
 import { grantToken, ownerClient, seedFixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -240,8 +241,8 @@ describe('OpenAI chat adapter through the real server (tm 255.6)', () => {
   });
 
   describe('a question answered by the model (FR-05-06.EK1)', () => {
-    it('sends the customer the model text, having sent the model only model, messages and max_completion_tokens (FR-MOD-06.4)', async () => {
-      const net = fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER));
+    it('sends the customer the model text, having sent the model only model, messages, max_completion_tokens and the answer’s schema (FR-MOD-06.4)', async () => {
+      const net = fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER)));
       const { server, log } = await start(net);
       try {
         const ws = await seedWorkspace();
@@ -260,7 +261,13 @@ describe('OpenAI chat adapter through the real server (tm 255.6)', () => {
           max_completion_tokens: number;
           messages: Array<{ role: string; content: string }>;
         };
-        expect(Object.keys(body).sort()).toEqual(['max_completion_tokens', 'messages', 'model']);
+        // The knowledge answer is the cited object (tm 298 · ADR §6a.1).
+        expect(Object.keys(body).sort()).toEqual([
+          'max_completion_tokens',
+          'messages',
+          'model',
+          'response_format',
+        ]);
         expect(body.model).toBe('test-model');
         expect(body.max_completion_tokens).toBe(400);
         expect(body.messages.map((m) => m.role)).toEqual(['system', 'user']);
@@ -291,7 +298,7 @@ describe('OpenAI chat adapter through the real server (tm 255.6)', () => {
     it('rides out a transient 503 with a retry', async () => {
       const net = fakeOpenAiFetch(
         openAiProblem(503, 'server_is_overloaded', { type: 'service_unavailable_error' }),
-        openAiCompletion(MODEL_ANSWER),
+        openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER)),
       );
       const { server, log } = await start(net);
       try {
@@ -394,7 +401,9 @@ describe('OpenAI chat adapter through the real server (tm 255.6)', () => {
     });
 
     it('redacts the key wherever someone logs the configuration (log-redact paths)', async () => {
-      const { server, log } = await start(fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER)));
+      const { server, log } = await start(
+        fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER))),
+      );
       try {
         server.app.log.info(
           {
@@ -448,7 +457,7 @@ describe('OpenAI chat adapter through the real server (tm 255.6)', () => {
 
   describe('the residency gate stands in front of the real adapter (NFR-C4)', () => {
     it('makes no request at all for a covered workspace on an out-of-region provider', async () => {
-      const net = fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER));
+      const net = fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER)));
       const { server } = await start(net, OUT_OF_REGION_ENV);
       try {
         const covered = await seedWorkspace({ region: 'us', baaSigned: true });

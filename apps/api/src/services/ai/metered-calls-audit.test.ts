@@ -58,8 +58,8 @@ const ALLOWED: Readonly<Record<string, Allowance>> = {
     holds: /readonly #embeddings: MeteredEmbeddings;/,
   },
   'services/ai/conversation/conversation-engine.ts': {
-    calls: 2,
-    why: 'calls the MeteredLlm it holds with the turn’s workspace, on the meter its mode names — the knowledge answer and a procedure turn’s written part (tm 296.3)',
+    calls: 1,
+    why: 'calls the MeteredLlm it holds with the turn’s workspace, on the meter its mode names — a procedure turn’s written part (tm 296.3); the understanding call and the cited knowledge answer (tm 298) go through completeStructured over MeteredLlm.forTenant(...)',
     holds: /readonly #llm: MeteredLlm;/,
   },
   'services/ai/copilot-summary.ts': {

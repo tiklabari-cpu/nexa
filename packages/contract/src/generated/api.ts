@@ -3074,8 +3074,13 @@ export interface paths {
      *     conversations that open after the change.
      *
      *     `ai_stall_timeout_seconds` is how long a visitor may wait on the agent
-     *     in such a conversation before a person is sent. Either field may be
-     *     sent alone; the other keeps its value.
+     *     in such a conversation before a person is sent.
+     *
+     *     `no_answer` is what the agent does when the knowledge base has no
+     *     answer (AI-06): the groups it names change, the others keep their
+     *     policy; `text: null` goes back to the default sentence.
+     *
+     *     Any field may be sent alone; the others keep their value.
      */
     put: operations['updateAiAgentHandoffSettings'];
     post?: never;
@@ -9310,7 +9315,34 @@ export interface components {
        *     a person as an `ai_failure` hand-over. Default 60.
        */
       ai_stall_timeout_seconds: number;
+      no_answer: components['schemas']['AiNoAnswerSettings'];
     };
+    /**
+     * @description What the agent does when the knowledge base has no answer to a
+     *     question no procedure takes (AI-06). It says so — it never stays
+     *     silent and never guesses — and then, by what the question is about,
+     *     either hands the conversation to a person at once (`handoff`) or asks
+     *     once whether to (`ask`; a second miss hands over without asking).
+     *     Defaults: money, account, bonus and responsible gaming `handoff`,
+     *     anything else `ask`.
+     */
+    AiNoAnswerSettings: {
+      policy_by_category: {
+        money: components['schemas']['AiNoAnswerPolicy'];
+        account: components['schemas']['AiNoAnswerPolicy'];
+        bonus: components['schemas']['AiNoAnswerPolicy'];
+        rg: components['schemas']['AiNoAnswerPolicy'];
+        other: components['schemas']['AiNoAnswerPolicy'];
+      };
+      /**
+       * @description The workspace's own sentence for a hand-over at once, said as
+       *     written. Null: "Bu konuda size kesin bilgi veremiyorum. Sizi bir
+       *     temsilcimize aktarıyorum." in the reply's language.
+       */
+      text: string | null;
+    };
+    /** @enum {string} */
+    AiNoAnswerPolicy: 'handoff' | 'ask';
     /**
      * @description Where the AI stands on a connection (AI-03 · tm 296.4), read from
      *     `ai_conversations`: `GET /chats/{chatId}/ai-conversation`, and the state
@@ -19515,6 +19547,16 @@ export interface operations {
           /** @enum {string} */
           assignment_mode?: 'ai_first' | 'parallel';
           ai_stall_timeout_seconds?: number;
+          no_answer?: {
+            policy_by_category?: {
+              money?: components['schemas']['AiNoAnswerPolicy'];
+              account?: components['schemas']['AiNoAnswerPolicy'];
+              bonus?: components['schemas']['AiNoAnswerPolicy'];
+              rg?: components['schemas']['AiNoAnswerPolicy'];
+              other?: components['schemas']['AiNoAnswerPolicy'];
+            };
+            text?: string | null;
+          };
         };
       };
     };

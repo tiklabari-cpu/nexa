@@ -21,7 +21,10 @@
  * The understanding call (tm 297.1) is the one structured request answered
  * from its input rather than its schema: `mockUnderstanding` reads the
  * context line `buildUnderstandPrompt` wrote, so a procedure is found by its
- * example sentences in every suite (AI-05 §6).
+ * example sentences in every suite (AI-05 §6). So is the cited knowledge
+ * answer (tm 298): `mockKnowledgeAnswer` reads the grounding
+ * `buildAnswerPrompt` wrote and writes the stitched answer it always wrote,
+ * citing the passages it used.
  * The invalid, refused and cut-off replies a real model can give are not
  * produced here; tests inject a provider that gives them (§6a.6).
  *
@@ -35,6 +38,10 @@
 import { shapeAnswer } from '@siyahtus/types';
 import { readAnswerGrounding } from './answer-prompt.js';
 import { readComposeGrounding } from './compose-prompt.js';
+import {
+  KNOWLEDGE_ANSWER_RESPONSE_NAME,
+  mockKnowledgeAnswer,
+} from '../conversation/knowledge-answer.js';
 import { mockUnderstanding } from '../conversation/understand-mock.js';
 import { readUnderstandGrounding, UNDERSTAND_RESPONSE_NAME } from '../conversation/understand.js';
 import { exampleForSchema } from './json-schema.js';
@@ -44,6 +51,18 @@ export class MockLlmProvider implements LlmProvider {
   readonly id = 'mock' as const;
 
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
+    if (request.responseFormat?.name === KNOWLEDGE_ANSWER_RESPONSE_NAME) {
+      const grounding = readAnswerGrounding(request.system);
+      if (!grounding) {
+        throw new Error(
+          'A knowledge answer request without the grounding buildAnswerPrompt writes.',
+        );
+      }
+      return {
+        text: JSON.stringify(mockKnowledgeAnswer(grounding)),
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
     if (request.responseFormat) {
       const grounding =
         request.responseFormat.name === UNDERSTAND_RESPONSE_NAME

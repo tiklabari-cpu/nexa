@@ -46,6 +46,7 @@ import type {
 } from '../../src/services/ai/provider/llm-provider.js';
 import { LineSink, customerAsks, seedAiWorkspace } from '../helpers/ai-workspace.js';
 import { ownerClient, seedFixtures, testEnv, type Fixtures } from '../helpers/fixtures.js';
+import { asKnowledgeAnswer } from '../helpers/knowledge-answer.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -62,7 +63,10 @@ class ScriptedLlm implements LlmProvider {
 
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
     this.calls.push(request);
-    return { text: REPLY, usage: { inputTokens: 100, outputTokens: 10 } };
+    return {
+      text: asKnowledgeAnswer(REPLY, request),
+      usage: { inputTokens: 100, outputTokens: 10 },
+    };
   }
 }
 

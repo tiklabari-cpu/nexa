@@ -78,7 +78,15 @@
  * job, not the request: its tenant, its logger, a runner over the server's
  * pool, the two gates, and the job's mark and fence for the reply.
  */
-import { AI_BOT_ID, DEFAULT_DAILY_MEMORY, parseEventId, type IdentityTrust } from '@siyahtus/types';
+import {
+  AI_BOT_ID,
+  DEFAULT_DAILY_MEMORY,
+  parseEventId,
+  readNoAnswerSettings,
+  type AiConversationMode,
+  type AiNoAnswerSettings,
+  type IdentityTrust,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
@@ -109,6 +117,7 @@ import {
   skillRunRecord,
   toTurnState,
   tookTurn,
+  turnAgentId,
   turnStatePatch,
   turnsTaken,
   type TurnHistory,
@@ -330,6 +339,8 @@ export class AiResponder {
             config: loaded.config.pkg,
             toolStubs: {},
             timeZone: loaded.timeZone,
+            aiMode: loaded.aiMode,
+            noAnswer: loaded.noAnswer,
           },
         );
         const { decisions } = result;
@@ -358,17 +369,14 @@ export class AiResponder {
               : 'ai knowledge search could not run; the conversation stays with a human',
           );
         }
-        if (!tookTurn(result)) {
-          if (result.decisions.policy?.rule === 'unmatched') {
-            // AI-05 §4.6: no procedure, no skill, no fallback took the message —
-            // the line AI-22's unanswered-questions report will collect.
-            log.info(
-              { policy_step: 6, procedure_key: result.decisions.understood?.procedure_key ?? null },
-              'ai turn unmatched: nothing took the message',
-            );
-          }
-          return result;
+        if (result.decisions.policy?.rule === 'unmatched') {
+          // AI-05 §4.6: no procedure, no skill, no fallback took the message.
+          log.info(
+            { policy_step: 6, procedure_key: result.decisions.understood?.procedure_key ?? null },
+            'ai turn unmatched: nothing took the message',
+          );
         }
+        if (!tookTurn(result)) return result;
 
         try {
           // The last draft goes out whatever the visitor wrote meanwhile.
@@ -398,6 +406,22 @@ export class AiResponder {
           }
           result = null;
         }
+      }
+
+      const { unanswered } = result.decisions;
+      if (unanswered) {
+        // AI-06 §8 → AI-22: the knowledge base had no answer and the AI said
+        // so. The question itself is on the decision record, not in the log.
+        log.info(
+          {
+            event: 'ai.unanswered',
+            category: unanswered.category,
+            policy: unanswered.policy,
+            reason: unanswered.reason,
+            language: unanswered.language,
+          },
+          'ai could not answer from the knowledge base',
+        );
       }
 
       // A turn that did nothing to the conversation leaves it as it was: what
@@ -669,7 +693,8 @@ export class AiResponder {
     trigger: number | null,
     trust: IdentityTrust,
   ): Promise<TurnRead | 'answered' | 'not_ai'> {
-    if (!aiMayAnswer(await readAiMode(tx, ref))) return 'not_ai';
+    const aiMode = await readAiMode(tx, ref);
+    if (!aiMayAnswer(aiMode)) return 'not_ai';
     const conversation = await loadConversation(tx, ref);
     const state = conversation ? toTurnState(conversation) : emptyTurnState();
     if (trigger !== null && trigger <= state.lastProcessedEventSeq) return 'answered';
@@ -679,6 +704,16 @@ export class AiResponder {
     });
     // Where the workspace's clock is (ID-04): how a procedure reads "13:40".
     const { timezone: timeZone } = await readDayBoundary(tx);
+    // The turn's agent's no-answer setting (AI-06 §8), live like the other
+    // hand-over settings — never from the pinned version (ADR-14b §2.2).
+    const agentId = turnAgentId(config.pkg.skills);
+    const handoff = agentId
+      ? await tx.aiHandoffSettings.findUnique({
+          where: { aiAgentId: agentId },
+          select: { noAnswer: true },
+        })
+      : null;
+    const noAnswer = readNoAnswerSettings(handoff?.noAnswer ?? null);
     if (trigger === null) {
       return {
         conversation,
@@ -688,6 +723,8 @@ export class AiResponder {
         through: null,
         earlierToday: null,
         timeZone,
+        aiMode,
+        noAnswer,
       };
     }
     const newest = await newestVisitorEvent(tx, ref);
@@ -702,7 +739,17 @@ export class AiResponder {
       memory.enabled && turnsTaken(state) === 0
         ? await loadEarlierToday(tx, ref, { trust, recall: memory.recall })
         : null;
-    return { conversation, state, config, context, through, earlierToday, timeZone };
+    return {
+      conversation,
+      state,
+      config,
+      context,
+      through,
+      earlierToday,
+      timeZone,
+      aiMode,
+      noAnswer,
+    };
   }
 
   /**
@@ -776,6 +823,10 @@ interface TurnRead {
   earlierToday: EarlierToday | null;
   /** The workspace's day-boundary zone (`inbox_settings.day_boundary_tz`). */
   timeZone: string;
+  /** Who answers the connection (`threads.ai_mode`) — null before anyone has (AI-11). */
+  aiMode: AiConversationMode | null;
+  /** The turn's agent's `no_answer` setting (tm 298 · AI-06 §8). */
+  noAnswer: AiNoAnswerSettings;
 }
 
 /**

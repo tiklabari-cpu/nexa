@@ -23,6 +23,12 @@
  * has settled go into the instructions, before the grounding. The answer is
  * still drawn from the passages alone — the history says what the customer
  * means, not what is true.
+ *
+ * **Cited, as an object (tm 298 · AI-06).** With `cite`, the passages carry
+ * the labels a reply cites them by (`ids` in the grounding, beside
+ * `passages`), the reply is asked for as the `knowledge_answer` object
+ * (`conversation/knowledge-answer.ts`), every figure must come from a passage,
+ * and a rewrite's notes go before the grounding — which stays the last line.
  */
 import {
   ANSWER_BUDGETS,
@@ -42,6 +48,8 @@ export const GROUNDING_MARKER = '--- grounding (JSON, last line) ---';
 export interface AnswerGrounding {
   /** Retrieved passages, best match first. */
   passages: string[];
+  /** The label each passage is cited by, in the same order — a cited answer's (tm 298). */
+  ids?: string[];
   tone: PersonaTone | null;
   answerLength: AnswerLength | null;
   /** The language to answer in, when the persona settled one. */
@@ -61,6 +69,11 @@ export interface AnswerPromptInput {
    * already cut to the visitor's identity and worded by `daily-memory.ts`.
    */
   earlierToday?: readonly string[];
+  /**
+   * Ask for the cited `knowledge_answer` object (tm 298): each passage's
+   * label, and what a rewrite is told about the draft before it.
+   */
+  cite?: { ids: readonly string[]; notes?: readonly string[] };
 }
 
 /** The part of a turn's history the prompt carries. */
@@ -75,6 +88,7 @@ export function buildAnswerPrompt(
 ): Pick<LlmCompletionRequest, 'system' | 'messages'> {
   const grounding: AnswerGrounding = {
     passages: [...input.passages],
+    ...(input.cite ? { ids: [...input.cite.ids] } : {}),
     tone: input.persona.tone,
     answerLength: input.persona.answerLength,
     answerIn: input.answerIn,
@@ -91,9 +105,15 @@ export function buildAnswerPrompt(
     grounding.answerIn
       ? `Reply in this language: ${grounding.answerIn}.`
       : 'Reply in the language the customer wrote in.',
-    'Write plain text: no markdown, no links the passages do not contain.',
+    ...(input.cite
+      ? [
+          'Reply with one JSON object. reply: the answer, as plain text — no markdown, no links the passages do not contain. grounded: "full" when the passages answer the whole question, "partial" when they answer part of it, "none" when they do not answer it (reply is then empty). cited_ids: the ids of the passages the reply is drawn from.',
+          'Every amount, limit, duration, percentage or multiplier in the reply must be one a passage gives. Never estimate one: when the passages do not give it, say less, or set grounded to "none".',
+        ]
+      : ['Write plain text: no markdown, no links the passages do not contain.']),
     ...(input.earlierToday ?? []),
     ...historyLines(input.history),
+    ...(input.cite?.notes ?? []),
     GROUNDING_MARKER,
     JSON.stringify(grounding),
   ];
@@ -136,16 +156,19 @@ function conversation(earlier: readonly LlmMessage[], message: string): LlmMessa
  * The grounding `buildAnswerPrompt` wrote into `system`, or `null` when the
  * prompt was not built by it. Validates every field rather than casting: the
  * stub answering from a half-read prompt would be a silent regression.
+ *
+ * The line after the last marker line: a structured call's second try appends
+ * its note below it (`completeStructured`).
  */
 export function readAnswerGrounding(system: string): AnswerGrounding | null {
-  const lastBreak = system.lastIndexOf('\n');
-  if (lastBreak < 0) return null;
-  const before = system.slice(0, lastBreak);
-  if (before.slice(before.lastIndexOf('\n') + 1) !== GROUNDING_MARKER) return null;
+  const marker = system.lastIndexOf(`\n${GROUNDING_MARKER}\n`);
+  if (marker < 0) return null;
+  const start = marker + GROUNDING_MARKER.length + 2;
+  const end = system.indexOf('\n', start);
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(system.slice(lastBreak + 1));
+    parsed = JSON.parse(system.slice(start, end < 0 ? undefined : end));
   } catch {
     return null;
   }
@@ -158,8 +181,23 @@ export function readAnswerGrounding(system: string): AnswerGrounding | null {
   const answerLength = oneOf(candidate['answerLength'], ANSWER_LENGTHS);
   const answerIn = oneOf(candidate['answerIn'], PERSONA_LANGUAGES);
   if (tone === undefined || answerLength === undefined || answerIn === undefined) return null;
+  const ids = candidate['ids'];
+  if (
+    ids !== undefined &&
+    (!Array.isArray(ids) ||
+      ids.length !== passages.length ||
+      !ids.every((id) => typeof id === 'string'))
+  ) {
+    return null;
+  }
 
-  return { passages: passages as string[], tone, answerLength, answerIn };
+  return {
+    passages: passages as string[],
+    ...(ids ? { ids: ids as string[] } : {}),
+    tone,
+    answerLength,
+    answerIn,
+  };
 }
 
 /** `null` stays `null`; a listed value is kept; anything else is `undefined` (invalid). */

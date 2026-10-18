@@ -9,9 +9,14 @@
  * conversation in "My chats" — two sessions, two browsers' worth of state, and
  * the routing decision in between. Only a browser walks that.
  *
- * The receiving agent's availability is set first, and by that agent: the route
- * refuses a hand-off to somebody who is offline (`group_unavailable`), and the
- * seeded roster's availability is writable by any spec that signs in as them.
+ * The receiving agent's availability is set by that agent, twice. Not accepting
+ * while the visitor writes: the router hands a new chat to the least loaded
+ * agent, and how loaded each one is depends on the specs that ran before this
+ * one — a receiver holding the fewest chats is handed this one directly, and
+ * then there is nothing left to hand over (seen in a sharded run, and on main
+ * with the same spec order). Accepting before the hand-off: the route refuses a
+ * hand-off to somebody who is offline (`group_unavailable`), and the seeded
+ * roster's availability is writable by any spec that signs in as them.
  * Asserting on a fresh conversation for the same reason `inbox-panel.spec.ts`
  * does — the seeded "All" view's first row may already be archived.
  */
@@ -31,17 +36,21 @@ test.describe('assigning a conversation', () => {
     const receiverContext = await browser.newContext();
     const visitor = await visitorContext.newPage();
     const receiver = await receiverContext.newPage();
+    let outOfRouting = false;
 
     try {
-      // The teammate signs in and declares themselves available, so the
-      // hand-off below is refused for a product reason or not at all.
+      // The teammate signs in and steps out of routing, so the router gives the
+      // visitor's chat to somebody else.
       await receiver.goto('/');
       await receiver.getByLabel('Email').fill(RECEIVER.email);
       await receiver.getByLabel('Password').fill(DEMO.password);
       await receiver.getByRole('button', { name: 'Sign in' }).click();
       await expect(receiver.getByRole('link', { name: 'Inbox' })).toBeVisible();
       await receiver.goto('/app/inbox');
-      await receiver.getByLabel('Availability').selectOption('accepting_chats');
+      const availability = receiver.getByLabel('Availability');
+      outOfRouting = true;
+      await availability.selectOption('not_accepting_chats');
+      await expect(availability).toHaveValue('not_accepting_chats');
 
       const receiverList = receiver.getByRole('region', { name: 'Conversations' });
       const receiverRail = receiver.getByRole('navigation', { name: 'Inbox views' });
@@ -50,6 +59,27 @@ test.describe('assigning a conversation', () => {
       // A live conversation to hand over.
       await openWidget(visitor, organizationId);
       await visitorSends(visitor, question);
+
+      // The owner opens it — this conversation, not whichever row the list
+      // re-sorted under the click — and somebody other than the teammate holds it.
+      await agentPage.goto('/app/inbox');
+      const list = agentPage.getByRole('region', { name: 'Conversations' });
+      await expect(list).toContainText(question, { timeout: 20_000 });
+      await list.getByRole('button').filter({ hasText: question }).click();
+      await expect(agentPage.getByRole('log', { name: 'Conversation transcript' })).toContainText(
+        question,
+      );
+
+      const details = agentPage.getByRole('complementary', { name: 'Conversation details' });
+      const assignee = details.getByRole('button', { name: 'Change assignee' });
+      await expect(assignee).toBeVisible();
+      await expect(assignee).not.toHaveText(new RegExp(`${RECEIVER.name}|Unassigned`));
+
+      // The teammate declares themselves available, so the hand-off below is
+      // refused for a product reason or not at all.
+      await availability.selectOption('accepting_chats');
+      await expect(availability).toHaveValue('accepting_chats');
+      outOfRouting = false;
 
       // Before: however many conversations this teammate already holds. A count
       // rather than "this row is absent", because the row is identified by its
@@ -60,16 +90,7 @@ test.describe('assigning a conversation', () => {
       await expect(receiver.getByRole('heading', { level: 2, name: 'My chats' })).toBeVisible();
       const before = await receiverList.getByRole('listitem').count();
 
-      // The owner opens it and hands it over from the Details panel.
-      await agentPage.goto('/app/inbox');
-      const list = agentPage.getByRole('region', { name: 'Conversations' });
-      await expect(list).toContainText(question, { timeout: 20_000 });
-      await list.getByRole('button').filter({ hasText: question }).click();
-
-      const details = agentPage.getByRole('complementary', { name: 'Conversation details' });
-      const assignee = details.getByRole('button', { name: 'Change assignee' });
-      await expect(assignee).toBeVisible();
-
+      // The owner hands it over from the Details panel.
       const transferred = agentPage.waitForResponse(
         (response) =>
           /\/chats\/[^/]+\/transfer$/.test(response.url()) &&
@@ -96,6 +117,16 @@ test.describe('assigning a conversation', () => {
         question,
       );
     } finally {
+      // A failure while the teammate was out of routing must not leave them
+      // there: `zz-suite-state.spec.ts` would report it as a second red.
+      if (outOfRouting) {
+        await receiver
+          .goto('/app/inbox')
+          .then(() =>
+            receiver.getByLabel('Availability').selectOption('accepting_chats', { timeout: 5_000 }),
+          )
+          .catch(() => undefined);
+      }
       await visitorContext.close();
       await receiverContext.close();
     }

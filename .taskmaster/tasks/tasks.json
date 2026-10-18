@@ -12625,7 +12625,7 @@
           "295"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T07:42:25.017Z",
+        "updatedAt": "2026-10-18T10:19:06.059Z",
         "subtasks": [
           {
             "id": 1,
@@ -12674,14 +12674,14 @@
             "description": "POST /skills/compile (procedure, SOP taslağı) + GET /chats/{id}/ai-conversation + preview conversation girdisi",
             "details": "Görünürlük resolveVisibility (access.ts:62).",
             "testStrategy": "Entegrasyon; görünürlük negatif.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "296.2",
               "296.3"
             ],
             "parentId": "296",
             "priority": "high",
-            "updatedAt": "2026-10-18T07:42:25.017Z"
+            "updatedAt": "2026-10-18T10:19:06.059Z"
           },
           {
             "id": 5,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T07:42:25.017Z",
+      "lastModified": "2026-10-18T10:19:06.060Z",
       "taskCount": 390,
       "completedCount": 294,
       "tags": [

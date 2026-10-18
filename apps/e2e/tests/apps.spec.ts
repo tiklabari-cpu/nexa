@@ -90,8 +90,10 @@ test.describe('apps marketplace', () => {
     // Page to the end of the chain. The button removes itself on the last page,
     // which is what makes "no button left" the honest end condition; it is only
     // clicked while idle, because a click during a fetch is one the button
-    // itself refuses.
-    const loadMore = agentPage.getByRole('button', { name: 'Load more' });
+    // itself refuses. While a page is in flight the same button reads
+    // "Loading…", so it is matched by either label: by "Load more" alone a slow
+    // page looked like no button at all and ended the chain early (tm 296.4).
+    const loadMore = agentPage.getByRole('button', { name: /^(Load more|Loading…)$/ });
     await expect(loadMore, 'a 100+ catalogue takes more than one page').toBeVisible();
     await expect
       .poll(

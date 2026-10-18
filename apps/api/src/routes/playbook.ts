@@ -7,7 +7,7 @@
  * happened. And a skill is never created active: an unfinished step list must
  * not start answering customers the instant it is saved.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { compileInstruction, stepProblemDetails, validateSteps } from '@siyahtus/ai-mock';
@@ -72,8 +72,22 @@ import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowled
 import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
-import { describeSideEffects } from '../services/ai/conversation/turn.js';
-import type { TenantClient } from '../lib/tenant.js';
+import { exchangeHistory } from '../services/ai/conversation/context-loader.js';
+import { conversationView } from '../services/ai/conversation/conversation-view.js';
+import {
+  SOP_DRAFT_SCHEMA,
+  SOP_TEXT_MAX,
+  draftFromModel,
+  skeletonFromSop,
+  sopDraftSystemPrompt,
+  type SopDraftResult,
+  type SopModelDraft,
+} from '../services/ai/conversation/procedure/sop-draft.js';
+import { describeSideEffects, emptyTurnState } from '../services/ai/conversation/turn.js';
+import { LlmProviderError } from '../services/ai/provider/llm-error.js';
+import { refuseOverlongPrompt } from '../services/ai/provider/llm-provider.js';
+import { completeStructured } from '../services/ai/provider/structured-output.js';
+import type { TenantClient, TenantContext } from '../lib/tenant.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
 const WRITE = ['agents-bot--all:rw'];
@@ -116,13 +130,44 @@ const updateSkillBody = z
 
 type SkillDefinitionBody = Pick<z.infer<typeof createSkillBody>, 'slots' | 'procedure'>;
 
-const compileBody = z.object({ instruction: z.string().min(1).max(10_000) });
-
-const previewBody = z.object({
-  steps: z.array(z.unknown()),
-  message: z.string().trim().min(1).max(10_000),
-  ai_agent_id: uuid.nullable().optional(),
+const compileBody = z.object({
+  mode: z.literal('single').optional(),
+  instruction: z.string().min(1).max(10_000),
 });
+
+/** An SOP to draft a procedure from (tm 296.4 · AI-03 §11). */
+const compileProcedureBody = z.object({
+  mode: z.literal('procedure'),
+  sop_text: z.string().trim().min(1).max(SOP_TEXT_MAX),
+});
+
+const previewBody = z
+  .object({
+    mode: z.enum(SKILL_MODES).default(DEFAULT_SKILL_MODE),
+    steps: z.array(z.unknown()).optional(),
+    // A procedure's definition (tm 296.4), judged as a save would judge it.
+    when_to_use: z.unknown().optional(),
+    examples: z.unknown().optional(),
+    priority: z.unknown().optional(),
+    slots: z.unknown().optional(),
+    procedure: z.unknown().optional(),
+    message: z.string().trim().min(1).max(10_000),
+    /** The exchange before `message`, as the live path's history (tm 296.4). */
+    conversation: z
+      .array(
+        z.object({
+          role: z.enum(['visitor', 'ai', 'agent']),
+          text: z.string().trim().min(1).max(10_000),
+        }),
+      )
+      .max(40)
+      .optional(),
+    ai_agent_id: uuid.nullable().optional(),
+  })
+  .refine((body) => body.mode === 'procedure' || body.steps !== undefined, {
+    message: 'steps is required unless mode is procedure',
+    path: ['steps'],
+  });
 
 /**
  * A website source is crawled from a URL; an `article` or a `faq` indexes the
@@ -824,15 +869,69 @@ export default async function playbookRoutes(
   // `aiBudget` (tm 257.8): compiling is deterministic and calls no model, and
   // a preview that would cross today's AI cap is a 429 — before the gate, or
   // from the engine when the call itself does not fit.
+  //
+  // A procedure drafted from an SOP (tm 296.4) is the exception: with a model
+  // configured it is one structured-output call, so that branch asks the
+  // budget itself — the route cannot declare `aiBudget` for one body and not
+  // the other, and the instruction compiler must stay free.
   app.post(
     '/skills/compile',
     { config: { scopes: WRITE, aiInference: true } },
     async (request, reply) => {
+      const raw = request.body as { mode?: unknown } | null | undefined;
+      if (raw?.mode === 'procedure') {
+        const body = parse(compileProcedureBody, request.body);
+        const { draft, unrecognised } = await draftProcedure(
+          request,
+          request.tenant(),
+          body.sop_text,
+        );
+        return reply.send({ mode: 'procedure', steps: [], unrecognised, draft });
+      }
       const body = parse(compileBody, request.body);
       const { steps, unrecognised } = compileInstruction(body.instruction);
-      return reply.send({ steps, unrecognised });
+      return reply.send({ mode: 'single', steps, unrecognised });
     },
   );
+
+  /**
+   * The SOP's draft: the rule-based skeleton with the `mock` provider, else
+   * the model's, and the skeleton again when the model could not answer — a
+   * timeout must not cost the author the draft. The daily cap is not a
+   * failure of that kind: it is the 429 a preview gives.
+   */
+  async function draftProcedure(
+    request: FastifyRequest,
+    tenant: TenantContext,
+    sopText: string,
+  ): Promise<SopDraftResult> {
+    if (llm.id === 'mock') return skeletonFromSop(sopText);
+    await request.requireAiBudget();
+    const prompt = {
+      system: sopDraftSystemPrompt(),
+      messages: [{ role: 'user' as const, content: sopText }],
+    };
+    try {
+      refuseOverlongPrompt(prompt, env.LLM_MAX_PROMPT_CHARS);
+      const { value } = await completeStructured<SopModelDraft>(
+        llm.forTenant(tenant, { surface: 'ai_agent' }),
+        {
+          ...prompt,
+          maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+          timeoutMs: env.LLM_TIMEOUT_MS,
+          responseFormat: { name: 'sop_procedure_draft', schema: SOP_DRAFT_SCHEMA },
+        },
+      );
+      return draftFromModel(value);
+    } catch (error) {
+      if (!(error instanceof LlmProviderError)) throw error;
+      request.log.warn(
+        { kind: error.kind, reason: error.reason },
+        'the model could not draft the SOP; the rule-based skeleton was returned',
+      );
+      return skeletonFromSop(sopText);
+    }
+  }
 
   app.post(
     '/skills/preview',
@@ -840,13 +939,55 @@ export default async function playbookRoutes(
     async (request, reply) => {
       const body = parse(previewBody, request.body);
       const tenant = request.tenant();
+      const history = body.conversation
+        ? exchangeHistory(body.conversation, {
+            maxMessages: env.AI_HISTORY_MAX_MESSAGES,
+            maxChars: env.AI_HISTORY_MAX_CHARS,
+          })
+        : undefined;
+
+      // A procedure is judged as a save would judge it (the license's teams
+      // included) and not run when a save would refuse it: what the preview
+      // shows must be what the saved skill would do.
+      let definition: SkillProcedureFields | undefined;
+      if (body.mode === 'procedure') {
+        definition = {
+          when_to_use: body.when_to_use,
+          examples: body.examples,
+          priority: body.priority,
+          slots: body.slots,
+          procedure: body.procedure,
+        };
+        const groups = await request.withTenant((tx) =>
+          tx.group.findMany({ select: { id: true } }),
+        );
+        const verdict = validateSkillProcedure(definition, {
+          groupIds: new Set(groups.map((group) => Number(group.id))),
+        });
+        if (!verdict.ok) {
+          return reply.send({
+            outcome: 'skipped',
+            reply: null,
+            tags: [],
+            transfer_to: null,
+            summary: null,
+            log: [],
+            errors: verdict.problems.map((problem) => problem.message),
+            error_details: [],
+            procedure_problems: verdict.problems.map(procedureProblemDetails),
+            state: conversationView(emptyTurnState()),
+          });
+        }
+      }
 
       // The real turn, no writes. A preview running different logic would be
       // worse than no preview.
       const result = await engine.preview((fn) => request.withTenant(fn), tenant, {
-        steps: body.steps,
+        steps: body.steps ?? [],
         message: body.message,
         aiAgentId: body.ai_agent_id ?? null,
+        ...(definition ? { definition } : {}),
+        ...(history ? { history } : {}),
       });
       const effects = describeSideEffects(result.sideEffects);
 
@@ -859,6 +1000,8 @@ export default async function playbookRoutes(
         log: result.decisions.log,
         errors: result.errors,
         error_details: result.error_details,
+        ...(definition ? { procedure_problems: [] } : {}),
+        state: conversationView(result.nextState),
       });
     },
   );

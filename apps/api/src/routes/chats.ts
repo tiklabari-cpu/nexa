@@ -21,6 +21,9 @@ import {
   type ProviderEndpoints,
 } from '../services/apps/verifiers/types.js';
 import { hasChatScope } from '../services/chat/access.js';
+import { conversationView } from '../services/ai/conversation/conversation-view.js';
+import { loadConversation } from '../services/ai/conversation/state-store.js';
+import { toTurnState } from '../services/ai/conversation/turn.js';
 import { SupervisionService } from '../services/traffic/supervision-service.js';
 import { roleAtLeast } from '../services/auth/principal.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
@@ -118,6 +121,8 @@ const eventsQuery = z.object({
   sort: z.enum(['oldest', 'newest']).default('oldest'),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
+
+const aiConversationQuery = z.object({ thread_id: z.string().min(1).max(64).optional() });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -336,6 +341,44 @@ export default async function chatRoutes(
       const chatId = parse(chatIdSchema, request.params.chatId);
       const items = await chats.listAiDigests(request.tenant(), request.requirePrincipal(), chatId);
       return reply.send({ items });
+    },
+  );
+
+  // --- GET /chats/:chatId/ai-conversation -----------------------------------
+  // Where the AI stands on a connection (tm 296.4 · AI-03 §13): the procedure,
+  // its step, the slots, the topic set aside. Agents only — the slots are what
+  // the visitor told the AI, and the widget never reads the AI's state.
+
+  app.get<{ Params: { chatId: string } }>(
+    '/chats/:chatId/ai-conversation',
+    {
+      config: {
+        scopes: ['chats--all:ro', 'chats--access:ro'],
+        principals: ['agent', 'bot'],
+      },
+    },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const query = parse(aiConversationQuery, request.query);
+      const result = await chats.readConnection(
+        request.tenant(),
+        request.requirePrincipal(),
+        chatId,
+        query.thread_id,
+        (tx, connection) => loadConversation(tx, connection),
+      );
+      const row = result.value;
+      return reply.send({
+        chat_id: result.chatId,
+        thread_id: result.threadId,
+        conversation: row
+          ? {
+              ...conversationView(toTurnState(row)),
+              updated_at: row.updatedAt.toISOString(),
+              closed_at: row.closedAt?.toISOString() ?? null,
+            }
+          : null,
+      });
     },
   );
 

@@ -339,6 +339,14 @@ const TRACKED = [
       "what the AI recalls of a member's day (tm 294 · AI-02) — the inbox's right pane " +
       '"Bugünkü önceki bağlantılar" list, which IN-02 (tm 331) draws.',
   },
+  {
+    op: 'GET /chats/{chatId}/ai-conversation',
+    owner: 'tm 331',
+    reason:
+      "where the AI stands on a connection (tm 296.4 · AI-03 §13) — the inbox's right pane " +
+      '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
+      'the timeline viewer (tm 334) reads it too.',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

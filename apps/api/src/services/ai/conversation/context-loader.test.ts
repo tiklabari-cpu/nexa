@@ -12,6 +12,7 @@ import {
   GAP_MARKER,
   attachmentPlaceholder,
   buildConnectionContext,
+  exchangeHistory,
   shortenHistory,
   stateDigest,
   type ConnectionEvent,
@@ -258,5 +259,52 @@ describe('the history yields to the prompt ceiling', () => {
     expect(lastWithMessages.messages).toHaveLength(1);
     expect(lastWithMessages.messages[0]!.content.startsWith('opening')).toBe(true);
     expect(steps.at(-1)).toMatchObject({ messages: [], systemNotes: history.systemNotes });
+  });
+});
+
+describe('a typed exchange as history (a preview, tm 296.4)', () => {
+  it('reads like a connection: roles, the agent marker, merged neighbours, nothing left fresh', () => {
+    const history = exchangeHistory([
+      { role: 'visitor', text: 'param yatmadi' },
+      { role: 'visitor', text: 'hala yok' },
+      { role: 'ai', text: 'Hangi yontemle yatirdiniz?' },
+      { role: 'agent', text: 'Kontrol ediyorum.' },
+    ]);
+    expect(history).toEqual({
+      messages: [
+        { role: 'user', content: 'param yatmadi\nhala yok' },
+        {
+          role: 'assistant',
+          content: `Hangi yontemle yatirdiniz?\n${AGENT_MARKER} Kontrol ediyorum.`,
+        },
+      ],
+      systemNotes: [],
+      stateDigest: '',
+      omitted: false,
+      visitorMessages: 2,
+    });
+  });
+
+  it('keeps the newest lines and the opening one under the budget, and says where it cut', () => {
+    const exchange = Array.from({ length: 6 }, (_, index) => ({
+      role: index % 2 === 0 ? ('visitor' as const) : ('ai' as const),
+      text: `line ${index + 1}`,
+    }));
+    const history = exchangeHistory(exchange, { maxMessages: 2, maxChars: 12_000 })!;
+    expect(history.omitted).toBe(true);
+    // The opening line and the window merge, as two visitor lines would live.
+    expect(history.messages).toEqual([
+      {
+        role: 'user',
+        content: `line 1
+${GAP_MARKER}
+line 5`,
+      },
+      { role: 'assistant', content: 'line 6' },
+    ]);
+  });
+
+  it('is no history at all for an empty exchange', () => {
+    expect(exchangeHistory([])).toBeUndefined();
   });
 });

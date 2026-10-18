@@ -500,6 +500,35 @@ export class ChatService {
     });
   }
 
+  /**
+   * Read one of the chat's connections behind the chat's visibility
+   * (`resolveVisibility`), like its transcript: the newest connection unless
+   * `threadId` names another, and a thread of another chat is a 404 too.
+   * `read` gets the connection in the same transaction, or is not called
+   * when the chat has none (`threadId` null). What is read is the caller's —
+   * `GET /chats/{chatId}/ai-conversation` (tm 296.4) reads the AI's state
+   * through it, so this service imports nothing of the AI (the rule bot's
+   * closure, FR-MOD-06.6).
+   */
+  async readConnection<T>(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    threadId: string | undefined,
+    read: (tx: TenantClient, connection: { chatId: string; threadId: string }) => Promise<T>,
+  ): Promise<{ chatId: string; threadId: string | null; value: T | null }> {
+    return withTenant(this.db, tenant, async (tx) => {
+      const visibility = await resolveVisibility(tx, principal, 'read');
+      const chat = await this.#loadVisibleChat(tx, visibility, chatId);
+      const thread = threadId ?? chat.threads[0]?.id ?? null;
+      if (thread !== null && !chat.threads.some((t) => t.id === thread)) {
+        throw ApiError.notFound('Thread not found.');
+      }
+      const value = thread ? await read(tx, { chatId: chat.id, threadId: thread }) : null;
+      return { chatId: chat.id, threadId: thread, value };
+    });
+  }
+
   async listEvents(
     tenant: TenantContext,
     principal: Principal,

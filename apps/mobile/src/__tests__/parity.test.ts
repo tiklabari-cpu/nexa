@@ -934,7 +934,11 @@ describe('module parity matrix — what is still owed', () => {
       // recalls of a member's day, for the web inbox's right pane (IN-02,
       // tm 331). The app's chat screen shows no AI summary; nothing here
       // re-scopes.
-      contractEndpoints: 238,
+      // 238 -> 239 with `/chats/{chatId}/ai-conversation` (tm 296.4) — where the
+      // AI stands on a connection (procedure, step, slots), for the web inbox's
+      // right pane and the timeline viewer. The app's chat screen shows no AI
+      // state; nothing here re-scopes.
+      contractEndpoints: 239,
       scopeBoundaries: 1,
     });
   });

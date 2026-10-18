@@ -98,6 +98,7 @@ import {
   type Persona,
   type PersonaLanguage,
   type Procedure,
+  type SkillProcedureFields,
 } from '@siyahtus/types';
 import type { TenantContext } from '../../../lib/tenant.js';
 import {
@@ -402,7 +403,18 @@ export class ConversationEngine {
   async preview(
     db: TenantRunner,
     tenant: TenantContext,
-    input: { steps: unknown; message: string; aiAgentId?: string | null },
+    input: {
+      steps: unknown;
+      message: string;
+      aiAgentId?: string | null;
+      /**
+       * A procedure's definition (tm 296.4), already judged as a save would
+       * judge it: `steps` is then not read, and the message must select it.
+       */
+      definition?: SkillProcedureFields;
+      /** The exchange before `message` (`exchangeHistory`); not replayed. */
+      history?: TurnHistory;
+    },
   ): Promise<PreviewResult> {
     const nothing = (log: SkillRunLogEntry[] = []): TurnResult => ({
       reply: null,
@@ -410,6 +422,46 @@ export class ConversationEngine {
       nextState: emptyTurnState(),
       sideEffects: [],
     });
+    const message: TurnMessage = input.history
+      ? { text: input.message, history: input.history }
+      : { text: input.message };
+
+    if (input.definition) {
+      const draft = await db((tx) =>
+        readAndCompile.forDraft(tx, {
+          steps: [],
+          aiAgentId: input.aiAgentId ?? null,
+          definition: input.definition,
+        }),
+      );
+      const result = await this.runTurn(emptyTurnState(), message, {
+        tenant,
+        db,
+        now: new Date(),
+        mode: 'preview',
+        chatId: null,
+        configVersionId: draft.versionId,
+        config: draft.pkg,
+        toolStubs: {},
+      });
+      if (result.decisions.capped) throw result.decisions.capped;
+      if (result.decisions.skillId === null) {
+        // As with a one-message skill's gate: the author asked about this
+        // procedure and is owed the reason it did not start.
+        return {
+          ...nothing([
+            {
+              step: 'procedure',
+              detail: 'the message did not select this procedure (its when_to_use and examples)',
+              ok: false,
+            },
+          ]),
+          errors: [],
+          error_details: [],
+        };
+      }
+      return { ...result, errors: [], error_details: [] };
+    }
 
     const parsed = validateSteps(input.steps);
     if (!parsed.ok) {
@@ -430,21 +482,17 @@ export class ConversationEngine {
     const draft = await db((tx) =>
       readAndCompile.forDraft(tx, { steps: input.steps, aiAgentId: input.aiAgentId ?? null }),
     );
-    const result = await this.runTurn(
-      emptyTurnState(),
-      { text: input.message },
-      {
-        tenant,
-        db,
-        now: new Date(),
-        mode: 'preview',
-        // A preview answers no conversation; its spend is the AI agent's.
-        chatId: null,
-        configVersionId: draft.versionId,
-        config: draft.pkg,
-        toolStubs: {},
-      },
-    );
+    const result = await this.runTurn(emptyTurnState(), message, {
+      tenant,
+      db,
+      now: new Date(),
+      mode: 'preview',
+      // A preview answers no conversation; its spend is the AI agent's.
+      chatId: null,
+      configVersionId: draft.versionId,
+      config: draft.pkg,
+      toolStubs: {},
+    });
     // A preview the cap stopped is not a result to show: what the skill would
     // say is unknown, and the author is told why instead (429, tm 257.8).
     if (result.decisions.capped) throw result.decisions.capped;

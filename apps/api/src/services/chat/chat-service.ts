@@ -3484,6 +3484,56 @@ export class ChatService {
     return true;
   }
 
+  /**
+   * The AI hands a connection over without naming a team (tm 296.3 · AI-03):
+   * a procedure's hand-over to a routing topic (#307 resolves topics to
+   * teams), to no target, or to a team that cannot take it now. The connection
+   * moves to `human` with `reason` — `ai_handoff`, or `ai_failure` when the
+   * model could not answer — and is routed as the watchdog's is
+   * (`#routeHandover`: nobody named a team). Under the thread's row lock, so a
+   * person who took it meanwhile keeps it: false.
+   */
+  async handOverFromAi(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string },
+    reason: 'ai_handoff' | 'ai_failure',
+  ): Promise<boolean> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const chat = await tx.chat.findUnique({ where: { id: ref.chatId }, include: chatInclude });
+      const thread = chat?.threads.find((t) => t.id === ref.threadId);
+      if (!chat?.active || !thread?.active) return null;
+
+      await tx.$queryRaw`SELECT 1 FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+      const mode = await this.#changeAiMode(tx, tenant, chat, thread.id, AI_MODE_SYSTEM_ACTOR, {
+        to: 'human',
+        reason,
+      });
+      if (!mode?.note) return mode;
+      const reloaded = await tx.chat.findUniqueOrThrow({
+        where: { id: chat.id },
+        include: chatInclude,
+      });
+      const before = mode.note.audience;
+      const after = this.#audienceFor(reloaded);
+      return {
+        ...mode,
+        note: {
+          ...mode.note,
+          audience: {
+            groupIds: [...new Set([...before.groupIds, ...after.groupIds])],
+            agentIds: [...new Set([...before.agentIds, ...after.agentIds])],
+            customerId: before.customerId,
+          },
+        },
+      };
+    });
+    if (!result) return false;
+
+    if (result.note) await this.#announceAiMode(tenant, result.note);
+    await this.#announceHandover(tenant, result.assigned);
+    return true;
+  }
+
   async tagThread(
     tenant: TenantContext,
     principal: Principal,

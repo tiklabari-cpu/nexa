@@ -83,6 +83,14 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       name: true,
       steps: true,
       aiAgentId: true,
+      // A procedure skill's definition (tm 296.3); the turn judges it.
+      mode: true,
+      whenToUse: true,
+      examples: true,
+      priority: true,
+      slots: true,
+      procedure: true,
+      locked: true,
       // The persona travels with the skill because it belongs to the agent
       // that owns it: two agents in one workspace answer in two voices, so
       // "which persona applies" is only decidable once a skill has been
@@ -100,6 +108,19 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       aiAgentId: skill.aiAgentId,
       steps: skill.steps,
       persona: readPersona(skill.aiAgent),
+      ...(skill.mode === 'procedure'
+        ? {
+            mode: 'procedure' as const,
+            definition: {
+              when_to_use: skill.whenToUse,
+              examples: skill.examples,
+              priority: skill.priority,
+              slots: skill.slots,
+              procedure: skill.procedure,
+            },
+            locked: skill.locked,
+          }
+        : {}),
     })),
     // Unset stays absent, so a configuration nobody tuned is what it was.
     ...(waits.length > 0 ? { batchWindowSeconds: Math.max(...waits) } : {}),

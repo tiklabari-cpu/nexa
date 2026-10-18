@@ -91,6 +91,12 @@ export function buildDigest(
     reply: string | null;
     replyKind: 'question' | 'answer' | null;
     sideEffects: readonly TurnSideEffect[];
+    /**
+     * How a procedure turn left the connection (tm 296.3): resolved, waiting,
+     * handed off, or nothing settled yet (null). Absent for a single-message
+     * skill, whose reply says it.
+     */
+    ended?: AiConversationOutcome | null;
   },
 ): StoredDigest {
   const before = previous ? readStoredDigest(previous) : null;
@@ -101,13 +107,15 @@ export function buildDigest(
     intent_label: turn.intent ?? before?.intent_label ?? null,
     slots: digestSlots(state.slots),
     outcome:
-      turn.outcome === 'handed_off'
-        ? 'handed_off'
-        : turn.replyKind === 'answer'
-          ? 'resolved'
-          : turn.replyKind === 'question'
-            ? null
-            : (before?.outcome ?? null),
+      turn.ended !== undefined
+        ? turn.ended
+        : turn.outcome === 'handed_off'
+          ? 'handed_off'
+          : turn.replyKind === 'answer'
+            ? 'resolved'
+            : turn.replyKind === 'question'
+              ? null
+              : (before?.outcome ?? null),
     awaiting_answer: turn.replyKind === 'question',
     handoff:
       handoff?.kind === 'handoff'
@@ -115,7 +123,7 @@ export function buildDigest(
             id: null,
             team_id: null,
             team_name: handoff.team,
-            reason_codes: ['ai_handoff'],
+            reason_codes: [handoff.reason ?? 'ai_handoff'],
             agent_replied: false,
           }
         : (before?.handoff ?? null),

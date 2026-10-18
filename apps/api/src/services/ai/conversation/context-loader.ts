@@ -54,6 +54,7 @@
 import { Prisma } from '@prisma/client';
 import type { TenantClient } from '../../../lib/tenant.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
+import { slotRecord } from './slots/extract.js';
 import type { ConnectionRef } from './state-store.js';
 import type { TurnHistory, TurnState } from './turn.js';
 
@@ -334,13 +335,20 @@ export function stateDigest(state: TurnState): string {
   if (state.stepId) {
     lines.push(`Current step: ${state.stepId}${state.stepStatus ? ` (${state.stepStatus})` : ''}`);
   }
-  const slots = Object.entries(state.slots).filter(([, value]) => value !== null);
-  if (slots.length > 0) {
-    const pairs = slots.map(
-      ([key, value]) => `${key} = ${typeof value === 'string' ? value : JSON.stringify(value)}`,
-    );
-    lines.push(`Collected so far: ${pairs.join('; ')}`);
+  const pairs: string[] = [];
+  for (const [key, value] of Object.entries(state.slots)) {
+    if (value === null || value === undefined) continue;
+    if (typeof value !== 'object') {
+      pairs.push(`${key} = ${String(value)}`);
+      continue;
+    }
+    // A procedure's slot record (tm 296.3): what it reads as, never its raw
+    // value — and a `pii: 'high'` one not at all (AI-04 §9).
+    const record = slotRecord(value);
+    if (record.pii === 'high' || record.status === 'missing') continue;
+    pairs.push(record.display !== null ? `${key} = ${record.display}` : `${key}: ${record.status}`);
   }
+  if (pairs.length > 0) lines.push(`Collected so far: ${pairs.join('; ')}`);
   return lines.join('\n');
 }
 

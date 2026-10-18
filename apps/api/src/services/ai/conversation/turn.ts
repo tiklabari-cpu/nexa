@@ -22,13 +22,23 @@
  * writes ({@link TurnState}); the row's identity, its lock counter and its
  * pinned configuration version stay with the store (`state-store.ts`).
  */
-import type { DailyMemorySettings, Persona } from '@siyahtus/types';
+import type {
+  DailyMemorySettings,
+  Persona,
+  SkillMode,
+  SkillProcedureFields,
+} from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../../lib/tenant.js';
 import type { AiDailyCapError } from '../ai-daily-budget.js';
 import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
 import type { EarlierToday } from './daily-memory.js';
+import type { ProcedureFacts } from './procedure/conditions.js';
+import type { StepDecision } from './procedure/executor.js';
+import type { ProcedureUnderstanding } from './procedure/understanding.js';
+import type { SlotAttachment } from './slots/extract.js';
+import type { SlotEnumOption } from './slots/validators.js';
 import type {
   AiConversationPatch,
   AiConversationPatchField,
@@ -153,6 +163,11 @@ export interface TurnMessage {
    * memory off.
    */
   readonly earlierToday?: EarlierToday;
+  /**
+   * Files the visitor sent with `text` — what fills a procedure's `file` slot
+   * (AI-04 §8): received, never read. Absent: none.
+   */
+  readonly attachments?: readonly SlotAttachment[];
 }
 
 /**
@@ -177,6 +192,16 @@ export interface TurnSkill {
   readonly steps: unknown;
   /** The persona of the agent that owns the skill (FR-MOD-06.4). */
   readonly persona: Persona;
+  /** `single` when absent — the step list above is what runs (tm 296.2). */
+  readonly mode?: SkillMode;
+  /**
+   * A `procedure` skill's definition as stored (tm 296.3): its own fields and
+   * its `procedure`, unvalidated — `validateSkillProcedure` reads them, and a
+   * definition that does not pass is skipped like a malformed step list.
+   */
+  readonly definition?: SkillProcedureFields;
+  /** A locked template copy (AI-15): it goes before every other topic. */
+  readonly locked?: boolean;
 }
 
 /**
@@ -223,6 +248,32 @@ export interface TurnContext {
    * passive in F1: no step calls a tool yet.
    */
   readonly toolStubs: Readonly<Record<string, unknown>>;
+  /**
+   * The workspace's zone (`inbox_settings.day_boundary_tz`, ID-04): where a
+   * procedure reads "13:40" and shows a moment. Absent: Europe/Istanbul.
+   */
+  readonly timeZone?: string;
+  /** What a procedure turn reads besides the conversation (tm 296.3). */
+  readonly procedure?: ProcedureTurnData;
+}
+
+/**
+ * What a procedure turn is told rather than finds out (tm 296.3). Each part
+ * has a stand-in until its own task: the caller passes what it has, a
+ * simulation (AI-19) or a test its fixture.
+ */
+export interface ProcedureTurnData {
+  /**
+   * The understanding call's answer for this message (#297). Absent: the
+   * interim reading (`procedure/understanding.ts`).
+   */
+  readonly understanding?: ProcedureUnderstanding;
+  /** What the AI-13 tables know (#310). Absent: nothing (`NO_FACTS`). */
+  readonly facts?: ProcedureFacts;
+  /** Table-sourced enum options by slot name (#310). Absent: none. */
+  readonly options?: Readonly<Record<string, readonly SlotEnumOption[]>>;
+  /** The workspace's currency (ISO 4217). Absent: TRY. */
+  readonly currency?: string;
 }
 
 export type SkillOutcome = 'answered' | 'handed_off' | 'skipped';
@@ -288,6 +339,14 @@ export interface TurnDecisions {
   /** Tokens the turn's provider calls cost — recorded on the run. */
   usage: SkillRunUsage;
   log: SkillRunLogEntry[];
+  /**
+   * Why the turn handed the conversation over, when a procedure did (tm 296.3):
+   * its `reason_code`, `max_turns`, `procedure_condition`, `slot_refused`.
+   * Absent for the single-message skills, whose reason the record derives.
+   */
+  handoffReason?: string | null;
+  /** A procedure turn's step decisions (ID-08: step_id, type, cond_result, detail). */
+  trace?: StepDecision[];
 }
 
 /**
@@ -298,8 +357,19 @@ export interface TurnDecisions {
 export type TurnSideEffect =
   | { readonly kind: 'tag'; readonly tag: string }
   | { readonly kind: 'summary'; readonly text: string }
-  /** Hand the conversation to a team, by name. */
-  | { readonly kind: 'handoff'; readonly team: string };
+  /**
+   * Hand the conversation over: to a team by name (a single-message skill's
+   * `transfer_to_team`), by id or routing topic (a procedure's target), or —
+   * all three absent — to whoever routing gives it (tm 296.3).
+   */
+  | {
+      readonly kind: 'handoff';
+      readonly team: string | null;
+      readonly groupId?: number;
+      readonly topic?: string;
+      /** The procedure's reason, for the card (AI-10). */
+      readonly reason?: string;
+    };
 
 export interface TurnResult {
   /** Text for the visitor, or null. The live adapter sends it as the bot. */
@@ -313,6 +383,14 @@ export interface TurnResult {
 /** Whether the AI took a turn at all: a skill ran (a message no skill matched is not a turn). */
 export function tookTurn(result: TurnResult): boolean {
   return result.decisions.skillId !== null || result.decisions.capped !== null;
+}
+
+/** The turn's hand-over, if it has one. */
+export function handoffOf(
+  effects: readonly TurnSideEffect[],
+): Extract<TurnSideEffect, { kind: 'handoff' }> | null {
+  for (const effect of effects) if (effect.kind === 'handoff') return effect;
+  return null;
 }
 
 /** The side effects as the preview and the run's callers read them. */

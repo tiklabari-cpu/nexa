@@ -203,6 +203,24 @@ describe('the state digest (AI-01 §3)', () => {
       'Current step: ask_time (awaiting_answer)\nCollected so far: method = Papara; amount = 500',
     );
   });
+
+  it('reads a procedure’s slot records as what they show, and never a pii: high value (tm 296.3 · AI-04 §9)', () => {
+    expect(
+      stateDigest({
+        ...emptyTurnState(),
+        slots: {
+          tutar: {
+            value: { amount: 2500, currency: 'TRY' },
+            display: '2.500 TRY',
+            status: 'filled',
+          },
+          iban_son4: { value: '8841', display: '8841', status: 'filled', pii: 'high' },
+          islem_zamani: { value: null, display: null, status: 'refused' },
+          referans: { value: null, display: null, status: 'missing' },
+        },
+      }),
+    ).toBe('Collected so far: tutar = 2.500 TRY; islem_zamani: refused');
+  });
 });
 
 describe('the history yields to the prompt ceiling', () => {

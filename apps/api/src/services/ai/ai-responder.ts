@@ -105,6 +105,7 @@ import {
 import {
   describeSideEffects,
   emptyTurnState,
+  handoffOf,
   skillRunRecord,
   toTurnState,
   tookTurn,
@@ -118,6 +119,8 @@ import { readAndCompile, type AiConfigRead } from './conversation/turn-config.js
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
+import { readDayBoundary } from '../chat/day-boundary.js';
+import { ApiError } from '../../lib/api-error.js';
 
 /** How many drafts one turn may write: the first, and one after the visitor wrote again. */
 const DRAFTS_PER_TURN = 2;
@@ -326,6 +329,7 @@ export class AiResponder {
             configVersionId: read?.configVersionId ?? loaded.config.versionId,
             config: loaded.config.pkg,
             toolStubs: {},
+            timeZone: loaded.timeZone,
           },
         );
         const { decisions } = result;
@@ -409,6 +413,9 @@ export class AiResponder {
 
       if (transferTo) {
         await this.#transfer(turn, transferTo);
+      } else {
+        const handoff = handoffOf(result.sideEffects);
+        if (handoff) await this.#handOver(turn, ref, handoff, result.decisions.failure !== null);
       }
 
       return result;
@@ -653,8 +660,18 @@ export class AiResponder {
       aiAgentId: null,
       pinnedVersionId: conversation?.configVersionId ?? null,
     });
+    // Where the workspace's clock is (ID-04): how a procedure reads "13:40".
+    const { timezone: timeZone } = await readDayBoundary(tx);
     if (trigger === null) {
-      return { conversation, state, config, context: null, through: null, earlierToday: null };
+      return {
+        conversation,
+        state,
+        config,
+        context: null,
+        through: null,
+        earlierToday: null,
+        timeZone,
+      };
     }
     const newest = await newestVisitorEvent(tx, ref);
     const through = Math.max(trigger, newest?.sequence ?? trigger);
@@ -668,7 +685,38 @@ export class AiResponder {
       memory.enabled && turnsTaken(state) === 0
         ? await loadEarlierToday(tx, ref, { trust, recall: memory.recall })
         : null;
-    return { conversation, state, config, context, through, earlierToday };
+    return { conversation, state, config, context, through, earlierToday, timeZone };
+  }
+
+  /**
+   * A procedure's hand-over (tm 296.3): to the team it names by id, and —
+   * when it names a routing topic (#307 resolves those), nothing, or a team
+   * that cannot take the conversation now — to whoever routing gives it. Either
+   * way the AI stops (`human`).
+   */
+  async #handOver(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    handoff: NonNullable<ReturnType<typeof handoffOf>>,
+    failed: boolean,
+  ): Promise<void> {
+    const { tenant, chatId } = turn;
+    if (handoff.groupId !== undefined && !failed) {
+      try {
+        await this.chats.transfer(tenant, botPrincipal(tenant), chatId, {
+          groupId: BigInt(handoff.groupId),
+          reason: 'ai_handoff',
+        });
+        return;
+      } catch (error) {
+        if (!(error instanceof ApiError)) throw error;
+        turn.log.warn(
+          { group_id: handoff.groupId, err_type: error.type },
+          'procedure hand-over team cannot take the conversation; routing it instead',
+        );
+      }
+    }
+    await this.chats.handOverFromAi(tenant, ref, failed ? 'ai_failure' : 'ai_handoff');
   }
 
   async #transfer(turn: VisitorTurn, groupName: string): Promise<void> {
@@ -709,6 +757,8 @@ interface TurnRead {
   through: number | null;
   /** The day's earlier connections, on the connection's first turn (tm 294). */
   earlierToday: EarlierToday | null;
+  /** The workspace's day-boundary zone (`inbox_settings.day_boundary_tz`). */
+  timeZone: string;
 }
 
 /**

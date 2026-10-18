@@ -12739,7 +12739,7 @@
           "296"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T13:49:50.239Z",
+        "updatedAt": "2026-10-18T15:14:59.216Z",
         "subtasks": [
           {
             "id": 1,
@@ -12759,13 +12759,13 @@
             "description": "policy.ts karar sırası + netleştirme + yedek prosedür migration'ı + clarify_thresholds",
             "details": "Üst görev 297 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Kabul kriterleri entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "297.1"
             ],
             "parentId": "297",
             "priority": "high",
-            "updatedAt": "2026-10-18T13:49:50.239Z"
+            "updatedAt": "2026-10-18T15:14:59.216Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T13:49:50.240Z",
+      "lastModified": "2026-10-18T15:14:59.217Z",
       "taskCount": 390,
       "completedCount": 295,
       "tags": [

@@ -20,14 +20,29 @@ import {
   DAILY_MEMORY_RECALLS,
   DEFAULT_AI_ASSIGNMENT_MODE,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
+  DEFAULT_SKILL_MODE,
+  SKILL_MODES,
+  procedureProblemDetails,
   readBatchWindowSeconds,
   readDailyMemory,
+  splitSkillProcedure,
+  validateSkillProcedure,
+  validateSkillSelection,
   type AiAssignmentMode,
+  type Procedure,
+  type ProcedureProblem,
+  type SkillMode,
+  type SkillProcedureFields,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import {
+  createSkillDraft,
+  deleteSkillDraft,
+  updateSkillDraft,
+} from '../services/ai/config-draft.js';
 import {
   refuseUnembeddable,
   type KnowledgeService,
@@ -65,11 +80,28 @@ const WRITE = ['agents-bot--all:rw'];
 
 const uuid = z.string().uuid();
 
+/**
+ * A skill's definition beyond its one-message steps (tm 296.2). The shape is
+ * left to `validateSkillSelection` / `validateSkillProcedure` (@siyahtus/types),
+ * which the editor runs too, so a refusal carries the same code either way.
+ * `locked`, `template_key`, `template_version` and `is_fallback` are not here:
+ * the server writes them, and a body naming them is not obeyed.
+ */
+const skillDefinitionFields = {
+  mode: z.enum(SKILL_MODES).optional(),
+  when_to_use: z.unknown().optional(),
+  examples: z.unknown().optional(),
+  priority: z.unknown().optional(),
+  slots: z.unknown().optional(),
+  procedure: z.unknown().optional(),
+};
+
 const createSkillBody = z.object({
   name: z.string().trim().min(1).max(120),
   ai_agent_id: uuid.optional(),
   instruction: z.string().max(10_000).optional(),
   steps: z.array(z.unknown()).optional(),
+  ...skillDefinitionFields,
 });
 
 const updateSkillBody = z
@@ -78,8 +110,11 @@ const updateSkillBody = z
     instruction: z.string().max(10_000).optional(),
     steps: z.array(z.unknown()).optional(),
     active: z.boolean().optional(),
+    ...skillDefinitionFields,
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+type SkillDefinitionBody = Pick<z.infer<typeof createSkillBody>, 'slots' | 'procedure'>;
 
 const compileBody = z.object({ instruction: z.string().min(1).max(10_000) });
 
@@ -368,6 +403,83 @@ function requireValidSteps(steps: unknown[]): unknown[] {
   return steps;
 }
 
+/**
+ * The mode-dependent columns of a skill write, judged and ready to store
+ * (tm 296.2). `fields` is the definition as it will be — a PATCH's fields over
+ * the stored ones — so a procedure is always judged whole: changing one slot
+ * re-checks every step that names it. A refusal is a `400 validation` whose
+ * `details` is the first problem's `ProcedureProblemDetails`.
+ *
+ * A `single` skill keeps whatever procedure it had (one switched back keeps
+ * its draft); it may not be handed new slots or a new procedure.
+ */
+async function skillDefinitionData(
+  tx: TenantClient,
+  mode: SkillMode,
+  fields: SkillProcedureFields,
+  written: SkillDefinitionBody,
+  locked?: Procedure,
+): Promise<Prisma.SkillUncheckedUpdateInput> {
+  if (mode === 'single') {
+    for (const field of ['slots', 'procedure'] as const) {
+      if (written[field] === undefined) continue;
+      throwProcedureProblem({
+        code: 'procedure_unknown_field',
+        section: 'procedure',
+        field,
+        message: `${field} belongs to a procedure skill (mode: procedure)`,
+      });
+    }
+    const [problem] = validateSkillSelection(fields);
+    if (problem) throwProcedureProblem(problem);
+    return {
+      mode,
+      whenToUse: typeof fields.when_to_use === 'string' ? fields.when_to_use.trim() : null,
+      ...(Array.isArray(fields.examples)
+        ? { examples: (fields.examples as string[]).map((example) => example.trim()) }
+        : {}),
+      ...(typeof fields.priority === 'number' ? { priority: fields.priority } : {}),
+    };
+  }
+
+  const groups = await tx.group.findMany({ select: { id: true } });
+  const result = validateSkillProcedure(fields, {
+    groupIds: new Set(groups.map((group) => Number(group.id))),
+    ...(locked ? { locked } : {}),
+  });
+  if (!result.ok) throwProcedureProblem(result.problems[0]!);
+  const split = splitSkillProcedure(result.procedure);
+  return {
+    mode,
+    whenToUse: split.when_to_use,
+    examples: split.examples,
+    priority: split.priority,
+    slots: split.slots as unknown as Prisma.InputJsonValue,
+    procedure: split.procedure as unknown as Prisma.InputJsonValue,
+  };
+}
+
+function throwProcedureProblem(problem: ProcedureProblem): never {
+  throw ApiError.validation(problem.message, { ...procedureProblemDetails(problem) });
+}
+
+/** A stored skill's definition, as `validateSkillProcedure` reads it. */
+function storedDefinition(skill: {
+  whenToUse: string | null;
+  examples: string[];
+  priority: number;
+  slots: unknown;
+  procedure: unknown;
+}): SkillProcedureFields {
+  return {
+    when_to_use: skill.whenToUse,
+    examples: skill.examples,
+    priority: skill.priority,
+    slots: skill.slots,
+    procedure: skill.procedure,
+  };
+}
+
 export default async function playbookRoutes(
   app: FastifyInstance,
   {
@@ -573,21 +685,20 @@ export default async function playbookRoutes(
         });
         if (!agent) throw ApiError.validation('That AI agent does not exist.');
       }
+      const definition = await skillDefinitionData(tx, body.mode ?? DEFAULT_SKILL_MODE, body, body);
 
       const createdBy = principal.kind === 'agent' ? principal.accountId : null;
-      const created = await tx.skill.create({
-        data: {
-          licenseId: tenant.licenseId,
-          name: body.name,
-          kind: 'ai_agent',
-          ...(body.ai_agent_id ? { aiAgentId: body.ai_agent_id } : {}),
-          ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
-          steps: steps as object,
-          // Never live on creation.
-          active: false,
-          createdBy,
-          updatedAt: new Date(),
-        },
+      const created = await createSkillDraft(tx, {
+        ...(definition as Pick<Prisma.SkillUncheckedCreateInput, 'mode' | 'whenToUse'>),
+        licenseId: tenant.licenseId,
+        name: body.name,
+        kind: 'ai_agent',
+        ...(body.ai_agent_id ? { aiAgentId: body.ai_agent_id } : {}),
+        ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
+        steps: steps as object,
+        // Never live on creation.
+        active: false,
+        createdBy,
       });
 
       return { created, createdByName: await creatorName(tx, createdBy) };
@@ -622,22 +733,62 @@ export default async function playbookRoutes(
         const existing = await tx.skill.findFirst({ where: { id } });
         if (!existing) throw ApiError.notFound('Skill not found.');
 
+        const mode = body.mode ?? (existing.mode as SkillMode);
+
         // Turning on a skill with nothing to run would look enabled and do
         // nothing, which is the hardest kind of misconfiguration to notice.
         const finalSteps = steps ?? (existing.steps as unknown[]);
-        if (body.active === true && (!Array.isArray(finalSteps) || finalSteps.length === 0)) {
+        if (
+          body.active === true &&
+          mode === 'single' &&
+          (!Array.isArray(finalSteps) || finalSteps.length === 0)
+        ) {
           throw new ApiError('not_allowed', 'A skill needs at least one step before it can run.');
         }
+        // The same trap for a procedure: nothing runs one until the executor
+        // (tm 296.3), which lifts this.
+        if ((body.active ?? existing.active) && mode === 'procedure') {
+          throw new ApiError('not_allowed', 'A procedure skill cannot be turned on yet.');
+        }
+        if (existing.locked && mode !== existing.mode) {
+          throwProcedureProblem({
+            code: 'procedure_locked_change',
+            section: 'procedure',
+            field: 'mode',
+            message: 'a locked skill keeps its mode',
+          });
+        }
 
-        const updated = await tx.skill.update({
-          where: { id },
-          data: {
-            ...(body.name !== undefined ? { name: body.name } : {}),
-            ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
-            ...(steps !== undefined ? { steps: steps as object } : {}),
-            ...(body.active !== undefined ? { active: body.active } : {}),
-            updatedAt: new Date(),
-          },
+        const stored = storedDefinition(existing);
+        const writesDefinition = (
+          Object.keys(skillDefinitionFields) as Array<keyof typeof skillDefinitionFields>
+        ).some((field) => body[field] !== undefined);
+        // A locked copy may change only its texts and its team: judged against
+        // the definition as stored.
+        const lockedAs =
+          existing.locked && existing.mode === 'procedure' ? validateSkillProcedure(stored) : null;
+        const definition = writesDefinition
+          ? await skillDefinitionData(
+              tx,
+              mode,
+              {
+                when_to_use: body.when_to_use !== undefined ? body.when_to_use : stored.when_to_use,
+                examples: body.examples ?? stored.examples,
+                priority: body.priority ?? stored.priority,
+                slots: body.slots ?? stored.slots,
+                procedure: body.procedure ?? stored.procedure,
+              },
+              body,
+              lockedAs?.ok ? lockedAs.procedure : undefined,
+            )
+          : {};
+
+        const updated = await updateSkillDraft(tx, id, {
+          ...definition,
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
+          ...(steps !== undefined ? { steps: steps as object } : {}),
+          ...(body.active !== undefined ? { active: body.active } : {}),
         });
 
         return { updated, createdByName: await creatorName(tx, updated.createdBy) };
@@ -653,7 +804,7 @@ export default async function playbookRoutes(
     async (request, reply) => {
       const id = parse(uuid, request.params.skillId);
       const deleted = await request.withTenant(async (tx) => {
-        const { count } = await tx.skill.deleteMany({ where: { id } });
+        const count = await deleteSkillDraft(tx, id);
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
         if (count > 0) {
@@ -1635,6 +1786,16 @@ function serialiseSkill(
     runsCount: number;
     updatedAt: Date;
     createdBy: string | null;
+    mode: string;
+    whenToUse: string | null;
+    examples: string[];
+    priority: number;
+    slots: unknown;
+    procedure: unknown;
+    locked: boolean;
+    templateKey: string | null;
+    templateVersion: number | null;
+    isFallback: boolean;
   },
   createdByName: string | null,
 ) {
@@ -1645,6 +1806,16 @@ function serialiseSkill(
     kind: skill.kind,
     instruction: skill.instruction,
     steps: Array.isArray(skill.steps) ? skill.steps : [],
+    mode: skill.mode,
+    when_to_use: skill.whenToUse,
+    examples: skill.examples,
+    priority: skill.priority,
+    slots: Array.isArray(skill.slots) ? skill.slots : [],
+    procedure: skill.procedure ?? null,
+    locked: skill.locked,
+    template_key: skill.templateKey,
+    template_version: skill.templateVersion,
+    is_fallback: skill.isFallback,
     active: skill.active,
     runs_count: skill.runsCount,
     updated_at: skill.updatedAt.toISOString(),

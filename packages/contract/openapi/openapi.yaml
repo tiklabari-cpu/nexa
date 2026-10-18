@@ -1649,7 +1649,25 @@ components:
 
     Skill:
       type: object
-      required: [id, name, kind, steps, active, runs_count, created_by_name, created_by_id]
+      required:
+        - id
+        - name
+        - kind
+        - steps
+        - active
+        - runs_count
+        - created_by_name
+        - created_by_id
+        - mode
+        - when_to_use
+        - examples
+        - priority
+        - slots
+        - procedure
+        - locked
+        - template_key
+        - template_version
+        - is_fallback
       properties:
         id: { type: string, format: uuid }
         ai_agent_id: { type: string, format: uuid, nullable: true }
@@ -1658,7 +1676,56 @@ components:
         instruction: { type: string, nullable: true }
         steps:
           type: array
+          description: The one-message step list — what a `single` skill runs.
           items: { $ref: "#/components/schemas/SkillStep" }
+        mode:
+          type: string
+          enum: [single, procedure]
+          description: |
+            `single` — the one-message step list in `steps`, every skill's mode
+            before procedures existed. `procedure` — a multi-turn procedure
+            (ADR-14a): `slots` and `procedure` define it, `steps` is not run.
+        when_to_use:
+          type: string
+          nullable: true
+          description: |
+            When the skill applies, in plain words — what the AI selects a skill
+            by (AI-05). Required for a procedure.
+        examples:
+          type: array
+          description: Customer sentences the skill should match.
+          items: { type: string }
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Between two equally likely skills the smaller number wins. Default 100.
+        slots:
+          type: array
+          description: What a procedure collects (AI-04); empty on a `single` skill.
+          items: { $ref: "#/components/schemas/SlotDef" }
+        procedure:
+          allOf:
+            - $ref: "#/components/schemas/SkillProcedure"
+          nullable: true
+          description: The rest of a procedure's definition; null on a `single` skill.
+        locked:
+          type: boolean
+          description: |
+            An installed template copy whose structure is fixed (AI-15): only
+            its texts and its team may change. Set by the server, never by a
+            request.
+        template_key:
+          type: string
+          nullable: true
+          description: The template this skill was installed from (AI-15); null when written by hand.
+        template_version:
+          type: integer
+          nullable: true
+          description: The installed template's version.
+        is_fallback:
+          type: boolean
+          description: The skill that answers when no other matches (AI-05).
         active: { type: boolean }
         runs_count: { type: integer }
         updated_at: { type: string, format: date-time }
@@ -1737,6 +1804,420 @@ components:
         type:
           type: string
           description: The unrecognised type, for `unknown_step_type`.
+
+    SkillProcedure:
+      type: object
+      description: |
+        A procedure's steps, reply templates, hand-over and limits (tm 296 ·
+        ADR-14a; `Procedure` in @siyahtus/types `procedure.ts`). Its
+        `when_to_use`, `examples`, `priority` and `slots` are the skill's own
+        fields. Validated as a whole before it is stored (`validateProcedure`);
+        a refusal is a `400 validation` whose `details` is a
+        `ProcedureProblemDetails`. Omitted fields take their defaults.
+      required: [steps]
+      properties:
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items: { $ref: "#/components/schemas/ProcedureStep" }
+        templates:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/ProcedureTemplate" }
+        handoff: { $ref: "#/components/schemas/ProcedureHandoff" }
+        limits:
+          type: object
+          required: [max_turns]
+          properties:
+            max_turns:
+              type: integer
+              minimum: 1
+              maximum: 50
+              description: AI turns before the procedure hands over with reason `max_turns`. Default 12.
+
+    ProcedureStep:
+      type: object
+      required: [id, type]
+      description: |
+        A discriminated union on `type` (`ProcStep`):
+
+          - `say` — `template_key` and/or `instruction`.
+          - `collect` — ask for whichever of `slots` (one or two) are required
+            and missing, and wait for the answer.
+          - `check` — `when` is the branch condition: `then` when it holds,
+            `else` (or the next step) when it does not.
+          - `answer_from_knowledge` — answer from the knowledge base; `query_hint`.
+          - `handoff` — hand over with `reason_code`, to `target` or the routes' team.
+          - `resolve` — mark `outcome`; `followup_template` goes with it.
+          - `tag` — tag the conversation.
+          - `tool` — a system lookup's place (AI-28); `active` is always false
+            in this release: skipped and logged.
+
+        On any step but `check`, `when` is a guard: the step runs only when it holds.
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z][a-z0-9_]{0,39}$"
+          description: Unique in the procedure — what a `goto` and the run log name.
+        type:
+          type: string
+          enum: [say, collect, check, answer_from_knowledge, handoff, resolve, tag, tool]
+        instruction: { type: string, maxLength: 1000 }
+        when: { $ref: "#/components/schemas/ProcedureCondition" }
+        template_key: { type: string, description: "say: the template sent." }
+        slots:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items: { type: string }
+          description: "collect: the slot names asked for."
+        then: { $ref: "#/components/schemas/ProcedureBranch" }
+        else: { $ref: "#/components/schemas/ProcedureBranch" }
+        query_hint: { type: string, maxLength: 300 }
+        reason_code:
+          { type: string, description: "handoff: the procedure's own reason, shown on the card." }
+        target: { $ref: "#/components/schemas/ProcedureHandoffTarget" }
+        outcome:
+          type: string
+          enum: [resolved, resolved_waiting]
+        followup_template: { type: string }
+        tag: { type: string, maxLength: 64 }
+        tool_key: { type: string }
+        inputs:
+          type: object
+          additionalProperties: { type: string }
+          description: "tool: the tool's input names mapped to slot names."
+        active:
+          type: boolean
+          enum: [false]
+          description: "tool: always false — no tool runs in this release."
+
+    ProcedureBranch:
+      type: object
+      description: |
+        Where a `check` goes: `{goto: <step id>}`, or a step written in place —
+        a `say`, `answer_from_knowledge`, `handoff`, `resolve` or `tag` with no
+        `id` and no `when`. A step in place that does not end the procedure
+        goes on after the check.
+      properties:
+        goto: { type: string }
+        type:
+          type: string
+          enum: [say, answer_from_knowledge, handoff, resolve, tag]
+        instruction: { type: string, maxLength: 1000 }
+        template_key: { type: string }
+        query_hint: { type: string, maxLength: 300 }
+        reason_code: { type: string }
+        target: { $ref: "#/components/schemas/ProcedureHandoffTarget" }
+        outcome:
+          type: string
+          enum: [resolved, resolved_waiting]
+        followup_template: { type: string }
+        tag: { type: string, maxLength: 64 }
+
+    ProcedureHandoffTarget:
+      description: A team by id, or a routing topic the license's routes resolve (`finance`, `kyc_risk`).
+      oneOf:
+        - type: object
+          required: [group_id]
+          properties:
+            group_id: { type: integer }
+        - type: object
+          required: [topic]
+          properties:
+            topic: { type: string }
+
+    ProcedureCondition:
+      type: object
+      minProperties: 1
+      maxProperties: 1
+      description: |
+        A condition (`Cond`): exactly one key. A fixed language — no free
+        expression. `all` / `any` / `not` combine; `slot` and `fact` compare a
+        collected value or an AI-13 table value; `fn` is one of the fixed
+        functions (`elapsed_minutes`, `within_working_hours`, `next_window`) —
+        without `op`, a yes/no function's own answer; `ai` is a yes/no question
+        the understanding call answers (`unknown` counts as false).
+      properties:
+        all:
+          type: array
+          items: { $ref: "#/components/schemas/ProcedureCondition" }
+        any:
+          type: array
+          items: { $ref: "#/components/schemas/ProcedureCondition" }
+        not: { $ref: "#/components/schemas/ProcedureCondition" }
+        slot:
+          type: object
+          required: [name, op]
+          properties:
+            name: { type: string }
+            op: { $ref: "#/components/schemas/ProcedureConditionOp" }
+            value: { $ref: "#/components/schemas/ProcedureConditionOperand" }
+        fact:
+          type: object
+          required: [path, op]
+          properties:
+            path: { type: string, description: "An AI-13 fact path: `method.expected_minutes`." }
+            op: { $ref: "#/components/schemas/ProcedureConditionOp" }
+            value: { $ref: "#/components/schemas/ProcedureConditionOperand" }
+        fn:
+          type: object
+          required: [name, args]
+          properties:
+            name:
+              type: string
+              enum: [elapsed_minutes, within_working_hours, next_window]
+            args:
+              type: array
+              items: { type: string }
+            op: { $ref: "#/components/schemas/ProcedureConditionOp" }
+            value: { $ref: "#/components/schemas/ProcedureConditionOperand" }
+        ai:
+          type: object
+          required: [question]
+          properties:
+            question: { type: string, maxLength: 300 }
+
+    ProcedureConditionOp:
+      type: string
+      description: "`exists` / `missing` take no value; `in` / `not_in` take a list."
+      enum: [eq, neq, lt, lte, gt, gte, in, not_in, exists, missing, matches]
+
+    ProcedureConditionOperand:
+      description: A literal, a list for `in` / `not_in`, or another slot's or fact's value.
+      oneOf:
+        - type: string
+        - type: number
+        - type: boolean
+        - type: array
+          items:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
+        - type: object
+          required: [slot]
+          properties:
+            slot: { type: string }
+        - type: object
+          required: [fact]
+          properties:
+            fact: { type: string }
+
+    ProcedureTemplate:
+      type: object
+      required: [key, text]
+      description: |
+        A reply text. `{name}` is replaced by a slot, a fact
+        (`{method.expected_minutes}`) or a function
+        (`{elapsed_minutes(islem_zamani)}`); a template with a variable the
+        conversation cannot fill is not sent. `verbatim` text goes out as written.
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        text: { type: string, maxLength: 2000 }
+        verbatim: { type: boolean }
+
+    ProcedureHandoff:
+      type: object
+      required: [conditions, card_fields]
+      properties:
+        conditions:
+          type: array
+          maxItems: 10
+          description: Checked every turn — any one holding hands the conversation over.
+          items: { $ref: "#/components/schemas/ProcedureCondition" }
+        target: { $ref: "#/components/schemas/ProcedureHandoffTarget" }
+        card_fields:
+          type: array
+          maxItems: 20
+          description: What the hand-over card shows as the basis — a slot, fact or function, no braces.
+          items: { type: string }
+        next_step_hint:
+          type: string
+          maxLength: 500
+          description: The card's suggested next step for the agent (template text).
+
+    SlotDef:
+      type: object
+      required: [name, label, type, ask]
+      description: |
+        One piece of information a procedure collects (AI-04; `SlotDef` in
+        @siyahtus/types `slots.ts`). A slot asking for a password, a one-time
+        code, a card number or CVC, a seed phrase, online-banking credentials or
+        a full IBAN is refused, as is a file slot asking for an identity
+        document. Omitted fields take their defaults.
+      properties:
+        name: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        label: { type: string, maxLength: 80 }
+        type:
+          type: string
+          enum:
+            - text
+            - enum
+            - number
+            - money
+            - datetime
+            - date
+            - duration
+            - boolean
+            - username
+            - email
+            - phone
+            - txid
+            - crypto_network
+            - iban_last4
+            - reference_code
+            - file
+            - url
+        required:
+          description: "`always` (default), `never`, or `{when: <condition>}`."
+          oneOf:
+            - type: string
+              enum: [always, never]
+            - type: object
+              required: [when]
+              properties:
+                when: { $ref: "#/components/schemas/ProcedureCondition" }
+        ask: { type: string, maxLength: 300, description: The question. }
+        ask_variants:
+          type: array
+          maxItems: 3
+          description: How the later attempts word it.
+          items: { type: string, maxLength: 300 }
+        validate:
+          type: object
+          properties:
+            min: { type: number }
+            max: { type: number }
+            enum_source:
+              type: string
+              enum: [payment_methods.deposit, payment_methods.withdrawal, bonuses, kyc_documents]
+            enum_values:
+              type: array
+              maxItems: 50
+              items: { type: string }
+            regex: { type: string, maxLength: 200 }
+            network_aware: { type: boolean }
+        pii:
+          type: string
+          enum: [none, low, high]
+        show_in_card: { type: boolean }
+        card_label: { type: string, maxLength: 80 }
+        max_attempts: { type: integer, minimum: 1, maximum: 5 }
+        confirm:
+          type: string
+          enum: [never, if_inferred, always]
+
+    ProcedureProblemDetails:
+      type: object
+      required: [reason, section]
+      description: |
+        Why a procedure was refused (`procedureProblemDetails`), as a code a
+        console words in its own language — the `details` of the `400
+        validation`. Slot problems keep their `slot_*` codes.
+      properties:
+        reason:
+          type: string
+          enum:
+            - procedure_not_object
+            - procedure_unknown_field
+            - procedure_needs_when_to_use
+            - procedure_bad_examples
+            - procedure_bad_priority
+            - procedure_bad_limits
+            - procedure_needs_steps
+            - procedure_too_many_steps
+            - procedure_step_not_object
+            - procedure_step_bad_id
+            - procedure_step_duplicate_id
+            - procedure_step_unknown_type
+            - procedure_step_bad_option
+            - procedure_say_needs_content
+            - procedure_collect_needs_slots
+            - procedure_collect_too_many_slots
+            - procedure_check_incomplete
+            - procedure_unknown_goto
+            - procedure_loop_without_collect
+            - procedure_tool_must_be_inactive
+            - procedure_bad_condition
+            - procedure_condition_too_deep
+            - procedure_bad_comparison
+            - procedure_unknown_fact
+            - procedure_fact_without_source
+            - procedure_unknown_function
+            - procedure_bad_function_args
+            - procedure_ai_condition_repeated
+            - procedure_bad_template
+            - procedure_duplicate_template
+            - procedure_unknown_template
+            - procedure_unknown_variable
+            - procedure_bad_handoff
+            - procedure_bad_target
+            - procedure_unknown_target
+            - procedure_locked_change
+            - slots_not_array
+            - slots_too_many
+            - slot_not_object
+            - slot_unknown_field
+            - slot_bad_name
+            - slot_duplicate_name
+            - slot_needs_label
+            - slot_unknown_type
+            - slot_bad_required
+            - slot_needs_ask
+            - slot_bad_option
+            - slot_bad_validate
+            - slot_enum_needs_values
+            - slot_unknown_enum_source
+            - slot_sensitive_forbidden
+            - slot_identity_document_forbidden
+            - slot_unknown_reference
+            - procedure_unreachable_step
+        section:
+          type: string
+          enum: [procedure, slots, steps, templates, handoff, limits]
+        position:
+          type: integer
+          minimum: 1
+          description: The 1-based position in the section's list (slot, step, template, hand-over condition).
+        step_id: { type: string }
+        slot: { type: string }
+        template_key: { type: string }
+        field:
+          { type: string, description: "The field at fault: `then`, `when`, `required`, `target`." }
+        path: { type: string, description: "Where inside a condition: `when.all[1].slot`." }
+        category:
+          type: string
+          description: "For `slot_sensitive_forbidden`: what the text reads as asking for."
+          enum:
+            - password
+            - one_time_code
+            - card_number
+            - card_security_code
+            - seed_or_private_key
+            - online_banking
+            - full_iban
+        reference:
+          type: string
+          description: What was named and not found or not allowed — a goto target, a variable, a team.
+
+    SkillValidationError:
+      description: |
+        A `400 validation` from a skill write. `details` says why, as codes: a
+        `StepProblem` for the one-message step list, a
+        `ProcedureProblemDetails` for a procedure (the first problem found).
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          properties:
+            error:
+              type: object
+              properties:
+                details:
+                  anyOf:
+                    - $ref: "#/components/schemas/StepProblem"
+                    - $ref: "#/components/schemas/ProcedureProblemDetails"
 
     SkillLogEntry:
       type: object

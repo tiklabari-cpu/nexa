@@ -3149,7 +3149,13 @@ export interface paths {
      *     engine cannot run would be skipped silently at the moment it mattered, and
      *     an admin would have no way to know why nothing happened.
      *
-     *     Activating a skill with no steps is refused for the same reason.
+     *     Activating a skill with no steps is refused for the same reason, and so is
+     *     activating a procedure skill: nothing runs procedures yet (tm 296.3).
+     *
+     *     A procedure is judged whole — the fields sent over the ones stored — so
+     *     changing one slot re-checks every step that names it. `procedure`
+     *     replaces the stored one; it is not merged. A locked template copy
+     *     (`locked`) may change only its texts and its team, never its mode.
      */
     patch: operations['updateSkill'];
     trace?: never;
@@ -9298,7 +9304,40 @@ export interface components {
       /** @enum {string} */
       kind: 'ai_agent' | 'workspace';
       instruction?: string | null;
+      /** @description The one-message step list — what a `single` skill runs. */
       steps: components['schemas']['SkillStep'][];
+      /**
+       * @description `single` — the one-message step list in `steps`, every skill's mode
+       *     before procedures existed. `procedure` — a multi-turn procedure
+       *     (ADR-14a): `slots` and `procedure` define it, `steps` is not run.
+       * @enum {string}
+       */
+      mode: 'single' | 'procedure';
+      /**
+       * @description When the skill applies, in plain words — what the AI selects a skill
+       *     by (AI-05). Required for a procedure.
+       */
+      when_to_use: string | null;
+      /** @description Customer sentences the skill should match. */
+      examples: string[];
+      /** @description Between two equally likely skills the smaller number wins. Default 100. */
+      priority: number;
+      /** @description What a procedure collects (AI-04); empty on a `single` skill. */
+      slots: components['schemas']['SlotDef'][];
+      /** @description The rest of a procedure's definition; null on a `single` skill. */
+      procedure: components['schemas']['SkillProcedure'] | null;
+      /**
+       * @description An installed template copy whose structure is fixed (AI-15): only
+       *     its texts and its team may change. Set by the server, never by a
+       *     request.
+       */
+      locked: boolean;
+      /** @description The template this skill was installed from (AI-15); null when written by hand. */
+      template_key: string | null;
+      /** @description The installed template's version. */
+      template_version: number | null;
+      /** @description The skill that answers when no other matches (AI-05). */
+      is_fallback: boolean;
       active: boolean;
       runs_count: number;
       /** Format: date-time */
@@ -9359,6 +9398,346 @@ export interface components {
       step?: number;
       /** @description The unrecognised type, for `unknown_step_type`. */
       type?: string;
+    };
+    /**
+     * @description A procedure's steps, reply templates, hand-over and limits (tm 296 ·
+     *     ADR-14a; `Procedure` in @siyahtus/types `procedure.ts`). Its
+     *     `when_to_use`, `examples`, `priority` and `slots` are the skill's own
+     *     fields. Validated as a whole before it is stored (`validateProcedure`);
+     *     a refusal is a `400 validation` whose `details` is a
+     *     `ProcedureProblemDetails`. Omitted fields take their defaults.
+     */
+    SkillProcedure: {
+      steps: components['schemas']['ProcedureStep'][];
+      templates?: components['schemas']['ProcedureTemplate'][];
+      handoff?: components['schemas']['ProcedureHandoff'];
+      limits?: {
+        /** @description AI turns before the procedure hands over with reason `max_turns`. Default 12. */
+        max_turns: number;
+      };
+    };
+    /**
+     * @description A discriminated union on `type` (`ProcStep`):
+     *
+     *       - `say` — `template_key` and/or `instruction`.
+     *       - `collect` — ask for whichever of `slots` (one or two) are required
+     *         and missing, and wait for the answer.
+     *       - `check` — `when` is the branch condition: `then` when it holds,
+     *         `else` (or the next step) when it does not.
+     *       - `answer_from_knowledge` — answer from the knowledge base; `query_hint`.
+     *       - `handoff` — hand over with `reason_code`, to `target` or the routes' team.
+     *       - `resolve` — mark `outcome`; `followup_template` goes with it.
+     *       - `tag` — tag the conversation.
+     *       - `tool` — a system lookup's place (AI-28); `active` is always false
+     *         in this release: skipped and logged.
+     *
+     *     On any step but `check`, `when` is a guard: the step runs only when it holds.
+     */
+    ProcedureStep: {
+      /** @description Unique in the procedure — what a `goto` and the run log name. */
+      id: string;
+      /** @enum {string} */
+      type:
+        | 'say'
+        | 'collect'
+        | 'check'
+        | 'answer_from_knowledge'
+        | 'handoff'
+        | 'resolve'
+        | 'tag'
+        | 'tool';
+      instruction?: string;
+      when?: components['schemas']['ProcedureCondition'];
+      /** @description say: the template sent. */
+      template_key?: string;
+      /** @description collect: the slot names asked for. */
+      slots?: string[];
+      then?: components['schemas']['ProcedureBranch'];
+      else?: components['schemas']['ProcedureBranch'];
+      query_hint?: string;
+      /** @description handoff: the procedure's own reason, shown on the card. */
+      reason_code?: string;
+      target?: components['schemas']['ProcedureHandoffTarget'];
+      /** @enum {string} */
+      outcome?: 'resolved' | 'resolved_waiting';
+      followup_template?: string;
+      tag?: string;
+      tool_key?: string;
+      /** @description tool: the tool's input names mapped to slot names. */
+      inputs?: {
+        [key: string]: string;
+      };
+      /**
+       * @description tool: always false — no tool runs in this release.
+       * @enum {boolean}
+       */
+      active?: false;
+    };
+    /**
+     * @description Where a `check` goes: `{goto: <step id>}`, or a step written in place —
+     *     a `say`, `answer_from_knowledge`, `handoff`, `resolve` or `tag` with no
+     *     `id` and no `when`. A step in place that does not end the procedure
+     *     goes on after the check.
+     */
+    ProcedureBranch: {
+      goto?: string;
+      /** @enum {string} */
+      type?: 'say' | 'answer_from_knowledge' | 'handoff' | 'resolve' | 'tag';
+      instruction?: string;
+      template_key?: string;
+      query_hint?: string;
+      reason_code?: string;
+      target?: components['schemas']['ProcedureHandoffTarget'];
+      /** @enum {string} */
+      outcome?: 'resolved' | 'resolved_waiting';
+      followup_template?: string;
+      tag?: string;
+    };
+    /** @description A team by id, or a routing topic the license's routes resolve (`finance`, `kyc_risk`). */
+    ProcedureHandoffTarget:
+      | {
+          group_id: number;
+        }
+      | {
+          topic: string;
+        };
+    /**
+     * @description A condition (`Cond`): exactly one key. A fixed language — no free
+     *     expression. `all` / `any` / `not` combine; `slot` and `fact` compare a
+     *     collected value or an AI-13 table value; `fn` is one of the fixed
+     *     functions (`elapsed_minutes`, `within_working_hours`, `next_window`) —
+     *     without `op`, a yes/no function's own answer; `ai` is a yes/no question
+     *     the understanding call answers (`unknown` counts as false).
+     */
+    ProcedureCondition: {
+      all?: components['schemas']['ProcedureCondition'][];
+      any?: components['schemas']['ProcedureCondition'][];
+      not?: components['schemas']['ProcedureCondition'];
+      slot?: {
+        name: string;
+        op: components['schemas']['ProcedureConditionOp'];
+        value?: components['schemas']['ProcedureConditionOperand'];
+      };
+      fact?: {
+        /** @description An AI-13 fact path: `method.expected_minutes`. */
+        path: string;
+        op: components['schemas']['ProcedureConditionOp'];
+        value?: components['schemas']['ProcedureConditionOperand'];
+      };
+      fn?: {
+        /** @enum {string} */
+        name: 'elapsed_minutes' | 'within_working_hours' | 'next_window';
+        args: string[];
+        op?: components['schemas']['ProcedureConditionOp'];
+        value?: components['schemas']['ProcedureConditionOperand'];
+      };
+      ai?: {
+        question: string;
+      };
+    };
+    /**
+     * @description `exists` / `missing` take no value; `in` / `not_in` take a list.
+     * @enum {string}
+     */
+    ProcedureConditionOp:
+      | 'eq'
+      | 'neq'
+      | 'lt'
+      | 'lte'
+      | 'gt'
+      | 'gte'
+      | 'in'
+      | 'not_in'
+      | 'exists'
+      | 'missing'
+      | 'matches';
+    /** @description A literal, a list for `in` / `not_in`, or another slot's or fact's value. */
+    ProcedureConditionOperand:
+      | string
+      | number
+      | boolean
+      | (string | number | boolean)[]
+      | {
+          slot: string;
+        }
+      | {
+          fact: string;
+        };
+    /**
+     * @description A reply text. `{name}` is replaced by a slot, a fact
+     *     (`{method.expected_minutes}`) or a function
+     *     (`{elapsed_minutes(islem_zamani)}`); a template with a variable the
+     *     conversation cannot fill is not sent. `verbatim` text goes out as written.
+     */
+    ProcedureTemplate: {
+      key: string;
+      text: string;
+      verbatim?: boolean;
+    };
+    ProcedureHandoff: {
+      /** @description Checked every turn — any one holding hands the conversation over. */
+      conditions: components['schemas']['ProcedureCondition'][];
+      target?: components['schemas']['ProcedureHandoffTarget'];
+      /** @description What the hand-over card shows as the basis — a slot, fact or function, no braces. */
+      card_fields: string[];
+      /** @description The card's suggested next step for the agent (template text). */
+      next_step_hint?: string;
+    };
+    /**
+     * @description One piece of information a procedure collects (AI-04; `SlotDef` in
+     *     @siyahtus/types `slots.ts`). A slot asking for a password, a one-time
+     *     code, a card number or CVC, a seed phrase, online-banking credentials or
+     *     a full IBAN is refused, as is a file slot asking for an identity
+     *     document. Omitted fields take their defaults.
+     */
+    SlotDef: {
+      name: string;
+      label: string;
+      /** @enum {string} */
+      type:
+        | 'text'
+        | 'enum'
+        | 'number'
+        | 'money'
+        | 'datetime'
+        | 'date'
+        | 'duration'
+        | 'boolean'
+        | 'username'
+        | 'email'
+        | 'phone'
+        | 'txid'
+        | 'crypto_network'
+        | 'iban_last4'
+        | 'reference_code'
+        | 'file'
+        | 'url';
+      /** @description `always` (default), `never`, or `{when: <condition>}`. */
+      required?:
+        | ('always' | 'never')
+        | {
+            when: components['schemas']['ProcedureCondition'];
+          };
+      /** @description The question. */
+      ask: string;
+      /** @description How the later attempts word it. */
+      ask_variants?: string[];
+      validate?: {
+        min?: number;
+        max?: number;
+        /** @enum {string} */
+        enum_source?:
+          'payment_methods.deposit' | 'payment_methods.withdrawal' | 'bonuses' | 'kyc_documents';
+        enum_values?: string[];
+        regex?: string;
+        network_aware?: boolean;
+      };
+      /** @enum {string} */
+      pii?: 'none' | 'low' | 'high';
+      show_in_card?: boolean;
+      card_label?: string;
+      max_attempts?: number;
+      /** @enum {string} */
+      confirm?: 'never' | 'if_inferred' | 'always';
+    };
+    /**
+     * @description Why a procedure was refused (`procedureProblemDetails`), as a code a
+     *     console words in its own language — the `details` of the `400
+     *     validation`. Slot problems keep their `slot_*` codes.
+     */
+    ProcedureProblemDetails: {
+      /** @enum {string} */
+      reason:
+        | 'procedure_not_object'
+        | 'procedure_unknown_field'
+        | 'procedure_needs_when_to_use'
+        | 'procedure_bad_examples'
+        | 'procedure_bad_priority'
+        | 'procedure_bad_limits'
+        | 'procedure_needs_steps'
+        | 'procedure_too_many_steps'
+        | 'procedure_step_not_object'
+        | 'procedure_step_bad_id'
+        | 'procedure_step_duplicate_id'
+        | 'procedure_step_unknown_type'
+        | 'procedure_step_bad_option'
+        | 'procedure_say_needs_content'
+        | 'procedure_collect_needs_slots'
+        | 'procedure_collect_too_many_slots'
+        | 'procedure_check_incomplete'
+        | 'procedure_unknown_goto'
+        | 'procedure_loop_without_collect'
+        | 'procedure_tool_must_be_inactive'
+        | 'procedure_bad_condition'
+        | 'procedure_condition_too_deep'
+        | 'procedure_bad_comparison'
+        | 'procedure_unknown_fact'
+        | 'procedure_fact_without_source'
+        | 'procedure_unknown_function'
+        | 'procedure_bad_function_args'
+        | 'procedure_ai_condition_repeated'
+        | 'procedure_bad_template'
+        | 'procedure_duplicate_template'
+        | 'procedure_unknown_template'
+        | 'procedure_unknown_variable'
+        | 'procedure_bad_handoff'
+        | 'procedure_bad_target'
+        | 'procedure_unknown_target'
+        | 'procedure_locked_change'
+        | 'slots_not_array'
+        | 'slots_too_many'
+        | 'slot_not_object'
+        | 'slot_unknown_field'
+        | 'slot_bad_name'
+        | 'slot_duplicate_name'
+        | 'slot_needs_label'
+        | 'slot_unknown_type'
+        | 'slot_bad_required'
+        | 'slot_needs_ask'
+        | 'slot_bad_option'
+        | 'slot_bad_validate'
+        | 'slot_enum_needs_values'
+        | 'slot_unknown_enum_source'
+        | 'slot_sensitive_forbidden'
+        | 'slot_identity_document_forbidden'
+        | 'slot_unknown_reference'
+        | 'procedure_unreachable_step';
+      /** @enum {string} */
+      section: 'procedure' | 'slots' | 'steps' | 'templates' | 'handoff' | 'limits';
+      /** @description The 1-based position in the section's list (slot, step, template, hand-over condition). */
+      position?: number;
+      step_id?: string;
+      slot?: string;
+      template_key?: string;
+      /** @description The field at fault: `then`, `when`, `required`, `target`. */
+      field?: string;
+      /** @description Where inside a condition: `when.all[1].slot`. */
+      path?: string;
+      /**
+       * @description For `slot_sensitive_forbidden`: what the text reads as asking for.
+       * @enum {string}
+       */
+      category?:
+        | 'password'
+        | 'one_time_code'
+        | 'card_number'
+        | 'card_security_code'
+        | 'seed_or_private_key'
+        | 'online_banking'
+        | 'full_iban';
+      /** @description What was named and not found or not allowed — a goto target, a variable, a team. */
+      reference?: string;
+    };
+    /**
+     * @description A `400 validation` from a skill write. `details` says why, as codes: a
+     *     `StepProblem` for the one-message step list, a
+     *     `ProcedureProblemDetails` for a procedure (the first problem found).
+     */
+    SkillValidationError: components['schemas']['Error'] & {
+      error?: {
+        details?:
+          components['schemas']['StepProblem'] | components['schemas']['ProcedureProblemDetails'];
+      };
     };
     SkillLogEntry: {
       step: string;
@@ -18961,6 +19340,17 @@ export interface operations {
           ai_agent_id?: string;
           instruction?: string;
           steps?: components['schemas']['SkillStep'][];
+          /**
+           * @description Default `single`. A procedure needs `when_to_use` and `procedure`.
+           * @enum {string}
+           */
+          mode?: 'single' | 'procedure';
+          when_to_use?: string;
+          examples?: string[];
+          priority?: number;
+          /** @description A procedure's only. */
+          slots?: components['schemas']['SlotDef'][];
+          procedure?: components['schemas']['SkillProcedure'];
         };
       };
     };
@@ -18974,7 +19364,15 @@ export interface operations {
           'application/json': components['schemas']['Skill'];
         };
       };
-      400: components['responses']['BadRequest'];
+      /** @description Malformed, or a step list or procedure that cannot run */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SkillValidationError'];
+        };
+      };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
@@ -19112,6 +19510,17 @@ export interface operations {
           name?: string;
           instruction?: string;
           steps?: components['schemas']['SkillStep'][];
+          /**
+           * @description Default `single`. A procedure needs `when_to_use` and `procedure`.
+           * @enum {string}
+           */
+          mode?: 'single' | 'procedure';
+          when_to_use?: string;
+          examples?: string[];
+          priority?: number;
+          /** @description A procedure's only. */
+          slots?: components['schemas']['SlotDef'][];
+          procedure?: components['schemas']['SkillProcedure'];
           active?: boolean;
         };
       };
@@ -19126,12 +19535,21 @@ export interface operations {
           'application/json': components['schemas']['Skill'];
         };
       };
-      400: components['responses']['BadRequest'];
+      /** @description Malformed, or a step list or procedure that cannot run */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SkillValidationError'];
+        };
+      };
       401: components['responses']['Unauthorized'];
-      403: components['responses']['Forbidden'];
-      404: components['responses']['NotFound'];
-      /** @description Cannot activate a skill with no steps */
-      409: {
+      /**
+       * @description Missing scope — or `not_allowed`: turning on a single skill with no
+       *     steps, or a procedure skill.
+       */
+      403: {
         headers: {
           [name: string]: unknown;
         };
@@ -19139,6 +19557,7 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

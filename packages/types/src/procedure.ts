@@ -731,6 +731,163 @@ interface StepFlow {
   backward: Array<{ field: 'then' | 'else'; target: number }>;
 }
 
+// ---------------------------------------------------------------------------
+// The skill row (#296.2).
+// ---------------------------------------------------------------------------
+
+/**
+ * A skill's mode (ADR-14a §1): `single` — the one-message step list, every
+ * skill's before procedures and the default; `procedure` — this module's.
+ */
+export const SKILL_MODES = ['single', 'procedure'] as const;
+export type SkillMode = (typeof SKILL_MODES)[number];
+export const DEFAULT_SKILL_MODE: SkillMode = 'single';
+
+/**
+ * What a skill keeps in its `procedure` field. `when_to_use`, `examples`,
+ * `priority` and `slots` are the skill's own fields — the first three select
+ * a skill in either mode.
+ */
+export const SKILL_PROCEDURE_FIELDS = ['steps', 'templates', 'handoff', 'limits'] as const;
+export type SkillProcedureBody = Pick<Procedure, (typeof SKILL_PROCEDURE_FIELDS)[number]>;
+
+/** A procedure skill's fields, as a request writes them or a row stores them. */
+export interface SkillProcedureFields {
+  when_to_use?: unknown;
+  examples?: unknown;
+  priority?: unknown;
+  slots?: unknown;
+  procedure?: unknown;
+}
+
+/**
+ * Judge a procedure skill's fields as one definition: `procedure` holds only
+ * its four fields, and together with the skill's own they make a `Procedure`
+ * `validateProcedure` accepts. A null or omitted field takes its default
+ * (`when_to_use` has none). What the API checks before storing a procedure
+ * skill and the editor before saving one.
+ */
+export function validateSkillProcedure(
+  fields: SkillProcedureFields,
+  context: ProcedureValidationContext = {},
+): ProcedureValidation {
+  const body = fields.procedure;
+  if (!isPlainObject(body)) {
+    return {
+      ok: false,
+      problems: [
+        {
+          code: 'procedure_not_object',
+          section: 'procedure',
+          field: 'procedure',
+          message: 'a procedure skill needs a procedure object',
+        },
+      ],
+      warnings: [],
+    };
+  }
+  const misplaced = Object.keys(body).filter(
+    (key) => !(SKILL_PROCEDURE_FIELDS as readonly string[]).includes(key),
+  );
+  if (misplaced.length > 0) {
+    return {
+      ok: false,
+      problems: misplaced.map((key) => ({
+        code: 'procedure_unknown_field' as const,
+        section: 'procedure' as const,
+        field: key,
+        message: PROCEDURE_FIELDS.has(key)
+          ? `${key} is the skill's own field, not the procedure's`
+          : `unknown field ${key}`,
+      })),
+      warnings: [],
+    };
+  }
+  const joined: Record<string, unknown> = { ...body };
+  for (const key of ['when_to_use', 'examples', 'priority', 'slots'] as const) {
+    const value = fields[key];
+    if (value !== undefined && value !== null) joined[key] = value;
+  }
+  return validateProcedure(joined, context);
+}
+
+/** A validated procedure as a skill stores it: its own four fields, and the rest. */
+export function splitSkillProcedure(procedure: Procedure): {
+  when_to_use: string;
+  examples: string[];
+  priority: number;
+  slots: SlotDef<Cond>[];
+  procedure: SkillProcedureBody;
+} {
+  const { when_to_use, examples, priority, slots, steps, templates, handoff, limits } = procedure;
+  return {
+    when_to_use,
+    examples,
+    priority,
+    slots,
+    procedure: { steps, templates, handoff, limits },
+  };
+}
+
+/**
+ * What selects a skill (AI-05) — `when_to_use`, `examples`, `priority` —
+ * judged by the procedure's rules, with its codes. A `single` skill has the
+ * same three fields; for it `when_to_use` may be absent (null or omitted).
+ * `validateProcedure` runs this with `when_to_use` required.
+ */
+export function validateSkillSelection(value: {
+  when_to_use?: unknown;
+  examples?: unknown;
+  priority?: unknown;
+}): ProcedureProblem[] {
+  return selectionProblems(value, false);
+}
+
+function selectionProblems(
+  value: Readonly<Record<string, unknown>>,
+  requireWhenToUse: boolean,
+): ProcedureProblem[] {
+  const problems: ProcedureProblem[] = [];
+  const whenToUse = value['when_to_use'];
+  if (
+    (requireWhenToUse || (whenToUse !== undefined && whenToUse !== null)) &&
+    (!nonEmptyString(whenToUse) || whenToUse.length > PROCEDURE_WHEN_TO_USE_MAX)
+  ) {
+    problems.push({
+      code: 'procedure_needs_when_to_use',
+      section: 'procedure',
+      field: 'when_to_use',
+      message: `needs a when_to_use of at most ${PROCEDURE_WHEN_TO_USE_MAX} characters`,
+    });
+  }
+
+  const examples = value['examples'] ?? PROCEDURE_DEFAULTS.examples;
+  if (
+    !Array.isArray(examples) ||
+    examples.length > PROCEDURE_EXAMPLES_MAX ||
+    !examples.every((e) => nonEmptyString(e) && e.length <= PROCEDURE_EXAMPLE_MAX)
+  ) {
+    problems.push({
+      code: 'procedure_bad_examples',
+      section: 'procedure',
+      field: 'examples',
+      message: `examples must be at most ${PROCEDURE_EXAMPLES_MAX} sentences of at most ${PROCEDURE_EXAMPLE_MAX} characters`,
+    });
+  }
+
+  const priority = value['priority'] ?? PROCEDURE_DEFAULTS.priority;
+  if (!isIntegerIn(priority, PROCEDURE_PRIORITY_MIN, PROCEDURE_PRIORITY_MAX)) {
+    problems.push({
+      code: 'procedure_bad_priority',
+      section: 'procedure',
+      field: 'priority',
+      message: `priority must be a whole number from ${PROCEDURE_PRIORITY_MIN} to ${PROCEDURE_PRIORITY_MAX}`,
+    });
+  }
+
+  return problems;
+}
+
 /**
  * Every problem in a procedure, and the definition with its defaults filled in
  * when there are none. Unknown fields are refused rather than dropped, as in
@@ -766,39 +923,7 @@ export function validateProcedure(
     }
   }
 
-  const whenToUse = value['when_to_use'];
-  if (!nonEmptyString(whenToUse) || whenToUse.length > PROCEDURE_WHEN_TO_USE_MAX) {
-    problems.push({
-      code: 'procedure_needs_when_to_use',
-      section: 'procedure',
-      field: 'when_to_use',
-      message: `needs a when_to_use of at most ${PROCEDURE_WHEN_TO_USE_MAX} characters`,
-    });
-  }
-
-  const examples = value['examples'] ?? PROCEDURE_DEFAULTS.examples;
-  if (
-    !Array.isArray(examples) ||
-    examples.length > PROCEDURE_EXAMPLES_MAX ||
-    !examples.every((e) => nonEmptyString(e) && e.length <= PROCEDURE_EXAMPLE_MAX)
-  ) {
-    problems.push({
-      code: 'procedure_bad_examples',
-      section: 'procedure',
-      field: 'examples',
-      message: `examples must be at most ${PROCEDURE_EXAMPLES_MAX} sentences of at most ${PROCEDURE_EXAMPLE_MAX} characters`,
-    });
-  }
-
-  const priority = value['priority'] ?? PROCEDURE_DEFAULTS.priority;
-  if (!isIntegerIn(priority, PROCEDURE_PRIORITY_MIN, PROCEDURE_PRIORITY_MAX)) {
-    problems.push({
-      code: 'procedure_bad_priority',
-      section: 'procedure',
-      field: 'priority',
-      message: `priority must be a whole number from ${PROCEDURE_PRIORITY_MIN} to ${PROCEDURE_PRIORITY_MAX}`,
-    });
-  }
+  problems.push(...selectionProblems(value, true));
 
   const rawSlots = value['slots'] ?? PROCEDURE_DEFAULTS.slots;
   const slotResult = validateSlotDefs(rawSlots);
@@ -872,9 +997,9 @@ export function validateProcedure(
   if (problems.length > 0 || !slotResult.ok) return { ok: false, problems, warnings };
 
   const procedure: Procedure = {
-    when_to_use: (whenToUse as string).trim(),
-    examples: (examples as string[]).map((e) => e.trim()),
-    priority: priority as number,
+    when_to_use: (value['when_to_use'] as string).trim(),
+    examples: ((value['examples'] ?? PROCEDURE_DEFAULTS.examples) as string[]).map((e) => e.trim()),
+    priority: (value['priority'] ?? PROCEDURE_DEFAULTS.priority) as number,
     slots: slotResult.slots as SlotDef<Cond>[],
     steps,
     templates,

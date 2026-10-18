@@ -19,6 +19,16 @@ function skill(overrides: Partial<Skill> & { id: string }): Skill {
     updated_at: '2026-08-01T00:00:00.000Z',
     created_by_name: null,
     created_by_id: null,
+    mode: 'single',
+    when_to_use: null,
+    examples: [],
+    priority: 100,
+    slots: [],
+    procedure: null,
+    locked: false,
+    template_key: null,
+    template_version: null,
+    is_fallback: false,
     ...overrides,
   };
 }

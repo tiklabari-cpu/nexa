@@ -5,6 +5,7 @@ import {
   PROCEDURE_PROBLEM_CODES,
   PROCEDURE_STEPS_MAX,
   PROCEDURE_TEMPLATES_MAX,
+  SKILL_PROCEDURE_FIELDS,
   type Procedure,
   type ProcedureProblem,
   type ProcedureProblemCode,
@@ -12,8 +13,11 @@ import {
   parseProcedureReference,
   procedureAiQuestions,
   procedureProblemDetails,
+  splitSkillProcedure,
   templateReferences,
   validateProcedure,
+  validateSkillProcedure,
+  validateSkillSelection,
 } from './procedure.js';
 import type { SlotProblemCode } from './slots.js';
 
@@ -1460,5 +1464,89 @@ describe('problems on the wire', () => {
       for (const code of codesOf(fixture, context)) seen.add(code);
     }
     expect(PROCEDURE_PROBLEM_CODES.filter((code) => !seen.has(code))).toEqual([]);
+  });
+});
+
+/** `base()` as a skill writes it: the skill's own fields beside `procedure` (#296.2). */
+function skillFields(): Json {
+  const { when_to_use, examples, priority, slots, ...procedure } = base();
+  return { when_to_use, examples, priority, slots, procedure };
+}
+
+describe('the skill row: a procedure split across the skill’s fields (#296.2)', () => {
+  it('judges the skill’s fields and its procedure as one definition, round-tripping through the split', () => {
+    const result = validateSkillProcedure(skillFields());
+    if (!result.ok) throw new Error(JSON.stringify(result.problems));
+    expect(result.procedure).toStrictEqual(valid(base()));
+
+    const split = splitSkillProcedure(result.procedure);
+    expect(Object.keys(split.procedure).sort()).toEqual([...SKILL_PROCEDURE_FIELDS].sort());
+    expect(split.priority).toBe(100);
+    expect(validateSkillProcedure(split)).toMatchObject({ ok: true, procedure: result.procedure });
+  });
+
+  it('refuses what validateProcedure refuses, with the same codes', () => {
+    const fields = skillFields();
+    const procedure = fields['procedure'] as Json;
+    const broken = {
+      ...fields,
+      procedure: { ...procedure, steps: [{ id: 'sor', type: 'collect', slots: ['a', 'b', 'c'] }] },
+    };
+    const result = validateSkillProcedure(broken);
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.problems.map((p) => p.code)).toContain(
+      'procedure_collect_too_many_slots',
+    );
+  });
+
+  it('needs a procedure object, holding only its four fields', () => {
+    for (const procedure of [undefined, null, 'x', []]) {
+      const result = validateSkillProcedure({ ...skillFields(), procedure });
+      expect(result.ok ? null : result.problems.map((p) => [p.code, p.field])).toEqual([
+        ['procedure_not_object', 'procedure'],
+      ]);
+    }
+    const fields = skillFields();
+    const result = validateSkillProcedure({
+      ...fields,
+      procedure: { ...(fields['procedure'] as Json), priority: 5, trigger: {} },
+    });
+    expect(result.ok ? null : result.problems.map((p) => [p.code, p.field])).toEqual([
+      ['procedure_unknown_field', 'priority'],
+      ['procedure_unknown_field', 'trigger'],
+    ]);
+  });
+
+  it('gives a null field its default — when_to_use has none', () => {
+    const result = validateSkillProcedure({ ...skillFields(), examples: null, priority: null });
+    expect(result.ok && [result.procedure.examples, result.procedure.priority]).toEqual([[], 100]);
+    const missing = validateSkillProcedure({ ...skillFields(), when_to_use: null });
+    expect(missing.ok ? [] : missing.problems.map((p) => p.code)).toEqual([
+      'procedure_needs_when_to_use',
+    ]);
+  });
+});
+
+describe('a skill’s selection fields, in either mode (#296.2)', () => {
+  it('lets a single skill go without when_to_use, and judges what it gives by the procedure’s rules', () => {
+    expect(validateSkillSelection({})).toEqual([]);
+    expect(validateSkillSelection({ when_to_use: null, examples: ['a'], priority: 1 })).toEqual([]);
+    expect(
+      validateSkillSelection({ when_to_use: ' ', examples: ['a', ''], priority: 0 }).map(
+        (p) => p.code,
+      ),
+    ).toEqual(['procedure_needs_when_to_use', 'procedure_bad_examples', 'procedure_bad_priority']);
+    expect(validateSkillSelection({ when_to_use: 'x'.repeat(1001) }).map((p) => p.code)).toEqual([
+      'procedure_needs_when_to_use',
+    ]);
+    expect(validateSkillSelection({ priority: 1001 }).map((p) => p.field)).toEqual(['priority']);
+    expect(validateSkillSelection({ priority: 2.5 }).map((p) => p.field)).toEqual(['priority']);
+  });
+
+  it('is what validateProcedure runs, with when_to_use required', () => {
+    expect(codesOf({ ...base(), when_to_use: undefined, priority: 0 })).toEqual([
+      'procedure_needs_when_to_use',
+      'procedure_bad_priority',
+    ]);
   });
 });

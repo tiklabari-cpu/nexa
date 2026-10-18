@@ -30,6 +30,12 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 
 const { SkillEditor } = await import('./SkillEditor.js');
 
+// The §3.1 procedure renders 19 steps and five sections, and these tests find
+// things by role across that tree — 1–3 s each on an idle machine, and the
+// first one went past the default 5 s inside the full DoD gate, where every
+// package's suite runs at once (as `auth-store.test.ts` measured, tm 259.1).
+vi.setConfig({ testTimeout: 20_000 });
+
 function depositRow() {
   const result = validateSkillProcedure(depositProcedureFields());
   if (!result.ok) throw new Error(JSON.stringify(result.problems));

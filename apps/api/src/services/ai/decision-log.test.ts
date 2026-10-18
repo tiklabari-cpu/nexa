@@ -4,11 +4,14 @@ import type { TenantClient } from '../../lib/tenant.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
 import {
   boundedDetails,
+  MAX_TRACE_STEPS,
   recordAiDecision,
   skillDecision,
+  stepRecords,
   toDecisionRow,
   type AiDecisionInput,
 } from './decision-log.js';
+import type { StepDecision } from './conversation/procedure/executor.js';
 import {
   emptyTurnState,
   type TenantRunner,
@@ -267,6 +270,149 @@ describe('skillDecision', () => {
       }),
     );
     expect(JSON.stringify(decided)).not.toMatch(/date_of_birth|date of birth/);
+  });
+
+  it('files a single-message turn without a step trace — the record it always wrote', () => {
+    const details = skillDecision(run())?.details ?? {};
+    expect(Object.keys(details).sort()).toEqual([
+      'embedding_tokens',
+      'failed_steps',
+      'outcome',
+      'steps',
+    ]);
+  });
+});
+
+describe('skillDecision on a procedure turn (AI-03 KAYIT · ID-08)', () => {
+  const HASH = 'a'.repeat(64);
+  const TRACE: StepDecision[] = [
+    { step_id: 'giris', type: 'say', cond_result: null, detail: 'template giris' },
+    { step_id: 'sor', type: 'collect', cond_result: null, detail: 'nothing left to ask' },
+    { step_id: 'sure', type: 'check', cond_result: true, detail: 'then: go to bekle' },
+    {
+      step_id: 'etiket',
+      type: 'tag',
+      cond_result: 'unknown',
+      detail: 'passed — its condition does not hold',
+    },
+    { step_id: 'bekle', type: 'say', cond_result: null, detail: 'template bekle' },
+    { step_id: 'bitti', type: 'resolve', cond_result: null, detail: 'resolved (resolved_waiting)' },
+  ];
+
+  /** A procedure turn: the trace, the hash and the connection's turn count after it. */
+  function procedureRun(trace: StepDecision[], turns = 3): TurnResult {
+    const result = run({
+      trace,
+      procedureHash: HASH,
+      log: [
+        ...trace.map((entry) => ({ step: entry.step_id, detail: entry.detail, ok: true })),
+        { step: 'bekle', detail: 'composed the reply', ok: true },
+        { step: 'procedure', detail: 'asked whether to go back to Bonus', ok: true },
+      ],
+    });
+    return { ...result, nextState: { ...emptyTurnState(), counters: { turns } } };
+  }
+
+  it('files every step decision with the turn, and the hash of the definition it ran on', () => {
+    const decided = skillDecision(procedureRun(TRACE));
+    expect(decided?.details).toEqual({
+      outcome: 'answered',
+      steps: ['giris', 'sor', 'sure', 'etiket', 'bekle', 'bitti', 'bekle', 'procedure'],
+      failed_steps: [],
+      embedding_tokens: 8,
+      turn: 3,
+      trace: TRACE,
+      procedure_hash: HASH,
+    });
+    // The step it stopped on is the last one it decided, not the log's last line.
+    expect(decided?.step).toBe('bitti');
+  });
+
+  it('keeps the steps’ ids and codes, never a tag’s wording', () => {
+    const decided = skillDecision(
+      procedureRun([
+        { step_id: 'etiket', type: 'tag', cond_result: null, detail: 'tagged "Zehra Hanım VIP"' },
+        {
+          step_id: 'sure',
+          type: 'check',
+          cond_result: true,
+          detail: 'then: tagged "acil – 5000 TL"',
+        },
+      ]),
+    );
+    expect(decided?.details?.['trace']).toEqual([
+      { step_id: 'etiket', type: 'tag', cond_result: null, detail: 'tagged "…"' },
+      { step_id: 'sure', type: 'check', cond_result: true, detail: 'then: tagged "…"' },
+    ]);
+    expect(JSON.stringify(decided)).not.toMatch(/Zehra|VIP|5000/);
+  });
+
+  it('falls back to the log for the step when no step ran — a turn handed over on max_turns', () => {
+    const result = run({
+      outcome: 'handed_off',
+      reply: null,
+      replyKind: null,
+      handoffReason: 'max_turns',
+      trace: [],
+      procedureHash: HASH,
+      log: [{ step: 'sor', detail: 'handing over — max_turns', ok: true }],
+    });
+    const decided = skillDecision({
+      ...result,
+      nextState: { ...emptyTurnState(), counters: { turns: 13 } },
+    });
+    expect(decided).toMatchObject({
+      decision: 'handoff',
+      step: 'sor',
+      handoffReason: 'max_turns',
+      details: { turn: 13, trace: [], procedure_hash: HASH },
+    });
+  });
+
+  it('caps a long trace at its last steps, and counts what it let go', () => {
+    const long: StepDecision[] = Array.from({ length: MAX_TRACE_STEPS + 6 }, (_, n) => ({
+      step_id: `s${n}`,
+      type: 'check',
+      cond_result: false,
+      detail: 'does not hold — on to the next step',
+    }));
+    const details = skillDecision(procedureRun(long))?.details as {
+      trace: StepDecision[];
+      trace_dropped: number;
+    };
+    expect(details.trace).toEqual(long.slice(6));
+    expect(details.trace_dropped).toBe(6);
+  });
+
+  it('lets the earliest steps go until the row fits its ceiling — the outcome is never replaced by a size note', () => {
+    const long: StepDecision[] = Array.from({ length: MAX_TRACE_STEPS }, (_, n) => ({
+      step_id: `s${n}`.padEnd(40, 'x'),
+      type: 'check',
+      cond_result: 'unknown',
+      detail: `does not hold — on to the next step ${'·'.repeat(400)}`,
+    }));
+    const decided = skillDecision(procedureRun(long));
+    const details = decided?.details as { trace: StepDecision[]; trace_dropped: number };
+    expect(details.trace.length).toBeGreaterThan(0);
+    expect(details.trace.length).toBeLessThan(MAX_TRACE_STEPS);
+    expect(details.trace.at(-1)?.step_id).toBe(long.at(-1)?.step_id);
+    expect(details.trace_dropped).toBe(MAX_TRACE_STEPS - details.trace.length);
+    expect(details.trace.every((entry) => entry.detail.length <= 120)).toBe(true);
+    // The whole row, as the writer stores it, is kept — not replaced by a size note.
+    const row = toDecisionRow(LICENSE, decided!);
+    expect(row.details).toMatchObject({ outcome: 'answered', turn: 3 });
+    expect(Buffer.byteLength(JSON.stringify(row.details))).toBeLessThanOrEqual(
+      AI_DECISION_DETAILS_MAX_BYTES,
+    );
+  });
+
+  it('keeps no conversation text: a reply and a slot value never reach the row', () => {
+    const decided = skillDecision({
+      ...procedureRun(TRACE),
+      reply: 'Papara yatırımları 30 dakika içinde yansır.',
+    });
+    expect(JSON.stringify(decided)).not.toMatch(/Papara|yansır/);
+    expect(stepRecords(TRACE)).toEqual({ trace: TRACE });
   });
 });
 

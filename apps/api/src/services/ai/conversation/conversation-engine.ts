@@ -976,6 +976,7 @@ export class ConversationEngine {
           log,
           handoffReason: handedOff && !aborted ? (end as { reason: string }).reason : null,
           trace: result.trace,
+          procedureHash: run.hash,
         },
         sideEffects,
       },

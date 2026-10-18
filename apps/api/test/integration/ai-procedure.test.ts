@@ -463,7 +463,7 @@ describe('procedure skills on the live path (AI-03)', () => {
       licenseId: fx.a.licenseId,
       organizationId: fx.a.organizationId,
       ownerId: fx.a.ownerAccountId,
-      scopes: ['agents-bot--all:rw'],
+      scopes: ['agents-bot--all:rw', 'reports_read'],
     });
     aiAgentId = (
       await owner.aiAgent.create({
@@ -516,6 +516,218 @@ describe('procedure skills on the live path (AI-03)', () => {
       { decision: 'asked', procedureId: skillId },
       { decision: 'answered', procedureId: skillId },
     ]);
+  });
+
+  it('files every step decision on the turn’s decision record — turn, step, type, condition, detail (ID-08)', async () => {
+    const skillId = await createProcedure({ group_id: Number(financeId) });
+    const headers = await customerAuth();
+    const first = await send(headers, 'param yatmadı');
+    // The definition's hash while it is pinned; resolved, the row lets it go.
+    const { procedureSnapshotHash: hash } = await owner.aiConversation.findFirstOrThrow({
+      where: { threadId: first.event.thread_id },
+      select: { procedureSnapshotHash: true },
+    });
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    await send(headers, 'Papara, 10 dakika önce');
+
+    const rows = await owner.aiDecisionLog.findMany({
+      where: { licenseId: fx.a.licenseId },
+      orderBy: { createdAt: 'asc' },
+      select: { decision: true, procedureId: true, step: true, threadId: true, details: true },
+    });
+    expect(rows).toEqual([
+      {
+        decision: 'asked',
+        procedureId: skillId,
+        step: 'sor',
+        threadId: first.event.thread_id,
+        details: expect.objectContaining({
+          turn: 1,
+          procedure_hash: hash,
+          trace: [
+            { step_id: 'giris', type: 'say', cond_result: null, detail: 'template giris' },
+            {
+              step_id: 'sor',
+              type: 'collect',
+              cond_result: null,
+              detail: 'asked for yontem, islem_zamani — waiting for the answer',
+            },
+          ],
+        }),
+      },
+      {
+        decision: 'answered',
+        procedureId: skillId,
+        step: 'bitti',
+        threadId: first.event.thread_id,
+        details: expect.objectContaining({
+          turn: 2,
+          procedure_hash: hash,
+          trace: [
+            { step_id: 'sor', type: 'collect', cond_result: null, detail: 'nothing left to ask' },
+            { step_id: 'sure', type: 'check', cond_result: true, detail: 'then: go to bekle' },
+            { step_id: 'bekle', type: 'say', cond_result: null, detail: 'template bekle' },
+            {
+              step_id: 'bitti',
+              type: 'resolve',
+              cond_result: null,
+              detail: 'resolved (resolved_waiting)',
+            },
+          ],
+        }),
+      },
+    ]);
+    // Ids and codes only: what the player wrote and what the AI said stay in the transcript.
+    expect(JSON.stringify(rows)).not.toMatch(/Papara|dakika|Hemen bakalım|yansır/);
+  });
+
+  it('writes one run per turn, which the AI Agent report counts and the run log lists (FR-MOD-07.4)', async () => {
+    const skillId = await createProcedure({ group_id: Number(financeId) });
+    const headers = await customerAuth();
+    const first = await send(headers, 'param yatmadı');
+    await send(headers, 'Papara, 10 dakika önce');
+    const second = await send(await customerAuth(), 'yatırımım gelmedi');
+
+    const runs = await owner.skillRun.findMany({
+      where: { skillId },
+      orderBy: { ranAt: 'asc' },
+      select: { threadId: true, status: true, log: true },
+    });
+    expect(runs.map((run) => [run.threadId, run.status])).toEqual([
+      [first.event.thread_id, 'succeeded'],
+      [first.event.thread_id, 'succeeded'],
+      [second.event.thread_id, 'succeeded'],
+    ]);
+    expect(runs.map((run) => (run.log as { outcome: string }).outcome)).toEqual([
+      'answered',
+      'answered',
+      'answered',
+    ]);
+    expect((await owner.skill.findUniqueOrThrow({ where: { id: skillId } })).runsCount).toBe(3);
+
+    const report = await server.get('/reports/ai-agent', auth());
+    expect(report.statusCode).toBe(200);
+    expect(report.json()).toMatchObject({
+      skill_runs: 3,
+      tokens: { llm_input: 0, llm_output: 0, embedding_input: 0 },
+    });
+    const listed = await server.get(`/skills/${skillId}/runs`, auth());
+    expect(listed.statusCode).toBe(200);
+    const items = (listed.json() as { items: { chat_id: string; log: { step: string }[] }[] })
+      .items;
+    expect(items).toHaveLength(3);
+    // Newest first; the run log names the procedure's steps as the admin wrote them.
+    expect(items[0]?.chat_id).toBe(second.chat_id);
+    expect(items[1]?.log.map((entry) => entry.step)).toEqual(
+      expect.arrayContaining(['sor', 'sure', 'bekle', 'bitti']),
+    );
+  });
+
+  it('a procedure whose skill is deleted mid-conversation still answers from its snapshot; its runs went with the skill', async () => {
+    // Another skill keeps the AI on: with no skill at all there is no turn to take.
+    await owner.skill.create({
+      data: {
+        licenseId: fx.a.licenseId,
+        aiAgentId,
+        name: 'Refunds',
+        kind: 'ai_agent',
+        steps: [
+          { type: 'detect_intent', intent: 'refund', phrases: ['refund'] },
+          { type: 'send_message', source: 'text', text: 'Refunds take 5 days.' },
+        ],
+        active: true,
+        updatedAt: new Date(),
+      },
+    });
+    const skillId = await createProcedure({ group_id: Number(financeId) });
+    const headers = await customerAuth();
+    const first = await send(headers, 'param yatmadı');
+    expect(await owner.skillRun.count({ where: { skillId } })).toBe(1);
+
+    expect((await server.del(`/skills/${skillId}`, auth())).statusCode).toBe(204);
+    await send(headers, 'Papara, 10 dakika önce');
+
+    expect(await botTexts(first.chat_id)).toEqual([
+      'Hemen bakalım.\nHangi yöntemle yatırdınız? Ne zaman yatırdınız?',
+      'Papara yatırımları 30 dakika içinde yansır.',
+    ]);
+    expect(
+      await owner.aiConversation.findFirstOrThrow({ where: { threadId: first.event.thread_id } }),
+    ).toMatchObject({ activeSkillId: null, stepStatus: null, counters: { turns: 2 } });
+    expect(await owner.skillRun.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+    const decisions = await owner.aiDecisionLog.findMany({
+      where: { licenseId: fx.a.licenseId },
+      orderBy: { createdAt: 'asc' },
+      select: { decision: true, procedureId: true, step: true, errorType: true },
+    });
+    expect(decisions).toEqual([
+      { decision: 'asked', procedureId: skillId, step: 'sor', errorType: null },
+      { decision: 'answered', procedureId: skillId, step: 'bitti', errorType: null },
+    ]);
+  });
+
+  it('a single-message skill answers beside a procedure exactly as it does alone — reply, run and record (AI-03 §10)', async () => {
+    const refunds = (
+      await owner.skill.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          aiAgentId,
+          name: 'Refunds',
+          kind: 'ai_agent',
+          steps: [
+            { type: 'detect_intent', intent: 'refund', phrases: ['refund'] },
+            { type: 'tag', tag: 'refunds' },
+            { type: 'send_message', source: 'text', text: 'Refunds take 5 days.' },
+          ],
+          active: true,
+          updatedAt: new Date(),
+        },
+        select: { id: true },
+      })
+    ).id;
+
+    /** One visitor asks; what the AI said, the run it wrote and its decision record. */
+    const ask = async () => {
+      const sent = await send(await customerAuth(), 'I want a refund please');
+      const run = await owner.skillRun.findFirstOrThrow({
+        where: { threadId: sent.event.thread_id },
+        select: { skillId: true, status: true, log: true },
+      });
+      const record = await owner.aiDecisionLog.findFirstOrThrow({
+        where: { threadId: sent.event.thread_id },
+        select: {
+          decision: true,
+          procedureId: true,
+          step: true,
+          handoffReason: true,
+          details: true,
+        },
+      });
+      const tags = await owner.thread.findUniqueOrThrow({
+        where: { id: sent.event.thread_id },
+        select: { tags: { select: { tag: { select: { name: true } } } } },
+      });
+      return { texts: await botTexts(sent.chat_id), run, record, tags };
+    };
+
+    const alone = await ask();
+    expect(alone.texts).toEqual(['Refunds take 5 days.']);
+    expect(alone.run).toMatchObject({ skillId: refunds, status: 'succeeded' });
+    expect(alone.record).toEqual({
+      decision: 'answered',
+      procedureId: refunds,
+      step: 'send_message',
+      handoffReason: null,
+      details: {
+        outcome: 'answered',
+        steps: ['detect_intent', 'tag', 'send_message'],
+        failed_steps: [],
+        embedding_tokens: 0,
+      },
+    });
+
+    await createProcedure({ group_id: Number(financeId) });
+    expect(await ask()).toEqual(alone);
   });
 
   it('hands over to the team it names by id, and the AI stops', async () => {

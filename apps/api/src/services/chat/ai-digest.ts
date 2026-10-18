@@ -204,7 +204,8 @@ export async function digestsOf(
 /**
  * The slots as a summary keeps them. A slot is an object with a `display`
  * (or a `value`) and a `status` (AI-04, #295), or a bare string; an empty one
- * is left out.
+ * is left out, and so is a `pii: 'high'` one — its value stays on the
+ * connection's record for the card and travels nowhere else (AI-04 §9).
  */
 export function digestSlots(slots: JsonObject): Record<string, DigestSlot> {
   const kept: Record<string, DigestSlot> = {};
@@ -215,6 +216,7 @@ export function digestSlots(slots: JsonObject): Record<string, DigestSlot> {
     }
     if (!slot || typeof slot !== 'object') continue;
     const fields = slot as Record<string, unknown>;
+    if (fields['pii'] === 'high') continue;
     const shown = fields['display'] ?? fields['value'];
     const display =
       typeof shown === 'string' ? shown.trim() : typeof shown === 'number' ? String(shown) : '';

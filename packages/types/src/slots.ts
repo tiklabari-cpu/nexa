@@ -13,7 +13,7 @@
  *
  *   - the closed lists — slot types, statuses, sources, sensitivity levels;
  *   - `SlotDef`, the definition an author writes, and `SlotValue`, the record
- *     the engine keeps per slot (#295.3 writes it);
+ *     the engine keeps per slot (`conversation/slots/extract.ts` writes it);
  *   - the sensitive-request list (G11): a slot whose name, label or question
  *     reads as asking for a password, a one-time code, a full card number, a
  *     card security code, a seed phrase or private key, online banking
@@ -237,6 +237,13 @@ export interface SlotValue {
   previous_values: SlotScalar[];
   /** A quantity outside `validate.min`/`max` — kept, flagged for the procedure's conditions. */
   out_of_range?: 'below_min' | 'above_max';
+  /** Why the latest words were not a value, while `invalid` — the re-ask explains it. */
+  invalid_reason?: string;
+  /**
+   * Set on a `pii: 'high'` slot's record: its value stays here, for the card,
+   * and goes nowhere else — not the daily digest, not a log (AI-04 §9).
+   */
+  pii?: 'high';
 }
 
 // ---------------------------------------------------------------------------

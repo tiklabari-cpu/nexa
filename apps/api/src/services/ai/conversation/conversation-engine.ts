@@ -92,12 +92,14 @@ import {
   DEFAULT_CLARIFY_THRESHOLDS,
   DEFAULT_DAY_BOUNDARY,
   DEFAULT_NO_ANSWER,
+  maxQuestionsOf,
   readPersona,
   validateSkillProcedure,
   type AiConversationOutcome,
   type AiUsageSurface,
   type Persona,
   type PersonaLanguage,
+  type PersonaStyle,
   type Procedure,
   type SkillProcedureFields,
 } from '@siyahtus/types';
@@ -123,6 +125,16 @@ import {
   type LlmProvider,
 } from '../provider/llm-provider.js';
 import { GAP_MARKER, shortenHistory } from './context-loader.js';
+import {
+  guidanceLayer,
+  guidanceRecord,
+  mergeGuidanceRecords,
+  personaStyleLayer,
+  renderLayers,
+  selectGuidance,
+  styleWarnings,
+  type GuidanceRecord,
+} from './guidance.js';
 import {
   KNOWLEDGE_ANSWER_RESPONSE_FORMAT,
   NO_ANSWER_PHRASES,
@@ -444,6 +456,8 @@ interface KnowledgeAnswer {
   record?: KnowledgeRecord;
   /** Why there is no answer, when there is none and nothing failed. */
   missed?: UnansweredReason;
+  /** The behaviour rules the call carried (tm 299.1) — absent when none applied. */
+  guidance?: GuidanceRecord;
 }
 
 export class ConversationEngine {
@@ -818,6 +832,7 @@ export class ConversationEngine {
     let capped: AiDailyCapError | null = null;
     let usage = NOTHING_SPENT;
     let knowledge: KnowledgeRecord | undefined;
+    let guidance: GuidanceRecord | undefined;
 
     for (const step of procedure.steps) {
       const name = stepLogName(step);
@@ -905,6 +920,7 @@ export class ConversationEngine {
           });
           usage = addUsage(usage, answer.spent);
           knowledge = mergeKnowledge(knowledge, answer.record);
+          guidance = mergeGuidanceRecords(guidance, answer.guidance);
           if (answer.failure || answer.capped) {
             failure = answer.failure ?? null;
             capped = answer.capped ?? null;
@@ -944,6 +960,7 @@ export class ConversationEngine {
         usage,
         log,
         ...(knowledge ? { knowledge } : {}),
+        ...(guidance ? { guidance } : {}),
       },
       sideEffects,
     };
@@ -1472,6 +1489,8 @@ export class ConversationEngine {
       facts: data.facts ?? NO_FACTS,
       ...(data.options ? { options: data.options } : {}),
       language: run.answerIn,
+      // AI-07 `max_questions_per_message`: the executor's, not the model's.
+      maxQuestions: maxQuestionsOf(styleOf(ctx.config.skills, run.skill.aiAgentId)),
     });
     log.push(...result.log);
 
@@ -1482,6 +1501,7 @@ export class ConversationEngine {
     const instructions: Array<{ at: string; text: string }> = [];
     let usage = run.spent;
     let knowledge: KnowledgeRecord | undefined;
+    let guidance: GuidanceRecord | undefined;
     let failure: SkillFailure | null = null;
     let capped: AiDailyCapError | null = null;
     let failedAt: string | null = null;
@@ -1514,6 +1534,7 @@ export class ConversationEngine {
           });
           usage = addUsage(usage, answer.spent);
           knowledge = mergeKnowledge(knowledge, answer.record);
+          guidance = mergeGuidanceRecords(guidance, answer.guidance);
           if (answer.failure || answer.capped) {
             failure = answer.failure ?? null;
             capped = answer.capped ?? null;
@@ -1539,9 +1560,11 @@ export class ConversationEngine {
         notes: longGap ? [LONG_GAP_NOTE] : [],
         persona: run.persona,
         answerIn: run.answerIn,
+        skill: run.skill,
         ctx,
       });
       usage = addUsage(usage, written.spent);
+      guidance = mergeGuidanceRecords(guidance, written.guidance);
       log.push({ step: at, detail: written.detail, ok: written.text !== null });
       if (written.failure || written.capped) {
         failure = written.failure ?? null;
@@ -1605,6 +1628,7 @@ export class ConversationEngine {
           trace: result.trace,
           procedureHash: run.hash,
           ...(knowledge ? { knowledge } : {}),
+          ...(guidance ? { guidance } : {}),
           ...(run.understood ? { understood: run.understood } : {}),
           ...(run.policy ? { policy: run.policy } : {}),
         },
@@ -1672,6 +1696,8 @@ export class ConversationEngine {
     notes: readonly string[];
     persona: Persona;
     answerIn: PersonaLanguage | null;
+    /** The procedure's skill: whose rules and style apply (tm 299.1). */
+    skill: { id: string; aiAgentId: string | null };
     ctx: TurnContext;
   }): Promise<KnowledgeAnswer> {
     const { ctx } = input;
@@ -1680,6 +1706,7 @@ export class ConversationEngine {
       chatId: ctx.chatId,
       configVersionId: ctx.configVersionId,
     };
+    const rules = this.#rules(ctx, input.skill);
     const prompt = fitHistory(
       (history) =>
         buildComposePrompt({
@@ -1689,6 +1716,7 @@ export class ConversationEngine {
           notes: input.notes,
           persona: input.persona,
           answerIn: input.answerIn,
+          rules: rules.lines,
           ...(history ? { history } : {}),
         }),
       input.message.history,
@@ -1722,16 +1750,55 @@ export class ConversationEngine {
       };
     }
     const asked = personaRequest(input.persona, input.answerIn);
+    const strayed = styleWarnings(completion.text, rules.style);
     return {
       text: completion.text,
       spent: {
         llmInputTokens: completion.usage.inputTokens,
         llmOutputTokens: completion.usage.outputTokens,
       },
+      ...(rules.record ? { guidance: rules.record } : {}),
       detail: [
         `wrote ${input.instructions.length} instruction(s)`,
         `written by ${this.#llm.id}`,
         asked ? `persona: ${asked}` : '',
+        rules.note,
+        strayed.length > 0 ? `style warning: ${strayed.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    };
+  }
+
+  /**
+   * The rules and style a written call carries (tm 299.1 · AI-07 §1–§3): the
+   * agent's behaviour rules in this call's scope — its procedure, the
+   * conversation's brand once a turn knows it (#309) — under the turn's
+   * budget, then the persona's address form and emoji, as prompt layers.
+   */
+  #rules(
+    ctx: TurnContext,
+    skill: { id?: string | null; aiAgentId: string | null },
+  ): {
+    lines: string[];
+    record: GuidanceRecord | null;
+    style: PersonaStyle | undefined;
+    note: string;
+  } {
+    const selection = selectGuidance(ctx.config.guidance ?? [], {
+      aiAgentId: skill.aiAgentId,
+      skillId: skill.id ?? null,
+    });
+    const style = styleOf(ctx.config.skills, skill.aiAgentId);
+    return {
+      lines: renderLayers([guidanceLayer(selection.rules), personaStyleLayer(style)]),
+      record: guidanceRecord(selection),
+      style,
+      note: [
+        selection.rules.length > 0 ? `${selection.rules.length} behaviour rule(s)` : '',
+        selection.dropped.length > 0
+          ? `guidance_truncated — ${selection.dropped.length} lower-priority rule(s) left out`
+          : '',
       ]
         .filter(Boolean)
         .join(' · '),
@@ -1747,7 +1814,8 @@ export class ConversationEngine {
     history: TurnHistory | undefined;
     /** What the model is told of the day's earlier connections (tm 294). */
     earlierToday: readonly string[];
-    skill: { aiAgentId: string | null };
+    /** Whose knowledge, rules and style; `id` the skill the answer is for, if any. */
+    skill: { id?: string | null; aiAgentId: string | null };
     persona: Persona;
     answerIn: PersonaLanguage | null;
     ctx: TurnContext;
@@ -1823,6 +1891,7 @@ export class ConversationEngine {
     // what applies it, so the run log records what was *asked for*.
     const labels = hits.map((_, index) => passageLabel(index));
     const sources = hits.map((hit) => hit.text);
+    const rules = this.#rules(ctx, input.skill);
     const llm = this.#llm.forTenant(ctx.tenant, attribution);
     const draft = (notes: readonly string[]) => {
       const prompt = fitHistory(
@@ -1832,6 +1901,7 @@ export class ConversationEngine {
             passages: sources,
             persona: input.persona,
             answerIn: input.answerIn,
+            rules: rules.lines,
             cite: { ids: labels, notes },
             ...(history ? { history } : {}),
             ...(input.earlierToday.length > 0 ? { earlierToday: input.earlierToday } : {}),
@@ -1966,6 +2036,7 @@ export class ConversationEngine {
     const cited = read.cited.map((label) => hits[labels.indexOf(label)]!);
     const best = cited[0]!;
     const asked = personaRequest(input.persona, input.answerIn);
+    const strayed = styleWarnings(read.reply, rules.style);
     return {
       text: read.reply,
       grounded: read.grounded,
@@ -1976,6 +2047,7 @@ export class ConversationEngine {
         source_ids: [...new Set(cited.map((hit) => hit.sourceId))],
         ...(drafts === 2 ? { drafts } : {}),
       },
+      ...(rules.record ? { guidance: rules.record } : {}),
       detail: [
         `answered from "${best.sourceName}" (${best.score})`,
         cited.length > 1 ? `+ ${cited.length - 1} more passage(s)` : '',
@@ -1983,6 +2055,8 @@ export class ConversationEngine {
         drafts === 2 ? 'written again' : '',
         `written by ${this.#llm.id}`,
         asked ? `persona: ${asked}` : '',
+        rules.note,
+        strayed.length > 0 ? `style warning: ${strayed.join(', ')}` : '',
       ]
         .filter(Boolean)
         .join(' · '),
@@ -2073,7 +2147,10 @@ export class ConversationEngine {
       detail: answer.detail,
       ok: answer.text !== null,
     };
-    const knowledge = answer.record ? { knowledge: answer.record } : {};
+    const knowledge = {
+      ...(answer.record ? { knowledge: answer.record } : {}),
+      ...(answer.guidance ? { guidance: answer.guidance } : {}),
+    };
 
     if (answer.failure || answer.capped) {
       // The model or the search could not answer: a person does (tm 255.6),
@@ -2715,6 +2792,15 @@ function personaFor(
     skills.find((skill) => skill.id === skillId) ??
     (aiAgentId === null ? undefined : skills.find((skill) => skill.aiAgentId === aiAgentId));
   return own?.persona ?? readPersona(null);
+}
+
+/**
+ * The style of the agent a call speaks for (tm 299.1): read off its first
+ * skill, as its persona is; absent when the agent has no skill in the turn.
+ */
+function styleOf(skills: readonly TurnSkill[], aiAgentId: string | null): PersonaStyle | undefined {
+  if (aiAgentId === null) return skills[0]?.style;
+  return skills.find((skill) => skill.aiAgentId === aiAgentId)?.style;
 }
 
 /** The question an awaiting `collect` asked: its slots still open. */

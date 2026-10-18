@@ -42,7 +42,9 @@ aiAgent:
       Sets the customer-facing persona (name, avatar, tone, languages, answer
       length) the widget shows (FR-MOD-06.4), how long the agent waits for a
       visitor to stop typing, its same-day memory, how sure it must be of a
-      procedure (`clarify_thresholds`, AI-05), and the on/off switch.
+      procedure (`clarify_thresholds`, AI-05), how it addresses the player,
+      its emoji and how many questions one message may ask (AI-07), and the
+      on/off switch.
 
       Deactivating an agent stops every skill under it at once, which is what an
       admin reaches for when automation is misbehaving. It does not delete
@@ -91,6 +93,22 @@ aiAgent:
                 properties:
                   high: { type: number, minimum: 0.01, maximum: 1 }
                   low: { type: number, minimum: 0.01, maximum: 1 }
+              address_form:
+                type: string
+                enum: [siz, sen, null]
+                nullable: true
+                description: How the player is addressed (AI-07). Null clears it.
+              emoji:
+                type: string
+                enum: [none, few, null]
+                nullable: true
+                description: Whether messages carry emoji (AI-07). Null clears it.
+              max_questions_per_message:
+                type: integer
+                minimum: 1
+                maximum: 3
+                nullable: true
+                description: Questions one procedure message may ask (AI-07). Null goes back to 2.
     responses:
       "200":
         description: Updated

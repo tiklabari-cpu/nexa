@@ -76,6 +76,7 @@ import partnerAppRoutes from './routes/partner-apps.js';
 import mcpRoutes from './routes/mcp.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
+import aiGuidanceRoutes from './routes/ai-guidance.js';
 import kbRoutes from './routes/kb.js';
 import publicKbRoutes from './routes/public-kb.js';
 import publicKbHtmlRoutes from './routes/public-kb-html.js';
@@ -626,6 +627,7 @@ export async function buildServer({
       });
       await api.register(uploadRoutes, { env });
       await api.register(playbookRoutes, { env, llm: meteredLlm, knowledge });
+      await api.register(aiGuidanceRoutes, { env, llm: meteredLlm });
       await api.register(kbRoutes);
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {

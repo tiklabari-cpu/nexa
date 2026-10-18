@@ -47,6 +47,11 @@ export interface ComposePromptInput {
   persona: Persona;
   answerIn: PersonaLanguage | null;
   history?: AnswerHistory;
+  /**
+   * The behaviour rules and the persona's style, as layers (tm 299.1 ·
+   * `guidance.ts` `renderLayers`); prose for the model, never in the JSON line.
+   */
+  rules?: readonly string[];
 }
 
 export function buildComposePrompt(
@@ -61,6 +66,7 @@ export function buildComposePrompt(
     "You are this business's customer-support assistant, replying in a live chat.",
     'Write the part of your next message that these instructions ask for, as one short passage:',
     ...input.instructions.map((instruction, n) => `${n + 1}. ${instruction}`),
+    ...(input.rules ?? []),
     ...(input.alongside.length > 0
       ? [
           'The same message also says the following, word for word. Do not repeat or contradict it:',

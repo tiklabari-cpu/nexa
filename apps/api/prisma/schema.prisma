@@ -189,6 +189,7 @@ model License {
   queueEntries           QueueEntry[]
   aiConversations        AiConversation[]
   aiHandoffSettings      AiHandoffSettings[]
+  aiGuidanceRules        AiGuidanceRule[]
   aiProcedureExamples    AiProcedureExample[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
@@ -1787,6 +1788,7 @@ model AiAgent {
   skills           Skill[]
   knowledgeSources KnowledgeSource[]
   handoffSettings  AiHandoffSettings?
+  guidanceRules    AiGuidanceRule[]
 
   @@index([licenseId, kind])
   @@map("ai_agents")
@@ -1821,6 +1823,42 @@ model AiHandoffSettings {
 
   @@index([licenseId])
   @@map("ai_handoff_settings")
+}
+
+/// An AI agent's behaviour rule (tm 299.1 · AI-07): one plain sentence the
+/// workspace writes for its AI, with a category, a scope (`{all}`,
+/// `{skill_ids}` or `{brand_ids}`, read through `readGuidanceScope`) and a
+/// priority (1 first). An editing table (ADR-14b §2.1): no publish state —
+/// `active` is "on in this version" — and every write goes through
+/// `services/ai/config-draft.ts`, which stamps `updated_at`. The turn reads the
+/// rules through `AiConfigSource`, never this table. The CHECKs, the trigger
+/// holding the row to an agent of its own licence and the move of
+/// `ai_agents.instruction` live in the migration (20261019120000_ai_guidance_rules).
+model AiGuidanceRule {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  aiAgentId String   @map("ai_agent_id") @db.Uuid
+  title     String
+  /// ≤ 600 characters by CHECK (`GUIDANCE_BODY_MAX`).
+  body      String
+  /// `GUIDANCE_CATEGORIES`, by CHECK.
+  category  String
+  scope     Json     @default("{\"all\": true}")
+  priority  Int      @default(100)
+  active    Boolean  @default(true)
+  /// Soft references to `accounts.id`, like `Skill.createdBy`: meta fields
+  /// (ADR-14b §2.2), never part of what the AI does.
+  ownerId   String?  @map("owner_id") @db.Uuid
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, aiAgentId])
+  @@map("ai_guidance_rules")
 }
 
 // ===========================================================================

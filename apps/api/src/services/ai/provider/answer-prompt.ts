@@ -74,6 +74,11 @@ export interface AnswerPromptInput {
    * label, and what a rewrite is told about the draft before it.
    */
   cite?: { ids: readonly string[]; notes?: readonly string[] };
+  /**
+   * The behaviour rules and the persona's style, as layers (tm 299.1 ·
+   * `guidance.ts` `renderLayers`); prose for the model, never in the JSON line.
+   */
+  rules?: readonly string[];
 }
 
 /** The part of a turn's history the prompt carries. */
@@ -98,6 +103,7 @@ export function buildAnswerPrompt(
   const lines = [
     "You are this business's customer-support assistant, replying in a live chat.",
     "Answer the customer's message using only the passages in the grounding below. Do not add facts they do not contain, and do not mention that you were given passages.",
+    ...(input.rules ?? []),
     budget
       ? `Length (${grounding.answerLength}): at most ${budget.sentences} sentence(s) and ${budget.maxChars} characters, drawing on at most ${budget.passages} passage(s).`
       : 'Length: answer from the first passage, briefly.',

@@ -1,0 +1,176 @@
+# AI behaviour rules (Guidance, AI-07 · tm 299.1).
+#
+# A rule is one plain sentence a workspace writes for its AI — how to talk,
+# when to ask first, what never to say — with a category, a scope (every
+# conversation, some procedures, some brands), a priority and an on/off
+# switch. Every message the AI writes carries the rules in scope, below the
+# platform's locked rules and the step's own instruction and above the persona;
+# where two conflict the higher layer wins. At most 30 rules and 6 000
+# characters go into one turn; past that the lowest priorities are left out
+# and the turn's record says so.
+#
+# Saving never waits for the conflict check: `POST /ai-guidance/check` is what
+# the editor calls first, and it only warns. What it refuses outright — a rule
+# that tells the AI to ask for a password, an OTP or a card, to make a bonus
+# offer mandatory or to switch off a locked platform rule — is refused by the
+# writes too, with `guidance_violates_locked_rule`.
+
+guidanceRules:
+  get:
+    tags: [Playbook]
+    operationId: listAiGuidanceRules
+    summary: The AI agent's behaviour rules
+    description: |
+      Every rule of the workspace's AI agents, or of the one named, most
+      binding first (priority, then category).
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: Behaviour rules
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiGuidanceRule
+    summary: Write a behaviour rule
+    description: |
+      `scope` defaults to every conversation, `priority` to 100, `active` to
+      true. A rule that tells the AI to ask for a password, an OTP or a card
+      number, to make a bonus offer mandatory, or to switch off a locked
+      platform rule is refused: `validation` with `details.reason:
+      guidance_violates_locked_rule` and `details.locked_rule`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [ai_agent_id, title, body, category]
+            properties:
+              ai_agent_id: { type: string, format: uuid }
+              title: { type: string, minLength: 1, maxLength: 120 }
+              body: { type: string, minLength: 1, maxLength: 600 }
+              category: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceCategory" }
+              scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
+              priority: { type: integer, minimum: 1, maximum: 1000 }
+              active: { type: boolean }
+              owner_id: { type: string, format: uuid, nullable: true }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guidanceRule:
+  parameters:
+    - name: ruleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateAiGuidanceRule
+    summary: Edit a behaviour rule
+    description: Any field alone; the others keep their value. Refused like a new rule.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              title: { type: string, minLength: 1, maxLength: 120 }
+              body: { type: string, minLength: 1, maxLength: 600 }
+              category: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceCategory" }
+              scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
+              priority: { type: integer, minimum: 1, maximum: 1000 }
+              active: { type: boolean }
+              owner_id: { type: string, format: uuid, nullable: true }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteAiGuidanceRule
+    summary: Delete a behaviour rule
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guidanceCheck:
+  post:
+    tags: [Playbook]
+    operationId: checkAiGuidanceRule
+    summary: Check a draft rule against the others
+    description: |
+      Warns, never refuses: the draft against the agent's other rules whose
+      scope overlaps it — contradictions, duplicates, and wording too vague
+      to follow. A draft that a locked platform rule overrides comes back in
+      `locked` (it would be refused on save). With an AI model configured the
+      model reads the rules, at most 20 at a time; otherwise — or when the
+      model cannot answer — a word-overlap reading does (`checked_by`).
+      `rule_id` names the rule being edited, so it is not compared with itself.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [ai_agent_id, body]
+            properties:
+              ai_agent_id: { type: string, format: uuid }
+              rule_id: { type: string, format: uuid }
+              title: { type: string, maxLength: 120 }
+              body: { type: string, minLength: 1, maxLength: 600 }
+              category: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceCategory" }
+              scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
+    responses:
+      "200":
+        description: Warnings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceCheck" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

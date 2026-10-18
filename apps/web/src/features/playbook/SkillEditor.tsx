@@ -197,6 +197,16 @@ function procedureSaveError(t: TFunction, error: unknown): string | null {
   return procedureProblemText(t, details as unknown as ProcedureProblemDetails);
 }
 
+/**
+ * A one-message skill's refusal that is a procedure problem all the same —
+ * its selection fields, or a second fallback (`procedure_fallback_taken`).
+ */
+function isProcedureRefusal(error: unknown): boolean {
+  if (!(error instanceof ApiClientError)) return false;
+  const reason = error.details?.['reason'];
+  return typeof reason === 'string' && reason.startsWith('procedure_');
+}
+
 /** Ties the run-log disclosure button to the panel it expands (NFR-A11Y). */
 const RUN_LOG_ID = 'skill-run-log';
 
@@ -246,6 +256,9 @@ export function SkillEditor({
   const storedMode: SkillMode = skill.mode ?? 'single';
   const [mode, setMode] = useState<SkillMode>(storedMode);
   const procedure = mode === 'procedure';
+  // The agent's fallback (AI-05 §5): tried only when nothing else takes a message.
+  const storedFallback = skill.is_fallback === true;
+  const [fallback, setFallback] = useState(storedFallback);
   const [procDraft, setProcDraft] = useState<ProcedureDraft>(() => skillProcedureDraft(skill));
   // Bumped when a compile replaces the draft wholesale: the sections keep the
   // text of their line-per-entry boxes locally and must start again from it.
@@ -352,18 +365,27 @@ export function SkillEditor({
   const draft = useMemo(
     () =>
       procedure
-        ? JSON.stringify({ name, instruction, mode, ...procedureFields(procDraft) })
-        : JSON.stringify({ name, instruction, steps, ...(mode !== storedMode ? { mode } : {}) }),
-    [name, instruction, steps, procedure, mode, storedMode, procDraft],
+        ? JSON.stringify({ name, instruction, mode, ...procedureFields(procDraft), fallback })
+        : JSON.stringify({
+            name,
+            instruction,
+            steps,
+            ...(mode !== storedMode ? { mode } : {}),
+            fallback,
+          }),
+    [name, instruction, steps, procedure, mode, storedMode, procDraft, fallback],
   );
   const [savedDraft, setSavedDraft] = useState<string | null>(null);
 
   // A one-message skill sends what it always sent; `mode` only when it is
   // being switched back from a procedure. A procedure sends its definition.
-  const body = () =>
-    procedure
+  // `is_fallback` only when it changes: the API refuses a second one per agent.
+  const body = () => ({
+    ...(procedure
       ? { name, instruction, mode, ...procedureFields(procDraft) }
-      : { name, instruction, steps, ...(mode !== storedMode ? { mode } : {}) };
+      : { name, instruction, steps, ...(mode !== storedMode ? { mode } : {}) }),
+    ...(fallback !== storedFallback ? { is_fallback: fallback } : {}),
+  });
 
   const save = useMutation({
     mutationFn: () =>
@@ -392,13 +414,15 @@ export function SkillEditor({
             instruction: skill.instruction ?? '',
             mode: storedMode,
             ...procedureFields(skillProcedureDraft(skill)),
+            fallback: storedFallback,
           })
         : JSON.stringify({
             name: skill.name,
             instruction: skill.instruction ?? '',
             steps: skill.steps,
+            fallback: storedFallback,
           }),
-    [skill, storedMode],
+    [skill, storedMode, storedFallback],
   );
   const dirty = draft !== (savedDraft ?? persisted);
 
@@ -582,7 +606,9 @@ export function SkillEditor({
 
               {save.isError && (
                 <span role="alert" className="text-2xs text-danger">
-                  {(procedure ? procedureSaveError(t, save.error) : null) ??
+                  {(procedure || isProcedureRefusal(save.error)
+                    ? procedureSaveError(t, save.error)
+                    : null) ??
                     reasonMessage(t, save.error, 'playbook.editor.stepProblem') ??
                     t(errorMessageKey(save.error))}
                 </span>
@@ -637,6 +663,24 @@ export function SkillEditor({
               {t(
                 procedure ? 'playbook.editor.modeProcedureHelp' : 'playbook.editor.modeSingleHelp',
               )}
+            </p>
+          </div>
+
+          {/* The agent's fallback (AI-05 §5). The hint sits outside the label so
+              it stays out of the checkbox's name. */}
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={fallback}
+                disabled={!canEdit}
+                onChange={(event) => setFallback(event.target.checked)}
+                aria-describedby="skill-fallback-help"
+              />
+              {t('playbook.editor.fallback')}
+            </label>
+            <p id="skill-fallback-help" className="text-2xs text-content-tertiary">
+              {t('playbook.editor.fallbackHelp')}
             </p>
           </div>
 

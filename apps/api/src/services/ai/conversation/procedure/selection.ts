@@ -10,8 +10,9 @@
  *      one set aside — is answered first: yes takes the set-aside topic up
  *      where it stood, with what it had collected; no lets it go.
  *   2. **The active procedure carries on** unless the understanding is sure
- *      (`PROCEDURE_START_CONFIDENCE`) the message is about another one and does
- *      not answer the question the AI is waiting on. Then the new topic starts,
+ *      (the agent's `clarify_thresholds.high`) the message is about another
+ *      one, and neither carries the active one on (`is_continuation`) nor
+ *      answers the question the AI is waiting on. Then the new topic starts,
  *      and the active one is **set aside** if it was waiting for the player —
  *      over any topic already set aside: at most one (AI-03-S3). One that was
  *      not waiting (stopped by the step limit) is left.
@@ -51,6 +52,8 @@ export interface SelectionInput {
   /** The conversation's slots — the active procedure's, which go aside with it. */
   readonly slots: AiStateObject;
   readonly now: Date;
+  /** The confidence a procedure starts at — the agent's `clarify_thresholds.high`. */
+  readonly high?: number;
 }
 
 export interface SelectionResult {
@@ -65,7 +68,7 @@ export function selectProcedure(input: SelectionInput): SelectionResult {
   const note = (detail: string) => log.push({ step: 'procedure', detail, ok: true });
   const { active, understanding } = input;
   let suspended = input.suspended;
-  const best = rankProcedures(understanding, input.catalogue)[0] ?? null;
+  const best = rankProcedures(understanding, input.catalogue, input.high)[0] ?? null;
 
   // 1. The question about the set-aside topic.
   let declined: SuspendedProcedure | null = null;
@@ -94,7 +97,11 @@ export function selectProcedure(input: SelectionInput): SelectionResult {
       if (suspended) note(`${suspended.snapshot.skill_name} is no longer set aside`);
       return { selection: { kind: 'start', key: best.entry.key }, suspended: null, log };
     }
-    if (active.snapshot.locked || understanding.answers_pending_question === true) {
+    if (
+      active.snapshot.locked ||
+      understanding.answers_pending_question === true ||
+      understanding.intent.is_continuation === true
+    ) {
       return { selection: { kind: 'continue', active }, suspended, log };
     }
     if (active.stepStatus === 'awaiting_answer') {

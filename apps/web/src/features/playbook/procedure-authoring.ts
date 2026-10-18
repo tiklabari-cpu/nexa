@@ -600,3 +600,13 @@ export function skillStepCount(skill: Pick<Skill, 'mode' | 'steps' | 'procedure'
   }
   return skill.steps.length;
 }
+
+/**
+ * A one-message skill with steps and no `detect_intent` gate: it matches every
+ * message, so it answers only when nothing else does (AI-05 §5) — what the
+ * list warns about. Moved onto the fallback when procedures arrived (tm 297.2).
+ */
+export function matchesEveryMessage(skill: Pick<Skill, 'mode' | 'steps'>): boolean {
+  if (skill.mode === 'procedure') return false;
+  return skill.steps.length > 0 && !skill.steps.some((step) => step.type === 'detect_intent');
+}

@@ -19,6 +19,9 @@ import {
   BATCH_WINDOW_SECONDS_MAX,
   DAILY_MEMORY_RECALLS,
   DEFAULT_AI_ASSIGNMENT_MODE,
+  clarifyThresholdsProblem,
+  fallbackTakenProblem,
+  readClarifyThresholds,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   DEFAULT_SKILL_MODE,
   SKILL_MODES,
@@ -98,8 +101,9 @@ const uuid = z.string().uuid();
  * A skill's definition beyond its one-message steps (tm 296.2). The shape is
  * left to `validateSkillSelection` / `validateSkillProcedure` (@siyahtus/types),
  * which the editor runs too, so a refusal carries the same code either way.
- * `locked`, `template_key`, `template_version` and `is_fallback` are not here:
- * the server writes them, and a body naming them is not obeyed.
+ * `locked`, `template_key` and `template_version` are not here: the server
+ * writes them, and a body naming them is not obeyed. `is_fallback` is the
+ * author's (tm 297.2), checked apart: it needs the agent's other skills.
  */
 const skillDefinitionFields = {
   mode: z.enum(SKILL_MODES).optional(),
@@ -110,12 +114,16 @@ const skillDefinitionFields = {
   procedure: z.unknown().optional(),
 };
 
+/** The agent's fallback (AI-05 §5) — at most one, {@link requireFallbackFree}. */
+const isFallbackField = { is_fallback: z.boolean().optional() };
+
 const createSkillBody = z.object({
   name: z.string().trim().min(1).max(120),
   ai_agent_id: uuid.optional(),
   instruction: z.string().max(10_000).optional(),
   steps: z.array(z.unknown()).optional(),
   ...skillDefinitionFields,
+  ...isFallbackField,
 });
 
 const updateSkillBody = z
@@ -125,6 +133,7 @@ const updateSkillBody = z
     steps: z.array(z.unknown()).optional(),
     active: z.boolean().optional(),
     ...skillDefinitionFields,
+    ...isFallbackField,
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -408,6 +417,15 @@ const updateAgentBody = z
       .strict()
       .refine((memory) => Object.keys(memory).length > 0, 'at least one field is required')
       .optional(),
+    // Either one alone; the pair is judged once merged (tm 297.2).
+    clarify_thresholds: z
+      .object({
+        high: z.number().min(0.01).max(1).optional(),
+        low: z.number().min(0.01).max(1).optional(),
+      })
+      .strict()
+      .refine((pair) => Object.keys(pair).length > 0, 'at least one field is required')
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -504,6 +522,28 @@ async function skillDefinitionData(
   };
 }
 
+/**
+ * Refuses a second fallback for one agent (AI-05 §5): `procedure_fallback_taken`,
+ * naming the skill that already is. `self` is the skill being written, which
+ * may be the fallback already. Skills without an agent count as one group.
+ */
+async function requireFallbackFree(
+  tx: TenantClient,
+  aiAgentId: string | null,
+  self: string | null,
+): Promise<void> {
+  const taken = await tx.skill.findFirst({
+    where: {
+      kind: 'ai_agent',
+      isFallback: true,
+      aiAgentId,
+      ...(self ? { id: { not: self } } : {}),
+    },
+    select: { name: true },
+  });
+  if (taken) throwProcedureProblem(fallbackTakenProblem(taken.name));
+}
+
 function throwProcedureProblem(problem: ProcedureProblem): never {
   throw ApiError.validation(problem.message, { ...procedureProblemDetails(problem) });
 }
@@ -584,15 +624,16 @@ export default async function playbookRoutes(
         });
         if (!existing) throw ApiError.notFound('AI agent not found.');
 
-        // `answer_length`, `batch_window_seconds` and `daily_memory` live
-        // inside the persona JSON alongside anything else an admin has set (a
+        // `answer_length`, `batch_window_seconds`, `daily_memory` and
+        // `clarify_thresholds` live inside the persona JSON alongside anything else an admin has set (a
         // signature, say), so merge rather than overwrite — clearing one
         // removes just that key.
         let persona: Prisma.InputJsonValue | undefined;
         if (
           body.answer_length !== undefined ||
           body.batch_window_seconds !== undefined ||
-          body.daily_memory !== undefined
+          body.daily_memory !== undefined ||
+          body.clarify_thresholds !== undefined
         ) {
           const current =
             existing.persona &&
@@ -609,6 +650,12 @@ export default async function playbookRoutes(
           }
           if (body.daily_memory !== undefined) {
             next['dailyMemory'] = { ...readDailyMemory(current), ...body.daily_memory };
+          }
+          if (body.clarify_thresholds !== undefined) {
+            const pair = { ...readClarifyThresholds(current), ...body.clarify_thresholds };
+            const problem = clarifyThresholdsProblem(pair);
+            if (problem) throw ApiError.validation(`clarify_thresholds: ${problem}`);
+            next['clarifyThresholds'] = pair;
           }
           persona = next as Prisma.InputJsonValue;
         }
@@ -731,6 +778,7 @@ export default async function playbookRoutes(
         if (!agent) throw ApiError.validation('That AI agent does not exist.');
       }
       const definition = await skillDefinitionData(tx, body.mode ?? DEFAULT_SKILL_MODE, body, body);
+      if (body.is_fallback === true) await requireFallbackFree(tx, body.ai_agent_id ?? null, null);
 
       const createdBy = principal.kind === 'agent' ? principal.accountId : null;
       const created = await createSkillDraft(tx, {
@@ -741,6 +789,7 @@ export default async function playbookRoutes(
         ...(body.ai_agent_id ? { aiAgentId: body.ai_agent_id } : {}),
         ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
         steps: steps as object,
+        ...(body.is_fallback !== undefined ? { isFallback: body.is_fallback } : {}),
         // Never live on creation.
         active: false,
         createdBy,
@@ -823,8 +872,13 @@ export default async function playbookRoutes(
             )
           : {};
 
+        if (body.is_fallback === true && !existing.isFallback) {
+          await requireFallbackFree(tx, existing.aiAgentId, existing.id);
+        }
+
         const updated = await updateSkillDraft(tx, id, {
           ...definition,
+          ...(body.is_fallback !== undefined ? { isFallback: body.is_fallback } : {}),
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
           ...(steps !== undefined ? { steps: steps as object } : {}),
@@ -1869,6 +1923,7 @@ function serialiseAgent(agent: {
     answer_length: typeof answerLength === 'string' ? answerLength : null,
     batch_window_seconds: readBatchWindowSeconds(persona),
     daily_memory: readDailyMemory(persona),
+    clarify_thresholds: readClarifyThresholds(persona),
     active: agent.active,
     skills_count: agent._count.skills,
   };

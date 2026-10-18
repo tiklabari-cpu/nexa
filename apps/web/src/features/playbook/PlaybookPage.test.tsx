@@ -337,3 +337,31 @@ describe('Playbook skill row — procedure badge and priority (AI-03)', () => {
     expect(singleRow!.textContent).not.toContain('priority');
   });
 });
+
+describe('Playbook skill row — the fallback (tm 297.2 · AI-05 §5)', () => {
+  it('marks the fallback, and warns about a one-message skill with no intent step', async () => {
+    const answer = { type: 'send_message' as const, source: 'text' as const, text: 'Merhaba' };
+    mockPlaybook([
+      baseSkill({ id: 'skill-f', name: 'Genel', steps: [answer], is_fallback: true }),
+      baseSkill({
+        id: 'skill-g',
+        name: 'Kargo',
+        steps: [{ type: 'detect_intent', intent: 'kargo', phrases: ['kargom nerede'] }, answer],
+      }),
+      baseSkill({ id: 'skill-e', name: 'Taslak', steps: [] }),
+    ]);
+    renderPage();
+
+    const warning =
+      'No intent step: it matches every message, so it answers only when nothing else does.';
+    const fallbackRow = (await screen.findByText('Genel')).closest('[role="listitem"]');
+    expect(fallbackRow!.textContent).toContain('Fallback');
+    expect(fallbackRow!.textContent).toContain(warning);
+
+    for (const name of ['Kargo', 'Taslak']) {
+      const row = screen.getByText(name).closest('[role="listitem"]');
+      expect(row!.textContent).not.toContain('Fallback');
+      expect(row!.textContent).not.toContain(warning);
+    }
+  });
+});

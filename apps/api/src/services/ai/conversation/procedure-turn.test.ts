@@ -44,6 +44,7 @@ import { readUnderstandGrounding, type UnderstandReply } from './understand.js';
 import {
   emptyTurnState,
   skillRunRecord,
+  tookTurn,
   type ProcedureTurnData,
   type TenantRunner,
   type TurnContext,
@@ -675,7 +676,7 @@ describe('the other steps and limits, through the engine', () => {
     expect(result.decisions.handoffReason).toBe('needs_check');
   });
 
-  it('a message in a language the persona does not speak leaves the procedure where it stood', async () => {
+  it('a message in a language the persona does not speak is handed to a person, not left in silence; the procedure stays where it stood (AI-05 §7)', async () => {
     const turkishOnly = {
       ...DEPOSIT_SKILL,
       persona: readPersona({ tone: null, languages: ['tr'], persona: null }),
@@ -687,7 +688,11 @@ describe('the other steps and limits, through the engine', () => {
       'Hello, I would like to know when my deposit will arrive in my account please',
     );
     expect(english.reply).toBeNull();
-    expect(english.decisions.outcome).toBe('skipped');
+    expect(english.decisions.outcome).toBe('handed_off');
+    expect(english.decisions.handoffReason).toBe('unsupported_language');
+    expect(english.sideEffects).toEqual([
+      { kind: 'handoff', team: null, reason: 'unsupported_language' },
+    ]);
     expect(chat.state).toMatchObject({
       stepId: before.stepId,
       stepStatus: before.stepStatus,
@@ -1057,6 +1062,315 @@ describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
       expect(result.decisions.skillId).toBe('bonus');
       // The new topic resolves and asks about the one set aside (AI-03 §7).
       expect(result.reply).toBe('Kampanyalar sayfasına bakın.\nÖnceki konuya dönelim mi?');
+    });
+  });
+});
+
+describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', () => {
+  const CLARIFY_BOTH =
+    'Tam anlayamadım: “Yatırım geçmedi” konusunda mı, yoksa “Çekim” konusunda mı yardım istiyorsunuz?';
+
+  it('unsure between two: one either-or question, and never a second one straight after (AI-05 acceptance)', async () => {
+    const chat = conversation(engine(), () => [DEPOSIT_SKILL, WITHDRAWAL_SKILL]);
+    const asked = await chat.say('param çekim');
+    expect(asked.reply).toBe(CLARIFY_BOTH);
+    expect(asked.decisions).toMatchObject({
+      outcome: 'answered',
+      replyKind: 'question',
+      skillId: null,
+      policy: { step: 4, rule: 'clarify', options: ['deposit', 'withdrawal'] },
+    });
+    // A turn without a skill is still a turn: the question goes out live.
+    expect(tookTurn(asked)).toBe(true);
+    expect(skillDecision(asked)).toMatchObject({
+      decision: 'asked',
+      procedureId: null,
+      details: { policy: { step: 4, rule: 'clarify' } },
+    });
+    expect(chat.state).toMatchObject({
+      activeSkillId: null,
+      signals: { clarify: { keys: ['deposit', 'withdrawal'], turn: 1 } },
+      counters: { turns: 1 },
+    });
+
+    const again = await chat.say('param çekim');
+    expect(again.reply).toBeNull();
+    expect(again.decisions.log).toContainEqual({
+      step: 'policy',
+      detail: 'still unclear after the clarifying question — no second one is asked',
+      ok: true,
+    });
+    expect(again.decisions.policy).toMatchObject({ step: 6, rule: 'unmatched' });
+    expect(tookTurn(again)).toBe(false);
+  });
+
+  it('the answer to the question starts the procedure it names', async () => {
+    const chat = conversation(engine(), () => [DEPOSIT_SKILL, WITHDRAWAL_SKILL]);
+    await chat.say('param çekim');
+    const answered = await chat.say('çekim');
+    expect(answered.decisions.skillId).toBe('withdrawal');
+    expect(answered.reply).toBe('Çekim talepleri 24 saat içinde işlenir.');
+    expect(answered.decisions.policy).toMatchObject({ step: 4, rule: 'clarified' });
+  });
+
+  it('the agent’s thresholds decide: with `high` at 0.5 the same message starts a procedure', async () => {
+    const skills = [DEPOSIT_SKILL, WITHDRAWAL_SKILL];
+    const result = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'param çekim' },
+      context(skills, { config: { skills, clarifyThresholds: { high: 0.5, low: 0.3 } } }),
+    );
+    // A tie: the smaller priority (50) goes first.
+    expect(result.decisions.skillId).toBe('deposit');
+    expect(result.decisions.policy).toEqual({ step: 3, rule: 'start', high: 0.5, low: 0.3 });
+  });
+
+  it('of two procedures equally sure, the smaller priority wins, whatever their order (AI-05 acceptance)', async () => {
+    const bonus = (id: string, priority: number) =>
+      procedureSkill(
+        id,
+        `Bonus ${priority}`,
+        build({
+          when_to_use: 'Bonus sorunu.',
+          examples: ['bonus kodu çalışmıyor'],
+          priority,
+          steps: [
+            { id: 'bilgi', type: 'say', template_key: 'bilgi' },
+            { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+          ],
+          templates: [{ key: 'bilgi', text: `Öncelik ${priority}.` }],
+        }),
+      );
+    for (const skills of [
+      [bonus('b20', 20), bonus('b10', 10)],
+      [bonus('b10', 10), bonus('b20', 20)],
+    ]) {
+      const result = await engine().runTurn(
+        emptyTurnState(),
+        { text: 'bonus kodu çalışmıyor' },
+        context(skills),
+      );
+      expect(result.decisions.skillId).toBe('b10');
+    }
+  });
+
+  it('“Papara” in a procedure in progress is its answer, not another procedure that matches it outright (AI-05 acceptance)', async () => {
+    const PAPARA_ACCOUNT = procedureSkill(
+      'papara_account',
+      'Papara hesabı',
+      build({
+        when_to_use: 'Oyuncu Papara hesabını değiştirmek istiyor.',
+        examples: ['papara'],
+        steps: [
+          { id: 'bilgi', type: 'say', template_key: 'bilgi' },
+          { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+        ],
+        templates: [{ key: 'bilgi', text: 'Papara hesabınızı profilden değiştirebilirsiniz.' }],
+      }),
+    );
+    const chat = conversation(engine(), () => [DEPOSIT_SKILL, PAPARA_ACCOUNT]);
+    await chat.say('param yatmadı');
+    expect(chat.state.stepStatus).toBe('awaiting_answer');
+    const papara = await chat.say('Papara');
+    expect(papara.decisions.skillId).toBe('deposit');
+    expect(papara.decisions.policy).toMatchObject({ step: 2, rule: 'continue' });
+    expect(chat.state.activeSkillId).toBe('deposit');
+    expect(chat.state.suspended).toBeNull();
+    expect(chat.state.slots).toMatchObject({ yontem: { status: 'filled' } });
+  });
+
+  it('a locked procedure takes over even from a message read as carrying the active one on (AI-05 acceptance)', async () => {
+    const SELF_EXCLUSION = procedureSkill(
+      'self_exclusion',
+      'Kendini sınırlama',
+      build({
+        when_to_use: 'Oyuncu hesabını kapatmak ya da sınırlamak istiyor.',
+        examples: ['hesabımı kapatın'],
+        steps: [
+          { id: 'bilgi', type: 'say', template_key: 'bilgi' },
+          { id: 'devir', type: 'handoff', reason_code: 'self_exclusion' },
+        ],
+        templates: [{ key: 'bilgi', text: 'Talebinizi sorumlu oyun ekibine iletiyorum.' }],
+      }),
+      { locked: true },
+    );
+    const chat = conversation(engine(), () => [DEPOSIT_SKILL, SELF_EXCLUSION]);
+    await chat.say('param yatmadı');
+    const result = await chat.say('hesabımı kapatın', {
+      procedure: {
+        ...FIXTURES,
+        understanding: {
+          intent: { procedure_key: 'self_exclusion', confidence: 0.9, is_continuation: true },
+          answers_pending_question: true,
+        },
+      },
+    });
+    expect(result.decisions.skillId).toBe('self_exclusion');
+    expect(result.sideEffects).toContainEqual(
+      expect.objectContaining({ kind: 'handoff', reason: 'self_exclusion' }),
+    );
+  });
+
+  describe('the fallback (AI-05 §5)', () => {
+    const FALLBACK_CATCH_ALL: TurnSkill = { ...CATCH_ALL, isFallback: true };
+    const GATED: TurnSkill = {
+      id: 'gated',
+      name: 'Kargo',
+      aiAgentId: 'agent-1',
+      steps: [
+        { type: 'detect_intent', intent: 'kargo', phrases: ['kargom nerede'] },
+        { type: 'send_message', source: 'text', text: 'Kargonuz yolda.' },
+      ],
+      persona: PERSONA,
+    };
+
+    it('a skill with no gate no longer answers before one whose gate matches, even edited last (AI-05 acceptance)', async () => {
+      for (const catchAll of [CATCH_ALL, FALLBACK_CATCH_ALL]) {
+        const result = await engine().runTurn(
+          emptyTurnState(),
+          { text: 'kargom nerede' },
+          context([catchAll, GATED, DEPOSIT_SKILL]),
+        );
+        expect(result.decisions.skillId).toBe('gated');
+        expect(result.decisions.policy).toMatchObject({ step: 5, rule: 'knowledge' });
+      }
+    });
+
+    it('it answers when no procedure was even likely, and says so on the record', async () => {
+      const result = await engine().runTurn(
+        emptyTurnState(),
+        { text: 'merhaba' },
+        context([FALLBACK_CATCH_ALL, GATED, DEPOSIT_SKILL]),
+      );
+      expect(result.decisions.skillId).toBe('catch-all');
+      expect(result.decisions.policy).toMatchObject({ step: 6, rule: 'fallback' });
+      expect(skillDecision(result)?.details).toMatchObject({
+        policy: { step: 6, rule: 'fallback' },
+      });
+    });
+
+    it('it does not answer a message a procedure was likely for: that one is asked about', async () => {
+      const result = await engine().runTurn(
+        emptyTurnState(),
+        { text: 'param çekim' },
+        context([FALLBACK_CATCH_ALL, DEPOSIT_SKILL, WITHDRAWAL_SKILL]),
+      );
+      expect(result.decisions.skillId).toBeNull();
+      expect(result.reply).toBe(CLARIFY_BOTH);
+    });
+
+    it('nor the message after an unanswered question, while a procedure is still likely (AI-05 §5)', async () => {
+      const chat = conversation(engine(), () => [
+        FALLBACK_CATCH_ALL,
+        DEPOSIT_SKILL,
+        WITHDRAWAL_SKILL,
+      ]);
+      await chat.say('param çekim');
+      const again = await chat.say('param çekim');
+      expect(again.decisions.skillId).toBeNull();
+      expect(again.reply).toBeNull();
+      expect(again.decisions.policy).toMatchObject({ step: 6, rule: 'unmatched' });
+    });
+
+    it('a fallback procedure is not offered to the understanding call; it starts when nothing else takes the message', async () => {
+      const GENERAL = procedureSkill(
+        'general',
+        'Genel',
+        build({
+          when_to_use: 'Başka hiçbir şeye uymayan mesajlar.',
+          examples: ['param yatmadı'],
+          steps: [
+            { id: 'bilgi', type: 'say', template_key: 'bilgi' },
+            { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+          ],
+          templates: [{ key: 'bilgi', text: 'Size nasıl yardımcı olabilirim?' }],
+        }),
+        { isFallback: true },
+      );
+      const llm = new FakeLlmProvider();
+      const ai = engine(llm);
+      const deposit = await ai.runTurn(
+        emptyTurnState(),
+        { text: 'param yatmadı' },
+        context([GENERAL, DEPOSIT_SKILL]),
+      );
+      expect(deposit.decisions.skillId).toBe('deposit');
+      const grounding = readUnderstandGrounding(llm.understandCalls[0]!.system);
+      expect(grounding?.catalogue.map((entry) => entry.key)).toEqual(['deposit']);
+
+      const other = await ai.runTurn(
+        emptyTurnState(),
+        { text: 'merhaba' },
+        context([GENERAL, DEPOSIT_SKILL]),
+      );
+      expect(other.decisions.skillId).toBe('general');
+      expect(other.reply).toBe('Size nasıl yardımcı olabilirim?');
+      expect(other.decisions.policy).toMatchObject({ step: 6, rule: 'fallback' });
+    });
+
+    it('with no fallback, nothing answers: the turn is unmatched and not taken', async () => {
+      const result = await engine().runTurn(
+        emptyTurnState(),
+        { text: 'merhaba' },
+        context([GATED, DEPOSIT_SKILL]),
+      );
+      expect(result.reply).toBeNull();
+      expect(result.decisions.policy).toMatchObject({ step: 6, rule: 'unmatched' });
+      expect(result.nextState).toEqual(emptyTurnState());
+      expect(tookTurn(result)).toBe(false);
+    });
+  });
+
+  it('small talk gets a short reply in the persona’s language, nothing searched (AI-05 §4.5)', async () => {
+    searched.length = 0;
+    const result = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'merhaba' },
+      context([DEPOSIT_SKILL, CATCH_ALL], {
+        procedure: {
+          ...FIXTURES,
+          understanding: { intent: { procedure_key: null, confidence: 0, smalltalk: true } },
+        },
+      }),
+    );
+    expect(result.reply).toBe('Buradayım — size nasıl yardımcı olabilirim?');
+    expect(result.decisions).toMatchObject({
+      outcome: 'answered',
+      skillId: null,
+      policy: { step: 5, rule: 'smalltalk' },
+    });
+    expect(searched).toEqual([]);
+    expect(tookTurn(result)).toBe(true);
+  });
+
+  it('a language the persona does not speak, read by the understanding, is a hand-over — not a silence (AI-05 §7)', async () => {
+    const turkishOnly: TurnSkill = {
+      ...DEPOSIT_SKILL,
+      persona: readPersona({ tone: null, languages: ['tr'], persona: null }),
+    };
+    const result = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'Мой депозит не пришёл' },
+      context([turkishOnly], {
+        procedure: {
+          ...FIXTURES,
+          understanding: { intent: { procedure_key: 'deposit', confidence: 0.9 }, language: 'ru' },
+        },
+      }),
+    );
+    expect(result.reply).toBeNull();
+    expect(result.decisions).toMatchObject({
+      outcome: 'handed_off',
+      skillId: 'deposit',
+      handoffReason: 'unsupported_language',
+    });
+    expect(result.sideEffects).toEqual([
+      { kind: 'handoff', team: null, reason: 'unsupported_language' },
+    ]);
+    expect(result.nextState.activeSkillId).toBeNull();
+    expect(skillDecision(result)).toMatchObject({
+      decision: 'handoff',
+      handoffReason: 'unsupported_language',
     });
   });
 });

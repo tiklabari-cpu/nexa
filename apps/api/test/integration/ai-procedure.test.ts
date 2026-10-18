@@ -738,7 +738,8 @@ describe('procedure skills on the live path (AI-03)', () => {
 
     await createProcedure({ group_id: Number(financeId) });
     // The same in every part but one: beside a procedure the understanding call
-    // ran first, and the record says what it read (tm 297.1 · AI-05 §8).
+    // ran first, and the record says what it read (tm 297.1 · AI-05 §8) and
+    // which rule sent the message to the skill (tm 297.2: the knowledge path).
     const { record, ...beside } = await ask();
     const { record: aloneRecord, ...aloneRest } = alone;
     expect(beside).toEqual(aloneRest);
@@ -753,6 +754,7 @@ describe('procedure skills on the live path (AI-03)', () => {
           language: 'en',
           tries: 1,
         },
+        policy: { step: 5, rule: 'knowledge', high: 0.7, low: 0.4 },
       },
     });
   });

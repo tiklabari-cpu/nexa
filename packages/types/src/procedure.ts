@@ -556,6 +556,10 @@ export type ProcedureSection = (typeof PROCEDURE_SECTIONS)[number];
  *   - `procedure_tool_must_be_inactive` — a tool step marked active; F1 has none.
  *   - `procedure_locked_change`         — a locked procedure's structure changed;
  *                                         only its texts and its team may.
+ *   - `procedure_fallback_taken`        — the skill is marked the fallback and
+ *                                         another of the agent's skills already
+ *                                         is (AI-05 §5: at most one); the
+ *                                         server's check, {@link fallbackTakenProblem}.
  */
 export const PROCEDURE_PROBLEM_CODES = [
   'procedure_not_object',
@@ -594,6 +598,7 @@ export const PROCEDURE_PROBLEM_CODES = [
   'procedure_bad_target',
   'procedure_unknown_target',
   'procedure_locked_change',
+  'procedure_fallback_taken',
 ] as const;
 export type ProcedureProblemCode = (typeof PROCEDURE_PROBLEM_CODES)[number];
 
@@ -2229,6 +2234,24 @@ function limitsSection(value: unknown, problems: ProcedureProblem[]): ProcLimits
     return { ...PROCEDURE_DEFAULTS.limits };
   }
   return { max_turns: maxTurns as number };
+}
+
+// --- the fallback -----------------------------------------------------------
+
+/**
+ * A skill marked the fallback (`is_fallback`, AI-05 §5) while another of the
+ * same agent's skills — named — already is. One fallback per agent: two would
+ * leave "which answers when nothing else does" to the order they were edited
+ * in. The server knows the other skill; the editor words the code.
+ */
+export function fallbackTakenProblem(otherSkillName: string): ProcedureProblem {
+  return {
+    code: 'procedure_fallback_taken',
+    section: 'procedure',
+    field: 'is_fallback',
+    reference: otherSkillName,
+    message: `“${otherSkillName}” is already this agent's fallback; an agent has at most one`,
+  };
 }
 
 // --- locked procedures ------------------------------------------------------

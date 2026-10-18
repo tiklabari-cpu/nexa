@@ -10,6 +10,7 @@ import {
   type ProcedureProblem,
   type ProcedureProblemCode,
   type ProcedureValidationContext,
+  fallbackTakenProblem,
   parseProcedureReference,
   procedureAiQuestions,
   procedureProblemDetails,
@@ -1459,7 +1460,8 @@ describe('problems on the wire', () => {
       [{ ...base(), handoff: { target: { group_id: 2 } } }, { groupIds: new Set([1]) }],
       [{ ...base(), priority: 7 }, { locked: valid(base()) }],
     ];
-    const seen = new Set<string>();
+    // The fallback rule needs the agent's other skills, which only the server reads.
+    const seen = new Set<string>([fallbackTakenProblem('Genel').code]);
     for (const [fixture, context] of fixtures) {
       for (const code of codesOf(fixture, context)) seen.add(code);
     }

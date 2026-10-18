@@ -1469,8 +1469,30 @@ components:
             answers at once. Null: the workspace default (the server's
             `AI_BATCH_WINDOW_MS`).
         daily_memory: { $ref: "#/components/schemas/AiDailyMemorySettings" }
+        clarify_thresholds: { $ref: "#/components/schemas/AiClarifyThresholds" }
         active: { type: boolean }
         skills_count: { type: integer }
+
+    AiClarifyThresholds:
+      type: object
+      required: [high, low]
+      description: |
+        How sure the agent must be of a procedure (AI-05). The understanding
+        call rates each message 0–1 against the agent's procedures: at `high`
+        or above the procedure starts; between `low` and `high` the agent asks
+        one either-or question between the two likeliest — never twice in a
+        row; below `low` it answers from knowledge, then the fallback.
+      properties:
+        high:
+          type: number
+          minimum: 0.01
+          maximum: 1
+          description: Default 0.70.
+        low:
+          type: number
+          minimum: 0.01
+          maximum: 1
+          description: Below `high`. Default 0.40.
 
     AiDailyMemorySettings:
       type: object
@@ -1831,7 +1853,12 @@ components:
           description: The installed template's version.
         is_fallback:
           type: boolean
-          description: The skill that answers when no other matches (AI-05).
+          description: |
+            The skill that answers when nothing else does (AI-05): no procedure
+            reached the agent's `clarify_thresholds.low` and no other skill took
+            the message. At most one per agent. A one-message skill with no
+            `detect_intent` step was moved onto it when procedures arrived, so
+            it no longer answers before the skills that do match.
         active: { type: boolean }
         runs_count: { type: integer }
         updated_at: { type: string, format: date-time }
@@ -2272,6 +2299,7 @@ components:
             - procedure_bad_target
             - procedure_unknown_target
             - procedure_locked_change
+            - procedure_fallback_taken
             - slots_not_array
             - slots_too_many
             - slot_not_object

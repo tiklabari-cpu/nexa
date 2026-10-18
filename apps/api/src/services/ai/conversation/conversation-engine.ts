@@ -89,8 +89,8 @@ import {
 import {
   ANSWER_BUDGETS,
   DEFAULT_ANSWER_PASSAGES,
+  DEFAULT_CLARIFY_THRESHOLDS,
   DEFAULT_DAY_BOUNDARY,
-  personaLanguageVerdict,
   readPersona,
   validateSkillProcedure,
   type AiConversationOutcome,
@@ -148,12 +148,21 @@ import {
   type ProcedureSnapshot,
   type SuspendedProcedure,
 } from './procedure/executor.js';
-import { selectProcedure } from './procedure/selection.js';
-import type {
-  CatalogueEntry,
-  PendingQuestion,
-  ProcedureUnderstanding,
+import {
+  rankProcedures,
+  type CatalogueEntry,
+  type PendingQuestion,
+  type ProcedureUnderstanding,
 } from './procedure/understanding.js';
+import {
+  CLARIFY_SIGNAL,
+  clarifyQuestion,
+  clarifySignal,
+  decide,
+  languageVerdict,
+  readClarifyMark,
+  type PolicyRecord,
+} from './policy.js';
 import {
   buildUnderstandPrompt,
   readUnderstanding,
@@ -268,6 +277,8 @@ interface ProcedureRun {
   spent: SkillRunUsage;
   /** What it read, for the decision record. */
   understood?: UnderstoodRecord;
+  /** Which rule of the decision order chose it (tm 297.2). */
+  policy?: PolicyRecord;
 }
 
 /**
@@ -290,11 +301,38 @@ type Understood =
       log: SkillRunLogEntry[];
     };
 
-/** A turn no procedure took: what the understanding cost, for the skill that answers instead. */
+/**
+ * A turn the decision order sent down the knowledge path (AI-05 §4.5): what
+ * the understanding cost and read, for the skill that answers instead.
+ */
 interface NoProcedure {
   spent: SkillRunUsage;
   record?: UnderstoodRecord;
+  policy: PolicyRecord;
+  understanding: ProcedureUnderstanding;
+  /** Whether the fallback may answer: no procedure reached `low` (AI-05 §5). */
+  fallback: boolean;
+  /** What the call read and the order decided — the log of a turn nothing takes. */
+  log: SkillRunLogEntry[];
 }
+
+/** A procedure skill the turn may start, its definition judged. */
+interface ProcedureItem {
+  entry: CatalogueEntry;
+  skill: TurnSkill;
+  procedure: Procedure;
+}
+
+/** A one-message skill, its steps judged and adapted. */
+interface SingleItem {
+  skill: TurnSkill;
+  procedure: SingleTurnProcedure;
+}
+
+/** The reading a fallback procedure starts on when no call was made. */
+const NOTHING_UNDERSTOOD: ProcedureUnderstanding = Object.freeze({
+  intent: { procedure_key: null, confidence: 0 },
+});
 
 /** One piece of a procedure turn's message; `written` is where the composed part goes. */
 type Segment =
@@ -368,19 +406,23 @@ export class ConversationEngine {
    *
    * Only one skill runs per message. Running several would let two of them
    * reply to the same question, and an admin debugging why a customer got two
-   * different answers has no way to see which fired first. A message no skill
-   * matches is not a turn: the state comes back as it went in.
+   * different answers has no way to see which fired first. A message nothing
+   * takes is not a turn: the state comes back as it went in.
+   *
+   * The order (AI-05 §4): a procedure in progress or one the message selects,
+   * or the decision order's own reply (`#procedureTurn`); then the one-message
+   * skills whose gate matches — the knowledge path; then the fallback (§5);
+   * then nothing, `unmatched`.
    */
   async runTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
-    // A procedure in progress, or one the message starts, goes first (tm 296.3
-    // · AI-05 §4: a procedure match is never answered by a catch-all skill).
     const procedural = await this.#procedureTurn(state, message, ctx);
     if (procedural && 'nextState' in procedural) return procedural;
     // The understanding call ran and chose no procedure: its cost is the turn's
     // all the same, on whichever skill answers.
     const spent = procedural?.spent ?? NOTHING_SPENT;
     const record = procedural?.record;
-    const charged = (executed: Executed): Executed =>
+    const policy = procedural?.policy;
+    const charged = (executed: Executed, rule?: 'fallback'): Executed =>
       procedural
         ? {
             ...executed,
@@ -388,74 +430,132 @@ export class ConversationEngine {
               ...executed.decisions,
               usage: addUsage(spent, executed.decisions.usage),
               ...(record ? { understood: record } : {}),
+              ...(policy ? { policy: rule ? { ...policy, step: 6, rule } : policy } : {}),
             },
           }
         : executed;
 
-    for (const skill of ctx.config.skills) {
-      if (skill.mode === 'procedure') continue;
-      const parsed = validateSteps(skill.steps);
-      if (!parsed.ok) {
-        // A malformed skill is skipped rather than crashing the message path —
-        // a customer must never lose a message because an admin saved a broken
-        // step list.
-        continue;
-      }
-      const procedure = adaptLegacySkill(parsed.steps);
-
-      const gate = intentGate(procedure.whenToUse, message.text);
+    // The knowledge path (AI-05 §4.5): the one-message skills whose gate
+    // matches, in their order. One with no gate matches everything, so it is
+    // not here — it waits with the fallback, and no longer answers before a
+    // skill written for the message (§5).
+    const singles = singleSkills(ctx.config.skills);
+    for (const item of singles) {
+      if (item.skill.isFallback || item.procedure.whenToUse.length === 0) continue;
+      const gate = intentGate(item.procedure.whenToUse, message.text);
       if (!gate.matched) continue;
+      return this.#runSingle(state, message, ctx, item, gate.log, charged, procedural);
+    }
 
-      const language = personaLanguageVerdict(message.text, skill.persona);
-      const identity = { id: skill.id, name: skill.name, aiAgentId: skill.aiAgentId };
-      const intent = procedure.whenToUse[0]?.intent ?? null;
-
-      if (language.unsupported) {
-        const executed = charged(declined(identity, gate.log, language.detected));
-        return { ...executed, nextState: afterTurn(state, message, executed, identity, intent) };
+    // The fallback (AI-05 §5): only when no procedure was even likely. The one
+    // marked first, in order; then the one-message skills with no gate.
+    if (procedural?.fallback !== false) {
+      for (const candidate of fallbacks(ctx.config.skills, singles)) {
+        if (candidate.kind === 'procedure') {
+          return this.#enterProcedure(state, message, ctx, {
+            starting: candidate.item,
+            ongoing: null,
+            resuming: false,
+            active: null,
+            suspendedSlots: {},
+            suspendedNext: readSuspended(state.suspended),
+            understanding: procedural?.understanding ?? NOTHING_UNDERSTOOD,
+            log: [
+              {
+                step: 'policy',
+                detail: `nothing else took the message — the fallback ${candidate.item.skill.name}`,
+                ok: true,
+              },
+            ],
+            spent,
+            ...(record ? { understood: record } : {}),
+            ...(policy ? { policy: { ...policy, step: 6, rule: 'fallback' } } : {}),
+          });
+        }
+        const gate = intentGate(candidate.item.procedure.whenToUse, message.text);
+        if (!gate.matched) continue;
+        return this.#runSingle(
+          state,
+          message,
+          ctx,
+          candidate.item,
+          gate.log,
+          (executed) => charged(executed, 'fallback'),
+          procedural,
+        );
       }
-
-      // The day's earlier connections (tm 294 · AI-02), on the connection's
-      // first turn: the slots an earlier one on this topic collected are the
-      // turn's from its start, and the recall — written here, not by the model
-      // (K5) — opens whatever the turn says.
-      const earlier = message.earlierToday;
-      const before = earlier ? withEarlierToday(state, earlier, skill.id) : state;
-      const target = earlier ? recallTarget(earlier, skill.id) : null;
-      const recall =
-        earlier && target ? recallLine(target, earlier.trust, language.answerIn) : null;
-
-      // The persona names the languages this assistant speaks. A message
-      // confidently in another one is the case the setting exists for, and the
-      // honest answer is not a reply in the wrong language — there is no
-      // translation here, only knowledge in whatever language the admin loaded.
-      // Declining leaves the outcome `skipped`, so routing proceeds exactly as
-      // it would with no AI and a human picks the conversation up.
-      const executed = charged(
-        withRecall(
-          await this.#execute(procedure, {
-            skill: identity,
-            message,
-            gateLog: gate.log,
-            persona: skill.persona,
-            answerIn: language.answerIn,
-            ctx,
-            slots: before.slots,
-            recalled: recall !== null,
-          }),
-          recall,
-        ),
-      );
-
-      return { ...executed, nextState: afterTurn(before, message, executed, identity, intent) };
     }
 
     return {
       reply: null,
-      decisions: { ...NOTHING_DECIDED, usage: spent, ...(record ? { understood: record } : {}) },
+      decisions: {
+        ...NOTHING_DECIDED,
+        usage: spent,
+        log: procedural?.log ?? [],
+        ...(record ? { understood: record } : {}),
+        // AI-05 §4.6: nothing took it — AI-22 collects these.
+        ...(policy ? { policy: { ...policy, step: 6, rule: 'unmatched' } } : {}),
+      },
       nextState: state,
       sideEffects: [],
     };
+  }
+
+  /** A one-message skill's turn: the persona's language, the day's recall, the steps. */
+  async #runSingle(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    item: SingleItem,
+    gateLog: SkillRunLogEntry[],
+    charged: (executed: Executed) => Executed,
+    procedural: NoProcedure | null,
+  ): Promise<TurnResult> {
+    const { skill, procedure } = item;
+    const language = languageVerdict(
+      message.text,
+      skill.persona,
+      procedural?.understanding.language,
+    );
+    const identity = { id: skill.id, name: skill.name, aiAgentId: skill.aiAgentId };
+    const intent = procedure.whenToUse[0]?.intent ?? null;
+
+    if (language.unsupported) {
+      // AI-05 §7: not a silence — a person answers (AI-09).
+      return forcedHandoff(state, message, identity, {
+        log: gateLog,
+        detected: language.detected,
+        decided: charged({ reply: null, decisions: NOTHING_DECIDED, sideEffects: [] }).decisions,
+        intent,
+      });
+    }
+
+    // The day's earlier connections (tm 294 · AI-02), on the connection's
+    // first turn: the slots an earlier one on this topic collected are the
+    // turn's from its start, and the recall — written here, not by the model
+    // (K5) — opens whatever the turn says.
+    const earlier = message.earlierToday;
+    const before = earlier ? withEarlierToday(state, earlier, skill.id) : state;
+    const target = earlier ? recallTarget(earlier, skill.id) : null;
+    const recall = earlier && target ? recallLine(target, earlier.trust, language.answerIn) : null;
+
+    const executed = charged(
+      withRecall(
+        await this.#execute(procedure, {
+          skill: identity,
+          message,
+          gateLog,
+          persona: skill.persona,
+          answerIn: language.answerIn,
+          ctx,
+          slots: before.slots,
+          recalled: recall !== null,
+        }),
+        recall,
+      ),
+    );
+
+    return { ...executed, nextState: afterTurn(before, message, executed, identity, intent) };
   }
 
   /**
@@ -731,11 +831,14 @@ export class ConversationEngine {
   }
 
   /**
-   * A procedure turn (tm 296.3 · AI-03), or null when no procedure is in
-   * progress, set aside or asked for — the single-message skills then run as
-   * they always did. Which procedure runs is `selectProcedure`'s; one turn of
-   * it is `runProcedureTurn`'s; what is left here is what needs the providers
-   * (the knowledge answers, the written part) and the next state.
+   * A procedure turn (tm 296.3 · AI-03), a turn the decision order answers
+   * without one (tm 297.2 · AI-05 §4: a clarifying question, a small-talk
+   * reply, a forced hand-over), or — when the order sends the message down the
+   * knowledge path — what the understanding cost and decided, for the
+   * one-message skills and the fallback to carry. Null when no procedure is in
+   * progress, set aside or selectable: the understanding call is not made.
+   * Which rule applies is `decide`'s; one turn of a procedure is
+   * `runProcedureTurn`'s; what is left here needs the providers.
    */
   async #procedureTurn(
     state: TurnState,
@@ -743,20 +846,22 @@ export class ConversationEngine {
     ctx: TurnContext,
   ): Promise<TurnResult | NoProcedure | null> {
     const catalogue = procedureCatalogue(ctx.config.skills);
+    // The fallback is not the call's to choose (AI-05 §5).
+    const selectable = catalogue.filter((item) => !item.skill.isFallback);
     const active = activeProcedure(state);
     const suspended = readSuspended(state.suspended);
-    if (catalogue.length === 0 && active === null && suspended === null) return null;
+    if (selectable.length === 0 && active === null && suspended === null) return null;
 
     const data = ctx.procedure ?? {};
     const timeZone = ctx.timeZone ?? DEFAULT_DAY_BOUNDARY.timezone;
     const currency = data.currency ?? DEFAULT_CURRENCY;
-    const entries = catalogue.map((item) => item.entry);
+    const entries = selectable.map((item) => item.entry);
     const understood: Understood = data.understanding
       ? { understanding: data.understanding, spent: NOTHING_SPENT, log: [] }
       : await this.#understand(message, ctx, {
           message: message.text,
           catalogue: understandCatalogue({
-            procedures: catalogue.map((item) => ({ entry: item.entry })),
+            procedures: selectable.map((item) => ({ entry: item.entry })),
             active: active ? snapshotEntry(active) : null,
           }),
           active: active
@@ -776,40 +881,109 @@ export class ConversationEngine {
       return notUnderstood(state, message, active, understood);
     }
     const { understanding } = understood;
-    const picked = selectProcedure({
+    const thresholds = ctx.config.clarifyThresholds ?? DEFAULT_CLARIFY_THRESHOLDS;
+    const decided = decide({
       understanding,
       catalogue: entries,
       active,
       suspended,
       slots: state.slots,
       now: ctx.now,
+      thresholds,
+      clarified: readClarifyMark(state.signals),
+      turnsTaken: turnsTaken(state),
     });
-    const { selection } = picked;
+    const { decision, record: policy } = decided;
     const record = understood.record;
-    if (selection.kind === 'none')
-      return { spent: understood.spent, ...(record ? { record } : {}) };
-    const log = [...understood.log, ...picked.log];
+    const log = [...understood.log, ...decided.log];
+    const spentSoFar = {
+      usage: understood.spent,
+      ...(record ? { understood: record } : {}),
+      policy,
+    };
 
-    if (selection.kind === 'declined') {
+    if (decision.kind === 'knowledge') {
+      return {
+        spent: understood.spent,
+        ...(record ? { record } : {}),
+        policy,
+        understanding,
+        log,
+        // AI-05 §5: the fallback answers only when no procedure was likely.
+        fallback: rankProcedures(understanding, entries, thresholds.low).length === 0,
+      };
+    }
+
+    if (decision.kind === 'clarify' || decision.kind === 'smalltalk') {
+      // Said for the agent, not for a skill: its persona and its language.
+      const persona = agentPersona(ctx.config.skills);
+      const language = languageVerdict(message.text, persona, understanding.language);
+      if (language.unsupported) {
+        return forcedHandoff(state, message, null, {
+          log,
+          detected: language.detected,
+          decided: spentSoFar,
+        });
+      }
+      const clarifying = decision.kind === 'clarify';
+      const executed: Executed = {
+        reply: clarifying
+          ? clarifyQuestion(decision.options, language.answerIn)
+          : SMALLTALK_PHRASES[language.answerIn ?? 'tr'],
+        decisions: {
+          ...NOTHING_DECIDED,
+          ...spentSoFar,
+          outcome: 'answered',
+          replyKind: clarifying ? 'question' : 'answer',
+          log: [
+            ...log,
+            ...(clarifying
+              ? []
+              : [
+                  {
+                    step: 'policy',
+                    detail: 'small talk — a short reply, nothing searched',
+                    ok: true,
+                  },
+                ]),
+          ],
+        },
+        sideEffects: [],
+      };
+      const turn = turnsTaken(state) + 1;
+      return {
+        ...executed,
+        nextState: {
+          ...state,
+          suspended: decided.suspended as unknown as AiStateObject | null,
+          signals: clarifying
+            ? { ...state.signals, [CLARIFY_SIGNAL]: clarifySignal(decision.options, turn) }
+            : state.signals,
+          counters: { ...state.counters, turns: turn },
+          lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+        },
+      };
+    }
+
+    if (decision.kind === 'declined') {
       // "Hayır" to the set-aside topic: it is let go, and the AI says so.
       const identity = {
-        id: selection.skillId,
-        name: selection.skillName,
+        id: decision.skillId,
+        name: decision.skillName,
         aiAgentId: null,
       };
-      const persona = personaFor(ctx.config.skills, selection.skillId, null);
-      const { answerIn } = personaLanguageVerdict(message.text, persona);
+      const persona = personaFor(ctx.config.skills, decision.skillId, null);
+      const { answerIn } = languageVerdict(message.text, persona, understanding.language);
       const line = PROCEDURE_PHRASES[answerIn ?? 'tr'].declined;
       const executed: Executed = {
         reply: line,
         decisions: {
           ...NOTHING_DECIDED,
+          ...spentSoFar,
           outcome: 'answered',
           skillId: identity.id,
           skillName: identity.name,
           replyKind: 'answer',
-          usage: understood.spent,
-          ...(record ? { understood: record } : {}),
           log,
           trace: [],
         },
@@ -822,11 +996,55 @@ export class ConversationEngine {
     }
 
     const starting =
-      selection.kind === 'start'
-        ? catalogue.find((item) => item.entry.key === selection.key)
+      decision.kind === 'start'
+        ? (selectable.find((item) => item.entry.key === decision.key) ?? null)
         : null;
-    const resuming = selection.kind === 'resume';
-    const ongoing: ActiveProcedure | null = selection.kind === 'start' ? null : selection.active;
+    const ongoing: ActiveProcedure | null = decision.kind === 'start' ? null : decision.active;
+    if (!starting && !ongoing) return null;
+    return this.#enterProcedure(state, message, ctx, {
+      starting,
+      ongoing,
+      resuming: decision.kind === 'resume',
+      active,
+      suspendedSlots: suspended?.slots ?? {},
+      suspendedNext: decided.suspended,
+      understanding,
+      log,
+      spent: understood.spent,
+      ...(record ? { understood: record } : {}),
+      policy,
+    });
+  }
+
+  /**
+   * The procedure the turn runs — one starting now, or the one in progress or
+   * set aside going on — from the decision to its turn: the persona's language
+   * (AI-05 §7: unsupported is a hand-over), where it starts, its run.
+   */
+  async #enterProcedure(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    input: {
+      starting: ProcedureItem | null;
+      ongoing: ActiveProcedure | null;
+      resuming: boolean;
+      /** The procedure in progress before the turn. */
+      active: ActiveProcedure | null;
+      /** A set-aside topic's slots, for `resuming`. */
+      suspendedSlots: AiStateObject;
+      suspendedNext: SuspendedProcedure | null;
+      understanding: ProcedureUnderstanding;
+      log: SkillRunLogEntry[];
+      spent: SkillRunUsage;
+      understood?: UnderstoodRecord;
+      policy?: PolicyRecord;
+    },
+  ): Promise<TurnResult> {
+    const { starting, ongoing, resuming, understanding } = input;
+    const data = ctx.procedure ?? {};
+    const timeZone = ctx.timeZone ?? DEFAULT_DAY_BOUNDARY.timezone;
+    const currency = data.currency ?? DEFAULT_CURRENCY;
     const skill = starting
       ? { id: starting.skill.id, name: starting.skill.name, aiAgentId: starting.skill.aiAgentId }
       : {
@@ -834,25 +1052,23 @@ export class ConversationEngine {
           name: (ongoing as ActiveProcedure).snapshot.skill_name,
           aiAgentId: (ongoing as ActiveProcedure).snapshot.ai_agent_id,
         };
-    if (!starting && !ongoing) return null;
 
     const persona = starting
       ? starting.skill.persona
       : personaFor(ctx.config.skills, skill.id, skill.aiAgentId);
-    const language = personaLanguageVerdict(message.text, persona);
+    const language = languageVerdict(message.text, persona, understanding.language);
     if (language.unsupported) {
-      // As a single-message skill declines (FR-MOD-06.4): nothing changes
-      // but the count — the procedure stays where it stood.
-      const refused = declined(skill, log, language.detected);
-      const executed = {
-        ...refused,
-        decisions: {
-          ...refused.decisions,
-          usage: understood.spent,
-          ...(record ? { understood: record } : {}),
+      // AI-05 §7 → AI-09: a person answers. The procedure stays where it
+      // stood — nothing of it ran — and goes on if the conversation comes back.
+      return forcedHandoff(state, message, skill, {
+        log: input.log,
+        detected: language.detected,
+        decided: {
+          usage: input.spent,
+          ...(input.understood ? { understood: input.understood } : {}),
+          ...(input.policy ? { policy: input.policy } : {}),
         },
-      };
-      return { ...executed, nextState: afterTurn(state, message, executed, skill, null) };
+      });
     }
 
     // Where it starts: a new procedure pins its definition now (AI-03 §3) and
@@ -878,7 +1094,7 @@ export class ConversationEngine {
       snapshot,
       hash: starting ? procedureHash(starting.procedure) : (ongoing as ActiveProcedure).hash,
       at: starting ? null : { stepId: (ongoing as ActiveProcedure).stepId },
-      slots: starting ? before.slots : resuming ? (suspended?.slots ?? {}) : state.slots,
+      slots: starting ? before.slots : resuming ? input.suspendedSlots : state.slots,
       signals: starting ? before.signals : state.signals,
       procedureTurns: starting ? 0 : (ongoing as ActiveProcedure).procedureTurns,
       // An `ai` answer is keyed by the step or slot it was asked for, and it
@@ -886,17 +1102,18 @@ export class ConversationEngine {
       // reads none of them (its ids may be the same words).
       understanding: resuming
         ? null
-        : starting && starting.entry.key !== active?.skillId
+        : starting && starting.entry.key !== input.active?.skillId
           ? { ...understanding, ai_conditions: {} }
           : understanding,
-      suspended: picked.suspended,
-      log,
+      suspended: input.suspendedNext,
+      log: input.log,
       recall: earlier && target ? recallLine(target, earlier.trust, language.answerIn) : null,
       lastTurnAt: starting ? null : lastTurnAt(state),
       timeZone,
       currency,
-      spent: understood.spent,
-      ...(record ? { understood: record } : {}),
+      spent: input.spent,
+      ...(input.understood ? { understood: input.understood } : {}),
+      ...(input.policy ? { policy: input.policy } : {}),
     });
   }
 
@@ -1163,6 +1380,7 @@ export class ConversationEngine {
           trace: result.trace,
           procedureHash: run.hash,
           ...(run.understood ? { understood: run.understood } : {}),
+          ...(run.policy ? { policy: run.policy } : {}),
         },
         sideEffects,
       },
@@ -1538,37 +1756,72 @@ function saidSoFar(message: TurnMessage): string {
 }
 
 /**
- * The turn where the persona declined to answer, because the customer wrote in
- * a language it does not speak (FR-MOD-06.4).
- *
- * `ok: true` on the log entry, and so a *succeeded* run: nothing failed. The
- * skill was asked a question outside the persona's declared languages and did
- * the one correct thing with it — nothing — which is a decision, not a fault,
- * and an admin reading the run log needs it to read that way. The outcome is
- * `skipped`, which is the engine's existing word for "a human owns this now".
+ * A hand-over the decision order forces (AI-05 §4.1, §7 → AI-09): the message
+ * is in a language the persona does not speak. Not a silence — a person
+ * answers. `ok: true` on the log entry: nothing failed, the AI did the one
+ * correct thing with a message it cannot serve. A procedure in progress stays
+ * where it stood: nothing of it ran.
  */
-function declined(
-  skill: { id: string; name: string },
-  gateLog: SkillRunLogEntry[],
-  detected: string | null,
-): Executed {
-  return {
+function forcedHandoff(
+  state: TurnState,
+  message: TurnMessage,
+  skill: { id: string; name: string } | null,
+  input: {
+    log: readonly SkillRunLogEntry[];
+    detected: string | null;
+    /** What the turn already decided and cost: the understanding, the rule. */
+    decided: Partial<TurnDecisions>;
+    intent?: string | null;
+  },
+): TurnResult {
+  const executed: Executed = {
     reply: null,
     decisions: {
       ...NOTHING_DECIDED,
-      skillId: skill.id,
-      skillName: skill.name,
+      ...input.decided,
+      outcome: 'handed_off',
+      skillId: skill?.id ?? null,
+      skillName: skill?.name ?? null,
+      replyKind: null,
+      failure: null,
+      capped: null,
+      handoffReason: 'unsupported_language',
       log: [
-        ...gateLog,
+        ...input.log,
         {
           step: 'persona',
-          detail: `left for a human — the message is in ${detected ?? 'another language'}, which this persona does not speak`,
+          detail: `handed to a human — the message is in ${input.detected ?? 'another language'}, which this persona does not speak`,
           ok: true,
         },
       ],
     },
-    sideEffects: [],
+    sideEffects: [{ kind: 'handoff', team: null, reason: 'unsupported_language' }],
   };
+  const nextState = skill
+    ? afterTurn(state, message, executed, skill, input.intent ?? null)
+    : {
+        ...state,
+        counters: { ...state.counters, turns: turnsTaken(state) + 1 },
+        lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+      };
+  return { ...executed, nextState };
+}
+
+/**
+ * The reply to small talk (AI-05 §4.5): short, in the persona's language,
+ * nothing searched and no model asked — a greeting is not worth a call.
+ */
+const SMALLTALK_PHRASES: Readonly<Record<PersonaLanguage, string>> = {
+  tr: 'Buradayım — size nasıl yardımcı olabilirim?',
+  en: 'I’m here — how can I help you?',
+  de: 'Ich bin für Sie da — wie kann ich helfen?',
+  fr: 'Je suis là — comment puis-je vous aider ?',
+  es: 'Aquí estoy — ¿en qué puedo ayudarle?',
+};
+
+/** The persona a turn with no skill speaks in: the agent's, read off its first skill. */
+function agentPersona(skills: readonly TurnSkill[]): Persona {
+  return skills[0]?.persona ?? readPersona(null);
 }
 
 /** How many retrieved passages this persona's answer length pays for. */
@@ -1677,10 +1930,8 @@ function buildSummary(message: string, history: TurnHistory | undefined, contact
  * does not pass is skipped, as a malformed step list is — a customer must not
  * lose a message to a definition stored past the API.
  */
-function procedureCatalogue(
-  skills: readonly TurnSkill[],
-): Array<{ entry: CatalogueEntry; skill: TurnSkill; procedure: Procedure }> {
-  const catalogue: Array<{ entry: CatalogueEntry; skill: TurnSkill; procedure: Procedure }> = [];
+function procedureCatalogue(skills: readonly TurnSkill[]): ProcedureItem[] {
+  const catalogue: ProcedureItem[] = [];
   for (const skill of skills) {
     if (skill.mode !== 'procedure' || skill.definition === undefined) continue;
     const parsed = validateSkillProcedure(skill.definition);
@@ -1699,6 +1950,50 @@ function procedureCatalogue(
     });
   }
   return catalogue;
+}
+
+/**
+ * The one-message skills, in their order, their steps judged: a malformed list
+ * is skipped rather than crashing the message path — a customer must never
+ * lose a message because an admin saved a broken step list.
+ */
+function singleSkills(skills: readonly TurnSkill[]): SingleItem[] {
+  const items: SingleItem[] = [];
+  for (const skill of skills) {
+    if (skill.mode === 'procedure') continue;
+    const parsed = validateSteps(skill.steps);
+    if (!parsed.ok) continue;
+    items.push({ skill, procedure: adaptLegacySkill(parsed.steps) });
+  }
+  return items;
+}
+
+type FallbackCandidate =
+  { kind: 'procedure'; item: ProcedureItem } | { kind: 'single'; item: SingleItem };
+
+/**
+ * What answers when nothing else does (AI-05 §5), in the order tried: the
+ * skills marked `is_fallback` — one per agent, though rows from before the
+ * rule may hold more — then the one-message skills with no gate.
+ */
+function fallbacks(
+  skills: readonly TurnSkill[],
+  singles: readonly SingleItem[],
+): FallbackCandidate[] {
+  const procedures = new Map(procedureCatalogue(skills).map((item) => [item.skill.id, item]));
+  const ones = new Map(singles.map((item) => [item.skill.id, item]));
+  const marked: FallbackCandidate[] = [];
+  for (const skill of skills) {
+    if (!skill.isFallback) continue;
+    const procedure = procedures.get(skill.id);
+    const single = ones.get(skill.id);
+    if (procedure) marked.push({ kind: 'procedure', item: procedure });
+    else if (single) marked.push({ kind: 'single', item: single });
+  }
+  const open = singles
+    .filter((item) => !item.skill.isFallback && item.procedure.whenToUse.length === 0)
+    .map((item): FallbackCandidate => ({ kind: 'single', item }));
+  return [...marked, ...open];
 }
 
 /** The procedure in progress as the understanding call sees it: its pinned definition. */

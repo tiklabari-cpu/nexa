@@ -236,6 +236,8 @@ export function skillDecision(
         ...(decisions.capped ? { cap_scope: decisions.capped.scope } : {}),
         ...(failure ? { transient: failure.transient } : {}),
         ...(decisions.understood ? { understood: decisions.understood } : {}),
+        // Which rule of the decision order decided (tm 297.2 · AI-05 §8).
+        ...(decisions.policy ? { policy: decisions.policy } : {}),
       },
       turn,
     ),

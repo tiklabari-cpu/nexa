@@ -866,3 +866,54 @@ describe('SkillEditor — preview at the daily AI cap (tm 257.8)', () => {
     expect(screen.queryByText('Could not run the preview.')).toBeNull();
   });
 });
+
+describe('SkillEditor — the agent’s fallback (tm 297.2 · AI-05 §5)', () => {
+  const answer: SkillStep = { type: 'send_message', source: 'text', text: 'Merhaba' };
+
+  it('sends `is_fallback` only when it changes, and counts it as an unsaved change', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([answer]));
+    const save = screen.getByRole('button', { name: 'Save changes' });
+    expect(save).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'Fallback for this agent' }));
+    expect(save).toBeEnabled();
+    await user.click(save);
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({ is_fallback: true }),
+    );
+  });
+
+  it('leaves it out of a save that did not touch it', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([answer], { is_fallback: true }));
+    expect(screen.getByRole('checkbox', { name: 'Fallback for this agent' })).toBeChecked();
+    await user.type(screen.getByLabelText('Name'), '!');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(api.patch.mock.calls.at(-1)![1]).not.toHaveProperty('is_fallback');
+  });
+
+  it('words the second-fallback refusal, naming the skill that already is one', async () => {
+    const user = userEvent.setup();
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message: 'already the fallback',
+        requestId: 'rq-1',
+        details: {
+          reason: 'procedure_fallback_taken',
+          section: 'procedure',
+          field: 'is_fallback',
+          reference: 'Genel',
+        },
+      }),
+    );
+    renderEditor(makeSkill([answer]));
+    await user.click(screen.getByRole('checkbox', { name: 'Fallback for this agent' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(
+      await screen.findByText('“Genel” is already this agent’s fallback. Turn it off there first.'),
+    ).toBeInTheDocument();
+  });
+});

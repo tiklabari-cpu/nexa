@@ -238,6 +238,11 @@ export function skillDecision(
         ...(decisions.understood ? { understood: decisions.understood } : {}),
         // Which rule of the decision order decided (tm 297.2 · AI-05 §8).
         ...(decisions.policy ? { policy: decisions.policy } : {}),
+        // The answer's grounding and the chunks and sources it cites (tm 298 ·
+        // AI-06 §10, G18) — ids, no text.
+        ...(decisions.knowledge ? { knowledge: decisions.knowledge } : {}),
+        // The question the knowledge base did not answer (AI-06 §8 → AI-22).
+        ...(decisions.unanswered ? { unanswered: decisions.unanswered } : {}),
       },
       turn,
     ),

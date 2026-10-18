@@ -37,6 +37,7 @@ import {
   openAiProblem,
   type FakeOpenAiFetch,
 } from '../helpers/fake-openai.js';
+import { knowledgeAnswerJson } from '../helpers/knowledge-answer.js';
 import { ownerClient, seedFixtures, testEnv } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer } from '../helpers/server.js';
 
@@ -131,7 +132,7 @@ describe('provider secrets and conversation text never reach a log line or a spa
   });
 
   it('writes neither the question, the passage, the prompt nor the answer to a log line or a span (NFR-S9)', async () => {
-    const llm = fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER));
+    const llm = fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER)));
     const embeddings = fakeOpenAiFetch(openAiEmbeddings((text) => embed(text)));
     const { server, log, spans, exported } = await start({ llm, embeddings });
     try {
@@ -206,7 +207,7 @@ describe('provider secrets and conversation text never reach a log line or a spa
 
   it('censors all four credentials wherever someone logs the configuration or a request', async () => {
     const { server, log } = await start({
-      llm: fakeOpenAiFetch(openAiCompletion(MODEL_ANSWER)),
+      llm: fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson(MODEL_ANSWER))),
       embeddings: fakeOpenAiFetch(openAiEmbeddings((text) => embed(text))),
     });
     try {

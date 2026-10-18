@@ -70,26 +70,42 @@ const db: TenantRunner = (fn) => fn(untouchable);
 
 /** What the knowledge search was asked, in order. */
 const searched: string[] = [];
+/**
+ * One passage, about how long a deposit takes: a question about deposits
+ * finds it, anything else finds nothing (AI-06 — the knowledge path answers
+ * only what the knowledge base holds).
+ */
 const knowledge = {
   threshold: RETRIEVAL_THRESHOLD,
   embedQuery: async (query: string) => {
     searched.push(query);
-    return { space: 'test:space', vector: '[1]', usage: { inputTokens: 3 } };
+    return { space: query, vector: '[1]', usage: { inputTokens: 3 } };
   },
-  search: async (): Promise<KnowledgeSearch> => ({
+  search: async (
+    _tx: unknown,
+    _tenant: unknown,
+    query: { space: string },
+  ): Promise<KnowledgeSearch> => ({
     strategy: 'exact',
     chunksInScope: 1,
-    chunks: [
-      {
-        id: 'chunk-1',
-        sourceId: 'source-1',
-        sourceName: 'Yatırımlar',
-        text: 'Papara yatırımları 30 dakikada yansır.',
-        score: 0.9,
-      },
-    ],
+    chunks: /yatırım|papara/i.test(query.space)
+      ? [
+          {
+            id: 'chunk-1',
+            sourceId: 'source-1',
+            sourceName: 'Yatırımlar',
+            text: 'Papara yatırımları 30 dakikada yansır.',
+            score: 0.9,
+          },
+        ]
+      : [],
   }),
 } as unknown as KnowledgeService;
+
+/** The no-answer replies (AI-06 §8, AI-06-S1). */
+const CANNOT_HAND_OVER =
+  'Bu konuda size kesin bilgi veremiyorum. Sizi bir temsilcimize aktarıyorum.';
+const CANNOT_ASK = 'Bu konuda size kesin bilgi veremiyorum. Sizi bir temsilcimize aktarayım mı?';
 
 function engine(llm: LlmProvider = new MockLlmProvider()): ConversationEngine {
   return new ConversationEngine({
@@ -1093,15 +1109,24 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
       counters: { turns: 1 },
     });
 
+    // Still unclear, and the knowledge base does not answer it: not a second
+    // question and not a silence — the AI says it cannot, and a money
+    // question goes to a person at once (AI-06 §8, AI-06-S1).
     const again = await chat.say('param çekim');
-    expect(again.reply).toBeNull();
+    expect(again.reply).toBe(CANNOT_HAND_OVER);
     expect(again.decisions.log).toContainEqual({
       step: 'policy',
       detail: 'still unclear after the clarifying question — no second one is asked',
       ok: true,
     });
     expect(again.decisions.policy).toMatchObject({ step: 6, rule: 'unmatched' });
-    expect(tookTurn(again)).toBe(false);
+    expect(again.decisions).toMatchObject({
+      outcome: 'handed_off',
+      handoffReason: 'no_knowledge',
+      unanswered: { category: 'money', policy: 'handoff', reason: 'no_passages' },
+    });
+    expect(again.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'no_knowledge' }]);
+    expect(tookTurn(again)).toBe(true);
   });
 
   it('the answer to the question starts the procedure it names', async () => {
@@ -1268,7 +1293,7 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
       await chat.say('param çekim');
       const again = await chat.say('param çekim');
       expect(again.decisions.skillId).toBeNull();
-      expect(again.reply).toBeNull();
+      expect(again.reply).toBe(CANNOT_HAND_OVER);
       expect(again.decisions.policy).toMatchObject({ step: 6, rule: 'unmatched' });
     });
 
@@ -1308,16 +1333,24 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
       expect(other.decisions.policy).toMatchObject({ step: 6, rule: 'fallback' });
     });
 
-    it('with no fallback, nothing answers: the turn is unmatched and not taken', async () => {
+    it('with no fallback and no answer in the knowledge base, the AI says it cannot — the turn is unmatched, never silent (AI-06 §8)', async () => {
       const result = await engine().runTurn(
         emptyTurnState(),
         { text: 'merhaba' },
         context([GATED, DEPOSIT_SKILL]),
       );
-      expect(result.reply).toBeNull();
-      expect(result.decisions.policy).toMatchObject({ step: 6, rule: 'unmatched' });
-      expect(result.nextState).toEqual(emptyTurnState());
-      expect(tookTurn(result)).toBe(false);
+      // "Anything else" is asked about once (AI-06-S1).
+      expect(result.reply).toBe(CANNOT_ASK);
+      expect(result.decisions).toMatchObject({
+        outcome: 'answered',
+        replyKind: 'question',
+        skillId: null,
+        policy: { step: 6, rule: 'unmatched' },
+        unanswered: { category: 'other', policy: 'ask', reason: 'no_passages' },
+      });
+      expect(result.sideEffects).toEqual([]);
+      expect(result.nextState.signals).toEqual({ no_answer: { turn: 1 } });
+      expect(tookTurn(result)).toBe(true);
     });
   });
 

@@ -91,6 +91,7 @@ import {
   DEFAULT_ANSWER_PASSAGES,
   DEFAULT_CLARIFY_THRESHOLDS,
   DEFAULT_DAY_BOUNDARY,
+  DEFAULT_NO_ANSWER,
   readPersona,
   validateSkillProcedure,
   type AiConversationOutcome,
@@ -122,6 +123,26 @@ import {
   type LlmProvider,
 } from '../provider/llm-provider.js';
 import { GAP_MARKER, shortenHistory } from './context-loader.js';
+import {
+  KNOWLEDGE_ANSWER_RESPONSE_FORMAT,
+  NO_ANSWER_PHRASES,
+  NO_ANSWER_SIGNAL,
+  NO_FACT_TABLES,
+  noAnswerCategory,
+  noAnswerSignal,
+  passageLabel,
+  problemDetail,
+  readKnowledgeAnswer,
+  readNoAnswerMark,
+  readOfferAnswer,
+  rewriteNote,
+  type KnowledgeAnswerReply,
+  type KnowledgeFacts,
+  type KnowledgeRecord,
+  type ReadKnowledgeAnswer,
+  type RiskReading,
+  type UnansweredReason,
+} from './knowledge-answer.js';
 import {
   buildDigest,
   earlierTodayLines,
@@ -185,6 +206,9 @@ import type { AiStateObject } from './state-store.js';
 import { readAndCompile } from './turn-config.js';
 import {
   emptyTurnState,
+  handoffOf,
+  tookTurn,
+  turnAgentId,
   turnsTaken,
   type TurnSkill,
   type SkillFailure,
@@ -226,6 +250,11 @@ export interface ConversationEngineOptions {
    * its exact-search ceiling. Default: `new ProcedureExamples()`.
    */
   procedureExamples?: ProcedureExamples;
+  /**
+   * The AI-13 tables' answers (#310), asked before the knowledge base on the
+   * knowledge path (tm 298 · AI-06 §3). Default: none (`NO_FACT_TABLES`).
+   */
+  facts?: KnowledgeFacts;
 }
 
 /** The meter each mode's spend is counted on (`TurnMode`). */
@@ -328,6 +357,15 @@ interface NoProcedure {
   log: SkillRunLogEntry[];
 }
 
+/** A knowledge search with no answer (AI-06): what it cost and why, for what answers instead. */
+interface KnowledgeMiss {
+  miss: true;
+  spent: SkillRunUsage;
+  reason: UnansweredReason;
+  knowledge?: KnowledgeRecord;
+  log: SkillRunLogEntry[];
+}
+
 /** A procedure skill the turn may start, its definition judged. */
 interface ProcedureItem {
   entry: CatalogueEntry;
@@ -400,11 +438,18 @@ interface KnowledgeAnswer {
   capped?: AiDailyCapError;
   /** Tokens this step's provider calls cost, billed whether or not it answered. */
   spent?: Partial<SkillRunUsage>;
+  /** `partial`: the passages answer part of it (AI-06 §7) — a person is offered. */
+  grounded?: ReadKnowledgeAnswer['grounded'];
+  /** What the decision record keeps of the search and the draft (tm 298). */
+  record?: KnowledgeRecord;
+  /** Why there is no answer, when there is none and nothing failed. */
+  missed?: UnansweredReason;
 }
 
 export class ConversationEngine {
   readonly #knowledge: KnowledgeService;
   readonly #examples: ProcedureExamples;
+  readonly #facts: KnowledgeFacts;
   readonly #llm: MeteredLlm;
   readonly #limits: { maxOutputTokens: number; timeoutMs: number };
   readonly #maxPromptChars: number;
@@ -417,6 +462,7 @@ export class ConversationEngine {
   constructor(options: ConversationEngineOptions) {
     this.#knowledge = options.knowledge;
     this.#examples = options.procedureExamples ?? new ProcedureExamples();
+    this.#facts = options.facts ?? NO_FACT_TABLES;
     this.#llm = MeteredLlm.wrap(options.llm);
     this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
     this.#maxPromptChars = options.maxPromptChars;
@@ -431,17 +477,28 @@ export class ConversationEngine {
    * different answers has no way to see which fired first. A message nothing
    * takes is not a turn: the state comes back as it went in.
    *
-   * The order (AI-05 §4): a procedure in progress or one the message selects,
-   * or the decision order's own reply (`#procedureTurn`); then the one-message
-   * skills whose gate matches — the knowledge path; then the fallback (§5);
-   * then nothing, `unmatched`.
+   * The order (AI-05 §4): the player's answer to an offer of a person
+   * (`#answerToOffer`); a procedure in progress or one the message selects,
+   * or the decision order's own reply (`#procedureTurn`); then the knowledge
+   * path (AI-06): the one-message skills whose gate matches, then the AI-13
+   * tables and the knowledge base (`#knowledgeTurn`); then the fallback (§5);
+   * then the no-answer reply (`#noAnswer`). Whatever the turn did, the
+   * silence rule has the last word (`#neverSilent`, AI-06 §9).
    */
   async runTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
+    const offer = this.#answerToOffer(state, message, ctx);
+    if (offer) return offer;
+    return this.#neverSilent(state, message, ctx, await this.#takeTurn(state, message, ctx));
+  }
+
+  async #takeTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
     const procedural = await this.#procedureTurn(state, message, ctx);
     if (procedural && 'nextState' in procedural) return procedural;
     // The understanding call ran and chose no procedure: its cost is the turn's
-    // all the same, on whichever skill answers.
-    const spent = procedural?.spent ?? NOTHING_SPENT;
+    // all the same, on whichever skill answers — and so is a knowledge search
+    // that found no answer before the fallback did (AI-06).
+    let spent = procedural?.spent ?? NOTHING_SPENT;
+    let missed: KnowledgeMiss | null = null;
     const record = procedural?.record;
     const policy = procedural?.policy;
     const charged = (executed: Executed, rule?: 'fallback'): Executed =>
@@ -451,6 +508,12 @@ export class ConversationEngine {
             decisions: {
               ...executed.decisions,
               usage: addUsage(spent, executed.decisions.usage),
+              ...(missed
+                ? {
+                    log: [...missed.log, ...executed.decisions.log],
+                    ...(missed.knowledge ? { knowledge: missed.knowledge } : {}),
+                  }
+                : {}),
               ...(record ? { understood: record } : {}),
               ...(policy ? { policy: rule ? { ...policy, step: 6, rule } : policy } : {}),
             },
@@ -469,6 +532,20 @@ export class ConversationEngine {
       return this.#runSingle(state, message, ctx, item, gate.log, charged, procedural);
     }
 
+    // AI-06: the decision order sent the message down the knowledge path and
+    // no skill took it — the tables, then the knowledge base, answer it.
+    if (procedural) {
+      const known = await this.#knowledgeTurn(state, message, ctx, {
+        understanding: procedural.understanding,
+        spent,
+        log: procedural.log,
+        decided: { ...(record ? { understood: record } : {}), ...(policy ? { policy } : {}) },
+      });
+      if (!('miss' in known)) return known;
+      missed = known;
+      spent = known.spent;
+    }
+
     // The fallback (AI-05 §5): only when no procedure was even likely. The one
     // marked first, in order; then the one-message skills with no gate.
     if (procedural?.fallback !== false) {
@@ -483,6 +560,7 @@ export class ConversationEngine {
             suspendedNext: readSuspended(state.suspended),
             understanding: procedural?.understanding ?? NOTHING_UNDERSTOOD,
             log: [
+              ...(missed?.log ?? []),
               {
                 step: 'policy',
                 detail: `nothing else took the message — the fallback ${candidate.item.skill.name}`,
@@ -508,19 +586,48 @@ export class ConversationEngine {
       }
     }
 
-    return {
-      reply: null,
-      decisions: {
-        ...NOTHING_DECIDED,
-        usage: spent,
-        log: procedural?.log ?? [],
-        ...(record ? { understood: record } : {}),
-        // AI-05 §4.6: nothing took it — AI-22 collects these.
-        ...(policy ? { policy: { ...policy, step: 6, rule: 'unmatched' } } : {}),
-      },
-      nextState: state,
-      sideEffects: [],
-    };
+    if (procedural) {
+      // AI-05 §4.6 → AI-06 §8: nothing took it, and the knowledge base has no
+      // answer — the AI says so (AI-22 collects these).
+      return this.#noAnswer(state, message, ctx, {
+        base: null,
+        understanding: procedural.understanding,
+        reason: missed?.reason ?? 'no_passages',
+        decided: {
+          usage: spent,
+          log: [...procedural.log, ...(missed?.log ?? [])],
+          ...(missed?.knowledge ? { knowledge: missed.knowledge } : {}),
+          ...(record ? { understood: record } : {}),
+          ...(policy ? { policy: { ...policy, step: 6, rule: 'unmatched' } } : {}),
+        },
+      });
+    }
+
+    if (ctx.aiMode === 'ai' && ctx.config.skills.length > 0) {
+      // No procedure to decide by, no skill took it, and the connection is the
+      // AI's: the knowledge base answers it, or the AI says it cannot (AI-06 §9).
+      const known = await this.#knowledgeTurn(state, message, ctx, {
+        understanding: null,
+        spent: NOTHING_SPENT,
+        log: [],
+        decided: {},
+      });
+      if (!('miss' in known)) return known;
+      return this.#noAnswer(state, message, ctx, {
+        base: null,
+        understanding: null,
+        reason: known.reason,
+        decided: {
+          usage: known.spent,
+          log: known.log,
+          ...(known.knowledge ? { knowledge: known.knowledge } : {}),
+        },
+      });
+    }
+
+    // Not the AI's connection yet, and nothing took the message: no turn —
+    // the person routing gave it to answers.
+    return { reply: null, decisions: NOTHING_DECIDED, nextState: state, sideEffects: [] };
   }
 
   /** A one-message skill's turn: the persona's language, the day's recall, the steps. */
@@ -710,6 +817,7 @@ export class ConversationEngine {
     let failure: SkillFailure | null = null;
     let capped: AiDailyCapError | null = null;
     let usage = NOTHING_SPENT;
+    let knowledge: KnowledgeRecord | undefined;
 
     for (const step of procedure.steps) {
       const name = stepLogName(step);
@@ -796,6 +904,7 @@ export class ConversationEngine {
             ctx: input.ctx,
           });
           usage = addUsage(usage, answer.spent);
+          knowledge = mergeKnowledge(knowledge, answer.record);
           if (answer.failure || answer.capped) {
             failure = answer.failure ?? null;
             capped = answer.capped ?? null;
@@ -805,23 +914,9 @@ export class ConversationEngine {
             reply = null;
             replyKind = null;
           } else if (answer.text) {
-            // K5: an amount, an IBAN or a transaction id from an earlier
-            // connection the player has not given again is not the AI's to say
-            // (the AI-08 output check's hook). The answer is withheld and a
-            // person answers, as with a knowledge miss.
-            const leaked = repeatsEarlierDetail(
-              answer.text,
-              input.message.earlierToday,
-              saidSoFar(input.message),
-            );
-            if (leaked.length > 0) {
-              log.push({
-                step: name,
-                detail: `withheld — it repeated ${leaked.length} detail(s) from an earlier conversation today the player has not given again`,
-                ok: false,
-              });
-              break;
-            }
+            // K5 (an earlier connection's detail) is the answer's own check
+            // (`#answerFromKnowledge`): a draft that repeats one comes back
+            // withheld, as a knowledge miss.
             reply = answer.text;
             replyKind = 'answer';
           }
@@ -848,6 +943,7 @@ export class ConversationEngine {
         capped,
         usage,
         log,
+        ...(knowledge ? { knowledge } : {}),
       },
       sideEffects,
     };
@@ -1385,6 +1481,7 @@ export class ConversationEngine {
     const segments: Segment[] = [];
     const instructions: Array<{ at: string; text: string }> = [];
     let usage = run.spent;
+    let knowledge: KnowledgeRecord | undefined;
     let failure: SkillFailure | null = null;
     let capped: AiDailyCapError | null = null;
     let failedAt: string | null = null;
@@ -1416,26 +1513,13 @@ export class ConversationEngine {
             ctx,
           });
           usage = addUsage(usage, answer.spent);
+          knowledge = mergeKnowledge(knowledge, answer.record);
           if (answer.failure || answer.capped) {
             failure = answer.failure ?? null;
             capped = answer.capped ?? null;
             failedAt = part.at;
           } else if (answer.text) {
-            // K5 (tm 294): an earlier connection's detail the player has not
-            // given again is not the AI's to say.
-            const leaked = repeatsEarlierDetail(
-              answer.text,
-              message.earlierToday,
-              saidSoFar(message),
-            );
-            if (leaked.length > 0) {
-              log.push({
-                step: part.at,
-                detail: `withheld — it repeated ${leaked.length} detail(s) from an earlier conversation today the player has not given again`,
-                ok: false,
-              });
-              break;
-            }
+            // K5 (tm 294) is the answer's own check (`#answerFromKnowledge`).
             segments.push({ kind: 'text', text: answer.text });
           }
           log.push({ step: part.at, detail: answer.detail, ok: answer.text !== null });
@@ -1520,6 +1604,7 @@ export class ConversationEngine {
           handoffReason: handedOff && !aborted ? (end as { reason: string }).reason : null,
           trace: result.trace,
           procedureHash: run.hash,
+          ...(knowledge ? { knowledge } : {}),
           ...(run.understood ? { understood: run.understood } : {}),
           ...(run.policy ? { policy: run.policy } : {}),
         },
@@ -1715,11 +1800,12 @@ export class ConversationEngine {
 
     if (hits.length === 0) {
       // Answering from an unrelated article is worse than admitting there is no
-      // answer. Returning no text leaves the outcome as `skipped`, so a human
-      // picks the conversation up.
+      // answer. Below the threshold the model is not asked at all (AI-06 §5).
       return {
         text: null,
         spent: { embeddingTokens },
+        missed: 'no_passages',
+        record: { grounded: 'none', cited_ids: [], source_ids: [] },
         detail:
           chunksInScope === 0
             ? // Said apart from a miss, because it is read by whoever has to fix
@@ -1730,42 +1816,117 @@ export class ConversationEngine {
       };
     }
 
-    const best = hits[0]!;
-    // Outside any transaction (see the file header). The persona travels in the
-    // prompt: the provider — model or stub — is what applies it now, so the
-    // run log records what was *asked for* rather than what a trimmer did.
-    const prompt = fitHistory(
-      (history) =>
-        buildAnswerPrompt({
-          message: input.message,
-          passages: hits.map((hit) => hit.text),
-          persona: input.persona,
-          answerIn: input.answerIn,
-          ...(history ? { history } : {}),
-          ...(input.earlierToday.length > 0 ? { earlierToday: input.earlierToday } : {}),
-        }),
-      input.history,
-      this.#maxPromptChars,
-    );
-    let completion: LlmCompletion;
-    try {
+    // The answer is an object (tm 298 · AI-06 §6): the reply, whether the
+    // passages answer it, and which of them it is drawn from — by the labels
+    // the prompt gives them. Outside any transaction (see the file header).
+    // The persona travels in the prompt: the provider — model or stub — is
+    // what applies it, so the run log records what was *asked for*.
+    const labels = hits.map((_, index) => passageLabel(index));
+    const sources = hits.map((hit) => hit.text);
+    const llm = this.#llm.forTenant(ctx.tenant, attribution);
+    const draft = (notes: readonly string[]) => {
+      const prompt = fitHistory(
+        (history) =>
+          buildAnswerPrompt({
+            message: input.message,
+            passages: sources,
+            persona: input.persona,
+            answerIn: input.answerIn,
+            cite: { ids: labels, notes },
+            ...(history ? { history } : {}),
+            ...(input.earlierToday.length > 0 ? { earlierToday: input.earlierToday } : {}),
+          }),
+        input.history,
+        this.#maxPromptChars,
+      );
       // Measured where the prompt is whole, so the refusal comes before the
       // provider — any provider — is reached (tm 255.9).
       refuseOverlongPrompt(prompt, this.#maxPromptChars);
-      completion = await this.#llm.complete(
-        ctx.tenant,
-        { ...prompt, ...this.#limits },
-        attribution,
+      return completeStructured<KnowledgeAnswerReply>(llm, {
+        ...prompt,
+        ...this.#limits,
+        tier: 'default',
+        responseFormat: KNOWLEDGE_ANSWER_RESPONSE_FORMAT,
+      });
+    };
+
+    let spent: Partial<SkillRunUsage> = { embeddingTokens };
+    const bill = (usage: { inputTokens: number; outputTokens: number } | null | undefined) => {
+      spent = {
+        embeddingTokens,
+        llmInputTokens: (spent.llmInputTokens ?? 0) + (usage?.inputTokens ?? 0),
+        llmOutputTokens: (spent.llmOutputTokens ?? 0) + (usage?.outputTokens ?? 0),
+      };
+    };
+    let read: ReadKnowledgeAnswer;
+    let drafts: 1 | 2 = 1;
+    const repeated = (answer: ReadKnowledgeAnswer): KnowledgeAnswer | null => {
+      if (answer.grounded === 'none') return null;
+      const leaked = repeatsEarlierDetail(
+        answer.reply,
+        input.turn.earlierToday,
+        saidSoFar(input.turn),
       );
+      if (leaked.length === 0) return null;
+      return {
+        text: null,
+        spent,
+        missed: 'withheld',
+        record: {
+          grounded: 'none',
+          cited_ids: [],
+          source_ids: [],
+          ...(drafts === 2 ? { drafts } : {}),
+        },
+        detail: `withheld — it repeated ${leaked.length} detail(s) from an earlier conversation today the player has not given again`,
+      };
+    };
+    try {
+      const first = await draft([]);
+      bill(first.usage);
+      read = readKnowledgeAnswer(first.value, { labels, sources });
+      // K5 (tm 294) first: an amount, an IBAN or a transaction id from an
+      // earlier connection the player has not given again is not the AI's to
+      // say — withheld, and a person answers, with no second draft asked for.
+      const leakedFirst = repeated(read);
+      if (leakedFirst) return leakedFirst;
+      if (read.problems.length > 0) {
+        // A citation it was not given, nothing cited, a figure no passage
+        // gives (AI-06 §6, §11): written once more with the rule named — the
+        // AI-08 output check's rewrite (#301) — and withheld if it breaks one
+        // again. A guess never reaches the player.
+        drafts = 2;
+        const second = await draft([rewriteNote(read.problems)]);
+        bill(second.usage);
+        const again = readKnowledgeAnswer(second.value, { labels, sources });
+        if (again.problems.length > 0) {
+          return {
+            text: null,
+            spent,
+            missed: 'withheld',
+            record: {
+              grounded: 'none',
+              cited_ids: [],
+              source_ids: [],
+              drafts,
+              withheld: again.problems.map((problem) => problem.kind),
+            },
+            detail: `withheld — written twice, and still ${problemDetail(again.problems)}`,
+          };
+        }
+        read = again;
+        const leakedAgain = repeated(read);
+        if (leakedAgain) return leakedAgain;
+      }
     } catch (error) {
       if (error instanceof AiDailyCapError) {
-        // Refused before any provider was reached (tm 257.8): the question's
-        // embedding is the turn's only cost, and the refusal was logged once
-        // where the cap decided it (`ai-daily-budget.ts`).
+        // Refused before any provider was reached (tm 257.8): what was asked
+        // before the refusal is the turn's only cost, and the refusal was
+        // logged once where the cap decided it (`ai-daily-budget.ts`).
         return {
           text: null,
           capped: error,
-          spent: { embeddingTokens },
+          spent,
           detail: `today's AI cap is reached (${error.scope}) — handed to a human`,
         };
       }
@@ -1774,39 +1935,355 @@ export class ConversationEngine {
       if (!(error instanceof LlmProviderError)) throw error;
       // The kind is all the run log keeps; the facts beside it go to the
       // operator's log (`ai-responder.ts`). The provider's message never
-      // travels (`llm-error.ts`).
+      // travels (`llm-error.ts`). A `no_answer` was generated, so it was
+      // billed; the other kinds carry no usage and cost 0 here.
+      bill(error.usage);
       return {
         text: null,
         failure: { provider: 'llm', kind: error.kind, ...failureFacts(error) },
-        // A `no_answer` was generated, so it was billed; the other kinds carry
-        // no usage and cost 0 here.
-        spent: {
-          embeddingTokens,
-          llmInputTokens: error.usage?.inputTokens ?? 0,
-          llmOutputTokens: error.usage?.outputTokens ?? 0,
-        },
+        spent,
         detail: `the model could not answer (${error.kind}) — handed to a human`,
       };
     }
-    const cited = hits.slice(0, Math.min(passages, hits.length));
-    const asked = personaRequest(input.persona, input.answerIn);
 
+    if (read.grounded === 'none') {
+      // The model read the passages and they do not answer it (AI-06 §7):
+      // nothing of its reply is used.
+      return {
+        text: null,
+        spent,
+        missed: 'not_grounded',
+        record: {
+          grounded: 'none',
+          cited_ids: [],
+          source_ids: [],
+          ...(drafts === 2 ? { drafts } : {}),
+        },
+        detail: `the passages found do not answer it (best "${hits[0]!.sourceName}", ${hits[0]!.score})`,
+      };
+    }
+
+    const cited = read.cited.map((label) => hits[labels.indexOf(label)]!);
+    const best = cited[0]!;
+    const asked = personaRequest(input.persona, input.answerIn);
     return {
-      text: completion.text,
-      spent: {
-        embeddingTokens,
-        llmInputTokens: completion.usage.inputTokens,
-        llmOutputTokens: completion.usage.outputTokens,
+      text: read.reply,
+      grounded: read.grounded,
+      spent,
+      record: {
+        grounded: read.grounded,
+        cited_ids: cited.map((hit) => hit.id),
+        source_ids: [...new Set(cited.map((hit) => hit.sourceId))],
+        ...(drafts === 2 ? { drafts } : {}),
       },
       detail: [
         `answered from "${best.sourceName}" (${best.score})`,
         cited.length > 1 ? `+ ${cited.length - 1} more passage(s)` : '',
+        read.grounded === 'partial' ? 'in part' : '',
+        drafts === 2 ? 'written again' : '',
         `written by ${this.#llm.id}`,
         asked ? `persona: ${asked}` : '',
       ]
         .filter(Boolean)
         .join(' · '),
     };
+  }
+
+  /**
+   * The knowledge path's own answer (tm 298 · AI-06): no procedure took the
+   * message and no one-message skill answered it, so the AI-13 tables are
+   * asked, then the knowledge base, in the agent's persona and language. A
+   * provider failure or today's cap hands over (the silence rule); a question
+   * the knowledge base does not answer comes back as a miss, for the fallback
+   * and then the no-answer reply ({@link #noAnswer}).
+   */
+  async #knowledgeTurn(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    input: {
+      understanding: ProcedureUnderstanding | null;
+      spent: SkillRunUsage;
+      log: SkillRunLogEntry[];
+      decided: Partial<TurnDecisions>;
+    },
+  ): Promise<TurnResult | KnowledgeMiss> {
+    const persona = agentPersona(ctx.config.skills);
+    const language = languageVerdict(message.text, persona, input.understanding?.language);
+    if (language.unsupported) {
+      return forcedHandoff(state, message, null, {
+        log: input.log,
+        detected: language.detected,
+        decided: { ...input.decided, usage: input.spent },
+      });
+    }
+    const { answerIn } = language;
+    const taken = (executed: Executed, signals: AiStateObject = state.signals): TurnResult => ({
+      ...executed,
+      nextState: {
+        ...state,
+        signals,
+        counters: { ...state.counters, turns: turnsTaken(state) + 1 },
+        lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+      },
+    });
+
+    // A row of the AI-13 tables before any passage (AI-06 §3): its value, exact.
+    const fact = await this.#facts.answer({
+      message: message.text,
+      understanding: input.understanding,
+      language: answerIn,
+    });
+    if (fact) {
+      return taken({
+        reply: fact.text,
+        decisions: {
+          ...NOTHING_DECIDED,
+          ...input.decided,
+          outcome: 'answered',
+          replyKind: 'answer',
+          usage: input.spent,
+          log: [
+            ...input.log,
+            {
+              step: 'knowledge',
+              detail: `answered from ${fact.factIds.length} table row(s)`,
+              ok: true,
+            },
+          ],
+        },
+        sideEffects: [],
+      });
+    }
+
+    const answer = await this.#answerFromKnowledge({
+      turn: message,
+      message: message.text,
+      ...knowledgeQuery(message),
+      history: message.history,
+      earlierToday: message.earlierToday ? earlierTodayLines(message.earlierToday, false) : [],
+      skill: { aiAgentId: turnAgentId(ctx.config.skills) },
+      persona,
+      answerIn,
+      ctx,
+    });
+    const spent = addUsage(input.spent, answer.spent);
+    const line: SkillRunLogEntry = {
+      step: 'knowledge',
+      detail: answer.detail,
+      ok: answer.text !== null,
+    };
+    const knowledge = answer.record ? { knowledge: answer.record } : {};
+
+    if (answer.failure || answer.capped) {
+      // The model or the search could not answer: a person does (tm 255.6),
+      // and says so by taking it over — not by a silence (AI-06 §9).
+      const failure = answer.failure ?? null;
+      return taken({
+        reply: null,
+        decisions: {
+          ...NOTHING_DECIDED,
+          ...input.decided,
+          ...knowledge,
+          outcome: 'handed_off',
+          failure,
+          capped: answer.capped ?? null,
+          usage: spent,
+          log: [...input.log, line],
+        },
+        sideEffects: [
+          {
+            kind: 'handoff',
+            team: null,
+            reason: failure ? `${failure.provider}_failure` : 'ai_cap_reached',
+          },
+        ],
+      });
+    }
+
+    if (answer.text !== null) {
+      // Partial (AI-06 §7): the answer, and a person offered for the rest —
+      // a "yes" on the next turn hands over (`#answerToOffer`). K5 was the
+      // answer's own check (`#answerFromKnowledge`).
+      const partial = answer.grounded === 'partial';
+      return taken(
+        {
+          reply: partial
+            ? `${answer.text}\n${NO_ANSWER_PHRASES[answerIn ?? 'tr'].offer}`
+            : answer.text,
+          decisions: {
+            ...NOTHING_DECIDED,
+            ...input.decided,
+            ...knowledge,
+            outcome: 'answered',
+            replyKind: 'answer',
+            usage: spent,
+            log: [...input.log, line],
+          },
+          sideEffects: [],
+        },
+        partial
+          ? { ...state.signals, [NO_ANSWER_SIGNAL]: noAnswerSignal(turnsTaken(state) + 1) }
+          : state.signals,
+      );
+    }
+    return { miss: true, spent, reason: answer.missed ?? 'no_passages', ...knowledge, log: [line] };
+  }
+
+  /**
+   * The answer when there is none (tm 298 · AI-06 §8, AI-06-S1): the AI says it
+   * cannot answer — never a guess, never a silence — and, by the question's
+   * group and the agent's `no_answer` setting, hands over at once (reason
+   * `no_knowledge`) or asks once whether to. A group set to ask is asked once
+   * per conversation: a second miss hands over without asking. Built on
+   * `base` when a skill ran and said nothing — its tags and summary stay.
+   */
+  #noAnswer(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    input: {
+      base: TurnResult | null;
+      understanding: RiskReading | null;
+      reason: UnansweredReason;
+      decided: Partial<TurnDecisions>;
+    },
+  ): TurnResult {
+    const { base } = input;
+    const persona = agentPersona(ctx.config.skills);
+    const { answerIn } = languageVerdict(message.text, persona, input.understanding?.language);
+    const settings = ctx.noAnswer ?? DEFAULT_NO_ANSWER;
+    const category = noAnswerCategory(message.text, input.understanding);
+    const before: TurnState =
+      base && tookTurn(base)
+        ? base.nextState
+        : {
+            ...state,
+            counters: { ...state.counters, turns: turnsTaken(state) + 1 },
+            lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+          };
+    const askedBefore = readNoAnswerMark(state.signals) !== null;
+    const policy =
+      settings.policy_by_category[category] === 'ask' && !askedBefore ? 'ask' : 'handoff';
+    const phrases = NO_ANSWER_PHRASES[answerIn ?? 'tr'];
+    const handingOff = policy === 'handoff';
+    const decisions = base?.decisions ?? NOTHING_DECIDED;
+    return {
+      reply: handingOff ? (settings.text ?? phrases.handoff) : phrases.ask,
+      decisions: {
+        ...decisions,
+        ...input.decided,
+        outcome: handingOff ? 'handed_off' : 'answered',
+        replyKind: handingOff ? 'answer' : 'question',
+        handoffReason: handingOff ? 'no_knowledge' : null,
+        log: [
+          ...(input.decided.log ?? decisions.log),
+          {
+            step: 'no_answer',
+            detail: handingOff
+              ? `no answer in the knowledge base (${category}) — said so and handed to a human`
+              : `no answer in the knowledge base (${category}) — said so and asked whether to hand over`,
+            ok: true,
+          },
+        ],
+        unanswered: {
+          language: answerIn,
+          category,
+          policy,
+          reason: input.reason,
+        },
+      },
+      sideEffects: [
+        ...(base?.sideEffects ?? []),
+        ...(handingOff ? [{ kind: 'handoff' as const, team: null, reason: 'no_knowledge' }] : []),
+      ],
+      nextState: handingOff
+        ? before
+        : {
+            ...before,
+            signals: { ...before.signals, [NO_ANSWER_SIGNAL]: noAnswerSignal(turnsTaken(before)) },
+          },
+    };
+  }
+
+  /**
+   * The player's "yes" or "no" to the offer of a person the AI made on its
+   * previous turn (tm 298 · AI-06 §7–§8): "yes" hands over (`no_knowledge`),
+   * "no" is answered. Anything else is an ordinary message — null — and the
+   * offer stays made: it is not made twice.
+   */
+  #answerToOffer(state: TurnState, message: TurnMessage, ctx: TurnContext): TurnResult | null {
+    const mark = readNoAnswerMark(state.signals);
+    if (!mark || mark.turn !== turnsTaken(state) || ctx.config.skills.length === 0) return null;
+    const said = readOfferAnswer(message.text);
+    if (said === null) return null;
+    const { answerIn } = languageVerdict(message.text, agentPersona(ctx.config.skills), null);
+    const phrases = NO_ANSWER_PHRASES[answerIn ?? 'tr'];
+    const yes = said === 'yes';
+    return {
+      reply: yes ? phrases.handingOver : phrases.declined,
+      decisions: {
+        ...NOTHING_DECIDED,
+        outcome: yes ? 'handed_off' : 'answered',
+        replyKind: 'answer',
+        handoffReason: yes ? 'no_knowledge' : null,
+        log: [
+          {
+            step: 'no_answer',
+            detail: yes
+              ? 'the player accepted the offer of a person — handed to a human'
+              : 'the player declined the offer of a person',
+            ok: true,
+          },
+        ],
+      },
+      sideEffects: yes ? [{ kind: 'handoff', team: null, reason: 'no_knowledge' }] : [],
+      nextState: {
+        ...state,
+        counters: { ...state.counters, turns: turnsTaken(state) + 1 },
+        lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+      },
+    };
+  }
+
+  /**
+   * The silence rule (tm 298 · AI-06 §9 — tested in one place,
+   * `ai-knowledge-answer.test.ts`): on a connection that is the AI's, and on
+   * every turn the decision order sent down the knowledge path, the turn ends
+   * with a message to the player or a hand-over. A turn that failed or was
+   * capped without one hands over; one that said nothing gets the no-answer
+   * reply. An AI with nothing to run takes no turn at all.
+   */
+  #neverSilent(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    result: TurnResult,
+  ): TurnResult {
+    const knowledgePath = (result.decisions.policy?.step ?? 0) >= 5;
+    if ((ctx.aiMode !== 'ai' && !knowledgePath) || ctx.config.skills.length === 0) return result;
+    if (result.reply !== null || handoffOf(result.sideEffects) !== null) return result;
+    const { decisions } = result;
+    if (decisions.failure || decisions.capped) {
+      return {
+        ...result,
+        decisions: { ...decisions, outcome: 'handed_off' },
+        sideEffects: [
+          ...result.sideEffects,
+          {
+            kind: 'handoff',
+            team: null,
+            reason: decisions.failure ? `${decisions.failure.provider}_failure` : 'ai_cap_reached',
+          },
+        ],
+      };
+    }
+    return this.#noAnswer(state, message, ctx, {
+      base: result,
+      understanding: null,
+      reason: 'nothing_answered',
+      decided: {},
+    });
   }
 }
 
@@ -1958,6 +2435,20 @@ const SMALLTALK_PHRASES: Readonly<Record<PersonaLanguage, string>> = {
   es: 'Aquí estoy — ¿en qué puedo ayudarle?',
 };
 
+/**
+ * What the knowledge path searches for (AI-06 §2): the player's message — and,
+ * when the AI's last message asked something, that question before it, so
+ * "Papara" is searched as the answer it is. The message alone is the turn's
+ * embedding, reused; with a question it is one more.
+ */
+function knowledgeQuery(message: TurnMessage): { query?: string } {
+  const last = message.history?.messages.at(-1);
+  if (last?.role !== 'assistant') return {};
+  const question = last.content.split('\n').at(-1)?.trim() ?? '';
+  if (!question.endsWith('?') || question.length > 200) return {};
+  return { query: `${question}\n${message.text}` };
+}
+
 /** The persona a turn with no skill speaks in: the agent's, read off its first skill. */
 function agentPersona(skills: readonly TurnSkill[]): Persona {
   return skills[0]?.persona ?? readPersona(null);
@@ -1980,6 +2471,25 @@ function failureFacts(
     code: error.code,
     requestId: error.requestId,
     reason: error.reason,
+  };
+}
+
+/**
+ * The turn's knowledge record with one more search's: every chunk and source
+ * cited, once; the grounding of the last search that answered.
+ */
+function mergeKnowledge(
+  total: KnowledgeRecord | undefined,
+  next: KnowledgeRecord | undefined,
+): KnowledgeRecord | undefined {
+  if (!next) return total;
+  if (!total) return next;
+  return {
+    ...total,
+    ...next,
+    grounded: next.grounded === 'none' ? total.grounded : next.grounded,
+    cited_ids: [...new Set([...total.cited_ids, ...next.cited_ids])],
+    source_ids: [...new Set([...total.source_ids, ...next.source_ids])],
   };
 }
 

@@ -57,6 +57,8 @@ const TENANT: TenantContext = { licenseId: 1n, organizationId: 'org-test' };
 const PASSAGE = 'Standard delivery takes 3 to 5 working days across the EU.';
 const MESSAGE = 'How long does delivery take?';
 const ANSWER = 'Delivery takes three to five working days.';
+/** The knowledge answer as the model writes it (tm 298): the reply, grounded, citing the passage. */
+const ANSWER_JSON = JSON.stringify({ reply: ANSWER, grounded: 'full', cited_ids: ['P1'] });
 /** What a provider's error message may say — none of it may reach the run log. */
 const PROVIDER_WORDS = 'Incorrect API key provided: sk-test-only-leak';
 
@@ -273,7 +275,7 @@ const FAILURES: Array<{
     // test fails with `answered` if the ceiling is not what stops it (tm 255.9).
     kind: 'prompt_too_long',
     maxPromptChars: 2_000,
-    llm: () => viaOpenAi(fakeOpenAiFetch(openAiCompletion(ANSWER))),
+    llm: () => viaOpenAi(fakeOpenAiFetch(openAiCompletion(ANSWER_JSON))),
     refused: true,
   },
 ];
@@ -323,7 +325,7 @@ describe('a model that cannot answer hands the conversation to a human (FR-05-06
   });
 
   it('answers normally when the model does', async () => {
-    const net = fakeOpenAiFetch(openAiCompletion(ANSWER));
+    const net = fakeOpenAiFetch(openAiCompletion(ANSWER_JSON));
     const ws = workspace(KNOWLEDGE_ANSWER);
 
     const result = await live(engine(openai(net)), ws, MESSAGE);
@@ -372,7 +374,7 @@ describe('after a failure the AI stops talking; the steps for the human still ru
   });
 
   it('leaves the same skill untouched when the model answers', async () => {
-    const net = fakeOpenAiFetch(openAiCompletion(ANSWER));
+    const net = fakeOpenAiFetch(openAiCompletion(ANSWER_JSON));
 
     const result = await live(engine(openai(net)), workspace(STEPS), MESSAGE);
 
@@ -598,7 +600,7 @@ describe('the run records what its provider calls cost', () => {
 
   it("reads the real adapter's usage — OpenAI's prompt_tokens and completion_tokens", async () => {
     // `openAiCompletion` reports 120 in / 12 out, as OpenAI's `usage` does.
-    const net = fakeOpenAiFetch(openAiCompletion(ANSWER));
+    const net = fakeOpenAiFetch(openAiCompletion(ANSWER_JSON));
     const ws = workspace(KNOWLEDGE_ANSWER);
 
     await live(engine(openai(net)), ws, MESSAGE);
@@ -613,10 +615,12 @@ describe('the run records what its provider calls cost', () => {
     const result = await live(engine(openai(net)), ws, MESSAGE);
 
     expect(result.failure).toMatchObject({ provider: 'llm', kind: 'no_answer' });
+    // Both tries of it: a cut-off answer is invalid and gets the structured
+    // gate's one retry (ADR §6a.4.3), which was cut off and billed too.
     expect(ws.runs[0]).toMatchObject({
       status: 'failed',
-      llmInputTokens: 120,
-      llmOutputTokens: 12,
+      llmInputTokens: 240,
+      llmOutputTokens: 24,
       embeddingTokens: QUESTION_TOKENS,
     });
   });
@@ -699,7 +703,7 @@ describe('the per-call ceilings reach the provider, or stop the call before it',
     );
     expect(fake.calls[0]!.maxOutputTokens).toBe(123);
 
-    const net = fakeOpenAiFetch(openAiCompletion(ANSWER));
+    const net = fakeOpenAiFetch(openAiCompletion(ANSWER_JSON));
     await live(
       new ConversationEngine({
         llm: openai(net),
@@ -730,6 +734,7 @@ describe('the per-call ceilings reach the provider, or stop the call before it',
         passages: [PASSAGE],
         persona: { tone: null, languages: [], answerLength: null },
         answerIn: null,
+        cite: { ids: ['P1'], notes: [] },
       }),
     );
     expect(length).toBeGreaterThan(2_000);

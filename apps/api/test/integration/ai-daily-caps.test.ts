@@ -49,6 +49,7 @@ import {
 import { fakeOpenAiFetch, openAiCompletion } from '../helpers/fake-openai.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { asKnowledgeAnswer, knowledgeAnswerJson } from '../helpers/knowledge-answer.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
 
@@ -99,7 +100,7 @@ class ScriptedLlm implements LlmProvider {
     try {
       if (this.#gate) await this.#gate;
       if (this.failWith) throw this.failWith;
-      return { text: REPLY, usage: this.usage };
+      return { text: asKnowledgeAnswer(REPLY, request), usage: this.usage };
     } finally {
       this.inFlight -= 1;
     }
@@ -558,7 +559,7 @@ describe('daily AI caps through the real server (tm 257.8)', () => {
 
   describe('the circuit breaker', () => {
     let server: TestServer;
-    const net = fakeOpenAiFetch(openAiCompletion('The model’s own answer.'));
+    const net = fakeOpenAiFetch(openAiCompletion(knowledgeAnswerJson('The model’s own answer.')));
 
     beforeAll(async () => {
       server = await startTestServer(

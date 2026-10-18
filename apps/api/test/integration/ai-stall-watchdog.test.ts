@@ -97,12 +97,14 @@ describe('the stalled-AI watchdog sends a person to a visitor the AI left unansw
     return { chatId: sent.chat_id, threadId: sent.event.thread_id };
   }
 
-  /** A skill that answers everything — or, `silent`, one that matches nothing. */
-  async function skill(silent = false): Promise<void> {
-    const answer = { type: 'send_message', source: 'text', text: AI_ANSWER };
-    const steps = silent
-      ? [{ type: 'detect_intent', intent: 'refund', phrases: ['refund'] }, answer]
-      : [answer];
+  /**
+   * A skill that answers everything. (A skill that matches nothing no longer
+   * leaves the visitor unanswered on an AI-first connection — the AI says it
+   * cannot answer, tm 298 · AI-06 §9 — so a stall is a worker that died:
+   * `silenceAi`.)
+   */
+  async function skill(): Promise<void> {
+    const steps = [{ type: 'send_message', source: 'text', text: AI_ANSWER }];
     await owner.skill.create({
       data: {
         licenseId: fx.a.licenseId,
@@ -219,7 +221,7 @@ describe('the stalled-AI watchdog sends a person to a visitor the AI left unansw
     it('reads 60 for an agent nobody configured; a write of one field keeps the other', async () => {
       const read = async () =>
         (await server.get(`/ai-agents/${aiAgentId}/handoff-settings`, auth(adminToken))).json();
-      expect(await read()).toEqual({
+      expect(await read()).toMatchObject({
         ai_agent_id: aiAgentId,
         assignment_mode: 'parallel',
         ai_stall_timeout_seconds: 60,
@@ -254,10 +256,15 @@ describe('the stalled-AI watchdog sends a person to a visitor the AI left unansw
   // --- The hand-over ----------------------------------------------------------
 
   it('sends a person to an AI-first conversation the AI left unanswered past its window, and not before (AI-11 · FR-MOD-08.6.1)', async () => {
-    await skill(true);
+    await skill();
     await aiFirst();
-    const { chatId, threadId } = await send(await visitor(), 'Hello there');
-    expect(await botCount(threadId)).toBe(0);
+    const headers = await visitor();
+    const { chatId, threadId } = await send(headers, 'Hello there');
+    expect(await botCount(threadId)).toBe(1);
+    // Then the AI stops answering, and the visitor writes again.
+    await silenceAi();
+    await send(headers, 'Are you there?');
+    expect(await botCount(threadId)).toBe(1);
     expect(await thread(threadId)).toEqual({ assigneeId: null, queuePosition: null, aiMode: 'ai' });
 
     // Inside the window: nothing.
@@ -400,9 +407,12 @@ describe('the stalled-AI watchdog sends a person to a visitor the AI left unansw
   // --- The race with a late answer ------------------------------------------
 
   it('spares a conversation whose answer commits while the hand-over waits for the lock', async () => {
-    await skill(true);
+    await skill();
     await aiFirst();
-    const { chatId, threadId } = await send(await visitor(), 'Hello there');
+    const headers = await visitor();
+    const { chatId, threadId } = await send(headers, 'Hello there');
+    await silenceAi();
+    await send(headers, 'Are you there?');
     const cutoff = new Date(Date.now() + 61 * SECOND);
 
     // The AI's commit, by hand: the thread's lock, then its reply.

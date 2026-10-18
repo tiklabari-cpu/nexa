@@ -141,8 +141,13 @@ aiAgentHandoffSettings:
       conversations that open after the change.
 
       `ai_stall_timeout_seconds` is how long a visitor may wait on the agent
-      in such a conversation before a person is sent. Either field may be
-      sent alone; the other keeps its value.
+      in such a conversation before a person is sent.
+
+      `no_answer` is what the agent does when the knowledge base has no
+      answer (AI-06): the groups it names change, the others keep their
+      policy; `text: null` goes back to the default sentence.
+
+      Any field may be sent alone; the others keep their value.
     requestBody:
       required: true
       content:
@@ -154,6 +159,22 @@ aiAgentHandoffSettings:
             properties:
               assignment_mode: { type: string, enum: [ai_first, parallel] }
               ai_stall_timeout_seconds: { type: integer, minimum: 15, maximum: 600 }
+              no_answer:
+                type: object
+                minProperties: 1
+                additionalProperties: false
+                properties:
+                  policy_by_category:
+                    type: object
+                    minProperties: 1
+                    additionalProperties: false
+                    properties:
+                      money: { $ref: "../openapi.yaml#/components/schemas/AiNoAnswerPolicy" }
+                      account: { $ref: "../openapi.yaml#/components/schemas/AiNoAnswerPolicy" }
+                      bonus: { $ref: "../openapi.yaml#/components/schemas/AiNoAnswerPolicy" }
+                      rg: { $ref: "../openapi.yaml#/components/schemas/AiNoAnswerPolicy" }
+                      other: { $ref: "../openapi.yaml#/components/schemas/AiNoAnswerPolicy" }
+                  text: { type: string, nullable: true, maxLength: 500 }
     responses:
       "200":
         description: Updated

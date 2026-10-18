@@ -93,6 +93,78 @@ export const AI_STALL_TIMEOUT_SECONDS_MIN = 15;
 export const AI_STALL_TIMEOUT_SECONDS_MAX = 600;
 
 /**
+ * What the AI does when the knowledge base has no answer (tm 298 · AI-06 §8,
+ * assumption AI-06-S1) — `ai_handoff_settings.no_answer`, one per AI agent.
+ * The question is put in one of these groups by its words (and the
+ * understanding's risk flags): money, account, bonus, responsible gaming
+ * (`rg`), anything else.
+ */
+export const NO_ANSWER_CATEGORIES = ['money', 'account', 'bonus', 'rg', 'other'] as const;
+export type NoAnswerCategory = (typeof NO_ANSWER_CATEGORIES)[number];
+
+/**
+ * Per group: `handoff` — say so and hand over at once; `ask` — say so and ask
+ * once whether to hand over (a second miss hands over without asking).
+ */
+export const NO_ANSWER_POLICIES = ['handoff', 'ask'] as const;
+export type NoAnswerPolicy = (typeof NO_ANSWER_POLICIES)[number];
+
+export interface AiNoAnswerSettings {
+  policy_by_category: Record<NoAnswerCategory, NoAnswerPolicy>;
+  /**
+   * The workspace's own words for "I cannot answer this; a person will" —
+   * said as written, in place of the default. Null: the default, in the
+   * reply's language.
+   */
+  text: string | null;
+}
+
+/** AI-06-S1: money, account, bonus and responsible gaming go to a person at once. */
+export const DEFAULT_NO_ANSWER: Readonly<AiNoAnswerSettings> = Object.freeze({
+  policy_by_category: Object.freeze({
+    money: 'handoff',
+    account: 'handoff',
+    bonus: 'handoff',
+    rg: 'handoff',
+    other: 'ask',
+  }) as Record<NoAnswerCategory, NoAnswerPolicy>,
+  text: null,
+});
+
+/** The longest `no_answer.text` (the route and the column's CHECK). */
+export const NO_ANSWER_TEXT_MAX = 500;
+
+/**
+ * The stored `no_answer` as the engine and the API read it: every group's
+ * policy, the default where the row has none or something it does not know.
+ * Null (no row, or never set) is the defaults.
+ */
+export function readNoAnswerSettings(raw: unknown): AiNoAnswerSettings {
+  const stored =
+    raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const policies =
+    stored['policy_by_category'] !== null &&
+    typeof stored['policy_by_category'] === 'object' &&
+    !Array.isArray(stored['policy_by_category'])
+      ? (stored['policy_by_category'] as Record<string, unknown>)
+      : {};
+  const policy_by_category = { ...DEFAULT_NO_ANSWER.policy_by_category };
+  for (const category of NO_ANSWER_CATEGORIES) {
+    const value = policies[category];
+    if ((NO_ANSWER_POLICIES as readonly unknown[]).includes(value)) {
+      policy_by_category[category] = value as NoAnswerPolicy;
+    }
+  }
+  const text = stored['text'];
+  return {
+    policy_by_category,
+    text: typeof text === 'string' && text.trim() !== '' ? text.trim() : null,
+  };
+}
+
+/**
  * How the AI takes a connection back (tm 293.3 · AI-11 §6) — the `resume` of
  * `POST /chats/{chatId}/return-to-ai`:
  *

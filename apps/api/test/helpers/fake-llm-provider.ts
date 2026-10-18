@@ -19,6 +19,12 @@
  * held or failed by `hold` / `fail` — so a test about the written part
  * counts the written part. A test about the understanding itself passes
  * `understand`.
+ *
+ * **A knowledge answer is an object (tm 298).** Its reply is the fake's reply,
+ * as before; the fake writes it as the `knowledge_answer` object — grounded
+ * in full, citing the first passage it was given — unless the reply already is
+ * such an object, which is how a test sends a partial answer, a citation of
+ * nothing, or an invented figure. Counted in `calls` like any other.
  */
 import { mockUnderstanding } from '../../src/services/ai/conversation/understand-mock.js';
 import {
@@ -32,6 +38,7 @@ import type {
   LlmProviderId,
   LlmUsage,
 } from '../../src/services/ai/provider/llm-provider.js';
+import { asKnowledgeAnswer } from './knowledge-answer.js';
 
 export const FAKE_LLM_REPLY = 'Written by the fake model.';
 
@@ -81,8 +88,9 @@ export class FakeLlmProvider implements LlmProvider {
       if (this.#options.hold) await this.#options.hold(request, call);
       if (this.#options.fail) throw this.#options.fail;
       const reply = this.#options.reply ?? FAKE_LLM_REPLY;
+      const text = typeof reply === 'function' ? reply(request) : reply;
       return {
-        text: typeof reply === 'function' ? reply(request) : reply,
+        text: asKnowledgeAnswer(text, request),
         usage: this.#options.usage ?? { inputTokens: 100, outputTokens: 10 },
       };
     } finally {

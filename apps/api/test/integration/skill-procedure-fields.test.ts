@@ -5,8 +5,8 @@
  * write path that judges a procedure with `validateSkillProcedure` before it
  * is stored.
  *
- * Running a procedure is not here — nothing does yet (#296.3), which is why a
- * procedure skill cannot be turned on.
+ * Running a procedure is `ai-procedure.test.ts`'s (#296.3); here, only that a
+ * procedure skill may now be turned on.
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -477,11 +477,11 @@ describe('skill procedure fields (tm 296.2)', () => {
     });
   });
 
-  it('a procedure cannot be turned on while nothing runs one (until #296.3)', async () => {
+  it('a procedure skill can be turned on now the executor runs it (#296.3), and a single one may become one while on', async () => {
     const created = await createDeposit();
     const on = await server.patch(`/skills/${created.id}`, { active: true }, auth());
-    expect(on.statusCode).toBe(403);
-    expect((on.json() as ErrorBody).error.type).toBe('not_allowed');
+    expect(on.statusCode).toBe(200);
+    expect((on.json() as SkillBody).active).toBe(true);
 
     const single = await create({
       name: 'Order status',
@@ -499,8 +499,11 @@ describe('skill procedure fields (tm 296.2)', () => {
       },
       auth(),
     );
-    expect(switched.statusCode).toBe(403);
-    expect((await owner.skill.findUniqueOrThrow({ where: { id } })).mode).toBe('single');
+    expect(switched.statusCode).toBe(200);
+    expect(await owner.skill.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      mode: 'procedure',
+      active: true,
+    });
   });
 
   it('the database holds the mode, the priority range and a procedure skill’s procedure', async () => {

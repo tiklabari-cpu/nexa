@@ -208,9 +208,10 @@ export function skillDecision(
         ? null
         : failure
           ? `${failure.provider}_failure`
-          : describeSideEffects(turn.sideEffects).transferTo
-            ? 'transfer_to_team'
-            : null,
+          : // A procedure names its own reason (tm 296.3): its step's `reason_code`,
+            // `max_turns`, `procedure_condition`, `slot_refused`.
+            (decisions.handoffReason ??
+            (describeSideEffects(turn.sideEffects).transferTo ? 'transfer_to_team' : null)),
     errorType: failure ? `${failure.provider}:${failure.kind}` : null,
     llmInputTokens: decisions.usage.llmInputTokens,
     llmOutputTokens: decisions.usage.llmOutputTokens,

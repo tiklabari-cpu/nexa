@@ -745,11 +745,6 @@ export default async function playbookRoutes(
         ) {
           throw new ApiError('not_allowed', 'A skill needs at least one step before it can run.');
         }
-        // The same trap for a procedure: nothing runs one until the executor
-        // (tm 296.3), which lifts this.
-        if ((body.active ?? existing.active) && mode === 'procedure') {
-          throw new ApiError('not_allowed', 'A procedure skill cannot be turned on yet.');
-        }
         if (existing.locked && mode !== existing.mode) {
           throwProcedureProblem({
             code: 'procedure_locked_change',

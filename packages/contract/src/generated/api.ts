@@ -3149,8 +3149,10 @@ export interface paths {
      *     engine cannot run would be skipped silently at the moment it mattered, and
      *     an admin would have no way to know why nothing happened.
      *
-     *     Activating a skill with no steps is refused for the same reason, and so is
-     *     activating a procedure skill: nothing runs procedures yet (tm 296.3).
+     *     Activating a single skill with no steps is refused for the same reason. A
+     *     procedure skill always holds a procedure that passed this check, so it
+     *     may be turned on; conversations already in it keep the definition they
+     *     started with (tm 296.3).
      *
      *     A procedure is judged whole — the fields sent over the ones stored — so
      *     changing one slot re-checks every step that names it. `procedure`
@@ -19547,7 +19549,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       /**
        * @description Missing scope — or `not_allowed`: turning on a single skill with no
-       *     steps, or a procedure skill.
+       *     steps.
        */
       403: {
         headers: {

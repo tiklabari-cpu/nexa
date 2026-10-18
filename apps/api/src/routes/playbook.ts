@@ -20,6 +20,11 @@ import {
   DAILY_MEMORY_RECALLS,
   DEFAULT_AI_ASSIGNMENT_MODE,
   clarifyThresholdsProblem,
+  ADDRESS_FORMS,
+  EMOJI_USES,
+  MAX_QUESTIONS_PER_MESSAGE_MAX,
+  MAX_QUESTIONS_PER_MESSAGE_MIN,
+  readPersonaStyle,
   fallbackTakenProblem,
   readClarifyThresholds,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
@@ -431,6 +436,16 @@ const updateAgentBody = z
       .strict()
       .refine((pair) => Object.keys(pair).length > 0, 'at least one field is required')
       .optional(),
+    // The persona's style (tm 299.1 · AI-07); null clears it.
+    address_form: z.enum(ADDRESS_FORMS).nullable().optional(),
+    emoji: z.enum(EMOJI_USES).nullable().optional(),
+    max_questions_per_message: z
+      .number()
+      .int()
+      .min(MAX_QUESTIONS_PER_MESSAGE_MIN)
+      .max(MAX_QUESTIONS_PER_MESSAGE_MAX)
+      .nullable()
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -697,8 +712,8 @@ export default async function playbookRoutes(
         });
         if (!existing) throw ApiError.notFound('AI agent not found.');
 
-        // `answer_length`, `batch_window_seconds`, `daily_memory` and
-        // `clarify_thresholds` live inside the persona JSON alongside anything else an admin has set (a
+        // `answer_length`, `batch_window_seconds`, `daily_memory`,
+        // `clarify_thresholds` and the style (tm 299.1) live inside the persona JSON alongside anything else an admin has set (a
         // signature, say), so merge rather than overwrite — clearing one
         // removes just that key.
         let persona: Prisma.InputJsonValue | undefined;
@@ -706,7 +721,10 @@ export default async function playbookRoutes(
           body.answer_length !== undefined ||
           body.batch_window_seconds !== undefined ||
           body.daily_memory !== undefined ||
-          body.clarify_thresholds !== undefined
+          body.clarify_thresholds !== undefined ||
+          body.address_form !== undefined ||
+          body.emoji !== undefined ||
+          body.max_questions_per_message !== undefined
         ) {
           const current =
             existing.persona &&
@@ -729,6 +747,15 @@ export default async function playbookRoutes(
             const problem = clarifyThresholdsProblem(pair);
             if (problem) throw ApiError.validation(`clarify_thresholds: ${problem}`);
             next['clarifyThresholds'] = pair;
+          }
+          const style: Array<[string, unknown]> = [
+            ['addressForm', body.address_form],
+            ['emoji', body.emoji],
+            ['maxQuestionsPerMessage', body.max_questions_per_message],
+          ];
+          for (const [key, value] of style) {
+            if (value === null) delete next[key];
+            else if (value !== undefined) next[key] = value;
           }
           persona = next as Prisma.InputJsonValue;
         }
@@ -2052,6 +2079,7 @@ function serialiseAgent(agent: {
       ? (agent.persona as Record<string, unknown>)
       : {};
   const answerLength = persona['answerLength'];
+  const style = readPersonaStyle(persona);
   return {
     id: agent.id,
     name: agent.name,
@@ -2063,6 +2091,9 @@ function serialiseAgent(agent: {
     batch_window_seconds: readBatchWindowSeconds(persona),
     daily_memory: readDailyMemory(persona),
     clarify_thresholds: readClarifyThresholds(persona),
+    address_form: style.addressForm,
+    emoji: style.emoji,
+    max_questions_per_message: style.maxQuestionsPerMessage,
     active: agent.active,
     skills_count: agent._count.skills,
   };

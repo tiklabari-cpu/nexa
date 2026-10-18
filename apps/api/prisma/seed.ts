@@ -14,7 +14,12 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { embed, LEXICAL_EMBEDDING_SPACE, toVectorLiteral } from '@siyahtus/ai-mock';
-import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@siyahtus/types';
+import {
+  buildEventId,
+  generateShortId,
+  GUIDANCE_GENERAL_TITLE,
+  MOBILE_REDIRECT_URI,
+} from '@siyahtus/types';
 import { parseEnv } from '../src/config/env.js';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
@@ -660,12 +665,24 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       name: 'Ada',
       tone: 'friendly',
       languages: ['en'],
-      instruction:
-        'Answer questions about orders, delivery and returns. Hand over to a human for refunds above 100.',
       active: spec.richDemo,
       persona: { answerLength: 'short', signature: '— Ada, Acme assistant' },
     },
     select: { id: true },
+  });
+
+  // What used to be `ai_agents.instruction` — written nowhere, read by nothing
+  // — is the agent's "Genel talimat" behaviour rule since tm 299.1 (AI-07).
+  await prisma.aiGuidanceRule.create({
+    data: {
+      licenseId,
+      aiAgentId: aiAgent.id,
+      title: GUIDANCE_GENERAL_TITLE,
+      body: 'Answer questions about orders, delivery and returns. Hand over to a human for refunds above 100.',
+      category: 'other',
+      createdBy: owner.id,
+      updatedBy: owner.id,
+    },
   });
 
   // Copilot is a second AI surface with its own, agent-only knowledge base

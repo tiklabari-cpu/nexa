@@ -319,6 +319,34 @@ const INDIRECT = [
  */
 const TRACKED = [
   {
+    op: 'GET /ai-guidance',
+    owner: 'tm 299.2',
+    reason:
+      "the AI agent's behaviour rules (tm 299.1 · AI-07). Its screen is GuidanceRules.tsx, a " +
+      'card in the AI Agent "behaviour" tab, which tm 299.2 builds; until then the rules are ' +
+      'written over the API.',
+  },
+  {
+    op: 'POST /ai-guidance',
+    owner: 'tm 299.2',
+    reason: 'writing a behaviour rule — the same screen (GuidanceRules.tsx).',
+  },
+  {
+    op: 'PATCH /ai-guidance/{ruleId}',
+    owner: 'tm 299.2',
+    reason: 'editing a behaviour rule — the same screen (GuidanceRules.tsx).',
+  },
+  {
+    op: 'DELETE /ai-guidance/{ruleId}',
+    owner: 'tm 299.2',
+    reason: 'deleting a behaviour rule — the same screen (GuidanceRules.tsx).',
+  },
+  {
+    op: 'POST /ai-guidance/check',
+    owner: 'tm 299.2',
+    reason: "the conflict check the editor runs before a save — GuidanceRules.tsx's warnings panel.",
+  },
+  {
     op: 'GET /ai-agents/{aiAgentId}/handoff-settings',
     owner: 'tm 303.5',
     reason:

@@ -28,6 +28,7 @@ import type {
   ClarifyThresholds,
   DailyMemorySettings,
   Persona,
+  PersonaStyle,
   SkillMode,
   SkillProcedureFields,
 } from '@siyahtus/types';
@@ -37,6 +38,7 @@ import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
 import type { EarlierToday } from './daily-memory.js';
+import type { GuidanceRecord, GuidanceRuleConfig } from './guidance.js';
 import type { KnowledgeRecord, UnansweredRecord } from './knowledge-answer.js';
 import type { PolicyRecord } from './policy.js';
 import type { ProcedureFacts } from './procedure/conditions.js';
@@ -198,6 +200,11 @@ export interface TurnSkill {
   readonly steps: unknown;
   /** The persona of the agent that owns the skill (FR-MOD-06.4). */
   readonly persona: Persona;
+  /**
+   * The same agent's style (tm 299.1 · AI-07): address form, emoji, questions
+   * per message. Absent: none set.
+   */
+  readonly style?: PersonaStyle;
   /** `single` when absent — the step list above is what runs (tm 296.2). */
   readonly mode?: SkillMode;
   /**
@@ -251,6 +258,11 @@ export interface TurnConfig {
    * Absent: the defaults. With several agents the stricter pair.
    */
   readonly clarifyThresholds?: ClarifyThresholds;
+  /**
+   * The agents' active behaviour rules (tm 299.1 · AI-07), most binding first.
+   * Each written call picks the ones in its scope (`guidance.ts`). Absent: none.
+   */
+  readonly guidance?: readonly GuidanceRuleConfig[];
 }
 
 export interface TurnContext {
@@ -411,6 +423,11 @@ export interface TurnDecisions {
    * collects (`ai.unanswered`) — absent when it answered.
    */
   unanswered?: UnansweredRecord;
+  /**
+   * The behaviour rules the turn's written calls carried, and the ones the
+   * budget left out (tm 299.1 · AI-07 §2, §8) — absent when none applied.
+   */
+  guidance?: GuidanceRecord;
 }
 
 /** The understanding as the decision record keeps it: keys and numbers, no words. */

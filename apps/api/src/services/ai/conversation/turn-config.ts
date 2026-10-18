@@ -18,11 +18,15 @@ import {
   readBatchWindowSeconds,
   readClarifyThresholds,
   readDailyMemory,
+  readGuidanceScope,
   readPersona,
+  readPersonaStyle,
+  type GuidanceCategory,
   type DailyMemorySettings,
   type SkillProcedureFields,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
+import { orderGuidance, type GuidanceRuleConfig } from './guidance.js';
 import { turnThresholds } from './policy.js';
 import type { TurnConfig } from './turn.js';
 
@@ -110,6 +114,10 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       aiAgent: { select: { tone: true, languages: true, persona: true } },
     },
   });
+  const guidance = await activeGuidance(
+    tx,
+    aiAgentId ? [aiAgentId] : [...new Set(skills.flatMap((skill) => skill.aiAgentId ?? []))],
+  );
   const waits = skills
     .map((skill) => readBatchWindowSeconds(skill.aiAgent?.persona))
     .filter((seconds): seconds is number => seconds !== null);
@@ -120,6 +128,7 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       aiAgentId: skill.aiAgentId,
       steps: skill.steps,
       persona: readPersona(skill.aiAgent),
+      style: readPersonaStyle(skill.aiAgent?.persona),
       ...(skill.isFallback ? { isFallback: true } : {}),
       ...(skill.mode === 'procedure'
         ? {
@@ -147,7 +156,30 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
           ),
         }
       : {}),
+    ...(guidance.length > 0 ? { guidance } : {}),
   };
+}
+
+/**
+ * The agents' active behaviour rules (tm 299.1 · AI-07), most binding first —
+ * the package's `guidance` (ADR-14b §2.4). A rule whose stored scope reads as
+ * none of the three applies nowhere, so it is not carried.
+ */
+async function activeGuidance(
+  tx: TenantClient,
+  aiAgentIds: readonly string[],
+): Promise<GuidanceRuleConfig[]> {
+  if (aiAgentIds.length === 0) return [];
+  const rows = await tx.aiGuidanceRule.findMany({
+    where: { active: true, aiAgentId: { in: [...aiAgentIds] } },
+    select: { id: true, aiAgentId: true, body: true, category: true, scope: true, priority: true },
+  });
+  return orderGuidance(
+    rows.flatMap((row) => {
+      const scope = readGuidanceScope(row.scope);
+      return scope ? [{ ...row, category: row.category as GuidanceCategory, scope }] : [];
+    }),
+  );
 }
 
 /**
@@ -178,8 +210,10 @@ async function previewTurnConfig(tx: TenantClient, input: DraftConfigInput): Pro
         select: { tone: true, languages: true, persona: true },
       })
     : null;
+  const guidance = await activeGuidance(tx, aiAgentId ? [aiAgentId] : []);
   return {
     ...(agent ? { clarifyThresholds: readClarifyThresholds(agent.persona) } : {}),
+    ...(guidance.length > 0 ? { guidance } : {}),
     skills: [
       {
         id: 'preview',
@@ -187,6 +221,7 @@ async function previewTurnConfig(tx: TenantClient, input: DraftConfigInput): Pro
         aiAgentId,
         steps: input.steps,
         persona: readPersona(agent),
+        style: readPersonaStyle(agent?.persona),
         ...(input.definition
           ? { mode: 'procedure' as const, definition: input.definition, locked: false }
           : {}),

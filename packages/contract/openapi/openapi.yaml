@@ -326,6 +326,12 @@ paths:
     $ref: "./paths/playbook.yaml#/aiAgent"
   /ai-agents/{aiAgentId}/handoff-settings:
     $ref: "./paths/playbook.yaml#/aiAgentHandoffSettings"
+  /ai-guidance:
+    $ref: "./paths/ai-guidance.yaml#/guidanceRules"
+  /ai-guidance/check:
+    $ref: "./paths/ai-guidance.yaml#/guidanceCheck"
+  /ai-guidance/{ruleId}:
+    $ref: "./paths/ai-guidance.yaml#/guidanceRule"
   /skills:
     $ref: "./paths/playbook.yaml#/skills"
   /skills/compile:
@@ -1470,8 +1476,126 @@ components:
             `AI_BATCH_WINDOW_MS`).
         daily_memory: { $ref: "#/components/schemas/AiDailyMemorySettings" }
         clarify_thresholds: { $ref: "#/components/schemas/AiClarifyThresholds" }
+        address_form:
+          type: string
+          nullable: true
+          enum: [siz, sen, null]
+          description: How the agent addresses the player (AI-07) — formal `siz` or familiar `sen`. Null is not set.
+        emoji:
+          type: string
+          nullable: true
+          enum: [none, few, null]
+          description: Whether the agent's messages carry emoji (AI-07). Null is not set.
+        max_questions_per_message:
+          type: integer
+          minimum: 1
+          maximum: 3
+          nullable: true
+          description: |
+            How many questions one message of a procedure may ask (AI-07),
+            applied by the procedure itself. Null: the default, 2.
         active: { type: boolean }
         skills_count: { type: integer }
+
+    AiGuidanceCategory:
+      type: string
+      enum: [communication, clarification, sensitive, prohibition, other]
+      description: What a behaviour rule is about (AI-07); the editor groups by it.
+
+    AiGuidanceScope:
+      description: |
+        Where a rule applies — exactly one of: every conversation, the turns
+        of some procedures (skill ids), the conversations of some brands.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [all]
+          properties:
+            all: { type: boolean, enum: [true] }
+        - type: object
+          additionalProperties: false
+          required: [skill_ids]
+          properties:
+            skill_ids:
+              type: array
+              minItems: 1
+              maxItems: 50
+              items: { type: string, format: uuid }
+        - type: object
+          additionalProperties: false
+          required: [brand_ids]
+          properties:
+            brand_ids:
+              type: array
+              minItems: 1
+              maxItems: 50
+              items: { type: string, format: uuid }
+
+    AiGuidanceRule:
+      type: object
+      required:
+        [id, ai_agent_id, title, body, category, scope, priority, active, created_at, updated_at]
+      description: |
+        One behaviour rule (AI-07). `priority` 1 goes first; at most 30 rules
+        and 6 000 characters reach one turn, the lowest priorities giving way.
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: string, maxLength: 600 }
+        category: { $ref: "#/components/schemas/AiGuidanceCategory" }
+        scope: { $ref: "#/components/schemas/AiGuidanceScope" }
+        priority: { type: integer, minimum: 1, maximum: 1000 }
+        active: { type: boolean }
+        owner_id: { type: string, format: uuid, nullable: true }
+        created_by: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AiGuidanceCheck:
+      type: object
+      required: [locked, conflicts, duplicates, vague, compared, checked_by]
+      description: |
+        What the conflict check found (AI-07 §4). Warnings only; `locked` is
+        the one a save refuses.
+      properties:
+        locked:
+          type: object
+          nullable: true
+          required: [locked_rule, explanation]
+          description: The locked platform rule the draft goes against — it would not be applied.
+          properties:
+            locked_rule: { type: string, enum: [credentials, mandatory_bonus, disable_locked] }
+            explanation: { type: string }
+        conflicts:
+          type: array
+          items:
+            type: object
+            required: [rule_id, explanation, severity]
+            properties:
+              rule_id: { type: string, format: uuid }
+              explanation: { type: string }
+              severity: { type: string, enum: [warning, error] }
+        duplicates:
+          type: array
+          items:
+            type: object
+            required: [rule_id, explanation]
+            properties:
+              rule_id: { type: string, format: uuid }
+              explanation: { type: string }
+        vague:
+          type: array
+          items:
+            type: object
+            required: [explanation]
+            properties:
+              explanation: { type: string }
+        compared:
+          type: integer
+          description: How many of the agent's rules overlap the draft's scope and were read.
+        checked_by: { type: string, enum: [model, rules] }
 
     AiClarifyThresholds:
       type: object

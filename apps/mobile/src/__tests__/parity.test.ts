@@ -938,7 +938,11 @@ describe('module parity matrix — what is still owed', () => {
       // AI stands on a connection (procedure, step, slots), for the web inbox's
       // right pane and the timeline viewer. The app's chat screen shows no AI
       // state; nothing here re-scopes.
-      contractEndpoints: 239,
+      // 239 -> 242 with `/ai-guidance`, `/ai-guidance/check` and
+      // `/ai-guidance/{ruleId}` (tm 299.1) — the AI agent's behaviour rules,
+      // written by an admin in the web panel's AI Agent screen (tm 299.2). The
+      // app configures no AI agent; nothing here re-scopes.
+      contractEndpoints: 242,
       scopeBoundaries: 1,
     });
   });

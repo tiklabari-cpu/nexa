@@ -243,6 +243,9 @@ export function skillDecision(
         ...(decisions.knowledge ? { knowledge: decisions.knowledge } : {}),
         // The question the knowledge base did not answer (AI-06 §8 → AI-22).
         ...(decisions.unanswered ? { unanswered: decisions.unanswered } : {}),
+        // The behaviour rules the turn carried, and `truncated` when the budget
+        // left some out (tm 299.1 · AI-07 §2, §8) — ids, no text.
+        ...(decisions.guidance ? { guidance: decisions.guidance } : {}),
       },
       turn,
     ),

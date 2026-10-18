@@ -3040,7 +3040,9 @@ export interface paths {
      * @description Sets the customer-facing persona (name, avatar, tone, languages, answer
      *     length) the widget shows (FR-MOD-06.4), how long the agent waits for a
      *     visitor to stop typing, its same-day memory, how sure it must be of a
-     *     procedure (`clarify_thresholds`, AI-05), and the on/off switch.
+     *     procedure (`clarify_thresholds`, AI-05), how it addresses the player,
+     *     its emoji and how many questions one message may ask (AI-07), and the
+     *     on/off switch.
      *
      *     Deactivating an agent stops every skill under it at once, which is what an
      *     admin reaches for when automation is misbehaving. It does not delete
@@ -3088,6 +3090,84 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/ai-guidance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The AI agent's behaviour rules
+     * @description Every rule of the workspace's AI agents, or of the one named, most
+     *     binding first (priority, then category).
+     */
+    get: operations['listAiGuidanceRules'];
+    put?: never;
+    /**
+     * Write a behaviour rule
+     * @description `scope` defaults to every conversation, `priority` to 100, `active` to
+     *     true. A rule that tells the AI to ask for a password, an OTP or a card
+     *     number, to make a bonus offer mandatory, or to switch off a locked
+     *     platform rule is refused: `validation` with `details.reason:
+     *     guidance_violates_locked_rule` and `details.locked_rule`.
+     */
+    post: operations['createAiGuidanceRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-guidance/check': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Check a draft rule against the others
+     * @description Warns, never refuses: the draft against the agent's other rules whose
+     *     scope overlaps it — contradictions, duplicates, and wording too vague
+     *     to follow. A draft that a locked platform rule overrides comes back in
+     *     `locked` (it would be refused on save). With an AI model configured the
+     *     model reads the rules, at most 20 at a time; otherwise — or when the
+     *     model cannot answer — a word-overlap reading does (`checked_by`).
+     *     `rule_id` names the rule being edited, so it is not compared with itself.
+     */
+    post: operations['checkAiGuidanceRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-guidance/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a behaviour rule */
+    delete: operations['deleteAiGuidanceRule'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a behaviour rule
+     * @description Any field alone; the others keep their value. Refused like a new rule.
+     */
+    patch: operations['updateAiGuidanceRule'];
     trace?: never;
   };
   '/skills': {
@@ -9214,8 +9294,100 @@ export interface components {
       batch_window_seconds?: number | null;
       daily_memory?: components['schemas']['AiDailyMemorySettings'];
       clarify_thresholds?: components['schemas']['AiClarifyThresholds'];
+      /**
+       * @description How the agent addresses the player (AI-07) — formal `siz` or familiar `sen`. Null is not set.
+       * @enum {string|null}
+       */
+      address_form?: 'siz' | 'sen' | null;
+      /**
+       * @description Whether the agent's messages carry emoji (AI-07). Null is not set.
+       * @enum {string|null}
+       */
+      emoji?: 'none' | 'few' | null;
+      /**
+       * @description How many questions one message of a procedure may ask (AI-07),
+       *     applied by the procedure itself. Null: the default, 2.
+       */
+      max_questions_per_message?: number | null;
       active: boolean;
       skills_count?: number;
+    };
+    /**
+     * @description What a behaviour rule is about (AI-07); the editor groups by it.
+     * @enum {string}
+     */
+    AiGuidanceCategory: 'communication' | 'clarification' | 'sensitive' | 'prohibition' | 'other';
+    /**
+     * @description Where a rule applies — exactly one of: every conversation, the turns
+     *     of some procedures (skill ids), the conversations of some brands.
+     */
+    AiGuidanceScope:
+      | {
+          /** @enum {boolean} */
+          all: true;
+        }
+      | {
+          skill_ids: string[];
+        }
+      | {
+          brand_ids: string[];
+        };
+    /**
+     * @description One behaviour rule (AI-07). `priority` 1 goes first; at most 30 rules
+     *     and 6 000 characters reach one turn, the lowest priorities giving way.
+     */
+    AiGuidanceRule: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      title: string;
+      body: string;
+      category: components['schemas']['AiGuidanceCategory'];
+      scope: components['schemas']['AiGuidanceScope'];
+      priority: number;
+      active: boolean;
+      /** Format: uuid */
+      owner_id?: string | null;
+      /** Format: uuid */
+      created_by?: string | null;
+      /** Format: uuid */
+      updated_by?: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description What the conflict check found (AI-07 §4). Warnings only; `locked` is
+     *     the one a save refuses.
+     */
+    AiGuidanceCheck: {
+      /** @description The locked platform rule the draft goes against — it would not be applied. */
+      locked: {
+        /** @enum {string} */
+        locked_rule: 'credentials' | 'mandatory_bonus' | 'disable_locked';
+        explanation: string;
+      } | null;
+      conflicts: {
+        /** Format: uuid */
+        rule_id: string;
+        explanation: string;
+        /** @enum {string} */
+        severity: 'warning' | 'error';
+      }[];
+      duplicates: {
+        /** Format: uuid */
+        rule_id: string;
+        explanation: string;
+      }[];
+      vague: {
+        explanation: string;
+      }[];
+      /** @description How many of the agent's rules overlap the draft's scope and were read. */
+      compared: number;
+      /** @enum {string} */
+      checked_by: 'model' | 'rules';
     };
     /**
      * @description How sure the agent must be of a procedure (AI-05). The understanding
@@ -19486,6 +19658,18 @@ export interface operations {
             high?: number;
             low?: number;
           };
+          /**
+           * @description How the player is addressed (AI-07). Null clears it.
+           * @enum {string|null}
+           */
+          address_form?: 'siz' | 'sen' | null;
+          /**
+           * @description Whether messages carry emoji (AI-07). Null clears it.
+           * @enum {string|null}
+           */
+          emoji?: 'none' | 'few' | null;
+          /** @description Questions one procedure message may ask (AI-07). Null goes back to 2. */
+          max_questions_per_message?: number | null;
         };
       };
     };
@@ -19568,6 +19752,176 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AiHandoffSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiGuidanceRules: {
+    parameters: {
+      query?: {
+        ai_agent_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Behaviour rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiGuidanceRule'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiGuidanceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          ai_agent_id: string;
+          title: string;
+          body: string;
+          category: components['schemas']['AiGuidanceCategory'];
+          scope?: components['schemas']['AiGuidanceScope'];
+          priority?: number;
+          active?: boolean;
+          /** Format: uuid */
+          owner_id?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiGuidanceRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  checkAiGuidanceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          ai_agent_id: string;
+          /** Format: uuid */
+          rule_id?: string;
+          title?: string;
+          body: string;
+          category?: components['schemas']['AiGuidanceCategory'];
+          scope?: components['schemas']['AiGuidanceScope'];
+        };
+      };
+    };
+    responses: {
+      /** @description Warnings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiGuidanceCheck'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteAiGuidanceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiGuidanceRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          title?: string;
+          body?: string;
+          category?: components['schemas']['AiGuidanceCategory'];
+          scope?: components['schemas']['AiGuidanceScope'];
+          priority?: number;
+          active?: boolean;
+          /** Format: uuid */
+          owner_id?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiGuidanceRule'];
         };
       };
       400: components['responses']['BadRequest'];

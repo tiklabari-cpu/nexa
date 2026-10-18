@@ -12733,13 +12733,13 @@
         "description": "Seçim kelime örtüşmesiyle (intent.ts:29, eşik 0.6), öncelik yok (en son düzenlenen kazanıyor, skill-engine.ts:239-256), detect_intent adımı olmayan skill her mesaja uyuyor (:366-370). Oyuncular aynı şeyi yazım hatalarıyla çok farklı söylüyor. Kaynak: AI-05.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: AI-05. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).\n\nunderstand.ts: katalog (yayındaki prosedürler, marka süzgeci AI-14; kilitliler + aktif her zaman; ≤8 örnek); 15'ten büyükse ön eleme (turun tek embedding'i, ai_procedure_examples tablosu (id, license_id, skill_id, text, embedding vector(1536), embedding_space) + RLS + HNSW indeksi ayrı migration'da).\nJSON ÇIKTI (ADR §6a): {language, relates_to_previous, wants_human{value, explicit}, intent{procedure_key|null, confidence, alternatives, is_continuation, smalltalk, off_topic}, answers_pending_question, yes_no, extracted (AI-04), correction, ai_conditions (AI-03), sentiment positive|neutral|negative|angry, abuse, risk{self_exclusion, rg_signal, self_harm, minor, fraud_aml, complaint_formal, account_takeover} her biri {flag, evidence_quote}}. Şema doğrulama; geçersizse 1 yeniden; yine geçersiz → ai_failure (AI-09).\nPOLICY (deterministik): 1) zorunlu devirler (AI-08/09) 2) aktif prosedür + (is_continuation | answers_pending_question) → sürdür 3) confidence ≥ high (0.70) → başlat/geç; beraberlikte (fark <0.10) kilitli > küçük priority > yüksek güven 4) low (0.40) ≤ c < high ve aday varsa → en iyi iki adayla tek seçmeli netleştirme (art arda ikincisi yok) 5) diğer → AI-06 bilgi yolu; smalltalk → kısa persona cevabı 6) hiçbiri → unmatched olayı (AI-22).\nYEDEK PROSEDÜR: is_fallback (ajan başına en fazla 1); migration: detect_intent adımı olmayan eski skill'ler is_fallback=true + panelde uyarı (\"her mesaja uyan skill\" biter).\nMOCK: matchIntent ile örnek cümlelerden deterministik çıktı; dil mock'ta detectLanguage. Desteklenmeyen dil sessizlik değil devir (AI-09).\nKontrat: Skill.is_fallback; AiAgent.clarify_thresholds{high, low}. LLM_UNDERSTAND_MODEL ya da tier fast, sıcaklık 0. Kayıt: seçilen prosedür, güven, alternatifler ID-08'e.\nFİKSTÜR: apps/api/test/fixtures/ai-intents-tr.json (20 iGaming konusu, ≥200 cümle, yazım hataları dahil); gerçek sağlayıcıyla gece değerlendirmesi isteğe bağlı (DoD dışı).\n\nKABUL KRİTERLERİ:\n- \"havale attım gözükmüyor\", \"usdt gönderdim düşmedi\", \"bakiyem gelmedi\" → deposit_not_credited (mock'ta örneklerle).\n- Eşit güvende küçük priority kazanır.\n- Niyet adımı olmayan eski skill başka prosedür eşleşince cevap vermez.\n- Düşük güvende iki seçenekli tek netleştirme; art arda ikinci yok.\n- Aktif prosedürde \"Papara\" devam olarak işlenir.\n- \"hesabımı kapatın\" her durumda kilitli self-exclusion'ı seçer.\n\nKULLANILAN VARSAYIMLAR:\n- AI-05-S1: iki aday arasında tek seçmeli soru, hiçbirine yakın değilse bilgi yolu.",
         "testStrategy": "Mock ile birim/entegrasyon (DoD); fikstür seti; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "270",
           "296"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T15:16:06.373Z",
+        "updatedAt": "2026-10-18T17:02:08.768Z",
         "subtasks": [
           {
             "id": 1,
@@ -12773,13 +12773,13 @@
             "description": "ai_procedure_examples + HNSW ön eleme (>15 prosedür) + ai-intents-tr.json fikstürü",
             "details": "İndeks kendi migration dosyasında.",
             "testStrategy": "Ön eleme birim; fikstür testi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "297.1"
             ],
             "parentId": "297",
             "priority": "high",
-            "updatedAt": "2026-10-18T15:16:06.373Z"
+            "updatedAt": "2026-10-18T17:02:08.768Z"
           }
         ]
       },
@@ -16132,9 +16132,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T15:16:06.373Z",
+      "lastModified": "2026-10-18T17:02:08.769Z",
       "taskCount": 390,
-      "completedCount": 295,
+      "completedCount": 296,
       "tags": [
         "master"
       ]

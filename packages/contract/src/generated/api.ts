@@ -1378,6 +1378,37 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/ai-conversation': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Where the AI stands on a connection
+     * @description The AI's state on one connection (AI-03): the procedure in progress as
+     *     the connection pinned it, its step and whether it waits for the visitor,
+     *     every slot the procedure collects with what the AI has of it, the topic
+     *     set aside, the turn count and the outcome. What the inbox's "AI'ın
+     *     topladıkları" list and the timeline viewer read.
+     *
+     *     Agents and bots only, behind the chat's visibility like its transcript:
+     *     a chat the caller may not see is `404`. The slots are what the visitor
+     *     told the AI; a `sensitive` one is shown to the console to hide behind a
+     *     reveal. Never served to the widget.
+     *
+     *     `conversation` is null when the AI never took part in the connection.
+     */
+    get: operations['getChatAiConversation'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/supervise': {
     parameters: {
       query?: never;
@@ -3086,13 +3117,30 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Turn a plain-language instruction into steps
-     * @description Returns the steps it produced *and* the lines it could not understand,
-     *     rather than inventing something for them. A skill that plausibly does the
-     *     wrong thing to a customer is worse than one that refuses to compile, so
-     *     the editor shows the leftovers and lets the admin rewrite them.
+     * Turn a plain-language instruction into steps, or an SOP into a draft procedure
+     * @description Two kinds of input, one answer shape.
      *
-     *     Compiles only — nothing is saved.
+     *     **`instruction`** — a one-message skill: returns the steps it produced
+     *     *and* the lines it could not understand, rather than inventing something
+     *     for them. A skill that plausibly does the wrong thing to a customer is
+     *     worse than one that refuses to compile, so the editor shows the leftovers
+     *     and lets the admin rewrite them. Deterministic; no model is called.
+     *
+     *     **`mode: procedure` + `sop_text`** (AI-03 · tm 296.4) — a multi-turn
+     *     procedure drafted from an SOP written for people. `draft` is the
+     *     definition `POST /skills` takes, already judged by the save-time
+     *     validator: `draft.problems` is what a save would refuse, empty when it
+     *     would store the draft as it is. With a model configured the SOP goes to
+     *     it as a structured-output call, counted against today's AI allowance (a
+     *     429 with `error.details.reason: ai_daily_cap` once that is used up); a
+     *     model that cannot answer falls back to the rules. With the `mock`
+     *     provider a rule-based skeleton is written. `draft.source` says which.
+     *     Neither writes a condition: a line that branches ("eğer…", "ya da",
+     *     "karşılaştır") comes back in `unrecognised`, for the author to write as
+     *     one.
+     *
+     *     Compiles only — nothing is saved, and a skill created from a draft is off
+     *     until someone turns it on.
      */
     post: operations['compileSkillInstruction'];
     delete?: never;
@@ -3118,6 +3166,17 @@ export interface paths {
      *     real model call on the deployment's key and counts against today's AI
      *     allowance (tm 257.8); once that is used up the answer is a 429 with
      *     `error.details.reason: ai_daily_cap` instead of a result.
+     *
+     *     **A procedure** (`mode: procedure`, tm 296.4) is previewed from the
+     *     unsaved definition — the fields `POST /skills` takes — judged as a save
+     *     would judge it: a definition a save would refuse is not run, and
+     *     `procedure_problems` says why. The message has to select the procedure
+     *     (its `when_to_use` and `examples`), as it would on the live path.
+     *
+     *     **`conversation`** is the exchange before `message`, oldest first, as the
+     *     live path's history: what the reply is written and answered with. It is
+     *     not replayed — the turn starts from an empty state, and `state` is the
+     *     state that one turn would leave (a full multi-turn run is AI-19's).
      */
     post: operations['previewSkill'];
     delete?: never;
@@ -9238,6 +9297,79 @@ export interface components {
       ai_stall_timeout_seconds: number;
     };
     /**
+     * @description Where the AI stands on a connection (AI-03 · tm 296.4), read from
+     *     `ai_conversations`: `GET /chats/{chatId}/ai-conversation`, and the state
+     *     a `POST /skills/preview` turn would leave. The procedure is the one the
+     *     connection pinned when it started, not the skill as it is now.
+     */
+    AiConversationState: {
+      /**
+       * @description Who answers the connection (AI-11).
+       * @enum {string}
+       */
+      mode: 'ai' | 'human' | 'paused';
+      /** @description The procedure in progress; null when none is. */
+      procedure: components['schemas']['AiConversationProcedure'] | null;
+      /**
+       * @description Every slot the procedure collects, in its order — one nothing was
+       *     said about is `missing` — then any other slot the state holds, by
+       *     name. Personal data.
+       */
+      slots: components['schemas']['AiConversationSlot'][];
+      /** @description The topic set aside for the one in progress (at most one, AI-03 §7). */
+      suspended:
+        | (components['schemas']['AiConversationProcedure'] & {
+            slots: components['schemas']['AiConversationSlot'][];
+          })
+        | null;
+      /** @description AI turns taken on the connection. */
+      turns: number;
+      /** @enum {string|null} */
+      outcome: 'resolved' | 'resolved_waiting' | 'handed_off' | 'abandoned' | 'no_ai' | null;
+      /**
+       * Format: date-time
+       * @description When the state last changed. Absent on a preview's state.
+       */
+      updated_at?: string;
+      /**
+       * Format: date-time
+       * @description When the connection closed. Absent on a preview's state.
+       */
+      closed_at?: string | null;
+    };
+    AiConversationProcedure: {
+      /** @description The skill the procedure is; `preview` in a preview's state. */
+      skill_id: string;
+      /** @description Its name when the connection started it. */
+      skill_name: string | null;
+      /** @description sha256 of the pinned definition (ADR-14b §2.9). */
+      snapshot_hash: string | null;
+      step_id: string | null;
+      /**
+       * @description `awaiting_answer` — a question is out; `ready` — it goes on with
+       *     the next message; `done` — it ended in a hand-over.
+       * @enum {string|null}
+       */
+      step_status: 'awaiting_answer' | 'ready' | 'done' | null;
+    };
+    AiConversationSlot: {
+      name: string;
+      /** @description The procedure's label; the name for a slot it does not define. */
+      label: string;
+      /** @description The slot's type (AI-04); null for a slot the procedure does not define. */
+      type: string | null;
+      /** @enum {string} */
+      status: 'missing' | 'filled' | 'partial' | 'invalid' | 'refused' | 'unknown' | 'carried';
+      /** @description What the visitor gave, read back; null while nothing usable was. */
+      display: string | null;
+      /** @enum {string} */
+      source: 'player' | 'carried' | 'inferred';
+      /** @description How many times the AI asked for it. */
+      attempts: number;
+      /** @description A `pii: high` slot — the console hides it until asked. */
+      sensitive: boolean;
+    };
+    /**
      * @description Who answers a chat's open connection after `return-to-ai` or
      *     `pause-ai` (AI-11). `ai`: the AI agent; `human`: a person has it and
      *     the AI stays silent; `paused`: the AI is held back without a person
@@ -9362,6 +9494,13 @@ export interface components {
       created_by_id: string | null;
     };
     SkillPreview: {
+      /** @description The state the turn would leave on a new connection (tm 296.4). */
+      state: components['schemas']['AiConversationState'];
+      /**
+       * @description Why a procedure preview was not run — what a save of the definition
+       *     would refuse, one entry per problem. Empty or absent otherwise.
+       */
+      procedure_problems?: components['schemas']['ProcedureProblemDetails'][];
       /**
        * @description `skipped` means the intent did not match, or nothing produced a
        *     reply — in which case a human takes the conversation.
@@ -9729,6 +9868,30 @@ export interface components {
         | 'full_iban';
       /** @description What was named and not found or not allowed — a goto target, a variable, a team. */
       reference?: string;
+    };
+    /**
+     * @description A procedure drafted from an SOP (`POST /skills/compile`, tm 296.4): the
+     *     fields `POST /skills` takes with `mode: procedure`, and the save-time
+     *     validator's verdict on them. A draft with problems may break the rules
+     *     those problems name — that is what they are for. No conditions: the
+     *     author writes them.
+     */
+    SkillProcedureDraft: {
+      name: string;
+      when_to_use: string;
+      examples: string[];
+      priority: number;
+      slots: components['schemas']['SlotDef'][];
+      procedure: components['schemas']['SkillProcedure'];
+      /**
+       * @description `rules` — the rule-based skeleton; `model` — the configured model wrote it.
+       * @enum {string}
+       */
+      source: 'rules' | 'model';
+      /** @description What a save would refuse; empty when it would store the draft as it is. */
+      problems: components['schemas']['ProcedureProblemDetails'][];
+      /** @description What a save allows but flags (`procedure_unreachable_step`). */
+      warnings: components['schemas']['ProcedureProblemDetails'][];
     };
     /**
      * @description A `400 validation` from a skill write. `details` says why, as codes: a
@@ -16964,6 +17127,46 @@ export interface operations {
       404: components['responses']['NotFound'];
     };
   };
+  getChatAiConversation: {
+    parameters: {
+      query?: {
+        /**
+         * @description Which connection — any id `Chat.connections` lists (Panelde: Chat
+         *     ID, bağlantı). Defaults to the most recent one. A thread of another
+         *     chat is `404`.
+         */
+        thread_id?: string;
+      };
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The AI's state on the connection */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @description The day (panel "Thread ID"). */
+            chat_id: string;
+            /** @description The connection read (panel "Chat ID"); null for a chat with none. */
+            thread_id: string | null;
+            conversation: components['schemas']['AiConversationState'] | null;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
   superviseChat: {
     parameters: {
       query?: never;
@@ -19389,9 +19592,17 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          instruction: string;
-        };
+        'application/json':
+          | {
+              /** @enum {string} */
+              mode?: 'single';
+              instruction: string;
+            }
+          | {
+              /** @enum {string} */
+              mode: 'procedure';
+              sop_text: string;
+            };
       };
     };
     responses: {
@@ -19402,16 +19613,23 @@ export interface operations {
         };
         content: {
           'application/json': {
+            /**
+             * @description Which input was compiled.
+             * @enum {string}
+             */
+            mode: 'single' | 'procedure';
+            /** @description The one-message steps; empty for a procedure. */
             steps: components['schemas']['SkillStep'][];
-            /** @description Instruction lines that produced no step. */
+            /** @description Instruction or SOP lines that produced no step. */
             unrecognised: string[];
+            draft?: components['schemas']['SkillProcedureDraft'];
           };
         };
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
     };
   };
   previewSkill: {
@@ -19424,8 +19642,28 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          steps: components['schemas']['SkillStep'][];
+          /**
+           * @description `single` (the default) runs `steps`; `procedure` the definition.
+           * @enum {string}
+           */
+          mode?: 'single' | 'procedure';
+          /** @description Required for a `single` preview. */
+          steps?: components['schemas']['SkillStep'][];
+          when_to_use?: string | null;
+          examples?: string[];
+          priority?: number;
+          slots?: components['schemas']['SlotDef'][];
+          procedure?: components['schemas']['SkillProcedure'];
           message: string;
+          /** @description The earlier exchange, oldest first. */
+          conversation?: {
+            /**
+             * @description `visitor` wrote it, the AI (`ai`) or a person (`agent`) answered.
+             * @enum {string}
+             */
+            role: 'visitor' | 'ai' | 'agent';
+            text: string;
+          }[];
           /** Format: uuid */
           ai_agent_id?: string | null;
         };

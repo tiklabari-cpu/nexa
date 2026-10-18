@@ -56,7 +56,7 @@ import type { TenantClient } from '../../../lib/tenant.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
 import { slotRecord } from './slots/extract.js';
 import type { ConnectionRef } from './state-store.js';
-import type { TurnHistory, TurnState } from './turn.js';
+import { emptyTurnState, type TurnHistory, type TurnState } from './turn.js';
 
 /** How much of the transcript a turn carries (AI-01 §3). */
 export interface HistoryBudget {
@@ -321,6 +321,61 @@ export function buildConnectionContext(
     newCustomerText: fresh.join('\n'),
     freshMessages: fresh.length,
     lastSeq,
+  };
+}
+
+/** Who wrote a line of an exchange typed rather than read (a preview's `conversation`). */
+export type ExchangeRole = 'visitor' | 'ai' | 'agent';
+
+const EXCHANGE_AUTHORS: Readonly<Record<ExchangeRole, string>> = {
+  visitor: 'customer',
+  ai: 'bot',
+  agent: 'agent',
+};
+
+/**
+ * An exchange the editor typed (`POST /skills/preview`'s `conversation`, tm
+ * 296.4) as the history a live turn would carry: read as the loader reads a
+ * connection — the newest `maxMessages` and the visitor's opening line, the
+ * roles, the merging, the character budget and the gap marker are
+ * {@link buildConnectionContext}'s — so a preview is answered with what the
+ * live path would have. Every line is earlier than the message being
+ * answered. Undefined for an empty exchange.
+ */
+export function exchangeHistory(
+  exchange: ReadonlyArray<{ role: ExchangeRole; text: string }>,
+  budget: HistoryBudget = DEFAULT_HISTORY_BUDGET,
+): TurnHistory | undefined {
+  if (exchange.length === 0) return undefined;
+  const events: ConnectionEvent[] = exchange.map((line, index) => ({
+    sequence: index + 1,
+    type: 'message',
+    authorType: EXCHANGE_AUTHORS[line.role],
+    text: line.text,
+    attachmentUrl: null,
+    properties: {},
+    createdAt: new Date(0),
+  }));
+  const window = events.slice(-budget.maxMessages);
+  const first = window[0]!;
+  const opening = events.find((event) => event.authorType === 'customer');
+  const read: ConnectionEvents =
+    first.sequence === 1
+      ? { events: window, gapAfter: null }
+      : opening && opening.sequence < first.sequence
+        ? { events: [opening, ...window], gapAfter: opening.sequence }
+        : { events: window, gapAfter: first.sequence - 1 };
+  const context = buildConnectionContext(read, {
+    state: emptyTurnState(),
+    processedThrough: events.length,
+    budget,
+  });
+  return {
+    messages: context.messages,
+    systemNotes: context.systemNotes,
+    stateDigest: context.stateDigest,
+    omitted: context.omitted,
+    visitorMessages: context.visitorMessages,
   };
 }
 

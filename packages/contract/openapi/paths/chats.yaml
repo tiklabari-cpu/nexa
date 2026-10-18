@@ -628,6 +628,56 @@ aiDigests:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
 
+aiConversation:
+  get:
+    tags: [Chats]
+    operationId: getChatAiConversation
+    summary: Where the AI stands on a connection
+    description: |
+      The AI's state on one connection (AI-03): the procedure in progress as
+      the connection pinned it, its step and whether it waits for the visitor,
+      every slot the procedure collects with what the AI has of it, the topic
+      set aside, the turn count and the outcome. What the inbox's "AI'ın
+      topladıkları" list and the timeline viewer read.
+
+      Agents and bots only, behind the chat's visibility like its transcript:
+      a chat the caller may not see is `404`. The slots are what the visitor
+      told the AI; a `sensitive` one is shown to the console to hide behind a
+      reveal. Never served to the widget.
+
+      `conversation` is null when the AI never took part in the connection.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+      - name: thread_id
+        in: query
+        description: |
+          Which connection — any id `Chat.connections` lists (Panelde: Chat
+          ID, bağlantı). Defaults to the most recent one. A thread of another
+          chat is `404`.
+        schema: { type: string, minLength: 1, maxLength: 64 }
+    responses:
+      "200":
+        description: The AI's state on the connection
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat_id, thread_id, conversation]
+              properties:
+                chat_id: { type: string, description: The day (panel "Thread ID"). }
+                thread_id:
+                  type: string
+                  nullable: true
+                  description: The connection read (panel "Chat ID"); null for a chat with none.
+                conversation:
+                  allOf:
+                    - $ref: "../openapi.yaml#/components/schemas/AiConversationState"
+                  nullable: true
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
 supervise:
   post:
     tags: [Chats]

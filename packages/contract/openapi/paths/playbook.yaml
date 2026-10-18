@@ -336,23 +336,47 @@ compile:
   post:
     tags: [Playbook]
     operationId: compileSkillInstruction
-    summary: Turn a plain-language instruction into steps
+    summary: Turn a plain-language instruction into steps, or an SOP into a draft procedure
     description: |
-      Returns the steps it produced *and* the lines it could not understand,
-      rather than inventing something for them. A skill that plausibly does the
-      wrong thing to a customer is worse than one that refuses to compile, so
-      the editor shows the leftovers and lets the admin rewrite them.
+      Two kinds of input, one answer shape.
 
-      Compiles only — nothing is saved.
+      **`instruction`** — a one-message skill: returns the steps it produced
+      *and* the lines it could not understand, rather than inventing something
+      for them. A skill that plausibly does the wrong thing to a customer is
+      worse than one that refuses to compile, so the editor shows the leftovers
+      and lets the admin rewrite them. Deterministic; no model is called.
+
+      **`mode: procedure` + `sop_text`** (AI-03 · tm 296.4) — a multi-turn
+      procedure drafted from an SOP written for people. `draft` is the
+      definition `POST /skills` takes, already judged by the save-time
+      validator: `draft.problems` is what a save would refuse, empty when it
+      would store the draft as it is. With a model configured the SOP goes to
+      it as a structured-output call, counted against today's AI allowance (a
+      429 with `error.details.reason: ai_daily_cap` once that is used up); a
+      model that cannot answer falls back to the rules. With the `mock`
+      provider a rule-based skeleton is written. `draft.source` says which.
+      Neither writes a condition: a line that branches ("eğer…", "ya da",
+      "karşılaştır") comes back in `unrecognised`, for the author to write as
+      one.
+
+      Compiles only — nothing is saved, and a skill created from a draft is off
+      until someone turns it on.
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            type: object
-            required: [instruction]
-            properties:
-              instruction: { type: string, minLength: 1, maxLength: 10000 }
+            oneOf:
+              - type: object
+                required: [instruction]
+                properties:
+                  mode: { type: string, enum: [single] }
+                  instruction: { type: string, minLength: 1, maxLength: 10000 }
+              - type: object
+                required: [mode, sop_text]
+                properties:
+                  mode: { type: string, enum: [procedure] }
+                  sop_text: { type: string, minLength: 1, maxLength: 20000 }
     responses:
       "200":
         description: Compiled
@@ -360,19 +384,26 @@ compile:
           application/json:
             schema:
               type: object
-              required: [steps, unrecognised]
+              required: [mode, steps, unrecognised]
               properties:
+                mode:
+                  type: string
+                  enum: [single, procedure]
+                  description: Which input was compiled.
                 steps:
                   type: array
+                  description: The one-message steps; empty for a procedure.
                   items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
                 unrecognised:
                   type: array
-                  description: Instruction lines that produced no step.
+                  description: Instruction or SOP lines that produced no step.
                   items: { type: string }
+                draft:
+                  $ref: "../openapi.yaml#/components/schemas/SkillProcedureDraft"
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
 
 preview:
   post:
@@ -386,18 +417,56 @@ preview:
       real model call on the deployment's key and counts against today's AI
       allowance (tm 257.8); once that is used up the answer is a 429 with
       `error.details.reason: ai_daily_cap` instead of a result.
+
+      **A procedure** (`mode: procedure`, tm 296.4) is previewed from the
+      unsaved definition — the fields `POST /skills` takes — judged as a save
+      would judge it: a definition a save would refuse is not run, and
+      `procedure_problems` says why. The message has to select the procedure
+      (its `when_to_use` and `examples`), as it would on the live path.
+
+      **`conversation`** is the exchange before `message`, oldest first, as the
+      live path's history: what the reply is written and answered with. It is
+      not replayed — the turn starts from an empty state, and `state` is the
+      state that one turn would leave (a full multi-turn run is AI-19's).
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required: [steps, message]
+            required: [message]
             properties:
+              mode:
+                type: string
+                enum: [single, procedure]
+                description: "`single` (the default) runs `steps`; `procedure` the definition."
               steps:
                 type: array
+                description: Required for a `single` preview.
                 items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
+              when_to_use: { type: string, nullable: true }
+              examples:
+                type: array
+                items: { type: string }
+              priority: { type: integer, minimum: 1, maximum: 1000 }
+              slots:
+                type: array
+                items: { $ref: "../openapi.yaml#/components/schemas/SlotDef" }
+              procedure: { $ref: "../openapi.yaml#/components/schemas/SkillProcedure" }
               message: { type: string, minLength: 1, maxLength: 10000 }
+              conversation:
+                type: array
+                maxItems: 40
+                description: The earlier exchange, oldest first.
+                items:
+                  type: object
+                  required: [role, text]
+                  properties:
+                    role:
+                      type: string
+                      enum: [visitor, ai, agent]
+                      description: "`visitor` wrote it, the AI (`ai`) or a person (`agent`) answered."
+                    text: { type: string, minLength: 1, maxLength: 10000 }
               ai_agent_id: { type: string, format: uuid, nullable: true }
     responses:
       "200":

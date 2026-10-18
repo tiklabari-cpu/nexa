@@ -19,6 +19,7 @@ import {
   readDailyMemory,
   readPersona,
   type DailyMemorySettings,
+  type SkillProcedureFields,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
 import type { TurnConfig } from './turn.js';
@@ -30,6 +31,14 @@ export interface AiConfigRead {
   readonly pkg: TurnConfig;
   /** The version's number on its agent's line; null with `versionId`. */
   readonly seq: number | null;
+}
+
+/** What the editor previews: a one-message step list, or a procedure's fields. */
+export interface DraftConfigInput {
+  aiAgentId: string | null;
+  steps: unknown;
+  /** A procedure skill's definition, as `POST /skills` takes it; absent for a `single` one. */
+  definition?: SkillProcedureFields;
 }
 
 /** The one read of the AI configuration a turn runs on (ADR-14b §2.6). */
@@ -44,11 +53,11 @@ export interface AiConfigSource {
     tx: TenantClient,
     input: { aiAgentId: string | null; pinnedVersionId: string | null },
   ): Promise<AiConfigRead>;
-  /** The editor's: the unsaved steps, as one skill of the agent they belong to. */
-  forDraft(
-    tx: TenantClient,
-    input: { aiAgentId: string | null; steps: unknown },
-  ): Promise<AiConfigRead>;
+  /**
+   * The editor's: the unsaved steps — or a procedure's definition (tm
+   * 296.4) — as one skill of the agent they belong to.
+   */
+  forDraft(tx: TenantClient, input: DraftConfigInput): Promise<AiConfigRead>;
 }
 
 /**
@@ -150,10 +159,7 @@ function strictest(settings: readonly DailyMemorySettings[]): DailyMemorySetting
  * agent it belongs to — a preview that shows an unshaped answer promises
  * something the product does not do.
  */
-async function previewTurnConfig(
-  tx: TenantClient,
-  input: { steps: unknown; aiAgentId: string | null },
-): Promise<TurnConfig> {
+async function previewTurnConfig(tx: TenantClient, input: DraftConfigInput): Promise<TurnConfig> {
   const { aiAgentId } = input;
   const agent = aiAgentId
     ? await tx.aiAgent.findFirst({
@@ -169,6 +175,9 @@ async function previewTurnConfig(
         aiAgentId,
         steps: input.steps,
         persona: readPersona(agent),
+        ...(input.definition
+          ? { mode: 'procedure' as const, definition: input.definition, locked: false }
+          : {}),
       },
     ],
   };

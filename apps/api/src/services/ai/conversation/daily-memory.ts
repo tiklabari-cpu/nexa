@@ -24,6 +24,7 @@
 import {
   DAILY_DIGEST_EXCERPT_MAX,
   DAILY_DIGEST_LIMIT,
+  SLOT_SETTLED_STATUSES,
   trustSeesDetails,
   type AiConversationOutcome,
   type DailyMemoryRecall,
@@ -73,7 +74,7 @@ const REPEAT_AFTER: ReadonlySet<AiConversationOutcome | null> = new Set([
 ]);
 
 /** A slot that is known: collected in this connection, or carried from an earlier one. */
-const KNOWN_SLOT_STATUSES: ReadonlySet<string> = new Set(['filled', 'carried']);
+const KNOWN_SLOT_STATUSES: ReadonlySet<string> = new Set(SLOT_SETTLED_STATUSES);
 
 /**
  * The summary after a turn the AI took. `turn` is what the engine decided:
@@ -194,7 +195,9 @@ export function isRepeatSameDay(earlier: EarlierToday, procedureKey: string): bo
 /**
  * The state with the slots an earlier connection on the same topic collected
  * pre-filled as `carried` (AI-02 §5) — only for a visitor who may see them —
- * and the repeat-contact signal. Slots this connection holds already stay.
+ * and the repeat-contact signal. Slots this connection holds already stay. Only
+ * a settled slot carries (AI-04 §5): a `partial` moment or a refused amount
+ * earlier is still to be asked, not known.
  */
 export function withEarlierToday(
   state: TurnState,
@@ -205,6 +208,7 @@ export function withEarlierToday(
   const slots: Record<string, unknown> = { ...state.slots };
   if (sameTopic && trustSeesDetails(earlier.trust)) {
     for (const [name, slot] of Object.entries(sameTopic.slots)) {
+      if (!KNOWN_SLOT_STATUSES.has(slot.status)) continue;
       if (slots[name] === undefined || slots[name] === null) {
         slots[name] = { display: slot.display, status: 'carried' };
       }

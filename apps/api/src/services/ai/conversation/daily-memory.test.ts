@@ -282,6 +282,41 @@ describe('carried slots and the repeat contact (AI-02 §5, §7)', () => {
     expect(next.signals).toEqual({ repeat_same_day: true });
   });
 
+  it('carries only a settled slot — a partial moment or a refused amount is still to be asked (AI-04 §5)', () => {
+    const partial = earlier({
+      digests: [
+        digest({
+          slots: {
+            method: { display: 'Papara', status: 'filled' },
+            when: { display: '16.10.2026 akşam', status: 'partial' },
+            amount: { display: 'not given', status: 'refused' },
+          },
+        }),
+      ],
+    });
+    const next = withEarlierToday(emptyTurnState(), partial, PAPARA);
+    expect(next.slots).toEqual({ method: { display: 'Papara', status: 'carried' } });
+    expect(slotKnown(next.slots, 'when')).toBe(false);
+  });
+
+  it('leaves a pii high slot out of the summary — its value stays on the connection (AI-04 §9)', () => {
+    const state: TurnState = {
+      ...emptyTurnState(),
+      slots: {
+        iban_last4: { value: '8841', display: '8841', status: 'filled', pii: 'high' },
+        method: { value: 'Papara', display: 'Papara', status: 'filled' },
+      },
+    };
+    const built = buildDigest(null, state, {
+      ...TURN,
+      outcome: 'answered',
+      reply: 'Thanks.',
+      replyKind: 'answer',
+    });
+    expect(built.slots).toEqual({ method: { display: 'Papara', status: 'filled' } });
+    expect(JSON.stringify(built)).not.toContain('8841');
+  });
+
   it('carries nothing for a claimed identity, or from another topic', () => {
     expect(withEarlierToday(emptyTurnState(), earlier({ trust: 'claimed' }), PAPARA).slots).toEqual(
       {},

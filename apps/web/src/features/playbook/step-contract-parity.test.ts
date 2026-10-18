@@ -15,7 +15,25 @@
  * would have worked).
  */
 import { validateSteps } from '@siyahtus/ai-mock';
+import {
+  PROCEDURE_PROBLEM_CODES,
+  PROCEDURE_WARNING_CODES,
+  PROC_BRANCH_STEP_TYPES,
+  PROC_STEP_TYPES,
+  SLOT_PROBLEM_CODES,
+  splitSkillProcedure,
+  validateSkillProcedure,
+} from '@siyahtus/types';
 import { describe, expect, it } from 'vitest';
+import { hasMessage } from '../../lib/i18n.js';
+import { depositProcedureFields } from '../../test/procedure-fixtures.js';
+import {
+  EDITOR_BRANCH_TYPES,
+  EDITOR_PROC_STEP_TYPES,
+  blankProcStep,
+  procedureDraft,
+  procedureFields,
+} from './procedure-authoring.js';
 import { STEP_TYPES, blankStep } from './step-authoring.js';
 import { stepIssues } from './step-reorder.js';
 import type { SkillStep } from './types.js';
@@ -70,5 +88,60 @@ describe('step gate parity with the server (FR-MOD-06.2.4)', () => {
 
   it('covers all six step types', () => {
     expect(new Set(CANDIDATES.map((step) => step.type)).size).toBe(STEP_TYPES.length);
+  });
+});
+
+/**
+ * The procedure editor (AI-03 · tm 296.5) has no gate of its own to drift: it
+ * runs `validateSkillProcedure`, the API's function, on `procedureFields` —
+ * the body Save sends. What can still drift is everything around it: a step
+ * type the server gains and the editor never offers, a refusal code with no
+ * sentence in one of the console's languages, a definition the form reads in
+ * and writes back changed.
+ */
+describe('procedure editor parity with the server (AI-03)', () => {
+  it('offers every step type the server takes, the passive tool aside', () => {
+    expect(new Set([...EDITOR_PROC_STEP_TYPES, 'tool'])).toStrictEqual(new Set(PROC_STEP_TYPES));
+    expect(new Set(EDITOR_BRANCH_TYPES)).toStrictEqual(new Set(PROC_BRANCH_STEP_TYPES));
+  });
+
+  it.each([...PROCEDURE_PROBLEM_CODES, ...SLOT_PROBLEM_CODES, ...PROCEDURE_WARNING_CODES])(
+    'words %s in English and Turkish',
+    (code) => {
+      const key = `playbook.procedure.problem.${code}`;
+      expect(hasMessage('en', key)).toBe(true);
+      expect(hasMessage('tr', key)).toBe(true);
+    },
+  );
+
+  it('sends the §3.1 deposit procedure back exactly as the server stored it', () => {
+    const stored = validateSkillProcedure(depositProcedureFields());
+    if (!stored.ok) throw new Error(JSON.stringify(stored.problems));
+    const row = splitSkillProcedure(stored.procedure);
+
+    const body = procedureFields(procedureDraft(row));
+
+    expect(body).toStrictEqual(row);
+    const resaved = validateSkillProcedure(body);
+    expect(resaved.ok && splitSkillProcedure(resaved.procedure)).toStrictEqual(row);
+  });
+
+  it('a blank step of each offered type is refused for what is missing, never for its shape', () => {
+    // A blank the editor mints must fail on the empty box the author has to
+    // fill — not on an unknown field or a bad option nobody can see.
+    const shapeCodes = new Set(['procedure_unknown_field', 'procedure_step_unknown_type']);
+    for (const type of EDITOR_PROC_STEP_TYPES) {
+      const result = validateSkillProcedure(
+        procedureFields({
+          ...procedureDraft({ when_to_use: 'x' }),
+          steps: procedureDraft({ procedure: { steps: [blankProcStep(type, 'yeni')] } }).steps,
+        }),
+      );
+      const codes = result.ok ? [] : result.problems.map((problem) => problem.code);
+      expect(
+        codes.filter((code) => shapeCodes.has(code)),
+        type,
+      ).toEqual([]);
+    }
   });
 });

@@ -11,7 +11,10 @@
  * A pure function so the rule is unit-testable on its own and reads the same
  * everywhere it is quoted — the banner, the disabled toggle, its tooltip.
  */
+import { skillStepCount } from './procedure-authoring.js';
 import type { KnowledgeSource, Skill } from './types.js';
+
+type RunnableSkill = Pick<Skill, 'steps' | 'active' | 'mode' | 'procedure'>;
 
 export interface Readiness {
   /** Safe to turn the agent on — it can answer or act on a message. */
@@ -29,14 +32,17 @@ function isIndexed(source: Pick<KnowledgeSource, 'chunk_count'>): boolean {
   return source.chunk_count > 0;
 }
 
-/** A skill can do something once it has at least one step and is active. */
-function isRunnable(skill: Pick<Skill, 'steps' | 'active'>): boolean {
-  return skill.active && skill.steps.length > 0;
+/**
+ * A skill can do something once it has at least one step and is active — a
+ * procedure's steps live in its definition, not in `steps` (AI-03).
+ */
+function isRunnable(skill: RunnableSkill): boolean {
+  return skill.active && skillStepCount(skill) > 0;
 }
 
 export function evaluateReadiness(
   sources: readonly Pick<KnowledgeSource, 'chunk_count'>[],
-  skills: readonly Pick<Skill, 'steps' | 'active'>[],
+  skills: readonly RunnableSkill[],
 ): Readiness {
   const hasKnowledge = sources.some(isIndexed);
   const hasSkill = skills.some(isRunnable);

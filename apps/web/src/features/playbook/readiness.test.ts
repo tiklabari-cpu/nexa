@@ -61,3 +61,35 @@ describe('AI agent readiness', () => {
     expect(r.ready).toBe(false);
   });
 });
+
+describe('AI agent readiness — procedure skills (AI-03)', () => {
+  const procedure = {
+    steps: [{ id: 'sor', type: 'collect' as const, slots: ['yontem'] }],
+    templates: [],
+    handoff: { conditions: [], card_fields: [] },
+    limits: { max_turns: 12 },
+  };
+
+  it('counts an active procedure as a runnable skill — its steps live in its definition', () => {
+    const r = evaluateReadiness(
+      [src(3)],
+      [{ steps: [], active: true, mode: 'procedure', procedure }],
+    );
+    expect(r.hasSkill).toBe(true);
+    expect(r.ready).toBe(true);
+  });
+
+  it('does not count a procedure with no steps, or one switched off', () => {
+    const empty = { ...procedure, steps: [] };
+    expect(
+      evaluateReadiness(
+        [src(3)],
+        [{ steps: [], active: true, mode: 'procedure', procedure: empty }],
+      ).hasSkill,
+    ).toBe(false);
+    expect(
+      evaluateReadiness([src(3)], [{ steps: [], active: false, mode: 'procedure', procedure }])
+        .hasSkill,
+    ).toBe(false);
+  });
+});

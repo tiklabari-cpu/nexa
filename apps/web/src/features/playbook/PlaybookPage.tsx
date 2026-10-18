@@ -23,6 +23,8 @@ import { confirmLeave } from '../../lib/dirty-guard.js';
 import { formatDate } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
+import { DEFAULT_PROCEDURE_PRIORITY } from '@siyahtus/types';
+import { skillStepCount } from './procedure-authoring.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
@@ -623,14 +625,31 @@ export function PlaybookPage(): ReactElement {
                                     </span>
                                     <span className="block text-2xs text-content-tertiary">
                                       {t('playbook.skills.stepsCount', {
-                                        count: skill.steps.length,
+                                        count: skillStepCount(skill),
                                       })}{' '}
+                                      {skill.mode === 'procedure' && (
+                                        <>
+                                          ·{' '}
+                                          {t('playbook.skills.priority', {
+                                            priority: skill.priority ?? DEFAULT_PROCEDURE_PRIORITY,
+                                          })}{' '}
+                                        </>
+                                      )}
                                       ·{' '}
                                       {t('playbook.skills.runsCount', { count: skill.runs_count })}{' '}
                                       · {formatDate(skill.updated_at)} ·{' '}
                                       {skill.created_by_name ?? '—'}
                                     </span>
                                   </button>
+
+                                  {/* A procedure talks the matter through over several
+                                      turns (ADR-14a) — worth telling apart from a
+                                      one-message skill at a glance. */}
+                                  {skill.mode === 'procedure' && (
+                                    <span className="shrink-0 rounded-sm bg-brand-100 px-1.5 py-0.5 text-2xs font-medium text-content-brand dark:bg-brand-950">
+                                      {t('playbook.skills.procedureBadge')}
+                                    </span>
+                                  )}
 
                                   {skill.ai_agent_id && (
                                     <span
@@ -667,7 +686,7 @@ export function PlaybookPage(): ReactElement {
                                   )}
                                 </div>
 
-                                {!skill.active && skill.steps.length === 0 && (
+                                {!skill.active && skillStepCount(skill) === 0 && (
                                   <p className="px-4 pb-2 text-2xs text-content-tertiary">
                                     {t('playbook.skills.needsStep')}
                                   </p>

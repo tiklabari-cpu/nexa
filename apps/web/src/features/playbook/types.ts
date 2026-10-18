@@ -1,4 +1,12 @@
-import type { AnswerLength, DailyMemorySettings } from '@siyahtus/types';
+import type {
+  AnswerLength,
+  Cond,
+  DailyMemorySettings,
+  ProcedureProblemDetails,
+  SkillMode,
+  SkillProcedureBody,
+  SlotDef,
+} from '@siyahtus/types';
 
 export type { AnswerLength };
 
@@ -27,6 +35,22 @@ export interface Skill {
   updated_at: string;
   created_by_name: string | null;
   created_by_id: string | null;
+  /**
+   * The procedure fields (tm 296.2). The API always sends them; they are
+   * optional here so a row written before them (or a test fixture) reads as a
+   * `single` skill with the defaults.
+   */
+  mode?: SkillMode;
+  when_to_use?: string | null;
+  examples?: string[];
+  priority?: number;
+  slots?: SlotDef<Cond>[];
+  procedure?: SkillProcedureBody | null;
+  /** A locked template copy (`self_exclusion`, …): only its texts and its team may change. */
+  locked?: boolean;
+  template_key?: string | null;
+  template_version?: number | null;
+  is_fallback?: boolean;
 }
 
 export interface AiAgent {
@@ -79,6 +103,67 @@ export interface SkillPreview {
   errors: string[];
   /** The same refusals as codes, one per entry of `errors` and in its order (tm 261). */
   error_details?: StepProblem[];
+  /** The state the turn would leave on a new connection (tm 296.4). */
+  state?: AiConversationState;
+  /** Why a procedure preview did not run: what a save would refuse, as codes. */
+  procedure_problems?: ProcedureProblemDetails[];
+}
+
+/** `POST /skills/compile`'s answer; `draft` only for `mode: 'procedure'` (tm 296.4). */
+export interface SkillCompileResult {
+  mode?: SkillMode;
+  steps: SkillStep[];
+  unrecognised: string[];
+  draft?: SkillProcedureDraft;
+}
+
+/** A procedure drafted from an SOP — `POST /skills`'s fields and the validator's verdict. */
+export interface SkillProcedureDraft {
+  name: string;
+  when_to_use: string;
+  examples: string[];
+  priority: number;
+  slots: SlotDef<Cond>[];
+  procedure: SkillProcedureBody;
+  source: 'rules' | 'model';
+  problems: ProcedureProblemDetails[];
+  warnings: ProcedureProblemDetails[];
+}
+
+/** One slot as `AiConversationState` reads it back — its `display`, never the raw value. */
+export interface AiConversationSlot {
+  name: string;
+  label: string;
+  type: string | null;
+  status: 'missing' | 'filled' | 'partial' | 'invalid' | 'refused' | 'unknown' | 'carried';
+  display: string | null;
+  source: 'player' | 'carried' | 'inferred';
+  attempts: number;
+  sensitive: boolean;
+}
+
+export interface AiConversationProcedure {
+  skill_id: string;
+  skill_name: string | null;
+  snapshot_hash: string | null;
+  step_id: string | null;
+  step_status: 'awaiting_answer' | 'ready' | 'done' | null;
+}
+
+/** Where the AI stands on a connection — and where a preview turn would leave it. */
+export interface AiConversationState {
+  mode: 'ai' | 'human' | 'paused';
+  procedure: AiConversationProcedure | null;
+  slots: AiConversationSlot[];
+  suspended: (AiConversationProcedure & { slots: AiConversationSlot[] }) | null;
+  turns: number;
+  outcome: 'resolved' | 'resolved_waiting' | 'handed_off' | 'abandoned' | 'no_ai' | null;
+}
+
+/** An earlier message of the preview's conversation (`POST /skills/preview` `conversation`). */
+export interface PreviewExchange {
+  role: 'visitor' | 'ai' | 'agent';
+  text: string;
 }
 
 export interface StepProblem {

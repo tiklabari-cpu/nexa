@@ -125,6 +125,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/billing/BillingPage.tsx',
   'src/features/playbook/PlaybookPage.tsx',
   'src/features/playbook/SkillEditor.tsx',
+  'src/features/playbook/ProcedureSections.tsx',
   'src/features/playbook/TemplateGallery.tsx',
   'src/features/playbook/RecommendedSkills.tsx',
   'src/features/playbook/ProfileForm.tsx',

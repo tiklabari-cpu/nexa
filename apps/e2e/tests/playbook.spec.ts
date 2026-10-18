@@ -227,6 +227,133 @@ test.describe('playbook — step authoring', () => {
   });
 });
 /**
+ * A procedure skill authored from the console (AI-03 · tm 296.5).
+ *
+ * The claim is the round trip the unit tests cannot make: the sections build a
+ * body the real `POST /skills` stores, the save gate is the server's own rule
+ * (an undefined template variable blocks Create in the browser, before any
+ * request), the list tells a procedure apart with its priority, and the
+ * preview takes the editor's definition through the real engine and answers
+ * with where the turn would leave the conversation.
+ */
+test.describe('playbook — procedure authoring', () => {
+  const SKILL_NAME = `E2E procedure ${Date.now().toString().slice(-6)}`;
+
+  let apiCtx: APIRequestContext;
+  let skillId: string | null = null;
+
+  test.beforeAll(async () => {
+    apiCtx = await newApiContext.newContext({
+      extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-playbook-procedure' },
+    });
+  });
+
+  test.afterAll(async () => {
+    // Shared workspace: the skill this test authors is removed again.
+    if (skillId) {
+      const token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
+      await apiCtx
+        .delete(`${API_BASE}/skills/${skillId}`, {
+          headers: { authorization: `Bearer ${token}` },
+        })
+        .catch(() => {});
+    }
+    await apiCtx.dispose();
+  });
+
+  test('authors, saves and previews a procedure; the save refuses an undefined variable', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook');
+    await agentPage.getByRole('button', { name: 'New skill', exact: true }).click();
+    await expect(agentPage.getByRole('region', { name: 'New skill' })).toBeVisible();
+
+    await agentPage.getByLabel('Name').fill(SKILL_NAME);
+    await agentPage.getByLabel('Skill type').selectOption('procedure');
+    await agentPage
+      .getByLabel('When to use it')
+      .fill('Oyuncu yatırımının hesabına geçmediğini söylüyor.');
+
+    // Information to collect.
+    await agentPage.getByRole('button', { name: 'Add information' }).click();
+    // Rows by position: a row's name is its label, which changes as it is typed,
+    // and a row holds its own list of problems.
+    const slot = agentPage
+      .getByRole('list', { name: 'Information to collect' })
+      .locator(':scope > li')
+      .first();
+    await slot.getByLabel('Key', { exact: true }).fill('yontem');
+    await slot.getByLabel('Question to ask').fill('Hangi yöntemle yatırdınız?');
+    await slot.getByLabel('Label', { exact: true }).fill('Yöntem');
+
+    // A template whose variable the procedure does not collect.
+    await agentPage.getByRole('button', { name: 'Add template' }).click();
+    const template = agentPage
+      .getByRole('list', { name: 'Reply templates' })
+      .locator(':scope > li')
+      .first();
+    await template.getByLabel('Template key').fill('bekle');
+    // The textarea by element: its label wraps it, so once it holds text the
+    // text is part of its accessible name and a label match stops resolving.
+    await template.locator('textarea').fill('{yontem} ile {bilinmeyen} dakikada geçer.');
+
+    // Steps: ask, say the template, hand over. A new step opens on its own form.
+    const stepTypeToAdd = agentPage.getByLabel('Step type to add');
+    const steps = agentPage.getByRole('list', { name: 'Steps' }).locator(':scope > li');
+
+    await stepTypeToAdd.selectOption('collect');
+    await agentPage.getByRole('button', { name: 'Add step' }).click();
+    await steps.nth(0).getByRole('checkbox', { name: 'yontem' }).check();
+
+    await stepTypeToAdd.selectOption('say');
+    await agentPage.getByRole('button', { name: 'Add step' }).click();
+    await steps.nth(1).getByLabel('Reply template').selectOption('bekle');
+
+    await stepTypeToAdd.selectOption('handoff');
+    await agentPage.getByRole('button', { name: 'Add step' }).click();
+    await steps.nth(2).getByLabel('Reason (shown on the card)').fill('needs_finance');
+
+    // The save gate is the server's rule, applied before any request.
+    const create = agentPage.getByRole('button', { name: 'Create skill' });
+    await expect(template.getByText(/“bilinmeyen” is not collected information/)).toBeVisible();
+    await expect(create).toBeDisabled();
+
+    await template.locator('textarea').fill('{yontem} ile yaptığınız yatırımı kontrol ediyorum.');
+    await expect(create).toBeEnabled();
+
+    await agentPage.screenshot({ path: 'kanit/296.5-procedure-editor.png', fullPage: true });
+
+    const [saved] = await Promise.all([
+      agentPage.waitForResponse(
+        (response) => response.request().method() === 'POST' && response.url().endsWith('/skills'),
+      ),
+      create.click(),
+    ]);
+    expect(saved.ok(), `save failed: ${saved.status()} ${await saved.text()}`).toBe(true);
+    skillId = ((await saved.json()) as { id: string }).id;
+
+    // Back from the API: the list marks it a procedure, with its priority.
+    await agentPage.reload();
+    await agentPage.getByPlaceholder('Search skills…').fill(SKILL_NAME);
+    const row = agentPage.getByRole('listitem').filter({ hasText: SKILL_NAME });
+    await expect(row).toContainText('Procedure');
+    await expect(row).toContainText('priority 100');
+    await expect(row).toContainText('3 steps');
+
+    await agentPage.getByRole('button', { name: SKILL_NAME }).click();
+    const editor = agentPage.getByRole('region', { name: SKILL_NAME });
+    await expect(editor.getByLabel('Skill type')).toHaveValue('procedure');
+    await expect(editor.getByRole('list', { name: 'Steps' }).locator(':scope > li')).toHaveCount(3);
+    await expect(editor.getByText('Say the “bekle” template')).toBeVisible();
+
+    // The preview runs the editor's definition through the real engine.
+    await editor.getByLabel('A message a customer might send').fill('param yatmadı');
+    await editor.getByRole('button', { name: 'Run preview' }).click();
+    await expect(editor.getByRole('region', { name: 'Where the turn leaves it' })).toBeVisible();
+  });
+});
+
+/**
  * Public KB → the category taxonomy is editable (tm 215 · FR-EK-B.1).
  *
  * `PATCH` and `DELETE /kb-categories/{categoryId}` shipped with `routes/kb.ts`

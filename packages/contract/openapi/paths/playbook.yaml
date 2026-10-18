@@ -198,13 +198,33 @@ skills:
               steps:
                 type: array
                 items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
+              mode:
+                type: string
+                enum: [single, procedure]
+                description: Default `single`. A procedure needs `when_to_use` and `procedure`.
+              when_to_use: { type: string, maxLength: 1000 }
+              examples:
+                type: array
+                maxItems: 30
+                items: { type: string, maxLength: 300 }
+              priority: { type: integer, minimum: 1, maximum: 1000 }
+              slots:
+                type: array
+                maxItems: 20
+                description: A procedure's only.
+                items: { $ref: "../openapi.yaml#/components/schemas/SlotDef" }
+              procedure: { $ref: "../openapi.yaml#/components/schemas/SkillProcedure" }
     responses:
       "201":
         description: Created
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Skill" }
-      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "400":
+        description: Malformed, or a step list or procedure that cannot run
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SkillValidationError" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
@@ -240,7 +260,13 @@ skill:
       engine cannot run would be skipped silently at the moment it mattered, and
       an admin would have no way to know why nothing happened.
 
-      Activating a skill with no steps is refused for the same reason.
+      Activating a skill with no steps is refused for the same reason, and so is
+      activating a procedure skill: nothing runs procedures yet (tm 296.3).
+
+      A procedure is judged whole — the fields sent over the ones stored — so
+      changing one slot re-checks every step that names it. `procedure`
+      replaces the stored one; it is not merged. A locked template copy
+      (`locked`) may change only its texts and its team, never its mode.
     requestBody:
       required: true
       content:
@@ -254,6 +280,22 @@ skill:
               steps:
                 type: array
                 items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
+              mode:
+                type: string
+                enum: [single, procedure]
+                description: Default `single`. A procedure needs `when_to_use` and `procedure`.
+              when_to_use: { type: string, maxLength: 1000 }
+              examples:
+                type: array
+                maxItems: 30
+                items: { type: string, maxLength: 300 }
+              priority: { type: integer, minimum: 1, maximum: 1000 }
+              slots:
+                type: array
+                maxItems: 20
+                description: A procedure's only.
+                items: { $ref: "../openapi.yaml#/components/schemas/SlotDef" }
+              procedure: { $ref: "../openapi.yaml#/components/schemas/SkillProcedure" }
               active: { type: boolean }
     responses:
       "200":
@@ -261,15 +303,20 @@ skill:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Skill" }
-      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "400":
+        description: Malformed, or a step list or procedure that cannot run
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SkillValidationError" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
-      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
-      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
-      "409":
-        description: Cannot activate a skill with no steps
+      "403":
+        description: |
+          Missing scope — or `not_allowed`: turning on a single skill with no
+          steps, or a procedure skill.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
   delete:

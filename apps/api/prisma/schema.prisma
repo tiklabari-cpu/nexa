@@ -1903,21 +1903,41 @@ model BotGroup {
 /// A named capability, expressed as an ordered list of steps compiled from a
 /// natural-language instruction (ADR-14 — Skill is the single paradigm).
 model Skill {
-  id          String   @id @default(uuid()) @db.Uuid
-  licenseId   BigInt   @map("license_id")
-  aiAgentId   String?  @map("ai_agent_id") @db.Uuid
-  name        String
-  kind        String
-  instruction String?
+  id              String   @id @default(uuid()) @db.Uuid
+  licenseId       BigInt   @map("license_id")
+  aiAgentId       String?  @map("ai_agent_id") @db.Uuid
+  name            String
+  kind            String
+  instruction     String?
   /// Ordered: detect_intent, request_info, tag, summarize, send_message,
   /// transfer_to_team.
-  steps       Json     @default("[]")
-  trigger     Json     @default("{}")
-  active      Boolean  @default(false)
-  runsCount   Int      @default(0) @map("runs_count")
-  createdBy   String?  @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  steps           Json     @default("[]")
+  trigger         Json     @default("{}")
+  /// `single` — the one-message step list above; `procedure` — a multi-turn
+  /// procedure (tm 296 · ADR-14a `docs/adr/skill-procedure.md`).
+  mode            String   @default("single")
+  /// What AI-05 selects a skill by, in either mode.
+  whenToUse       String?  @map("when_to_use")
+  examples        String[] @default([])
+  /// Between two equally likely skills the smaller number wins.
+  priority        Int      @default(100)
+  /// A procedure's `SlotDef`s (@siyahtus/types `slots.ts`).
+  slots           Json     @default("[]")
+  /// The rest of a procedure — `{steps, templates, handoff, limits}`; null on a
+  /// `single` skill.
+  procedure       Json?
+  /// An installed template copy only its texts and team may change in (AI-15);
+  /// set by the server, never by a client.
+  locked          Boolean  @default(false)
+  templateKey     String?  @map("template_key")
+  templateVersion Int?     @map("template_version")
+  /// The skill that answers when no other matches (AI-05).
+  isFallback      Boolean  @default(false) @map("is_fallback")
+  active          Boolean  @default(false)
+  runsCount       Int      @default(0) @map("runs_count")
+  createdBy       String?  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   aiAgent AiAgent?   @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)

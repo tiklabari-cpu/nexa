@@ -347,6 +347,11 @@ export interface TurnDecisions {
   handoffReason?: string | null;
   /** A procedure turn's step decisions (ID-08: step_id, type, cond_result, detail). */
   trace?: StepDecision[];
+  /**
+   * The sha256 of the definition the procedure turn ran on (`procedure_snapshot_hash`,
+   * ADR-14b §2.9) — which version decided, until #290 numbers them.
+   */
+  procedureHash?: string | null;
 }
 
 /**

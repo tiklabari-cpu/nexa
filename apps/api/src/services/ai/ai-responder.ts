@@ -534,7 +534,20 @@ export class AiResponder {
         version: 0,
       };
       if (Object.keys(patch).length > 0) await saveConversation(tx, current, patch);
-      if (run) {
+      // The count an admin sees in the Playbook list, incremented in the same
+      // transaction so it cannot drift from the run log beside it. Counted
+      // first: a procedure goes on from its snapshot after its skill is
+      // deleted (AI-03 §3 · tm 296.6), and a run row would then fail its
+      // foreign key and take the reply down with it. The skill's runs went
+      // with it, so this one is not written either; the decision record,
+      // which has no relation, still says which procedure answered.
+      const counted = run
+        ? await tx.skill.updateMany({
+            where: { id: run.skillId },
+            data: { runsCount: { increment: 1 } },
+          })
+        : null;
+      if (run && counted && counted.count > 0) {
         await tx.skillRun.create({
           data: {
             skillId: run.skillId,
@@ -548,12 +561,6 @@ export class AiResponder {
             llmOutputTokens: run.llmOutputTokens,
             embeddingTokens: run.embeddingTokens,
           },
-        });
-        // The count an admin sees in the Playbook list. Incremented in the same
-        // transaction so it cannot drift from the run log beside it.
-        await tx.skill.update({
-          where: { id: run.skillId },
-          data: { runsCount: { increment: 1 } },
         });
       }
     };

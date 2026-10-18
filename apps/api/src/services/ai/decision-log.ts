@@ -31,9 +31,11 @@ import {
   type AiDecision,
 } from '@siyahtus/types';
 import { type TenantContext, UUID_RE } from '../../lib/tenant.js';
+import type { StepDecision } from './conversation/procedure/executor.js';
 import {
   describeSideEffects,
   tookTurn,
+  turnsTaken,
   type TenantRunner,
   type TurnResult,
 } from './conversation/turn.js';
@@ -178,6 +180,14 @@ export async function recordAiDecision(
  * Ids, counts and labels only. The run log's `detail` strings are left out on
  * purpose: they quote tag names, fields and source titles an admin wrote, and
  * on a `request_info` step the field the customer was asked for.
+ *
+ * A procedure turn (tm 296.6 · AI-03 KAYIT) also files every step decision —
+ * the turn's number on the connection and, per step, `step_id`, `type`,
+ * `cond_result` and `detail` — with the hash of the definition it ran on.
+ * Those details name only what the validator holds to a key pattern (step,
+ * slot and template keys, reason and outcome codes); a tag, the one label
+ * written freely, arrives quoted and is left out as `"…"` (see
+ * {@link stepRecords}).
  */
 export function skillDecision(
   turn: TurnResult,
@@ -202,7 +212,9 @@ export function skillDecision(
   return {
     decision,
     procedureId: decisions.skillId,
-    step: decisions.log.at(-1)?.step ?? null,
+    // A procedure turn stopped on the last step it decided; the log's last line
+    // can be the compose call or the offer to go back to a set-aside topic.
+    step: decisions.trace?.at(-1)?.step_id ?? decisions.log.at(-1)?.step ?? null,
     handoffReason:
       decision !== 'handoff'
         ? null
@@ -215,15 +227,74 @@ export function skillDecision(
     errorType: failure ? `${failure.provider}:${failure.kind}` : null,
     llmInputTokens: decisions.usage.llmInputTokens,
     llmOutputTokens: decisions.usage.llmOutputTokens,
-    details: {
-      outcome: decisions.outcome,
-      steps: decisions.log.map((entry) => entry.step),
-      failed_steps: decisions.log.filter((entry) => !entry.ok).map((entry) => entry.step),
-      embedding_tokens: decisions.usage.embeddingTokens,
-      ...(decisions.capped ? { cap_scope: decisions.capped.scope } : {}),
-      ...(failure ? { transient: failure.transient } : {}),
-    },
+    details: withTrace(
+      {
+        outcome: decisions.outcome,
+        steps: decisions.log.map((entry) => entry.step),
+        failed_steps: decisions.log.filter((entry) => !entry.ok).map((entry) => entry.step),
+        embedding_tokens: decisions.usage.embeddingTokens,
+        ...(decisions.capped ? { cap_scope: decisions.capped.scope } : {}),
+        ...(failure ? { transient: failure.transient } : {}),
+      },
+      turn,
+    ),
   };
+}
+
+/**
+ * A procedure turn's details: the base, the turn, the step decisions and the
+ * hash. The trace gives way before the base does — entries are let go, the
+ * earliest first, until the whole fits `AI_DECISION_DETAILS_MAX_BYTES`, so a
+ * long turn never has its outcome replaced by a size note. A single-message
+ * turn's details are the base, as they always were.
+ */
+function withTrace(base: Record<string, unknown>, turn: TurnResult): Record<string, unknown> {
+  const { trace, procedureHash } = turn.decisions;
+  if (!trace) return base;
+  const head = {
+    ...base,
+    turn: turnsTaken(turn.nextState),
+    ...(procedureHash ? { procedure_hash: procedureHash } : {}),
+  };
+  for (let keep = Math.min(trace.length, MAX_TRACE_STEPS); ; keep -= 1) {
+    const details = { ...head, ...stepRecords(trace, keep) };
+    if (
+      keep === 0 ||
+      Buffer.byteLength(JSON.stringify(details), 'utf8') <= AI_DECISION_DETAILS_MAX_BYTES
+    ) {
+      return details;
+    }
+  }
+}
+
+/** The most step decisions one row keeps: past the inner-step limit with room to spare. */
+export const MAX_TRACE_STEPS = 24;
+/** The longest step `detail` one row keeps. */
+const MAX_TRACE_DETAIL = 120;
+
+/**
+ * A procedure turn's step decisions as the record keeps them (ID-08): the last
+ * `keep` of them — where the turn ended matters most — each `detail` within
+ * {@link MAX_TRACE_DETAIL} characters, and how many earlier ones were let go.
+ * Quoted text — a tag's name, the one label an admin writes freely — becomes
+ * `"…"`.
+ */
+export function stepRecords(
+  trace: readonly StepDecision[],
+  keep = MAX_TRACE_STEPS,
+): {
+  trace: StepDecision[];
+  trace_dropped?: number;
+} {
+  const kept = trace.slice(Math.max(0, trace.length - keep)).map((entry) => ({
+    step_id: entry.step_id.slice(0, MAX_LABEL),
+    type: entry.type,
+    cond_result: entry.cond_result,
+    detail: entry.detail.replace(/"[^"]*"/g, '"…"').slice(0, MAX_TRACE_DETAIL),
+  }));
+  return trace.length > kept.length
+    ? { trace: kept, trace_dropped: trace.length - kept.length }
+    : { trace: kept };
 }
 
 /**

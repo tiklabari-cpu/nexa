@@ -12625,7 +12625,7 @@
           "295"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T11:44:57.656Z",
+        "updatedAt": "2026-10-18T11:46:09.245Z",
         "subtasks": [
           {
             "id": 1,
@@ -12703,13 +12703,13 @@
             "description": "Eski skill regresyonu + ID-08 adım kayıtları + skill_runs sürekliliği",
             "details": "AI Agent raporu skill_runs'tan okur.",
             "testStrategy": "skill-engine.test.ts yeni motorla; rapor testi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "296.3"
             ],
             "parentId": "296",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-18T11:46:09.245Z"
           },
           {
             "id": 7,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T11:44:57.657Z",
+      "lastModified": "2026-10-18T11:46:09.246Z",
       "taskCount": 390,
       "completedCount": 294,
       "tags": [

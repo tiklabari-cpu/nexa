@@ -17,7 +17,8 @@
  *      to routing when the team cannot take it.
  *
  * Every model is the in-process stub (MASTER-PROMPT: the LLM is a
- * deterministic stub); the understanding is the interim reading (#297).
+ * deterministic stub); the understanding call is answered by its reading
+ * (`understand-mock.ts`, tm 297.1).
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -518,7 +519,7 @@ describe('procedure skills on the live path (AI-03)', () => {
     ]);
   });
 
-  it('files every step decision on the turn’s decision record — turn, step, type, condition, detail (ID-08)', async () => {
+  it('files every step decision on the turn’s decision record — turn, step, type, condition, detail, what was understood (ID-08)', async () => {
     const skillId = await createProcedure({ group_id: Number(financeId) });
     const headers = await customerAuth();
     const first = await send(headers, 'param yatmadı');
@@ -544,6 +545,14 @@ describe('procedure skills on the live path (AI-03)', () => {
         details: expect.objectContaining({
           turn: 1,
           procedure_hash: hash,
+          // What the understanding call read (tm 297.1 · AI-05 §8), mock-answered.
+          understood: {
+            procedure_key: skillId,
+            confidence: 1,
+            alternatives: [],
+            language: null,
+            tries: 1,
+          },
           trace: [
             { step_id: 'giris', type: 'say', cond_result: null, detail: 'template giris' },
             {
@@ -563,6 +572,7 @@ describe('procedure skills on the live path (AI-03)', () => {
         details: expect.objectContaining({
           turn: 2,
           procedure_hash: hash,
+          understood: expect.objectContaining({ procedure_key: null, tries: 1 }),
           trace: [
             { step_id: 'sor', type: 'collect', cond_result: null, detail: 'nothing left to ask' },
             { step_id: 'sure', type: 'check', cond_result: true, detail: 'then: go to bekle' },
@@ -727,7 +737,24 @@ describe('procedure skills on the live path (AI-03)', () => {
     });
 
     await createProcedure({ group_id: Number(financeId) });
-    expect(await ask()).toEqual(alone);
+    // The same in every part but one: beside a procedure the understanding call
+    // ran first, and the record says what it read (tm 297.1 · AI-05 §8).
+    const { record, ...beside } = await ask();
+    const { record: aloneRecord, ...aloneRest } = alone;
+    expect(beside).toEqual(aloneRest);
+    expect(record).toEqual({
+      ...aloneRecord,
+      details: {
+        ...(aloneRecord.details as Record<string, unknown>),
+        understood: {
+          procedure_key: null,
+          confidence: 0,
+          alternatives: [],
+          language: 'en',
+          tries: 1,
+        },
+      },
+    });
   });
 
   it('hands over to the team it names by id, and the AI stops', async () => {

@@ -1,7 +1,8 @@
 /**
  * Which procedure a turn runs (tm 296.3 · AI-03 §7, AI-05 §4.3; AI-03-S3) —
  * the topic change, the one topic set aside, the question about it, the
- * locked procedures — and the interim understanding that feeds it until #297.
+ * locked procedures. The mock understanding that feeds it in the suites is
+ * `../understand-mock.test.ts`'s.
  */
 import { describe, expect, it } from 'vitest';
 import { depositProcedure } from '../../../../../test/helpers/procedure-fixtures.js';
@@ -14,7 +15,6 @@ import {
 import { selectProcedure } from './selection.js';
 import {
   PROCEDURE_START_CONFIDENCE,
-  interimUnderstanding,
   rankProcedures,
   type CatalogueEntry,
   type ProcedureUnderstanding,
@@ -227,70 +227,5 @@ describe('ranking the candidates (AI-05 §4.3)', () => {
         },
       }),
     ).toEqual(['withdrawal', 'deposit']);
-  });
-});
-
-describe('the interim understanding (until #297)', () => {
-  const procedure = depositProcedure();
-  const read = { now: NOW, timeZone: 'Europe/Istanbul', currency: 'TRY' };
-  const options = { yontem: [{ value: 'Papara' }, { value: 'Havale' }] };
-
-  it('finds the procedure by its example sentences', () => {
-    const result = interimUnderstanding({
-      text: 'Param yatmadı!',
-      catalogue: CATALOGUE,
-      pending: null,
-      read,
-    });
-    expect(result.intent).toMatchObject({ procedure_key: 'deposit', confidence: 1 });
-    expect(result.extracted).toEqual([]);
-  });
-
-  it('reads the message only for the slots the AI is waiting on, and only where it holds something of their kind', () => {
-    const pending = {
-      defs: procedure.slots as never,
-      slots: {},
-      asked: ['yontem', 'islem_zamani'],
-      key: 'deposit',
-    };
-    const both = interimUnderstanding({
-      text: 'Papara 13:40',
-      catalogue: CATALOGUE,
-      pending,
-      read,
-      options,
-    });
-    expect(both.extracted).toEqual([
-      { slot: 'yontem', raw_text: 'Papara 13:40' },
-      { slot: 'islem_zamani', raw_text: 'Papara 13:40' },
-    ]);
-    expect(both.answers_pending_question).toBe(true);
-
-    const one = interimUnderstanding({
-      text: 'papara ile',
-      catalogue: CATALOGUE,
-      pending,
-      read,
-      options,
-    });
-    expect(one.extracted).toEqual([{ slot: 'yontem', raw_text: 'papara ile' }]);
-
-    const other = interimUnderstanding({
-      text: 'çekim yapamıyorum',
-      catalogue: CATALOGUE,
-      pending,
-      read,
-      options,
-    });
-    expect(other.extracted).toEqual([]);
-    expect(other.answers_pending_question).toBe(false);
-    expect(other.intent.procedure_key).toBe('withdrawal');
-  });
-
-  it('answers yes or no in Turkish', () => {
-    const yes = interimUnderstanding({ text: 'evet', catalogue: [], pending: null, read });
-    const no = interimUnderstanding({ text: 'hayır', catalogue: [], pending: null, read });
-    const neither = interimUnderstanding({ text: 'bilmem', catalogue: [], pending: null, read });
-    expect([yes.yes_no, no.yes_no, neither.yes_no]).toEqual(['yes', 'no', null]);
   });
 });

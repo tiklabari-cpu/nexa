@@ -18,6 +18,10 @@
  * `responseFormat` (tm 283.1 · ADR §6a.6): the deterministic object
  * `exampleForSchema` builds from the schema, serialised — the same request
  * always gets the same bytes, and they pass `completeStructured`'s gate.
+ * The understanding call (tm 297.1) is the one structured request answered
+ * from its input rather than its schema: `mockUnderstanding` reads the
+ * context line `buildUnderstandPrompt` wrote, so a procedure is found by its
+ * example sentences in every suite (AI-05 §6).
  * The invalid, refused and cut-off replies a real model can give are not
  * produced here; tests inject a provider that gives them (§6a.6).
  *
@@ -31,6 +35,8 @@
 import { shapeAnswer } from '@siyahtus/types';
 import { readAnswerGrounding } from './answer-prompt.js';
 import { readComposeGrounding } from './compose-prompt.js';
+import { mockUnderstanding } from '../conversation/understand-mock.js';
+import { readUnderstandGrounding, UNDERSTAND_RESPONSE_NAME } from '../conversation/understand.js';
 import { exampleForSchema } from './json-schema.js';
 import type { LlmCompletion, LlmCompletionRequest, LlmProvider } from './llm-provider.js';
 
@@ -39,7 +45,13 @@ export class MockLlmProvider implements LlmProvider {
 
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
     if (request.responseFormat) {
-      const text = JSON.stringify(exampleForSchema(request.responseFormat.schema));
+      const grounding =
+        request.responseFormat.name === UNDERSTAND_RESPONSE_NAME
+          ? readUnderstandGrounding(request.system)
+          : null;
+      const text = JSON.stringify(
+        grounding ? mockUnderstanding(grounding) : exampleForSchema(request.responseFormat.schema),
+      );
       return { text, usage: { inputTokens: 0, outputTokens: 0 } };
     }
 

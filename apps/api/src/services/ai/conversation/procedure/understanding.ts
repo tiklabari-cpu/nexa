@@ -1,42 +1,19 @@
 /**
  * What the procedure executor needs to know about a message (tm 296.3 ·
- * SiyahTuş analysis AI-03 §4, §7; AI-05 §3) — and the interim reading that
- * answers it until the understanding call exists (#297).
+ * SiyahTuş analysis AI-03 §4, §7; AI-05 §3), and how the candidates it names
+ * are ranked.
  *
- * The understanding call (#297 `understand.ts`, AI-05) reads every message
- * once and answers in one JSON object: which procedure it is about and how
- * sure it is, whether it continues the active one or answers the question the
- * AI asked, a yes/no, the slot values it heard (AI-04), the answers to the
+ * The understanding call (`../understand.ts`, tm 297.1 · AI-05) reads every
+ * message once and answers in one JSON object: which procedure it is about and
+ * how sure it is, whether it continues the active one or answers the question
+ * the AI asked, a yes/no, the slot values it heard (AI-04), the answers to the
  * procedure's `ai` conditions (AI-03). {@link ProcedureUnderstanding} is the
  * part of that object the executor reads, under the same names, so the call's
- * output goes in as it comes.
- *
- * Until #297, {@link interimUnderstanding} stands in for it — deterministic,
- * no model call, and deliberately modest:
- *
- *   - **which procedure** — `matchIntent` over each procedure's example
- *     sentences (its name when it has none), the legacy skill gate's own
- *     matcher; the score is the confidence. Ties are the policy's
- *     ({@link rankProcedures}).
- *   - **the slot values** — only for the question the AI is waiting on: each
- *     slot the awaiting `collect` asked for, proposed with the whole message as
- *     the player's words, and only when that slot's own reader (`readSlot`)
- *     finds something of its kind in them — an enum, one of its options.
- *     Nothing is proposed for a slot nobody asked about: the whole message read
- *     as a username or a yes/no would fill it with words that were never an
- *     answer to it. A message with nothing for the question does not answer
- *     it, which is what lets another topic take over.
- *   - **a yes/no** — the boolean reader's, for "Önceki konuya dönelim mi?".
- *   - **`ai` conditions** — none: unknown, which the condition evaluator
- *     counts as false and logs.
- *
- * #297 replaces the call, not the shape.
+ * output goes in as it comes. With `LLM_PROVIDER=mock` the call is answered
+ * by `../understand-mock.ts`, the deterministic reading that stood here as
+ * `interimUnderstanding` until #297.
  */
-import { matchIntent } from '@siyahtus/ai-mock';
 import type { SlotDef } from '@siyahtus/types';
-import { parseBooleanTr } from '../slots/normalize-tr.js';
-import { readSlot, type SlotEnumOption, type SlotReadContext } from '../slots/validators.js';
-import { slotRecord } from '../slots/extract.js';
 import type { AiStateObject } from '../state-store.js';
 
 /**
@@ -66,7 +43,7 @@ export interface ProcedureUnderstanding {
 /**
  * The understanding at which a procedure starts, or takes over from the active
  * one — AI-05's `clarify_thresholds.high` default (0.70). The agent's own
- * thresholds and the clarifying question between them are #297's.
+ * thresholds and the clarifying question between them are #297.2's.
  */
 export const PROCEDURE_START_CONFIDENCE = 0.7;
 
@@ -78,6 +55,8 @@ export interface CatalogueEntry {
   /** The skill's id — the understanding's `procedure_key`. */
   readonly key: string;
   readonly name: string;
+  /** "Ne zaman kullanılır" — what the understanding call selects by. */
+  readonly whenToUse?: string;
   readonly examples: readonly string[];
   readonly priority: number;
   /** A locked template copy (self-exclusion, responsible gaming) — first, always. */
@@ -134,67 +113,4 @@ export interface PendingQuestion {
   readonly asked: readonly string[];
   /** The procedure waiting — its key. */
   readonly key: string;
-}
-
-export interface InterimUnderstandingInput {
-  /** What the player wrote this turn. */
-  readonly text: string;
-  readonly catalogue: readonly CatalogueEntry[];
-  readonly pending: PendingQuestion | null;
-  /** How the readers read the words: the clock, the zone, the currency. */
-  readonly read: Omit<SlotReadContext, 'options' | 'completing' | 'network'>;
-  readonly options?: Readonly<Record<string, readonly SlotEnumOption[]>>;
-}
-
-/** The deterministic stand-in for the understanding call (see the file header). */
-export function interimUnderstanding(input: InterimUnderstandingInput): ProcedureUnderstanding {
-  const scored = input.catalogue
-    .map((entry) => ({
-      key: entry.key,
-      confidence: matchIntent(input.text, entry.name, [...entry.examples]).score,
-    }))
-    .sort((a, b) => b.confidence - a.confidence);
-  const best = scored[0];
-
-  const extracted: Array<{ slot: string; raw_text: string }> = [];
-  if (input.pending) {
-    const defs = new Map(input.pending.defs.map((def) => [def.name, def]));
-    for (const name of input.pending.asked) {
-      const def = defs.get(name);
-      if (def === undefined || def.type === 'file') continue;
-      const current = slotRecord(input.pending.slots[name]);
-      const reading = readSlot(def, input.text, {
-        ...input.read,
-        ...(input.options?.[name] ? { options: input.options[name] } : {}),
-        completing:
-          current.status === 'partial' &&
-          current.value !== null &&
-          typeof current.value === 'object'
-            ? (current.value as SlotReadContext['completing'])
-            : null,
-      });
-      // Nothing of the slot's kind: no words to read, or — an enum — none of its options named.
-      if (
-        reading.status === 'invalid' &&
-        (reading.reason === 'unreadable' || reading.reason === 'not_an_option')
-      ) {
-        continue;
-      }
-      extracted.push({ slot: name, raw_text: input.text });
-    }
-  }
-
-  const yes = parseBooleanTr(input.text);
-  return {
-    intent: {
-      procedure_key: best && best.confidence > 0 ? best.key : null,
-      confidence: best?.confidence ?? 0,
-      alternatives: scored.slice(1).filter((candidate) => candidate.confidence > 0),
-      is_continuation: input.pending !== null && extracted.length > 0,
-    },
-    answers_pending_question: input.pending !== null && extracted.length > 0,
-    yes_no: yes.status === 'filled' ? (yes.value ? 'yes' : 'no') : null,
-    extracted,
-    ai_conditions: {},
-  };
 }

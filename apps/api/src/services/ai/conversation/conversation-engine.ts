@@ -112,6 +112,7 @@ import { buildAnswerPrompt } from '../provider/answer-prompt.js';
 import { buildComposePrompt } from '../provider/compose-prompt.js';
 import { EmbeddingProviderError } from '../provider/embedding-error.js';
 import { LlmProviderError } from '../provider/llm-error.js';
+import { completeStructured } from '../provider/structured-output.js';
 import {
   promptLength,
   refuseOverlongPrompt,
@@ -148,12 +149,22 @@ import {
   type SuspendedProcedure,
 } from './procedure/executor.js';
 import { selectProcedure } from './procedure/selection.js';
-import {
-  interimUnderstanding,
-  type CatalogueEntry,
-  type PendingQuestion,
-  type ProcedureUnderstanding,
+import type {
+  CatalogueEntry,
+  PendingQuestion,
+  ProcedureUnderstanding,
 } from './procedure/understanding.js';
+import {
+  buildUnderstandPrompt,
+  readUnderstanding,
+  understandCatalogue,
+  understandGrounding,
+  understoodDetail,
+  understoodRecord,
+  UNDERSTAND_RESPONSE_FORMAT,
+  type UnderstandContextInput,
+  type UnderstandReply,
+} from './understand.js';
 import type { AiStateObject } from './state-store.js';
 import { readAndCompile } from './turn-config.js';
 import {
@@ -172,6 +183,7 @@ import {
   type TurnResult,
   type TurnSideEffect,
   type TurnState,
+  type UnderstoodRecord,
 } from './turn.js';
 
 export interface ConversationEngineOptions {
@@ -252,6 +264,36 @@ interface ProcedureRun {
   lastTurnAt: Date | null;
   timeZone: string;
   currency: string;
+  /** What the understanding call cost — the turn's first spend. */
+  spent: SkillRunUsage;
+  /** What it read, for the decision record. */
+  understood?: UnderstoodRecord;
+}
+
+/**
+ * What the understanding call gave the turn (tm 297.1): the reading, or why
+ * there is none — the model failed, or today's cap refused it — and its cost.
+ */
+type Understood =
+  | {
+      understanding: ProcedureUnderstanding;
+      spent: SkillRunUsage;
+      log: SkillRunLogEntry[];
+      /** Absent when the turn was handed its understanding (a test, a simulation). */
+      record?: UnderstoodRecord;
+    }
+  | {
+      understanding: null;
+      failure: SkillFailure | null;
+      capped: AiDailyCapError | null;
+      spent: SkillRunUsage;
+      log: SkillRunLogEntry[];
+    };
+
+/** A turn no procedure took: what the understanding cost, for the skill that answers instead. */
+interface NoProcedure {
+  spent: SkillRunUsage;
+  record?: UnderstoodRecord;
 }
 
 /** One piece of a procedure turn's message; `written` is where the composed part goes. */
@@ -333,7 +375,22 @@ export class ConversationEngine {
     // A procedure in progress, or one the message starts, goes first (tm 296.3
     // · AI-05 §4: a procedure match is never answered by a catch-all skill).
     const procedural = await this.#procedureTurn(state, message, ctx);
-    if (procedural) return procedural;
+    if (procedural && 'nextState' in procedural) return procedural;
+    // The understanding call ran and chose no procedure: its cost is the turn's
+    // all the same, on whichever skill answers.
+    const spent = procedural?.spent ?? NOTHING_SPENT;
+    const record = procedural?.record;
+    const charged = (executed: Executed): Executed =>
+      procedural
+        ? {
+            ...executed,
+            decisions: {
+              ...executed.decisions,
+              usage: addUsage(spent, executed.decisions.usage),
+              ...(record ? { understood: record } : {}),
+            },
+          }
+        : executed;
 
     for (const skill of ctx.config.skills) {
       if (skill.mode === 'procedure') continue;
@@ -354,7 +411,7 @@ export class ConversationEngine {
       const intent = procedure.whenToUse[0]?.intent ?? null;
 
       if (language.unsupported) {
-        const executed = declined(identity, gate.log, language.detected);
+        const executed = charged(declined(identity, gate.log, language.detected));
         return { ...executed, nextState: afterTurn(state, message, executed, identity, intent) };
       }
 
@@ -374,24 +431,31 @@ export class ConversationEngine {
       // translation here, only knowledge in whatever language the admin loaded.
       // Declining leaves the outcome `skipped`, so routing proceeds exactly as
       // it would with no AI and a human picks the conversation up.
-      const executed = withRecall(
-        await this.#execute(procedure, {
-          skill: identity,
-          message,
-          gateLog: gate.log,
-          persona: skill.persona,
-          answerIn: language.answerIn,
-          ctx,
-          slots: before.slots,
-          recalled: recall !== null,
-        }),
-        recall,
+      const executed = charged(
+        withRecall(
+          await this.#execute(procedure, {
+            skill: identity,
+            message,
+            gateLog: gate.log,
+            persona: skill.persona,
+            answerIn: language.answerIn,
+            ctx,
+            slots: before.slots,
+            recalled: recall !== null,
+          }),
+          recall,
+        ),
       );
 
       return { ...executed, nextState: afterTurn(before, message, executed, identity, intent) };
     }
 
-    return { reply: null, decisions: NOTHING_DECIDED, nextState: state, sideEffects: [] };
+    return {
+      reply: null,
+      decisions: { ...NOTHING_DECIDED, usage: spent, ...(record ? { understood: record } : {}) },
+      nextState: state,
+      sideEffects: [],
+    };
   }
 
   /**
@@ -677,7 +741,7 @@ export class ConversationEngine {
     state: TurnState,
     message: TurnMessage,
     ctx: TurnContext,
-  ): Promise<TurnResult | null> {
+  ): Promise<TurnResult | NoProcedure | null> {
     const catalogue = procedureCatalogue(ctx.config.skills);
     const active = activeProcedure(state);
     const suspended = readSuspended(state.suspended);
@@ -687,15 +751,31 @@ export class ConversationEngine {
     const timeZone = ctx.timeZone ?? DEFAULT_DAY_BOUNDARY.timezone;
     const currency = data.currency ?? DEFAULT_CURRENCY;
     const entries = catalogue.map((item) => item.entry);
-    const understanding =
-      data.understanding ??
-      interimUnderstanding({
-        text: message.text,
-        catalogue: entries,
-        pending: active ? pendingQuestion(active, state.slots) : null,
-        read: { now: ctx.now, timeZone, currency },
-        ...(data.options ? { options: data.options } : {}),
-      });
+    const understood: Understood = data.understanding
+      ? { understanding: data.understanding, spent: NOTHING_SPENT, log: [] }
+      : await this.#understand(message, ctx, {
+          message: message.text,
+          catalogue: understandCatalogue({
+            procedures: catalogue.map((item) => ({ entry: item.entry })),
+            active: active ? snapshotEntry(active) : null,
+          }),
+          active: active
+            ? {
+                key: active.skillId,
+                name: active.snapshot.skill_name,
+                procedure: active.snapshot.procedure,
+              }
+            : null,
+          pending: active ? pendingQuestion(active, state.slots) : null,
+          ...(data.options ? { options: data.options } : {}),
+          now: ctx.now,
+          timeZone,
+          currency,
+        });
+    if (understood.understanding === null) {
+      return notUnderstood(state, message, active, understood);
+    }
+    const { understanding } = understood;
     const picked = selectProcedure({
       understanding,
       catalogue: entries,
@@ -705,7 +785,10 @@ export class ConversationEngine {
       now: ctx.now,
     });
     const { selection } = picked;
-    if (selection.kind === 'none') return null;
+    const record = understood.record;
+    if (selection.kind === 'none')
+      return { spent: understood.spent, ...(record ? { record } : {}) };
+    const log = [...understood.log, ...picked.log];
 
     if (selection.kind === 'declined') {
       // "Hayır" to the set-aside topic: it is let go, and the AI says so.
@@ -725,7 +808,9 @@ export class ConversationEngine {
           skillId: identity.id,
           skillName: identity.name,
           replyKind: 'answer',
-          log: picked.log,
+          usage: understood.spent,
+          ...(record ? { understood: record } : {}),
+          log,
           trace: [],
         },
         sideEffects: [],
@@ -758,7 +843,15 @@ export class ConversationEngine {
     if (language.unsupported) {
       // As a single-message skill declines (FR-MOD-06.4): nothing changes
       // but the count — the procedure stays where it stood.
-      const executed = declined(skill, picked.log, language.detected);
+      const refused = declined(skill, log, language.detected);
+      const executed = {
+        ...refused,
+        decisions: {
+          ...refused.decisions,
+          usage: understood.spent,
+          ...(record ? { understood: record } : {}),
+        },
+      };
       return { ...executed, nextState: afterTurn(state, message, executed, skill, null) };
     }
 
@@ -788,14 +881,106 @@ export class ConversationEngine {
       slots: starting ? before.slots : resuming ? (suspended?.slots ?? {}) : state.slots,
       signals: starting ? before.signals : state.signals,
       procedureTurns: starting ? 0 : (ongoing as ActiveProcedure).procedureTurns,
-      understanding: resuming ? null : understanding,
+      // An `ai` answer is keyed by the step or slot it was asked for, and it
+      // was asked for the procedure in progress: a procedure starting now
+      // reads none of them (its ids may be the same words).
+      understanding: resuming
+        ? null
+        : starting && starting.entry.key !== active?.skillId
+          ? { ...understanding, ai_conditions: {} }
+          : understanding,
       suspended: picked.suspended,
-      log: picked.log,
+      log,
       recall: earlier && target ? recallLine(target, earlier.trust, language.answerIn) : null,
       lastTurnAt: starting ? null : lastTurnAt(state),
       timeZone,
       currency,
+      spent: understood.spent,
+      ...(record ? { understood: record } : {}),
     });
+  }
+
+  /**
+   * The understanding call (tm 297.1 · AI-05 §3 · `understand.ts`): one
+   * structured call on the fast tier, counted on the turn's meter like every
+   * other call. A reply that fails the schema twice, any other provider
+   * failure and today's cap end in the same place as a failed answer — no
+   * reading, and a person is sent (AI-09 `ai_failure`).
+   */
+  async #understand(
+    message: TurnMessage,
+    ctx: TurnContext,
+    input: UnderstandContextInput,
+  ): Promise<Understood> {
+    const attribution: AiAttribution = {
+      surface: SURFACE[ctx.mode],
+      chatId: ctx.chatId,
+      configVersionId: ctx.configVersionId,
+    };
+    const grounding = understandGrounding(input);
+    const prompt = fitHistory(
+      (history) => buildUnderstandPrompt({ grounding, ...(history ? { history } : {}) }),
+      message.history,
+      this.#maxPromptChars,
+    );
+    try {
+      refuseOverlongPrompt(prompt, this.#maxPromptChars);
+      const { value, usage, tries } = await completeStructured<UnderstandReply>(
+        this.#llm.forTenant(ctx.tenant, attribution),
+        { ...prompt, ...this.#limits, tier: 'fast', responseFormat: UNDERSTAND_RESPONSE_FORMAT },
+      );
+      const read = readUnderstanding(value, grounding);
+      return {
+        understanding: read.understanding,
+        record: understoodRecord(read.understanding, tries),
+        spent: addUsage(NOTHING_SPENT, {
+          llmInputTokens: usage.inputTokens,
+          llmOutputTokens: usage.outputTokens,
+        }),
+        log: [
+          { step: 'understand', detail: understoodDetail(read.understanding, tries), ok: true },
+          ...read.dropped.map((detail) => ({
+            step: 'understand',
+            detail: `dropped — ${detail}`,
+            ok: false,
+          })),
+        ],
+      };
+    } catch (error) {
+      if (error instanceof AiDailyCapError) {
+        return {
+          understanding: null,
+          failure: null,
+          capped: error,
+          spent: NOTHING_SPENT,
+          log: [
+            {
+              step: 'understand',
+              detail: `today's AI cap is reached (${error.scope}) — handed to a human`,
+              ok: false,
+            },
+          ],
+        };
+      }
+      if (!(error instanceof LlmProviderError)) throw error;
+      return {
+        understanding: null,
+        failure: { provider: 'llm', kind: error.kind, ...failureFacts(error) },
+        capped: null,
+        // A `no_answer` was generated — both tries of it — so it was billed.
+        spent: addUsage(NOTHING_SPENT, {
+          llmInputTokens: error.usage?.inputTokens ?? 0,
+          llmOutputTokens: error.usage?.outputTokens ?? 0,
+        }),
+        log: [
+          {
+            step: 'understand',
+            detail: `the model could not read the message (${error.kind}) — handed to a human`,
+            ok: false,
+          },
+        ],
+      };
+    }
   }
 
   /** One turn of the chosen procedure, with its message written and its next state. */
@@ -842,7 +1027,7 @@ export class ConversationEngine {
     // one call, in place of the first.
     const segments: Segment[] = [];
     const instructions: Array<{ at: string; text: string }> = [];
-    let usage = NOTHING_SPENT;
+    let usage = run.spent;
     let failure: SkillFailure | null = null;
     let capped: AiDailyCapError | null = null;
     let failedAt: string | null = null;
@@ -977,6 +1162,7 @@ export class ConversationEngine {
           handoffReason: handedOff && !aborted ? (end as { reason: string }).reason : null,
           trace: result.trace,
           procedureHash: run.hash,
+          ...(run.understood ? { understood: run.understood } : {}),
         },
         sideEffects,
       },
@@ -1503,6 +1689,7 @@ function procedureCatalogue(
       entry: {
         key: skill.id,
         name: skill.name,
+        whenToUse: parsed.procedure.when_to_use,
         examples: parsed.procedure.examples,
         priority: parsed.procedure.priority,
         locked: skill.locked === true,
@@ -1512,6 +1699,63 @@ function procedureCatalogue(
     });
   }
   return catalogue;
+}
+
+/** The procedure in progress as the understanding call sees it: its pinned definition. */
+function snapshotEntry(active: ActiveProcedure): CatalogueEntry {
+  const { procedure } = active.snapshot;
+  return {
+    key: active.skillId,
+    name: active.snapshot.skill_name,
+    whenToUse: procedure.when_to_use,
+    examples: procedure.examples,
+    priority: procedure.priority,
+    locked: active.snapshot.locked,
+  };
+}
+
+/**
+ * The turn when the message could not be understood (AI-05 §3 → AI-09
+ * `ai_failure`): nothing is said, a person is sent, and a procedure in
+ * progress stays where it stood — nothing of it ran, so it can go on if the
+ * conversation is handed back.
+ */
+function notUnderstood(
+  state: TurnState,
+  message: TurnMessage,
+  active: ActiveProcedure | null,
+  understood: Extract<Understood, { understanding: null }>,
+): TurnResult {
+  const skill = active ? { id: active.skillId, name: active.snapshot.skill_name } : null;
+  const executed: Executed = {
+    reply: null,
+    decisions: {
+      ...NOTHING_DECIDED,
+      outcome: 'handed_off',
+      skillId: skill?.id ?? null,
+      skillName: skill?.name ?? null,
+      failure: understood.failure,
+      capped: understood.capped,
+      usage: understood.spent,
+      log: understood.log,
+      ...(active ? { trace: [], procedureHash: active.hash } : {}),
+    },
+    sideEffects: [
+      {
+        kind: 'handoff',
+        team: null,
+        reason: understood.failure ? `${understood.failure.provider}_failure` : 'ai_cap_reached',
+      },
+    ],
+  };
+  const nextState = skill
+    ? afterTurn(state, message, executed, skill, null)
+    : {
+        ...state,
+        counters: { ...state.counters, turns: turnsTaken(state) + 1 },
+        lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+      };
+  return { ...executed, nextState };
 }
 
 /**

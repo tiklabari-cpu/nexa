@@ -189,6 +189,7 @@ model License {
   queueEntries           QueueEntry[]
   aiConversations        AiConversation[]
   aiHandoffSettings      AiHandoffSettings[]
+  aiProcedureExamples    AiProcedureExample[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -1939,12 +1940,38 @@ model Skill {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  license License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  aiAgent AiAgent?   @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
-  runs    SkillRun[]
+  license        License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent        AiAgent?             @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  runs           SkillRun[]
+  exampleVectors AiProcedureExample[]
 
   @@index([licenseId, kind, active])
   @@map("skills")
+}
+
+/// A procedure skill's example sentences, embedded (tm 297.3 · SiyahTuş
+/// analysis AI-05 §2): what the understanding call's catalogue is narrowed by
+/// when an agent has more than 15 procedures. Written after a skill save
+/// (`procedure-examples.ts`); a procedure with no rows in the turn's
+/// embedding space is never narrowed away. Its hnsw index
+/// (`idx_procedure_examples_embedding_hnsw`) is created in a migration, like
+/// `knowledge_chunks`'s, because Prisma cannot express index methods.
+model AiProcedureExample {
+  id             String                      @id @default(uuid()) @db.Uuid
+  licenseId      BigInt                      @map("license_id")
+  skillId        String                      @map("skill_id") @db.Uuid
+  text           String
+  embedding      Unsupported("vector(1536)")
+  /// `EmbeddingProvider.space`, as on `knowledge_chunks` (PLAN D182).
+  embeddingSpace String                      @map("embedding_space")
+  createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@index([licenseId, embeddingSpace])
+  @@map("ai_procedure_examples")
 }
 
 /// Audit trail for skill executions — what ran, against which chat, and why it

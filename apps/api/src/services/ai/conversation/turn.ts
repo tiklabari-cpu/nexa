@@ -41,6 +41,7 @@ import type { StepDecision } from './procedure/executor.js';
 import type { ProcedureUnderstanding } from './procedure/understanding.js';
 import type { SlotAttachment } from './slots/extract.js';
 import type { SlotEnumOption } from './slots/validators.js';
+import type { PrefilterRecord } from './prefilter.js';
 import type {
   AiConversationPatch,
   AiConversationPatchField,
@@ -385,6 +386,8 @@ export interface UnderstoodRecord {
   language: string | null;
   /** 2 when the first reply failed the schema. */
   tries: 1 | 2;
+  /** How the catalogue was narrowed first (tm 297.3) — absent at 15 procedures or fewer. */
+  prefilter?: PrefilterRecord;
 }
 
 /**

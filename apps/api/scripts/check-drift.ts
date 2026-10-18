@@ -47,6 +47,14 @@ const KNOWN_UNMODELLABLE = [
     reason: 'pgvector hnsw index — Prisma cannot express index access methods',
   },
   {
+    // Created as `USING hnsw (embedding vector_cosine_ops) WITH (m = 16,
+    // ef_construction = 64)` in 20261018180100_ai_procedure_examples_hnsw_index
+    // — the catalogue narrowing's index (tm 297.3).
+    pattern:
+      /CREATE INDEX "idx_procedure_examples_embedding_hnsw" ON "public"\."ai_procedure_examples"/,
+    reason: 'pgvector hnsw index — Prisma cannot express index access methods',
+  },
+  {
     // Created as `ON brands(license_id) WHERE is_default` in 20260802100000_brands.
     pattern: /CREATE UNIQUE INDEX "brands_one_default_per_license" ON "public"\."brands"/,
     reason:

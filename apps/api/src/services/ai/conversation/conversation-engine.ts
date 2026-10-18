@@ -108,6 +108,7 @@ import {
 } from '../knowledge-service.js';
 import { AiDailyCapError, type AiAttribution } from '../ai-daily-budget.js';
 import { MeteredLlm } from '../metered-llm.js';
+import { ProcedureExamples } from '../procedure-examples.js';
 import { buildAnswerPrompt } from '../provider/answer-prompt.js';
 import { buildComposePrompt } from '../provider/compose-prompt.js';
 import { EmbeddingProviderError } from '../provider/embedding-error.js';
@@ -164,6 +165,12 @@ import {
   type PolicyRecord,
 } from './policy.js';
 import {
+  narrowCatalogue,
+  needsPrefilter,
+  prefilterDetail,
+  type PrefilterRecord,
+} from './prefilter.js';
+import {
   buildUnderstandPrompt,
   readUnderstanding,
   understandCatalogue,
@@ -214,6 +221,11 @@ export interface ConversationEngineOptions {
    * lexical stub, searching a space the knowledge base may no longer be in.
    */
   knowledge: KnowledgeService;
+  /**
+   * Where the catalogue narrowing reads its examples (tm 297.3); tests lower
+   * its exact-search ceiling. Default: `new ProcedureExamples()`.
+   */
+  procedureExamples?: ProcedureExamples;
 }
 
 /** The meter each mode's spend is counted on (`TurnMode`). */
@@ -329,6 +341,9 @@ interface SingleItem {
   procedure: SingleTurnProcedure;
 }
 
+/** A skill id; a preview's unsaved procedure has none. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** The reading a fallback procedure starts on when no call was made. */
 const NOTHING_UNDERSTOOD: ProcedureUnderstanding = Object.freeze({
   intent: { procedure_key: null, confidence: 0 },
@@ -389,12 +404,19 @@ interface KnowledgeAnswer {
 
 export class ConversationEngine {
   readonly #knowledge: KnowledgeService;
+  readonly #examples: ProcedureExamples;
   readonly #llm: MeteredLlm;
   readonly #limits: { maxOutputTokens: number; timeoutMs: number };
   readonly #maxPromptChars: number;
+  /**
+   * The turn's one embedding (AI-05 §2): the narrowing embeds the message, and
+   * the knowledge search of the same turn reuses it rather than asking again.
+   */
+  readonly #turnEmbeddings = new WeakMap<TurnMessage, { text: string; query: EmbeddedQuery }>();
 
   constructor(options: ConversationEngineOptions) {
     this.#knowledge = options.knowledge;
+    this.#examples = options.procedureExamples ?? new ProcedureExamples();
     this.#llm = MeteredLlm.wrap(options.llm);
     this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
     this.#maxPromptChars = options.maxPromptChars;
@@ -762,6 +784,7 @@ export class ConversationEngine {
 
         case 'answer_from_knowledge': {
           const answer = await this.#answerFromKnowledge({
+            turn: input.message,
             message: input.message.text,
             history: input.message.history,
             earlierToday: input.message.earlierToday
@@ -858,7 +881,7 @@ export class ConversationEngine {
     const entries = selectable.map((item) => item.entry);
     const understood: Understood = data.understanding
       ? { understanding: data.understanding, spent: NOTHING_SPENT, log: [] }
-      : await this.#understand(message, ctx, {
+      : await this.#understandNarrowed(message, ctx, active?.skillId ?? null, {
           message: message.text,
           catalogue: understandCatalogue({
             procedures: selectable.map((item) => ({ entry: item.entry })),
@@ -1118,6 +1141,123 @@ export class ConversationEngine {
   }
 
   /**
+   * The understanding call over the catalogue as narrowed (tm 297.3 · AI-05
+   * §2): what the narrowing cost and said comes first in the turn's spend and
+   * log, and its counts go in the decision record beside the reading.
+   */
+  async #understandNarrowed(
+    message: TurnMessage,
+    ctx: TurnContext,
+    activeKey: string | null,
+    input: UnderstandContextInput,
+  ): Promise<Understood> {
+    const narrowed = await this.#narrow(message, ctx, input.catalogue, activeKey);
+    const understood = await this.#understand(message, ctx, {
+      ...input,
+      catalogue: narrowed.catalogue,
+    });
+    const spent = addUsage(narrowed.spent, understood.spent);
+    const log = [...narrowed.log, ...understood.log];
+    if (understood.understanding === null) return { ...understood, spent, log };
+    return {
+      ...understood,
+      spent,
+      log,
+      ...(understood.record && narrowed.record
+        ? { record: { ...understood.record, prefilter: narrowed.record } }
+        : {}),
+    };
+  }
+
+  /**
+   * The catalogue narrowing (tm 297.3 · AI-05 §2 · `prefilter.ts`): past 15
+   * procedures, the turn's message is embedded — once; the knowledge search
+   * reuses it — and the call is offered the nearest by example, the locked
+   * and the active. A narrowing that cannot run (the embedding failed or did
+   * not fit today's cap) offers the whole catalogue and says so: it is an
+   * economy, and its failure is not the player's.
+   */
+  async #narrow(
+    message: TurnMessage,
+    ctx: TurnContext,
+    catalogue: readonly CatalogueEntry[],
+    activeKey: string | null,
+  ): Promise<{
+    catalogue: CatalogueEntry[];
+    spent: SkillRunUsage;
+    log: SkillRunLogEntry[];
+    record?: PrefilterRecord;
+  }> {
+    if (!needsPrefilter(catalogue))
+      return { catalogue: [...catalogue], spent: NOTHING_SPENT, log: [] };
+    let query: EmbeddedQuery;
+    try {
+      query = await this.#embedTurn(message, message.text, ctx);
+    } catch (error) {
+      if (error instanceof AiDailyCapError) {
+        return {
+          catalogue: [...catalogue],
+          spent: NOTHING_SPENT,
+          log: [
+            {
+              step: 'prefilter',
+              detail: `not narrowed — today's AI cap is reached (${error.scope})`,
+              ok: false,
+            },
+          ],
+        };
+      }
+      if (!(error instanceof EmbeddingProviderError)) throw error;
+      return {
+        catalogue: [...catalogue],
+        spent: addUsage(NOTHING_SPENT, { embeddingTokens: error.usage?.inputTokens ?? 0 }),
+        log: [
+          {
+            step: 'prefilter',
+            detail: `not narrowed — the message could not be embedded (${error.kind})`,
+            ok: false,
+          },
+        ],
+      };
+    }
+    // A preview's unsaved procedure has no id, so no examples: unranked, kept.
+    const skillIds = catalogue.map((entry) => entry.key).filter((key) => UUID.test(key));
+    const ranking = await ctx.db((tx) => this.#examples.rank(tx, ctx.tenant, query, skillIds));
+    const narrowed = narrowCatalogue({
+      catalogue,
+      ranked: ranking.ranked,
+      activeKey,
+      strategy: ranking.strategy,
+    });
+    const spent = addUsage(NOTHING_SPENT, { embeddingTokens: query.usage.inputTokens });
+    if (!narrowed.record) return { catalogue: narrowed.catalogue, spent, log: [] };
+    return {
+      catalogue: narrowed.catalogue,
+      spent,
+      log: [{ step: 'prefilter', detail: prefilterDetail(narrowed.record), ok: true }],
+      record: narrowed.record,
+    };
+  }
+
+  /**
+   * The turn's message embedded — or `text`, a step's search with a hint —
+   * asked of the provider once per turn and text (AI-05 §2: one embedding per
+   * turn). A second ask returns the same vector at no cost: its tokens were
+   * counted where it was first asked. A failure is not kept.
+   */
+  async #embedTurn(turn: TurnMessage, text: string, ctx: TurnContext): Promise<EmbeddedQuery> {
+    const done = this.#turnEmbeddings.get(turn);
+    if (done && done.text === text) return { ...done.query, usage: { inputTokens: 0 } };
+    const query = await this.#knowledge.embedQuery(text, ctx.tenant, {
+      surface: SURFACE[ctx.mode],
+      chatId: ctx.chatId,
+      configVersionId: ctx.configVersionId,
+    });
+    if (!done) this.#turnEmbeddings.set(turn, { text, query });
+    return query;
+  }
+
+  /**
    * The understanding call (tm 297.1 · AI-05 §3 · `understand.ts`): one
    * structured call on the fast tier, counted on the turn's meter like every
    * other call. A reply that fails the schema twice, any other provider
@@ -1263,6 +1403,7 @@ export class ConversationEngine {
           break;
         case 'knowledge': {
           const answer = await this.#answerFromKnowledge({
+            turn: message,
             message: message.text,
             ...(part.queryHint ? { query: `${part.queryHint}\n${message.text}` } : {}),
             history: message.history,
@@ -1513,6 +1654,8 @@ export class ConversationEngine {
   }
 
   async #answerFromKnowledge(input: {
+    /** The turn's message — whose embedding the narrowing may already have. */
+    turn: TurnMessage;
     message: string;
     /** What is searched for, when not the message alone (a step's `query_hint`). */
     query?: string;
@@ -1534,11 +1677,7 @@ export class ConversationEngine {
     // Outside any transaction, like the model call below (see the file header).
     let question: EmbeddedQuery;
     try {
-      question = await this.#knowledge.embedQuery(
-        input.query ?? input.message,
-        ctx.tenant,
-        attribution,
-      );
+      question = await this.#embedTurn(input.turn, input.query ?? input.message, ctx);
     } catch (error) {
       if (error instanceof AiDailyCapError) {
         // The question's embedding did not fit today's cap (tm 257.20): nothing

@@ -53,8 +53,8 @@ const ALLOWED: Readonly<Record<string, Allowance>> = {
     why: 'the embedding wrapper itself: the provider’s embed() — straight through when nothing is counted, and counted for a workspace, a hold and the deployment',
   },
   'services/ai/knowledge-service.ts': {
-    calls: 2,
-    why: 'prepare() and embedQuery() call the MeteredEmbeddings it holds, with the caller’s payer',
+    calls: 3,
+    why: 'prepare(), embedSentences() (a procedure’s examples, tm 297.3) and embedQuery() call the MeteredEmbeddings it holds, with the caller’s payer',
     holds: /readonly #embeddings: MeteredEmbeddings;/,
   },
   'services/ai/conversation/conversation-engine.ts': {

@@ -654,7 +654,7 @@ describe('the run records what its provider calls cost', () => {
     });
   });
 
-  it('adds up a skill that answers twice from knowledge', async () => {
+  it('adds up a skill that answers twice from knowledge — the message embedded once (AI-05 §2)', async () => {
     const llm = new FakeLlmProvider({ usage: { inputTokens: 100, outputTokens: 10 } });
     const ws = workspace([
       { type: 'send_message', source: 'knowledge' },
@@ -664,10 +664,12 @@ describe('the run records what its provider calls cost', () => {
     await live(engine(llm), ws, MESSAGE);
 
     expect(llm.calls).toHaveLength(2);
+    // One embedding per turn (tm 297.3): the second search reuses the first's
+    // vector, and the provider was asked — and billed — once.
     expect(ws.runs[0]).toMatchObject({
       llmInputTokens: 200,
       llmOutputTokens: 20,
-      embeddingTokens: 2 * QUESTION_TOKENS,
+      embeddingTokens: QUESTION_TOKENS,
     });
   });
 

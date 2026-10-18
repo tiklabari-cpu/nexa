@@ -71,6 +71,7 @@ import {
   type BulkCrawlRefusal,
 } from '../services/ai/knowledge-bulk-crawl.js';
 import { crawl } from '../services/ai/web-crawler.js';
+import { embedProcedureExamples, ProcedureExamples } from '../services/ai/procedure-examples.js';
 import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
 import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
@@ -596,6 +597,53 @@ export default async function playbookRoutes(
     timeoutMs: env.LLM_TIMEOUT_MS,
     maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
   });
+  const procedureExamples = new ProcedureExamples();
+
+  /**
+   * After a procedure skill's save commits (tm 297.3 · AI-05 §2): its example
+   * sentences embedded — outside any transaction — and stored for the
+   * catalogue narrowing. A provider failure or today's cap leaves the skill
+   * without rows, which the narrowing reads as "always offer it"; the save
+   * stands and the log says so. Stored only if the skill still holds these
+   * examples, so a slower write never replaces a newer save's.
+   */
+  async function storeProcedureExamples(
+    request: FastifyRequest,
+    skill: { id: string; mode: string; examples: string[] },
+  ): Promise<void> {
+    if (skill.mode !== 'procedure' || skill.examples.length === 0) return;
+    const tenant = request.tenant();
+    let prepared;
+    try {
+      prepared = await embedProcedureExamples(knowledge, skill.examples, tenant);
+    } catch (error) {
+      if (!(error instanceof EmbeddingProviderError) && !(error instanceof AiDailyCapError)) {
+        throw error;
+      }
+      request.log.warn(
+        {
+          skill_id: skill.id,
+          kind: error instanceof EmbeddingProviderError ? error.kind : 'ai_cap_reached',
+        },
+        'procedure examples not embedded; the skill is never narrowed away until its next save',
+      );
+      return;
+    }
+    await request.withTenant(async (tx) => {
+      const current = await tx.skill.findFirst({
+        where: { id: skill.id },
+        select: { mode: true, examples: true },
+      });
+      if (
+        current?.mode !== 'procedure' ||
+        current.examples.length !== skill.examples.length ||
+        current.examples.some((example, index) => example !== skill.examples[index])
+      ) {
+        return;
+      }
+      await procedureExamples.write(tx, tenant, skill.id, prepared);
+    });
+  }
 
   // --- AI agents -------------------------------------------------------------
 
@@ -797,6 +845,7 @@ export default async function playbookRoutes(
 
       return { created, createdByName: await creatorName(tx, createdBy) };
     });
+    await storeProcedureExamples(request, created);
 
     return reply.status(201).send(serialiseSkill(created, createdByName));
   });
@@ -876,6 +925,25 @@ export default async function playbookRoutes(
           await requireFallbackFree(tx, existing.aiAgentId, existing.id);
         }
 
+        // The rows describe the examples as they were; a new set is embedded
+        // after this commits, and until then the skill is never narrowed away.
+        // A procedure with none in the provider's space — saved before the
+        // narrowing, while the provider failed, or in another space — gets
+        // them on any save.
+        const changed =
+          mode !== existing.mode ||
+          (body.examples !== undefined &&
+            JSON.stringify(definition.examples ?? existing.examples) !==
+              JSON.stringify(existing.examples));
+        if (changed) await procedureExamples.clear(tx, id);
+        const reembed =
+          changed ||
+          (mode === 'procedure' &&
+            (await tx.aiProcedureExample.findFirst({
+              where: { skillId: id, embeddingSpace: knowledge.space },
+              select: { id: true },
+            })) === null);
+
         const updated = await updateSkillDraft(tx, id, {
           ...definition,
           ...(body.is_fallback !== undefined ? { isFallback: body.is_fallback } : {}),
@@ -885,8 +953,9 @@ export default async function playbookRoutes(
           ...(body.active !== undefined ? { active: body.active } : {}),
         });
 
-        return { updated, createdByName: await creatorName(tx, updated.createdBy) };
+        return { updated, createdByName: await creatorName(tx, updated.createdBy), reembed };
       });
+      if (result.reembed) await storeProcedureExamples(request, result.updated);
 
       return reply.send(serialiseSkill(result.updated, result.createdByName));
     },

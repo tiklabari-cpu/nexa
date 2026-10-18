@@ -342,6 +342,31 @@ export class KnowledgeService {
     return { space: this.space, vector: toVectorLiteral(vectors[0]!), usage };
   }
 
+  /**
+   * Embed several short texts in one call, each whole — a procedure's example
+   * sentences (tm 297.3 · `procedure-examples.ts`), which must land in the
+   * space questions are asked in, so they go through this service's provider.
+   * The provider call; never inside a transaction. Counted as indexing; the
+   * same refusals as {@link prepare}. Blank texts are not sent.
+   */
+  async embedSentences(
+    texts: readonly string[],
+    payer?: EmbeddingPayer,
+  ): Promise<{
+    space: string;
+    sentences: Array<{ text: string; vector: string }>;
+    usage: EmbeddingUsage;
+  }> {
+    const kept = texts.filter((text) => text.trim() !== '');
+    if (kept.length === 0) return { space: this.space, sentences: [], usage: { inputTokens: 0 } };
+    const { vectors, usage } = await this.#embeddings.embed(kept, payer, KNOWLEDGE_INDEX);
+    return {
+      space: this.space,
+      sentences: kept.map((text, index) => ({ text, vector: toVectorLiteral(vectors[index]!) })),
+      usage,
+    };
+  }
+
   /** Nearest chunks to a question, best first. How they are found: {@link search}. */
   async retrieve(
     tx: TenantClient,

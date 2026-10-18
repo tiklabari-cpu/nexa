@@ -235,6 +235,7 @@ export function skillDecision(
         embedding_tokens: decisions.usage.embeddingTokens,
         ...(decisions.capped ? { cap_scope: decisions.capped.scope } : {}),
         ...(failure ? { transient: failure.transient } : {}),
+        ...(decisions.understood ? { understood: decisions.understood } : {}),
       },
       turn,
     ),

@@ -264,8 +264,8 @@ export interface TurnContext {
  */
 export interface ProcedureTurnData {
   /**
-   * The understanding call's answer for this message (#297). Absent: the
-   * interim reading (`procedure/understanding.ts`).
+   * The understanding of this message, handed in. Absent: the turn asks the
+   * understanding call (`understand.ts`, tm 297.1).
    */
   readonly understanding?: ProcedureUnderstanding;
   /** What the AI-13 tables know (#310). Absent: nothing (`NO_FACTS`). */
@@ -352,6 +352,22 @@ export interface TurnDecisions {
    * ADR-14b §2.9) — which version decided, until #290 numbers them.
    */
   procedureHash?: string | null;
+  /**
+   * What the understanding call read (tm 297.1 · AI-05 §3, §8): the procedure
+   * it named, how sure, the alternatives, the language — the record's "why
+   * this procedure". Absent when no call was made.
+   */
+  understood?: UnderstoodRecord;
+}
+
+/** The understanding as the decision record keeps it: keys and numbers, no words. */
+export interface UnderstoodRecord {
+  procedure_key: string | null;
+  confidence: number;
+  alternatives: Array<{ key: string; confidence: number }>;
+  language: string | null;
+  /** 2 when the first reply failed the schema. */
+  tries: 1 | 2;
 }
 
 /**

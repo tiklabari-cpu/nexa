@@ -10,7 +10,21 @@
  *
  * `id` is `openai` by default because a fake stands in for a remote model: that
  * is the configuration the residency gate and the usage counter exist for.
+ *
+ * **The understanding call (tm 297.1) is answered apart.** Every procedure
+ * turn starts with it, and a fake that wrote its fixed prose there would end
+ * every such turn in "the model could not read the message". By default it is
+ * answered as `LLM_PROVIDER=mock` answers it (`mockUnderstanding`), costs
+ * nothing, and is recorded in `understandCalls` — not in `calls`, and not
+ * held or failed by `hold` / `fail` — so a test about the written part
+ * counts the written part. A test about the understanding itself passes
+ * `understand`.
  */
+import { mockUnderstanding } from '../../src/services/ai/conversation/understand-mock.js';
+import {
+  readUnderstandGrounding,
+  UNDERSTAND_RESPONSE_NAME,
+} from '../../src/services/ai/conversation/understand.js';
 import type {
   LlmCompletion,
   LlmCompletionRequest,
@@ -33,12 +47,21 @@ export interface FakeLlmProviderOptions {
    * model that is still thinking, for as long as the test holds it (tm 256.10).
    */
   hold?: (request: LlmCompletionRequest, call: number) => Promise<void>;
+  /**
+   * How the understanding call is answered: the mock's reading (default), the
+   * reply this function writes, or this error thrown.
+   */
+  understand?: ((request: LlmCompletionRequest) => string) | Error;
+  /** What an understanding reply costs; nothing by default. */
+  understandUsage?: LlmUsage;
 }
 
 export class FakeLlmProvider implements LlmProvider {
   readonly id: LlmProviderId;
   /** Every request, in order. `calls.length` is the call count. */
   readonly calls: LlmCompletionRequest[] = [];
+  /** The understanding calls, in order (see the file header). */
+  readonly understandCalls: LlmCompletionRequest[] = [];
   /** Calls started and not yet answered, and the most there ever were at once. */
   inFlight = 0;
   maxInFlight = 0;
@@ -50,6 +73,7 @@ export class FakeLlmProvider implements LlmProvider {
   }
 
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
+    if (request.responseFormat?.name === UNDERSTAND_RESPONSE_NAME) return this.#understand(request);
     const call = this.calls.push(request) - 1;
     this.inFlight += 1;
     this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
@@ -66,8 +90,20 @@ export class FakeLlmProvider implements LlmProvider {
     }
   }
 
+  #understand(request: LlmCompletionRequest): LlmCompletion {
+    this.understandCalls.push(request);
+    const answer = this.#options.understand;
+    if (answer instanceof Error) throw answer;
+    const usage = this.#options.understandUsage ?? { inputTokens: 0, outputTokens: 0 };
+    if (answer) return { text: answer(request), usage };
+    const grounding = readUnderstandGrounding(request.system);
+    if (!grounding) throw new Error('An understanding request without its context line.');
+    return { text: JSON.stringify(mockUnderstanding(grounding)), usage };
+  }
+
   reset(): void {
     this.calls.length = 0;
+    this.understandCalls.length = 0;
     this.inFlight = 0;
     this.maxInFlight = 0;
   }

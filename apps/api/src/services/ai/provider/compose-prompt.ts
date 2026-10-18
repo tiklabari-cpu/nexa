@@ -84,7 +84,8 @@ export function buildComposePrompt(
   };
 }
 
-function historyLines(history: AnswerHistory | undefined): string[] {
+/** The history's framing lines — shared with `understand.ts`. */
+export function historyLines(history: AnswerHistory | undefined): string[] {
   if (!history) return [];
   const lines: string[] = [];
   if (history.messages.length > 0) {
@@ -99,7 +100,8 @@ function historyLines(history: AnswerHistory | undefined): string[] {
   return lines;
 }
 
-function conversation(earlier: readonly LlmMessage[], message: string): LlmMessage[] {
+/** The earlier exchange plus the latest message, merged into a trailing visitor turn. */
+export function conversation(earlier: readonly LlmMessage[], message: string): LlmMessage[] {
   const messages = earlier.map((entry) => ({ ...entry }));
   const last = messages.at(-1);
   if (last?.role === 'user') last.content = `${last.content}\n${message}`;

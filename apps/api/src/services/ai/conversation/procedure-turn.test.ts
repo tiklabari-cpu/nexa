@@ -7,8 +7,9 @@
  *
  * The database a turn is handed throws when touched (a turn reads its
  * configuration from its context and writes nothing). The understanding is the
- * interim reading unless a test hands one in (the call is #297); the
- * payment-method facts are a fixture (#310).
+ * call's (tm 297.1), answered by the mock provider's reading
+ * (`understand-mock.ts`) unless a test hands one in; the payment-method facts
+ * are a fixture (#310).
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -25,17 +26,21 @@ import {
   depositProcedure,
 } from '../../../../test/helpers/procedure-fixtures.js';
 import type { TenantClient, TenantContext } from '../../../lib/tenant.js';
+import { AiDailyCapError, type AiDailyBudget } from '../ai-daily-budget.js';
 import { skillDecision } from '../decision-log.js';
+import { MeteredLlm } from '../metered-llm.js';
 import {
   RETRIEVAL_THRESHOLD,
   type KnowledgeSearch,
   type KnowledgeService,
 } from '../knowledge-service.js';
 import { LlmProviderError } from '../provider/llm-error.js';
-import type { LlmProvider } from '../provider/llm-provider.js';
+import type { LlmCompletionRequest, LlmProvider } from '../provider/llm-provider.js';
 import { MockLlmProvider } from '../provider/mock-llm-provider.js';
 import { ConversationEngine } from './conversation-engine.js';
 import { procedureHash } from './procedure/executor.js';
+import { mockUnderstanding } from './understand-mock.js';
+import { readUnderstandGrounding, type UnderstandReply } from './understand.js';
 import {
   emptyTurnState,
   skillRunRecord,
@@ -261,7 +266,7 @@ describe('a procedure’s first turn (AI-03 §3–§4)', () => {
 });
 
 describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', () => {
-  it('A — the interim understanding reads the answer to its question; the wait is explained and the topic resolved waiting, in two turns', async () => {
+  it('A — the understanding reads the answer to its question; the wait is explained and the topic resolved waiting, in two turns', async () => {
     const llm = new FakeLlmProvider();
     const chat = conversation(engine(llm), () => [DEPOSIT_SKILL]);
     await chat.say('param yatmadı');
@@ -688,6 +693,370 @@ describe('the other steps and limits, through the engine', () => {
       stepStatus: before.stepStatus,
       slots: before.slots,
       counters: { turns: 2 },
+    });
+  });
+});
+
+describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
+  const DEPOSIT_NOT_CREDITED = procedureSkill(
+    'deposit_not_credited',
+    'Yatırım hesaba geçmedi',
+    depositProcedure((raw) => {
+      raw['examples'] = [
+        'param yatmadı',
+        'havale attım gözükmüyor',
+        'usdt gönderdim düşmedi',
+        'bakiyem gelmedi',
+      ];
+    }),
+  );
+  const SELF_EXCLUSION = procedureSkill(
+    'self_exclusion',
+    'Kendini sınırlama',
+    build({
+      when_to_use: 'Oyuncu hesabını kapatmak ya da sınırlamak istiyor.',
+      examples: ['hesabımı kapatın', 'kendimi sınırlamak istiyorum'],
+      priority: 500,
+      steps: [
+        { id: 'bilgi', type: 'say', template_key: 'bilgi' },
+        { id: 'devir', type: 'handoff', reason_code: 'self_exclusion' },
+      ],
+      templates: [{ key: 'bilgi', text: 'Talebinizi sorumlu oyun ekibine iletiyorum.' }],
+    }),
+    { locked: true },
+  );
+  /** A tenant procedure with the very same example and a smaller priority. */
+  const ACCOUNT_CLOSE = procedureSkill(
+    'account_close',
+    'Hesap kapatma',
+    build({
+      when_to_use: 'Hesap kapatma.',
+      examples: ['hesabımı kapatın'],
+      priority: 1,
+      steps: [
+        { id: 'bilgi', type: 'say', template_key: 'bilgi' },
+        { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+      ],
+      templates: [{ key: 'bilgi', text: 'Hesap ayarlarından kapatabilirsiniz.' }],
+    }),
+  );
+  const ALL = [WITHDRAWAL_SKILL, DEPOSIT_NOT_CREDITED, SELF_EXCLUSION, ACCOUNT_CLOSE];
+
+  /** The mock's reading of the request, edited — what a model that answered might say. */
+  function answer(request: LlmCompletionRequest, edit: (reply: UnderstandReply) => void): string {
+    const grounding = readUnderstandGrounding(request.system);
+    if (!grounding) throw new Error('not an understanding request');
+    const reply = mockUnderstanding(grounding);
+    edit(reply);
+    return JSON.stringify(reply);
+  }
+
+  it.each(['havale attım gözükmüyor', 'usdt gönderdim düşmedi', 'bakiyem gelmedi'])(
+    '“%s” starts deposit_not_credited by its examples (AI-05 acceptance, mock)',
+    async (text) => {
+      const result = await engine().runTurn(emptyTurnState(), { text }, context(ALL));
+      expect(result.decisions.skillId).toBe('deposit_not_credited');
+      expect(result.decisions.log[0]).toEqual({
+        step: 'understand',
+        detail: 'understood: deposit_not_credited (1)',
+        ok: true,
+      });
+      expect(result.nextState.activeSkillId).toBe('deposit_not_credited');
+      expect(skillDecision(result)?.details).toMatchObject({
+        understood: {
+          procedure_key: 'deposit_not_credited',
+          confidence: 1,
+          alternatives: [],
+          language: null,
+          tries: 1,
+        },
+      });
+    },
+  );
+
+  it('“hesabımı kapatın” takes the locked self-exclusion over a tie with a smaller priority, and over a procedure in progress (AI-05 acceptance)', async () => {
+    const fresh = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'hesabımı kapatın' },
+      context(ALL),
+    );
+    expect(fresh.decisions.skillId).toBe('self_exclusion');
+    expect(fresh.reply).toBe('Talebinizi sorumlu oyun ekibine iletiyorum.');
+
+    const chat = conversation(engine(), () => ALL);
+    await chat.say('param yatmadı');
+    expect(chat.state.stepStatus).toBe('awaiting_answer');
+    const midway = await chat.say('hesabımı kapatın');
+    expect(midway.decisions.skillId).toBe('self_exclusion');
+    expect(midway.sideEffects).toContainEqual(
+      expect.objectContaining({ kind: 'handoff', reason: 'self_exclusion' }),
+    );
+  });
+
+  it('asks once per turn, on the fast tier, for the schema, without a temperature — the catalogue and the question in its context line', async () => {
+    const llm = new FakeLlmProvider();
+    const chat = conversation(engine(llm), () => ALL);
+    await chat.say('param yatmadı');
+    await chat.say('papara ile');
+    expect(llm.understandCalls).toHaveLength(2);
+    const [first, second] = llm.understandCalls;
+    expect(first).toMatchObject({
+      tier: 'fast',
+      responseFormat: { name: 'turn_understanding' },
+      maxOutputTokens: 400,
+      timeoutMs: 20_000,
+    });
+    expect(first).not.toHaveProperty('temperature');
+    const opening = readUnderstandGrounding(first!.system)!;
+    expect(opening.catalogue.map((entry) => entry.key)).toEqual([
+      'self_exclusion',
+      'account_close',
+      'deposit_not_credited',
+      'withdrawal',
+    ]);
+    expect(opening).toMatchObject({ active: null, pending: null, slots: [], questions: [] });
+    const answering = readUnderstandGrounding(second!.system)!;
+    expect(answering).toMatchObject({
+      message: 'papara ile',
+      active: { key: 'deposit_not_credited', name: 'Yatırım hesaba geçmedi' },
+      pending: { asked: ['yontem', 'islem_zamani'] },
+      options: { yontem: DEPOSIT_OPTIONS['yontem'] },
+      now: NOW.toISOString(),
+      time_zone: 'Europe/Istanbul',
+      currency: 'TRY',
+    });
+    expect(second!.messages.at(-1)).toEqual({ role: 'user', content: 'papara ile' });
+  });
+
+  it('an invalid reply gets one more try with the problem named, and the turn goes on; both tries are on the run', async () => {
+    let tries = 0;
+    const llm = new FakeLlmProvider({
+      understand: (request) =>
+        tries++ === 0 ? 'Bence yatırım konusu.' : answer(request, () => {}),
+      understandUsage: { inputTokens: 50, outputTokens: 20 },
+    });
+    const result = await engine(llm).runTurn(
+      emptyTurnState(),
+      { text: 'param yatmadı' },
+      context(ALL),
+    );
+    expect(llm.understandCalls).toHaveLength(2);
+    expect(llm.understandCalls[1]!.system).toContain(
+      'Your previous reply could not be used (it was not valid JSON).',
+    );
+    expect(result.decisions.skillId).toBe('deposit_not_credited');
+    expect(result.decisions.log[0]!.detail).toBe(
+      'understood: deposit_not_credited (1) · second try',
+    );
+    expect(result.decisions.usage).toEqual({
+      llmInputTokens: 100,
+      llmOutputTokens: 40,
+      embeddingTokens: 0,
+    });
+    expect(result.decisions.understood).toMatchObject({ tries: 2 });
+  });
+
+  it('two invalid replies are an AI failure: nothing is said, a person is sent, the procedure stays where it stood (AI-09)', async () => {
+    const chat = conversation(engine(), () => ALL);
+    await chat.say('param yatmadı');
+    const before = chat.state;
+    const llm = new FakeLlmProvider({
+      understand: (request) =>
+        answer(request, (reply) => ((reply as { sentiment: string }).sentiment = 'calm')),
+      understandUsage: { inputTokens: 50, outputTokens: 20 },
+    });
+    const result = await engine(llm).runTurn(before, { text: 'papara ile' }, context(ALL));
+    expect(llm.understandCalls).toHaveLength(2);
+    expect(llm.calls).toHaveLength(0);
+    expect(result.reply).toBeNull();
+    expect(result.decisions).toMatchObject({
+      outcome: 'handed_off',
+      skillId: 'deposit_not_credited',
+      failure: { provider: 'llm', kind: 'no_answer', reason: 'schema' },
+      capped: null,
+      usage: { llmInputTokens: 100, llmOutputTokens: 40 },
+      log: [
+        {
+          step: 'understand',
+          detail: 'the model could not read the message (no_answer) — handed to a human',
+          ok: false,
+        },
+      ],
+    });
+    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'llm_failure' }]);
+    expect(result.nextState).toMatchObject({
+      activeSkillId: before.activeSkillId,
+      stepId: before.stepId,
+      stepStatus: before.stepStatus,
+      slots: before.slots,
+      counters: { turns: 2 },
+    });
+    expect(skillDecision(result)).toMatchObject({
+      decision: 'handoff',
+      procedureId: 'deposit_not_credited',
+      handoffReason: 'llm_failure',
+      errorType: 'llm:no_answer',
+    });
+  });
+
+  it('a provider failure is not retried and ends the same way, with no procedure in progress too', async () => {
+    const llm = new FakeLlmProvider({ understand: new LlmProviderError('timeout') });
+    const result = await engine(llm).runTurn(
+      emptyTurnState(),
+      { text: 'param yatmadı' },
+      context(ALL),
+    );
+    expect(llm.understandCalls).toHaveLength(1);
+    expect(result.reply).toBeNull();
+    expect(result.decisions).toMatchObject({
+      outcome: 'handed_off',
+      skillId: null,
+      failure: { provider: 'llm', kind: 'timeout' },
+    });
+    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'llm_failure' }]);
+    expect(result.nextState).toEqual({ ...emptyTurnState(), counters: { turns: 1 } });
+  });
+
+  it('today’s AI cap refuses the call before any model is asked: a person is sent, no failure is filed (tm 257.8)', async () => {
+    const fake = new FakeLlmProvider();
+    const refusal = new AiDailyCapError('llm', 'workspace', 120);
+    const budget = {
+      reserve: async () => {
+        throw refusal;
+      },
+      settle: async () => {
+        throw new Error('nothing was reserved, so nothing may be settled');
+      },
+    } as unknown as AiDailyBudget;
+    const capped = new ConversationEngine({
+      llm: new MeteredLlm(fake, budget),
+      maxOutputTokens: 400,
+      timeoutMs: 20_000,
+      maxPromptChars: 16_000,
+      knowledge,
+    });
+    const result = await capped.runTurn(emptyTurnState(), { text: 'param yatmadı' }, context(ALL));
+    expect(fake.understandCalls).toHaveLength(0);
+    expect(result.reply).toBeNull();
+    expect(result.decisions).toMatchObject({
+      outcome: 'handed_off',
+      failure: null,
+      capped: refusal,
+    });
+    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'ai_cap_reached' }]);
+    expect(skillDecision(result)).toMatchObject({ decision: 'cap_reached' });
+  });
+
+  it('a procedure the catalogue does not hold starts nothing; the skill that answers instead carries the call’s cost', async () => {
+    const llm = new FakeLlmProvider({
+      understand: (request) =>
+        answer(request, (reply) => {
+          reply.intent.procedure_key = 'bonus_claim';
+          reply.intent.confidence = 0.99;
+        }),
+      understandUsage: { inputTokens: 50, outputTokens: 20 },
+    });
+    const result = await engine(llm).runTurn(
+      emptyTurnState(),
+      { text: 'bonusumu alamadım' },
+      context([CATCH_ALL, ...ALL]),
+    );
+    expect(result.decisions.skillId).toBe('catch-all');
+    expect(result.reply).toBe('Size nasıl yardımcı olabilirim?');
+    expect(result.decisions.usage).toMatchObject({ llmInputTokens: 50, llmOutputTokens: 20 });
+    // The record says why no procedure ran: the key was not one of the catalogue's.
+    expect(skillDecision(result)?.details).toMatchObject({
+      understood: { procedure_key: null, confidence: 0, tries: 1 },
+    });
+    expect(result.nextState.activeSkillId).toBeNull();
+  });
+
+  describe('an `ai` answer belongs to the procedure it was asked for (AI-03)', () => {
+    const PAYMENT = procedureSkill(
+      'payment',
+      'Ödeme',
+      build({
+        when_to_use: 'Ödeme.',
+        examples: ['para yatırdım'],
+        slots: [{ name: 'tutar', label: 'Tutar', type: 'money', ask: 'Ne kadar yatırdınız?' }],
+        steps: [
+          { id: 'sor', type: 'collect', slots: ['tutar'] },
+          {
+            id: 'uyari',
+            type: 'say',
+            template_key: 'ucuncu',
+            when: { ai: { question: 'Para başkasının hesabından mı gönderilmiş?' } },
+          },
+          { id: 'son', type: 'say', template_key: 'son' },
+          { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+        ],
+        templates: [
+          { key: 'ucuncu', text: 'Üçüncü kişi ödemesi kabul edilmez.' },
+          { key: 'son', text: 'Kontrol ediyoruz.' },
+        ],
+      }),
+    );
+    const BONUS = procedureSkill(
+      'bonus',
+      'Bonus',
+      build({
+        when_to_use: 'Bonus.',
+        examples: ['bonus var mı'],
+        steps: [
+          {
+            id: 'uyari',
+            type: 'say',
+            template_key: 'sart',
+            when: { ai: { question: 'Oyuncu çevrimsiz bonus mu istiyor?' } },
+          },
+          { id: 'bilgi', type: 'say', template_key: 'bilgi' },
+          { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+        ],
+        templates: [
+          { key: 'sart', text: 'Çevrimsiz bonus yoktur.' },
+          { key: 'bilgi', text: 'Kampanyalar sayfasına bakın.' },
+        ],
+      }),
+    );
+
+    async function secondTurn(edit: (reply: UnderstandReply) => void, text: string) {
+      let turn = 0;
+      const llm = new FakeLlmProvider({
+        understand: (request) =>
+          answer(request, (reply) => {
+            if (turn++ === 0) return;
+            reply.ai_conditions = [{ key: 'uyari', answer: true }];
+            edit(reply);
+          }),
+      });
+      const chat = conversation(engine(llm), () => [PAYMENT, BONUS]);
+      expect((await chat.say('para yatırdım')).reply).toBe('Ne kadar yatırdınız?');
+      expect(readUnderstandGrounding(llm.understandCalls[0]!.system)!.questions).toEqual([]);
+      const result = await chat.say(text);
+      expect(readUnderstandGrounding(llm.understandCalls[1]!.system)!.questions).toEqual([
+        { key: 'uyari', question: 'Para başkasının hesabından mı gönderilmiş?' },
+      ]);
+      return result;
+    }
+
+    it('the procedure in progress reads it', async () => {
+      const result = await secondTurn((reply) => {
+        reply.intent.is_continuation = true;
+        reply.answers_pending_question = true;
+        reply.extracted = [{ slot: 'tutar', raw_text: '500 TL', value: '500', confidence: 0.9 }];
+      }, '500 TL');
+      expect(result.decisions.skillId).toBe('payment');
+      expect(result.reply).toBe('Üçüncü kişi ödemesi kabul edilmez.\nKontrol ediyoruz.');
+    });
+
+    it('a procedure starting on the same turn does not, whatever its step ids', async () => {
+      const result = await secondTurn((reply) => {
+        reply.intent.procedure_key = 'bonus';
+        reply.intent.confidence = 0.95;
+      }, 'bonus var mı');
+      expect(result.decisions.skillId).toBe('bonus');
+      // The new topic resolves and asks about the one set aside (AI-03 §7).
+      expect(result.reply).toBe('Kampanyalar sayfasına bakın.\nÖnceki konuya dönelim mi?');
     });
   });
 });

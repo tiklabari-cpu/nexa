@@ -28,6 +28,7 @@ import { matchesEveryMessage, skillStepCount } from './procedure-authoring.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
+import { GuidanceRules } from './GuidanceRules.js';
 import { ProfileForm } from './ProfileForm.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
@@ -403,12 +404,21 @@ export function PlaybookPage(): ReactElement {
 
             {view === 'profile' &&
               (aiAgent ? (
-                <ProfileForm
-                  key={aiAgent.id}
-                  agent={aiAgent}
-                  canEdit={canEdit}
-                  onSaved={invalidate}
-                />
+                <div className="flex flex-col gap-4">
+                  <ProfileForm
+                    key={aiAgent.id}
+                    agent={aiAgent}
+                    canEdit={canEdit}
+                    onSaved={invalidate}
+                  />
+                  {/* AI-07: the behaviour rules ride with the persona; tm 390 moves both to one tab. */}
+                  <GuidanceRules
+                    key={`guidance-${aiAgent.id}`}
+                    agent={aiAgent}
+                    skills={(skills.data?.items ?? []).map(({ id, name }) => ({ id, name }))}
+                    canEdit={canEdit}
+                  />
+                </div>
               ) : (
                 <Card>
                   <EmptyState

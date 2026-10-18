@@ -1,8 +1,12 @@
 import type {
+  AddressForm,
   AnswerLength,
   Cond,
   ClarifyThresholds,
   DailyMemorySettings,
+  EmojiUse,
+  GuidanceCategory,
+  GuidanceScope,
   ProcedureProblemDetails,
   SkillMode,
   SkillProcedureBody,
@@ -68,8 +72,39 @@ export interface AiAgent {
   daily_memory?: DailyMemorySettings;
   /** How sure the agent must be of a procedure (tm 297.2 · AI-05); absent reads as the default. */
   clarify_thresholds?: ClarifyThresholds;
+  /** How the player is addressed, whether emoji are used, questions per message (tm 299 · AI-07); null is unset. */
+  address_form?: AddressForm | null;
+  emoji?: EmojiUse | null;
+  max_questions_per_message?: number | null;
   active: boolean;
   skills_count: number;
+}
+
+/** One behaviour rule of the AI agent (`GET /ai-guidance`, tm 299 · AI-07). */
+export interface GuidanceRule {
+  id: string;
+  ai_agent_id: string;
+  title: string;
+  body: string;
+  category: GuidanceCategory;
+  scope: GuidanceScope;
+  priority: number;
+  active: boolean;
+  owner_id?: string | null;
+  updated_at: string;
+}
+
+/** `POST /ai-guidance/check`'s answer: warnings only, except `locked`, which a save refuses. */
+export interface GuidanceCheck {
+  locked: {
+    locked_rule: 'credentials' | 'mandatory_bonus' | 'disable_locked';
+    explanation: string;
+  } | null;
+  conflicts: { rule_id: string; explanation: string; severity: 'warning' | 'error' }[];
+  duplicates: { rule_id: string; explanation: string }[];
+  vague: { explanation: string }[];
+  compared: number;
+  checked_by: 'model' | 'rules';
 }
 
 export interface SkillLogEntry {

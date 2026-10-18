@@ -274,6 +274,74 @@ describe('PersonaPreview shapes a sample reply with the same helper as the engin
   });
 });
 
+describe('ProfileForm style (tm 299.2 · AI-07)', () => {
+  it('shows an agent that never set a style as unset, with 2 questions as the default', () => {
+    renderForm();
+
+    expect(screen.getByLabelText('Address the player as')).toHaveValue('');
+    expect(screen.getByLabelText('Emoji')).toHaveValue('');
+    const questions = screen.getByLabelText('Questions per message');
+    expect(questions).toHaveValue('');
+    expect(Array.from(questions.querySelectorAll('option')).map((o) => o.value)).toEqual([
+      '',
+      '1',
+      '2',
+      '3',
+    ]);
+  });
+
+  it('PATCHes the three style fields, and only those that changed', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, emoji: 'few' });
+
+    await user.selectOptions(screen.getByLabelText('Address the player as'), 'sen');
+    await user.selectOptions(screen.getByLabelText('Questions per message'), '1');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    const body = api.patch.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body).toMatchObject({ address_form: 'sen', max_questions_per_message: 1 });
+    expect(body).not.toHaveProperty('emoji');
+  });
+
+  it('clears a style back to unset with null', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, address_form: 'siz', emoji: 'none', max_questions_per_message: 3 });
+
+    expect(screen.getByLabelText('Address the player as')).toHaveValue('siz');
+    expect(screen.getByLabelText('Emoji')).toHaveValue('none');
+    expect(screen.getByLabelText('Questions per message')).toHaveValue('3');
+    await user.selectOptions(screen.getByLabelText('Address the player as'), '');
+    await user.selectOptions(screen.getByLabelText('Emoji'), '');
+    await user.selectOptions(screen.getByLabelText('Questions per message'), '');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({ address_form: null, emoji: null, max_questions_per_message: null }),
+    );
+  });
+
+  it('sends no style field when only the name changed', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, address_form: 'siz' });
+
+    await user.type(screen.getByLabelText('Name'), '2');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    const body = api.patch.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('address_form');
+    expect(body).not.toHaveProperty('emoji');
+    expect(body).not.toHaveProperty('max_questions_per_message');
+  });
+
+  it('locks the style selects for a reader without edit rights', () => {
+    renderForm({ ...AGENT, emoji: 'few' }, false);
+
+    expect(screen.getByLabelText('Emoji')).toBeDisabled();
+    expect(screen.getByLabelText('Questions per message')).toBeDisabled();
+  });
+});
+
 describe('ProfileForm localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();

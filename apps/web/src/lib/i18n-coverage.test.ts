@@ -129,6 +129,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/playbook/TemplateGallery.tsx',
   'src/features/playbook/RecommendedSkills.tsx',
   'src/features/playbook/ProfileForm.tsx',
+  'src/features/playbook/GuidanceRules.tsx',
   'src/features/playbook/AiPerformance.tsx',
   'src/features/playbook/BulkImportForm.tsx',
   'src/features/playbook/BulkImportResults.tsx',

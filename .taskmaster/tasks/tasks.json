@@ -12810,7 +12810,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T21:09:09.611Z",
+        "updatedAt": "2026-10-18T21:10:10.400Z",
         "subtasks": [
           {
             "id": 1,
@@ -12830,13 +12830,13 @@
             "description": "GuidanceRules.tsx + ProfileForm hitap/emoji/soru sayısı",
             "details": "Üst görev 299 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "299.1"
             ],
             "parentId": "299",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-18T21:10:10.400Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T21:09:09.612Z",
+      "lastModified": "2026-10-18T21:10:10.401Z",
       "taskCount": 390,
       "completedCount": 297,
       "tags": [

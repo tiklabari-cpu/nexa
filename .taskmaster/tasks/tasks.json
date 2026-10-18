@@ -12625,7 +12625,7 @@
           "295"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T00:18:19.371Z",
+        "updatedAt": "2026-10-18T01:55:19.753Z",
         "subtasks": [
           {
             "id": 1,
@@ -12633,11 +12633,11 @@
             "description": "packages/types procedure.ts: Procedure/ProcStep/Cond tipleri + kaydetme doğrulayıcısı + problem kodları",
             "details": "Web ve API aynı doğrulayıcıyı kullanır.",
             "testStrategy": "Doğrulayıcı birim testleri (ret listesi).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "296",
             "priority": "high",
-            "updatedAt": "2026-10-18T00:18:19.371Z"
+            "updatedAt": "2026-10-18T01:55:19.753Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T00:18:19.371Z",
+      "lastModified": "2026-10-18T01:55:19.754Z",
       "taskCount": 390,
       "completedCount": 294,
       "tags": [

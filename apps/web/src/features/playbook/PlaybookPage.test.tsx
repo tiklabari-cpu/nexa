@@ -303,3 +303,37 @@ describe('Playbook knowledge — load error (tm 259.6)', () => {
     expect(screen.queryByText("Knowledge sources couldn't be loaded")).not.toBeInTheDocument();
   });
 });
+
+describe('Playbook skill row — procedure badge and priority (AI-03)', () => {
+  it('marks a procedure, with its priority and its own step count', async () => {
+    mockPlaybook([
+      baseSkill({
+        id: 'skill-p',
+        name: 'Yatırım geçmedi',
+        mode: 'procedure',
+        priority: 50,
+        procedure: {
+          steps: [
+            { id: 'sor', type: 'collect', slots: ['yontem'] },
+            { id: 'devir', type: 'handoff', reason_code: 'needs_finance' },
+          ],
+          templates: [],
+          handoff: { conditions: [], card_fields: [] },
+          limits: { max_turns: 12 },
+        },
+      }),
+      baseSkill({ id: 'skill-s', name: 'Order status', mode: 'single', priority: 100 }),
+    ]);
+    renderPage();
+
+    const procedureRow = (await screen.findByText('Yatırım geçmedi')).closest('[role="listitem"]');
+    expect(procedureRow!.textContent).toContain('Procedure');
+    expect(procedureRow!.textContent).toContain('priority 50');
+    expect(procedureRow!.textContent).toContain('2 steps');
+
+    // A one-message skill reads as it always did.
+    const singleRow = screen.getByText('Order status').closest('[role="listitem"]');
+    expect(singleRow!.textContent).not.toContain('Procedure');
+    expect(singleRow!.textContent).not.toContain('priority');
+  });
+});

@@ -25,6 +25,13 @@
  * retyped. Until it could, a skill created from "New skill" was born with
  * `steps: []` and had no way to gain one — the whole ordered-steps surface was
  * reachable only by starting from a template.
+ *
+ * A skill in `procedure` mode (AI-03 · ADR-14a) swaps the one-message step
+ * list for the procedure's sections (`ProcedureSections.tsx`): the same top
+ * bar, name and text, the same preview — the text is the SOP a draft is
+ * compiled from, and the preview carries the conversation so far and shows
+ * where the turn would leave it. Save is gated on `validateSkillProcedure`,
+ * the function the API stores by.
  */
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo, useState, type ReactElement } from 'react';
@@ -33,13 +40,44 @@ import { Card, ErrorNotice } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
-import { AI_DAILY_CAP_MESSAGE_KEY, errorMessageKey, isAiDailyCap } from '../../lib/api-client.js';
+import {
+  AI_DAILY_CAP_MESSAGE_KEY,
+  ApiClientError,
+  errorMessageKey,
+  isAiDailyCap,
+} from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useLeaveGuard, shouldWarnOnLeave } from '../../lib/dirty-guard.js';
 import { formatDateTime } from '../../lib/format.js';
 import { hasMessage, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { reasonMessage } from '../../lib/reason-message.js';
-import type { Skill, SkillPreview, SkillRun, SkillStep, StepProblem } from './types.js';
+import {
+  validateSkillProcedure,
+  type ProcedureProblemDetails,
+  type SkillMode,
+} from '@siyahtus/types';
+import type {
+  PreviewExchange,
+  Skill,
+  SkillCompileResult,
+  SkillPreview,
+  SkillRun,
+  SkillStep,
+  StepProblem,
+} from './types.js';
+import {
+  procedureDraft,
+  procedureFields,
+  skillProcedureDraft,
+  validateDraft,
+  type ProcedureDraft,
+} from './procedure-authoring.js';
+import {
+  ProcedureEditor,
+  ProcedureStateView,
+  procedureProblemText,
+  type TeamOption,
+} from './ProcedureSections.js';
 import { moveStep, stepIssues } from './step-reorder.js';
 import {
   STEP_TYPES,
@@ -144,6 +182,21 @@ const STEP_TYPE_LABEL_KEYS: Record<StepType, string> = {
   transfer_to_team: 'playbook.editor.typeTransferToTeam',
 };
 
+/**
+ * A refused procedure save, worded from its code. The API sends the first
+ * problem as `details` — the same `ProcedureProblemDetails` the editor words
+ * its own verdict with — so a refusal the client did not foresee (a team
+ * removed since the page loaded) still reads in the console's language.
+ */
+function procedureSaveError(t: TFunction, error: unknown): string | null {
+  if (!(error instanceof ApiClientError)) return null;
+  const details = error.details;
+  if (typeof details?.['reason'] !== 'string' || typeof details['section'] !== 'string') {
+    return null;
+  }
+  return procedureProblemText(t, details as unknown as ProcedureProblemDetails);
+}
+
 /** Ties the run-log disclosure button to the panel it expands (NFR-A11Y). */
 const RUN_LOG_ID = 'skill-run-log';
 
@@ -188,6 +241,45 @@ export function SkillEditor({
   const [newStepType, setNewStepType] = useState<StepType>('detect_intent');
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  // The procedure half (AI-03). Kept alongside the step list rather than in
+  // place of it: switching the mode back and forth loses neither.
+  const storedMode: SkillMode = skill.mode ?? 'single';
+  const [mode, setMode] = useState<SkillMode>(storedMode);
+  const procedure = mode === 'procedure';
+  const [procDraft, setProcDraft] = useState<ProcedureDraft>(() => skillProcedureDraft(skill));
+  // Bumped when a compile replaces the draft wholesale: the sections keep the
+  // text of their line-per-entry boxes locally and must start again from it.
+  const [procVersion, setProcVersion] = useState(0);
+  const [history, setHistory] = useState<PreviewExchange[]>([]);
+
+  // The license's teams, for a hand-over's target and for the save-time check
+  // that one exists — only once there is a procedure to hand over from.
+  const teams = useQuery({
+    queryKey: ['playbook', 'teams'],
+    queryFn: () => api.get<{ items: TeamOption[] }>('/groups'),
+    enabled: procedure && canEdit,
+    staleTime: 60_000,
+  });
+  const teamItems = useMemo(() => teams.data?.items ?? [], [teams.data]);
+
+  // A locked template copy may change only its texts and its team; the
+  // validator judges that against the stored definition, as the API does.
+  const lockedAs = useMemo(() => {
+    if (!skill.locked || storedMode !== 'procedure') return undefined;
+    const stored = validateSkillProcedure(procedureFields(skillProcedureDraft(skill)));
+    return stored.ok ? stored.procedure : undefined;
+  }, [skill, storedMode]);
+
+  const verdict = useMemo(
+    () =>
+      validateDraft(procDraft, {
+        ...(teams.data ? { groupIds: new Set(teamItems.map((team) => team.id)) } : {}),
+        ...(lockedAs ? { locked: lockedAs } : {}),
+      }),
+    [procDraft, teams.data, teamItems, lockedAs],
+  );
+  const procProblems = useMemo(() => (verdict.ok ? [] : verdict.problems), [verdict]);
+
   const steps = useMemo(() => entries.map((entry) => entry.step), [entries]);
   // Gating (count, index) comes from the shared, tested `stepIssues` — the
   // *messages* shown are `issueMessageText`'s translated mirror of the same
@@ -205,42 +297,82 @@ export function SkillEditor({
 
   const compile = useMutation({
     mutationFn: () =>
-      api.post<{ steps: SkillStep[]; unrecognised: string[] }>('/skills/compile', {
-        instruction,
-      }),
+      api.post<SkillCompileResult>(
+        '/skills/compile',
+        procedure ? { mode: 'procedure', sop_text: instruction } : { instruction },
+      ),
     onSuccess: (result) => {
-      setEntries(toEntries(result.steps));
       setUnrecognised(result.unrecognised);
+      if (!procedure) {
+        setEntries(toEntries(result.steps));
+        return;
+      }
+      // A draft, never a saved skill (AI-03 §11): it lands in the form for the
+      // author to finish — conditions are theirs to write — and to save.
+      if (result.draft) {
+        setProcDraft(procedureDraft(result.draft));
+        setProcVersion((version) => version + 1);
+        if (isBlank(name)) setName(result.draft.name);
+      }
     },
   });
 
   const preview = useMutation({
     mutationFn: () =>
-      api.post<SkillPreview>('/skills/preview', {
-        steps,
-        message: sample,
-        ai_agent_id: skill.ai_agent_id,
-      }),
+      api.post<SkillPreview>(
+        '/skills/preview',
+        procedure
+          ? {
+              mode: 'procedure',
+              ...procedureFields(procDraft),
+              message: sample,
+              ...(history.length > 0 ? { conversation: history } : {}),
+              ai_agent_id: skill.ai_agent_id,
+            }
+          : {
+              steps,
+              message: sample,
+              ai_agent_id: skill.ai_agent_id,
+            },
+      ),
+    onSuccess: (result) => {
+      if (!procedure) return;
+      // The exchange so far is what the next preview message is read against
+      // (tm 296.4): the visitor's line, and the reply the turn would send.
+      setHistory((current) => [
+        ...current,
+        { role: 'visitor', text: sample },
+        ...(result.reply ? [{ role: 'ai' as const, text: result.reply }] : []),
+      ]);
+    },
   });
 
   // What a save would send, and what is already on the server — compared as
   // one value so "is there anything to lose?" has a single answer.
   const draft = useMemo(
-    () => JSON.stringify({ name, instruction, steps }),
-    [name, instruction, steps],
+    () =>
+      procedure
+        ? JSON.stringify({ name, instruction, mode, ...procedureFields(procDraft) })
+        : JSON.stringify({ name, instruction, steps, ...(mode !== storedMode ? { mode } : {}) }),
+    [name, instruction, steps, procedure, mode, storedMode, procDraft],
   );
   const [savedDraft, setSavedDraft] = useState<string | null>(null);
+
+  // A one-message skill sends what it always sent; `mode` only when it is
+  // being switched back from a procedure. A procedure sends its definition.
+  const body = () =>
+    procedure
+      ? { name, instruction, mode, ...procedureFields(procDraft) }
+      : { name, instruction, steps, ...(mode !== storedMode ? { mode } : {}) };
 
   const save = useMutation({
     mutationFn: () =>
       isNew
         ? api.post<Skill>('/skills', {
-            name,
-            instruction,
-            steps,
+            ...body(),
             ...(skill.ai_agent_id ? { ai_agent_id: skill.ai_agent_id } : {}),
           })
-        : api.patch<Skill>(`/skills/${skill.id}`, { name, instruction, steps }),
+        : api.patch<Skill>(`/skills/${skill.id}`, body()),
     onSuccess: (saved) => {
       // Remember what we just sent. `onSaved` only *starts* the parent's
       // refetch; until it lands the `skill` prop still describes the old row,
@@ -252,11 +384,22 @@ export function SkillEditor({
     },
   });
 
-  const persisted = JSON.stringify({
-    name: skill.name,
-    instruction: skill.instruction ?? '',
-    steps: skill.steps,
-  });
+  const persisted = useMemo(
+    () =>
+      storedMode === 'procedure'
+        ? JSON.stringify({
+            name: skill.name,
+            instruction: skill.instruction ?? '',
+            mode: storedMode,
+            ...procedureFields(skillProcedureDraft(skill)),
+          })
+        : JSON.stringify({
+            name: skill.name,
+            instruction: skill.instruction ?? '',
+            steps: skill.steps,
+          }),
+    [skill, storedMode],
+  );
   const dirty = draft !== (savedDraft ?? persisted);
 
   // Turning the skill on/off from here runs the *same* mutation the list row
@@ -287,7 +430,11 @@ export function SkillEditor({
   // A step with a missing required parameter (most often a hand-over with no
   // team) would be stored and then skipped in silence in front of a customer —
   // so a save is refused until every step is runnable (FR-MOD-06.2.4).
-  const canSave = dirty && !nameMissing && issues.length === 0 && !save.isPending;
+  const canSave =
+    dirty && !nameMissing && (procedure ? verdict.ok : issues.length === 0) && !save.isPending;
+
+  // What stands between the draft and a save, counted the way its mode counts.
+  const blocking = procedure ? procProblems.length : issues.length;
 
   function reorder(from: number, to: number): void {
     if (!canEdit) return;
@@ -390,7 +537,7 @@ export function SkillEditor({
                 >
                   {compile.isPending
                     ? t('playbook.editor.compiling')
-                    : t('playbook.editor.compile')}
+                    : t(procedure ? 'playbook.editor.compileSop' : 'playbook.editor.compile')}
                 </button>
 
                 {isNew && (
@@ -417,35 +564,37 @@ export function SkillEditor({
             )}
           </div>
 
-          {canEdit &&
-            (showNameMissing || issues.length > 0 || save.isError || toggleActive.isError) && (
-              <div className="flex flex-wrap items-center gap-3 px-4 pb-2.5">
-                {showNameMissing && (
-                  <span role="alert" className="text-2xs text-warning">
-                    {t('playbook.editor.nameRequired')}
-                  </span>
-                )}
+          {canEdit && (showNameMissing || blocking > 0 || save.isError || toggleActive.isError) && (
+            <div className="flex flex-wrap items-center gap-3 px-4 pb-2.5">
+              {showNameMissing && (
+                <span role="alert" className="text-2xs text-warning">
+                  {t('playbook.editor.nameRequired')}
+                </span>
+              )}
 
-                {issues.length > 0 && (
-                  <span role="alert" className="text-2xs text-warning">
-                    {t('playbook.editor.fixIssues', { count: issues.length })}
-                  </span>
-                )}
+              {blocking > 0 && (
+                <span role="alert" className="text-2xs text-warning">
+                  {procedure
+                    ? t('playbook.procedure.fixProblems', { count: blocking })
+                    : t('playbook.editor.fixIssues', { count: blocking })}
+                </span>
+              )}
 
-                {save.isError && (
-                  <span role="alert" className="text-2xs text-danger">
-                    {reasonMessage(t, save.error, 'playbook.editor.stepProblem') ??
-                      t(errorMessageKey(save.error))}
-                  </span>
-                )}
+              {save.isError && (
+                <span role="alert" className="text-2xs text-danger">
+                  {(procedure ? procedureSaveError(t, save.error) : null) ??
+                    reasonMessage(t, save.error, 'playbook.editor.stepProblem') ??
+                    t(errorMessageKey(save.error))}
+                </span>
+              )}
 
-                {toggleActive.isError && (
-                  <span role="alert" className="text-2xs text-danger">
-                    {t(errorMessageKey(toggleActive.error))}
-                  </span>
-                )}
-              </div>
-            )}
+              {toggleActive.isError && (
+                <span role="alert" className="text-2xs text-danger">
+                  {t(errorMessageKey(toggleActive.error))}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {runLogOpen && <RunLog query={runs} />}
@@ -464,9 +613,36 @@ export function SkillEditor({
             />
           </label>
 
+          {/* One-message or multi-turn (ADR-14a). A locked template copy keeps
+              its mode, as the API insists. */}
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="skill-mode"
+              className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+            >
+              {t('playbook.editor.mode')}
+            </label>
+            <select
+              id="skill-mode"
+              value={mode}
+              disabled={!canEdit || skill.locked === true}
+              onChange={(event) => setMode(event.target.value as SkillMode)}
+              aria-describedby="skill-mode-help"
+              className="w-64 rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+            >
+              <option value="single">{t('playbook.editor.modeSingle')}</option>
+              <option value="procedure">{t('playbook.editor.modeProcedure')}</option>
+            </select>
+            <p id="skill-mode-help" className="text-2xs text-content-tertiary">
+              {t(
+                procedure ? 'playbook.editor.modeProcedureHelp' : 'playbook.editor.modeSingleHelp',
+              )}
+            </p>
+          </div>
+
           <label htmlFor="skill-instruction" className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-              {t('playbook.editor.instruction')}
+              {t(procedure ? 'playbook.editor.sop' : 'playbook.editor.instruction')}
             </span>
             <textarea
               id="skill-instruction"
@@ -474,7 +650,11 @@ export function SkillEditor({
               disabled={!canEdit}
               onChange={(event) => setInstruction(event.target.value)}
               rows={5}
-              placeholder={t('playbook.editor.instructionPlaceholder')}
+              placeholder={t(
+                procedure
+                  ? 'playbook.editor.sopPlaceholder'
+                  : 'playbook.editor.instructionPlaceholder',
+              )}
               className="resize-y rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
             />
           </label>
@@ -499,198 +679,221 @@ export function SkillEditor({
         </div>
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-content-tertiary">
-            {t('playbook.editor.stepsTitle')}
+      {procedure ? (
+        <Card>
+          <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('playbook.procedure.title')}
           </h3>
-          {canEdit && entries.length > 1 && (
-            <span className="text-2xs text-content-tertiary">{t('playbook.editor.dragHint')}</span>
-          )}
-        </div>
+          <ProcedureEditor
+            key={procVersion}
+            draft={procDraft}
+            onChange={setProcDraft}
+            canEdit={canEdit}
+            problems={procProblems}
+            warnings={verdict.warnings}
+            teams={teamItems}
+          />
+        </Card>
+      ) : (
+        <Card>
+          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+            <h3 className="text-xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('playbook.editor.stepsTitle')}
+            </h3>
+            {canEdit && entries.length > 1 && (
+              <span className="text-2xs text-content-tertiary">
+                {t('playbook.editor.dragHint')}
+              </span>
+            )}
+          </div>
 
-        {/* Move confirmations for a keyboard/screen-reader user (NFR-A11Y4). */}
-        <p aria-live="polite" className="sr-only">
-          {announcement}
-        </p>
+          {/* Move confirmations for a keyboard/screen-reader user (NFR-A11Y4). */}
+          <p aria-live="polite" className="sr-only">
+            {announcement}
+          </p>
 
-        {entries.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-content-secondary">{t('playbook.editor.noSteps')}</p>
-        ) : (
-          // Named so the list of steps is addressable on its own — the
-          // fields inside it share labels with the app shell ("Team" is
-          // also a nav destination).
-          <ol aria-label={t('playbook.editor.stepsTitle')} className="divide-y divide-border">
-            {entries.map((entry, index) => {
-              const issue = issueByIndex.get(index);
-              const open = openStepIds.has(entry.id);
-              const bodyId = `step-body-${entry.id}`;
-              return (
-                <li
-                  key={entry.id}
-                  onDragOver={(event) => {
-                    if (canEdit && dragIndex !== null) event.preventDefault();
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    if (dragIndex !== null) reorder(dragIndex, index);
-                    setDragIndex(null);
-                  }}
-                  className={dragIndex === index ? 'opacity-50' : ''}
-                >
-                  <div className="flex items-start gap-3 px-4 py-2.5">
-                    {/* Only the handle is draggable, not the row: with the row
+          {entries.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-content-secondary">
+              {t('playbook.editor.noSteps')}
+            </p>
+          ) : (
+            // Named so the list of steps is addressable on its own — the
+            // fields inside it share labels with the app shell ("Team" is
+            // also a nav destination).
+            <ol aria-label={t('playbook.editor.stepsTitle')} className="divide-y divide-border">
+              {entries.map((entry, index) => {
+                const issue = issueByIndex.get(index);
+                const open = openStepIds.has(entry.id);
+                const bodyId = `step-body-${entry.id}`;
+                return (
+                  <li
+                    key={entry.id}
+                    onDragOver={(event) => {
+                      if (canEdit && dragIndex !== null) event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (dragIndex !== null) reorder(dragIndex, index);
+                      setDragIndex(null);
+                    }}
+                    className={dragIndex === index ? 'opacity-50' : ''}
+                  >
+                    <div className="flex items-start gap-3 px-4 py-2.5">
+                      {/* Only the handle is draggable, not the row: with the row
                         itself draggable, selecting the text in an open step's
                         input starts a drag instead of a selection. */}
-                    {canEdit && (
-                      <span
-                        draggable
-                        onDragStart={() => setDragIndex(index)}
-                        onDragEnd={() => setDragIndex(null)}
-                        aria-hidden="true"
-                        className="mt-0.5 cursor-grab text-content-tertiary"
-                      >
-                        ⠿
+                      {canEdit && (
+                        <span
+                          draggable
+                          onDragStart={() => setDragIndex(index)}
+                          onDragEnd={() => setDragIndex(null)}
+                          aria-hidden="true"
+                          className="mt-0.5 cursor-grab text-content-tertiary"
+                        >
+                          ⠿
+                        </span>
+                      )}
+                      <span className="tabular mt-0.5 text-2xs text-content-tertiary">
+                        {index + 1}
                       </span>
-                    )}
-                    <span className="tabular mt-0.5 text-2xs text-content-tertiary">
-                      {index + 1}
-                    </span>
 
-                    <div className="min-w-0 flex-1">
-                      {/* The summary is the disclosure: what the step does is
+                      <div className="min-w-0 flex-1">
+                        {/* The summary is the disclosure: what the step does is
                           the most useful name the control can have, so it is
                           the button's own content rather than a generic label. */}
-                      <button
-                        type="button"
-                        aria-expanded={open}
-                        aria-controls={bodyId}
-                        onClick={() => toggleStepOpen(entry.id)}
-                        className="w-full text-left"
-                      >
-                        <span className="block text-sm">{describeStepText(entry.step, t)}</span>
-                        <span className="text-2xs text-content-tertiary">
-                          {t(STEP_TYPE_LABEL_KEYS[entry.step.type])}{' '}
-                          <span aria-hidden="true">{open ? '▴' : '▾'}</span>
-                        </span>
-                      </button>
-
-                      {/* Stays in the collapsed summary on purpose: a step that
-                          blocks the save has to be findable without opening
-                          every step to look for it. */}
-                      {issue && (
-                        <p role="alert" className="mt-1 text-2xs text-danger">
-                          {issue}
-                        </p>
-                      )}
-                    </div>
-
-                    {canEdit && (
-                      <div className="flex shrink-0 items-start gap-1">
-                        <div className="flex flex-col gap-1">
-                          <button
-                            type="button"
-                            aria-label={t('playbook.editor.moveUp', { index: index + 1 })}
-                            disabled={index === 0}
-                            onClick={() => reorder(index, index - 1)}
-                            className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={t('playbook.editor.moveDown', { index: index + 1 })}
-                            disabled={index === entries.length - 1}
-                            onClick={() => reorder(index, index + 1)}
-                            className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
-                          >
-                            ↓
-                          </button>
-                        </div>
                         <button
                           type="button"
-                          aria-label={t('playbook.editor.deleteStep', { index: index + 1 })}
-                          onClick={() => deleteStep(index)}
-                          className="rounded border border-border px-1.5 py-0.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 hover:text-danger"
+                          aria-expanded={open}
+                          aria-controls={bodyId}
+                          onClick={() => toggleStepOpen(entry.id)}
+                          className="w-full text-left"
                         >
-                          ✕
+                          <span className="block text-sm">{describeStepText(entry.step, t)}</span>
+                          <span className="text-2xs text-content-tertiary">
+                            {t(STEP_TYPE_LABEL_KEYS[entry.step.type])}{' '}
+                            <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+                          </span>
                         </button>
-                      </div>
-                    )}
-                  </div>
 
-                  {open && (
-                    <div id={bodyId} className="flex flex-col gap-3 px-4 pb-3 pl-12">
+                        {/* Stays in the collapsed summary on purpose: a step that
+                          blocks the save has to be findable without opening
+                          every step to look for it. */}
+                        {issue && (
+                          <p role="alert" className="mt-1 text-2xs text-danger">
+                            {issue}
+                          </p>
+                        )}
+                      </div>
+
                       {canEdit && (
-                        <div className="flex flex-col gap-1">
-                          {/* Sibling label, not a wrapper: wrapping a <select>
-                              folds its option text into the accessible name. */}
-                          <label
-                            htmlFor={`step-type-${entry.id}`}
-                            className="text-2xs text-content-tertiary"
+                        <div className="flex shrink-0 items-start gap-1">
+                          <div className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              aria-label={t('playbook.editor.moveUp', { index: index + 1 })}
+                              disabled={index === 0}
+                              onClick={() => reorder(index, index - 1)}
+                              className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={t('playbook.editor.moveDown', { index: index + 1 })}
+                              disabled={index === entries.length - 1}
+                              onClick={() => reorder(index, index + 1)}
+                              className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
+                            >
+                              ↓
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={t('playbook.editor.deleteStep', { index: index + 1 })}
+                            onClick={() => deleteStep(index)}
+                            className="rounded border border-border px-1.5 py-0.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 hover:text-danger"
                           >
-                            {t('playbook.editor.stepType')}
-                          </label>
-                          <select
-                            id={`step-type-${entry.id}`}
-                            value={entry.step.type}
-                            onChange={(event) => retypeStep(index, event.target.value as StepType)}
-                            className="w-56 rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none"
-                          >
-                            {STEP_TYPES.map((type) => (
-                              <option key={type} value={type}>
-                                {t(STEP_TYPE_LABEL_KEYS[type])}
-                              </option>
-                            ))}
-                          </select>
+                            ✕
+                          </button>
                         </div>
                       )}
-
-                      <StepParameters
-                        entry={entry}
-                        canEdit={canEdit}
-                        invalid={issue !== undefined}
-                        onEdit={(patch) => editStep(index, patch)}
-                      />
                     </div>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        )}
 
-        {/* Authoring, not just ordering (FR-MOD-06.2.4): without this a skill
+                    {open && (
+                      <div id={bodyId} className="flex flex-col gap-3 px-4 pb-3 pl-12">
+                        {canEdit && (
+                          <div className="flex flex-col gap-1">
+                            {/* Sibling label, not a wrapper: wrapping a <select>
+                              folds its option text into the accessible name. */}
+                            <label
+                              htmlFor={`step-type-${entry.id}`}
+                              className="text-2xs text-content-tertiary"
+                            >
+                              {t('playbook.editor.stepType')}
+                            </label>
+                            <select
+                              id={`step-type-${entry.id}`}
+                              value={entry.step.type}
+                              onChange={(event) =>
+                                retypeStep(index, event.target.value as StepType)
+                              }
+                              className="w-56 rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none"
+                            >
+                              {STEP_TYPES.map((type) => (
+                                <option key={type} value={type}>
+                                  {t(STEP_TYPE_LABEL_KEYS[type])}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <StepParameters
+                          entry={entry}
+                          canEdit={canEdit}
+                          invalid={issue !== undefined}
+                          onEdit={(patch) => editStep(index, patch)}
+                        />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
+          {/* Authoring, not just ordering (FR-MOD-06.2.4): without this a skill
             created from "New skill" is born with no steps and could never gain
             one, so the ordered-steps surface was unreachable for anything but a
             template. */}
-        {canEdit && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2.5">
-            <label htmlFor="add-step-type" className="sr-only">
-              {t('playbook.editor.addStepType')}
-            </label>
-            <select
-              id="add-step-type"
-              value={newStepType}
-              onChange={(event) => setNewStepType(event.target.value as StepType)}
-              className="rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none"
-            >
-              {STEP_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {t(STEP_TYPE_LABEL_KEYS[type])}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={appendStep}
-              className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2"
-            >
-              {t('playbook.editor.addStep')}
-            </button>
-          </div>
-        )}
-      </Card>
+          {canEdit && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2.5">
+              <label htmlFor="add-step-type" className="sr-only">
+                {t('playbook.editor.addStepType')}
+              </label>
+              <select
+                id="add-step-type"
+                value={newStepType}
+                onChange={(event) => setNewStepType(event.target.value as StepType)}
+                className="rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none"
+              >
+                {STEP_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {t(STEP_TYPE_LABEL_KEYS[type])}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={appendStep}
+                className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2"
+              >
+                {t('playbook.editor.addStep')}
+              </button>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card>
         <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -709,16 +912,61 @@ export function SkillEditor({
             />
           </label>
 
+          {/* The conversation so far (tm 296.4): context for the next message,
+              not a replay — each preview turn starts from an empty state. */}
+          {procedure && history.length > 0 && (
+            <div className="flex flex-col gap-1 rounded-md border border-border p-2">
+              <span className="text-2xs text-content-tertiary">
+                {t('playbook.editor.previewHistory')}
+              </span>
+              <ol
+                aria-label={t('playbook.editor.previewHistory')}
+                className="flex flex-col gap-0.5"
+              >
+                {history.map((exchange, index) => (
+                  <li key={index} className="text-2xs text-content-secondary">
+                    <span className="font-medium">
+                      {t(
+                        exchange.role === 'visitor'
+                          ? 'playbook.editor.previewVisitor'
+                          : 'playbook.editor.previewAi',
+                      )}
+                    </span>{' '}
+                    {exchange.text}
+                  </li>
+                ))}
+              </ol>
+              <button
+                type="button"
+                onClick={() => {
+                  setHistory([]);
+                  preview.reset();
+                }}
+                className="self-start rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+              >
+                {t('playbook.editor.previewStartOver')}
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
-            disabled={!sample.trim() || steps.length === 0 || preview.isPending}
+            disabled={
+              !sample.trim() || (procedure ? !verdict.ok : steps.length === 0) || preview.isPending
+            }
             onClick={() => preview.mutate()}
             className="self-start rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
           >
             {preview.isPending ? t('playbook.editor.running') : t('playbook.editor.runPreview')}
           </button>
 
-          {preview.data && <PreviewResult result={preview.data} />}
+          {procedure && !verdict.ok && (
+            <p className="text-2xs text-content-tertiary">
+              {t('playbook.procedure.previewBlocked')}
+            </p>
+          )}
+
+          {preview.data && <PreviewResult result={preview.data} showState={procedure} />}
 
           {preview.isError && (
             <p role="alert" className="text-2xs text-danger">
@@ -1126,7 +1374,13 @@ function stepProblemText(t: TFunction, problem: StepProblem | undefined): string
   return t('playbook.editor.stepProblem.generic');
 }
 
-function PreviewResult({ result }: { result: SkillPreview }): ReactElement {
+function PreviewResult({
+  result,
+  showState,
+}: {
+  result: SkillPreview;
+  showState: boolean;
+}): ReactElement {
   const t = useTranslate();
   const tone =
     result.outcome === 'answered'
@@ -1150,6 +1404,16 @@ function PreviewResult({ result }: { result: SkillPreview }): ReactElement {
           {result.errors.map((_error, index) => (
             <li key={index} className="text-2xs text-danger">
               {stepProblemText(t, result.error_details?.[index])}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {result.procedure_problems && result.procedure_problems.length > 0 && (
+        <ul role="alert" className="flex flex-col gap-0.5">
+          {result.procedure_problems.map((problem, index) => (
+            <li key={index} className="text-2xs text-danger">
+              {procedureProblemText(t, problem)}
             </li>
           ))}
         </ul>
@@ -1184,6 +1448,9 @@ function PreviewResult({ result }: { result: SkillPreview }): ReactElement {
           {t('playbook.editor.tagsLabel', { tags: result.tags.join(', ') })}
         </p>
       )}
+
+      {/* Only a procedure has somewhere to stand between turns. */}
+      {showState && result.state && <ProcedureStateView state={result.state} />}
 
       {result.log.length > 0 && (
         <ol className="mt-1 flex flex-col gap-0.5">

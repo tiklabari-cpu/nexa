@@ -12739,7 +12739,7 @@
           "296"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T12:36:55.547Z",
+        "updatedAt": "2026-10-18T13:48:43.504Z",
         "subtasks": [
           {
             "id": 1,
@@ -12747,11 +12747,11 @@
             "description": "understand.ts: katalog, JSON şema, doğrulama/yeniden deneme, mock çıktısı",
             "details": "Üst görev 297 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Birim + mock entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "297",
             "priority": "high",
-            "updatedAt": "2026-10-18T12:36:55.547Z"
+            "updatedAt": "2026-10-18T13:48:43.504Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T12:36:55.547Z",
+      "lastModified": "2026-10-18T13:48:43.505Z",
       "taskCount": 390,
       "completedCount": 295,
       "tags": [

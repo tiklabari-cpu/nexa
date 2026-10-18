@@ -1,0 +1,606 @@
+{
+  "description": "AI-05 intent fixture (tm 297.3): 20 iGaming support topics as procedures — name, when_to_use, the example sentences an admin would write (what the catalogue and the narrowing read), and held-out player messages that are never examples: `sentences` as a player might write them, `typos` with the misspellings, dropped letters and missing Turkish characters players actually type. Read by ai-intents-fixture.test.ts; the optional nightly evaluation against a real provider reads the same file.",
+  "version": 1,
+  "topics": [
+    {
+      "key": "deposit_not_credited",
+      "name": "Yatırım hesaba geçmedi",
+      "when_to_use": "Oyuncu para yatırdığını ama bakiyesine yansımadığını söylüyor.",
+      "examples": [
+        "para yatırdım hesabıma geçmedi",
+        "havale attım gözükmüyor",
+        "usdt gönderdim düşmedi",
+        "bakiyem gelmedi",
+        "yatırımım hesaba yansımadı",
+        "papara ile yatırdım bakiye gelmedi",
+        "kripto yatırdım hala görünmüyor",
+        "yatırdığım para nerede"
+      ],
+      "sentences": [
+        "yarım saat önce havale yaptım bakiyem hala sıfır",
+        "yatırdığım 500 tl hesabımda görünmüyor",
+        "papara ile para gönderdim ama bakiye gelmedi",
+        "usdt transferi yaptım hesaba düşmedi",
+        "dekontu attım yatırım hala yansımadı",
+        "kredi kartıyla yatırdım bakiyem artmadı",
+        "yatırım yaptım ama hesabıma geçmedi neden"
+      ],
+      "typos": [
+        "havale atım gözükmüyo",
+        "usdt gonderdim dusmedi",
+        "bakiyem gelmedii",
+        "para yatrdim hesaba gecmedi"
+      ]
+    },
+    {
+      "key": "withdrawal_pending",
+      "name": "Çekim bekliyor",
+      "when_to_use": "Oyuncu çekim talebinin hâlâ beklemede olduğunu, paranın gelmediğini söylüyor.",
+      "examples": [
+        "çekim talebim hala beklemede",
+        "çektiğim para gelmedi",
+        "çekimim ne zaman onaylanacak",
+        "para çekme işlemim bekliyor",
+        "çekim yaptım hesabıma ulaşmadı",
+        "çekim talebi onay bekliyor",
+        "paramı çektim ama gelmedi",
+        "çekim ne zaman gelir"
+      ],
+      "sentences": [
+        "dün çekim talebi verdim hala beklemede görünüyor",
+        "çekim yaptım iki gündür para gelmedi",
+        "çekim talebim neden onaylanmıyor",
+        "çektiğim para banka hesabıma ne zaman geçer",
+        "çekimim beklemede kaldı",
+        "para çekme talebim ne durumda",
+        "çekim onayı ne kadar sürüyor"
+      ],
+      "typos": [
+        "cekim talebim hala beklmede",
+        "cektigim para gelmedi",
+        "çekimim ne zman onaylanack",
+        "para cekme islemim bekliyo"
+      ]
+    },
+    {
+      "key": "withdrawal_rejected",
+      "name": "Çekim reddedildi",
+      "when_to_use": "Oyuncu çekim talebinin reddedildiğini ya da iptal edildiğini söylüyor.",
+      "examples": [
+        "çekim talebim reddedildi",
+        "çekimim iptal edildi neden",
+        "çekim reddedildi sebebi ne",
+        "para çekme talebim iptal oldu",
+        "çekimim onaylanmadı reddedildi",
+        "çekim neden iptal edildi",
+        "talebim reddedilmiş",
+        "çekim iade edildi"
+      ],
+      "sentences": [
+        "çekim talebim sebepsiz yere reddedildi",
+        "çekimimi neden iptal ettiniz",
+        "para çekme talebim reddedilmiş açıklama yok",
+        "çekim iptal oldu para bakiyeye döndü",
+        "çekimim onaylanmadı reddedildi diyor",
+        "üçüncü kez çekimim iptal edildi",
+        "reddedilen çekimimin sebebini öğrenmek istiyorum"
+      ],
+      "typos": [
+        "cekim talebim redddildi",
+        "cekimim iptl edildi neden",
+        "çekim redddedildi sebebi ne",
+        "talebim redettiniz neden"
+      ]
+    },
+    {
+      "key": "bonus_not_received",
+      "name": "Bonus yüklenmedi",
+      "when_to_use": "Oyuncu hak ettiği bonusun hesabına tanımlanmadığını söylüyor.",
+      "examples": [
+        "bonusum yüklenmedi",
+        "hoş geldin bonusu gelmedi",
+        "yatırım bonusu tanımlanmadı",
+        "kayıp bonusu hesabıma geçmedi",
+        "bonus hesabıma eklenmedi",
+        "freespin gelmedi",
+        "bonusumu alamadım",
+        "bonus tanımlanmadı"
+      ],
+      "sentences": [
+        "yatırım yaptım ama bonusum yüklenmedi",
+        "hoşgeldin bonusu hesabımda yok",
+        "kayıp bonusum bu hafta tanımlanmadı",
+        "freespinlerim hesaba eklenmedi",
+        "bonusu talep ettim gelmedi",
+        "yüzde yüz bonus yüklenmedi",
+        "cashback bonusum gelmedi"
+      ],
+      "typos": [
+        "bonusum yuklenmedi",
+        "hos geldin bonusu gelmedi",
+        "bonus tanimlanmadi",
+        "freespn gelmedi"
+      ]
+    },
+    {
+      "key": "bonus_wagering",
+      "name": "Çevrim şartı",
+      "when_to_use": "Oyuncu bonus çevrim şartını, kalan çevrimi ya da çevrim kurallarını soruyor.",
+      "examples": [
+        "çevrim şartı nedir",
+        "bonus çevrimi ne kadar kaldı",
+        "çevrimi tamamladım mı",
+        "kaç kat çevrim yapmam lazım",
+        "çevrim şartını nasıl doldururum",
+        "bonus çevrim kuralları",
+        "çevrim bitmeden çekim yapabilir miyim",
+        "çevrime hangi oyunlar sayılıyor"
+      ],
+      "sentences": [
+        "bonusun çevrim şartı kaç kat",
+        "çevrimimin ne kadarı kaldı",
+        "çevrimi bitirdim ama çekim yapamıyorum",
+        "slot oyunları çevrime sayılıyor mu",
+        "çevrim şartları çok ağır neden",
+        "bonus çevrimini nasıl takip ederim",
+        "canlı casino çevrime dahil mi"
+      ],
+      "typos": [
+        "cevrim sarti nedir",
+        "bonus çevirimi ne kdr kaldı",
+        "kac kat cevrim lazim",
+        "cevrime hangi oyunlar sayiliyo"
+      ]
+    },
+    {
+      "key": "account_verification",
+      "name": "Hesap doğrulama",
+      "when_to_use": "Oyuncu kimlik doğrulama, belge yükleme ya da KYC sürecini soruyor.",
+      "examples": [
+        "hesabımı nasıl doğrularım",
+        "kimlik belgesi yükledim onaylanmadı",
+        "doğrulama için hangi belgeler gerekli",
+        "kyc onayı ne zaman çıkar",
+        "belgelerim reddedildi",
+        "ikametgah belgesi istiyorsunuz",
+        "kimlik doğrulama bekliyor",
+        "selfie fotoğrafı yüklemem gerekiyor mu"
+      ],
+      "sentences": [
+        "kimlik fotoğrafımı yükledim hala onay yok",
+        "doğrulama belgelerim neden reddedildi",
+        "hesap doğrulaması kaç gün sürer",
+        "adres belgesi olarak fatura olur mu",
+        "kyc sürecim tamamlanmadı",
+        "ehliyet ile doğrulama yapabilir miyim",
+        "belge yükleme sayfası açılmıyor"
+      ],
+      "typos": [
+        "hesabimi nasil dogrularim",
+        "kimlk belgesi yukledim onaylanmadi",
+        "dogrulama icin hangi belgeler gerekli",
+        "belgelerim redddedildi"
+      ]
+    },
+    {
+      "key": "password_reset",
+      "name": "Giriş yapamıyorum",
+      "when_to_use": "Oyuncu şifresini unuttuğunu ya da hesabına giriş yapamadığını söylüyor.",
+      "examples": [
+        "şifremi unuttum",
+        "giriş yapamıyorum",
+        "şifre sıfırlama maili gelmedi",
+        "hesabıma giremiyorum",
+        "şifremi nasıl değiştiririm",
+        "kullanıcı adımı unuttum",
+        "giriş yaparken hata alıyorum",
+        "sms kodu gelmiyor"
+      ],
+      "sentences": [
+        "şifremi hatırlamıyorum yardım eder misiniz",
+        "sıfırlama linki mailime gelmedi",
+        "doğru şifreyi girmeme rağmen giriş yapamıyorum",
+        "hesaba girerken hatalı şifre diyor",
+        "kullanıcı adımı hatırlamıyorum",
+        "iki adımlı doğrulama kodu gelmiyor",
+        "şifre değiştirmek istiyorum"
+      ],
+      "typos": [
+        "sifremi unutum",
+        "giris yapamiyorum",
+        "hesabima giremiyom",
+        "sifre sifirlama maili gelmedi"
+      ]
+    },
+    {
+      "key": "account_locked",
+      "name": "Hesap kilitlendi",
+      "when_to_use": "Oyuncu hesabının kilitlendiğini, askıya alındığını ya da kısıtlandığını söylüyor.",
+      "examples": [
+        "hesabım kilitlendi",
+        "hesabım askıya alınmış",
+        "hesabım neden kapatıldı",
+        "hesabıma kısıtlama getirilmiş",
+        "hesabım bloke oldu",
+        "hesabım dondurulmuş",
+        "hesabım engellendi",
+        "hesap kilidi nasıl açılır"
+      ],
+      "sentences": [
+        "giriş yapınca hesabınız kilitlendi yazıyor",
+        "hesabımı neden askıya aldınız",
+        "hesabım sebepsiz yere kapatılmış",
+        "bahis yapamıyorum hesabım kısıtlanmış",
+        "hesabımın blokesini kaldırın",
+        "hesabım dondurulmuş açabilir misiniz",
+        "hesabım engellenmiş görünüyor"
+      ],
+      "typos": [
+        "hesabim kilitlendi",
+        "hesabım askya alınmış",
+        "hesabim neden kapatildi",
+        "hesabim bloke oldu"
+      ]
+    },
+    {
+      "key": "self_exclusion",
+      "name": "Kendini dışlama",
+      "when_to_use": "Oyuncu hesabını kendi isteğiyle kapatmak, oyundan uzaklaşmak ya da kendini dışlamak istiyor.",
+      "examples": [
+        "hesabımı kapatın",
+        "hesabımı kalıcı olarak kapatmak istiyorum",
+        "kendimi oyundan uzaklaştırmak istiyorum",
+        "bir süre oynamak istemiyorum hesabımı kapatın",
+        "kumar bağımlılığım var hesabımı kapatın",
+        "kendimi dışlamak istiyorum",
+        "hesabımı silin",
+        "bir daha oynamamak için hesabımı kapatın"
+      ],
+      "sentences": [
+        "lütfen hesabımı hemen kapatın",
+        "artık oynamak istemiyorum hesabımı kapatır mısınız",
+        "altı ay boyunca hesabıma erişimi engelleyin",
+        "oyun kontrolümü kaybettim hesabımı silin",
+        "hesabımın kalıcı olarak kapatılmasını istiyorum",
+        "kendimi sitenizden uzaklaştırmak istiyorum",
+        "beni siteden engelleyin bir daha girmeyeyim"
+      ],
+      "typos": [
+        "hesabimi kapatin",
+        "hesabımı kaptın lütfen",
+        "kendimi dislamak istiyorum",
+        "hesabimi silin artik oynamicam"
+      ]
+    },
+    {
+      "key": "deposit_limit",
+      "name": "Yatırım limiti",
+      "when_to_use": "Oyuncu yatırım limiti, kayıp limiti ya da oturum süresi sınırı koymak ya da değiştirmek istiyor.",
+      "examples": [
+        "yatırım limiti koymak istiyorum",
+        "günlük limitimi düşürmek istiyorum",
+        "kayıp limiti nasıl ayarlanır",
+        "haftalık yatırım sınırı belirlemek istiyorum",
+        "limitimi değiştirmek istiyorum",
+        "aylık limit koyabilir miyim",
+        "oturum süresi sınırı ayarlamak istiyorum",
+        "limitimi kaldırmak istiyorum"
+      ],
+      "sentences": [
+        "kendime günlük yatırım limiti koyabilir miyim",
+        "haftalık kayıp limitimi 1000 tl yapın",
+        "yatırım sınırımı yükseltmek istiyorum",
+        "aylık limitimi nasıl değiştiririm",
+        "oyun süreme sınır getirmek istiyorum",
+        "limit ayarları nerede",
+        "koyduğum limiti kaldırmak istiyorum"
+      ],
+      "typos": [
+        "yatirim limiti koymak istiyorm",
+        "gunluk limitimi dusurmek istiyorum",
+        "kayip limiti nasil ayarlanir",
+        "limitimi degistirmek istiyorum"
+      ]
+    },
+    {
+      "key": "payment_methods",
+      "name": "Ödeme yöntemleri",
+      "when_to_use": "Oyuncu hangi yöntemlerle para yatırıp çekebileceğini, alt ve üst limitleri soruyor.",
+      "examples": [
+        "hangi yöntemlerle para yatırabilirim",
+        "papara ile yatırım var mı",
+        "kripto ile yatırım yapabilir miyim",
+        "minimum yatırım tutarı ne kadar",
+        "havale bilgilerini verir misiniz",
+        "kredi kartı ile yatırım yapılıyor mu",
+        "çekim yöntemleri neler",
+        "maksimum çekim limiti ne kadar"
+      ],
+      "sentences": [
+        "en az ne kadar yatırım yapabilirim",
+        "usdt ile yatırım kabul ediyor musunuz",
+        "papara hesap bilgilerini paylaşır mısınız",
+        "banka havalesiyle yatırım nasıl yapılır",
+        "hangi kripto paraları kabul ediyorsunuz",
+        "günlük en fazla ne kadar çekebilirim",
+        "yatırım yöntemlerinizi öğrenebilir miyim"
+      ],
+      "typos": [
+        "hangi yontemlerle para yatirabilirim",
+        "papara ile yatirim var mi",
+        "minimum yatirim tutari ne kdr",
+        "kripto ile yatrım yapabilirmiyim"
+      ]
+    },
+    {
+      "key": "bet_settlement",
+      "name": "Kupon sonuçlandırma",
+      "when_to_use": "Oyuncu kuponunun ya da bahsinin yanlış sonuçlandığını ya da sonuçlanmadığını söylüyor.",
+      "examples": [
+        "kuponum yanlış sonuçlandı",
+        "kazandığım kupon kaybetti görünüyor",
+        "bahsim hala sonuçlanmadı",
+        "maç bitti kuponum açık",
+        "kupon iptal edildi neden",
+        "kuponum kazandı para yatmadı",
+        "bahis yanlış hesaplandı",
+        "kupon sonucu hatalı"
+      ],
+      "sentences": [
+        "maç 2-1 bitti ama kuponum kaybetti diyor",
+        "dünkü kuponum hala sonuçlanmadı",
+        "kazanan kuponumun parası hesabıma gelmedi",
+        "kombine kuponumda bir maç yanlış sonuçlanmış",
+        "bahsimi neden iptal ettiniz",
+        "korner bahsim hatalı sonuçlandı",
+        "kupon kazandı ama bakiyeme eklenmedi"
+      ],
+      "typos": [
+        "kuponum yanlis sonuclandi",
+        "bahsim hala sonuclanmadi",
+        "kupon iptl edildi neden",
+        "kazandigim kupon kaybetti gorunuyor"
+      ]
+    },
+    {
+      "key": "game_malfunction",
+      "name": "Oyun hatası",
+      "when_to_use": "Oyuncu bir oyunun donduğunu, açılmadığını ya da oyun sırasında hata aldığını söylüyor.",
+      "examples": [
+        "oyun dondu",
+        "slot oyunu açılmıyor",
+        "oyun ortasında bağlantım koptu",
+        "canlı casino masası yüklenmiyor",
+        "oyunda hata aldım bakiyem gitti",
+        "spin attım oyun takıldı",
+        "oyun ekranı siyah kalıyor",
+        "oyun yüklenmiyor"
+      ],
+      "sentences": [
+        "sweet bonanza açılmıyor sürekli yükleniyor",
+        "free spin sırasında oyun dondu kazancım gitti",
+        "rulet masasında bağlantı koptu bahsim ne oldu",
+        "oyuna girince hata kodu veriyor",
+        "slot ekranı donup kaldı",
+        "canlı blackjack yüklenmiyor",
+        "oyun takıldı para düştü ama spin dönmedi"
+      ],
+      "typos": [
+        "oyun dondu bakiyem gitti yardm",
+        "slot oyunu acilmiyor",
+        "oyun yuklenmiyor",
+        "canli casino masasi yuklenmiyor"
+      ]
+    },
+    {
+      "key": "cashout",
+      "name": "Kupon bozdurma",
+      "when_to_use": "Oyuncu kuponunu bozdurmak (cashout) istiyor ya da bozdurma seçeneğini soruyor.",
+      "examples": [
+        "kuponumu bozdurmak istiyorum",
+        "cashout nasıl yapılır",
+        "bozdur butonu çıkmıyor",
+        "kupon bozdurma neden kapalı",
+        "erken ödeme alabilir miyim",
+        "kuponu bozdurdum para gelmedi",
+        "cashout tutarı çok düşük",
+        "bozdurma seçeneği yok"
+      ],
+      "sentences": [
+        "canlı maçta kuponumu bozdurabilir miyim",
+        "kuponumda bozdur seçeneği görünmüyor",
+        "cashout yaptım bakiyeme eklenmedi",
+        "bozdurma teklifi neden bu kadar az",
+        "bu kupon için erken ödeme var mı",
+        "kuponu bozdurmak istedim hata verdi",
+        "cashout butonu aktif değil"
+      ],
+      "typos": [
+        "kuponumu bozdurmk istiyorum",
+        "casout nasil yapilir",
+        "bozdur butonu cikmiyor",
+        "kupon bozdurma nden kapali"
+      ]
+    },
+    {
+      "key": "promo_code",
+      "name": "Promosyon kodu",
+      "when_to_use": "Oyuncu bir promosyon kodunun çalışmadığını ya da nereye gireceğini soruyor.",
+      "examples": [
+        "promosyon kodu çalışmıyor",
+        "promo kodu nereye yazıyorum",
+        "kod geçersiz diyor",
+        "kupon kodu kabul edilmedi",
+        "promosyon kodum hata veriyor",
+        "kodu girdim bonus gelmedi",
+        "promosyon kodunun süresi dolmuş mu",
+        "promo kod nasıl kullanılır"
+      ],
+      "sentences": [
+        "mailde gelen promosyon kodu geçersiz diyor",
+        "promo kodunu girecek yer bulamıyorum",
+        "telegramdan aldığım kod çalışmıyor",
+        "promosyon kodunu girdim hiçbir şey olmadı",
+        "bu kodun son kullanma tarihi ne",
+        "kod daha önce kullanılmış diyor",
+        "promosyon kodu hata veriyor"
+      ],
+      "typos": [
+        "promosyon kodu calismiyor",
+        "promo kodu nereye yaziyorum",
+        "kod gecersiz diyo",
+        "promosyon kodm hata veriyor"
+      ]
+    },
+    {
+      "key": "vip_loyalty",
+      "name": "VIP ve sadakat",
+      "when_to_use": "Oyuncu VIP seviyesini, sadakat puanlarını ya da VIP ayrıcalıklarını soruyor.",
+      "examples": [
+        "vip seviyem nedir",
+        "sadakat puanlarımı nasıl kullanırım",
+        "vip olmak için ne yapmalıyım",
+        "vip ayrıcalıkları neler",
+        "puanlarım nereye gitti",
+        "vip yöneticimle görüşmek istiyorum",
+        "seviye atladım ödül gelmedi",
+        "sadakat programı nasıl işliyor"
+      ],
+      "sentences": [
+        "vip seviyemi nasıl yükseltirim",
+        "biriken puanlarımı bonusa çevirebilir miyim",
+        "gold seviyesine geçtim ödülüm nerede",
+        "vip kulübüne nasıl katılırım",
+        "kişisel hesap yöneticim kim",
+        "sadakat puanım sıfırlanmış",
+        "vip üyelere özel bonus var mı"
+      ],
+      "typos": [
+        "vip seviyem nedr",
+        "sadakat puanlarimi nasil kullanirim",
+        "vip olmak icin ne yapmaliyim",
+        "puanlarim nereye gitti"
+      ]
+    },
+    {
+      "key": "personal_info_update",
+      "name": "Bilgi güncelleme",
+      "when_to_use": "Oyuncu telefon, e-posta, adres ya da banka bilgisini değiştirmek istiyor.",
+      "examples": [
+        "telefon numaramı değiştirmek istiyorum",
+        "e-posta adresimi güncellemek istiyorum",
+        "adresimi değiştirebilir miyim",
+        "banka hesabımı değiştirmek istiyorum",
+        "iban bilgimi güncelleyin",
+        "ad soyad yanlış yazılmış",
+        "doğum tarihim hatalı",
+        "kişisel bilgilerimi nasıl güncellerim"
+      ],
+      "sentences": [
+        "yeni telefon numaramı hesabıma eklemek istiyorum",
+        "mail adresim değişti nasıl güncellerim",
+        "kayıtlı ibanımı değiştirmek istiyorum",
+        "soyadım evlilikle değişti",
+        "profilimdeki adres eski",
+        "kayıt olurken doğum tarihimi yanlış girdim",
+        "hesap bilgilerimi düzenleyemiyorum"
+      ],
+      "typos": [
+        "telefon numarami degistirmek istiyorum",
+        "eposta adresimi guncellemek istiyorum",
+        "iban bilgimi guncelleyin",
+        "dogum tarihim hatali"
+      ]
+    },
+    {
+      "key": "odds_question",
+      "name": "Oran sorusu",
+      "when_to_use": "Oyuncu oranların değişmesini, kapanan marketleri ya da bahis kurallarını soruyor.",
+      "examples": [
+        "oran neden değişti",
+        "bahis yaparken oran düştü",
+        "maç bahise kapandı neden",
+        "oranlar çok düşük",
+        "maksimum bahis limiti ne kadar",
+        "oran değişikliği onayı istiyor",
+        "market kapandı",
+        "canlı bahiste oran donuyor"
+      ],
+      "sentences": [
+        "kupon yaparken oran sürekli değişiyor",
+        "bu maçın oranları neden kapandı",
+        "en yüksek bahis tutarı ne kadar",
+        "oran değişti diye kuponum onaylanmadı",
+        "canlı bahiste oranlar askıya alınıyor",
+        "diğer sitelerde oranlar daha yüksek",
+        "bu market neden açılmıyor"
+      ],
+      "typos": [
+        "oran nden degisti",
+        "mac bahise kapandi neden",
+        "oranlar cok dusuk",
+        "canli bahiste oran donuyo"
+      ]
+    },
+    {
+      "key": "referral",
+      "name": "Arkadaş davet",
+      "when_to_use": "Oyuncu arkadaş davet programını, referans kodunu ya da davet ödülünü soruyor.",
+      "examples": [
+        "arkadaşımı davet ettim ödül gelmedi",
+        "referans kodum nerede",
+        "davet linki nasıl alınır",
+        "arkadaş getir kampanyası nasıl işliyor",
+        "referans bonusu ne zaman yüklenir",
+        "davet ettiğim kişi yatırım yaptı",
+        "referans kodu çalışmıyor",
+        "arkadaş davet ödülü"
+      ],
+      "sentences": [
+        "arkadaşım kodumla üye oldu bonusum nerede",
+        "kendi davet linkimi nereden bulurum",
+        "referansla gelen arkadaşım yatırım yaptı ödül yok",
+        "arkadaş getir kampanyasının şartları neler",
+        "davet kodumu paylaştım kimse görünmüyor",
+        "referans ödülü kaç tl",
+        "arkadaşımı davet etmek istiyorum"
+      ],
+      "typos": [
+        "arkadasimi davet ettim odul gelmedi",
+        "referans kodm nerde",
+        "davet linki nasil alinir",
+        "referans bonusu ne zman yuklenir"
+      ]
+    },
+    {
+      "key": "complaint_formal",
+      "name": "Resmi şikayet",
+      "when_to_use": "Oyuncu resmi şikayette bulunmak, bir yetkiliyle görüşmek ya da lisans kurumuna başvurmak istiyor.",
+      "examples": [
+        "şikayette bulunmak istiyorum",
+        "resmi şikayet oluşturmak istiyorum",
+        "yöneticinizle görüşmek istiyorum",
+        "lisans kurumuna şikayet edeceğim",
+        "bu durumu şikayet ediyorum",
+        "şikayet formu nerede",
+        "hizmetinizden memnun değilim şikayet",
+        "avukatıma vereceğim"
+      ],
+      "sentences": [
+        "bu yaşadığımı resmi olarak şikayet etmek istiyorum",
+        "bir üst yetkiliyle konuşmak istiyorum",
+        "curacao lisans otoritesine başvuracağım",
+        "şikayetimi nereye iletebilirim",
+        "üç gündür kimse ilgilenmiyor şikayetçiyim",
+        "şikayet numarası almak istiyorum",
+        "hukuki yollara başvuracağım"
+      ],
+      "typos": [
+        "sikayette bulunmak istiyorum",
+        "resmi sikayet olusturmak istiyorum",
+        "yoneticinizle gorusmek istiyorum",
+        "sikayet formu nerde"
+      ]
+    }
+  ]
+}

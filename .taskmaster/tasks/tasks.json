@@ -12739,7 +12739,7 @@
           "296"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T15:14:59.216Z",
+        "updatedAt": "2026-10-18T15:16:06.373Z",
         "subtasks": [
           {
             "id": 1,
@@ -12773,13 +12773,13 @@
             "description": "ai_procedure_examples + HNSW ön eleme (>15 prosedür) + ai-intents-tr.json fikstürü",
             "details": "İndeks kendi migration dosyasında.",
             "testStrategy": "Ön eleme birim; fikstür testi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "297.1"
             ],
             "parentId": "297",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-18T15:16:06.373Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T15:14:59.217Z",
+      "lastModified": "2026-10-18T15:16:06.373Z",
       "taskCount": 390,
       "completedCount": 295,
       "tags": [

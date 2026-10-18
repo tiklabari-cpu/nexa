@@ -1,0 +1,19 @@
+-- The approximate index the catalogue narrowing reads above its exact-search
+-- ceiling (tm 297.3 · SiyahTuş analysis AI-05 §2 · `procedure-examples.ts`).
+--
+-- Alone in this file on purpose: `CREATE INDEX CONCURRENTLY` cannot run inside
+-- a transaction block (CONVENTIONS 6.3). The table is new and empty when this
+-- runs, so the build is instant here; CONCURRENTLY all the same, so the file
+-- stays safe to replay against a table that has rows.
+--
+-- HNSW, with pgvector's default m and ef_construction — the choices
+-- `idx_chunks_embedding_hnsw` (20260913120100) measured and explains: no
+-- training step, so a fresh install's empty graph is the graph production
+-- grows; the bigger graphs cost every write more than their recall is worth.
+-- One index serves every tenant, like that one.
+--
+-- NO `IF NOT EXISTS`, for that file's reason: a failed concurrent build leaves
+-- an INVALID index of this name behind, which the retry must not keep. Recover
+-- by `DROP INDEX CONCURRENTLY idx_procedure_examples_embedding_hnsw`, then
+-- `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE INDEX CONCURRENTLY "idx_procedure_examples_embedding_hnsw" ON "ai_procedure_examples" USING hnsw ("embedding" vector_cosine_ops) WITH (m = 16, ef_construction = 64);

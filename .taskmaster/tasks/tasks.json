@@ -12810,7 +12810,7 @@
           "292"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T19:16:53.641Z",
+        "updatedAt": "2026-10-18T21:09:09.611Z",
         "subtasks": [
           {
             "id": 1,
@@ -12818,11 +12818,11 @@
             "description": "ai_guidance_rules + persona alanları + instruction taşıma + CRUD/check uçları + guidance.ts prompt derleme",
             "details": "Üst görev 299 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "299",
             "priority": "high",
-            "updatedAt": "2026-10-18T19:16:53.641Z"
+            "updatedAt": "2026-10-18T21:09:09.611Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T19:16:53.641Z",
+      "lastModified": "2026-10-18T21:09:09.612Z",
       "taskCount": 390,
       "completedCount": 297,
       "tags": [

@@ -24,7 +24,7 @@ import { formatDate } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
 import { DEFAULT_PROCEDURE_PRIORITY } from '@siyahtus/types';
-import { skillStepCount } from './procedure-authoring.js';
+import { matchesEveryMessage, skillStepCount } from './procedure-authoring.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
@@ -640,6 +640,14 @@ export function PlaybookPage(): ReactElement {
                                       · {formatDate(skill.updated_at)} ·{' '}
                                       {skill.created_by_name ?? '—'}
                                     </span>
+                                    {/* AI-05 §5: a skill with no gate used to answer
+                                        every message; now it waits for nothing else
+                                        to — the author should know why it went quiet. */}
+                                    {matchesEveryMessage(skill) && (
+                                      <span className="block text-2xs text-content-secondary">
+                                        {t('playbook.skills.matchesEverything')}
+                                      </span>
+                                    )}
                                   </button>
 
                                   {/* A procedure talks the matter through over several
@@ -648,6 +656,15 @@ export function PlaybookPage(): ReactElement {
                                   {skill.mode === 'procedure' && (
                                     <span className="shrink-0 rounded-sm bg-brand-100 px-1.5 py-0.5 text-2xs font-medium text-content-brand dark:bg-brand-950">
                                       {t('playbook.skills.procedureBadge')}
+                                    </span>
+                                  )}
+
+                                  {skill.is_fallback && (
+                                    <span
+                                      className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium text-content-secondary"
+                                      title={t('playbook.skills.fallbackHint')}
+                                    >
+                                      {t('playbook.skills.fallbackBadge')}
                                     </span>
                                   )}
 

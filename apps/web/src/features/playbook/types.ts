@@ -1,6 +1,7 @@
 import type {
   AnswerLength,
   Cond,
+  ClarifyThresholds,
   DailyMemorySettings,
   ProcedureProblemDetails,
   SkillMode,
@@ -65,6 +66,8 @@ export interface AiAgent {
   batch_window_seconds: number | null;
   /** Same-day memory (tm 294 · AI-02); absent reads as the default. */
   daily_memory?: DailyMemorySettings;
+  /** How sure the agent must be of a procedure (tm 297.2 · AI-05); absent reads as the default. */
+  clarify_thresholds?: ClarifyThresholds;
   active: boolean;
   skills_count: number;
 }

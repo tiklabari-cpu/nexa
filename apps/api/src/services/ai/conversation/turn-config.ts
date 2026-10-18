@@ -16,12 +16,14 @@
  */
 import {
   readBatchWindowSeconds,
+  readClarifyThresholds,
   readDailyMemory,
   readPersona,
   type DailyMemorySettings,
   type SkillProcedureFields,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
+import { turnThresholds } from './policy.js';
 import type { TurnConfig } from './turn.js';
 
 /** A configuration as the seam returns it (ADR-14b §2.6). */
@@ -100,6 +102,7 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       slots: true,
       procedure: true,
       locked: true,
+      isFallback: true,
       // The persona travels with the skill because it belongs to the agent
       // that owns it: two agents in one workspace answer in two voices, so
       // "which persona applies" is only decidable once a skill has been
@@ -117,6 +120,7 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       aiAgentId: skill.aiAgentId,
       steps: skill.steps,
       persona: readPersona(skill.aiAgent),
+      ...(skill.isFallback ? { isFallback: true } : {}),
       ...(skill.mode === 'procedure'
         ? {
             mode: 'procedure' as const,
@@ -135,6 +139,13 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
     ...(waits.length > 0 ? { batchWindowSeconds: Math.max(...waits) } : {}),
     ...(skills.length > 0
       ? { dailyMemory: strictest(skills.map((skill) => readDailyMemory(skill.aiAgent?.persona))) }
+      : {}),
+    ...(skills.length > 0
+      ? {
+          clarifyThresholds: turnThresholds(
+            skills.map((skill) => readClarifyThresholds(skill.aiAgent?.persona)),
+          ),
+        }
       : {}),
   };
 }
@@ -168,6 +179,7 @@ async function previewTurnConfig(tx: TenantClient, input: DraftConfigInput): Pro
       })
     : null;
   return {
+    ...(agent ? { clarifyThresholds: readClarifyThresholds(agent.persona) } : {}),
     skills: [
       {
         id: 'preview',

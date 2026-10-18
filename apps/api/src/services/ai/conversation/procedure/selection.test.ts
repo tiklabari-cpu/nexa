@@ -71,7 +71,11 @@ function about(
 
 function select(
   understanding: ProcedureUnderstanding,
-  state: { active?: ActiveProcedure | null; suspended?: SuspendedProcedure | null } = {},
+  state: {
+    active?: ActiveProcedure | null;
+    suspended?: SuspendedProcedure | null;
+    high?: number;
+  } = {},
 ) {
   return selectProcedure({
     understanding,
@@ -80,6 +84,7 @@ function select(
     suspended: state.suspended ?? null,
     slots: { yontem: { status: 'filled', display: 'Papara', value: 'Papara' } },
     now: NOW,
+    ...(state.high !== undefined ? { high: state.high } : {}),
   });
 }
 
@@ -90,6 +95,25 @@ describe('the topic change (AI-03 §7)', () => {
       kind: 'none',
     });
     expect(select(about('not_in_the_catalogue')).selection).toEqual({ kind: 'none' });
+  });
+
+  it('the agent’s own `high` is the threshold a procedure starts at (AI-05 §4.3)', () => {
+    expect(select(about('deposit', 0.75), { high: 0.8 }).selection).toEqual({ kind: 'none' });
+    expect(select(about('deposit', 0.62), { high: 0.6 }).selection).toEqual({
+      kind: 'start',
+      key: 'deposit',
+    });
+  });
+
+  it('a message the understanding reads as carrying the active one on is not a topic change, however sure of another (AI-05 §4.2)', () => {
+    const result = select(
+      about('withdrawal', 0.95, {
+        intent: { procedure_key: 'withdrawal', confidence: 0.95, is_continuation: true },
+      }),
+      { active: active('deposit') },
+    );
+    expect(result.selection.kind).toBe('continue');
+    expect(result.suspended).toBeNull();
   });
 
   it('the active procedure carries on: the same topic, no topic, or an answer to its question', () => {

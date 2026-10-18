@@ -23,6 +23,7 @@
  * pinned configuration version stay with the store (`state-store.ts`).
  */
 import type {
+  ClarifyThresholds,
   DailyMemorySettings,
   Persona,
   SkillMode,
@@ -34,6 +35,7 @@ import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
 import type { EarlierToday } from './daily-memory.js';
+import type { PolicyRecord } from './policy.js';
 import type { ProcedureFacts } from './procedure/conditions.js';
 import type { StepDecision } from './procedure/executor.js';
 import type { ProcedureUnderstanding } from './procedure/understanding.js';
@@ -202,6 +204,11 @@ export interface TurnSkill {
   readonly definition?: SkillProcedureFields;
   /** A locked template copy (AI-15): it goes before every other topic. */
   readonly locked?: boolean;
+  /**
+   * The agent's fallback (`is_fallback`, AI-05 §5): tried only when nothing
+   * else took the message, and never offered to the understanding call.
+   */
+  readonly isFallback?: boolean;
 }
 
 /**
@@ -226,6 +233,11 @@ export interface TurnConfig {
    * wins — off if any is off, `on_topic_only` if any asks for it.
    */
   readonly dailyMemory?: DailyMemorySettings;
+  /**
+   * How sure the understanding must be (`clarify_thresholds`, AI-05 §4).
+   * Absent: the defaults. With several agents the stricter pair.
+   */
+  readonly clarifyThresholds?: ClarifyThresholds;
 }
 
 export interface TurnContext {
@@ -358,6 +370,11 @@ export interface TurnDecisions {
    * this procedure". Absent when no call was made.
    */
   understood?: UnderstoodRecord;
+  /**
+   * Which rule of the decision order decided (tm 297.2 · AI-05 §4, §8) —
+   * absent when the understanding call was not made.
+   */
+  policy?: PolicyRecord;
 }
 
 /** The understanding as the decision record keeps it: keys and numbers, no words. */
@@ -401,9 +418,19 @@ export interface TurnResult {
   sideEffects: TurnSideEffect[];
 }
 
-/** Whether the AI took a turn at all: a skill ran (a message no skill matched is not a turn). */
+/**
+ * Whether the AI took a turn at all: a skill ran, or the turn said something
+ * or sent a person without one — a clarifying question, a small-talk reply, a
+ * hand-over the decision order forced (AI-05 §4). A message nothing took is
+ * not a turn.
+ */
 export function tookTurn(result: TurnResult): boolean {
-  return result.decisions.skillId !== null || result.decisions.capped !== null;
+  return (
+    result.decisions.skillId !== null ||
+    result.decisions.capped !== null ||
+    result.reply !== null ||
+    handoffOf(result.sideEffects) !== null
+  );
 }
 
 /** The turn's hand-over, if it has one. */

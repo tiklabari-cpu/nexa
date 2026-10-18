@@ -156,6 +156,11 @@ export const playbook: Messages = {
   'playbook.skills.filterOwnerUnknown': 'Bilinmeyen',
   'playbook.skills.aiAgentBadge': 'Bu AI ajanı üzerinden çalışır',
   'playbook.skills.procedureBadge': 'Prosedür',
+  'playbook.skills.fallbackBadge': 'Yedek',
+  'playbook.skills.fallbackHint':
+    'Yalnızca hiçbir prosedür ya da başka bir skill mesajı üstlenmediğinde yanıt verir.',
+  'playbook.skills.matchesEverything':
+    'Niyet adımı yok: her mesaja uyar, bu yüzden yalnızca başka hiçbir şey yanıt vermediğinde çalışır.',
   'playbook.skills.priority': 'öncelik {priority}',
   'playbook.skills.filterSort': 'Sırala',
   'playbook.skills.sortNameAsc': 'Ad A–Z',
@@ -454,6 +459,12 @@ export const playbook: Messages = {
   'playbook.profile.recallOnTopic': 'Yalnız ziyaretçi aynı konuyla döndüğünde',
   'playbook.profile.dailyMemoryHint':
     'Asistan konuyu hatırlatır; tutar, IBAN ya da işlem numarasını asla tekrar etmez. Üye tokenıyla tanınmayan ziyaretçiye ayrıntı verilmez. Önceki günler kullanılmaz.',
+  'playbook.profile.clarify': 'Netleştirme eşikleri',
+  'playbook.profile.clarifyHigh': 'Prosedürü başlatma eşiği',
+  'playbook.profile.clarifyLow': 'Soru sorma eşiği',
+  'playbook.profile.clarifyOrder': 'İkinci sayı birinciden küçük olmalı.',
+  'playbook.profile.clarifyHint':
+    'Asistanın bir prosedürden ne kadar emin olması gerektiği. Birinci sayıda ya da üstünde prosedürü başlatır; ikisinin arasında tek bir seçmeli soru sorar; ikinci sayının altında bilgi bankasından yanıtlar.',
   'playbook.profile.save': 'Profili kaydet',
   'playbook.profile.saving': 'Kaydediliyor…',
   'playbook.profile.previewTitle': 'Önizleme',
@@ -651,6 +662,9 @@ export const playbook: Messages = {
   'playbook.editor.modeSingle': 'Tek mesaj',
   'playbook.editor.modeProcedure': 'Prosedür (çok turlu)',
   'playbook.editor.modeSingleHelp': 'Adımlarını bir kez, onu tetikleyen mesajda koşar.',
+  'playbook.editor.fallback': 'Bu ajanın yedek prosedürü',
+  'playbook.editor.fallbackHelp':
+    'Yalnızca hiçbir prosedür olası görünmediğinde ve başka bir skill mesajı üstlenmediğinde çalışır. Bir ajanın en fazla bir yedeği olur.',
   'playbook.editor.modeProcedureHelp':
     'Konuyu birkaç mesajda yürütür: sorar, kontrol eder, yanıtlar, sonra çözer ya da devreder.',
   'playbook.editor.sop': 'Prosedür metni (SOP)',
@@ -933,6 +947,8 @@ export const playbook: Messages = {
   'playbook.procedure.problem.procedure_unknown_target': 'O ekip artık bu çalışma alanında yok.',
   'playbook.procedure.problem.procedure_locked_change':
     'Bu prosedür kilitli: yalnızca metinleri ve ekibi değişebilir.',
+  'playbook.procedure.problem.procedure_fallback_taken':
+    '“{reference}” zaten bu ajanın yedeği. Önce oradan kapatın.',
   'playbook.procedure.problem.procedure_unreachable_step': 'Bu adıma hiçbir yol ulaşmıyor.',
   'playbook.procedure.problem.slots_not_array': 'Bilgi listesi okunamadı.',
   'playbook.procedure.problem.slots_too_many': 'Bir prosedür en fazla 20 bilgi toplar.',

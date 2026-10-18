@@ -3039,7 +3039,8 @@ export interface paths {
      * Edit the persona, or turn the agent on and off
      * @description Sets the customer-facing persona (name, avatar, tone, languages, answer
      *     length) the widget shows (FR-MOD-06.4), how long the agent waits for a
-     *     visitor to stop typing, its same-day memory, and the on/off switch.
+     *     visitor to stop typing, its same-day memory, how sure it must be of a
+     *     procedure (`clarify_thresholds`, AI-05), and the on/off switch.
      *
      *     Deactivating an agent stops every skill under it at once, which is what an
      *     admin reaches for when automation is misbehaving. It does not delete
@@ -9207,8 +9208,22 @@ export interface components {
        */
       batch_window_seconds?: number | null;
       daily_memory?: components['schemas']['AiDailyMemorySettings'];
+      clarify_thresholds?: components['schemas']['AiClarifyThresholds'];
       active: boolean;
       skills_count?: number;
+    };
+    /**
+     * @description How sure the agent must be of a procedure (AI-05). The understanding
+     *     call rates each message 0–1 against the agent's procedures: at `high`
+     *     or above the procedure starts; between `low` and `high` the agent asks
+     *     one either-or question between the two likeliest — never twice in a
+     *     row; below `low` it answers from knowledge, then the fallback.
+     */
+    AiClarifyThresholds: {
+      /** @description Default 0.70. */
+      high: number;
+      /** @description Below `high`. Default 0.40. */
+      low: number;
     };
     /**
      * @description Same-day memory (AI-02): on a member's later connection of the day the
@@ -9470,7 +9485,13 @@ export interface components {
       template_key: string | null;
       /** @description The installed template's version. */
       template_version: number | null;
-      /** @description The skill that answers when no other matches (AI-05). */
+      /**
+       * @description The skill that answers when nothing else does (AI-05): no procedure
+       *     reached the agent's `clarify_thresholds.low` and no other skill took
+       *     the message. At most one per agent. A one-message skill with no
+       *     `detect_intent` step was moved onto it when procedures arrived, so
+       *     it no longer answers before the skills that do match.
+       */
       is_fallback: boolean;
       active: boolean;
       runs_count: number;
@@ -9825,6 +9846,7 @@ export interface components {
         | 'procedure_bad_target'
         | 'procedure_unknown_target'
         | 'procedure_locked_change'
+        | 'procedure_fallback_taken'
         | 'slots_not_array'
         | 'slots_too_many'
         | 'slot_not_object'
@@ -19424,6 +19446,14 @@ export interface operations {
             /** @enum {string} */
             recall?: 'auto_if_unresolved' | 'on_topic_only';
           };
+          /**
+           * @description Either field alone; the one left out keeps its value. The
+           *     pair must keep `low` below `high`.
+           */
+          clarify_thresholds?: {
+            high?: number;
+            low?: number;
+          };
         };
       };
     };
@@ -19556,6 +19586,11 @@ export interface operations {
           /** @description A procedure's only. */
           slots?: components['schemas']['SlotDef'][];
           procedure?: components['schemas']['SkillProcedure'];
+          /**
+           * @description The agent's fallback (AI-05). Refused with
+           *     `procedure_fallback_taken` while another of its skills is.
+           */
+          is_fallback?: boolean;
         };
       };
     };
@@ -19761,6 +19796,11 @@ export interface operations {
           /** @description A procedure's only. */
           slots?: components['schemas']['SlotDef'][];
           procedure?: components['schemas']['SkillProcedure'];
+          /**
+           * @description The agent's fallback (AI-05). Refused with
+           *     `procedure_fallback_taken` while another of its skills is.
+           */
+          is_fallback?: boolean;
           active?: boolean;
         };
       };

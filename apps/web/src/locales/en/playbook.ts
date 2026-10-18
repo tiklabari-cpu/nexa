@@ -161,6 +161,11 @@ export const playbook: Messages = {
   'playbook.skills.filterOwnerUnknown': 'Unknown',
   'playbook.skills.aiAgentBadge': 'Runs through this AI agent',
   'playbook.skills.procedureBadge': 'Procedure',
+  'playbook.skills.fallbackBadge': 'Fallback',
+  'playbook.skills.fallbackHint':
+    'Answers only when no procedure or other skill takes the message.',
+  'playbook.skills.matchesEverything':
+    'No intent step: it matches every message, so it answers only when nothing else does.',
   'playbook.skills.priority': 'priority {priority}',
   'playbook.skills.filterSort': 'Sort',
   'playbook.skills.sortNameAsc': 'Name A–Z',
@@ -458,6 +463,12 @@ export const playbook: Messages = {
   'playbook.profile.recallOnTopic': 'Only when the visitor is back on the same topic',
   'playbook.profile.dailyMemoryHint':
     'The assistant recalls the topic, never an amount, an IBAN or a transaction number. A visitor not signed in with a member token gets no details. Earlier days are never used.',
+  'playbook.profile.clarify': 'Clarifying thresholds',
+  'playbook.profile.clarifyHigh': 'Start a procedure at',
+  'playbook.profile.clarifyLow': 'Ask which one from',
+  'playbook.profile.clarifyOrder': 'The second number must be below the first.',
+  'playbook.profile.clarifyHint':
+    'How sure the assistant must be of a procedure. At the first number or above it starts it; between the two it asks one either-or question; below the second it answers from knowledge.',
   'playbook.profile.save': 'Save profile',
   'playbook.profile.saving': 'Saving…',
   'playbook.profile.previewTitle': 'Preview',
@@ -651,6 +662,9 @@ export const playbook: Messages = {
   'playbook.editor.modeSingle': 'One message',
   'playbook.editor.modeProcedure': 'Procedure (several turns)',
   'playbook.editor.modeSingleHelp': 'Runs its steps once, on the message that set it off.',
+  'playbook.editor.fallback': 'Fallback for this agent',
+  'playbook.editor.fallbackHelp':
+    'Runs only when no procedure is even likely and no other skill takes the message. An agent has at most one.',
   'playbook.editor.modeProcedureHelp':
     'Talks the matter through over several messages: asks, checks, answers, then resolves or hands over.',
   'playbook.editor.sop': 'Procedure text (SOP)',
@@ -934,6 +948,8 @@ export const playbook: Messages = {
     'That team is not in this workspace any more.',
   'playbook.procedure.problem.procedure_locked_change':
     'This procedure is locked: only its texts and its team may change.',
+  'playbook.procedure.problem.procedure_fallback_taken':
+    '“{reference}” is already this agent’s fallback. Turn it off there first.',
   'playbook.procedure.problem.procedure_unreachable_step': 'No path reaches this step.',
   'playbook.procedure.problem.slots_not_array': 'The information list could not be read.',
   'playbook.procedure.problem.slots_too_many':

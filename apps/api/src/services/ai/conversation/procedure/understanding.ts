@@ -13,7 +13,7 @@
  * by `../understand-mock.ts`, the deterministic reading that stood here as
  * `interimUnderstanding` until #297.
  */
-import type { SlotDef } from '@siyahtus/types';
+import { DEFAULT_CLARIFY_THRESHOLDS, type SlotDef } from '@siyahtus/types';
 import type { AiStateObject } from '../state-store.js';
 
 /**
@@ -29,9 +29,13 @@ export interface ProcedureUnderstanding {
     readonly alternatives?: ReadonlyArray<{ readonly key: string; readonly confidence: number }>;
     /** The message carries on the active procedure. */
     readonly is_continuation?: boolean;
+    /** A greeting, thanks or small talk with no request (AI-05 §4.5). */
+    readonly smalltalk?: boolean;
   };
   /** The message answers the question the AI is waiting on. */
   readonly answers_pending_question?: boolean;
+  /** ISO 639-1 — what the persona's language check reads (AI-05 §7); absent or null: not told. */
+  readonly language?: string | null;
   readonly yes_no?: 'yes' | 'no' | null;
   /** AI-04's `extracted` and `correction`, read by `applyExtraction`. */
   readonly extracted?: unknown;
@@ -42,10 +46,10 @@ export interface ProcedureUnderstanding {
 
 /**
  * The understanding at which a procedure starts, or takes over from the active
- * one — AI-05's `clarify_thresholds.high` default (0.70). The agent's own
- * thresholds and the clarifying question between them are #297.2's.
+ * one, when the agent set no `clarify_thresholds` — their `high` default
+ * (0.70). The policy (`../policy.ts`) passes the agent's own.
  */
-export const PROCEDURE_START_CONFIDENCE = 0.7;
+export const PROCEDURE_START_CONFIDENCE = DEFAULT_CLARIFY_THRESHOLDS.high;
 
 /** Two candidates closer than this are a tie, broken by the policy (AI-05 §4.3). */
 export const PROCEDURE_TIE_MARGIN = 0.1;
@@ -73,11 +77,13 @@ export interface RankedProcedure {
  * The candidates in the order the policy takes them (AI-05 §4.3): by
  * confidence, except that two within {@link PROCEDURE_TIE_MARGIN} of each
  * other are ordered locked first, then the smaller `priority`, then the higher
- * confidence. Only candidates at {@link PROCEDURE_START_CONFIDENCE} or above.
+ * confidence. Only candidates at `atLeast` or above — the agent's `high` to
+ * start one, its `low` to ask about one.
  */
 export function rankProcedures(
   understanding: ProcedureUnderstanding,
   catalogue: readonly CatalogueEntry[],
+  atLeast: number = PROCEDURE_START_CONFIDENCE,
 ): RankedProcedure[] {
   const byKey = new Map(catalogue.map((entry) => [entry.key, entry]));
   const scored = new Map<string, number>();
@@ -91,7 +97,7 @@ export function rankProcedures(
     offer(alternative.key, alternative.confidence);
   }
   const ranked = [...scored]
-    .filter(([, confidence]) => confidence >= PROCEDURE_START_CONFIDENCE)
+    .filter(([, confidence]) => confidence >= atLeast)
     .map(([key, confidence]) => ({ entry: byKey.get(key) as CatalogueEntry, confidence }));
   const top = Math.max(0, ...ranked.map((candidate) => candidate.confidence));
   return ranked.sort((a, b) => {

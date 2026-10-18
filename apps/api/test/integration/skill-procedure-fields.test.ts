@@ -409,12 +409,11 @@ describe('skill procedure fields (tm 296.2)', () => {
     expect(body.slots).toEqual(created.slots);
   });
 
-  it('obeys no body on the server’s fields: locked, template_key, template_version, is_fallback', async () => {
+  it('obeys no body on the server’s fields: locked, template_key, template_version', async () => {
     const serverFields = {
       locked: true,
       template_key: 'x',
       template_version: 3,
-      is_fallback: true,
     };
     const created = await create({ ...deposit(), ...serverFields });
     expect(created.statusCode).toBe(201);

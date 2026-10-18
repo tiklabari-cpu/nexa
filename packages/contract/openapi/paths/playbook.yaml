@@ -41,7 +41,8 @@ aiAgent:
     description: |
       Sets the customer-facing persona (name, avatar, tone, languages, answer
       length) the widget shows (FR-MOD-06.4), how long the agent waits for a
-      visitor to stop typing, its same-day memory, and the on/off switch.
+      visitor to stop typing, its same-day memory, how sure it must be of a
+      procedure (`clarify_thresholds`, AI-05), and the on/off switch.
 
       Deactivating an agent stops every skill under it at once, which is what an
       admin reaches for when automation is misbehaving. It does not delete
@@ -80,6 +81,16 @@ aiAgent:
                 properties:
                   enabled: { type: boolean }
                   recall: { type: string, enum: [auto_if_unresolved, on_topic_only] }
+              clarify_thresholds:
+                type: object
+                minProperties: 1
+                additionalProperties: false
+                description: |
+                  Either field alone; the one left out keeps its value. The
+                  pair must keep `low` below `high`.
+                properties:
+                  high: { type: number, minimum: 0.01, maximum: 1 }
+                  low: { type: number, minimum: 0.01, maximum: 1 }
     responses:
       "200":
         description: Updated
@@ -214,6 +225,11 @@ skills:
                 description: A procedure's only.
                 items: { $ref: "../openapi.yaml#/components/schemas/SlotDef" }
               procedure: { $ref: "../openapi.yaml#/components/schemas/SkillProcedure" }
+              is_fallback:
+                type: boolean
+                description: |
+                  The agent's fallback (AI-05). Refused with
+                  `procedure_fallback_taken` while another of its skills is.
     responses:
       "201":
         description: Created
@@ -298,6 +314,11 @@ skill:
                 description: A procedure's only.
                 items: { $ref: "../openapi.yaml#/components/schemas/SlotDef" }
               procedure: { $ref: "../openapi.yaml#/components/schemas/SkillProcedure" }
+              is_fallback:
+                type: boolean
+                description: |
+                  The agent's fallback (AI-05). Refused with
+                  `procedure_fallback_taken` while another of its skills is.
               active: { type: boolean }
     responses:
       "200":

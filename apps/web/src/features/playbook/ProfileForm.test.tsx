@@ -175,6 +175,42 @@ describe('ProfileForm', () => {
     );
   });
 
+  it('shows the clarifying thresholds at 0.70 and 0.40 when the agent never set them (tm 297.2)', () => {
+    renderForm();
+    expect(screen.getByLabelText('Start a procedure at')).toHaveValue('0.70');
+    expect(screen.getByLabelText('Ask which one from')).toHaveValue('0.40');
+  });
+
+  it('PATCHes the thresholds as a pair, only when one changed (AI-05 §4)', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, clarify_thresholds: { high: 0.72, low: 0.4 } });
+    // A stored value off the 0.05 grid is still a choice.
+    expect(screen.getByLabelText('Start a procedure at')).toHaveValue('0.72');
+    await user.selectOptions(screen.getByLabelText('Ask which one from'), '0.50');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(api.patch).toHaveBeenLastCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({ clarify_thresholds: { high: 0.72, low: 0.5 } }),
+    );
+  });
+
+  it('refuses a pair that leaves no room to ask: an error, and no Save', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.selectOptions(screen.getByLabelText('Ask which one from'), '0.80');
+    expect(screen.getByText('The second number must be below the first.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Start a procedure at')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
+  });
+
+  it('leaves the thresholds out of a save that did not touch them', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.type(screen.getByLabelText('Name'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(api.patch.mock.calls.at(-1)![1]).not.toHaveProperty('clarify_thresholds');
+  });
+
   it('reflects the name in the live preview as it is typed', async () => {
     const user = userEvent.setup();
     renderForm();

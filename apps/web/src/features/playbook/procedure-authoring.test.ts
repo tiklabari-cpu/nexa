@@ -23,6 +23,7 @@ import {
   changeSimpleKind,
   changeSlotType,
   condFromSimple,
+  matchesEveryMessage,
   moveProcStep,
   nextStepId,
   procedureDraft,
@@ -391,5 +392,21 @@ describe('the list’s step count', () => {
     ).toBe(1);
     expect(skillStepCount({ steps: [{ type: 'summarize' }] })).toBe(1);
     expect(skillStepCount({ mode: 'procedure', steps: [], procedure: null })).toBe(0);
+  });
+});
+
+describe('matchesEveryMessage (tm 297.2 · AI-05 §5)', () => {
+  const answer = { type: 'send_message' as const, source: 'text' as const, text: 'Merhaba' };
+  it('is a one-message skill with steps and no intent gate — nothing else', () => {
+    expect(matchesEveryMessage({ mode: 'single', steps: [answer] })).toBe(true);
+    expect(matchesEveryMessage({ steps: [answer] })).toBe(true);
+    expect(
+      matchesEveryMessage({
+        mode: 'single',
+        steps: [{ type: 'detect_intent', intent: 'kargo', phrases: [] }, answer],
+      }),
+    ).toBe(false);
+    expect(matchesEveryMessage({ mode: 'single', steps: [] })).toBe(false);
+    expect(matchesEveryMessage({ mode: 'procedure', steps: [answer] })).toBe(false);
   });
 });

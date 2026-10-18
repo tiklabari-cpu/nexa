@@ -358,7 +358,17 @@ export class AiResponder {
               : 'ai knowledge search could not run; the conversation stays with a human',
           );
         }
-        if (!tookTurn(result)) return result;
+        if (!tookTurn(result)) {
+          if (result.decisions.policy?.rule === 'unmatched') {
+            // AI-05 §4.6: no procedure, no skill, no fallback took the message —
+            // the line AI-22's unanswered-questions report will collect.
+            log.info(
+              { policy_step: 6, procedure_key: result.decisions.understood?.procedure_key ?? null },
+              'ai turn unmatched: nothing took the message',
+            );
+          }
+          return result;
+        }
 
         try {
           // The last draft goes out whatever the visitor wrote meanwhile.

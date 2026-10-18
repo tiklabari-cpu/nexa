@@ -14,11 +14,13 @@ import {
   ANSWER_LENGTHS,
   BATCH_WINDOW_SECONDS_MAX,
   DAILY_MEMORY_RECALLS,
+  DEFAULT_CLARIFY_THRESHOLDS,
   DEFAULT_DAILY_MEMORY,
   isPersonaLanguage,
   readPersona,
   shapeAnswer,
   type AnswerLength,
+  type ClarifyThresholds,
   type DailyMemoryRecall,
   type DailyMemorySettings,
 } from '@siyahtus/types';
@@ -40,6 +42,15 @@ const LANGUAGE_OPTIONS: [string, string][] = [
 
 /** 1…10 — 0 is its own option ("answer at once") and the empty one is the default. */
 const BATCH_WINDOW_STEPS = Array.from({ length: BATCH_WINDOW_SECONDS_MAX }, (_, i) => i + 1);
+
+/** 0.05 … 1.00 — the thresholds' choices (AI-05 §4); a stored value off the grid is added. */
+const CLARIFY_STEPS = Array.from({ length: 20 }, (_, i) => ((i + 1) * 0.05).toFixed(2));
+
+function clarifyOptions(current: string): string[] {
+  return CLARIFY_STEPS.includes(current)
+    ? CLARIFY_STEPS
+    : [...CLARIFY_STEPS, current].sort((a, b) => Number(a) - Number(b));
+}
 
 const RECALL_LABEL_KEYS: Record<DailyMemoryRecall, string> = {
   auto_if_unresolved: 'playbook.profile.recallUnresolved',
@@ -93,6 +104,7 @@ export function ProfileForm({
       answer_length: AnswerLength | null;
       batch_window_seconds: number | null;
       daily_memory?: DailyMemorySettings;
+      clarify_thresholds?: ClarifyThresholds;
     }) => api.patch<AiAgent>(`/ai-agents/${agent.id}`, body),
     onSuccess: onSaved,
   });
@@ -108,6 +120,9 @@ export function ProfileForm({
     // earlier conversation up.
     memory: (agent.daily_memory ?? DEFAULT_DAILY_MEMORY).enabled ? 'on' : 'off',
     recall: (agent.daily_memory ?? DEFAULT_DAILY_MEMORY).recall as string,
+    // How sure it must be of a procedure (tm 297.2 · AI-05 §4), as "0.70".
+    clarifyHigh: (agent.clarify_thresholds ?? DEFAULT_CLARIFY_THRESHOLDS).high.toFixed(2),
+    clarifyLow: (agent.clarify_thresholds ?? DEFAULT_CLARIFY_THRESHOLDS).low.toFixed(2),
   };
 
   const form = useForm({
@@ -140,12 +155,26 @@ export function ProfileForm({
               },
             }
           : {}),
+        ...(values.clarifyHigh !== initialValues.clarifyHigh ||
+        values.clarifyLow !== initialValues.clarifyLow
+          ? {
+              clarify_thresholds: {
+                high: Number(values.clarifyHigh),
+                low: Number(values.clarifyLow),
+              },
+            }
+          : {}),
       });
     },
   });
   const nameError = form.errorFor('name');
+  // The pair is judged together, as the API judges it: no room to ask is no pair.
+  const clarifyError =
+    Number(form.values.clarifyLow) >= Number(form.values.clarifyHigh)
+      ? t('playbook.profile.clarifyOrder')
+      : null;
   const dirty = form.isDirty || languagesDirty;
-  const canSave = canEdit && form.isValid && dirty && !save.isPending;
+  const canSave = canEdit && form.isValid && clarifyError === null && dirty && !save.isPending;
 
   function toggleLanguage(code: string): void {
     setLanguages((current) =>
@@ -318,6 +347,44 @@ export function ProfileForm({
             <p className="text-2xs text-content-tertiary">
               {t('playbook.profile.dailyMemoryHint')}
             </p>
+          </fieldset>
+
+          {/* AI-05 §4: when the agent starts a procedure, when it asks first. */}
+          <fieldset className="flex flex-col gap-1.5" disabled={!canEdit}>
+            <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('playbook.profile.clarify')}
+            </legend>
+            <div className="flex flex-wrap gap-3">
+              {(
+                [
+                  ['clarifyHigh', 'persona-clarify-high', 'playbook.profile.clarifyHigh'],
+                  ['clarifyLow', 'persona-clarify-low', 'playbook.profile.clarifyLow'],
+                ] as const
+              ).map(([field, id, label]) => (
+                <div key={field} className="flex flex-col gap-1">
+                  {/* Sibling label, for the same reason as the answer length above. */}
+                  <label htmlFor={id} className="text-2xs text-content-secondary">
+                    {t(label)}
+                  </label>
+                  <select
+                    id={id}
+                    value={form.values[field]}
+                    onChange={(event) => form.setValue(field, event.target.value)}
+                    aria-invalid={clarifyError ? true : undefined}
+                    aria-describedby={clarifyError ? 'persona-clarify-error' : undefined}
+                    className="w-28 rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+                  >
+                    {clarifyOptions(form.values[field]).map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <FieldError id="persona-clarify-error" message={clarifyError} />
+            <p className="text-2xs text-content-tertiary">{t('playbook.profile.clarifyHint')}</p>
           </fieldset>
 
           {canEdit && (

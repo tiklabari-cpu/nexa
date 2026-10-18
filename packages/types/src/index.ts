@@ -9,6 +9,7 @@ export * from './ai-decision.js';
 export * from './ai-conversation.js';
 export * from './ai-daily-memory.js';
 export * from './slots.js';
+export * from './procedure.js';
 export * from './entitlements.js';
 export * from './integrations.js';
 export * from './errors.js';

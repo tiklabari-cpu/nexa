@@ -19,6 +19,8 @@
  *     card security code, a seed phrase or private key, online banking
  *     credentials or a full IBAN is refused on save — `slot_sensitive_forbidden`.
  *     The TR and EN patterns live here and nowhere else;
+ *   - a `file` slot that asks for an identity document is refused too —
+ *     `slot_identity_document_forbidden` (AI-04-S1 · G12);
  *   - `validateSlotDefs`, every problem in a slot list as a stable code.
  *
  * Turning the player's words into values — Turkish amounts, dates, yes/no,
@@ -326,6 +328,26 @@ const SENSITIVE_PATTERNS: Readonly<Record<SensitiveSlotCategory, readonly RegExp
   full_iban: [/\biban/, /\b26 (hane|karakter|digit|character)/],
 };
 
+/**
+ * An identity document, on folded text: the ID card, passport, driving licence,
+ * proof of address, the selfie that goes with them. The AI never takes one
+ * through the chat — the player is sent to the official upload path
+ * (AI-04-S1 · G12). A receipt or a screenshot is not one.
+ */
+const IDENTITY_DOCUMENT_PATTERNS: readonly RegExp[] = [
+  // "kimliğiniz" folds to "kimlig…": the k softens before a vowel.
+  /\b(kimli[kg]|nufus (cuzdan|kart)|pasaport|passport|ehliyet|surucu belge|vesikalik|ozcekim|selfie|kyc\b)/,
+  /\b(ikametgah|(adres|yerlesim yeri) (belge|teyit|kanit))/,
+  // "driver's licence" folds to "driver s licence".
+  /\b(identity|id (card|document|photo|scan)|driv\w*( s)? licen[cs]e|proof of (address|identity|id\b)|utility bill)/,
+];
+
+/** Whether a `file` slot's text asks for an identity document (AI-04-S1). */
+export function asksForIdentityDocument(text: string): boolean {
+  const folded = foldForSensitiveMatch(text);
+  return folded.length > 0 && IDENTITY_DOCUMENT_PATTERNS.some((pattern) => pattern.test(folded));
+}
+
 /** "son 4 hane" / "last 4 digits" — asking for the tail of a number, not the number. */
 const LAST_FOUR = /\b(son (4|dort) (hane|rakam|karakter)|last (4|four) (digit|character|number))/;
 
@@ -365,9 +387,10 @@ export function sensitiveSlotCategory(text: string, type?: SlotType): SensitiveS
  * language. A write answers 400 `validation` with the first problem's
  * `slotProblemDetails` in `error.details`; the editor shows all of them.
  *
- * `slot_unknown_reference` is the procedure validator's (#296.1): a `collect`
- * step, a template variable or a condition naming a slot the procedure does
- * not define. It is listed here so the codes have one home.
+ * `slot_unknown_reference` is the procedure validator's (`procedure.ts`): a
+ * `collect` step, a condition, a tool input or a card field naming a slot the
+ * procedure does not define (an undefined template variable is
+ * `procedure_unknown_variable`). It is listed here so the codes have one home.
  */
 export const SLOT_PROBLEM_CODES = [
   'slots_not_array',
@@ -385,6 +408,7 @@ export const SLOT_PROBLEM_CODES = [
   'slot_enum_needs_values',
   'slot_unknown_enum_source',
   'slot_sensitive_forbidden',
+  'slot_identity_document_forbidden',
   'slot_unknown_reference',
 ] as const;
 export type SlotProblemCode = (typeof SLOT_PROBLEM_CODES)[number];
@@ -653,6 +677,22 @@ export function validateSlotDef(
     }
   }
 
+  if (type === 'file') {
+    const field = SENSITIVE_TEXT_FIELDS.find((key) => {
+      const raw = value[key];
+      return (Array.isArray(raw) ? raw : [raw]).some(
+        (text) => typeof text === 'string' && asksForIdentityDocument(text),
+      );
+    });
+    if (field !== undefined) {
+      push(
+        'slot_identity_document_forbidden',
+        field,
+        `${field} asks for an identity document, which the AI never takes through the chat`,
+      );
+    }
+  }
+
   if (problems.length > 0) return { slot: null, problems };
 
   const slot: SlotDef = {
@@ -738,10 +778,12 @@ function validateProblems(
       out.push(['slot_bad_validate', `regex must be 1 to ${SLOT_REGEX_MAX} characters`]);
     } else if (type !== undefined && !SLOT_REGEX_TYPES.includes(type)) {
       out.push(['slot_bad_validate', `regex applies only to ${SLOT_REGEX_TYPES.join(', ')}`]);
-    } else if (!compiles(regex)) {
-      out.push(['slot_bad_validate', 'regex does not compile']);
-    } else if (NESTED_QUANTIFIER.test(regex)) {
-      out.push(['slot_bad_validate', 'regex must not repeat a repeated group']);
+    } else {
+      const problem = authorPatternProblem(regex);
+      if (problem === 'does_not_compile') out.push(['slot_bad_validate', 'regex does not compile']);
+      if (problem === 'nested_quantifier') {
+        out.push(['slot_bad_validate', 'regex must not repeat a repeated group']);
+      }
     }
   }
 
@@ -753,6 +795,18 @@ function validateProblems(
     }
   }
   return out;
+}
+
+/**
+ * Why a pattern an author wrote cannot run on player text, or null: it must
+ * compile with the `u` flag and not repeat a repeated group. Shared by a slot's
+ * `regex` and a procedure condition's `matches`.
+ */
+export function authorPatternProblem(
+  pattern: string,
+): 'does_not_compile' | 'nested_quantifier' | null {
+  if (!compiles(pattern)) return 'does_not_compile';
+  return NESTED_QUANTIFIER.test(pattern) ? 'nested_quantifier' : null;
 }
 
 function compiles(pattern: string): boolean {

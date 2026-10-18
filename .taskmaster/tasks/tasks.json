@@ -12625,7 +12625,7 @@
           "295"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T01:57:01.390Z",
+        "updatedAt": "2026-10-18T03:02:04.028Z",
         "subtasks": [
           {
             "id": 1,
@@ -12645,13 +12645,13 @@
             "description": "Migration: skills yeni kolonlar (varsayılanlı) + contract Skill/ProcedureStep",
             "details": "Mevcut skill'ler için veri taşıma gerekmez.",
             "testStrategy": "db:check-drift; contract:generate.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "296.1"
             ],
             "parentId": "296",
             "priority": "high",
-            "updatedAt": "2026-10-18T01:57:01.390Z"
+            "updatedAt": "2026-10-18T03:02:04.028Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T01:57:01.391Z",
+      "lastModified": "2026-10-18T03:02:04.028Z",
       "taskCount": 390,
       "completedCount": 294,
       "tags": [

@@ -11,18 +11,24 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import {
+  ADDRESS_FORMS,
   ANSWER_LENGTHS,
   BATCH_WINDOW_SECONDS_MAX,
   DAILY_MEMORY_RECALLS,
   DEFAULT_CLARIFY_THRESHOLDS,
   DEFAULT_DAILY_MEMORY,
+  EMOJI_USES,
   isPersonaLanguage,
+  MAX_QUESTIONS_PER_MESSAGE_MAX,
+  MAX_QUESTIONS_PER_MESSAGE_MIN,
   readPersona,
   shapeAnswer,
+  type AddressForm,
   type AnswerLength,
   type ClarifyThresholds,
   type DailyMemoryRecall,
   type DailyMemorySettings,
+  type EmojiUse,
 } from '@siyahtus/types';
 import { Card } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -56,6 +62,22 @@ const RECALL_LABEL_KEYS: Record<DailyMemoryRecall, string> = {
   auto_if_unresolved: 'playbook.profile.recallUnresolved',
   on_topic_only: 'playbook.profile.recallOnTopic',
 };
+
+const ADDRESS_FORM_LABEL_KEYS: Record<AddressForm, string> = {
+  siz: 'playbook.profile.addressSiz',
+  sen: 'playbook.profile.addressSen',
+};
+
+const EMOJI_LABEL_KEYS: Record<EmojiUse, string> = {
+  none: 'playbook.profile.emojiNone',
+  few: 'playbook.profile.emojiFew',
+};
+
+/** 1…3 — how many questions one message of a procedure may ask (AI-07). */
+const QUESTION_STEPS = Array.from(
+  { length: MAX_QUESTIONS_PER_MESSAGE_MAX - MAX_QUESTIONS_PER_MESSAGE_MIN + 1 },
+  (_, i) => i + MAX_QUESTIONS_PER_MESSAGE_MIN,
+);
 
 const ANSWER_LENGTH_LABEL_KEYS: Record<AnswerLength, string> = {
   short: 'playbook.profile.lengthShort',
@@ -105,6 +127,9 @@ export function ProfileForm({
       batch_window_seconds: number | null;
       daily_memory?: DailyMemorySettings;
       clarify_thresholds?: ClarifyThresholds;
+      address_form?: AddressForm | null;
+      emoji?: EmojiUse | null;
+      max_questions_per_message?: number | null;
     }) => api.patch<AiAgent>(`/ai-agents/${agent.id}`, body),
     onSuccess: onSaved,
   });
@@ -123,6 +148,12 @@ export function ProfileForm({
     // How sure it must be of a procedure (tm 297.2 · AI-05 §4), as "0.70".
     clarifyHigh: (agent.clarify_thresholds ?? DEFAULT_CLARIFY_THRESHOLDS).high.toFixed(2),
     clarifyLow: (agent.clarify_thresholds ?? DEFAULT_CLARIFY_THRESHOLDS).low.toFixed(2),
+    // How the player is addressed, emoji, questions per message (tm 299.2 · AI-07);
+    // '' is "not set" and goes out as null.
+    addressForm: agent.address_form ?? '',
+    emoji: agent.emoji ?? '',
+    maxQuestions:
+      agent.max_questions_per_message == null ? '' : String(agent.max_questions_per_message),
   };
 
   const form = useForm({
@@ -162,6 +193,19 @@ export function ProfileForm({
                 high: Number(values.clarifyHigh),
                 low: Number(values.clarifyLow),
               },
+            }
+          : {}),
+        // Only what changed: an unset style that stays unset sends nothing.
+        ...(values.addressForm !== initialValues.addressForm
+          ? { address_form: (values.addressForm || null) as AddressForm | null }
+          : {}),
+        ...(values.emoji !== initialValues.emoji
+          ? { emoji: (values.emoji || null) as EmojiUse | null }
+          : {}),
+        ...(values.maxQuestions !== initialValues.maxQuestions
+          ? {
+              max_questions_per_message:
+                values.maxQuestions === '' ? null : Number(values.maxQuestions),
             }
           : {}),
       });
@@ -385,6 +429,71 @@ export function ProfileForm({
             </div>
             <FieldError id="persona-clarify-error" message={clarifyError} />
             <p className="text-2xs text-content-tertiary">{t('playbook.profile.clarifyHint')}</p>
+          </fieldset>
+
+          {/* AI-07: how the player is addressed, emoji, questions per message.
+              Sibling labels, for the same reason as the answer length above. */}
+          <fieldset className="flex flex-col gap-1.5" disabled={!canEdit}>
+            <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('playbook.profile.style')}
+            </legend>
+            <div className="flex flex-wrap gap-3">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="persona-address" className="text-2xs text-content-secondary">
+                  {t('playbook.profile.addressForm')}
+                </label>
+                <select
+                  id="persona-address"
+                  value={form.values.addressForm}
+                  onChange={(event) => form.setValue('addressForm', event.target.value)}
+                  className="w-36 rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+                >
+                  <option value="">{t('playbook.profile.noPreference')}</option>
+                  {ADDRESS_FORMS.map((value) => (
+                    <option key={value} value={value}>
+                      {t(ADDRESS_FORM_LABEL_KEYS[value])}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="persona-emoji" className="text-2xs text-content-secondary">
+                  {t('playbook.profile.emoji')}
+                </label>
+                <select
+                  id="persona-emoji"
+                  value={form.values.emoji}
+                  onChange={(event) => form.setValue('emoji', event.target.value)}
+                  className="w-36 rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+                >
+                  <option value="">{t('playbook.profile.noPreference')}</option>
+                  {EMOJI_USES.map((value) => (
+                    <option key={value} value={value}>
+                      {t(EMOJI_LABEL_KEYS[value])}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="persona-max-questions" className="text-2xs text-content-secondary">
+                  {t('playbook.profile.maxQuestions')}
+                </label>
+                <select
+                  id="persona-max-questions"
+                  value={form.values.maxQuestions}
+                  onChange={(event) => form.setValue('maxQuestions', event.target.value)}
+                  className="w-36 rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+                >
+                  <option value="">{t('playbook.profile.maxQuestionsDefault')}</option>
+                  {QUESTION_STEPS.map((count) => (
+                    <option key={count} value={String(count)}>
+                      {count}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-2xs text-content-tertiary">{t('playbook.profile.styleHint')}</p>
           </fieldset>
 
           {canEdit && (

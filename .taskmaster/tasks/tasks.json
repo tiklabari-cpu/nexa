@@ -12625,7 +12625,7 @@
           "295"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T03:03:08.224Z",
+        "updatedAt": "2026-10-18T04:06:49.581Z",
         "subtasks": [
           {
             "id": 1,
@@ -12717,13 +12717,13 @@
             "description": "conditions.ts (Cond ağacı: all|any|not|slot|fact|fn|ai, op listesi, sabit fn listesi, fact stub arayüzü) + templates.ts (kalıp doldurma; eksik değişkende gönderme yok + hata kaydı) — saf modüller",
             "details": "Üst görev TANIM'daki Cond ve templates kuralları; serbest ifade/eval YOK; tipler 296.1'de. Executor (296.3) bunları kullanır. Ayrıntı ve kabul maddeleri: üst görev #296 details (tek kaynak).",
             "testStrategy": "Birim (her op, iç içe koşul, eksik değişken); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "296.1"
             ],
             "parentId": "296",
             "priority": "high",
-            "updatedAt": "2026-10-18T03:03:08.224Z"
+            "updatedAt": "2026-10-18T04:06:49.581Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T03:03:08.224Z",
+      "lastModified": "2026-10-18T04:06:49.582Z",
       "taskCount": 390,
       "completedCount": 294,
       "tags": [

@@ -12625,7 +12625,7 @@
           "295"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-18T10:20:30.385Z",
+        "updatedAt": "2026-10-18T11:44:57.656Z",
         "subtasks": [
           {
             "id": 1,
@@ -12689,13 +12689,13 @@
             "description": "SkillEditor prosedür bölümleri + liste rozeti/öncelik (görsel tuval YOK)",
             "details": "step-authoring.ts, step-reorder.ts deseni.",
             "testStrategy": "Web birim + step-contract-parity + e2e playbook.spec.ts.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "296.4"
             ],
             "parentId": "296",
             "priority": "high",
-            "updatedAt": "2026-10-18T10:20:30.385Z"
+            "updatedAt": "2026-10-18T11:44:57.656Z"
           },
           {
             "id": 6,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T10:20:30.386Z",
+      "lastModified": "2026-10-18T11:44:57.657Z",
       "taskCount": 390,
       "completedCount": 294,
       "tags": [

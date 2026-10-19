@@ -12849,7 +12849,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-18T22:27:21.729Z",
+        "updatedAt": "2026-10-19T00:19:26.390Z",
         "subtasks": [
           {
             "id": 1,
@@ -12857,11 +12857,11 @@
             "description": "Saf maskeleme çekirdeği: sensitive-mask.ts + 8 dedektör + yazar politikası + cc-mask sarmalayıcı + Türkçe test seti",
             "details": "apps/api/src/lib/sensitive-mask.ts maskSensitive(text, {author, policy}) → {text, detections}; üst görevdeki DEDEKTÖRLER ve POLİTİKA (AI-26-S2) aynen; cc-mask.ts geriye uyumlu sarmalayıcı; packages/types SENSITIVE_TYPES + yazar politikası + uyarı metinleri. Regex'ler önceden derlenmiş ve geri izlemesiz. Çağrı noktalarına BAĞLAMA YOK (300.2). Kabul: üst görevin ilk üç kabul maddesi (maskelenenler, maskelenmeyenler, BIP-39) birim testle. Ayrıntı ve kabul maddeleri: üst görev #300 details (tek kaynak).",
             "testStrategy": "Türkçe pozitif/negatif örnek seti (cc-mask.test.ts yanında) + geri izleme (ReDoS) testi; `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "300",
             "priority": "high",
-            "updatedAt": "2026-10-18T22:27:21.729Z"
+            "updatedAt": "2026-10-19T00:19:26.390Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-18T22:27:21.730Z",
+      "lastModified": "2026-10-19T00:19:26.390Z",
       "taskCount": 390,
       "completedCount": 298,
       "tags": [

@@ -13021,7 +13021,7 @@
           "301"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T19:43:07.763Z",
+        "updatedAt": "2026-10-19T21:02:21.163Z",
         "subtasks": [
           {
             "id": 1,
@@ -13055,13 +13055,13 @@
             "description": "K9 devir kuralları listesi (ai_handoff_rules): CRUD, sıralama, hazır örnekler, kilitli G satırları",
             "details": "Üst görev 303 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "CRUD + tetikleme + kilit 400.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "303.1"
             ],
             "parentId": "303",
             "priority": "high",
-            "updatedAt": "2026-10-19T19:43:07.763Z"
+            "updatedAt": "2026-10-19T21:02:21.163Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T19:43:07.763Z",
+      "lastModified": "2026-10-19T21:02:21.163Z",
       "taskCount": 390,
       "completedCount": 301,
       "tags": [

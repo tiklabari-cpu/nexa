@@ -131,6 +131,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/playbook/ProfileForm.tsx',
   'src/features/playbook/GuidanceRules.tsx',
   'src/features/playbook/GuardrailsPage.tsx',
+  'src/features/playbook/HandoffSettings.tsx',
+  'src/features/playbook/HandoffRules.tsx',
   'src/features/playbook/GuardrailSettings.tsx',
   'src/features/playbook/GuardrailRules.tsx',
   'src/features/playbook/GuardrailScope.tsx',

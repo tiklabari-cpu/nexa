@@ -31,6 +31,7 @@ import { useSkillActiveToggle } from './useSkillActiveToggle.js';
 import { GuidanceRules } from './GuidanceRules.js';
 import { ProfileForm } from './ProfileForm.js';
 import { GuardrailsPage } from './GuardrailsPage.js';
+import { HandoffSettings } from './HandoffSettings.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
@@ -443,6 +444,17 @@ export function PlaybookPage(): ReactElement {
                     key={`guidance-${aiAgent.id}`}
                     agent={aiAgent}
                     skills={(skills.data?.items ?? []).map(({ id, name }) => ({ id, name }))}
+                    canEdit={canEdit}
+                  />
+                  {/* AI-09: when, what and where the agent hands over; tm 390 moves it to the Behaviour tab. */}
+                  <HandoffSettings
+                    key={`handoff-${aiAgent.id}`}
+                    agent={aiAgent}
+                    skills={(skills.data?.items ?? []).map(({ id, name, mode }) => ({
+                      id,
+                      name,
+                      mode,
+                    }))}
                     canEdit={canEdit}
                   />
                 </div>

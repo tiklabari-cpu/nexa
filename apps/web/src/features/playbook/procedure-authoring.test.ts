@@ -80,6 +80,39 @@ describe('reading a definition into the form and back out (AI-03)', () => {
     expect(validateSkillProcedure(after).ok).toBe(true);
   });
 
+  it('carries the procedure’s “solved” criteria through the form (AI-09 · K9)', () => {
+    const criteria: Cond = {
+      all: [
+        { slot: { name: 'talep_olusturuldu', op: 'eq', value: true } },
+        { fn: { name: 'player_confirmed', args: [] } },
+      ],
+    };
+    const before = stored();
+    const withCriteria = {
+      ...before,
+      procedure: { ...before.procedure, resolution_criteria: criteria },
+    };
+
+    const draft = procedureDraft(withCriteria);
+    expect(draft.resolution_criteria).toStrictEqual(criteria);
+    expect(procedureFields(draft)).toStrictEqual(withCriteria);
+    // The draft's copy is its own.
+    (draft.resolution_criteria as { all: unknown[] }).all.pop();
+    expect((criteria as { all: unknown[] }).all).toHaveLength(2);
+  });
+
+  it('writes no criteria for a procedure without its own, and drops them when the box is cleared (AI-09 · K9)', () => {
+    const draft = procedureDraft(stored());
+    expect(draft.resolution_criteria).toBeUndefined();
+    expect(procedureFields(draft).procedure).not.toHaveProperty('resolution_criteria');
+
+    const { resolution_criteria: _drop, ...cleared } = {
+      ...draft,
+      resolution_criteria: { fn: { name: 'player_confirmed', args: [] } } as Cond,
+    };
+    expect(procedureFields(cleared).procedure).not.toHaveProperty('resolution_criteria');
+  });
+
   it('opens a skill without a procedure on a well-formed, empty one', () => {
     const draft = procedureDraft({ when_to_use: null, procedure: null });
 
@@ -339,6 +372,28 @@ describe('the simple condition form', () => {
       expect(simple, JSON.stringify(cond)).not.toBeNull();
       expect(condFromSimple(simple!, slots)).toStrictEqual(cond);
     }
+  });
+
+  it('shows the player’s confirmation as its own kind, and only that exact call (AI-09 · K9)', () => {
+    const confirmed: Cond = { fn: { name: 'player_confirmed', args: [] } };
+    expect(simpleCond(confirmed)).toStrictEqual({ kind: 'confirmed' });
+    expect(condFromSimple({ kind: 'confirmed' }, slots)).toStrictEqual(confirmed);
+    expect(
+      simpleCond({ fn: { name: 'player_confirmed', args: ['x'] } } as unknown as Cond),
+    ).toBeNull();
+    expect(
+      simpleCond({
+        fn: { name: 'player_confirmed', args: [], op: 'eq', value: true },
+      } as unknown as Cond),
+    ).toBeNull();
+    expect(changeSimpleKind({ kind: 'ai', question: 'x' }, 'confirmed', slots)).toStrictEqual({
+      kind: 'confirmed',
+    });
+    expect(changeSimpleKind({ kind: 'confirmed' }, 'slot', slots)).toMatchObject({
+      kind: 'slot',
+      op: 'exists',
+    });
+    expect(changeSimpleKind({ kind: 'confirmed' }, 'elapsed', slots)).toMatchObject({ op: 'gt' });
   });
 
   it('leaves to JSON what it cannot show', () => {

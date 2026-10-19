@@ -15,6 +15,7 @@
  * validator's English sentence would read as English in a Turkish console.
  */
 import {
+  DEFAULT_RESOLUTION_CRITERIA,
   PROCEDURE_FACTS,
   PROC_OUTCOMES,
   SLOT_ENUM_SOURCES,
@@ -75,11 +76,11 @@ export interface TeamOption {
   name: string;
 }
 
-const inputClass =
+export const inputClass =
   'rounded-md border border-border bg-inset px-2 py-1 text-sm outline-none disabled:opacity-60';
-const smallButton =
+export const smallButton =
   'rounded border border-border px-1.5 py-0.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30';
-const addButton =
+export const addButton =
   'self-start rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2';
 
 // ---------------------------------------------------------------------------
@@ -156,6 +157,7 @@ function condSummary(cond: Cond | undefined, t: TFunction): string {
   const simple = simpleCond(cond);
   if (simple === null) return t('playbook.procedure.cond.complex');
   if (simple.kind === 'ai') return t('playbook.procedure.cond.ai', { question: simple.question });
+  if (simple.kind === 'confirmed') return t('playbook.procedure.cond.kindConfirmed');
   const subject =
     simple.kind === 'elapsed'
       ? t('playbook.procedure.cond.elapsedSubject', { slot: simple.subject || '?' })
@@ -396,7 +398,7 @@ function SelectionFields({
  * an empty box is `NaN`, which the validator refuses by name — and the box
  * keeps the text, for the same reason `PhrasesField` keeps its own.
  */
-function NumberInput({
+export function NumberInput({
   id,
   value,
   disabled,
@@ -470,7 +472,7 @@ function LinesField({
   );
 }
 
-function Select<T extends string>({
+export function Select<T extends string>({
   id,
   label,
   value,
@@ -510,7 +512,7 @@ function Select<T extends string>({
   );
 }
 
-function TextInput({
+export function TextInput({
   id,
   label,
   value,
@@ -1312,7 +1314,7 @@ function BranchEditor({
 }
 
 /** Who a hand-over goes to: the routes decide (no target), a team, or a routing topic. */
-function TargetField({
+export function TargetField({
   id,
   target,
   teams,
@@ -1369,13 +1371,14 @@ function TargetField({
  * form never rewrites a condition it cannot show — opening a step with an
  * `all` of three comparisons and closing it again leaves it as written.
  */
-function CondEditor({
+export function CondEditor({
   idPrefix,
   label,
   cond,
   slots,
   canEdit,
   onChange,
+  resolution,
 }: {
   idPrefix: string;
   label: string;
@@ -1383,22 +1386,36 @@ function CondEditor({
   slots: readonly SlotDef<Cond>[];
   canEdit: boolean;
   onChange: (cond: Cond) => void;
+  /**
+   * Editing "resolved" criteria (K9): adds the player's yes, and for the
+   * workspace's default — which has no slots — drops the kinds that read one.
+   */
+  resolution?: 'procedure' | 'workspace';
 }): ReactElement {
   const t = useTranslate();
-  const simple = simpleCond(cond);
+  // `player_confirmed()` is only the form's to show where it is valid.
+  const found = simpleCond(cond);
+  const simple = found?.kind === 'confirmed' && resolution === undefined ? null : found;
   const [json, setJson] = useState<string | null>(() =>
     simple === null ? JSON.stringify(cond ?? {}, null, 2) : null,
   );
   const [jsonError, setJsonError] = useState(false);
-  const kind: SimpleCond['kind'] | 'json' = json !== null ? 'json' : (simple?.kind ?? 'slot');
+  const kind: SimpleCond['kind'] | 'json' =
+    json !== null ? 'json' : (simple?.kind ?? (resolution === 'workspace' ? 'confirmed' : 'slot'));
 
-  const kinds: Array<readonly [SimpleCond['kind'] | 'json', string]> = [
+  const allKinds: Array<readonly [SimpleCond['kind'] | 'json', string]> = [
+    ['confirmed', t('playbook.procedure.cond.kindConfirmed')],
     ['slot', t('playbook.procedure.cond.kindSlot')],
     ['fact', t('playbook.procedure.cond.kindFact')],
     ['elapsed', t('playbook.procedure.cond.kindElapsed')],
     ['ai', t('playbook.procedure.cond.kindAi')],
     ['json', t('playbook.procedure.cond.kindJson')],
   ];
+  const kinds = allKinds.filter(([id]) => {
+    if (id === 'confirmed') return resolution !== undefined;
+    if (resolution === 'workspace') return id === 'ai' || id === 'json';
+    return true;
+  });
 
   function setKind(next: SimpleCond['kind'] | 'json'): void {
     if (next === 'json') {
@@ -1449,6 +1466,12 @@ function CondEditor({
           </p>
         )}
       </>
+    );
+  } else if (simple !== null && simple.kind === 'confirmed') {
+    body = (
+      <p className="text-2xs text-content-secondary">
+        {t('playbook.procedure.cond.confirmedBody')}
+      </p>
     );
   } else if (simple !== null && simple.kind === 'ai') {
     body = (
@@ -1821,7 +1844,97 @@ function HandoffSection({
           }
         />
       </label>
+
+      <ResolutionCriteriaField
+        idPrefix="procedure-resolution"
+        scope="procedure"
+        value={draft.resolution_criteria}
+        slots={draft.slots}
+        canEdit={canEdit}
+        onChange={(resolution_criteria) =>
+          onChange((current) => {
+            const { resolution_criteria: _drop, ...rest } = current;
+            return resolution_criteria === undefined ? rest : { ...rest, resolution_criteria };
+          })
+        }
+      />
     </>
+  );
+}
+
+/**
+ * When the AI may say a matter is solved (K9): the platform's default is the
+ * player's explicit yes; a procedure — or the agent, for the procedures
+ * without their own — may require more ("the slots are filled AND the player
+ * said yes"). Unchecked is no criteria of its own: the next level up decides.
+ */
+export function ResolutionCriteriaField({
+  idPrefix,
+  scope,
+  value,
+  slots,
+  canEdit,
+  onChange,
+}: {
+  idPrefix: string;
+  scope: 'procedure' | 'workspace';
+  value: Cond | null | undefined;
+  slots: readonly SlotDef<Cond>[];
+  canEdit: boolean;
+  onChange: (value: Cond | undefined) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const custom = value !== undefined && value !== null;
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="text-2xs font-medium text-content-secondary">
+        {t('playbook.resolution.title')}
+      </legend>
+      <p className="text-2xs text-content-tertiary">
+        {t(
+          scope === 'procedure'
+            ? 'playbook.resolution.helpProcedure'
+            : 'playbook.resolution.helpWorkspace',
+        )}
+      </p>
+      <label htmlFor={`${idPrefix}-custom`} className="flex items-center gap-2 text-sm">
+        <input
+          id={`${idPrefix}-custom`}
+          type="checkbox"
+          checked={custom}
+          disabled={!canEdit}
+          onChange={(event) =>
+            onChange(
+              event.target.checked ? structuredClone(DEFAULT_RESOLUTION_CRITERIA) : undefined,
+            )
+          }
+        />
+        {t(
+          scope === 'procedure'
+            ? 'playbook.resolution.customProcedure'
+            : 'playbook.resolution.customWorkspace',
+        )}
+      </label>
+      {custom ? (
+        <CondEditor
+          idPrefix={idPrefix}
+          label={t('playbook.resolution.condition')}
+          cond={value}
+          slots={slots}
+          canEdit={canEdit}
+          onChange={onChange}
+          resolution={scope}
+        />
+      ) : (
+        <p className="text-2xs text-content-secondary">
+          {t(
+            scope === 'procedure'
+              ? 'playbook.resolution.inheritProcedure'
+              : 'playbook.resolution.inheritWorkspace',
+          )}
+        </p>
+      )}
+    </fieldset>
   );
 }
 

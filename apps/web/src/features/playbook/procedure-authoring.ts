@@ -95,6 +95,8 @@ export interface ProcedureDraft {
   templates: ProcTemplate[];
   handoff: ProcHandoff;
   limits: ProcLimits;
+  /** When the procedure may say a matter is solved (K9); absent: the agent's default. */
+  resolution_criteria?: Cond;
 }
 
 /** What `POST`/`PATCH /skills` take for a procedure, besides `name` and `mode`. */
@@ -154,6 +156,11 @@ export function procedureDraft(fields: {
       max_turns: DEFAULT_PROCEDURE_MAX_TURNS,
       ...(structuredClone(limits) as Partial<ProcLimits>),
     },
+    // Carried through untouched: a draft that dropped it would erase the
+    // criteria on the next Save (invariant 1).
+    ...(isObject(body['resolution_criteria'])
+      ? { resolution_criteria: structuredClone(body['resolution_criteria']) as Cond }
+      : {}),
   };
 }
 
@@ -212,6 +219,9 @@ export function procedureFields(draft: ProcedureDraft): ProcedureFieldsBody {
       templates: draft.templates,
       handoff: withoutBlank(draft.handoff, ['next_step_hint']),
       limits: draft.limits,
+      ...(draft.resolution_criteria !== undefined
+        ? { resolution_criteria: draft.resolution_criteria }
+        : {}),
     },
   };
 }
@@ -455,7 +465,12 @@ export type SimpleCond =
       /** Compare with a table value instead: `method.expected_minutes`. */
       valueFact?: string;
     }
-  | { kind: 'ai'; question: string };
+  | { kind: 'ai'; question: string }
+  /** `player_confirmed()` — the player said yes to "is it solved?" (K9); offered for resolution criteria only. */
+  | { kind: 'confirmed' };
+
+/** The conditions that compare a subject — the ones with an operator and a value. */
+export type ComparisonCond = Extract<SimpleCond, { subject: string }>;
 
 function isScalar(value: unknown): value is CondScalar {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
@@ -476,6 +491,16 @@ function operandText(value: CondOperand | undefined): { value: string; valueFact
 /** The simple form of `cond`, or null when only the JSON editor can hold it. */
 export function simpleCond(cond: Cond | undefined): SimpleCond | null {
   if (!isObject(cond) || Object.keys(cond).length !== 1) return null;
+  if (
+    'fn' in cond &&
+    isObject(cond.fn) &&
+    cond.fn['name'] === 'player_confirmed' &&
+    Object.keys(cond.fn).length === 2 &&
+    Array.isArray(cond.fn['args']) &&
+    cond.fn['args'].length === 0
+  ) {
+    return { kind: 'confirmed' };
+  }
   if ('ai' in cond && isObject(cond.ai) && typeof cond.ai.question === 'string') {
     return Object.keys(cond.ai).length === 1 ? { kind: 'ai', question: cond.ai.question } : null;
   }
@@ -509,7 +534,7 @@ export function simpleCond(cond: Cond | undefined): SimpleCond | null {
 
 /** What kind of value the form's subject holds — picks the operators and parses the literal. */
 export function simpleValueKind(
-  simple: Exclude<SimpleCond, { kind: 'ai' }>,
+  simple: ComparisonCond,
   slots: readonly SlotDef<Cond>[],
 ): CondValueKind {
   if (simple.kind === 'elapsed') return 'number';
@@ -522,7 +547,7 @@ export function simpleValueKind(
 
 /** The operators the form offers for a subject: the ones the validator accepts for its kind. */
 export function simpleOps(
-  simple: Exclude<SimpleCond, { kind: 'ai' }>,
+  simple: ComparisonCond,
   slots: readonly SlotDef<Cond>[],
 ): readonly CondOp[] {
   return COND_OPS_BY_KIND[simpleValueKind(simple, slots)];
@@ -547,6 +572,7 @@ function parseScalar(text: string, kind: CondValueKind): CondScalar {
 /** The condition the simple form describes, values typed by what the subject holds. */
 export function condFromSimple(simple: SimpleCond, slots: readonly SlotDef<Cond>[]): Cond {
   if (simple.kind === 'ai') return { ai: { question: simple.question } };
+  if (simple.kind === 'confirmed') return { fn: { name: 'player_confirmed', args: [] } };
   const kind = simpleValueKind(simple, slots);
   let value: CondOperand | undefined;
   if (VALUELESS_OPS.includes(simple.op)) value = undefined;
@@ -581,7 +607,13 @@ export function changeSimpleKind(
   slots: readonly SlotDef<Cond>[],
 ): SimpleCond {
   if (kind === 'ai') return { kind, question: simple.kind === 'ai' ? simple.question : '' };
-  const op = simple.kind === 'ai' ? (kind === 'elapsed' ? 'gt' : 'exists') : simple.op;
+  if (kind === 'confirmed') return { kind };
+  const op =
+    simple.kind === 'ai' || simple.kind === 'confirmed'
+      ? kind === 'elapsed'
+        ? 'gt'
+        : 'exists'
+      : simple.op;
   const next: SimpleCond = { kind, subject: '', op, value: '' };
   return simpleOps(next, slots).includes(op)
     ? next

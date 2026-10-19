@@ -105,11 +105,6 @@ const BY_ID_READ =
   'one by id. The read exists for the API consumers this product sells to — PATs, partner ' +
   'apps, MCP (FR-MOD-09.4) — which are a first-class client without a screen.';
 
-/** The compliance guardrails (tm 301.2) — one screen for all of them. */
-const GUARDRAILS =
-  'the compliance guardrails (tm 301.2 · AI-08) — the AI Agent screen\'s "Uyum Korumaları" ' +
-  'tab, GuardrailsPage.tsx, which tm 301.4 builds; until then they are set over the API.';
-
 /** Operations with no client, and why that is the design rather than a gap. */
 const HEADLESS = [
   {
@@ -362,66 +357,6 @@ const TRACKED = [
       "where the AI stands on a connection (tm 296.4 · AI-03 §13) — the inbox's right pane " +
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
-  },
-  {
-    op: 'GET /ai-guardrails/platform',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'GET /ai-guardrails/settings',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'PUT /ai-guardrails/settings',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'GET /ai-guardrails/rules',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'POST /ai-guardrails/rules',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'PATCH /ai-guardrails/rules/{ruleId}',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'DELETE /ai-guardrails/rules/{ruleId}',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'GET /ai-guardrails/phrases',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'POST /ai-guardrails/phrases',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'PATCH /ai-guardrails/phrases/{phraseId}',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'DELETE /ai-guardrails/phrases/{phraseId}',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
-  },
-  {
-    op: 'GET /ai-guardrails/hits',
-    owner: 'tm 301.4',
-    reason: GUARDRAILS,
   },
 ];
 

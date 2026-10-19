@@ -12893,7 +12893,7 @@
           "300"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T08:17:58.562Z",
+        "updatedAt": "2026-10-19T08:19:14.460Z",
         "subtasks": [
           {
             "id": 1,
@@ -12941,13 +12941,13 @@
             "description": "GuardrailsPage.tsx (kurallar, ekler, metinler, tetiklenme kaydı)",
             "details": "Üst görev 301 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "301.2"
             ],
             "parentId": "301",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-19T08:19:14.460Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T08:17:58.562Z",
+      "lastModified": "2026-10-19T08:19:14.461Z",
       "taskCount": 390,
       "completedCount": 299,
       "tags": [

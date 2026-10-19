@@ -5,6 +5,11 @@ import type {
   ClarifyThresholds,
   DailyMemorySettings,
   EmojiUse,
+  ForbiddenPhraseAction,
+  ForbiddenPhraseMatch,
+  GuardrailCategory,
+  GuardrailHitAction,
+  GuardrailRuleAction,
   GuidanceCategory,
   GuidanceScope,
   ProcedureProblemDetails,
@@ -105,6 +110,80 @@ export interface GuidanceCheck {
   vague: { explanation: string }[];
   compared: number;
   checked_by: 'model' | 'rules';
+}
+
+/** One locked platform guardrail (`GET /ai-guardrails/platform`, tm 301.2 · AI-08). */
+export interface PlatformGuardrail {
+  id: string;
+  title: { tr: string; en: string };
+  prompt: { tr: string; en: string };
+  category: GuardrailCategory;
+  action: 'force_handoff' | 'block_output' | 'block_promo' | 'warn';
+  target: 'responsible_gaming' | 'kyc_risk' | 'complaints' | null;
+  priority: 'urgent' | 'high' | 'normal';
+  tenant_text: 'crisis' | 'complaint' | 'access_info' | null;
+  stages: ('input' | 'output')[];
+  locked: true;
+}
+
+export interface PlatformGuardrails {
+  version: string;
+  rules: PlatformGuardrail[];
+}
+
+/** An AI agent's guardrail texts and judge switch (`GET /ai-guardrails/settings`). */
+export interface GuardrailSettings {
+  ai_agent_id: string;
+  crisis_text: string | null;
+  complaint_text: string | null;
+  judge_enabled: boolean;
+  crisis_text_approved: boolean;
+  approved_by: string | null;
+  approved_at: string | null;
+  crisis_text_draft: string | null;
+  setup_problem: 'crisis_text_missing' | 'crisis_text_not_approved' | null;
+  updated_at: string | null;
+}
+
+/** A workspace's compliance rule (`GET /ai-guardrails/rules`). */
+export interface GuardrailRule {
+  id: string;
+  ai_agent_id: string;
+  title: string;
+  body: string;
+  category: GuardrailCategory;
+  action: GuardrailRuleAction;
+  scope: GuidanceScope;
+  active: boolean;
+  updated_at: string;
+}
+
+/** A phrase the AI's replies must not carry (`GET /ai-guardrails/phrases`). */
+export interface ForbiddenPhrase {
+  id: string;
+  ai_agent_id: string;
+  phrase: string;
+  match: ForbiddenPhraseMatch;
+  lang: string | null;
+  scope: GuidanceScope;
+  action: ForbiddenPhraseAction;
+  active: boolean;
+  updated_at: string;
+}
+
+/** One guardrail a turn found broken (`GET /ai-guardrails/hits`). */
+export interface GuardrailHitRecord {
+  id: string;
+  /** The day container (ids.thread) — the inbox opens it with ?chat=. */
+  chat_id: string;
+  thread_id: string;
+  turn_id: string;
+  rule_key: string;
+  stage: 'input' | 'output';
+  action_taken: GuardrailHitAction;
+  evidence: string | null;
+  catalog_version: string;
+  created_at: string;
 }
 
 export interface SkillLogEntry {

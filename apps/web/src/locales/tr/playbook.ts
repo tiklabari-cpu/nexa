@@ -1049,4 +1049,173 @@ export const playbook: Messages = {
   'playbook.guidance.locked.credentials': 'Oyuncudan şifre, OTP ya da kart numarası istiyor.',
   'playbook.guidance.locked.mandatory_bonus': 'Bonus teklifini zorunlu kılıyor.',
   'playbook.guidance.locked.disable_locked': 'Platformun kilitli bir kuralını kapatıyor.',
+
+  // Uyum korumaları (GuardrailsPage.tsx ve bölümleri)
+  'playbook.tabs.guardrails': 'Uyum Korumaları',
+  'playbook.agent.openGuardrails': 'Uyum Korumalarını aç',
+  'playbook.guardrails.intro.owner':
+    'Aşağıdaki platform kuralları kilitlidir. Daha sıkı kurallar ekleyebilir, AI’ın kriz ya da şikâyet anında göndereceği metinleri yazabilir ve korumaların neyi yakaladığını görebilirsiniz.',
+  'playbook.guardrails.intro.reader':
+    'Aşağıdaki platform kuralları kilitlidir. Metinleri, kuralları ve ifadeleri yalnız sahip değiştirebilir; siz onları ve yakalananların kaydını görebilirsiniz.',
+  'playbook.guardrails.ownerOnly': 'Bunları yalnız sahip değiştirebilir.',
+  'playbook.guardrails.error.locked':
+    'Kilitli bir platform kuralı değiştirilemez ya da kapatılamaz. Onun yerine daha sıkı bir kural ekleyin.',
+  'playbook.guardrails.category.responsible_gaming': 'Sorumlu oyun',
+  'playbook.guardrails.category.money': 'Para ve sözler',
+  'playbook.guardrails.category.data_security': 'Veri ve güvenlik',
+  'playbook.guardrails.category.legal': 'Hukuki',
+  'playbook.guardrails.category.transparency': 'Şeffaflık',
+
+  'playbook.guardrails.settings.title': 'Kriz ve şikâyet metinleri',
+  'playbook.guardrails.settings.description':
+    'Kriz metni, risk altındaki bir oyuncuya yazdığı anda, saat fark etmeksizin, AI devretmeden önce gider. Sahip onaylamadan ajan yayına alınamaz.',
+  'playbook.guardrails.settings.loadFailed': 'Koruma metinleri yüklenemedi',
+  'playbook.guardrails.settings.problem.crisis_text_missing':
+    'AI ajanı henüz yayına alınamaz: kriz metnini yazın ve onaylayın.',
+  'playbook.guardrails.settings.problem.crisis_text_not_approved':
+    'AI ajanı henüz yayına alınamaz: sahip kriz metnini bu hâliyle onaylamadı.',
+  'playbook.guardrails.settings.crisisField': 'Kriz metni',
+  'playbook.guardrails.settings.crisisPlaceholder':
+    'Yanınızdayız. Lütfen ülkenizdeki bir destek hattına ulaşın…',
+  'playbook.guardrails.settings.crisisHint':
+    'Kendine zarar vermekten söz eden bir oyuncu bir kişiye devredilmeden önce, saat fark etmeksizin, kelimesi kelimesine gönderilir.',
+  'playbook.guardrails.settings.draftTitle': 'Ülkeniz için öneri',
+  'playbook.guardrails.settings.useDraft': 'Bu öneriyi kullan',
+  'playbook.guardrails.settings.approved': 'Sahip tarafından {date} tarihinde onaylandı.',
+  'playbook.guardrails.settings.notApproved':
+    'Onaylanmadı. Sahip onaylamadan AI bu metni gönderemez.',
+  'playbook.guardrails.settings.noCrisisText': 'Henüz kriz metni yok.',
+  'playbook.guardrails.settings.complaintField': 'Şikâyet prosedürü',
+  'playbook.guardrails.settings.complaintPlaceholder':
+    'Resmi şikâyet için sikayet@ornek.com adresine yazabilirsiniz…',
+  'playbook.guardrails.settings.complaintHint':
+    'Resmî şikâyet etmek istediğini söyleyen oyuncuya, AI devretmeden önce verilir.',
+  'playbook.guardrails.settings.judgeField': 'Riskli yanıtları ikinci bir kontrol okusun',
+  'playbook.guardrails.settings.judgeHint':
+    'Üçüncü bir model çağrısı; para, hesap, bonus ve sorumlu oyun konusundaki taslakları gönderilmeden okur. Bu yanıtlara biraz süre ve maliyet ekler.',
+  'playbook.guardrails.settings.save': 'Metinleri kaydet',
+  'playbook.guardrails.settings.saving': 'Kaydediliyor…',
+  'playbook.guardrails.settings.saveApprove': 'Kaydet ve kriz metnini onayla',
+  'playbook.guardrails.settings.withdraw': 'Onayı geri çek',
+  'playbook.guardrails.settings.approveNeedsText': 'Onaylamadan önce kriz metnini yazın.',
+
+  'playbook.guardrails.platform.title': 'Platform kuralları',
+  'playbook.guardrails.platform.description':
+    'Her yanıt bunların altında çalışır. Düzenlenemez, kapatılamaz, sizin bir kuralınızla geçersiz kılınamaz.',
+  'playbook.guardrails.platform.version': 'Kural seti sürümü {version}',
+  'playbook.guardrails.platform.loadFailed': 'Platform kuralları yüklenemedi',
+  'playbook.guardrails.platform.locked': 'Kilitli',
+  'playbook.guardrails.platform.action.force_handoff': 'Bir kişiye devreder',
+  'playbook.guardrails.platform.action.block_output': 'Yanıtı engeller',
+  'playbook.guardrails.platform.action.block_promo': 'Yanıtta promosyon olmaz',
+  'playbook.guardrails.platform.action.warn': 'Uyarı olarak kaydedilir',
+  'playbook.guardrails.platform.target.responsible_gaming': 'Sorumlu oyun ekibi',
+  'playbook.guardrails.platform.target.kyc_risk': 'Doğrulama ve risk ekibi',
+  'playbook.guardrails.platform.target.complaints': 'Şikâyet ekibi',
+  'playbook.guardrails.platform.priority.urgent': 'Acil',
+  'playbook.guardrails.platform.priority.high': 'Yüksek öncelik',
+  'playbook.guardrails.platform.priority.normal': 'Normal öncelik',
+  'playbook.guardrails.platform.text.crisis': 'Kriz metninizi gönderir',
+  'playbook.guardrails.platform.text.complaint': 'Şikâyet prosedürünüzü verir',
+  'playbook.guardrails.platform.text.access_info': 'Erişim bilginizden yanıtlar',
+
+  'playbook.guardrails.rules.title': 'Kurallarınız',
+  'playbook.guardrails.rules.description':
+    'AI’ın talimatlarına daha sıkı satırlar. Bir kural, kendini bozan yanıtı engelleyebilir ya da kapsamına giren mesajı devredebilir. Bir platform kuralını asla gevşetmez.',
+  'playbook.guardrails.rules.new': 'Yeni uyum kuralı',
+  'playbook.guardrails.rules.limit': 'Bu ajan için kural sınırına ulaşıldı.',
+  'playbook.guardrails.rules.loadFailed': 'Uyum kuralları yüklenemedi',
+  'playbook.guardrails.rules.emptyTitle': 'Henüz kendi kuralınız yok',
+  'playbook.guardrails.rules.emptyDescription':
+    'Platform kuralları her zaman geçerlidir. Lisansınızın bunların üstüne istediği şey için bir kural ekleyin.',
+  'playbook.guardrails.rules.activeLabel': 'Uyum kuralı “{title}”',
+  'playbook.guardrails.rules.editLabel': '“{title}” uyum kuralını düzenle',
+  'playbook.guardrails.rules.deleteLabel': '“{title}” uyum kuralını sil',
+  'playbook.guardrails.rules.editorNew': 'Yeni uyum kuralı',
+  'playbook.guardrails.rules.editorEdit': 'Uyum kuralını düzenle',
+  'playbook.guardrails.rules.bodyPlaceholder':
+    'Kaybından söz eden oyuncuya asla para yatırmayı önerme.',
+  'playbook.guardrails.rules.actionField': 'Ne zaman geçerli',
+  'playbook.guardrails.rules.action.prompt_only': 'AI’a söyle',
+  'playbook.guardrails.rules.action.block_output': 'AI’a söyle ve bozan yanıtları engelle',
+  'playbook.guardrails.rules.action.force_handoff': 'Kapsamına giren mesajı devret',
+  'playbook.guardrails.rules.actionHint.prompt_only': 'Kural yalnızca AI’ın talimatlarına eklenir.',
+  'playbook.guardrails.rules.actionHint.block_output':
+    'Kuralı bozan yanıt bir kez yeniden yazılır; yine bozuyorsa güvenli metin gider ve bir kişi devralır.',
+  'playbook.guardrails.rules.actionHint.force_handoff':
+    'Kurala giren oyuncu mesajı, AI yanıtlamadan bir kişiye gider.',
+
+  'playbook.guardrails.phrases.title': 'Yasaklı ifadeler',
+  'playbook.guardrails.phrases.description':
+    'Hiçbir yanıtın taşımaması gereken sözcükler ve ifadeler, örneğin “kesin”. İfadeyi taşıyan yanıt bir kez yeniden yazılır; yine taşıyorsa güvenli metin gider ve bir kişi devralır.',
+  'playbook.guardrails.phrases.new': 'Yeni yasaklı ifade',
+  'playbook.guardrails.phrases.loadFailed': 'Yasaklı ifadeler yüklenemedi',
+  'playbook.guardrails.phrases.emptyTitle': 'Henüz yasaklı ifade yok',
+  'playbook.guardrails.phrases.emptyDescription':
+    'Platform “garanti” ve “hesabınıza geçti” gibi sözleri zaten yasaklar. Lisansınızın eklediği sözcükleri ekleyin.',
+  'playbook.guardrails.phrases.match.exact': 'Sözcüğün her yerinde',
+  'playbook.guardrails.phrases.match.word': 'Tam sözcük',
+  'playbook.guardrails.phrases.match.regex': 'Desen',
+  'playbook.guardrails.phrases.action.block': 'Yanıtı engeller',
+  'playbook.guardrails.phrases.action.warn': 'Yalnızca kaydedilir',
+  'playbook.guardrails.phrases.langValue': 'Dil: {lang}',
+  'playbook.guardrails.phrases.langAll': 'Her dil',
+  'playbook.guardrails.phrases.activeLabel': 'Yasaklı ifade “{phrase}”',
+  'playbook.guardrails.phrases.confirmDelete': '“{phrase}” silinsin mi?',
+  'playbook.guardrails.phrases.editLabel': '“{phrase}” yasaklı ifadesini düzenle',
+  'playbook.guardrails.phrases.deleteLabel': '“{phrase}” yasaklı ifadesini sil',
+  'playbook.guardrails.phrases.editorNew': 'Yeni yasaklı ifade',
+  'playbook.guardrails.phrases.editorEdit': 'Yasaklı ifadeyi düzenle',
+  'playbook.guardrails.phrases.phraseField': 'İfade',
+  'playbook.guardrails.phrases.phrasePlaceholder': 'kesin',
+  'playbook.guardrails.phrases.phraseHint':
+    'Büyük harf, Türkçe harf ve noktalama fark etmez: “Kesin” ile “KESİN” aynı ifadedir.',
+  'playbook.guardrails.phrases.matchField': 'Eşleşme',
+  'playbook.guardrails.phrases.actionField': 'Bulunduğunda',
+  'playbook.guardrails.phrases.langField': 'Dil',
+  'playbook.guardrails.phrases.langHint':
+    'İki harf, örneğin tr ya da en. Her dil için boş bırakın.',
+  'playbook.guardrails.phrases.activeField': 'İfade açık',
+  'playbook.guardrails.phrases.save': 'İfadeyi kaydet',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_empty': 'Bir ifade yazın.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_too_long': 'Bu ifade çok uzun.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_invalid':
+    'Bu geçerli bir desen değil.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_unsafe':
+    'Bu desen izin verilmeyen bir şey kullanıyor: geri başvuru, ileri/geri bakış ya da fazla açık tekrarlar.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_matches_empty':
+    'Bu desen hiçbir şeyle de eşleşebilir, bu yüzden her yanıtı engellerdi.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_exists': 'Bu ifade listede zaten var.',
+  'playbook.guardrails.phrases.problem.forbidden_phrases_limit':
+    'Bu ajan için yasaklı ifade sınırına ulaşıldı.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_limit':
+    'Bu ajan için desen sınırına ulaşıldı.',
+
+  'playbook.guardrails.hits.title': 'Korumaların yakaladıkları',
+  'playbook.guardrails.hits.description':
+    'Son 30 gün, en yeni üstte. Gösterilen sözler konuşmadan gelir; kart numaraları, kodlar ve şifreler maskelenmiştir.',
+  'playbook.guardrails.hits.ruleFilter': 'Kurala göre süz',
+  'playbook.guardrails.hits.allRules': 'Tüm kurallar',
+  'playbook.guardrails.hits.stageFilter': 'Aşamaya göre süz',
+  'playbook.guardrails.hits.allStages': 'Her yerde',
+  'playbook.guardrails.hits.stage.input': 'Oyuncunun mesajı',
+  'playbook.guardrails.hits.stage.output': 'AI’ın yanıtı',
+  'playbook.guardrails.hits.action.handoff': 'Bir kişiye devredildi',
+  'playbook.guardrails.hits.action.crisis_text': 'Kriz metni gönderildi, sonra devredildi',
+  'playbook.guardrails.hits.action.rewrite': 'Yanıt yeniden yazıldı',
+  'playbook.guardrails.hits.action.safe_text': 'Güvenli metin gönderildi, devredildi',
+  'playbook.guardrails.hits.action.prompt_block': 'Promosyon yanıttan uzak tutuldu',
+  'playbook.guardrails.hits.action.warn': 'Yalnızca kaydedildi',
+  'playbook.guardrails.hits.action.evidence': 'Kanıt olarak tutuldu',
+  'playbook.guardrails.hits.removedRule': 'Silinmiş bir kural',
+  'playbook.guardrails.hits.removedPhrase': 'Silinmiş bir ifade',
+  'playbook.guardrails.hits.phraseName': 'İfade “{phrase}”',
+  'playbook.guardrails.hits.loadFailed': 'Koruma kaydı yüklenemedi',
+  'playbook.guardrails.hits.emptyTitle': 'Yakalanan bir şey yok',
+  'playbook.guardrails.hits.emptyDescription':
+    'Bir koruma bir mesaja ya da yanıta müdahale ettiğinde burada görünür.',
+  'playbook.guardrails.hits.loadMore': 'Daha fazla yükle',
+  'playbook.guardrails.hits.loadingMore': 'Yükleniyor…',
+  'playbook.guardrails.hits.loadMoreFailed': 'Sonraki sayfa yüklenemedi. Yeniden deneyin.',
+  'playbook.guardrails.hits.openChat': 'Konuşmayı aç',
 };

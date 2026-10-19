@@ -17,7 +17,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { confirmLeave } from '../../lib/dirty-guard.js';
 import { formatDate } from '../../lib/format.js';
@@ -30,6 +30,7 @@ import { SkillEditor } from './SkillEditor.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
 import { GuidanceRules } from './GuidanceRules.js';
 import { ProfileForm } from './ProfileForm.js';
+import { GuardrailsPage } from './GuardrailsPage.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
@@ -71,11 +72,19 @@ import {
  * the Public KB surface (PUBKB-g) — the self-service article list, distinct
  * from the AI's own `knowledge` (what it answers a customer from).
  */
-type PlaybookView = 'performance' | 'profile' | 'skills' | 'knowledge' | 'kb';
-const VIEW_TABS: readonly PlaybookView[] = ['performance', 'profile', 'skills', 'knowledge', 'kb'];
+type PlaybookView = 'performance' | 'profile' | 'guardrails' | 'skills' | 'knowledge' | 'kb';
+const VIEW_TABS: readonly PlaybookView[] = [
+  'performance',
+  'profile',
+  'guardrails',
+  'skills',
+  'knowledge',
+  'kb',
+];
 const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
   performance: 'playbook.tabs.performance',
   profile: 'playbook.tabs.profile',
+  guardrails: 'playbook.tabs.guardrails',
   skills: 'playbook.tabs.skills',
   knowledge: 'playbook.tabs.knowledge',
   kb: 'playbook.tabs.kb',
@@ -366,6 +375,24 @@ export function PlaybookPage(): ReactElement {
                   {t('playbook.agent.notReady')}
                 </p>
               )}
+              {toggleAgent.isError && (
+                <div
+                  role="alert"
+                  className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-2 text-2xs text-danger"
+                >
+                  <span>{t(errorMessageKey(toggleAgent.error))}</span>
+                  {toggleAgent.error instanceof ApiClientError &&
+                    toggleAgent.error.type === 'ai_guardrail_setup_incomplete' && (
+                      <button
+                        type="button"
+                        onClick={() => setView('guardrails')}
+                        className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary hover:bg-surface-2"
+                      >
+                        {t('playbook.agent.openGuardrails')}
+                      </button>
+                    )}
+                </div>
+              )}
             </Card>
           )}
 
@@ -419,6 +446,23 @@ export function PlaybookPage(): ReactElement {
                     canEdit={canEdit}
                   />
                 </div>
+              ) : (
+                <Card>
+                  <EmptyState
+                    title={t('playbook.profile.noAgentTitle')}
+                    description={t('playbook.profile.noAgentDescription')}
+                  />
+                </Card>
+              ))}
+
+            {view === 'guardrails' &&
+              (aiAgent ? (
+                <GuardrailsPage
+                  key={`guardrails-${aiAgent.id}`}
+                  agent={aiAgent}
+                  skills={(skills.data?.items ?? []).map(({ id, name }) => ({ id, name }))}
+                  hasAiScope={canEdit}
+                />
               ) : (
                 <Card>
                   <EmptyState

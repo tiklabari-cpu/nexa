@@ -1051,4 +1051,175 @@ export const playbook: Messages = {
     'It asks the player for a password, an OTP or a card number.',
   'playbook.guidance.locked.mandatory_bonus': 'It makes a bonus offer mandatory.',
   'playbook.guidance.locked.disable_locked': 'It switches off a locked platform rule.',
+
+  // Compliance guardrails (GuardrailsPage.tsx and its sections)
+  'playbook.tabs.guardrails': 'Guardrails',
+  'playbook.agent.openGuardrails': 'Open Guardrails',
+  'playbook.guardrails.intro.owner':
+    'The platform’s rules below are locked. You can add stricter ones, write the texts the AI sends in a crisis or a complaint, and see what the guardrails caught.',
+  'playbook.guardrails.intro.reader':
+    'The platform’s rules below are locked. Only the owner can change the texts, rules and phrases; you can see them and the log of what was caught.',
+  'playbook.guardrails.ownerOnly': 'Only the owner can change these.',
+  'playbook.guardrails.error.locked':
+    'A locked platform rule can’t be changed or switched off. Add a stricter rule instead.',
+  'playbook.guardrails.category.responsible_gaming': 'Responsible gaming',
+  'playbook.guardrails.category.money': 'Money and promises',
+  'playbook.guardrails.category.data_security': 'Data and security',
+  'playbook.guardrails.category.legal': 'Legal',
+  'playbook.guardrails.category.transparency': 'Transparency',
+
+  'playbook.guardrails.settings.title': 'Crisis and complaint texts',
+  'playbook.guardrails.settings.description':
+    'The crisis text goes to a player at risk the moment they write, at any hour, before the AI hands over. The agent can’t go live until the owner has approved it.',
+  'playbook.guardrails.settings.loadFailed': 'The guardrail texts couldn’t be loaded',
+  'playbook.guardrails.settings.problem.crisis_text_missing':
+    'The AI agent can’t go live yet: write the crisis text and approve it.',
+  'playbook.guardrails.settings.problem.crisis_text_not_approved':
+    'The AI agent can’t go live yet: the owner hasn’t approved the crisis text as it stands.',
+  'playbook.guardrails.settings.crisisField': 'Crisis text',
+  'playbook.guardrails.settings.crisisPlaceholder':
+    'We’re here for you. Please reach out to a support line in your country…',
+  'playbook.guardrails.settings.crisisHint':
+    'Sent word for word, whatever the hour, before a player who talks about hurting themselves is handed to a person.',
+  'playbook.guardrails.settings.draftTitle': 'Suggested for your country',
+  'playbook.guardrails.settings.useDraft': 'Use this suggestion',
+  'playbook.guardrails.settings.approved': 'Approved by the owner on {date}.',
+  'playbook.guardrails.settings.notApproved':
+    'Not approved. The AI can’t send this text until the owner approves it.',
+  'playbook.guardrails.settings.noCrisisText': 'No crisis text yet.',
+  'playbook.guardrails.settings.complaintField': 'Complaint procedure',
+  'playbook.guardrails.settings.complaintPlaceholder':
+    'To file a formal complaint, write to complaints@example.com…',
+  'playbook.guardrails.settings.complaintHint':
+    'Given to a player who says they want to complain officially, before the AI hands over.',
+  'playbook.guardrails.settings.judgeField': 'Have a second check read risky replies',
+  'playbook.guardrails.settings.judgeHint':
+    'A third model call reads drafts about money, accounts, bonuses and responsible gaming before they are sent. It adds a little time and cost to those replies.',
+  'playbook.guardrails.settings.save': 'Save texts',
+  'playbook.guardrails.settings.saving': 'Saving…',
+  'playbook.guardrails.settings.saveApprove': 'Save and approve crisis text',
+  'playbook.guardrails.settings.withdraw': 'Withdraw approval',
+  'playbook.guardrails.settings.approveNeedsText': 'Write the crisis text before approving it.',
+
+  'playbook.guardrails.platform.title': 'Platform rules',
+  'playbook.guardrails.platform.description':
+    'Every reply runs under these. They can’t be edited, switched off or overridden by a rule of yours.',
+  'playbook.guardrails.platform.version': 'Rule set version {version}',
+  'playbook.guardrails.platform.loadFailed': 'The platform rules couldn’t be loaded',
+  'playbook.guardrails.platform.locked': 'Locked',
+  'playbook.guardrails.platform.action.force_handoff': 'Hands over to a person',
+  'playbook.guardrails.platform.action.block_output': 'Blocks the reply',
+  'playbook.guardrails.platform.action.block_promo': 'No promotions in the reply',
+  'playbook.guardrails.platform.action.warn': 'Recorded as a warning',
+  'playbook.guardrails.platform.target.responsible_gaming': 'Responsible gaming team',
+  'playbook.guardrails.platform.target.kyc_risk': 'Verification and risk team',
+  'playbook.guardrails.platform.target.complaints': 'Complaints team',
+  'playbook.guardrails.platform.priority.urgent': 'Urgent',
+  'playbook.guardrails.platform.priority.high': 'High priority',
+  'playbook.guardrails.platform.priority.normal': 'Normal priority',
+  'playbook.guardrails.platform.text.crisis': 'Sends your crisis text',
+  'playbook.guardrails.platform.text.complaint': 'Gives your complaint procedure',
+  'playbook.guardrails.platform.text.access_info': 'Answers from your access information',
+
+  'playbook.guardrails.rules.title': 'Your rules',
+  'playbook.guardrails.rules.description':
+    'Stricter lines for the AI’s instructions. A rule can also block a reply that breaks it, or hand over a message that falls under it. It never loosens a platform rule.',
+  'playbook.guardrails.rules.new': 'New compliance rule',
+  'playbook.guardrails.rules.limit': 'The limit of rules for this agent is reached.',
+  'playbook.guardrails.rules.loadFailed': 'Compliance rules couldn’t be loaded',
+  'playbook.guardrails.rules.emptyTitle': 'No rules of your own yet',
+  'playbook.guardrails.rules.emptyDescription':
+    'The platform rules always apply. Add a rule for what your licence asks of you on top of them.',
+  'playbook.guardrails.rules.activeLabel': 'Compliance rule “{title}”',
+  'playbook.guardrails.rules.editLabel': 'Edit compliance rule “{title}”',
+  'playbook.guardrails.rules.deleteLabel': 'Delete compliance rule “{title}”',
+  'playbook.guardrails.rules.editorNew': 'New compliance rule',
+  'playbook.guardrails.rules.editorEdit': 'Edit compliance rule',
+  'playbook.guardrails.rules.bodyPlaceholder':
+    'Never suggest a deposit to a player who mentions a loss.',
+  'playbook.guardrails.rules.actionField': 'When it applies',
+  'playbook.guardrails.rules.action.prompt_only': 'Tell the AI',
+  'playbook.guardrails.rules.action.block_output': 'Tell the AI and block replies that break it',
+  'playbook.guardrails.rules.action.force_handoff': 'Hand over messages that fall under it',
+  'playbook.guardrails.rules.actionHint.prompt_only':
+    'The rule is added to the AI’s instructions and nothing else.',
+  'playbook.guardrails.rules.actionHint.block_output':
+    'A reply that breaks it is rewritten once; if it still does, the safe text goes out and a person takes over.',
+  'playbook.guardrails.rules.actionHint.force_handoff':
+    'A player message that falls under the rule goes to a person without the AI answering.',
+
+  'playbook.guardrails.phrases.title': 'Forbidden phrases',
+  'playbook.guardrails.phrases.description':
+    'Words and phrases no reply may carry, such as “kesin”. A reply with one is rewritten once; if it still has it, the safe text goes out and a person takes over.',
+  'playbook.guardrails.phrases.new': 'New forbidden phrase',
+  'playbook.guardrails.phrases.loadFailed': 'Forbidden phrases couldn’t be loaded',
+  'playbook.guardrails.phrases.emptyTitle': 'No forbidden phrases yet',
+  'playbook.guardrails.phrases.emptyDescription':
+    'The platform already forbids promises such as “guaranteed” and “your account is credited”. Add the words your licence adds.',
+  'playbook.guardrails.phrases.match.exact': 'Anywhere in a word',
+  'playbook.guardrails.phrases.match.word': 'Whole word',
+  'playbook.guardrails.phrases.match.regex': 'Pattern',
+  'playbook.guardrails.phrases.action.block': 'Blocks the reply',
+  'playbook.guardrails.phrases.action.warn': 'Only recorded',
+  'playbook.guardrails.phrases.langValue': 'Language: {lang}',
+  'playbook.guardrails.phrases.langAll': 'Every language',
+  'playbook.guardrails.phrases.activeLabel': 'Forbidden phrase “{phrase}”',
+  'playbook.guardrails.phrases.confirmDelete': 'Delete “{phrase}”?',
+  'playbook.guardrails.phrases.editLabel': 'Edit forbidden phrase “{phrase}”',
+  'playbook.guardrails.phrases.deleteLabel': 'Delete forbidden phrase “{phrase}”',
+  'playbook.guardrails.phrases.editorNew': 'New forbidden phrase',
+  'playbook.guardrails.phrases.editorEdit': 'Edit forbidden phrase',
+  'playbook.guardrails.phrases.phraseField': 'Phrase',
+  'playbook.guardrails.phrases.phrasePlaceholder': 'kesin',
+  'playbook.guardrails.phrases.phraseHint':
+    'Capital letters, Turkish letters and punctuation don’t matter: “Kesin” and “KESİN” are one phrase.',
+  'playbook.guardrails.phrases.matchField': 'Matches',
+  'playbook.guardrails.phrases.actionField': 'When found',
+  'playbook.guardrails.phrases.langField': 'Language',
+  'playbook.guardrails.phrases.langHint':
+    'Two letters, such as tr or en. Leave empty for every language.',
+  'playbook.guardrails.phrases.activeField': 'Phrase is on',
+  'playbook.guardrails.phrases.save': 'Save phrase',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_empty': 'Write a phrase.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_too_long': 'This phrase is too long.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_invalid':
+    'This isn’t a valid pattern.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_unsafe':
+    'This pattern uses something that isn’t allowed: back-references, look-arounds, or repetitions that are too open.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_matches_empty':
+    'This pattern can match nothing at all, so it would block every reply.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_exists':
+    'This phrase is already on the list.',
+  'playbook.guardrails.phrases.problem.forbidden_phrases_limit':
+    'The limit of forbidden phrases for this agent is reached.',
+  'playbook.guardrails.phrases.problem.forbidden_phrase_regex_limit':
+    'The limit of patterns for this agent is reached.',
+
+  'playbook.guardrails.hits.title': 'What the guardrails caught',
+  'playbook.guardrails.hits.description':
+    'The last 30 days, newest first. The words shown come from the conversation, with card numbers, codes and passwords masked.',
+  'playbook.guardrails.hits.ruleFilter': 'Filter by rule',
+  'playbook.guardrails.hits.allRules': 'All rules',
+  'playbook.guardrails.hits.stageFilter': 'Filter by stage',
+  'playbook.guardrails.hits.allStages': 'Anywhere',
+  'playbook.guardrails.hits.stage.input': 'Player’s message',
+  'playbook.guardrails.hits.stage.output': 'AI’s reply',
+  'playbook.guardrails.hits.action.handoff': 'Handed over to a person',
+  'playbook.guardrails.hits.action.crisis_text': 'Sent the crisis text, then handed over',
+  'playbook.guardrails.hits.action.rewrite': 'Reply rewritten',
+  'playbook.guardrails.hits.action.safe_text': 'Safe text sent, handed over',
+  'playbook.guardrails.hits.action.prompt_block': 'Promotions kept out of the reply',
+  'playbook.guardrails.hits.action.warn': 'Recorded only',
+  'playbook.guardrails.hits.action.evidence': 'Kept as evidence',
+  'playbook.guardrails.hits.removedRule': 'A rule that was deleted',
+  'playbook.guardrails.hits.removedPhrase': 'A phrase that was deleted',
+  'playbook.guardrails.hits.phraseName': 'Phrase “{phrase}”',
+  'playbook.guardrails.hits.loadFailed': 'The guardrail log couldn’t be loaded',
+  'playbook.guardrails.hits.emptyTitle': 'Nothing caught',
+  'playbook.guardrails.hits.emptyDescription':
+    'When a guardrail acts on a message or a reply, it shows up here.',
+  'playbook.guardrails.hits.loadMore': 'Load more',
+  'playbook.guardrails.hits.loadingMore': 'Loading…',
+  'playbook.guardrails.hits.loadMoreFailed': 'The next page couldn’t be loaded. Try again.',
+  'playbook.guardrails.hits.openChat': 'Open the conversation',
 };

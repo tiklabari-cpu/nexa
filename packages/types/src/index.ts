@@ -11,6 +11,7 @@ export * from './ai-daily-memory.js';
 export * from './ai-clarify.js';
 export * from './ai-guidance.js';
 export * from './guardrails.js';
+export * from './ai-guardrails.js';
 export * from './sensitive-data.js';
 export * from './slots.js';
 export * from './procedure.js';

@@ -332,6 +332,22 @@ paths:
     $ref: "./paths/ai-guidance.yaml#/guidanceCheck"
   /ai-guidance/{ruleId}:
     $ref: "./paths/ai-guidance.yaml#/guidanceRule"
+  /ai-guardrails/hits:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailHits"
+  /ai-guardrails/phrases:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailPhrases"
+  /ai-guardrails/phrases/{phraseId}:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailPhrase"
+  /ai-guardrails/platform:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailPlatform"
+  /ai-guardrails/platform/{ruleKey}:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailPlatformRule"
+  /ai-guardrails/rules:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailRules"
+  /ai-guardrails/rules/{ruleId}:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailRule"
+  /ai-guardrails/settings:
+    $ref: "./paths/ai-guardrails.yaml#/guardrailSettings"
   /skills:
     $ref: "./paths/playbook.yaml#/skills"
   /skills/compile:
@@ -1603,6 +1619,243 @@ components:
           type: integer
           description: How many of the agent's rules overlap the draft's scope and were read.
         checked_by: { type: string, enum: [model, rules] }
+
+    AiGuardrailCategory:
+      type: string
+      enum: [responsible_gaming, money, data_security, legal, transparency]
+      description: What a guardrail protects — the five groups of the platform catalogue (AI-08).
+
+    AiPlatformGuardrail:
+      type: object
+      required:
+        [
+          id,
+          title,
+          prompt,
+          category,
+          action,
+          target,
+          priority,
+          handoff_reason,
+          risk_flag,
+          understand_risks,
+          lexicon_alone,
+          applies_when,
+          tenant_text,
+          warnings_before_handoff,
+          stages,
+          locked,
+        ]
+      description: |
+        One locked platform rule. `prompt` is the line every written call's
+        system prompt opens with; `stages` says where it is checked — the
+        player's message (`input`), the AI's draft (`output`).
+      properties:
+        id: { type: string, pattern: "^G([1-9]|1[0-9])$" }
+        title:
+          type: object
+          required: [tr, en]
+          properties:
+            tr: { type: string }
+            en: { type: string }
+        prompt:
+          type: object
+          required: [tr, en]
+          properties:
+            tr: { type: string }
+            en: { type: string }
+        category: { $ref: "#/components/schemas/AiGuardrailCategory" }
+        action: { type: string, enum: [force_handoff, block_output, block_promo, warn] }
+        target:
+          type: string
+          nullable: true
+          enum: [responsible_gaming, kyc_risk, complaints, null]
+          description: The hand-over's topic; null follows the procedure's own routing.
+        priority: { type: string, enum: [urgent, high, normal] }
+        handoff_reason: { type: string, nullable: true }
+        risk_flag: { type: string, nullable: true }
+        understand_risks: { type: array, items: { type: string } }
+        lexicon_alone:
+          type: boolean
+          description: Whether a lexicon hit on the player's message triggers the rule on its own.
+        applies_when: { type: string, enum: [always, risk_flagged] }
+        tenant_text:
+          type: string
+          nullable: true
+          enum: [crisis, complaint, access_info, null]
+          description: The workspace text the rule sends or answers from.
+        warnings_before_handoff: { type: integer, nullable: true }
+        stages:
+          type: array
+          items: { type: string, enum: [input, output] }
+        locked: { type: boolean, enum: [true] }
+
+    AiPlatformGuardrails:
+      type: object
+      required: [version, rules]
+      properties:
+        version:
+          type: string
+          description: "`PLATFORM_GUARDRAILS_VERSION` — what every turn records."
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/AiPlatformGuardrail" }
+
+    AiGuardrailSettings:
+      type: object
+      required:
+        [
+          ai_agent_id,
+          crisis_text,
+          complaint_text,
+          judge_enabled,
+          crisis_text_approved,
+          approved_by,
+          approved_at,
+          crisis_text_draft,
+          setup_problem,
+          updated_by,
+          updated_at,
+        ]
+      description: |
+        A customer-facing agent's guardrail settings (AI-08). `setup_problem`
+        is what keeps the agent from being switched on — null once the owner
+        has approved the crisis text as it stands.
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        crisis_text:
+          type: string
+          nullable: true
+          description: Sent verbatim, whatever the hour, before G3 hands a player at risk over.
+        complaint_text:
+          type: string
+          nullable: true
+          description: The complaint procedure G15 gives before its hand-over.
+        judge_enabled:
+          type: boolean
+          description: Whether a third model call checks drafts in money, account, bonus and responsible-gaming procedures.
+        crisis_text_approved: { type: boolean }
+        approved_by: { type: string, format: uuid, nullable: true }
+        approved_at: { type: string, format: date-time, nullable: true }
+        crisis_text_draft:
+          type: string
+          nullable: true
+          description: The platform's suggested crisis text for the workspace's country; null when it has none.
+        setup_problem:
+          type: string
+          nullable: true
+          enum: [crisis_text_missing, crisis_text_not_approved, null]
+        updated_by: { type: string, format: uuid, nullable: true }
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null while nothing has been written.
+
+    AiGuardrailRuleAction:
+      type: string
+      enum: [prompt_only, block_output, force_handoff]
+      description: |
+        What a compliance rule makes the turn do besides standing in the
+        prompt: nothing more, block a draft that breaks it (rewritten once,
+        then the safe text), or hand over a player message that falls under it.
+
+    AiGuardrailRule:
+      type: object
+      required:
+        [id, ai_agent_id, title, body, category, action, scope, active, created_at, updated_at]
+      description: A workspace's compliance rule — stricter than the platform's, never looser.
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: string, maxLength: 600 }
+        category: { $ref: "#/components/schemas/AiGuardrailCategory" }
+        action: { $ref: "#/components/schemas/AiGuardrailRuleAction" }
+        scope: { $ref: "#/components/schemas/AiGuidanceScope" }
+        active: { type: boolean }
+        created_by: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AiForbiddenPhraseMatch:
+      type: string
+      enum: [exact, word, regex]
+      description: |
+        How a phrase matches the reply, both folded (lower-case ASCII, Turkish
+        letters folded, punctuation a space, a sentence end a line break):
+        `exact` anywhere, inside a word too; `word` as whole words; `regex` a
+        pattern of at most 120 characters, case-insensitive, `^`/`$` at a
+        sentence's edges — no back-references, look-arounds or named groups,
+        only `?` after a group, every repetition capped at 30 (`*` reads as
+        `{0,30}`), and repetition ranges × optional parts × alternatives at
+        most 256 (`.*` is 31, `\d{1,3} .*` 93, `\d+ .*` is refused).
+
+    AiForbiddenPhrase:
+      type: object
+      required:
+        [id, ai_agent_id, phrase, match, lang, scope, action, active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        phrase: { type: string }
+        match: { $ref: "#/components/schemas/AiForbiddenPhraseMatch" }
+        lang:
+          type: string
+          nullable: true
+          description: The reply language it applies to; null is every language.
+        scope: { $ref: "#/components/schemas/AiGuidanceScope" }
+        action:
+          type: string
+          enum: [block, warn]
+          description: "`block` rewrites the reply once, then sends the safe text and hands over; `warn` records it."
+        active: { type: boolean }
+        created_by: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AiGuardrailHit:
+      type: object
+      required:
+        [
+          id,
+          chat_id,
+          thread_id,
+          turn_id,
+          rule_key,
+          stage,
+          action_taken,
+          evidence,
+          pattern_index,
+          catalog_version,
+          created_at,
+        ]
+      description: One rule a turn found broken, and what the turn did about it.
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, description: The day container (panel "Thread ID"). }
+        thread_id: { type: string, description: The connection (panel "Chat ID"). }
+        turn_id:
+          type: string
+          format: uuid
+          description: The turn's decision record (`ai_decision_logs.id`).
+        rule_key:
+          type: string
+          description: "`G1` … `G19`, `rule:<id>` or `phrase:<id>`."
+        stage: { type: string, enum: [input, output] }
+        action_taken:
+          type: string
+          enum: [handoff, crisis_text, rewrite, safe_text, prompt_block, warn, evidence]
+        evidence:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: The words that matched, masked.
+        pattern_index: { type: integer, nullable: true, minimum: 0 }
+        catalog_version: { type: string }
+        created_at: { type: string, format: date-time }
 
     AiClarifyThresholds:
       type: object
@@ -8552,6 +8805,7 @@ components:
       type: string
       description: Machine-readable error category (v2-03 §1.8).
       enum:
+        - ai_guardrail_setup_incomplete
         - ai_mode_transition_refused
         - ai_return_blocked
         - authentication

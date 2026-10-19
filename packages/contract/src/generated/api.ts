@@ -3242,6 +3242,13 @@ export interface paths {
      *     reason; `null` goes back to the default. `after_hours` is the text
      *     for a hand-over nobody can take now.
      *
+     *     `resolution_criteria` is the default "resolved" criteria (K9): a
+     *     condition the procedures without their own are held to; `null` goes
+     *     back to the platform's, the player's explicit yes. A condition that
+     *     names a slot, a fact or a function needing one is 400 `validation`
+     *     with `details` a `ProcedureProblemDetails` (section `handoff`, field
+     *     `resolution_criteria`).
+     *
      *     Any field may be sent alone; the others keep their value.
      */
     put: operations['updateAiAgentHandoffSettings'];
@@ -10230,6 +10237,15 @@ export interface components {
       triggers: components['schemas']['AiHandoffTriggers'];
       messages: components['schemas']['AiHandoffMessages'];
       after_hours: components['schemas']['AiHandoffAfterHours'];
+      /**
+       * @description The agent's default "resolved" criteria (K9, tm 303.4): what must
+       *     hold before the agent says a matter is solved, for a procedure that
+       *     has no `resolution_criteria` of its own. A condition over no
+       *     procedure's slots — `player_confirmed()`, an `ai` question and
+       *     `all` / `any` / `not` of them. `null`: the platform's, the
+       *     player's explicit yes (`{ fn: { name: player_confirmed, args: [] } }`).
+       */
+      resolution_criteria: components['schemas']['ProcedureCondition'] | null;
     };
     /**
      * @description When the agent hands a conversation to a person on its own (AI-09),
@@ -10701,6 +10717,16 @@ export interface components {
       steps: components['schemas']['ProcedureStep'][];
       templates?: components['schemas']['ProcedureTemplate'][];
       handoff?: components['schemas']['ProcedureHandoff'];
+      /**
+       * @description When the matter counts as solved (K9, tm 303.4): a `resolve` step
+       *     says so only once this holds — "these slots are filled and the
+       *     player said yes" (`player_confirmed()`). When it does not, the
+       *     agent asks "is it solved?" if the player's yes is all that is
+       *     missing, and otherwise hands over. Absent or `null`: the agent's
+       *     default (`AiHandoffSettings.resolution_criteria`), else the
+       *     player's explicit yes.
+       */
+      resolution_criteria?: components['schemas']['ProcedureCondition'] | null;
       limits?: {
         /** @description AI turns before the procedure hands over with reason `max_turns`. Default 12. */
         max_turns: number;
@@ -10795,9 +10821,10 @@ export interface components {
      * @description A condition (`Cond`): exactly one key. A fixed language — no free
      *     expression. `all` / `any` / `not` combine; `slot` and `fact` compare a
      *     collected value or an AI-13 table value; `fn` is one of the fixed
-     *     functions (`elapsed_minutes`, `within_working_hours`, `next_window`) —
-     *     without `op`, a yes/no function's own answer; `ai` is a yes/no question
-     *     the understanding call answers (`unknown` counts as false).
+     *     functions (`elapsed_minutes`, `within_working_hours`, `next_window`,
+     *     `player_confirmed` — the player's yes to "is it solved?") — without
+     *     `op`, a yes/no function's own answer; `ai` is a yes/no question the
+     *     understanding call answers (`unknown` counts as false).
      */
     ProcedureCondition: {
       all?: components['schemas']['ProcedureCondition'][];
@@ -10816,7 +10843,7 @@ export interface components {
       };
       fn?: {
         /** @enum {string} */
-        name: 'elapsed_minutes' | 'within_working_hours' | 'next_window';
+        name: 'elapsed_minutes' | 'within_working_hours' | 'next_window' | 'player_confirmed';
         args: string[];
         op?: components['schemas']['ProcedureConditionOp'];
         value?: components['schemas']['ProcedureConditionOperand'];
@@ -20972,6 +20999,7 @@ export interface operations {
           after_hours?: {
             text: string | null;
           };
+          resolution_criteria?: components['schemas']['ProcedureCondition'] | null;
         };
       };
     };

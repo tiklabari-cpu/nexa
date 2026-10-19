@@ -18,6 +18,7 @@ export * from './handoff-rules.js';
 export * from './sensitive-data.js';
 export * from './slots.js';
 export * from './procedure.js';
+export * from './resolution.js';
 export * from './entitlements.js';
 export * from './integrations.js';
 export * from './errors.js';

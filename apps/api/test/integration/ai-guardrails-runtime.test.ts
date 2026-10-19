@@ -255,7 +255,7 @@ describe('the guardrails on a live conversation (AI-08 · tm 301.3)', () => {
     ]);
 
     const elsewhere = await say(await visitor(fx.b), 'çekim ne zaman');
-    expect(elsewhere.said).toEqual(['Bu kesin bir bilgidir.']);
+    expect(elsewhere.said).toEqual(['Bu kesin bir bilgidir.\nSorununuz çözüldü mü?']);
     expect(await hits(elsewhere.chatId)).toEqual([]);
   });
 
@@ -288,7 +288,7 @@ describe('the guardrails on a live conversation (AI-08 · tm 301.3)', () => {
 
   it('an ordinary answer leaves no hit, and its record names the catalogue it ran under', async () => {
     const turn = await say(await visitor(fx.a), 'bonus nedir');
-    expect(turn.said).toEqual(['Bonus kurallarını kısaca anlat.']);
+    expect(turn.said).toEqual(['Bonus kurallarını kısaca anlat.\nSorununuz çözüldü mü?']);
     expect(await hits(turn.chatId)).toEqual([]);
     const [row] = await decisions(fx.a.licenseId);
     expect(row).toMatchObject({

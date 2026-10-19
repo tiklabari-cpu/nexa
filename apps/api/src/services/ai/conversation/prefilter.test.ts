@@ -321,7 +321,7 @@ describe('the narrowing in a turn (AI-05 §2 · tm 297.3)', () => {
     // Locked first, then the catalogue's order.
     expect(harness.offered()).toEqual([id(20), ...numbers(10, 19).map(id)]);
     expect(result.decisions.skillId).toBe(id(12));
-    expect(result.reply).toBe('Konu 12 hakkında bilgi.');
+    expect(result.reply).toBe('Konu 12 hakkında bilgi.\nSorununuz çözüldü mü?');
     expect(result.decisions.usage.embeddingTokens).toBe(5);
     expect(result.decisions.understood?.prefilter).toEqual({
       procedures: 20,

@@ -181,7 +181,8 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
 }
 
 /**
- * The agent's hand-over triggers, messages and after-hours text (tm 303.2 ·
+ * The agent's hand-over triggers, messages, after-hours text and default
+ * "resolved" criteria (tm 303.2, tm 303.4 ·
  * AI-09) and its active hand-over rules (tm 303.3 · K9) — the package's
  * `handoff` (ADR-14b §2.12: versioned, unlike `assignment_mode`) — or null
  * when the agent has neither a row nor a rule: the defaults.
@@ -193,7 +194,7 @@ async function handoffSettings(
   if (!aiAgentId) return null;
   const row = await tx.aiHandoffSettings.findUnique({
     where: { aiAgentId },
-    select: { triggers: true, messages: true, afterHours: true },
+    select: { triggers: true, messages: true, afterHours: true, resolutionCriteria: true },
   });
   const rules = await activeHandoffRules(tx, aiAgentId);
   if (!row && rules.length === 0) return null;

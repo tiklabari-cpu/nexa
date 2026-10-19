@@ -33,7 +33,14 @@
  *   - `say` contributes its template, filled — or, when a variable is unknown,
  *     its instruction for the compose call (`templates.ts`);
  *   - `answer_from_knowledge` asks for a knowledge answer;
- *   - `handoff` and `resolve` end the procedure; `tag` tags;
+ *   - `handoff` ends the procedure; `tag` tags;
+ *   - `resolve` ends it only when the "resolved" criteria hold (K9 · tm 303.4,
+ *     `../resolution.ts`): when the player's yes is all that is missing it
+ *     asks "is it solved?" and waits on the step (`confirming`) — the next
+ *     turn reads the answer there; when anything else is, or the answer is
+ *     a no, it hands over (`player_said_unresolved`, or the procedure's
+ *     `resolution_criteria_unmet`). An answer neither yes nor no is the
+ *     engine's: it lets the procedure go before this runs;
  *   - `tool` is passive in F1 (AI-28): skipped, and the run log says so.
  *
  * **At most {@link MAX_INNER_STEPS} steps run in a turn** — the loop shield.
@@ -51,6 +58,8 @@
 import { createHash } from 'node:crypto';
 import {
   DEFAULT_MAX_QUESTIONS_PER_MESSAGE,
+  RESOLUTION_PHRASES,
+  RESOLUTION_UNMET_REASON,
   validateProcedure,
   type HandoffTarget,
   type PersonaLanguage,
@@ -59,9 +68,11 @@ import {
   type ProcStep,
   type ProcStepType,
   type Procedure,
+  type ResolutionRecord,
   type SlotDef,
 } from '@siyahtus/types';
 import { canonicalJson } from '../../../audit/audit-chain.js';
+import { decideResolution, resolutionCriteriaFor, type ResolutionCriteria } from '../resolution.js';
 import {
   applyExtraction,
   planQuestions,
@@ -133,7 +144,9 @@ export type ReplyPart =
   /** A `collect` question (AI-04 §7), worded by `planQuestions`. */
   | { kind: 'question'; at: string; slot: string; text: string }
   /** An answer from the knowledge base (AI-06); the hint, when the step gives one, joins the search. */
-  | { kind: 'knowledge'; at: string; queryHint: string | null };
+  | { kind: 'knowledge'; at: string; queryHint: string | null }
+  /** "Is it solved?" or the thanks after a yes (K9 · tm 303.4) — said as written. */
+  | { kind: 'resolution'; at: string; text: string };
 
 /** One step's decision — the decision record's shape (ID-08: step_id, type, cond_result, detail). */
 export interface StepDecision {
@@ -153,6 +166,11 @@ export type ProcedureEnd =
   /** Handed over — by a step, a hand-over condition, the turn limit or a refused slot. */
   | { kind: 'handoff'; stepId: string | null; reason: string; target: HandoffTarget | null }
   | { kind: 'resolved'; stepId: string; outcome: ProcOutcome }
+  /**
+   * A `resolve` step asked "is it solved?" (K9): the procedure waits on it, and
+   * the next turn decides there. `outcome` is what it resolves as on a yes.
+   */
+  | { kind: 'confirming'; stepId: string; outcome: ProcOutcome }
   /** The step list ran out without a `resolve` or a `handoff`. */
   | { kind: 'finished' };
 
@@ -181,6 +199,17 @@ export interface ProcedureTurnInput {
   readonly language: PersonaLanguage | null;
   /** AI-07 `max_questions_per_message`. */
   readonly maxQuestions?: number;
+  /**
+   * The "resolved" criteria a `resolve` step is held to (K9 · tm 303.4) —
+   * `resolutionCriteriaFor`; absent: the procedure's own, else the
+   * platform's (the player's yes).
+   */
+  readonly resolution?: ResolutionCriteria;
+  /**
+   * "Is it solved?" was asked at the step the procedure stands on, on the
+   * turn before: the understanding's yes or no answers it.
+   */
+  readonly resolutionAsked?: boolean;
 }
 
 export interface ProcedureTurnResult {
@@ -191,6 +220,8 @@ export interface ProcedureTurnResult {
   slots: Record<string, unknown>;
   trace: StepDecision[];
   log: SkillRunLogEntry[];
+  /** A `resolve` step's decision, when one ran (ID-08 `details.resolution`). */
+  resolution?: ResolutionRecord;
 }
 
 /** Run one turn of a procedure (see the file header). */
@@ -220,20 +251,30 @@ export function runProcedureTurn(input: ProcedureTurnInput): ProcedureTurnResult
     log.push(...extraction.log);
   }
 
+  // The player's yes or no is an answer to "is it solved?" only on the turn
+  // after it was asked (K9 · tm 303.4).
+  const confirmation = input.resolutionAsked ? (input.understanding?.yes_no ?? null) : null;
   const context = (): TemplateContext => ({
     slots,
     facts: input.facts,
     now: input.now,
     timeZone: input.timeZone,
     aiAnswers: input.understanding?.ai_conditions ?? {},
+    confirmation,
   });
-  const done = (end: ProcedureEnd, parts: ReplyPart[] = [], tags: string[] = []) => ({
+  const done = (
+    end: ProcedureEnd,
+    parts: ReplyPart[] = [],
+    tags: string[] = [],
+    resolution?: ResolutionRecord,
+  ): ProcedureTurnResult => ({
     parts,
     tags,
     end,
     slots,
     trace,
     log,
+    ...(resolution ? { resolution } : {}),
   });
 
   const stoppedAt = input.at?.stepId ?? null;
@@ -285,10 +326,14 @@ export function runProcedureTurn(input: ProcedureTurnInput): ProcedureTurnResult
     turn: input.turn,
     language: input.language,
     maxQuestions: input.maxQuestions ?? DEFAULT_MAX_QUESTIONS_PER_MESSAGE,
+    resolution: input.resolution ?? resolutionCriteriaFor(procedure, null),
+    // Only the step it was asked at reads the answer: a `check` that now
+    // branches elsewhere reaches a `resolve` that never asked.
+    askedAt: input.resolutionAsked && stoppedAt !== null && start >= 0 ? stoppedAt : null,
     trace,
     log,
   });
-  return done(loop.end, loop.parts, loop.tags);
+  return done(loop.end, loop.parts, loop.tags, loop.resolution);
 }
 
 interface StepLoop {
@@ -300,15 +345,24 @@ interface StepLoop {
   turn: number;
   language: PersonaLanguage | null;
   maxQuestions: number;
+  resolution: ResolutionCriteria;
+  /** The step "is it solved?" was asked at, on the turn before; null when it was not. */
+  askedAt: string | null;
   trace: StepDecision[];
   log: SkillRunLogEntry[];
 }
 
 /** The step loop: from `from` until a step waits or ends the procedure, or the limit stops it. */
-function runSteps(loop: StepLoop): { parts: ReplyPart[]; tags: string[]; end: ProcedureEnd } {
+function runSteps(loop: StepLoop): {
+  parts: ReplyPart[];
+  tags: string[];
+  end: ProcedureEnd;
+  resolution?: ResolutionRecord;
+} {
   const { procedure, trace, log } = loop;
   const parts: ReplyPart[] = [];
   const tags: string[] = [];
+  let resolution: ResolutionRecord | undefined;
   const indexOf = new Map(procedure.steps.map((step, index) => [step.id, index]));
   const defs = new Map(procedure.slots.map((def) => [def.name, def as SlotDef]));
   let slots = loop.slots;
@@ -368,7 +422,20 @@ function runSteps(loop: StepLoop): { parts: ReplyPart[]; tags: string[]; end: Pr
         return { kind: 'handoff', stepId: at.id, reason: step.reason_code, target };
       }
       case 'resolve': {
-        if (step.followup_template !== undefined) {
+        // K9 (tm 303.4): resolved only by the criteria — see the file header.
+        const asked = loop.askedAt === at.id;
+        const verdict = decideResolution({
+          resolution: loop.resolution,
+          ctx: loop.context(),
+          asked,
+          at: at.id,
+        });
+        log.push(...verdict.log);
+        resolution = { ...verdict.record, outcome: step.outcome, step_id: at.id };
+        const { decision } = verdict.record;
+        const phrases = RESOLUTION_PHRASES[loop.language ?? 'tr'];
+        // The follow-up goes with the answer, not with the thanks after "yes".
+        if (decision !== 'unresolved' && !asked && step.followup_template !== undefined) {
           const followup = renderTemplate(
             step.followup_template,
             procedure.templates,
@@ -386,8 +453,39 @@ function runSteps(loop: StepLoop): { parts: ReplyPart[]; tags: string[]; end: Pr
             });
           }
         }
-        record({ id: at.id, type: 'resolve' }, cond, label(`resolved (${step.outcome})`));
-        return { kind: 'resolved', stepId: at.id, outcome: step.outcome };
+        if (decision === 'resolved') {
+          if (asked) parts.push({ kind: 'resolution', at: at.id, text: phrases.thanks });
+          record(
+            { id: at.id, type: 'resolve' },
+            cond,
+            label(`resolved (${step.outcome}) — ${verdict.record.basis} criteria hold`),
+          );
+          return { kind: 'resolved', stepId: at.id, outcome: step.outcome };
+        }
+        if (decision === 'asked') {
+          parts.push({ kind: 'resolution', at: at.id, text: phrases.confirm[step.outcome] });
+          record(
+            { id: at.id, type: 'resolve' },
+            cond,
+            label(`asked whether it is solved (${verdict.record.basis} criteria)`),
+          );
+          return { kind: 'confirming', stepId: at.id, outcome: step.outcome };
+        }
+        const reason =
+          verdict.record.reason === 'player_said_no'
+            ? 'player_said_unresolved'
+            : RESOLUTION_UNMET_REASON;
+        record(
+          { id: at.id, type: 'resolve' },
+          cond,
+          label(`not resolved (${verdict.record.reason}) — handing over (${reason})`),
+        );
+        return {
+          kind: 'handoff',
+          stepId: at.id,
+          reason,
+          target: procedure.handoff.target ?? null,
+        };
       }
       default:
         return null;
@@ -518,7 +616,7 @@ function runSteps(loop: StepLoop): { parts: ReplyPart[]; tags: string[]; end: Pr
           break;
         }
         const ended = perform(branch, { id: step.id, type: branch.type }, evaluation.result, side);
-        if (ended) return { parts, tags, end: ended };
+        if (ended) return { parts, tags, end: ended, ...(resolution ? { resolution } : {}) };
         index += 1;
         break;
       }
@@ -530,7 +628,7 @@ function runSteps(loop: StepLoop): { parts: ReplyPart[]; tags: string[]; end: Pr
 
       default: {
         const ended = perform(step, step, cond);
-        if (ended) return { parts, tags, end: ended };
+        if (ended) return { parts, tags, end: ended, ...(resolution ? { resolution } : {}) };
         index += 1;
       }
     }

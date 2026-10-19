@@ -3,7 +3,7 @@
  * ADR-14a §2.3).
  *
  * `Cond` (`@siyahtus/types` `procedure.ts`) is a fixed language — `all`, `any`,
- * `not`, a slot, a fact, one of three functions, a yes/no question for the
+ * `not`, a slot, a fact, one of four functions, a yes/no question for the
  * model — and the save-time validator has already held every definition to
  * it. This module answers it against one conversation's state. Nothing here
  * evaluates author text: an operator is a `switch` arm, a function is one of
@@ -38,6 +38,7 @@ import {
   type CondFnName,
   type CondScalar,
   type ProcedureFactPath,
+  type ResolutionConfirmation,
   type SlotDateTime,
   type SlotDef,
   type SlotValue,
@@ -105,6 +106,12 @@ export interface ProcedureEvalContext {
    * `procedureAiQuestions` keys them: `true`, `false`, or anything else for unknown.
    */
   aiAnswers?: Readonly<Record<string, unknown>>;
+  /**
+   * The player's answer to the AI's "is it solved?" (K9 · tm 303.4) — what
+   * `player_confirmed()` reads. Null or absent: not asked, or not answered
+   * either way.
+   */
+  confirmation?: ResolutionConfirmation;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +187,8 @@ export function factValue(facts: ProcedureFacts, path: string): ProcLookup {
  *     a day alone (`partial`) is not settled, so it is unknown.
  *   - `within_working_hours(method, slot)` — the facts' answer for that moment.
  *   - `next_window(method)` — the facts' next processing moment after now.
+ *   - `player_confirmed()` — the player's answer to "is it solved?": yes or
+ *     no, unknown until asked and answered either way (tm 303.4).
  */
 export function functionValue(
   name: string,
@@ -210,6 +219,10 @@ export function functionValue(
       return next === null || Number.isNaN(next.getTime())
         ? notKnown(`fn ${name}`)
         : { known: true, value: { kind: 'moment', value: next } };
+    }
+    case 'player_confirmed': {
+      const answer = ctx.confirmation ?? null;
+      return answer === null ? notKnown(`fn ${name}`) : known('boolean', answer === 'yes');
     }
   }
 }

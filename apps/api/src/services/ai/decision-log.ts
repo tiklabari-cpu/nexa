@@ -269,6 +269,9 @@ export function skillDecision(
         // Every reason the turn handed over for, most severe first (tm 303.2 ·
         // AI-09 §3) — catalogue codes; `handoff_reason` keeps the turn's own.
         ...(decisions.handoffReasons ? { reason_codes: decisions.handoffReasons } : {}),
+        // Whether the AI said it is solved, by whose criteria and why (tm 303.4
+        // · K9) — codes and the names it could not decide, no values.
+        ...(decisions.resolution ? { resolution: decisions.resolution } : {}),
       },
       turn,
     ),

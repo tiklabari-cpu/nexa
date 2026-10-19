@@ -323,7 +323,7 @@ describe('the persona’s style (AI-07 §3)', () => {
       { text: 'bonus nedir' },
       context([styled]),
     );
-    expect(result.reply).toBe('Bonuslar çevrim şartıyla verilir 🎉');
+    expect(result.reply).toBe('Bonuslar çevrim şartıyla verilir 🎉\nSorununuz çözüldü mü?');
     expect(result.decisions.log).toContainEqual(
       expect.objectContaining({
         step: 'anlat',

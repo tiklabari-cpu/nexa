@@ -238,6 +238,12 @@ import {
 } from './legacy-skill.js';
 import { NO_FACTS, slotSettled } from './procedure/conditions.js';
 import {
+  decideResolution,
+  knowledgeResolution,
+  resolutionCriteriaFor,
+  withResolutionCriteria,
+} from './resolution.js';
+import {
   activeProcedure,
   procedureHash,
   readSuspended,
@@ -432,6 +438,8 @@ interface NoProcedure {
   fallback: boolean;
   /** What the call read and the order decided — the log of a turn nothing takes. */
   log: SkillRunLogEntry[];
+  /** The state the rest of the turn starts from, when the procedure was let go (K9). */
+  state?: TurnState;
 }
 
 /** A knowledge search with no answer (AI-06): what it cost and why, for what answers instead. */
@@ -483,6 +491,17 @@ const LONG_GAP_NOTE =
  * The two sentences a procedure says itself (AI-03 §7): the question about
  * the set-aside topic, and the answer to a "no" to it.
  */
+/**
+ * The counter naming where "is it solved?" waits for its answer (K9 · tm
+ * 303.4): `<skill id>:<step id>`. Set by the turn that asks, gone with the
+ * procedure's next turn — so a topic set aside and taken up again asks anew.
+ */
+const RESOLUTION_ASKED = 'resolution_asked';
+
+function resolutionAskedKey(skillId: string, stepId: string): string {
+  return `${skillId}:${stepId}`;
+}
+
 const PROCEDURE_PHRASES: Readonly<Record<PersonaLanguage, { offer: string; declined: string }>> = {
   tr: {
     offer: 'Önceki konuya dönelim mi?',
@@ -1113,6 +1132,8 @@ export class ConversationEngine {
   async #takeTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
     const procedural = await this.#procedureTurn(state, message, ctx);
     if (procedural && 'nextState' in procedural) return procedural;
+    // A procedure let go unconfirmed (K9): the rest of the turn runs without it.
+    if (procedural?.state) state = procedural.state;
     // The understanding call ran and chose no procedure: its cost is the turn's
     // all the same, on whichever skill answers — and so is a knowledge search
     // that found no answer before the fallback did (AI-06).
@@ -1602,7 +1623,7 @@ export class ConversationEngine {
     const catalogue = procedureCatalogue(ctx.config.skills);
     // The fallback is not the call's to choose (AI-05 §5).
     const selectable = catalogue.filter((item) => !item.skill.isFallback);
-    const active = activeProcedure(state);
+    let active = activeProcedure(state);
     const suspended = readSuspended(state.suspended);
     if (selectable.length === 0 && active === null && suspended === null) return null;
 
@@ -1622,7 +1643,12 @@ export class ConversationEngine {
             ? {
                 key: active.skillId,
                 name: active.snapshot.skill_name,
-                procedure: active.snapshot.procedure,
+                // The "resolved" criteria that apply, so an `ai` question in
+                // the workspace's default is asked too (tm 303.4).
+                procedure: withResolutionCriteria(
+                  active.snapshot.procedure,
+                  resolutionCriteriaFor(active.snapshot.procedure, handoffConfigOf(ctx).resolution),
+                ),
               }
             : null,
           pending: active ? pendingQuestion(active, state.slots) : null,
@@ -1672,6 +1698,23 @@ export class ConversationEngine {
     });
     if (triggered) return triggered;
 
+    // K9 (tm 303.4): "is it solved?" answered with neither yes nor no — the
+    // player went on to something else. Nothing is claimed and nobody is sent:
+    // the procedure is let go, and the message takes the decision order as if
+    // none were in progress (a topic set aside stays set aside).
+    const released: SkillRunLogEntry[] = [];
+    const unconfirmed = active ? unconfirmedResolution(state, active, understanding, ctx) : null;
+    if (active && unconfirmed) {
+      released.push({
+        step: active.stepId ?? 'procedure',
+        detail:
+          'not claimed — the player did not say whether it is solved; the procedure is let go',
+        ok: true,
+      });
+      state = unconfirmed;
+      active = null;
+    }
+
     const thresholds = ctx.config.clarifyThresholds ?? DEFAULT_CLARIFY_THRESHOLDS;
     const decided = decide({
       understanding,
@@ -1686,7 +1729,7 @@ export class ConversationEngine {
     });
     const { decision, record: policy } = decided;
     const record = understood.record;
-    const log = [...understood.log, ...decided.log];
+    const log = [...understood.log, ...released, ...decided.log];
     const spentSoFar = {
       usage: understood.spent,
       ...(record ? { understood: record } : {}),
@@ -1702,6 +1745,7 @@ export class ConversationEngine {
         log,
         // AI-05 §5: the fallback answers only when no procedure was likely.
         fallback: rankProcedures(understanding, entries, thresholds.low).length === 0,
+        ...(unconfirmed ? { state } : {}),
       };
     }
 
@@ -2133,6 +2177,9 @@ export class ConversationEngine {
     const handoff = handoffConfigOf(ctx);
     const own = run.snapshot.procedure;
     const limit = effectiveMaxTurns(own.limits.max_turns, handoff.triggers);
+    // K9 (tm 303.4): "is it solved?" asked at the step the procedure stands
+    // on, the turn before — the counter names the procedure and the step.
+    const askedKey = run.at?.stepId ? resolutionAskedKey(run.skill.id, run.at.stepId) : null;
     const result = runProcedureTurn({
       procedure: limit === own.limits.max_turns ? own : { ...own, limits: { max_turns: limit } },
       at: run.at,
@@ -2150,6 +2197,8 @@ export class ConversationEngine {
       language: run.answerIn,
       // AI-07 `max_questions_per_message`: the executor's, not the model's.
       maxQuestions: maxQuestionsOf(styleOf(ctx.config.skills, run.skill.aiAgentId)),
+      resolution: resolutionCriteriaFor(own, handoff.resolution),
+      resolutionAsked: askedKey !== null && state.counters[RESOLUTION_ASKED] === askedKey,
     });
     log.push(...result.log);
 
@@ -2200,6 +2249,10 @@ export class ConversationEngine {
           break;
         case 'question':
           segments.push({ kind: 'question', at: part.at, text: part.text });
+          break;
+        case 'resolution':
+          // "Is it solved?" or the thanks after a yes (K9): said as written.
+          segments.push({ kind: 'text', text: part.text });
           break;
         case 'instruction':
           if (instructions.length === 0) segments.push({ kind: 'written' });
@@ -2342,6 +2395,9 @@ export class ConversationEngine {
           handoffReason: handedOff && !aborted ? (end as { reason: string }).reason : null,
           trace: result.trace,
           procedureHash: run.hash,
+          // The "resolved" decision (K9 · tm 303.4) — only when it ended the
+          // turn: a failure, a block or a repeat contact overrode it otherwise.
+          ...(result.resolution && end === result.end ? { resolution: result.resolution } : {}),
           ...(knowledge ? { knowledge } : {}),
           ...(guidance ? { guidance } : {}),
           ...(run.understood ? { understood: run.understood } : {}),
@@ -2352,8 +2408,9 @@ export class ConversationEngine {
       run.recall,
     );
 
-    const goingOn = end.kind === 'awaiting' || end.kind === 'paused';
+    const goingOn = end.kind === 'awaiting' || end.kind === 'paused' || end.kind === 'confirming';
     const pinned = goingOn || handedOff;
+    const { [RESOLUTION_ASKED]: _asked, ...counters } = state.counters;
     const next: TurnState = {
       ...state,
       // Ended by a hand-over, the procedure stays named — where it stopped,
@@ -2362,13 +2419,13 @@ export class ConversationEngine {
       procedureSnapshot: pinned ? (run.snapshot as unknown as AiStateObject) : null,
       procedureSnapshotHash: pinned ? run.hash : null,
       stepId:
-        end.kind === 'awaiting' || end.kind === 'paused'
+        end.kind === 'awaiting' || end.kind === 'paused' || end.kind === 'confirming'
           ? end.stepId
           : end.kind === 'handoff'
             ? (end.stepId ?? run.at?.stepId ?? null)
             : null,
       stepStatus:
-        end.kind === 'awaiting'
+        end.kind === 'awaiting' || end.kind === 'confirming'
           ? 'awaiting_answer'
           : end.kind === 'paused'
             ? 'ready'
@@ -2379,10 +2436,14 @@ export class ConversationEngine {
       suspended: suspendedNext as unknown as AiStateObject | null,
       signals: run.signals,
       counters: {
-        ...state.counters,
+        ...counters,
         turns: turn,
         procedure_turns: run.procedureTurns + 1,
         last_turn_at: ctx.now.toISOString(),
+        // Where "is it solved?" waits for its answer (K9); gone once answered.
+        ...(end.kind === 'confirming'
+          ? { [RESOLUTION_ASKED]: resolutionAskedKey(run.skill.id, end.stepId) }
+          : {}),
       },
       lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
     };
@@ -3007,6 +3068,17 @@ export class ConversationEngine {
       });
     }
     const { answerIn } = language;
+    // K9 (tm 303.4): an answer is not a claim — the AI asked nothing, so it
+    // says "solved" only if the criteria hold without the player's word.
+    const resolution = knowledgeResolution(
+      resolutionCriteriaFor(null, handoffConfigOf(ctx).resolution),
+      {
+        slots: state.slots,
+        facts: NO_FACTS,
+        now: ctx.now,
+        timeZone: ctx.timeZone ?? DEFAULT_DAY_BOUNDARY.timezone,
+      },
+    );
     const taken = (executed: Executed, signals: AiStateObject = state.signals): TurnResult => ({
       ...executed,
       nextState: {
@@ -3031,6 +3103,7 @@ export class ConversationEngine {
           ...input.decided,
           outcome: 'answered',
           replyKind: 'answer',
+          resolution,
           usage: input.spent,
           log: [
             ...input.log,
@@ -3127,6 +3200,7 @@ export class ConversationEngine {
             ...knowledge,
             outcome: 'answered',
             replyKind: 'answer',
+            resolution,
             usage: spent,
             log: [...input.log, line],
           },
@@ -3835,6 +3909,48 @@ function joinSegments(segments: readonly Segment[]): string | null {
   return text ? text : null;
 }
 
+/**
+ * The state with the procedure let go, when the player answered its "is it
+ * solved?" with neither yes nor no (K9 · tm 303.4) — the criteria judged as
+ * the step would judge them, so a criterion the message does meet (an `ai`
+ * answer) or a "no" is left to the procedure. Null otherwise.
+ */
+function unconfirmedResolution(
+  state: TurnState,
+  active: ActiveProcedure,
+  understanding: ProcedureUnderstanding,
+  ctx: TurnContext,
+): TurnState | null {
+  if (active.stepStatus !== 'awaiting_answer' || active.stepId === null) return null;
+  if (state.counters[RESOLUTION_ASKED] !== resolutionAskedKey(active.skillId, active.stepId)) {
+    return null;
+  }
+  const verdict = decideResolution({
+    resolution: resolutionCriteriaFor(active.snapshot.procedure, handoffConfigOf(ctx).resolution),
+    ctx: {
+      slots: state.slots,
+      facts: ctx.procedure?.facts ?? NO_FACTS,
+      now: ctx.now,
+      timeZone: ctx.timeZone ?? DEFAULT_DAY_BOUNDARY.timezone,
+      aiAnswers: understanding.ai_conditions ?? {},
+      confirmation: understanding.yes_no ?? null,
+    },
+    asked: true,
+    at: active.stepId,
+  });
+  if (verdict.record.reason !== 'not_confirmed') return null;
+  const { [RESOLUTION_ASKED]: _asked, ...counters } = state.counters;
+  return {
+    ...state,
+    activeSkillId: null,
+    procedureSnapshot: null,
+    procedureSnapshotHash: null,
+    stepId: null,
+    stepStatus: null,
+    counters,
+  };
+}
+
 /** A procedure's hand-over as the turn's side effect: by team id, by topic, or to routing. */
 function handoffEffect(end: Extract<ProcedureEnd, { kind: 'handoff' }>): TurnSideEffect {
   const { target } = end;
@@ -3852,7 +3968,10 @@ function endedAs(end: ProcedureEnd, reply: string | null): AiConversationOutcome
   switch (end.kind) {
     case 'handoff':
       return 'handed_off';
+    // Asked "is it solved?" after the answer (`confirming`): the summary says
+    // it was answered; the decision record, that it is not claimed yet (K9).
     case 'resolved':
+    case 'confirming':
       return end.outcome;
     case 'finished':
       return reply ? 'resolved' : null;

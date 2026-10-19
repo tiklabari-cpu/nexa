@@ -1839,6 +1839,10 @@ model AiHandoffSettings {
   messages              Json?
   /// `{ text }` said when nobody is accepting chats (AI-12 §4); `readHandoffAfterHours`.
   afterHours            Json?    @map("after_hours")
+  /// The agent's default "resolved" criteria (tm 303.4 · K9): a procedure
+  /// condition (`Cond`) a procedure without its own is held to; null is the
+  /// platform's, the player's yes. Read through `readResolutionCriteria`.
+  resolutionCriteria    Json?    @map("resolution_criteria")
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   /// Set by the write trigger, not by the writer.
   updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)

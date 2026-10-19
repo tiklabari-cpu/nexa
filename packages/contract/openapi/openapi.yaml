@@ -2133,6 +2133,7 @@ components:
           triggers,
           messages,
           after_hours,
+          resolution_criteria,
         ]
       properties:
         ai_agent_id: { type: string, format: uuid }
@@ -2159,6 +2160,17 @@ components:
         triggers: { $ref: "#/components/schemas/AiHandoffTriggers" }
         messages: { $ref: "#/components/schemas/AiHandoffMessages" }
         after_hours: { $ref: "#/components/schemas/AiHandoffAfterHours" }
+        resolution_criteria:
+          allOf:
+            - $ref: "#/components/schemas/ProcedureCondition"
+          nullable: true
+          description: |
+            The agent's default "resolved" criteria (K9, tm 303.4): what must
+            hold before the agent says a matter is solved, for a procedure that
+            has no `resolution_criteria` of its own. A condition over no
+            procedure's slots — `player_confirmed()`, an `ai` question and
+            `all` / `any` / `not` of them. `null`: the platform's, the
+            player's explicit yes (`{ fn: { name: player_confirmed, args: [] } }`).
 
     AiHandoffTriggers:
       type: object
@@ -2796,6 +2808,18 @@ components:
           maxItems: 30
           items: { $ref: "#/components/schemas/ProcedureTemplate" }
         handoff: { $ref: "#/components/schemas/ProcedureHandoff" }
+        resolution_criteria:
+          allOf:
+            - $ref: "#/components/schemas/ProcedureCondition"
+          nullable: true
+          description: |
+            When the matter counts as solved (K9, tm 303.4): a `resolve` step
+            says so only once this holds — "these slots are filled and the
+            player said yes" (`player_confirmed()`). When it does not, the
+            agent asks "is it solved?" if the player's yes is all that is
+            missing, and otherwise hands over. Absent or `null`: the agent's
+            default (`AiHandoffSettings.resolution_criteria`), else the
+            player's explicit yes.
         limits:
           type: object
           required: [max_turns]
@@ -2906,9 +2930,10 @@ components:
         A condition (`Cond`): exactly one key. A fixed language — no free
         expression. `all` / `any` / `not` combine; `slot` and `fact` compare a
         collected value or an AI-13 table value; `fn` is one of the fixed
-        functions (`elapsed_minutes`, `within_working_hours`, `next_window`) —
-        without `op`, a yes/no function's own answer; `ai` is a yes/no question
-        the understanding call answers (`unknown` counts as false).
+        functions (`elapsed_minutes`, `within_working_hours`, `next_window`,
+        `player_confirmed` — the player's yes to "is it solved?") — without
+        `op`, a yes/no function's own answer; `ai` is a yes/no question the
+        understanding call answers (`unknown` counts as false).
       properties:
         all:
           type: array
@@ -2937,7 +2962,7 @@ components:
           properties:
             name:
               type: string
-              enum: [elapsed_minutes, within_working_hours, next_window]
+              enum: [elapsed_minutes, within_working_hours, next_window, player_confirmed]
             args:
               type: array
               items: { type: string }

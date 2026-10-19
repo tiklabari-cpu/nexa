@@ -1,4 +1,8 @@
-import { AI_DECISION_DETAILS_MAX_BYTES, type AiDecision } from '@siyahtus/types';
+import {
+  AI_DECISION_DETAILS_MAX_BYTES,
+  type AiDecision,
+  type ResolutionRecord,
+} from '@siyahtus/types';
 import { describe, expect, it, vi } from 'vitest';
 import type { TenantClient } from '../../lib/tenant.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
@@ -338,6 +342,29 @@ describe('skillDecision on a procedure turn (AI-03 KAYIT · ID-08)', () => {
     });
     // The step it stopped on is the last one it decided, not the log's last line.
     expect(decided?.step).toBe('bitti');
+  });
+
+  it('files the "resolved" decision — what, by whose criteria and why, by name (K9 · tm 303.4)', () => {
+    const resolution: ResolutionRecord = {
+      decision: 'asked',
+      reason: 'awaiting_confirmation',
+      basis: 'platform',
+      result: 'unknown',
+      unknown: ['fn player_confirmed'],
+      confirmation: null,
+      outcome: 'resolved_waiting',
+      step_id: 'bitti',
+    };
+    const decided = skillDecision({
+      ...procedureRun(TRACE),
+      decisions: { ...procedureRun(TRACE).decisions, resolution },
+    });
+    expect(decided?.details).toMatchObject({ resolution });
+    expect(toDecisionRow(1n, { ...decided!, decision: 'answered' }).details).toMatchObject({
+      resolution,
+    });
+    // A turn that decided nothing about it files nothing.
+    expect(skillDecision(procedureRun(TRACE))?.details).not.toHaveProperty('resolution');
   });
 
   it('keeps the steps’ ids and codes, never a tag’s wording', () => {

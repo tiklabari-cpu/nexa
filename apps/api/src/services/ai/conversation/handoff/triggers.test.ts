@@ -101,6 +101,9 @@ describe('the reasons, the priority, the limit', () => {
     expect(catalogueReason('no_site_request')).toBe('procedure_rule');
     expect(catalogueReason('procedure_condition')).toBe('procedure_rule');
     expect(catalogueReason(undefined)).toBe('procedure_rule');
+    // K9 (tm 303.4): the "resolved" criteria unmet — the AI could not solve it.
+    expect(catalogueReason('resolution_criteria_unmet')).toBe('player_said_unresolved');
+    expect(catalogueReason('player_said_unresolved')).toBe('player_said_unresolved');
   });
 
   it('keeps every reason once, most severe first — the first is the primary', () => {
@@ -137,6 +140,19 @@ describe('the reasons, the priority, the limit', () => {
     expect(read.triggers.not_understood).toEqual(readHandoffTriggers(null).not_understood);
     expect(read.messages.ai_failure).toBe('Bir arkadaşım yazacak.');
     expect(read.afterHours.text).toBe('Sabah 9’da döneriz.');
+    expect(read.resolution).toBeUndefined();
+  });
+
+  it('reads the default "resolved" criteria; one that is not valid is none (tm 303.4)', () => {
+    const criteria = { fn: { name: 'player_confirmed', args: [] } };
+    const row = { triggers: null, messages: null, afterHours: null };
+    expect(readHandoffConfig({ ...row, resolutionCriteria: criteria }).resolution).toEqual(
+      criteria,
+    );
+    expect(
+      readHandoffConfig({ ...row, resolutionCriteria: { slot: { name: 'x', op: 'exists' } } })
+        .resolution,
+    ).toBeUndefined();
   });
 });
 

@@ -44,10 +44,13 @@ import {
   GUARDRAIL_LANGS,
   HANDOFF_MESSAGE_REASONS,
   HANDOFF_REASON_INFO,
+  RESOLUTION_UNMET_REASON,
   isHandoffReason,
   readHandoffAfterHours,
   readHandoffMessages,
   readHandoffTriggers,
+  readResolutionCriteria,
+  type Cond,
   type GuardrailLang,
   type GuardrailPriority,
   type HandoffAfterHours,
@@ -92,6 +95,11 @@ export interface HandoffConfig {
    * `./rules.ts`). Absent: none.
    */
   readonly rules?: readonly HandoffRuleConfig[];
+  /**
+   * The workspace's default "resolved" criteria (tm 303.4 · K9 —
+   * `../resolution.ts`). Absent: the platform's, the player's yes.
+   */
+  readonly resolution?: Cond;
 }
 
 /** An agent with no `ai_handoff_settings` row: AI-09-S1/S2's defaults, the default words. */
@@ -103,13 +111,20 @@ export const DEFAULT_HANDOFF_CONFIG: HandoffConfig = Object.freeze({
 
 /** The stored row read the way the API reads it — null is the defaults. */
 export function readHandoffConfig(
-  row: { triggers: unknown; messages: unknown; afterHours: unknown } | null,
+  row: {
+    triggers: unknown;
+    messages: unknown;
+    afterHours: unknown;
+    resolutionCriteria?: unknown;
+  } | null,
 ): HandoffConfig {
   if (!row) return DEFAULT_HANDOFF_CONFIG;
+  const resolution = readResolutionCriteria(row.resolutionCriteria);
   return {
     triggers: readHandoffTriggers(row.triggers),
     messages: readHandoffMessages(row.messages),
     afterHours: readHandoffAfterHours(row.afterHours),
+    ...(resolution ? { resolution } : {}),
   };
 }
 
@@ -139,6 +154,10 @@ export function catalogueReason(raw: string | null | undefined): HandoffReason {
   switch (raw) {
     case 'slot_refused':
       return 'missing_required_info';
+    // K9 (tm 303.4): the "resolved" criteria were not met — the AI could not
+    // solve it, as when the player says so; the "AI could not" rule routes it.
+    case RESOLUTION_UNMET_REASON:
+      return 'player_said_unresolved';
     case 'llm_failure':
     case 'embedding_failure':
     case 'ai_cap_reached':

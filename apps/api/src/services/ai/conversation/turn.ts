@@ -31,6 +31,7 @@ import type {
   DailyMemorySettings,
   Persona,
   PersonaStyle,
+  ResolutionRecord,
   RiskFlagType,
   RiskPolicy,
   SkillMode,
@@ -444,6 +445,12 @@ export interface TurnDecisions {
    * ADR-14b §2.9) — which version decided, until #290 numbers them.
    */
   procedureHash?: string | null;
+  /**
+   * Whether the AI said the matter is solved, by whose criteria and why
+   * (tm 303.4 · K9 → ID-08) — a `resolve` step's decision, or a knowledge
+   * answer's `not_claimed`. Absent when neither ran.
+   */
+  resolution?: ResolutionRecord;
   /**
    * What the understanding call read (tm 297.1 · AI-05 §3, §8): the procedure
    * it named, how sure, the alternatives, the language — the record's "why

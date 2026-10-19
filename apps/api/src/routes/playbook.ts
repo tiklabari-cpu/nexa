@@ -8,7 +8,7 @@
  * not start answering customers the instant it is saved.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { compileInstruction, stepProblemDetails, validateSteps } from '@siyahtus/ai-mock';
 import {
@@ -41,6 +41,7 @@ import {
   readHandoffAfterHours,
   readHandoffMessages,
   readHandoffTriggers,
+  readResolutionCriteria,
   storedHandoffMessages,
   NO_ANSWER_POLICIES,
   NO_ANSWER_TEXT_MAX,
@@ -50,9 +51,11 @@ import {
   readDailyMemory,
   readNoAnswerSettings,
   splitSkillProcedure,
+  validateResolutionCriteria,
   validateSkillProcedure,
   validateSkillSelection,
   type AiAssignmentMode,
+  type Cond,
   type AiNoAnswerSettings,
   type HandoffAfterHours,
   type HandoffMessages,
@@ -595,6 +598,9 @@ const handoffSettingsBody = z
       .object({ text: z.string().trim().min(1).max(HANDOFF_MESSAGE_MAX).nullable() })
       .strict()
       .optional(),
+    // The default "resolved" criteria (tm 303.4 · K9): a condition, judged by
+    // `validateResolutionCriteria` in the handler; null is the platform's.
+    resolution_criteria: z.record(z.unknown()).nullable().optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
@@ -955,6 +961,9 @@ export default async function playbookRoutes(
       const id = parse(uuid, request.params.aiAgentId);
       refuseLockedTriggerOff(request.body);
       const body = parse(handoffSettingsBody, request.body);
+      const criteria = body.resolution_criteria
+        ? requireResolutionCriteria(body.resolution_criteria)
+        : null;
       const tenant = request.tenant();
       const settings = await request.withTenant(async (tx) => {
         await customerFacingAgent(tx, id);
@@ -997,6 +1006,14 @@ export default async function playbookRoutes(
               }
             : {}),
           ...(body.after_hours ? { afterHours: { text: body.after_hours.text } } : {}),
+          ...(body.resolution_criteria !== undefined
+            ? {
+                resolutionCriteria:
+                  criteria === null
+                    ? Prisma.DbNull
+                    : (criteria as unknown as Prisma.InputJsonObject),
+              }
+            : {}),
         };
         return upsertHandoffSettingsDraft(
           tx,
@@ -2181,6 +2198,7 @@ const HANDOFF_SETTINGS_SELECT = {
   triggers: true,
   messages: true,
   afterHours: true,
+  resolutionCriteria: true,
 } as const;
 
 /** `AiHandoffSettings` (contract): an agent with no row has the defaults. */
@@ -2193,6 +2211,7 @@ function serialiseHandoffSettings(
     triggers: unknown;
     messages: unknown;
     afterHours: unknown;
+    resolutionCriteria: unknown;
   } | null,
 ): {
   ai_agent_id: string;
@@ -2202,6 +2221,7 @@ function serialiseHandoffSettings(
   triggers: HandoffTriggers;
   messages: HandoffMessages;
   after_hours: HandoffAfterHours;
+  resolution_criteria: Cond | null;
 } {
   return {
     ai_agent_id: aiAgentId,
@@ -2213,7 +2233,15 @@ function serialiseHandoffSettings(
     triggers: readHandoffTriggers(row?.triggers ?? null),
     messages: readHandoffMessages(row?.messages ?? null),
     after_hours: readHandoffAfterHours(row?.afterHours ?? null),
+    resolution_criteria: readResolutionCriteria(row?.resolutionCriteria ?? null),
   };
+}
+
+/** The default "resolved" criteria a PUT sends, or the procedure problem it is refused with (tm 303.4). */
+function requireResolutionCriteria(value: unknown): Cond {
+  const validated = validateResolutionCriteria(value);
+  if (!validated.ok) throwProcedureProblem(validated.problems[0] as ProcedureProblem);
+  return validated.criteria;
 }
 
 /** The stored `no_answer` with a PUT's groups and sentence over it (tm 298). */

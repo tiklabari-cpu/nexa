@@ -47,6 +47,8 @@ function conversation(
   let slots: Record<string, unknown> = {};
   let procedureTurns = options.procedureTurns ?? 0;
   let turn = 0;
+  // "Is it solved?" asked at `at` on the turn before (K9 · tm 303.4).
+  let asked = false;
   return {
     say(text: string, understanding: ProcedureUnderstanding | null = heard()): ProcedureTurnResult {
       turn += 1;
@@ -64,10 +66,16 @@ function conversation(
         facts: options.facts ?? depositFacts(),
         options: DEPOSIT_OPTIONS,
         language: 'tr',
+        resolutionAsked: asked,
       });
       slots = result.slots;
       procedureTurns += 1;
-      if (result.end.kind === 'awaiting' || result.end.kind === 'paused') {
+      asked = result.end.kind === 'confirming';
+      if (
+        result.end.kind === 'awaiting' ||
+        result.end.kind === 'paused' ||
+        result.end.kind === 'confirming'
+      ) {
         at = { stepId: result.end.stepId };
       }
       return result;
@@ -130,12 +138,14 @@ describe('the §3.1 deposit procedure, turn by turn (AI-03 acceptance)', () => {
       'papara ile 13:40 gibi',
       heard(['yontem', 'papara'], ['islem_zamani', '13:40']),
     );
+    // K9 (tm 303.4): the explanation, then "is it solved?" — not resolved yet.
     expect(said(second)).toEqual([
       'Papara ile yapılan yatırımlar genellikle 30 dk içinde hesaba yansır. İşleminiz 10 dk önce yapılmış; hâlâ normal süre içinde.',
       '30 dk dolduğunda bakiye görünmezse bu sohbete yazın.',
+      'Bu bilgiler işinize yaradı mı?',
     ]);
     expect(second.end).toEqual({
-      kind: 'resolved',
+      kind: 'confirming',
       stepId: 'bekleme_bitti',
       outcome: 'resolved_waiting',
     });
@@ -144,6 +154,22 @@ describe('the §3.1 deposit procedure, turn by turn (AI-03 acceptance)', () => {
       type: 'check',
       cond_result: true,
       detail: 'then: go to bekleme',
+    });
+
+    const third = chat.say('evet, teşekkürler', { ...heard(), yes_no: 'yes' });
+    expect(said(third)).toEqual([
+      'Sevindim! Başka bir konuda yardımcı olabileceğim bir şey olursa yazmanız yeterli.',
+    ]);
+    expect(third.end).toEqual({
+      kind: 'resolved',
+      stepId: 'bekleme_bitti',
+      outcome: 'resolved_waiting',
+    });
+    expect(third.resolution).toMatchObject({
+      decision: 'resolved',
+      reason: 'criteria_met',
+      basis: 'platform',
+      confirmation: 'yes',
     });
   });
 
@@ -158,9 +184,10 @@ describe('the §3.1 deposit procedure, turn by turn (AI-03 acceptance)', () => {
     );
     expect(said(second)).toEqual([
       'Papara işlemleri 09:00–18:00 arasında işlenir. Talebiniz bir sonraki işlem penceresinde (19.10.2026 09:00) değerlendirilecek.',
+      'Bu bilgiler işinize yaradı mı?',
     ]);
     expect(second.end).toEqual({
-      kind: 'resolved',
+      kind: 'confirming',
       stepId: 'mesai_bitti',
       outcome: 'resolved_waiting',
     });
@@ -292,7 +319,10 @@ describe('a say step whose template cannot be filled (AI-03 §4)', () => {
     const chat = conversation(procedure);
     chat.say('x', null);
     const second = chat.say('merhaba', heard(['a', 'merhaba']));
-    expect(second.parts).toEqual([{ kind: 'instruction', at: 'soyle', text: 'Kısaca açıkla.' }]);
+    expect(second.parts).toEqual([
+      { kind: 'instruction', at: 'soyle', text: 'Kısaca açıkla.' },
+      { kind: 'resolution', at: 'bitti', text: 'Sorununuz çözüldü mü?' },
+    ]);
     expect(second.log).toContainEqual({
       step: 'soyle',
       detail: 'template k not sent: {b} unknown',
@@ -311,6 +341,7 @@ describe('a say step whose template cannot be filled (AI-03 §4)', () => {
     const result = conversation(procedure).say('x', null);
     expect(result.parts).toEqual([
       { kind: 'template', at: 'yasal', key: 'k', text: 'Yasal uyarı.', verbatim: true },
+      { kind: 'resolution', at: 'bitti', text: 'Sorununuz çözüldü mü?' },
     ]);
   });
 });
@@ -373,6 +404,178 @@ describe('the limits a procedure runs within (AI-03 §6)', () => {
   });
 });
 
+describe('the "resolved" criteria at a resolve step (K9 · tm 303.4)', () => {
+  const yes = (): ProcedureUnderstanding => ({ ...heard(), yes_no: 'yes' });
+  const no = (): ProcedureUnderstanding => ({ ...heard(), yes_no: 'no' });
+  const finance = { handoff: { conditions: [], card_fields: [], target: { topic: 'finance' } } };
+
+  it('by default it is not solved until the player says so: asked, then "hayır" hands over as player_said_unresolved', () => {
+    const procedure = procedureOf(
+      [
+        { id: 'bilgi', type: 'say', instruction: 'Açıkla.' },
+        { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+      ],
+      finance,
+    );
+    const chat = conversation(procedure);
+    const first = chat.say('x', null);
+    expect(first.end).toEqual({ kind: 'confirming', stepId: 'bitti', outcome: 'resolved' });
+    expect(first.resolution).toEqual({
+      decision: 'asked',
+      reason: 'awaiting_confirmation',
+      basis: 'platform',
+      result: 'unknown',
+      unknown: ['fn player_confirmed'],
+      confirmation: null,
+      outcome: 'resolved',
+      step_id: 'bitti',
+    });
+    expect(first.trace.at(-1)).toEqual({
+      step_id: 'bitti',
+      type: 'resolve',
+      cond_result: null,
+      detail: 'asked whether it is solved (platform criteria)',
+    });
+
+    const second = chat.say('hayır, hâlâ yok', no());
+    expect(second.parts).toEqual([]);
+    expect(second.end).toEqual({
+      kind: 'handoff',
+      stepId: 'bitti',
+      reason: 'player_said_unresolved',
+      target: { topic: 'finance' },
+    });
+    expect(second.resolution).toMatchObject({
+      decision: 'unresolved',
+      reason: 'player_said_no',
+      result: false,
+      confirmation: 'no',
+    });
+  });
+
+  it('asked, and answered neither yes nor no: not solved — a person takes over (resolution_criteria_unmet)', () => {
+    const chat = conversation(procedureOf([{ id: 'bitti', type: 'resolve', outcome: 'resolved' }]));
+    chat.say('x', null);
+    const second = chat.say('peki ne zaman?', heard());
+    expect(second.end).toMatchObject({ kind: 'handoff', reason: 'resolution_criteria_unmet' });
+    expect(second.resolution).toMatchObject({
+      decision: 'unresolved',
+      reason: 'not_confirmed',
+      confirmation: null,
+    });
+  });
+
+  it('a yes that was not the answer to "is it solved?" confirms nothing', () => {
+    const result = conversation(
+      procedureOf([{ id: 'bitti', type: 'resolve', outcome: 'resolved' }]),
+    ).say('evet', yes());
+    expect(result.end.kind).toBe('confirming');
+    expect(result.resolution).toMatchObject({ decision: 'asked', confirmation: null });
+  });
+
+  it('the procedure’s own criteria: a slot it needs missing hands over at once, never asking; filled, the yes resolves', () => {
+    const procedure = procedureOf(
+      [
+        { id: 'sor', type: 'collect', slots: ['a'] },
+        { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+      ],
+      {
+        slots: [
+          { name: 'a', label: 'A', type: 'text', ask: 'A?' },
+          { name: 'b', label: 'B', type: 'text', ask: 'B?', required: 'never' },
+        ],
+        resolution_criteria: {
+          all: [
+            { slot: { name: 'b', op: 'exists' } },
+            { fn: { name: 'player_confirmed', args: [] } },
+          ],
+        },
+      },
+    );
+    const missing = conversation(procedure);
+    missing.say('x', null);
+    const handed = missing.say('a değeri', heard(['a', 'değer']));
+    expect(handed.parts).toEqual([]);
+    expect(handed.end).toMatchObject({ kind: 'handoff', reason: 'resolution_criteria_unmet' });
+    expect(handed.resolution).toMatchObject({
+      decision: 'unresolved',
+      reason: 'criteria_unmet',
+      basis: 'procedure',
+      result: false,
+    });
+
+    const filled = conversation(procedure);
+    filled.say('x', null);
+    const asking = filled.say('değer ve öteki', heard(['a', 'değer'], ['b', 'öteki']));
+    expect(asking.end.kind).toBe('confirming');
+    const solved = filled.say('evet', yes());
+    expect(solved.end).toEqual({ kind: 'resolved', stepId: 'bitti', outcome: 'resolved' });
+    expect(solved.resolution).toMatchObject({
+      decision: 'resolved',
+      basis: 'procedure',
+      result: true,
+      confirmation: 'yes',
+    });
+  });
+
+  it('criteria the conversation already meets resolve with no question — an ai answer under its key', () => {
+    const procedure = procedureOf([{ id: 'bitti', type: 'resolve', outcome: 'resolved' }], {
+      resolution_criteria: { ai: { question: 'Oyuncu sorununun çözüldüğünü söyledi mi?' } },
+    });
+    const told = conversation(procedure).say('tamam oldu, sağ olun', {
+      ...heard(),
+      ai_conditions: { 'resolution.criteria': true },
+    });
+    expect(told.end).toEqual({ kind: 'resolved', stepId: 'bitti', outcome: 'resolved' });
+    expect(told.parts).toEqual([]);
+    expect(told.resolution).toMatchObject({ decision: 'resolved', reason: 'criteria_met' });
+
+    // Not the player's yes that is missing: asking would not help.
+    const notTold = conversation(procedure).say('x', heard());
+    expect(notTold.end).toMatchObject({ kind: 'handoff', reason: 'resolution_criteria_unmet' });
+  });
+
+  it('the workspace’s default, handed in, is what a procedure without its own is held to', () => {
+    const result = runProcedureTurn({
+      procedure: procedureOf([{ id: 'bitti', type: 'resolve', outcome: 'resolved' }]),
+      at: null,
+      slots: {},
+      procedureTurns: 0,
+      turn: 1,
+      understanding: { ...heard(), ai_conditions: { 'resolution.criteria': true } },
+      messages: ['x'],
+      now: NOW,
+      timeZone: TZ,
+      currency: 'TRY',
+      facts: NO_FACTS,
+      language: 'en',
+      resolution: { criteria: { ai: { question: 'Solved?' } }, basis: 'workspace' },
+    });
+    expect(result.end.kind).toBe('resolved');
+    expect(result.resolution).toMatchObject({ decision: 'resolved', basis: 'workspace' });
+  });
+
+  it('asks in the persona’s language, by the outcome', () => {
+    const run = (outcome: 'resolved' | 'resolved_waiting') =>
+      runProcedureTurn({
+        procedure: procedureOf([{ id: 'bitti', type: 'resolve', outcome }]),
+        at: null,
+        slots: {},
+        procedureTurns: 0,
+        turn: 1,
+        understanding: null,
+        messages: ['x'],
+        now: NOW,
+        timeZone: TZ,
+        currency: 'TRY',
+        facts: NO_FACTS,
+        language: 'en',
+      });
+    expect(said(run('resolved'))).toEqual(['Has this solved your problem?']);
+    expect(said(run('resolved_waiting'))).toEqual(['Was this information helpful?']);
+  });
+});
+
 describe('the step loop', () => {
   const tags = (n: number) =>
     Array.from({ length: n }, (_, i) => ({ id: `t${i + 1}`, type: 'tag', tag: `tag${i + 1}` }));
@@ -389,7 +592,7 @@ describe('the step loop', () => {
     expect(first.log.at(-1)).toMatchObject({ step: 't9', ok: false });
     const second = chat.say('y', null);
     expect(second.tags).toEqual(['tag9', 'tag10']);
-    expect(second.end).toMatchObject({ kind: 'resolved', stepId: 'bitti' });
+    expect(second.end).toMatchObject({ kind: 'confirming', stepId: 'bitti' });
   });
 
   it('a loop through a collect whose slots are all given waits for nothing — the limit stops it', () => {
@@ -467,6 +670,8 @@ describe('the step loop', () => {
       currency: 'TRY',
       facts: NO_FACTS,
       language: 'tr',
+      // Criteria the turn already meets: the branch's `resolve` resolves.
+      resolution: { criteria: { slot: { name: 'a', op: 'exists' } }, basis: 'procedure' },
     });
     expect(result.tags).toEqual([]);
     expect(result.end).toEqual({ kind: 'resolved', stepId: 'kontrol', outcome: 'resolved' });
@@ -480,8 +685,9 @@ describe('the step loop', () => {
     const result = conversation(procedure).say('x', null);
     expect(result.parts).toEqual([
       { kind: 'knowledge', at: 'bilgi', queryHint: 'yatırım süreleri' },
+      { kind: 'resolution', at: 'bitti', text: 'Sorununuz çözüldü mü?' },
     ]);
-    expect(result.end.kind).toBe('resolved');
+    expect(result.end.kind).toBe('confirming');
   });
 
   it('running past the last step finishes the procedure', () => {

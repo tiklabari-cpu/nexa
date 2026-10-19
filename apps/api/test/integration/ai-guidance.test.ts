@@ -538,7 +538,7 @@ describe('behaviour rules (AI-07 · tm 299.1)', () => {
       });
 
       const { chatId, reply } = await ask('bonus nedir');
-      expect(reply).toBe('Bonus kurallarını kısaca anlat.');
+      expect(reply).toBe('Bonus kurallarını kısaca anlat.\nSorununuz çözüldü mü?');
       const decision = await owner.aiDecisionLog.findFirstOrThrow({
         where: { chatId },
         select: { procedureId: true, details: true },

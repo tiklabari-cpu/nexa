@@ -7,11 +7,6 @@
       "env": {
         "TASK_MASTER_TOOLS": "all"
       }
-    },
-    "codebase-memory": {
-      "type": "stdio",
-      "command": "C:/Users/Hobbie/AppData/Local/nexa-tools/cbm/bin/codebase-memory-mcp.exe",
-      "args": []
     }
   }
 }

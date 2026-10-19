@@ -53,24 +53,13 @@ ATTEMPTS_FILE="$LOG_DIR/attempts.tsv"; : >> "$ATTEMPTS_FILE"
 MAX_CONSEC_TASK_FAILS="${LOOP_MAX_CONSEC_TASK_FAILS:-3}"
 ALLOW=""                   # gerekirse: '--allowedTools Bash(git *),Bash(pnpm *)'
 
-# --- Kod haritası (codebase-memory-mcp, 2026-10-16) ---------------------------
-# Harita açık --mcp-config ile verilir; --strict-mcp-config kullanıcı düzeyindeki sunucuları
-# (Gmail, Canva, …) ve projenin .mcp.json'ını pencereden çıkarır: 270–288 arası hiçbiri
-# çağrılmadı ve otonom pencerenin kişisel hesaplara erişmesi istenmez. (Not: .mcp.json
-# pencerelerde YÜKLENİYOR — tm 288.2'de codebase-memory source=project bağlandı; taskmaster-ai'nin
-# yokluğu .claude/settings.local.json disabledMcpjsonServers yüzündendi.) Program yoksa
-# pencere haritasız açılır.
-# Yenileme: scripts/loop/cbm-refresh.sh (döngü başı + her BİTTİ sonrası); kurallar TASK-RUNNER-PROMPT §0.7.
-CBM_REFRESH="scripts/loop/cbm-refresh.sh"
-CBM_BIN="${CBM_BIN:-$(cygpath -m "${LOCALAPPDATA:-}" 2>/dev/null)/nexa-tools/cbm/bin/codebase-memory-mcp.exe}"
-CBM_TOOLS="index_repository index_status list_projects search_graph query_graph trace_path search_code get_code_snippet get_file_outline get_architecture get_graph_schema detect_changes check_index_coverage"
+# --- MCP sunucuları -----------------------------------------------------------
+# --strict-mcp-config kullanıcı düzeyindeki sunucuları (Gmail, Canva, …) ve projenin
+# .mcp.json'ını pencereden çıkarır: 270–288 arası hiçbiri çağrılmadı ve otonom pencerenin
+# kişisel hesaplara erişmesi istenmez. Kod haritası (codebase-memory, 2026-10-16) 2026-10-19'da
+# kaldırıldı: 25+ pencerede hiç çağrılmadı. Okuma yardımcısı: scripts/loop/block.mjs
+# (TASK-RUNNER-PROMPT §0.7).
 MCP_ARGS=(--strict-mcp-config)
-if [ -f "$CBM_BIN" ]; then
-  jq -n --arg cmd "$CBM_BIN" '{mcpServers:{"codebase-memory":{type:"stdio",command:$cmd,args:[]}}}' \
-    > "$LOG_DIR/loop-mcp.json"
-  MCP_ARGS+=(--mcp-config "$LOG_DIR/loop-mcp.json"
-             --allowedTools "$(for t in $CBM_TOOLS; do printf 'mcp__codebase-memory__%s,' "$t"; done | sed 's/,$//')")
-fi
 
 # --- Kota kapısı ayarları -----------------------------------------------------
 # Bir pencere açmadan ÖNCE "kalan kota bu işi kaldırır mı?" diye sorulur. Maliyet
@@ -381,7 +370,6 @@ rm -f "$STOP_FLAG" "$STOP_HONORED"
 # =============================================================================
 consec_errors=0; iteration=0; consec_task_fails=0
 log "▶▶ Döngü başladı. Canlı akış aşağıda; tam kayıt: $LOG_DIR/"
-CBM_BIN="$CBM_BIN" bash "$CBM_REFRESH" || true
 
 while true; do
   iteration=$((iteration+1))
@@ -453,8 +441,6 @@ while true; do
   if [ "$status" = "done" ]; then
     clear_attempt "$task_id"; consec_task_fails=0
     log "✔ Task $task_id BİTTİ (+commit +push +done) — ${el}s. Sıradakine geçiliyor."
-    # Sonraki pencere güncel haritayla açılsın. Başarısızlık döngüyü durdurmaz (betik hep 0 döner).
-    CBM_BIN="$CBM_BIN" bash "$CBM_REFRESH" || true
   else
     consec_task_fails=$((consec_task_fails+1))
     # Tur başarısız. Görev büyük olasılıkla 'blocked' bırakıldı; eskiden döngü

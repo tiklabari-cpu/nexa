@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // Döngü pencerelerinin maliyet/süre/bağlam ölçümü (.loop-logs/task-*.jsonl ve arşivdeki .gz'ler).
 // Kullanım: node scripts/loop/loop-metrics.cjs [--from 281] [--to 999]
-// Sütunlar: model, süre (dk), API çağrısı, maliyet ($), ilk tur bağlamı, araç çıktısı (k token,
-// ~3,5 karakter/token), bunun okuma/arama payı, kod haritası çağrısı, yüklenen araç sayısı.
-// Kod haritasının (2026-10-16) etkisini görmek için 281–288 tabanını sonraki görevlerle karşılaştır.
+// Sütunlar: model, süre (dk), API çağrısı, maliyet ($), ilk tur bağlamı, okuma (Σ çağrı bağlamı,
+// M token), araç çıktısı (k token, ~3,5 karakter/token), bunun okuma/arama payı, block.mjs
+// kullanımı, grep'ten hemen sonra gelen ayrı okuma çağrısı, yüklenen araç sayısı.
+// Çağrı = tekil message.id (2026-10-19): akış kaydı bir yanıtın parçalarını ayrı satırlarda
+// yazar; eskiden her parça ayrı çağrı sayılıyordu (≈2 kat). block.mjs'in etkisi için 295–303
+// tabanını sonraki görevlerle karşılaştır.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -17,8 +20,13 @@ const DIR = path.resolve(__dirname, '..', '..', '.loop-logs');
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true })
   .flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
 const text = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => x.text || '').join('') : '');
+const shell = (u) => u.name === 'Bash' || u.name === 'PowerShell';
 const isRead = (u) => u.name === 'Read' || u.name === 'Grep' || u.name === 'Glob' ||
-  ((u.name === 'Bash' || u.name === 'PowerShell') && /(^|[\s|;&(])(cat|sed|head|tail|grep|rg|ls|find|wc)\s/.test(u.cmd));
+  (shell(u) && /(^|[\s|;&(])(cat|sed|head|tail|grep|rg|ls|find|wc)\s/.test(u.cmd));
+const isBlock = (u) => shell(u) && /scripts\/loop\/block\.mjs/.test(u.cmd);
+const isGrep = (u) => u.name === 'Grep' || (shell(u) && /\b(grep|rg) -[a-zA-Z]*n/.test(u.cmd) && !isBlock(u));
+const isRangeRead = (u) => u.name === 'Read' || (shell(u) && /\bsed -n|\bcat\s|\bhead -|\btail -/.test(u.cmd) && !isBlock(u));
+const ctxOf = (u) => (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
 
 const rows = [];
 for (const f of walk(DIR).filter((p) => /task-[\d.]+\.jsonl(\.gz)?$/.test(p))) {
@@ -28,20 +36,22 @@ for (const f of walk(DIR).filter((p) => /task-[\d.]+\.jsonl(\.gz)?$/.test(p))) {
   let buf = fs.readFileSync(f);
   if (f.endsWith('.gz')) buf = zlib.gunzipSync(buf);
   const uses = {};
-  let res = null, calls = 0, first = null, tools = 0, out = 0, readOut = 0, cbm = 0;
+  const msgs = new Map(); // message.id → { ctx, tools[] } — bir çağrı
+  let res = null, tools = 0, out = 0, readOut = 0;
   for (const line of buf.toString('utf8').split('\n')) {
     if (!line) continue;
     let j; try { j = JSON.parse(line); } catch { continue; }
     if (j.type === 'system' && j.subtype === 'init') tools = (j.tools || []).length;
     if (j.type === 'result') res = j;
-    if (j.type === 'assistant' && !j.parent_tool_use_id) {
-      calls++;
-      const u = j.message && j.message.usage;
-      if (u && first === null) first = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-      for (const c of (j.message && j.message.content) || []) {
+    if (j.type === 'assistant' && !j.parent_tool_use_id && j.message) {
+      const key = j.message.id || `${msgs.size}`;
+      if (!msgs.has(key)) msgs.set(key, { ctx: 0, tools: [] });
+      const m = msgs.get(key);
+      if (j.message.usage) m.ctx = ctxOf(j.message.usage);
+      for (const c of j.message.content || []) {
         if (c.type !== 'tool_use') continue;
         uses[c.id] = { name: c.name, cmd: (c.input && c.input.command) || '' };
-        if (c.name.startsWith('mcp__codebase-memory__')) cbm++;
+        m.tools.push(uses[c.id]);
       }
     }
     if (j.type === 'user') for (const c of (j.message && j.message.content) || []) {
@@ -52,17 +62,25 @@ for (const f of walk(DIR).filter((p) => /task-[\d.]+\.jsonl(\.gz)?$/.test(p))) {
     }
   }
   if (!res) continue;
+  const calls = [...msgs.values()];
+  let blocks = 0, grepThenRead = 0;
+  calls.forEach((c, i) => {
+    blocks += c.tools.filter(isBlock).length;
+    if (i > 0 && calls[i - 1].tools.some(isGrep) && c.tools.some(isRangeRead)) grepThenRead++;
+  });
   const model = Object.entries(res.modelUsage || {}).sort((a, b) => b[1].costUSD - a[1].costUSD)[0];
   rows.push({
     id,
     model: model ? model[0].replace('claude-', '') : '?',
     min: +(res.duration_ms / 60000).toFixed(0),
-    calls,
+    calls: calls.length,
     usd: +(res.total_cost_usd || 0).toFixed(2),
-    'ilk tur (k)': first === null ? null : Math.round(first / 1000),
+    'ilk tur (k)': calls.length ? Math.round(calls[0].ctx / 1000) : null,
+    'okuma (M)': +(calls.reduce((s, c) => s + c.ctx, 0) / 1e6).toFixed(1),
     'araç çıktısı (k)': Math.round(out / 3500),
     'okuma %': out ? Math.round((100 * readOut) / out) : 0,
-    harita: cbm,
+    block: blocks,
+    'grep→oku': grepThenRead,
     araç: tools,
   });
 }
@@ -73,8 +91,8 @@ const grp = (name, f) => {
   const r = rows.filter(f);
   if (!r.length) return;
   console.log(`${name.padEnd(16)} n=${r.length}  çağrı ${med(r.map((x) => x.calls))}  $${med(r.map((x) => x.usd))}  ` +
-    `ilk tur ${med(r.map((x) => x['ilk tur (k)']))}k  araç çıktısı ${med(r.map((x) => x['araç çıktısı (k)']))}k  ` +
-    `okuma ${med(r.map((x) => x['okuma %']))}%  (medyan)`);
+    `ilk tur ${med(r.map((x) => x['ilk tur (k)']))}k  okuma ${med(r.map((x) => x['okuma (M)']))}M  ` +
+    `grep→oku ${med(r.map((x) => x['grep→oku']))}  (medyan)`);
 };
-grp('harita yok', (r) => r.harita === 0);
-grp('harita kullanıldı', (r) => r.harita > 0);
+grp('block yok', (r) => r.block === 0);
+grp('block kullanıldı', (r) => r.block > 0);

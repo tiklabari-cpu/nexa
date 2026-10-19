@@ -32,6 +32,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ℹ tm 301.1 · AI-08 1/4 (uyum korumaları #301 — AI Agent'ın "Uyum Korumaları" sekmesi ve yayın kapısı 301.2–301.4'te, damga `✅` kaldı): platformun kilitli G1–G19 kataloğu `@siyahtus/types`'ta (başlık + istem TR/EN, eylem, AI-12 hedef + öncelik, AI-09 neden, AI-27 bayrağı, anlama sinyalleri, `PLATFORM_GUARDRAILS_VERSION`), 223 kalıplık TR/EN giriş + çıkış sözlüğü, ofset koruyan Türkçe normalizasyon, saf `scanGuardrails` · `packages/types/src/guardrails.ts:1304` · `guardrails.test.ts` (67) · §D283
 
+- ℹ tm 301.2 · AI-08 2/4 (şema + API; sekme 301.4'te, damga `✅` kaldı): dört RLS'li tablo, `/ai-guardrails/*` 8 yol, platform kuralına yazma 403 `guardrail_platform_locked`, kriz metni onaysız ajan açma 409 `ai_guardrail_setup_incomplete`, güvenli regex lehçeli yasaklı ifadeler · `apps/api/src/routes/ai-guardrails.ts:1` · `ai-guardrails.test.ts` int (24) + types (16) + `guardrail-lock.test.ts` (5) · §D284
+
 #### K06.2.4 — 06.2.4 · Ordered steps (6 adım tipi; reorder + klavye alternatifi)
 
 ✅ drag + klavye (↑↓) reorder — ikisi de tek `moveStep` yolundan + aria-live duyuru; zorunlu-parametre kapısı (transfer hedefi boşsa Save engeli + `role="alert"` satır hatası) — `SkillEditor.tsx` (draggable liste + ↑↓ + `canSave = issues.length===0`) · saf `step-reorder.ts` (`moveStep`/`describeMove`/`stepIssues`) · test `step-reorder.test.ts` (10) + `SkillEditor.test.tsx` (5) · tm 33.2 · §D53

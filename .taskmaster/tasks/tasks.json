@@ -13021,7 +13021,7 @@
           "301"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T21:03:19.347Z",
+        "updatedAt": "2026-10-19T22:37:30.318Z",
         "subtasks": [
           {
             "id": 1,
@@ -13069,13 +13069,13 @@
             "description": "K9 çözüldü kriterleri: prosedür başına + genel varsayılan, resolve kararı, ID-08 gerekçesi",
             "details": "Cond dili #296.",
             "testStrategy": "Kriter sağlanmadan çözüldü yok.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "303.2"
             ],
             "parentId": "303",
             "priority": "high",
-            "updatedAt": "2026-10-19T21:03:19.347Z"
+            "updatedAt": "2026-10-19T22:37:30.318Z"
           },
           {
             "id": 5,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T21:03:19.347Z",
+      "lastModified": "2026-10-19T22:37:30.318Z",
       "taskCount": 390,
       "completedCount": 301,
       "tags": [

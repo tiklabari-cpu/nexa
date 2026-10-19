@@ -202,7 +202,16 @@ describe('an answer from the knowledge base (AI-06 §4–§7)', () => {
     });
     expect(skillDecision(result)).toMatchObject({
       decision: 'answered',
-      details: { knowledge: { source_ids: ['source-faq'] } },
+      details: {
+        knowledge: { source_ids: ['source-faq'] },
+        // K9 (tm 303.4): an answer is not "solved" — nothing claimed until the player says so.
+        resolution: {
+          decision: 'not_claimed',
+          reason: 'awaiting_confirmation',
+          basis: 'platform',
+          confirmation: null,
+        },
+      },
     });
     expect(tookTurn(result)).toBe(true);
     // The cited object, written by the default tier, with the passages labelled.

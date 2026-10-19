@@ -271,7 +271,16 @@ describe('the §3.1 deposit procedure on the database (AI-03 acceptance)', () =>
 
     const second = await turn(ref, 'Papara 13:40');
     expect(second.reply).toBe(
-      'Papara ile yapılan yatırımlar genellikle 30 dk içinde hesaba yansır. İşleminiz 10 dk önce yapılmış; hâlâ normal süre içinde.\n30 dk dolduğunda bakiye görünmezse bu sohbete yazın.',
+      'Papara ile yapılan yatırımlar genellikle 30 dk içinde hesaba yansır. İşleminiz 10 dk önce yapılmış; hâlâ normal süre içinde.\n30 dk dolduğunda bakiye görünmezse bu sohbete yazın.\nBu bilgiler işinize yaradı mı?',
+    );
+    // K9 (tm 303.4): not solved until the player says so — the row waits on it.
+    expect(await row(ref)).toMatchObject({
+      stepId: 'bekleme_bitti',
+      stepStatus: 'awaiting_answer',
+      counters: expect.objectContaining({ resolution_asked: `${skillId}:bekleme_bitti` }),
+    });
+    expect((await turn(ref, 'evet')).reply).toBe(
+      'Sevindim! Başka bir konuda yardımcı olabileceğim bir şey olursa yazmanız yeterli.',
     );
     expect(await row(ref)).toMatchObject({
       activeSkillId: null,
@@ -287,6 +296,7 @@ describe('the §3.1 deposit procedure on the database (AI-03 acceptance)', () =>
     await turn(fresh, 'param yatmadı');
     const third = await turn(fresh, 'Papara 13:40');
     expect(third.reply).toContain('YENİ: Papara genellikle birazdan yansır.');
+    await turn(fresh, 'evet');
     expect((await row(fresh)).digest).toMatchObject({ outcome: 'resolved_waiting' });
   });
 
@@ -314,7 +324,10 @@ describe('the §3.1 deposit procedure on the database (AI-03 acceptance)', () =>
 
     const switched = await turn(ref, 'para çekemiyorum');
     expect(switched.reply).toBe(
-      'Çekim talepleri genellikle 24 saat içinde işlenir.\nÖnceki konuya dönelim mi?',
+      'Çekim talepleri genellikle 24 saat içinde işlenir.\nSorununuz çözüldü mü?',
+    );
+    expect((await turn(ref, 'evet')).reply).toBe(
+      'Sevindim! Başka bir konuda yardımcı olabileceğim bir şey olursa yazmanız yeterli.\nÖnceki konuya dönelim mi?',
     );
     const aside = await row(ref);
     expect(aside).toMatchObject({ activeSkillId: null, stepStatus: null });
@@ -512,13 +525,25 @@ describe('procedure skills on the live path (AI-03)', () => {
 
     await send(headers, 'Papara, 10 dakika önce');
     expect((await botTexts(first.chat_id))[1]).toBe(
-      'Papara yatırımları genellikle 30 dakika içinde yansır.',
+      'Papara yatırımları genellikle 30 dakika içinde yansır.\nBu bilgiler işinize yaradı mı?',
     );
     expect(
       await owner.aiConversation.findFirstOrThrow({ where: { threadId: first.event.thread_id } }),
-    ).toMatchObject({ activeSkillId: null, stepStatus: null, counters: { turns: 2 } });
+    ).toMatchObject({
+      activeSkillId: skillId,
+      stepStatus: 'awaiting_answer',
+      counters: { turns: 2 },
+    });
 
-    expect(await owner.skillRun.count({ where: { skillId } })).toBe(2);
+    await send(headers, 'evet');
+    expect((await botTexts(first.chat_id))[2]).toBe(
+      'Sevindim! Başka bir konuda yardımcı olabileceğim bir şey olursa yazmanız yeterli.',
+    );
+    expect(
+      await owner.aiConversation.findFirstOrThrow({ where: { threadId: first.event.thread_id } }),
+    ).toMatchObject({ activeSkillId: null, stepStatus: null, counters: { turns: 3 } });
+
+    expect(await owner.skillRun.count({ where: { skillId } })).toBe(3);
     const decisions = await owner.aiDecisionLog.findMany({
       where: { licenseId: fx.a.licenseId },
       orderBy: { createdAt: 'asc' },
@@ -526,6 +551,7 @@ describe('procedure skills on the live path (AI-03)', () => {
     });
     expect(decisions).toEqual([
       { decision: 'asked', procedureId: skillId },
+      { decision: 'answered', procedureId: skillId },
       { decision: 'answered', procedureId: skillId },
     ]);
   });
@@ -592,9 +618,20 @@ describe('procedure skills on the live path (AI-03)', () => {
               step_id: 'bitti',
               type: 'resolve',
               cond_result: null,
-              detail: 'resolved (resolved_waiting)',
+              detail: 'asked whether it is solved (platform criteria)',
             },
           ],
+          // K9 (tm 303.4): not claimed yet — why, by whose criteria; names, no values.
+          resolution: {
+            decision: 'asked',
+            reason: 'awaiting_confirmation',
+            basis: 'platform',
+            result: 'unknown',
+            unknown: ['fn player_confirmed'],
+            confirmation: null,
+            outcome: 'resolved_waiting',
+            step_id: 'bitti',
+          },
         }),
       },
     ]);
@@ -670,11 +707,16 @@ describe('procedure skills on the live path (AI-03)', () => {
 
     expect(await botTexts(first.chat_id)).toEqual([
       'Hemen bakalım.\nHangi yöntemle yatırdınız? Ne zaman yatırdınız?',
-      'Papara yatırımları genellikle 30 dakika içinde yansır.',
+      'Papara yatırımları genellikle 30 dakika içinde yansır.\nBu bilgiler işinize yaradı mı?',
     ]);
+    // Asked on the snapshot: the deleted skill's id stays pinned while it waits.
     expect(
       await owner.aiConversation.findFirstOrThrow({ where: { threadId: first.event.thread_id } }),
-    ).toMatchObject({ activeSkillId: null, stepStatus: null, counters: { turns: 2 } });
+    ).toMatchObject({
+      activeSkillId: skillId,
+      stepStatus: 'awaiting_answer',
+      counters: { turns: 2 },
+    });
     expect(await owner.skillRun.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
     const decisions = await owner.aiDecisionLog.findMany({
       where: { licenseId: fx.a.licenseId },

@@ -284,15 +284,42 @@ describe('a procedure’s first turn (AI-03 §3–§4)', () => {
 });
 
 describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', () => {
-  it('A — the understanding reads the answer to its question; the wait is explained and the topic resolved waiting, in two turns', async () => {
+  it('A — the understanding reads the answer to its question; the wait is explained, and on the player’s yes the topic is resolved waiting', async () => {
     const llm = new FakeLlmProvider();
     const chat = conversation(engine(llm), () => [DEPOSIT_SKILL]);
     await chat.say('param yatmadı');
     const second = await chat.say('Papara 13:40');
+    // K9 (tm 303.4): not solved until the player says so — the answer, then the question.
     expect(second.reply).toBe(
-      'Papara ile yapılan yatırımlar genellikle 30 dk içinde hesaba yansır. İşleminiz 10 dk önce yapılmış; hâlâ normal süre içinde.\n30 dk dolduğunda bakiye görünmezse bu sohbete yazın.',
+      'Papara ile yapılan yatırımlar genellikle 30 dk içinde hesaba yansır. İşleminiz 10 dk önce yapılmış; hâlâ normal süre içinde.\n30 dk dolduğunda bakiye görünmezse bu sohbete yazın.\nBu bilgiler işinize yaradı mı?',
     );
-    expect(second.decisions).toMatchObject({ outcome: 'answered', replyKind: 'answer' });
+    expect(second.decisions).toMatchObject({
+      outcome: 'answered',
+      replyKind: 'answer',
+      resolution: { decision: 'asked', reason: 'awaiting_confirmation', basis: 'platform' },
+    });
+    expect(chat.state).toMatchObject({
+      activeSkillId: 'deposit',
+      stepId: 'bekleme_bitti',
+      stepStatus: 'awaiting_answer',
+      counters: { turns: 2, resolution_asked: 'deposit:bekleme_bitti' },
+    });
+    // The summary says it was answered; the decision record, that it is not claimed yet.
+    expect(chat.state.digest).toMatchObject({
+      outcome: 'resolved_waiting',
+      awaiting_answer: false,
+    });
+
+    const third = await chat.say('evet');
+    expect(third.reply).toBe(
+      'Sevindim! Başka bir konuda yardımcı olabileceğim bir şey olursa yazmanız yeterli.',
+    );
+    expect(third.decisions.resolution).toMatchObject({
+      decision: 'resolved',
+      reason: 'criteria_met',
+      confirmation: 'yes',
+      outcome: 'resolved_waiting',
+    });
     // Templates only: no model was asked to write anything.
     expect(llm.calls).toHaveLength(0);
     expect(chat.state).toMatchObject({
@@ -301,13 +328,61 @@ describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', ()
       procedureSnapshotHash: null,
       stepId: null,
       stepStatus: null,
-      counters: { turns: 2 },
+      counters: { turns: 3 },
     });
+    expect(chat.state.counters['resolution_asked']).toBeUndefined();
     expect(chat.state.digest).toMatchObject({
       outcome: 'resolved_waiting',
       awaiting_answer: false,
     });
     expect((chat.state.slots['yontem'] as { display: string }).display).toBe('Papara');
+  });
+
+  it('A, and the player answers "is it solved?" with something else: nothing claimed, nobody sent — the procedure is let go and the message taken as new', async () => {
+    const chat = conversation(engine(), () => [DEPOSIT_SKILL, WITHDRAWAL_SKILL]);
+    await chat.say('param yatmadı');
+    await chat.say('Papara 13:40');
+    // Neither yes nor no ('para çekemiyorum' would read as a no to the mock).
+    const next = await chat.say('çekim yapmak istiyorum');
+    // The decision order as if nothing were in progress: here, its "is it about…?".
+    expect(next.reply).toBe('Doğru anladıysam “Çekim” konusunda mı yardım istiyorsunuz?');
+    expect(next.decisions.outcome).toBe('answered');
+    expect(next.decisions.resolution).toBeUndefined();
+    expect(next.sideEffects).toEqual([]);
+    expect(next.decisions.log).toContainEqual({
+      step: 'bekleme_bitti',
+      detail: 'not claimed — the player did not say whether it is solved; the procedure is let go',
+      ok: true,
+    });
+    // The deposit is let go, not set aside to be offered back: it was answered.
+    expect(chat.state).toMatchObject({
+      activeSkillId: null,
+      procedureSnapshot: null,
+      stepId: null,
+      stepStatus: null,
+      suspended: null,
+    });
+    expect(chat.state.counters['resolution_asked']).toBeUndefined();
+  });
+
+  it('A, and the player says it is not solved: a person takes over — the "AI could not solve it" reason, the procedure’s team', async () => {
+    const chat = conversation(engine(), () => [DEPOSIT_SKILL]);
+    await chat.say('param yatmadı');
+    await chat.say('Papara 13:40');
+    const no = await chat.say('hayır');
+    expect(no.decisions).toMatchObject({
+      outcome: 'handed_off',
+      handoffReason: 'player_said_unresolved',
+      resolution: { decision: 'unresolved', reason: 'player_said_no', confirmation: 'no' },
+    });
+    expect(no.sideEffects).toContainEqual(
+      expect.objectContaining({
+        kind: 'handoff',
+        topic: 'finance',
+        reason: 'player_said_unresolved',
+      }),
+    );
+    expect(chat.state.digest).toMatchObject({ outcome: 'handed_off' });
   });
 
   it('D — six turns: every slot collected, the passive lookup logged, a hand-over to the finance topic with its reason', async () => {
@@ -460,11 +535,17 @@ describe('a topic change mid-procedure (AI-03 §7 acceptance)', () => {
 
     const switched = await chat.say('para çekemiyorum');
     expect(switched.decisions.skillId).toBe('withdrawal');
+    // K9 (tm 303.4): the new topic is solved on the player's yes — then the offer.
     expect(switched.reply).toBe(
-      'Çekim talepleri genellikle 24 saat içinde işlenir.\nÖnceki konuya dönelim mi?',
+      'Çekim talepleri genellikle 24 saat içinde işlenir.\nSorununuz çözüldü mü?',
     );
     expect(switched.decisions.log.map((entry) => entry.detail)).toContain(
       'Yatırım geçmedi set aside for Çekim',
+    );
+    const solved = await chat.say('evet');
+    expect(solved.decisions.skillId).toBe('withdrawal');
+    expect(solved.reply).toBe(
+      'Sevindim! Başka bir konuda yardımcı olabileceğim bir şey olursa yazmanız yeterli.\nÖnceki konuya dönelim mi?',
     );
     expect(chat.state).toMatchObject({
       activeSkillId: null,
@@ -495,6 +576,7 @@ describe('a topic change mid-procedure (AI-03 §7 acceptance)', () => {
     const chat = conversation(engine(), () => [DEPOSIT_SKILL, WITHDRAWAL_SKILL]);
     await chat.say('param yatmadı');
     await chat.say('para çekemiyorum');
+    await chat.say('evet');
     // An understanding that hears the yes as the time — the words are the player's.
     const back = await chat.say('evet', {
       procedure: {
@@ -516,11 +598,12 @@ describe('a topic change mid-procedure (AI-03 §7 acceptance)', () => {
     const chat = conversation(engine(), () => [DEPOSIT_SKILL, WITHDRAWAL_SKILL]);
     await chat.say('param yatmadı');
     await chat.say('para çekemiyorum');
+    await chat.say('evet');
     const no = await chat.say('hayır');
     expect(no.reply).toBe('Peki. Başka bir konuda yardımcı olabileceğim bir şey var mı?');
     expect(no.decisions.skillId).toBe('deposit');
     expect(chat.state.suspended).toBeNull();
-    expect(chat.state.counters).toMatchObject({ turns: 3 });
+    expect(chat.state.counters).toMatchObject({ turns: 4 });
   });
 
   it('an answer to the waiting question is not a topic change, even when it names another topic’s words', async () => {
@@ -1132,7 +1215,9 @@ describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
         reply.extracted = [{ slot: 'tutar', raw_text: '500 TL', value: '500', confidence: 0.9 }];
       }, '500 TL');
       expect(result.decisions.skillId).toBe('payment');
-      expect(result.reply).toBe('Üçüncü kişi ödemesi kabul edilmez.\nKontrol ediyoruz.');
+      expect(result.reply).toBe(
+        'Üçüncü kişi ödemesi kabul edilmez.\nKontrol ediyoruz.\nSorununuz çözüldü mü?',
+      );
     });
 
     it('a procedure starting on the same turn does not, whatever its step ids', async () => {
@@ -1141,8 +1226,9 @@ describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
         reply.intent.confidence = 0.95;
       }, 'bonus var mı');
       expect(result.decisions.skillId).toBe('bonus');
-      // The new topic resolves and asks about the one set aside (AI-03 §7).
-      expect(result.reply).toBe('Kampanyalar sayfasına bakın.\nÖnceki konuya dönelim mi?');
+      // The new topic asks whether it is solved (K9); on yes, it asks about the
+      // one set aside (AI-03 §7).
+      expect(result.reply).toBe('Kampanyalar sayfasına bakın.\nSorununuz çözüldü mü?');
     });
   });
 });
@@ -1207,7 +1293,9 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
     await chat.say('param çekim');
     const answered = await chat.say('çekim');
     expect(answered.decisions.skillId).toBe('withdrawal');
-    expect(answered.reply).toBe('Çekim talepleri genellikle 24 saat içinde işlenir.');
+    expect(answered.reply).toBe(
+      'Çekim talepleri genellikle 24 saat içinde işlenir.\nSorununuz çözüldü mü?',
+    );
     expect(answered.decisions.policy).toMatchObject({ step: 4, rule: 'clarified' });
   });
 
@@ -1402,7 +1490,7 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
         context([GENERAL, DEPOSIT_SKILL]),
       );
       expect(other.decisions.skillId).toBe('general');
-      expect(other.reply).toBe('Size nasıl yardımcı olabilirim?');
+      expect(other.reply).toBe('Size nasıl yardımcı olabilirim?\nSorununuz çözüldü mü?');
       expect(other.decisions.policy).toMatchObject({ step: 6, rule: 'fallback' });
     });
 

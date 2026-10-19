@@ -180,6 +180,13 @@ aiAgentHandoffSettings:
       reason; `null` goes back to the default. `after_hours` is the text
       for a hand-over nobody can take now.
 
+      `resolution_criteria` is the default "resolved" criteria (K9): a
+      condition the procedures without their own are held to; `null` goes
+      back to the platform's, the player's explicit yes. A condition that
+      names a slot, a fact or a function needing one is 400 `validation`
+      with `details` a `ProcedureProblemDetails` (section `handoff`, field
+      `resolution_criteria`).
+
       Any field may be sent alone; the others keep their value.
     requestBody:
       required: true
@@ -361,6 +368,10 @@ aiAgentHandoffSettings:
                 additionalProperties: false
                 properties:
                   text: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+              resolution_criteria:
+                allOf:
+                  - $ref: "../openapi.yaml#/components/schemas/ProcedureCondition"
+                nullable: true
     responses:
       "200":
         description: Updated

@@ -461,7 +461,7 @@ describe('the understanding call’s signals, before the decision order (AI-08 �
       context([BONUS]),
     );
     expect(result.decisions.skillId).toBe('bonus');
-    expect(result.reply).toBe('Bonus kurallarını kısaca anlat.');
+    expect(result.reply).toBe('Bonus kurallarını kısaca anlat.\nSorununuz çözüldü mü?');
     expect(hitsOf(result)).toEqual(['G2/input/evidence']);
     expect(result.decisions.guardrails?.hits[0]?.evidence).toBe('kaybımı geri almam');
   });
@@ -504,7 +504,9 @@ describe('the output check, the one rewrite, the safe text (AI-08 §6, §8)', ()
       { text: 'param yatmadı' },
       context([saying('yatirim', 'param yatmadı', 'Durumu açıkla.')]),
     );
-    expect(result.reply).toBe('Talebinizi aldım; ekibimiz yatırımınızı inceleyecek.');
+    expect(result.reply).toBe(
+      'Talebinizi aldım; ekibimiz yatırımınızı inceleyecek.\nSorununuz çözüldü mü?',
+    );
     expect(result.decisions.outcome).toBe('answered');
     expect(hitsOf(result)).toEqual(['G8/output/rewrite']);
     expect(result.decisions.log.some((line) => line.detail.includes('written again'))).toBe(true);
@@ -564,7 +566,7 @@ describe('the output check, the one rewrite, the safe text (AI-08 §6, §8)', ()
       context([bonus]),
     );
     expect(plain.written()[0]!.system).not.toContain(platformGuardrail('G4').prompt.tr);
-    expect(answered.reply).toBe('Size özel bir bonus tanımlayabiliriz.');
+    expect(answered.reply).toBe('Size özel bir bonus tanımlayabiliriz.\nSorununuz çözüldü mü?');
     expect(hitsOf(answered)).toEqual([]);
   });
 
@@ -607,7 +609,7 @@ describe('the output check, the one rewrite, the safe text (AI-08 §6, §8)', ()
       { text: 'param yatmadı' },
       context([saying('yatirim', 'param yatmadı', 'Hemen bakıyorum.')], { guardrails: config }),
     );
-    expect(warned.reply).toBe('Hemen bakıyorum.');
+    expect(warned.reply).toBe('Hemen bakıyorum.\nSorununuz çözüldü mü?');
     expect(hitsOf(warned)).toEqual([`phrase:${RULE_ID}/output/warn`]);
   });
 
@@ -728,7 +730,7 @@ describe('the judge (AI-08 §7, AI-08-S3)', () => {
       tier: 'fast',
       responseFormat: { name: 'guardrail_judge' },
     });
-    expect(result.reply).toBe('Ekibimiz yatırımınızı inceleyecek.');
+    expect(result.reply).toBe('Ekibimiz yatırımınızı inceleyecek.\nSorununuz çözüldü mü?');
     expect(hitsOf(result)).toEqual(['G8/output/rewrite']);
   });
 
@@ -809,7 +811,7 @@ describe('G19: calm warnings, then a person (AI-09 `abuse_warnings`)', () => {
       context([BONUS]),
     );
     expect(first.reply).toBe(
-      'Size yardımcı olmak istiyorum; lütfen saygılı bir dille devam edelim.\nBonus kurallarını kısaca anlat.',
+      'Size yardımcı olmak istiyorum; lütfen saygılı bir dille devam edelim.\nBonus kurallarını kısaca anlat.\nSorununuz çözüldü mü?',
     );
     expect(first.nextState.signals['abuse_warnings']).toBe(1);
     expect(hitsOf(first)).toEqual(['G19/input/warn']);
@@ -973,7 +975,7 @@ describe('the stored risk flags on every turn (tm 302.2 · AI-27 §3)', () => {
       { text: 'bonus nedir' },
       context([bonus], { risk: policy([{ type: 'abusive', scope: 'chat', chat_id: 'c' }]) }),
     );
-    expect(plain.reply).toBe('Size özel bir bonus tanımlayabiliriz.');
+    expect(plain.reply).toBe('Size özel bir bonus tanımlayabiliriz.\nSorununuz çözüldü mü?');
 
     const idle = await engine().runTurn(
       emptyTurnState(),

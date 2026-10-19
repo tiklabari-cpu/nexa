@@ -15,9 +15,12 @@
  * the same definitions with the same codes:
  *
  *   - `Procedure`, `ProcStep` (eight step types) and `Cond`, the condition
- *     language: a fixed operator list, three fixed functions, the AI-13 fact
+ *     language: a fixed operator list, four fixed functions, the AI-13 fact
  *     paths and a yes/no question for the model — no free expression, no eval.
  *     A new function is a code change here, never an author's text;
+ *   - `resolution_criteria` (K9 · tm 303.4): what must hold before a `resolve`
+ *     step may say the matter is solved, in the same language — and
+ *     {@link validateResolutionCriteria} for the workspace's default;
  *   - templates and their `{variable}` grammar — a slot, a fact path or a
  *     function call between braces;
  *   - `validateProcedure`, every problem as a stable code: a `goto` to no step,
@@ -265,8 +268,16 @@ export function slotValueKind(type: SlotType): CondValueKind {
  *   - `elapsed_minutes(slot)`             — minutes since a `datetime` slot's moment.
  *   - `within_working_hours(method, slot)` — whether the method processes at that moment.
  *   - `next_window(method)`               — when the method next processes.
+ *   - `player_confirmed()`                — the player answered the AI's "is it
+ *     solved?" with a yes (K9 · tm 303.4); no, a no; unknown until it was asked
+ *     and answered either way. The default "resolved" criterion.
  */
-export const COND_FNS = ['elapsed_minutes', 'within_working_hours', 'next_window'] as const;
+export const COND_FNS = [
+  'elapsed_minutes',
+  'within_working_hours',
+  'next_window',
+  'player_confirmed',
+] as const;
 export type CondFnName = (typeof COND_FNS)[number];
 
 /**
@@ -281,6 +292,7 @@ export const COND_FN_SIGNATURES: Readonly<
   elapsed_minutes: { params: ['moment_slot'], returns: 'number' },
   within_working_hours: { params: ['method', 'moment_slot'], returns: 'boolean' },
   next_window: { params: ['method'], returns: 'moment' },
+  player_confirmed: { params: [], returns: 'boolean' },
 };
 
 /**
@@ -407,6 +419,13 @@ export interface Procedure {
   templates: ProcTemplate[];
   handoff: ProcHandoff;
   limits: ProcLimits;
+  /**
+   * When the matter counts as solved (K9 · tm 303.4): a `resolve` step says so
+   * only once this holds — "these slots are filled and the player said yes"
+   * (`player_confirmed()`). Absent: the workspace's default, else the
+   * platform's (`DEFAULT_RESOLUTION_CRITERIA`, the player's explicit yes).
+   */
+  resolution_criteria?: Cond;
 }
 
 export const DEFAULT_PROCEDURE_PRIORITY = 100;
@@ -451,6 +470,8 @@ export const COND_LIST_MAX = 10;
 export const COND_IN_VALUES_MAX = 50;
 export const COND_AI_QUESTION_MAX = 300;
 export const COND_PATTERN_MAX = 200;
+/** The workspace's default "resolved" criteria as JSON, at most — the column's CHECK too. */
+export const RESOLUTION_CRITERIA_MAX_BYTES = 16384;
 
 // ---------------------------------------------------------------------------
 // References: `{variable}` in a template, a card field.
@@ -491,9 +512,16 @@ export function templateReferences(text: string): string[] {
 }
 
 /**
+ * The key the `ai` question of the "resolved" criteria is answered under — a
+ * dot, so no step id (lower snake_case) can be the same word.
+ */
+export const RESOLUTION_AI_KEY = 'resolution.criteria';
+
+/**
  * Every `ai` condition with the key its answer comes back under: the step's
  * id, `slot.<name>` for a slot's `required.when`, `handoff.<n>` for the n-th
- * (0-based) hand-over condition. The understanding call (AI-05) asks these.
+ * (0-based) hand-over condition, {@link RESOLUTION_AI_KEY} for the "resolved"
+ * criteria. The understanding call (AI-05) asks these.
  */
 export function procedureAiQuestions(
   procedure: Procedure,
@@ -508,6 +536,7 @@ export function procedureAiQuestions(
     if (typeof slot.required === 'object') take(slot.required.when, `slot.${slot.name}`);
   }
   procedure.handoff.conditions.forEach((cond, n) => take(cond, `handoff.${n}`));
+  take(procedure.resolution_criteria, RESOLUTION_AI_KEY);
   return out;
 }
 
@@ -694,6 +723,7 @@ const PROCEDURE_FIELDS: ReadonlySet<string> = new Set([
   'templates',
   'handoff',
   'limits',
+  'resolution_criteria',
 ]);
 
 const STEP_FIELDS: Readonly<Record<ProcStepType, readonly string[]>> = {
@@ -753,7 +783,13 @@ export const DEFAULT_SKILL_MODE: SkillMode = 'single';
  * `priority` and `slots` are the skill's own fields — the first three select
  * a skill in either mode.
  */
-export const SKILL_PROCEDURE_FIELDS = ['steps', 'templates', 'handoff', 'limits'] as const;
+export const SKILL_PROCEDURE_FIELDS = [
+  'steps',
+  'templates',
+  'handoff',
+  'limits',
+  'resolution_criteria',
+] as const;
 export type SkillProcedureBody = Pick<Procedure, (typeof SKILL_PROCEDURE_FIELDS)[number]>;
 
 /** A procedure skill's fields, as a request writes them or a row stores them. */
@@ -825,12 +861,19 @@ export function splitSkillProcedure(procedure: Procedure): {
   procedure: SkillProcedureBody;
 } {
   const { when_to_use, examples, priority, slots, steps, templates, handoff, limits } = procedure;
+  const criteria = procedure.resolution_criteria;
   return {
     when_to_use,
     examples,
     priority,
     slots,
-    procedure: { steps, templates, handoff, limits },
+    procedure: {
+      steps,
+      templates,
+      handoff,
+      limits,
+      ...(criteria !== undefined ? { resolution_criteria: criteria } : {}),
+    },
   };
 }
 
@@ -979,6 +1022,7 @@ export function validateProcedure(
   const { steps, flows } = stepsSection(rawSteps, scope, context, problems);
   const handoff = handoffSection(value['handoff'], scope, context, problems);
   const limits = limitsSection(value['limits'], problems);
+  const resolution = resolutionSection(value['resolution_criteria'], scope, problems);
 
   for (const [index, flow] of flows.entries()) {
     for (const { field, target } of flow.backward) {
@@ -1010,6 +1054,8 @@ export function validateProcedure(
     templates,
     handoff,
     limits,
+    // Absent unless written, so the hash of a procedure without one is unchanged.
+    ...(resolution !== undefined ? { resolution_criteria: resolution } : {}),
   };
 
   if (context.locked !== undefined) {
@@ -2215,6 +2261,79 @@ function handoffSection(
   };
 }
 
+/**
+ * The "resolved" criteria (K9 · tm 303.4): a condition over the procedure's
+ * own slots and facts. Its problems are the hand-over section's — where the
+ * editor shows them — under the field `resolution_criteria`. Null is none.
+ */
+function resolutionSection(
+  value: unknown,
+  scope: Scope,
+  problems: ProcedureProblem[],
+): Cond | undefined {
+  if (value === undefined || value === null) return undefined;
+  for (const issue of condIssues(value, scope, 'resolution_criteria', 1, { count: 0 })) {
+    problems.push({
+      ...placeIssue(issue),
+      section: 'handoff',
+      field: 'resolution_criteria',
+      ...(issue.code === 'slot_unknown_reference' && issue.reference !== undefined
+        ? { slot: issue.reference }
+        : {}),
+      message: `resolution_criteria: ${issue.message}`,
+    });
+  }
+  return value as Cond;
+}
+
+/**
+ * The workspace's default "resolved" criteria (K9 · tm 303.4 ·
+ * `ai_handoff_settings.resolution_criteria`), judged as a procedure's are but
+ * with no procedure around it: no slot, so no slot condition, no fact and no
+ * function that reads one — `player_confirmed()`, an `ai` question and
+ * `all` / `any` / `not` over them.
+ */
+export function validateResolutionCriteria(
+  value: unknown,
+): { ok: true; criteria: Cond } | { ok: false; problems: ProcedureProblem[] } {
+  if (isPlainObject(value) && utf8Bytes(JSON.stringify(value)) > RESOLUTION_CRITERIA_MAX_BYTES) {
+    return {
+      ok: false,
+      problems: [
+        {
+          code: 'procedure_bad_condition',
+          section: 'handoff',
+          field: 'resolution_criteria',
+          message: `resolution_criteria: at most ${RESOLUTION_CRITERIA_MAX_BYTES} bytes`,
+        },
+      ],
+    };
+  }
+  const scope: Scope = {
+    slots: new Map(),
+    entities: new Set(),
+    placeholders: new Set(),
+    templateKeys: new Set(),
+    stepIndex: new Map(),
+  };
+  const problems: ProcedureProblem[] = [];
+  const criteria = resolutionSection(value, scope, problems);
+  if (criteria === undefined) {
+    return {
+      ok: false,
+      problems: [
+        {
+          code: 'procedure_bad_condition',
+          section: 'handoff',
+          field: 'resolution_criteria',
+          message: 'resolution_criteria: a condition must be an object',
+        },
+      ],
+    };
+  }
+  return problems.length > 0 ? { ok: false, problems } : { ok: true, criteria };
+}
+
 function limitsSection(value: unknown, problems: ProcedureProblem[]): ProcLimits {
   if (value === undefined) return { ...PROCEDURE_DEFAULTS.limits };
   const maxTurns = isPlainObject(value)
@@ -2289,6 +2408,7 @@ function lockSkeleton(procedure: Procedure): Record<ProcedureSection, unknown> {
     handoff: {
       conditions: procedure.handoff.conditions,
       card_fields: procedure.handoff.card_fields,
+      resolution_criteria: procedure.resolution_criteria,
     },
     limits: procedure.limits,
   };
@@ -2341,6 +2461,16 @@ function nonEmptyString(value: unknown): value is string {
 
 function isOneOf<T extends string>(list: readonly T[], value: unknown): value is T {
   return typeof value === 'string' && (list as readonly string[]).includes(value);
+}
+
+/** The UTF-8 length of a text, as the database counts its bytes. */
+function utf8Bytes(text: string): number {
+  let bytes = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return bytes;
 }
 
 function isIntegerIn(value: unknown, min: number, max: number): boolean {

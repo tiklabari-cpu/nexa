@@ -1482,7 +1482,10 @@ describe('the skill row: a procedure split across the skill’s fields (#296.2)'
     expect(result.procedure).toStrictEqual(valid(base()));
 
     const split = splitSkillProcedure(result.procedure);
-    expect(Object.keys(split.procedure).sort()).toEqual([...SKILL_PROCEDURE_FIELDS].sort());
+    // `resolution_criteria` only when written (tm 303.4).
+    expect(Object.keys(split.procedure).sort()).toEqual(
+      SKILL_PROCEDURE_FIELDS.filter((field) => field !== 'resolution_criteria').sort(),
+    );
     expect(split.priority).toBe(100);
     expect(validateSkillProcedure(split)).toMatchObject({ ok: true, procedure: result.procedure });
   });

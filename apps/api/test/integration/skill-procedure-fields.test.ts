@@ -207,7 +207,10 @@ describe('skill procedure fields (tm 296.2)', () => {
       ['yontem', 'always', 2],
       ['islem_zamani', 'always', 2],
     ]);
-    expect(Object.keys(created.procedure ?? {}).sort()).toEqual([...SKILL_PROCEDURE_FIELDS].sort());
+    // `resolution_criteria` is stored only when written (tm 303.4).
+    expect(Object.keys(created.procedure ?? {}).sort()).toEqual(
+      SKILL_PROCEDURE_FIELDS.filter((field) => field !== 'resolution_criteria').sort(),
+    );
     expect(created.procedure).toMatchObject({
       handoff: { conditions: [], card_fields: [] },
       limits: { max_turns: 12 },

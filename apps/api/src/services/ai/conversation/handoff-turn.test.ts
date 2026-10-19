@@ -267,7 +267,7 @@ describe('an upset player (AI-09 `negative_sentiment`)', () => {
     const chat = conversation(handoffConfig({ negative_sentiment: { ask_first: true } }));
     const offered = await chat.say('bu ne rezalet, çekim yapamıyorum');
     expect(offered.reply).toBe(
-      `Çekim talepleri genellikle 24 saat içinde işlenir.\n${HANDOFF_PHRASES.tr.offer}`,
+      `Çekim talepleri genellikle 24 saat içinde işlenir.\nSorununuz çözüldü mü?\n${HANDOFF_PHRASES.tr.offer}`,
     );
     expect(handoffOf(offered.sideEffects)).toBeNull();
     const yes = await chat.say('evet');
@@ -362,7 +362,9 @@ describe('the same problem again today (AI-09 `repeat_same_day`)', () => {
       handoffConfig({ repeat_same_day: { enabled: false } }),
       repeat,
     ).say('çekim yapamıyorum');
-    expect(result.reply).toBe('Çekim talepleri genellikle 24 saat içinde işlenir.');
+    expect(result.reply).toBe(
+      'Çekim talepleri genellikle 24 saat içinde işlenir.\nSorununuz çözüldü mü?',
+    );
   });
 });
 

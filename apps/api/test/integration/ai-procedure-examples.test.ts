@@ -330,7 +330,7 @@ describe('ai_procedure_examples and the catalogue narrowing (AI-05 §2 · tm 297
       select: { text: true },
     });
     expect(written.map((event) => event.text)).toEqual([
-      'Yatırım hesaba geçmedi: talebiniz alındı.',
+      'Yatırım hesaba geçmedi: talebiniz alındı.\nSorununuz çözüldü mü?',
     ]);
     const decision = await owner.aiDecisionLog.findFirstOrThrow({
       where: { chatId },

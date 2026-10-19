@@ -341,7 +341,9 @@ describe('the decision order on the API and the live path (AI-05 · tm 297.2)', 
         { clarify_thresholds: { high: 0.5, low: 0.3 } },
         headers,
       );
-      expect((await ask('param çekim')).reply).toBe('Yatırımınız kontrol ediliyor.');
+      expect((await ask('param çekim')).reply).toBe(
+        'Yatırımınız kontrol ediliyor.\nSorununuz çözüldü mü?',
+      );
     });
 
     it('an old catch-all edited last no longer answers before the skill written for the message (AI-05 acceptance)', async () => {

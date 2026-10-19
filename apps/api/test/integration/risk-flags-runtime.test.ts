@@ -38,6 +38,8 @@ import { clearRateLimits, startTestServer, type TestServer } from '../helpers/se
 
 const SAFE = 'Bilgilerinizi ilgili ekibimize iletiyorum.';
 const BONUS = 'Bonus kurallarını kısaca anlat.';
+/** The answer with "is it solved?" after it (K9 · tm 303.4). */
+const BONUS_ASKED = `${BONUS}\nSorununuz çözüldü mü?`;
 const PROMOTION = /bonus|promosyon|kampanya|freespin|yatırın/i;
 const KK = 'Hesabımı kapatmak istiyorum, oynamayı bırakacağım';
 const OPERATOR = 'rg-desk@operator.test';
@@ -262,7 +264,7 @@ describe('risk flags on a live conversation (AI-27 · tm 302.2)', () => {
   it('an agent’s flag while the AI has the conversation keeps the AI out: no reply, a hand-over, and no hand-back (409 from the stored flag)', async () => {
     const headers = await visitor(fx.a);
     const first = await say(headers, 'bonus nedir');
-    expect(first.said).toEqual([BONUS]);
+    expect(first.said).toEqual([BONUS_ASKED]);
     expect(first.aiMode).toBe('ai');
 
     const raised = await server.post(
@@ -279,7 +281,7 @@ describe('risk flags on a live conversation (AI-27 · tm 302.2)', () => {
     expect((conversation.signals as { risk_flags?: unknown }).risk_flags).toBeUndefined();
 
     const second = await say(headers, 'bonus nedir');
-    expect(second.said).toEqual([BONUS]);
+    expect(second.said).toEqual([BONUS_ASKED]);
     expect(second.aiMode).toBe('human');
     const [, record] = await owner.aiDecisionLog.findMany({
       where: { licenseId: fx.a.licenseId },
@@ -297,7 +299,7 @@ describe('risk flags on a live conversation (AI-27 · tm 302.2)', () => {
   it('a player flagged in an earlier conversation gets no bonus talk (G4), and the AI still answers', async () => {
     const headers = await visitor(fx.a);
     const first = await say(headers, 'bonus nedir');
-    expect(first.said).toEqual([BONUS]);
+    expect(first.said).toEqual([BONUS_ASKED]);
     const chat = await owner.chat.findUniqueOrThrow({
       where: { id: first.chatId },
       select: { customerId: true },
@@ -316,7 +318,8 @@ describe('risk flags on a live conversation (AI-27 · tm 302.2)', () => {
     });
 
     const second = await say(headers, 'bonus nedir');
-    expect(second.said).toEqual([BONUS, SAFE]);
+    // Not a yes to "is it solved?": the first topic is let go and the question runs anew (K9).
+    expect(second.said).toEqual([BONUS_ASKED, SAFE]);
     const records = await owner.aiDecisionLog.findMany({
       where: { licenseId: fx.a.licenseId },
       orderBy: { createdAt: 'asc' },

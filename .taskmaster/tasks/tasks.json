@@ -13021,7 +13021,7 @@
           "301"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T14:31:56.364Z",
+        "updatedAt": "2026-10-19T16:07:43.901Z",
         "subtasks": [
           {
             "id": 1,
@@ -13029,11 +13029,11 @@
             "description": "handoff.ts neden kodları + ai_handoff_settings + kontrat",
             "details": "Üst görev 303 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Birim; RLS.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "303",
             "priority": "high",
-            "updatedAt": "2026-10-19T14:31:56.364Z"
+            "updatedAt": "2026-10-19T16:07:43.901Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T14:31:56.364Z",
+      "lastModified": "2026-10-19T16:07:43.902Z",
       "taskCount": 390,
       "completedCount": 301,
       "tags": [

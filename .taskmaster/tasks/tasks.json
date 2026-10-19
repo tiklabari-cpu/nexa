@@ -12885,7 +12885,7 @@
         "description": "iGaming'de tek yanlış cümle lisans riski: self-exclusion isteyene bonus, reşit olmayana oyun bilgisi, \"5 dakikaya yatar\" sözü, AML ipucu. Bugün guardrail, yasaklı ifade ya da çıktı denetimi yok. K13: erişim/adres sorularında AI kiracının \"Erişim bilgisi\" ayarındaki bilgiyi kullanır (adres/VPN uydurmaz); 05'teki \"hiçbir yöntem önerme\" varsayılanı KALDIRILDI. Kaynak: AI-08.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: AI-08. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).\n\nXHIGH GEREKÇESİ: (1) güvenlik/uyum yüzeyi — güvenilmeyen model çıktısının denetimi.\nTİPLER packages/types/src/guardrails.ts: G1–G19 (id, başlık TR/EN, prompt metni, kategori, eylem force_handoff|block_output|block_promo|warn, hedef konu, öncelik, ön tarama sözlükleri TR/EN) + PLATFORM_GUARDRAILS_VERSION.\nPRİSMA (RLS): ai_guardrail_settings (license_id, ai_agent_id, crisis_text, complaint_text, approved_by, approved_at) — G14 metni burada değil, AI-13 \"Erişim bilgisi\" ayarında (#310, K13); ai_guardrail_rules (kiracı ekleri; action prompt_only|block_output|force_handoff, scope, active); ai_forbidden_phrases (phrase, match exact|word|regex, lang, scope, action block|warn); ai_guardrail_hits (license_id, chat_id, thread_id, turn_id, rule_key, stage input|output, action_taken, created_at).\nSÜRÜM MODELİ (#290 · ADR-14b · docs/adr/ai-config-versioning.md §2.12 — şema kuralı, uy): ai_guardrail_settings / ai_guardrail_rules / ai_forbidden_phrases taslak tablosu: `status` AÇILMAZ, yazma tek yardımcıdan (§2.5), değişiklik `touches_compliance` (Kurucu onayı, §2.10); `approved_by/approved_at` yayın kapısı değil; G1–G19 kodda kalır, paket `guardrail_catalog_version` kaydeder; ai_guardrail_hits kayıttır (turn_id).\nKONTRAT: GET /ai-guardrails/platform, GET/PUT /ai-guardrails/settings, /rules CRUD, /phrases CRUD, GET /ai-guardrails/hits.\nGİRİŞ TARAMASI (LLM'siz, anlamadan önce): TR normalizasyon sonrası sözlükler G1 (hesabımı kapatın, ara vermek…), G2 (kaybımı geri almam lazım, kredi çektim…), G3 (intihar, kendimi öldür…), G5 (18 altı beyanı, lisedeyim), G13 (hesabım çalındı…), G15 (resmi şikâyet, avukat, lisans kurumu), G19 (hakaret). G1/G3/G5 için sözlük tek başına yeter; anlama çıktısının risk bayrakları da tetikler (kaçırmamak öncelikli); kanıt alıntısı kayda.\nEYLEMLER: G1/G2/G3/G5/G13/G15 → zorunlu devir (AI-09) + hedef (G1/G2/G3 sorumlu oyun, G13 KYC/Risk, G15 şikâyet) + öncelik (G3/G5 acil); G3'te kriz metni mesai bağımsız, devirden önce verbatim.\nG4: risk bayrağı varsa compose'a \"bonus/promosyon/yatırım teşviki yok\" + çıkış denetimi bonus/freespin/kampanya/\"yatırın\" engeller.\nÇIKIŞ DENETİMİ (her cevapta): platform yasaklı ifadeleri (\"kontrol ettim\", \"sistemde görünüyor\", \"hesabınıza geçti\", \"garanti\", \"kesin yatacak\", \"tekrar yatırın\", \"kazanırsınız\", VPN/adres UYDURMA — K13: yalnız Erişim bilgisi ayarından gelen bilgi serbest) + kiracı listesi; sayı uydurma (AI-06); süre sözü regex (\"genellikle/politikamıza göre\" yoksa ihlal); risk bayraklıda promosyon terimleri; hassas veri isteme; hitap/emoji (uyarı).\nHAKEM (LLM #3, ayar açıksa para/hesap/bonus/sorumlu oyun kategorilerinde; AI-08-S3): {ok, violations}.\nİHLALDE: bir kez yeniden yazdır → verbatim kalıp ya da güvenli metin (\"Bilgilerinizi ilgili ekibimize iletiyorum\") + devir nedeni guardrail_output_block; her tetiklenme hits + ID-08.\nKİLİT: platform kuralları API'den değiştirilemez (403); kiracı yalnız daha sıkı ekler. Her tur PLATFORM_GUARDRAILS_VERSION.\nYAYIN KAPISI: PATCH /ai-agents/{id} active:true iken kriz metni onaylı değilse 409 ai_guardrail_setup_incomplete (AI-08-S1).\nWEB: GuardrailsPage.tsx (platform kuralları salt okunur, kiracı ekleri, kriz/şikâyet metni, tetiklenme kaydı → ID-09). Kurucu düzenler, Yönetici görür, EL kayıtları görür.\n\nKABUL KRİTERLERİ:\n- \"artık oynamak istemiyorum, hesabımı kapatın\" → ikna yok, aynı turda sorumlu oyun ekibine devir, cevapta bonus terimi yok.\n- \"16 yaşındayım\" → oyun bilgisi yok, devir + reşit olmayan bayrağı.\n- Mock'un \"kontrol ettim, hesabınıza geçti\" taslağı engellenir, yeniden yazılır, yine geçmezse güvenli metin + devir.\n- Kiracının eklediği \"kesin\" ifadesi cevabı engeller.\n- Kriz metni onaylanmadan AI ajanı etkinleştirilemez (409).\n- Platform kuralını değiştirme isteği reddedilir.\n- Kendine zarar ifadesinde kriz metni mesai dışında da hemen.\n- Erişim sorusunda AI yalnız Erişim bilgisi ayarındaki bilgiyi söyler; ayar yoksa devir (K13, #310 ile).\n\nKULLANILAN VARSAYIMLAR:\n- K13 (G14 varsayılanı kaldırıldı).\n- AI-08-S1: platform ülkeye göre kriz metni taslağı önerir, kiracı onaylamadan yayın yok.\n- AI-08-S3: hakem yalnız riskli kategorilerde.\n\nPANEL YERLEŞİMİ (tm 389 root panel · docs/platform-admin/gorev-yerlesimi.md · 2026-10-14): W+R. Workspace paneli: GuardrailsPage (kilitli kurallar salt okunur, kiracı ekleri, kriz/şikâyet metni, tetiklenme kaydı) — tm 390 ile Playbook › AI Agent › Davranış altında kart/alt sekme. ROOT panel (389.19): G1–G19 kataloğu + `PLATFORM_GUARDRAILS_VERSION` görünümü, **ülkeye göre kriz metni taslakları** (AI-08-S1 \"platform ülkeye göre taslak önerir\") `platform_settings.ai.crisis_text_drafts` — kiracı API `platform_ai_settings()` ile okur (389.17/389.19 varsa; yoksa bu görev yalnız boş taslak + \"kendi metnini yaz\"), GuardrailsPage'de \"platform taslağını kullan\" düğmesi \"varsa\" çalışır; `ai_guardrail_hits` kural anahtarına göre SAYILAR workspace AI sekmesinde (içerik yok). Katalog kodda kalır; root panelden düzenleme F2.",
         "testStrategy": "Her G kuralı için en az bir senaryo (AI-19 uyum paketi tohumu), çıkış denetimi birim testleri, çapraz kiracı; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "270",
           "298",
@@ -12893,7 +12893,7 @@
           "300"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T08:19:14.460Z",
+        "updatedAt": "2026-10-19T09:42:04.962Z",
         "subtasks": [
           {
             "id": 1,
@@ -12941,13 +12941,13 @@
             "description": "GuardrailsPage.tsx (kurallar, ekler, metinler, tetiklenme kaydı)",
             "details": "Üst görev 301 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "301.2"
             ],
             "parentId": "301",
             "priority": "high",
-            "updatedAt": "2026-10-19T08:19:14.460Z"
+            "updatedAt": "2026-10-19T09:42:04.962Z"
           }
         ]
       },
@@ -16132,9 +16132,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T08:19:14.461Z",
+      "lastModified": "2026-10-19T09:42:04.962Z",
       "taskCount": 390,
-      "completedCount": 299,
+      "completedCount": 300,
       "tags": [
         "master"
       ]

@@ -8,6 +8,13 @@
  * summary, tags and hand-over the turn asked for are applied. A preview shows
  * the same turn and a simulation (AI-19) records it; neither comes through here.
  *
+ * **A hand-over happens in one place (tm 303.2 · AI-09 §5).** What the turn
+ * hands over for and to whom is the engine's; the card, the move to `human`,
+ * the target and the pushes are `HandoffService.execute`'s, and the turn's
+ * decision record names the hand-over's id. Today's AI cap refusing the turn
+ * on a connection the AI answers is a hand-over too: the player is told so in
+ * a fixed sentence (`ai_failure`) — never a silence.
+ *
  * Kept out of the route because the ordering here is load-bearing and easy to
  * get wrong: the customer's message must be durable *before* the AI reacts to
  * it, and an AI failure must never lose that message. Everything below runs
@@ -85,13 +92,13 @@ import {
   DEFAULT_DAILY_MEMORY,
   parseEventId,
   readNoAnswerSettings,
+  readPersona,
   type AiConversationMode,
   type AiNoAnswerSettings,
   type IdentityTrust,
   type RiskPolicy,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
-import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
@@ -129,12 +136,25 @@ import {
   type TurnState,
 } from './conversation/turn.js';
 import { readAndCompile, type AiConfigRead } from './conversation/turn-config.js';
+import {
+  afterHoursWords,
+  DEFAULT_HANDOFF_CONFIG,
+  handoffWords,
+} from './conversation/handoff/triggers.js';
+import { languageVerdict } from './conversation/policy.js';
+import {
+  anyoneAccepting,
+  botPrincipal,
+  HandoffService,
+  planHandoff,
+  type HandoffCardWriter,
+  type PlannedHandoff,
+} from './handoff-service.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
 import { recordGuardrailHits } from './guardrail-hits.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
-import { ApiError } from '../../lib/api-error.js';
 import { maskDeep } from '../../lib/sensitive-mask.js';
 import type { RiskFlagAnnouncer } from '../risk/risk-announce.js';
 import { chatRiskPolicy, raiseRiskFlag } from '../risk/risk-flags.js';
@@ -160,6 +180,8 @@ export interface AiResponderOptions {
    * 302.2 · AI-27: push, webhook, urgent mail). Absent: written, not announced.
    */
   readonly riskFlags?: RiskFlagAnnouncer;
+  /** The hand-over card's writer (AI-10, #304) — none until then. */
+  readonly handoffCard?: HandoffCardWriter;
 }
 
 /**
@@ -179,6 +201,7 @@ export class AiResponder {
   readonly #batchWindowMs: number;
   readonly #historyBudget: HistoryBudget;
   readonly #riskFlags: RiskFlagAnnouncer | null;
+  readonly #handoffs: HandoffService;
 
   constructor(
     private readonly chats: ChatService,
@@ -190,6 +213,11 @@ export class AiResponder {
     this.#batchWindowMs = options.batchWindowMs ?? 0;
     this.#historyBudget = options.historyBudget ?? DEFAULT_HISTORY_BUDGET;
     this.#riskFlags = options.riskFlags ?? null;
+    this.#handoffs = new HandoffService(
+      chats,
+      publisher,
+      options.handoffCard ? { card: options.handoffCard } : {},
+    );
   }
 
   /**
@@ -230,6 +258,8 @@ export class AiResponder {
     // otherwise record a refusal for a message nobody is waiting on.
     let runnable = true;
     let batchWindowMs = this.#batchWindowMs;
+    /** Set when today's cap refusing the turn hands it over (the AI's connection). */
+    let capConfig: AiConfigRead | null = null;
     try {
       const lookout = await this.#lookout(turn, ref);
       if (!lookout) {
@@ -242,6 +272,7 @@ export class AiResponder {
           return null;
         }
         runnable = lookout.runnable;
+        if (runnable && lookout.aiMode === 'ai') capConfig = lookout.config;
         // The agent's own window, when it set one, in place of the workspace's.
         if (lookout.batchWindowSeconds !== null) batchWindowMs = lookout.batchWindowSeconds * 1000;
       }
@@ -281,8 +312,21 @@ export class AiResponder {
     } catch (error) {
       if (error instanceof AiDailyCapError) {
         // The allowance refused the turn before any skill was looked at — still
-        // a turn the AI did not take, and the one the cap's report counts.
-        await record({ decision: 'cap_reached', details: { cap_scope: error.scope } });
+        // a turn the AI did not take, and the one the cap's report counts. On a
+        // connection that is the AI's the player is told and a person sent
+        // (AI-09 `ai_failure`, tm 303.2); elsewhere routing's person has it.
+        const handedOver = capConfig
+          ? await this.#capHandOver(turn, ref, message, capConfig)
+          : null;
+        await record({
+          decision: 'cap_reached',
+          details: {
+            cap_scope: error.scope,
+            ...(handedOver
+              ? { handoff_id: handedOver.handoffId, reason_codes: ['ai_failure'] }
+              : {}),
+          },
+        });
       } else {
         log.error(
           { err: error },
@@ -309,6 +353,8 @@ export class AiResponder {
      * second draft is a turn of its own.
      */
     let turnId = randomUUID();
+    /** The turn's hand-over, once it has one (tm 303.2): its id goes on the record. */
+    let planned: PlannedHandoff | null = null;
     try {
       for (;;) {
         drafts += 1;
@@ -327,7 +373,7 @@ export class AiResponder {
         // transaction around it — the engine opens a short one per read so the
         // model call waits in none.
         const loaded = await turn.withTenant((tx) =>
-          this.#read(tx, ref, trigger, turn.identityTrust),
+          this.#read(tx, ref, trigger, turn.identityTrust, tenant.licenseId),
         );
         if (loaded === 'answered') {
           // Answered while this turn waited — by another engine on the same
@@ -368,6 +414,7 @@ export class AiResponder {
             aiMode: loaded.aiMode,
             noAnswer: loaded.noAnswer,
             risk: loaded.risk,
+            handoffAvailable: loaded.handoffAvailable,
           },
         );
         const { decisions } = result;
@@ -456,7 +503,7 @@ export class AiResponder {
       // its steps queued for a reply that never came is not applied.
       if (result.decisions.outcome === 'skipped') return result;
 
-      const { summary, tags, transferTo } = describeSideEffects(result.sideEffects);
+      const { summary, tags } = describeSideEffects(result.sideEffects);
       if (summary) {
         await turn.withTenant((tx) =>
           tx.thread.updateMany({
@@ -495,11 +542,16 @@ export class AiResponder {
             }
           : undefined;
 
+      // The hand-over (AI-09 §5): the card, `human`, the target, the pushes.
       const handoff = handoffOf(result.sideEffects);
-      if (transferTo) {
-        await this.#transfer(turn, transferTo, alongside);
-      } else if (handoff) {
-        await this.#handOver(turn, ref, handoff, result.decisions.failure !== null, alongside);
+      if (handoff) {
+        const failed = result.decisions.failure !== null;
+        planned = planHandoff(handoff, failed);
+        await this.#handoffs.execute(turn, ref, handoff, {
+          plan: planned,
+          failed,
+          ...(alongside ? { alongside } : {}),
+        });
       } else if (alongside) {
         await turn.withTenant(alongside);
       }
@@ -582,6 +634,8 @@ export class AiResponder {
             // draft, says so (AI-01 §5, §7).
             ...(gathered > 1 ? { messages_answered: gathered } : {}),
             ...(drafts > 1 ? { drafts } : {}),
+            // The hand-over's id, which its events and its card carry (AI-09 §6).
+            ...(planned ? { handoff_id: planned.handoffId } : {}),
           },
         });
         // What the guardrails found and did, under the same turn (tm 301.3 ·
@@ -730,9 +784,12 @@ export class AiResponder {
     answeredThrough: number;
     runnable: boolean;
     batchWindowSeconds: number | null;
+    aiMode: AiConversationMode | null;
+    config: AiConfigRead;
   } | null> {
     return turn.withTenant(async (tx) => {
-      if (!aiMayAnswer(await readAiMode(tx, ref))) return null;
+      const aiMode = await readAiMode(tx, ref);
+      if (!aiMayAnswer(aiMode)) return null;
       const conversation = await loadConversation(tx, ref);
       const config = await readAndCompile.forTurn(tx, {
         aiAgentId: null,
@@ -742,8 +799,60 @@ export class AiResponder {
         answeredThrough: conversation?.lastProcessedEventSeq ?? 0,
         runnable: config.pkg.skills.length > 0,
         batchWindowSeconds: config.pkg.batchWindowSeconds ?? null,
+        aiMode,
+        config,
       };
     });
+  }
+
+  /**
+   * Today's cap refused the turn on a connection the AI answers (tm 303.2 ·
+   * AI-09 `ai_failure`): the player is told in a fixed sentence — the
+   * workspace's or the default, with the after-hours text when nobody is
+   * accepting chats — and a person is sent. The sentence answers the job's
+   * message (its mark and fence). Null when it could not be done: the message
+   * waits for a person, as it always did.
+   */
+  async #capHandOver(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    message: string,
+    config: AiConfigRead,
+  ): Promise<PlannedHandoff | null> {
+    const { tenant, chatId, log } = turn;
+    const handoff = config.pkg.handoff ?? DEFAULT_HANDOFF_CONFIG;
+    const persona = config.pkg.skills[0]?.persona ?? readPersona(null);
+    const { answerIn } = languageVerdict(message, persona, null);
+    try {
+      const available = await turn.withTenant((tx) => anyoneAccepting(tx, tenant.licenseId));
+      const words = handoffWords(handoff, 'ai_failure', answerIn) as string;
+      await this.chats.sendEvent(
+        tenant,
+        botPrincipal(tenant),
+        chatId,
+        {
+          type: 'message',
+          text: available ? words : `${words}\n${afterHoursWords(handoff, answerIn)}`,
+          recipients: 'all',
+          properties: { ...turn.replyProperties },
+        },
+        { outbox: (tx, written) => turn.replyOutbox(tx, written) },
+      );
+      const effect = {
+        kind: 'handoff' as const,
+        team: null,
+        reason: 'ai_cap_reached',
+        reasons: ['ai_failure' as const],
+        priority: 'normal' as const,
+      };
+      const plan = planHandoff(effect, true);
+      await this.#handoffs.execute(turn, ref, effect, { plan, failed: true });
+      return plan;
+    } catch (error) {
+      if (error instanceof AiJobReplyRefusedError) throw error;
+      log.error({ err: error }, 'the ai cap hand-over failed; leaving the message for a human');
+      return null;
+    }
   }
 
   /**
@@ -766,6 +875,7 @@ export class AiResponder {
     ref: ConnectionRef,
     trigger: number | null,
     trust: IdentityTrust,
+    licenseId: bigint,
   ): Promise<TurnRead | 'answered' | 'not_ai'> {
     const aiMode = await readAiMode(tx, ref);
     if (!aiMayAnswer(aiMode)) return 'not_ai';
@@ -790,6 +900,8 @@ export class AiResponder {
     const noAnswer = readNoAnswerSettings(handoff?.noAnswer ?? null);
     // The conversation's risk flags and its player's (AI-27 §3, §6), live.
     const { policy: risk } = await chatRiskPolicy(tx, ref.chatId);
+    // Whether anyone could take a hand-over now (AI-12 §4): if not, it says so.
+    const handoffAvailable = await anyoneAccepting(tx, licenseId);
     if (trigger === null) {
       return {
         conversation,
@@ -802,6 +914,7 @@ export class AiResponder {
         aiMode,
         noAnswer,
         risk,
+        handoffAvailable,
       };
     }
     const newest = await newestVisitorEvent(tx, ref);
@@ -827,78 +940,8 @@ export class AiResponder {
       aiMode,
       noAnswer,
       risk,
+      handoffAvailable,
     };
-  }
-
-  /**
-   * A procedure's hand-over (tm 296.3): to the team it names by id, and —
-   * when it names a routing topic (#307 resolves those), nothing, or a team
-   * that cannot take the conversation now — to whoever routing gives it. Either
-   * way the AI stops (`human`).
-   */
-  async #handOver(
-    turn: VisitorTurn,
-    ref: ConnectionRef,
-    handoff: NonNullable<ReturnType<typeof handoffOf>>,
-    failed: boolean,
-    alongside?: (tx: TenantClient) => Promise<void>,
-  ): Promise<void> {
-    const { tenant, chatId } = turn;
-    const options = alongside ? { alongside } : {};
-    if (handoff.groupId !== undefined && !failed) {
-      try {
-        await this.chats.transfer(
-          tenant,
-          botPrincipal(tenant),
-          chatId,
-          { groupId: BigInt(handoff.groupId), reason: 'ai_handoff' },
-          options,
-        );
-        return;
-      } catch (error) {
-        if (!(error instanceof ApiError)) throw error;
-        turn.log.warn(
-          { group_id: handoff.groupId, err_type: error.type },
-          'procedure hand-over team cannot take the conversation; routing it instead',
-        );
-      }
-    }
-    await this.chats.handOverFromAi(tenant, ref, failed ? 'ai_failure' : 'ai_handoff', options);
-  }
-
-  async #transfer(
-    turn: VisitorTurn,
-    groupName: string,
-    alongside?: (tx: TenantClient) => Promise<void>,
-  ): Promise<void> {
-    const { tenant, chatId } = turn;
-
-    const group = await turn.withTenant((tx) =>
-      tx.group.findFirst({ where: { name: groupName }, select: { id: true } }),
-    );
-
-    if (!group) {
-      // The skill names a team that no longer exists. Leaving the conversation
-      // where it is means a human still sees it; silently dropping it would not.
-      turn.log.warn({ group: groupName }, 'skill targets an unknown team');
-      if (alongside) await turn.withTenant(alongside);
-      return;
-    }
-
-    await this.chats.transfer(
-      tenant,
-      botPrincipal(tenant),
-      chatId,
-      { groupId: group.id, reason: 'ai_handoff' },
-      alongside ? { alongside } : {},
-    );
-
-    await this.publisher.publish(
-      tenant,
-      'chat_transferred',
-      { allAgents: true },
-      { chat_id: chatId, reason: 'ai_handoff', transferred_to: { group_ids: [Number(group.id)] } },
-    );
   }
 }
 
@@ -920,6 +963,8 @@ interface TurnRead {
   noAnswer: AiNoAnswerSettings;
   /** What the conversation's risk flags and its player's mean (tm 302.2 · AI-27). */
   risk: RiskPolicy;
+  /** Whether anyone in the workspace is accepting chats now (tm 303.2 · AI-12 §4). */
+  handoffAvailable: boolean;
 }
 
 /**
@@ -931,22 +976,4 @@ function historyOf(context: ConnectionContext | null): TurnHistory | null {
   const { messages, systemNotes, stateDigest, omitted, visitorMessages } = context;
   if (messages.length === 0 && systemNotes.length === 0 && !stateDigest) return null;
   return { messages, systemNotes, stateDigest, omitted, visitorMessages };
-}
-
-/**
- * The AI acts as a bot principal, not as an agent.
- *
- * It carries the scopes the engine's own actions need and nothing else, so a
- * skill cannot reach further into the API than the steps it declares.
- */
-function botPrincipal(tenant: { licenseId: bigint; organizationId: string }): BotPrincipal {
-  return {
-    kind: 'bot',
-    botId: AI_BOT_ID,
-    licenseId: tenant.licenseId,
-    organizationId: tenant.organizationId,
-    scopes: ['chats--all:rw', 'tags--all:rw'],
-    tokenId: AI_BOT_ID,
-    tokenKind: 'bot',
-  };
 }

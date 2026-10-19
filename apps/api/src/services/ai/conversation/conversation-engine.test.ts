@@ -23,7 +23,7 @@ import {
   type FakeOpenAiFetch,
 } from '../../../../test/helpers/fake-openai.js';
 import { FakeLlmProvider } from '../../../../test/helpers/fake-llm-provider.js';
-import { readPersona } from '@siyahtus/types';
+import { DEFAULT_HANDOFF_MESSAGES, readPersona } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../../lib/tenant.js';
 import {
   RETRIEVAL_THRESHOLD,
@@ -359,7 +359,8 @@ describe('after a failure the AI stops talking; the steps for the human still ru
 
     expect(result.outcome).toBe('handed_off');
     expect(result.failure).toMatchObject({ provider: 'llm', kind: 'auth' });
-    expect(result.reply).toBeNull();
+    // Nothing the steps queued — the hand-over's own fixed sentence (tm 303.2 · AI-09).
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.procedure_rule.en);
     expect(result.tags).toEqual(['delivery']);
     expect(result.summary).toMatch(/^Customer asked: How long does delivery take\?/);
     expect(result.transferTo).toBe('Logistics');
@@ -486,7 +487,7 @@ describe('a knowledge search that cannot run hands the conversation to a human (
     expect(result).toMatchObject({
       outcome: 'handed_off',
       failure: { provider: 'embedding', kind: 'timeout' },
-      reply: null,
+      reply: DEFAULT_HANDOFF_MESSAGES.procedure_rule.en,
       tags: ['delivery'],
       transferTo: 'Logistics',
     });
@@ -981,7 +982,13 @@ describe('the turn returns what it would do and does none of it (AI-19)', () => 
     expect(result.sideEffects).toEqual([
       { kind: 'tag', tag: 'delivery' },
       { kind: 'summary', text: `Customer asked: ${MESSAGE}` },
-      { kind: 'handoff', team: 'Logistics' },
+      {
+        kind: 'handoff',
+        team: 'Logistics',
+        reason: 'procedure_rule',
+        reasons: ['procedure_rule'],
+        priority: 'normal',
+      },
     ]);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',

@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_HANDOFF_MESSAGES,
   readPersona,
   splitSkillProcedure,
   validateProcedure,
@@ -329,7 +330,8 @@ describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', ()
       'Kullanıcı adınızı yazar mısınız?',
       'İşlemin referans numarasını paylaşır mısınız?',
     ]);
-    expect(replies[5]).toBeNull();
+    // The procedure hands over without a word of its own: the reason's message (tm 303.2).
+    expect(replies[5]).toBe(DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr);
     expect(last).toMatchObject({
       activeSkillId: 'deposit',
       stepId: 'finansa_devir',
@@ -367,7 +369,14 @@ describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', ()
     });
     expect(result!.reply).toBe(DEPOSIT_TEMPLATES.talep_yok);
     expect(result!.sideEffects).toEqual([
-      { kind: 'handoff', team: null, topic: 'finance', reason: 'no_site_request' },
+      {
+        kind: 'handoff',
+        team: null,
+        topic: 'finance',
+        reason: 'no_site_request',
+        reasons: ['procedure_rule'],
+        priority: 'normal',
+      },
     ]);
     expect(skillDecision(result!)).toMatchObject({
       decision: 'handoff',
@@ -393,7 +402,14 @@ describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', ()
     await chat.say('Papara, 12:00');
     const third = await chat.say('hayır oluşturmadım');
     expect(third.sideEffects).toEqual([
-      { kind: 'handoff', team: null, groupId: 7, reason: 'no_site_request' },
+      {
+        kind: 'handoff',
+        team: null,
+        groupId: 7,
+        reason: 'no_site_request',
+        reasons: ['procedure_rule'],
+        priority: 'normal',
+      },
     ]);
   });
 });
@@ -568,14 +584,24 @@ describe('the written part (AI-03 §5)', () => {
       { text: 'bonus nedir' },
       context(skills()),
     );
-    expect(result.reply).toBeNull();
+    // Nothing the model would have said — the fixed sentence (tm 303.2 · AI-09 `ai_failure`).
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.ai_failure.tr);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',
-      replyKind: null,
+      replyKind: 'answer',
       failure: { provider: 'llm', kind: 'unavailable', status: 503 },
       handoffReason: null,
+      handoffReasons: ['ai_failure'],
     });
-    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'llm_failure' }]);
+    expect(result.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'llm_failure',
+        reasons: ['ai_failure'],
+        priority: 'normal',
+      },
+    ]);
     expect(result.nextState).toMatchObject({ stepId: 'anlat', stepStatus: 'done' });
     expect(skillDecision(result)).toMatchObject({
       decision: 'handoff',
@@ -650,7 +676,14 @@ describe('the other steps and limits, through the engine', () => {
     const third = await chat.say('hatırlamıyorum');
     expect(third.decisions).toMatchObject({ outcome: 'handed_off', handoffReason: 'max_turns' });
     expect(third.sideEffects).toEqual([
-      { kind: 'handoff', team: null, topic: 'finance', reason: 'max_turns' },
+      {
+        kind: 'handoff',
+        team: null,
+        topic: 'finance',
+        reason: 'max_turns',
+        reasons: ['max_turns'],
+        priority: 'normal',
+      },
     ]);
     expect(skillDecision(third)?.handoffReason).toBe('max_turns');
   });
@@ -703,11 +736,18 @@ describe('the other steps and limits, through the engine', () => {
     const english = await chat.say(
       'Hello, I would like to know when my deposit will arrive in my account please',
     );
-    expect(english.reply).toBeNull();
+    // Told so, in English (tm 303.2 · AI-09): not a silence.
+    expect(english.reply).toBe(DEFAULT_HANDOFF_MESSAGES.unsupported_language.en);
     expect(english.decisions.outcome).toBe('handed_off');
     expect(english.decisions.handoffReason).toBe('unsupported_language');
     expect(english.sideEffects).toEqual([
-      { kind: 'handoff', team: null, reason: 'unsupported_language' },
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'unsupported_language',
+        reasons: ['unsupported_language'],
+        priority: 'normal',
+      },
     ]);
     expect(chat.state).toMatchObject({
       stepId: before.stepId,
@@ -889,7 +929,7 @@ describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
     const result = await engine(llm).runTurn(before, { text: 'papara ile' }, context(ALL));
     expect(llm.understandCalls).toHaveLength(2);
     expect(llm.calls).toHaveLength(0);
-    expect(result.reply).toBeNull();
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.ai_failure.tr);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',
       skillId: 'deposit_not_credited',
@@ -904,7 +944,15 @@ describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
         },
       ],
     });
-    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'llm_failure' }]);
+    expect(result.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'llm_failure',
+        reasons: ['ai_failure'],
+        priority: 'normal',
+      },
+    ]);
     expect(result.nextState).toMatchObject({
       activeSkillId: before.activeSkillId,
       stepId: before.stepId,
@@ -928,13 +976,21 @@ describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
       context(ALL),
     );
     expect(llm.understandCalls).toHaveLength(1);
-    expect(result.reply).toBeNull();
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.ai_failure.tr);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',
       skillId: null,
       failure: { provider: 'llm', kind: 'timeout' },
     });
-    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'llm_failure' }]);
+    expect(result.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'llm_failure',
+        reasons: ['ai_failure'],
+        priority: 'normal',
+      },
+    ]);
     expect(result.nextState).toEqual({ ...emptyTurnState(), counters: { turns: 1 } });
   });
 
@@ -958,13 +1014,22 @@ describe('the understanding call on the turn (AI-05 §3 · tm 297.1)', () => {
     });
     const result = await capped.runTurn(emptyTurnState(), { text: 'param yatmadı' }, context(ALL));
     expect(fake.understandCalls).toHaveLength(0);
-    expect(result.reply).toBeNull();
+    // The cap is no silence either (AI-09 acceptance): the fixed sentence, a person.
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.ai_failure.tr);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',
       failure: null,
       capped: refusal,
     });
-    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'ai_cap_reached' }]);
+    expect(result.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'ai_cap_reached',
+        reasons: ['ai_failure'],
+        priority: 'normal',
+      },
+    ]);
     expect(skillDecision(result)).toMatchObject({ decision: 'cap_reached' });
   });
 
@@ -1125,7 +1190,15 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
       handoffReason: 'no_knowledge',
       unanswered: { category: 'money', policy: 'handoff', reason: 'no_passages' },
     });
-    expect(again.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'no_knowledge' }]);
+    expect(again.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'no_knowledge',
+        reasons: ['no_knowledge'],
+        priority: 'normal',
+      },
+    ]);
     expect(tookTurn(again)).toBe(true);
   });
 
@@ -1349,7 +1422,11 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
         unanswered: { category: 'other', policy: 'ask', reason: 'no_passages' },
       });
       expect(result.sideEffects).toEqual([]);
-      expect(result.nextState.signals).toEqual({ no_answer: { turn: 1 } });
+      // The turn is one not understood (tm 303.2 · AI-09): counted for the next.
+      expect(result.nextState.signals).toEqual({
+        no_answer: { turn: 1 },
+        handoff: { not_understood: 1, negative: 0, topic_asked: null },
+      });
       expect(tookTurn(result)).toBe(true);
     });
   });
@@ -1391,14 +1468,20 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
         },
       }),
     );
-    expect(result.reply).toBeNull();
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.unsupported_language.en);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',
       skillId: 'deposit',
       handoffReason: 'unsupported_language',
     });
     expect(result.sideEffects).toEqual([
-      { kind: 'handoff', team: null, reason: 'unsupported_language' },
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'unsupported_language',
+        reasons: ['unsupported_language'],
+        priority: 'normal',
+      },
     ]);
     expect(result.nextState.activeSkillId).toBeNull();
     expect(skillDecision(result)).toMatchObject({

@@ -39,7 +39,10 @@
  * still run — `tag`, `summarize` and a `handoff` the skill declares. With no
  * hand-over step the conversation stays with whoever routing gave it to when
  * it opened (`ChatService.start`), which is already a human: nothing here ever
- * took it away from one.
+ * took it away from one. On a connection that is the AI's the turn hands over
+ * (`#neverSilent`), and since tm 303.2 the player is told so in a fixed
+ * sentence, no model asked — AI-09 `ai_failure`, the workspace's message or
+ * the default ("Size bir temsilcimiz yardımcı olacak") — never a silence.
  *
  * **So is a knowledge search that could not run (tm 255.7).** The question is
  * embedded by the configured `EmbeddingProvider` before any transaction opens;
@@ -202,6 +205,20 @@ import {
   type RiskReading,
   type UnansweredReason,
 } from './knowledge-answer.js';
+import {
+  catalogueReason,
+  DEFAULT_HANDOFF_CONFIG,
+  effectiveMaxTurns,
+  openHandoffWatch,
+  readHandoffMark,
+  readingOf,
+  settleHandoffTurn,
+  topicQuestionTurn,
+  triggerHandoffTurn,
+  understandVerdict,
+  type HandoffConfig,
+  type HandoffWatch,
+} from './handoff/triggers.js';
 import {
   buildDigest,
   earlierTodayLines,
@@ -547,9 +564,6 @@ interface DraftCheck {
 /** A workspace rule's hand-over (`force_handoff`, read by the judge) — the catalogue's own code since tm 303.1. */
 const WORKSPACE_RULE_HANDOFF_REASON: HandoffReason = 'guardrail_workspace_rule';
 
-/** G19 warns this many times before it hands over (AI-09 `abuse_warnings`, #303 makes it a setting). */
-const ABUSE_WARNINGS_BEFORE_HANDOFF = platformGuardrail('G19').warningsBeforeHandoff ?? 2;
-
 export class ConversationEngine {
   readonly #knowledge: KnowledgeService;
   readonly #examples: ProcedureExamples;
@@ -564,6 +578,10 @@ export class ConversationEngine {
   readonly #turnEmbeddings = new WeakMap<TurnMessage, { text: string; query: EmbeddedQuery }>();
   /** The turn's guardrails (tm 301.3), opened by `runTurn` and read by every written call. */
   readonly #guards = new WeakMap<TurnMessage, TurnGuard>();
+  /** The turn's hand-over triggers (tm 303.2), opened by `runTurn` and settled at its end. */
+  readonly #watches = new WeakMap<TurnMessage, HandoffWatch>();
+  /** G16's words held from the input for the understanding call (`#holdsForTopic`). */
+  readonly #held = new WeakMap<TurnMessage, GuardrailTrigger>();
 
   constructor(options: ConversationEngineOptions) {
     this.#knowledge = options.knowledge;
@@ -596,17 +614,202 @@ export class ConversationEngine {
    * over at once (`#inputGuardrails`) — and the output check last, on the
    * reply the turn would send, whoever wrote it (`#closeGuard`). The written
    * calls between check their own drafts and rewrite them once.
+   *
+   * The hand-over triggers (tm 303.2 · AI-09) have the very last word
+   * (`#settleHandoff`): a loop or the count of turns not understood turns
+   * the turn into a hand-over, and every hand-over gets its reasons, its
+   * priority and the reason's message.
    */
   async runTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
     const guard = this.#openGuard(state, message, ctx);
+    const watch = openHandoffWatch();
+    this.#watches.set(message, watch);
     const result =
       this.#inputGuardrails(state, message, ctx, guard) ??
       this.#riskHandoff(state, message, ctx) ??
+      this.#answerToTopic(state, message, ctx) ??
       this.#answerToOffer(state, message, ctx) ??
       this.#neverSilent(state, message, ctx, await this.#takeTurn(state, message, ctx));
     const settled =
       guard.deferred.length > 0 ? this.#settleDeferred(state, message, ctx, guard, result) : result;
-    return this.#closeGuard(state, message, ctx, guard, settled);
+    const closed = this.#closeGuard(state, message, ctx, guard, settled);
+    this.#watches.delete(message);
+    return this.#settleHandoff(state, message, ctx, watch, closed);
+  }
+
+  /** The turn's hand-over watch — a fresh one outside `runTurn`. */
+  #watchOf(message: TurnMessage): HandoffWatch {
+    return this.#watches.get(message) ?? openHandoffWatch();
+  }
+
+  /**
+   * Whether G16's words wait for the understanding call (tm 303.2 ·
+   * AI-09-S1): a person asked for and nothing else, no topic known yet — no
+   * procedure in progress or set aside — no question asked before, and a
+   * catalogue the call will read. The call says whether the message names
+   * the topic: a person at once if it does, the one question if not.
+   */
+  #holdsForTopic(
+    state: TurnState,
+    ctx: TurnContext,
+    triggers: readonly GuardrailTrigger[],
+  ): boolean {
+    if (triggers.length !== 1 || triggers[0]?.rule.handoffReason !== 'player_request') {
+      return false;
+    }
+    if (activeProcedure(state) !== null || readSuspended(state.suspended) !== null) return false;
+    if (readHandoffMark(state.signals).topic_asked !== null) return false;
+    return procedureCatalogue(ctx.config.skills).some((item) => !item.skill.isFallback);
+  }
+
+  /**
+   * The player's answer to G16's question on the AI's previous turn (tm 303.2
+   * · AI-09-S1): whatever it says, a person now — the question was only for
+   * the right team, and the request stands.
+   */
+  #answerToTopic(state: TurnState, message: TurnMessage, ctx: TurnContext): TurnResult | null {
+    const asked = readHandoffMark(state.signals).topic_asked;
+    if (asked === null || asked !== turnsTaken(state) || ctx.config.skills.length === 0) {
+      return null;
+    }
+    return triggerHandoffTurn(state, message, {
+      reasons: ['player_request'],
+      detail: 'the player asked for a person and said what it is about — handed to a human',
+      decided: {},
+    });
+  }
+
+  /**
+   * The understanding's hand-over triggers (tm 303.2 · AI-09 §2), right after
+   * the call and before the decision order: a person asked for —
+   * `wants_human.explicit` or G16's words held from the input — and an upset
+   * player. Null when the turn goes on; an offer of a person (`ask_first`)
+   * waits for its end.
+   */
+  #understandTriggers(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    input: {
+      understanding: ProcedureUnderstanding;
+      active: ActiveProcedure | null;
+      suspended: SuspendedProcedure | null;
+      spent: SkillRunUsage;
+      record: UnderstoodRecord | undefined;
+      log: SkillRunLogEntry[];
+    },
+  ): TurnResult | null {
+    const watch = this.#watchOf(message);
+    const reading = readingOf(input.understanding);
+    const { verdict, mark, angry } = understandVerdict({
+      reading,
+      requested: watch.requested,
+      topicKnown:
+        input.active !== null || input.suspended !== null || reading.procedureKey !== null,
+      mark: readHandoffMark(state.signals),
+      triggers: handoffConfigOf(ctx).triggers,
+      offered: readNoAnswerMark(state.signals) !== null,
+    });
+    watch.reading = reading;
+    watch.mark = mark;
+    watch.angry = angry;
+    const decided: Partial<TurnDecisions> = {
+      usage: input.spent,
+      ...(input.record ? { understood: input.record } : {}),
+      log: input.log,
+    };
+    const language = languageVerdict(
+      message.text,
+      agentPersona(ctx.config.skills),
+      input.understanding.language,
+    );
+    const skill = input.active
+      ? { id: input.active.skillId, name: input.active.snapshot.skill_name }
+      : null;
+    const handOver = (reasons: HandoffReason[], detail: string): TurnResult =>
+      triggerHandoffTurn(state, message, {
+        reasons,
+        detail,
+        decided: {
+          ...decided,
+          ...(input.active ? { trace: [], procedureHash: input.active.hash } : {}),
+        },
+        skill,
+      });
+    switch (verdict.kind) {
+      case 'go_on':
+        watch.offer = verdict.offer;
+        return null;
+      case 'ask_topic':
+        if (language.unsupported) {
+          return handOver(
+            ['player_request', 'unsupported_language'],
+            'the player asked for a person, in a language this persona does not speak — handed to a human',
+          );
+        }
+        watch.mark = { ...mark, topic_asked: turnsTaken(state) + 1 };
+        return topicQuestionTurn(state, message, { answerIn: language.answerIn, decided });
+      case 'handoff':
+        return handOver(
+          [...verdict.reasons],
+          verdict.reasons.includes('player_request')
+            ? 'the player asked for a person — handed to a human'
+            : angry
+              ? 'the player is angry — handed to a human'
+              : `the player was upset ${mark.negative} turns in a row — handed to a human`,
+        );
+    }
+  }
+
+  /**
+   * The hand-over triggers' last word on the turn (tm 303.2 · AI-09,
+   * `settleHandoffTurn`), in the language the turn answered in — English
+   * for a language the persona does not speak — and G16's hit when its words
+   * waited for the understanding call.
+   */
+  #settleHandoff(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    watch: HandoffWatch,
+    result: TurnResult,
+  ): TurnResult {
+    const held = this.#held.get(message);
+    this.#held.delete(message);
+    if (!tookTurn(result)) return result;
+    const skill = ctx.config.skills.find((candidate) => candidate.id === result.decisions.skillId);
+    const language = languageVerdict(
+      message.text,
+      skill?.persona ?? agentPersona(ctx.config.skills),
+      result.decisions.understood?.language,
+    );
+    const settled = settleHandoffTurn({
+      state,
+      message,
+      result,
+      config: handoffConfigOf(ctx),
+      watch,
+      answerIn: language.unsupported ? 'en' : language.answerIn,
+      ...(ctx.handoffAvailable !== undefined ? { available: ctx.handoffAvailable } : {}),
+    });
+    if (!held) return settled;
+    const match = held.matches[0];
+    const record = mergeGuardrailRecords(settled.decisions.guardrails, {
+      catalog_version: (ctx.config.guardrails ?? NO_GUARDRAIL_CONFIG).catalogVersion,
+      hits: [
+        guardrailHit(
+          { source: 'platform', id: 'G16' },
+          'input',
+          settled.decisions.outcome === 'handed_off' ? 'handoff' : 'evidence',
+          match?.quote ?? null,
+          match?.pattern ?? null,
+        ),
+      ],
+      risk_flags: [],
+    });
+    return record
+      ? { ...settled, decisions: { ...settled.decisions, guardrails: record } }
+      : settled;
   }
 
   /** The turn's guardrails: the configuration, the input scan, the risk flags it starts with. */
@@ -679,7 +882,7 @@ export class ConversationEngine {
     if (ctx.config.skills.length === 0) return null;
     const abusive =
       guard.scan.abuse.length > 0 &&
-      readAbuseWarnings(state.signals) >= ABUSE_WARNINGS_BEFORE_HANDOFF;
+      readAbuseWarnings(state.signals) >= handoffConfigOf(ctx).triggers.abuse.warnings;
     const triggers = [
       ...guard.scan.triggered,
       ...(abusive
@@ -694,6 +897,11 @@ export class ConversationEngine {
         : []),
     ];
     if (triggers.length === 0) return null;
+    if (this.#holdsForTopic(state, ctx, triggers)) {
+      this.#watchOf(message).requested = true;
+      this.#held.set(message, triggers[0] as GuardrailTrigger);
+      return null;
+    }
     if (this.#defers(triggers, ctx)) {
       guard.deferred.push(...triggers);
       return null;
@@ -813,7 +1021,7 @@ export class ConversationEngine {
     let signals = out.nextState.signals;
     const abusedBefore = readAbuseWarnings(state.signals);
     const firstAbuse = guard.scan.abuse[0];
-    if (firstAbuse && abusedBefore < ABUSE_WARNINGS_BEFORE_HANDOFF) {
+    if (firstAbuse && abusedBefore < handoffConfigOf(ctx).triggers.abuse.warnings) {
       // G19 (AI-09 `abuse_warnings`): calm, no reply in kind — a warning in
       // front of the answer, counted; the hand-over comes when they are spent.
       hits.push(
@@ -1410,6 +1618,18 @@ export class ConversationEngine {
       });
     }
 
+    // AI-09 §1: the understanding's own hand-over triggers — a person asked
+    // for, an upset player — before any procedure or answer (tm 303.2).
+    const triggered = this.#understandTriggers(state, message, ctx, {
+      understanding,
+      active,
+      suspended,
+      spent: understood.spent,
+      record: understood.record,
+      log: understood.log,
+    });
+    if (triggered) return triggered;
+
     const thresholds = ctx.config.clarifyThresholds ?? DEFAULT_CLARIFY_THRESHOLDS;
     const decided = decide({
       understanding,
@@ -1867,8 +2087,12 @@ export class ConversationEngine {
       });
     }
 
+    // AI-09 `max_turns`: the workspace's limit over the procedure's own (tm 303.2).
+    const handoff = handoffConfigOf(ctx);
+    const own = run.snapshot.procedure;
+    const limit = effectiveMaxTurns(own.limits.max_turns, handoff.triggers);
     const result = runProcedureTurn({
-      procedure: run.snapshot.procedure,
+      procedure: limit === own.limits.max_turns ? own : { ...own, limits: { max_turns: limit } },
       at: run.at,
       slots: run.slots,
       procedureTurns: run.procedureTurns,
@@ -1887,6 +2111,33 @@ export class ConversationEngine {
     });
     log.push(...result.log);
 
+    // AI-09 `repeat_same_day` (AI-02): the same problem again today, after a
+    // person had it or it was left waiting. No diagnosis: only the
+    // procedure's questions are asked, and once it has none, a person (tm 303.2).
+    let parts = result.parts;
+    let repeatEnd: ProcedureEnd | null = null;
+    const repeat =
+      handoff.triggers.repeat_same_day.enabled && run.signals['repeat_same_day'] === true;
+    if (repeat && result.end.kind !== 'handoff') {
+      const questions = result.parts.filter((part) => part.kind === 'question');
+      if (result.end.kind === 'awaiting' && questions.length > 0) {
+        parts = questions;
+      } else {
+        parts = [];
+        repeatEnd = {
+          kind: 'handoff',
+          stepId: 'stepId' in result.end ? result.end.stepId : (run.at?.stepId ?? null),
+          reason: 'repeat_same_day',
+          target: own.handoff.target ?? null,
+        };
+        log.push({
+          step: 'procedure',
+          detail: 'the same problem again today — handed to a human (repeat_same_day)',
+          ok: true,
+        });
+      }
+    }
+
     // The message, in the order the steps produced it (AI-03 §5): texts as
     // they are, knowledge answers asked for, and every instruction written in
     // one call, in place of the first.
@@ -1899,7 +2150,7 @@ export class ConversationEngine {
     let capped: AiDailyCapError | null = null;
     let blocked: { reason: string } | null = null;
     let failedAt: string | null = null;
-    for (const part of result.parts) {
+    for (const part of parts) {
       if (failure || capped || blocked) break;
       switch (part.kind) {
         case 'template':
@@ -1988,7 +2239,7 @@ export class ConversationEngine {
     // the turn would have said is withdrawn and a person is sent — the steps'
     // own hand-over, when the procedure was ending in one anyway.
     const aborted = failure !== null || capped !== null;
-    let end: ProcedureEnd = result.end;
+    let end: ProcedureEnd = repeatEnd ?? result.end;
     if (aborted && end.kind !== 'handoff') {
       end = {
         kind: 'handoff',
@@ -2024,7 +2275,15 @@ export class ConversationEngine {
     }
 
     const sideEffects: TurnSideEffect[] = result.tags.map((tag) => ({ kind: 'tag', tag }));
-    if (end.kind === 'handoff') sideEffects.push(handoffEffect(end));
+    if (end.kind === 'handoff') {
+      const effect = handoffEffect(end);
+      // A repeat contact's hand-over says so whoever ended it (AI-12 §3: `high`).
+      sideEffects.push(
+        repeat && effect.kind === 'handoff'
+          ? { ...effect, reasons: [catalogueReason(end.reason), 'repeat_same_day'] }
+          : effect,
+      );
+    }
     const handedOff = end.kind === 'handoff';
     const executed = withRecall(
       {
@@ -2929,13 +3188,15 @@ export class ConversationEngine {
     const { answerIn } = languageVerdict(message.text, agentPersona(ctx.config.skills), null);
     const phrases = NO_ANSWER_PHRASES[answerIn ?? 'tr'];
     const yes = said === 'yes';
+    // A hand-over trigger's offer (`ask_first`, tm 303.2) hands over for its reason.
+    const reason = mark.reason ?? 'no_knowledge';
     return {
       reply: yes ? phrases.handingOver : phrases.declined,
       decisions: {
         ...NOTHING_DECIDED,
         outcome: yes ? 'handed_off' : 'answered',
         replyKind: 'answer',
-        handoffReason: yes ? 'no_knowledge' : null,
+        handoffReason: yes ? reason : null,
         log: [
           {
             step: 'no_answer',
@@ -2946,7 +3207,7 @@ export class ConversationEngine {
           },
         ],
       },
-      sideEffects: yes ? [{ kind: 'handoff', team: null, reason: 'no_knowledge' }] : [],
+      sideEffects: yes ? [{ kind: 'handoff', team: null, reason }] : [],
       nextState: {
         ...state,
         counters: { ...state.counters, turns: turnsTaken(state) + 1 },
@@ -2994,6 +3255,11 @@ export class ConversationEngine {
       decided: {},
     });
   }
+}
+
+/** The turn agent's hand-over settings (tm 303.2) — the defaults when it has none. */
+function handoffConfigOf(ctx: TurnContext): HandoffConfig {
+  return ctx.config.handoff ?? DEFAULT_HANDOFF_CONFIG;
 }
 
 /** The procedure's gates; all of them must match. */

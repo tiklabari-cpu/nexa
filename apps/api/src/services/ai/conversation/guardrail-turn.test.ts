@@ -18,6 +18,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_HANDOFF_MESSAGES,
   PLATFORM_GUARDRAILS_VERSION,
   platformGuardrail,
   readPersona,
@@ -259,11 +260,13 @@ describe('the input scan hands over before any model is asked (AI-08 §1–§3)'
         topic: 'responsible_gaming',
         reason: 'guardrail_rg',
         priority: 'urgent',
+        reasons: ['guardrail_rg'],
       },
     ]);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',
       handoffReason: 'guardrail_rg',
+      handoffReasons: ['guardrail_rg'],
     });
     expect(result.nextState.signals).toEqual({ risk_flags: ['self_exclusion_request'] });
     expect(result.decisions.guardrails).toEqual({
@@ -382,7 +385,13 @@ describe('the input scan hands over before any model is asked (AI-08 §1–§3)'
     );
     expect(result.reply).toBe(HANDING_OVER);
     expect(result.sideEffects).toEqual([
-      { kind: 'handoff', team: null, reason: 'player_request', priority: 'normal' },
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'player_request',
+        priority: 'normal',
+        reasons: ['player_request'],
+      },
     ]);
   });
 
@@ -616,7 +625,13 @@ describe('the output check, the one rewrite, the safe text (AI-08 §6, §8)', ()
     expect(llm.requests).toEqual([]);
     expect(result.reply).toBe(SAFE);
     expect(result.sideEffects).toEqual([
-      { kind: 'handoff', team: null, reason: 'guardrail_output_block' },
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'guardrail_output_block',
+        reasons: ['guardrail_output_block'],
+        priority: 'normal',
+      },
     ]);
     expect(hitsOf(result)).toEqual(['G8/output/safe_text']);
   });
@@ -776,7 +791,8 @@ describe('the judge (AI-08 §7, AI-08-S3)', () => {
       { text: 'param yatmadı' },
       context([saying('yatirim', 'param yatmadı', 'Durumu açıkla.')], { guardrails: judging() }),
     );
-    expect(result.reply).toBeNull();
+    // No draft — the fixed sentence of a hand-over the AI could not avoid (tm 303.2 · AI-09).
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.ai_failure.tr);
     expect(result.decisions.failure).toMatchObject({ provider: 'llm', kind: 'no_answer' });
     expect(result.sideEffects).toContainEqual(expect.objectContaining({ kind: 'handoff' }));
   });
@@ -908,6 +924,7 @@ describe('the stored risk flags on every turn (tm 302.2 · AI-27 §3)', () => {
         topic: 'responsible_gaming',
         reason: 'risk_flag',
         priority: 'urgent',
+        reasons: ['risk_flag'],
       },
     ]);
     expect(result.decisions).toMatchObject({ outcome: 'handed_off', handoffReason: 'risk_flag' });

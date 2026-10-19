@@ -27,6 +27,7 @@ import type {
   AiNoAnswerSettings,
   GuardrailPriority,
   ClarifyThresholds,
+  HandoffReason,
   DailyMemorySettings,
   Persona,
   PersonaStyle,
@@ -42,6 +43,7 @@ import type { LlmMessage } from '../provider/llm-provider.js';
 import type { EarlierToday } from './daily-memory.js';
 import type { GuardrailConfig } from './guardrails/config.js';
 import type { GuardrailRecord } from './guardrails/record.js';
+import type { HandoffConfig } from './handoff/triggers.js';
 import type { GuidanceRecord, GuidanceRuleConfig } from './guidance.js';
 import type { KnowledgeRecord, UnansweredRecord } from './knowledge-answer.js';
 import type { PolicyRecord } from './policy.js';
@@ -273,6 +275,11 @@ export interface TurnConfig {
    * phrases. Absent: none — the platform's locked G1–G19 apply all the same.
    */
   readonly guardrails?: GuardrailConfig;
+  /**
+   * The turn agent's hand-over triggers, messages and after-hours text (tm
+   * 303.2 · AI-09, `ai_handoff_settings`). Absent: `DEFAULT_HANDOFF_CONFIG`.
+   */
+  readonly handoff?: HandoffConfig;
 }
 
 export interface TurnContext {
@@ -322,6 +329,12 @@ export interface TurnContext {
    * the risk-flagged guardrails (G4) apply. Absent: no flag.
    */
   readonly risk?: RiskPolicy;
+  /**
+   * Whether anyone in the workspace is accepting chats now, read live with the
+   * turn (tm 303.2 · AI-12 §4): false and a hand-over says the after-hours
+   * text after its message. Absent: not known — nothing is said of it.
+   */
+  readonly handoffAvailable?: boolean;
 }
 
 /**
@@ -412,6 +425,12 @@ export interface TurnDecisions {
    * Absent for the single-message skills, whose reason the record derives.
    */
   handoffReason?: string | null;
+  /**
+   * Every reason the turn hands over for, as catalogue codes, most severe
+   * first — the first is the primary reason (tm 303.2 · AI-09 §3). Set on
+   * every hand-over at the end of the turn (`settleHandoffTurn`).
+   */
+  handoffReasons?: HandoffReason[];
   /** A procedure turn's step decisions (ID-08: step_id, type, cond_result, detail). */
   trace?: StepDecision[];
   /**
@@ -490,6 +509,11 @@ export type TurnSideEffect =
        * a self-exclusion. Carried for the routing that reads it (#307).
        */
       readonly priority?: GuardrailPriority;
+      /**
+       * Every reason, as catalogue codes, most severe first (tm 303.2 · AI-09
+       * §3) — the transfer event and the card (AI-10) carry them.
+       */
+      readonly reasons?: readonly HandoffReason[];
     };
 
 export interface TurnResult {

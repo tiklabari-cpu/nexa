@@ -21,6 +21,9 @@
  *     lets another topic take over.
  *   - **a yes/no** — the boolean reader's, for "Önceki konuya dönelim mi?".
  *   - **the language** — `detectLanguage`, the persona check's rule (AI-05 §7).
+ *   - **the mood** — angry or negative only on a few words no request is made
+ *     of ({@link mockSentiment}): what lets a suite drive AI-09's
+ *     `negative_sentiment` (tm 303.2); neutral otherwise.
  *   - **everything else** — the least committal reading: no wish for a person,
  *     neutral, no abuse, no risk, no `ai` answer (unknown, which the condition
  *     evaluator counts as false). A stub that raised flags would make
@@ -29,9 +32,21 @@
  */
 import { matchIntent } from '@siyahtus/ai-mock';
 import { detectLanguage, type SlotDef } from '@siyahtus/types';
-import { parseBooleanTr } from './slots/normalize-tr.js';
+import { foldTr, parseBooleanTr } from './slots/normalize-tr.js';
 import { readSlot, type SlotReadContext } from './slots/validators.js';
 import { UNDERSTAND_RISKS, type UnderstandGrounding, type UnderstandReply } from './understand.js';
+
+/** Words that are an upset player and nothing else, folded (`foldTr`). */
+const ANGRY = /\b(rezalet|sacmalik|berbat|ridiculous|outrageous|furious)\b/;
+const NEGATIVE = /\b(hayal kirikligi|cok kotu|mutsuzum|disappointed|unhappy)\b/;
+
+/** The stub's mood: angry or negative on {@link ANGRY} / {@link NEGATIVE}, neutral otherwise. */
+export function mockSentiment(text: string): UnderstandReply['sentiment'] {
+  const folded = foldTr(text);
+  if (ANGRY.test(folded)) return 'angry';
+  if (NEGATIVE.test(folded)) return 'negative';
+  return 'neutral';
+}
 
 export function mockUnderstanding(grounding: UnderstandGrounding): UnderstandReply {
   const text = grounding.message;
@@ -97,7 +112,7 @@ export function mockUnderstanding(grounding: UnderstandGrounding): UnderstandRep
     extracted,
     correction: false,
     ai_conditions: [],
-    sentiment: 'neutral',
+    sentiment: mockSentiment(text),
     abuse: false,
     risk: Object.fromEntries(
       UNDERSTAND_RISKS.map((risk) => [risk, { flag: false, evidence_quote: null }]),

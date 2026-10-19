@@ -18,6 +18,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
+import { DEFAULT_HANDOFF_MESSAGES } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTenant } from '../../src/lib/tenant.js';
 import { openConversation } from '../../src/services/ai/conversation/state-store.js';
@@ -194,7 +195,10 @@ describe('the live turn adapter (AI-01 · AI-19)', () => {
 
     const sent = await send(headers, 'I need help');
 
-    expect(await botEvents(sent.chat_id)).toEqual([]);
+    // Nothing of the skill's — the hand-over's own sentence (tm 303.2 · AI-09).
+    expect((await botEvents(sent.chat_id)).map((event) => event.text)).toEqual([
+      DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr,
+    ]);
     expect(await conversations()).toEqual([
       expect.objectContaining({ counters: { turns: 1 }, version: 1 }),
     ]);

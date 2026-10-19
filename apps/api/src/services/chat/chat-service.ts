@@ -379,6 +379,13 @@ export interface ChatAiModeResult {
  */
 export interface HandOverOptions {
   alongside?: (tx: TenantClient) => Promise<void>;
+  /**
+   * What the AI's hand-over adds to the system events it writes — the transfer
+   * line and the AI-mode line (tm 303.2 · AI-09 §6): `handoff_id`,
+   * `reason_codes`, `primary_reason`, `priority`, for the reports and the
+   * search. Never the event's own keys: those are written after.
+   */
+  properties?: Record<string, unknown>;
 }
 
 export class ChatService {
@@ -3005,6 +3012,7 @@ export class ChatService {
           text: 'Chat transferred',
           recipients: 'all',
           properties: {
+            ...options.properties,
             system_event: 'chat_transferred',
             reason: target.reason,
             ...(target.groupId !== undefined
@@ -3016,13 +3024,21 @@ export class ChatService {
 
       // A transferred chat is a person's: the AI stays silent on it (AI-11),
       // the AI's own hand-over included.
-      const mode = await this.#changeAiMode(tx, tenant, chat, thread.id, actorOf(principal), {
-        to: 'human',
-        reason:
-          target.reason === 'ai_handoff' || target.reason === 'bot_handoff'
-            ? target.reason
-            : 'transfer',
-      });
+      const mode = await this.#changeAiMode(
+        tx,
+        tenant,
+        chat,
+        thread.id,
+        actorOf(principal),
+        {
+          to: 'human',
+          reason:
+            target.reason === 'ai_handoff' || target.reason === 'bot_handoff'
+              ? target.reason
+              : 'transfer',
+        },
+        options.properties ? { properties: options.properties } : {},
+      );
 
       // In the transfer's transaction: a transfer refused rolls it back too.
       await options.alongside?.(tx);
@@ -3616,10 +3632,15 @@ export class ChatService {
       if (!chat?.active || !thread?.active) return null;
 
       await tx.$queryRaw`SELECT 1 FROM threads WHERE id = ${thread.id} FOR UPDATE`;
-      const mode = await this.#changeAiMode(tx, tenant, chat, thread.id, AI_MODE_SYSTEM_ACTOR, {
-        to: 'human',
-        reason,
-      });
+      const mode = await this.#changeAiMode(
+        tx,
+        tenant,
+        chat,
+        thread.id,
+        AI_MODE_SYSTEM_ACTOR,
+        { to: 'human', reason },
+        options.properties ? { properties: options.properties } : {},
+      );
       if (!mode?.note) return mode;
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: chat.id },

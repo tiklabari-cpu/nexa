@@ -266,6 +266,9 @@ export function skillDecision(
         // The catalogue version the turn ran under and its hits (tm 301.3 ·
         // AI-08 §9) — rule keys and actions, no evidence.
         ...(guardrails ? { guardrails: guardrailDetails(guardrails) } : {}),
+        // Every reason the turn handed over for, most severe first (tm 303.2 ·
+        // AI-09 §3) — catalogue codes; `handoff_reason` keeps the turn's own.
+        ...(decisions.handoffReasons ? { reason_codes: decisions.handoffReasons } : {}),
       },
       turn,
     ),

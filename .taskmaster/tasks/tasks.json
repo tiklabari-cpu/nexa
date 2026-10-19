@@ -13021,7 +13021,7 @@
           "301"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T17:49:20.106Z",
+        "updatedAt": "2026-10-19T19:42:15.482Z",
         "subtasks": [
           {
             "id": 1,
@@ -13041,13 +13041,13 @@
             "description": "triggers.ts + handoffService.execute (kart → mod → hedef) + transfer olayı özellikleri + ai_failure sabit metni",
             "details": "Üst görev 303 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Tetikleyici entegrasyonları.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "303.1"
             ],
             "parentId": "303",
             "priority": "high",
-            "updatedAt": "2026-10-19T17:49:20.106Z"
+            "updatedAt": "2026-10-19T19:42:15.482Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T17:49:20.106Z",
+      "lastModified": "2026-10-19T19:42:15.483Z",
       "taskCount": 390,
       "completedCount": 301,
       "tags": [

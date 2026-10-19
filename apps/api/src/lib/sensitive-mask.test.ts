@@ -3,7 +3,13 @@ import { type SensitivePolicy, type SensitiveType } from '@siyahtus/types';
 import { describe, expect, it } from 'vitest';
 import { BIP39_ENGLISH } from './bip39-english.js';
 import { maskCardNumbers } from './cc-mask.js';
-import { SECRET_MASK, maskSensitive } from './sensitive-mask.js';
+import {
+  SECRET_MASK,
+  maskDeep,
+  maskForWrite,
+  maskSensitive,
+  sensitiveAuthorOf,
+} from './sensitive-mask.js';
 
 /**
  * tm 300.1 · AI-26 — the sensitive-data masker on its own: what is masked, what
@@ -94,6 +100,26 @@ describe('card (FR-MOD-08.9.5)', () => {
     const txid = 'ab4111111111111111cdefcdefcdefcdefcdefcdefcdefcdefcdefcdefcdefcd';
     expect(txid).toHaveLength(64);
     expectUntouched(`TXID ${txid}`);
+  });
+
+  it('leaves a number its label names as a reference, even beside a code keyword (tm 300.2)', () => {
+    expectUntouched('SMS order 680112: where is my bike?');
+    expectUntouched('SMS ile sipariş no 482913 geldi mi?');
+    expectUntouched('Kod sordular, fatura #204155 için');
+    // The word right before the number decides: these are still codes.
+    expect(types(customer('SMS kodu 482913'))).toEqual(['otp']);
+    expect(types(customer('sipariş için SMS kodu: 482913'))).toEqual(['otp']);
+  });
+
+  it('leaves a UUID whole, though its last groups pass Luhn (tm 300.2)', () => {
+    // `8000-000000000011` is sixteen Luhn-valid digits; the GL-5 window used to
+    // carve it out of the id — harmless in a message, fatal to an id in a prompt.
+    const id = '00000000-0000-4000-8000-000000000011';
+    expectUntouched(`skill ${id}`);
+    expectUntouched(`doğrulama kodu ${id}`);
+    expect(customer(`kart 4111 1111 1111 1111 skill ${id}`).text).toBe(
+      `kart **** **** **** 1111 skill ${id}`,
+    );
   });
 });
 
@@ -409,6 +435,7 @@ describe('maskSensitive — linear on adversarial input', () => {
     'iban-like': fill('TR33 0006 '),
     'wif prefix': `5${fill('H').slice(1)}`,
     'banking keywords': fill('müşteri no 12345 '),
+    'uuid-like groups': fill('00000000-0000-4000-8000-'),
     noise: noise(),
   };
 
@@ -421,4 +448,55 @@ describe('maskSensitive — linear on adversarial input', () => {
       expect(elapsed).toBeLessThan(5000);
     });
   }
+});
+
+describe('what the write paths see (tm 300.2)', () => {
+  it('returns the masked text and the types once each, in catalogue order', () => {
+    expect(
+      maskForWrite('SMS kodu 482913, şifrem Ali1234! kart 4111 1111 1111 1111', 'customer'),
+    ).toEqual({
+      text: `SMS kodu ${SECRET_MASK}, şifrem ${SECRET_MASK} kart **** **** **** 1111`,
+      types: ['card', 'otp', 'password'],
+    });
+  });
+
+  it('passes an absent value or a clean text through untouched', () => {
+    expect(maskForWrite(undefined, 'customer')).toEqual({ text: undefined, types: [] });
+    expect(maskForWrite(null, 'agent')).toEqual({ text: null, types: [] });
+    expect(maskForWrite('param yatmadı', 'customer')).toEqual({
+      text: 'param yatmadı',
+      types: [],
+    });
+  });
+
+  it("keeps an agent's IBAN whole and masks the player's (AI-26-S2)", () => {
+    const iban = 'TR33 0006 1005 1978 6457 8413 26';
+    expect(maskForWrite(`IBAN: ${iban}`, 'agent').text).toBe(`IBAN: ${iban}`);
+    expect(maskForWrite(`IBAN: ${iban}`, 'customer').types).toEqual(['iban']);
+  });
+
+  it('maps an author type to its policy, and the system to none', () => {
+    expect(sensitiveAuthorOf('customer')).toBe('customer');
+    expect(sensitiveAuthorOf('agent')).toBe('agent');
+    expect(sensitiveAuthorOf('bot')).toBe('bot');
+    expect(sensitiveAuthorOf('system')).toBeNull();
+  });
+
+  it('masks every string in a JSON value, keys and non-strings untouched', () => {
+    const when = new Date(0);
+    expect(
+      maskDeep(
+        {
+          'şifrem 123abc!': 'şifrem 123abc!',
+          slots: { otp: 'SMS kodu 482913', amount: 2500, ok: true, at: when },
+          list: ['kart 4111 1111 1111 1111', null],
+        },
+        'customer',
+      ),
+    ).toEqual({
+      'şifrem 123abc!': `şifrem ${SECRET_MASK}`,
+      slots: { otp: `SMS kodu ${SECRET_MASK}`, amount: 2500, ok: true, at: when },
+      list: ['kart **** **** **** 1111', null],
+    });
+  });
 });

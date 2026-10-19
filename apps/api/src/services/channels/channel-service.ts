@@ -36,7 +36,7 @@ import {
   decryptCredential,
   encryptCredential,
 } from '../../lib/credential-cipher.js';
-import { maskCardNumbers } from '../../lib/cc-mask.js';
+import { maskForWrite } from '../../lib/sensitive-mask.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { AuditContext } from '../audit/audit-log.js';
 import type { ChatService } from '../chat/chat-service.js';
@@ -488,8 +488,10 @@ export class ChannelService {
     // Mask before anything reads the text, so the masked value is what the spam
     // classifier sees, what the event stores, what realtime pushes and what the
     // message log keeps — the order `routes/customer.ts` and `email-inbound.ts`
-    // both use, and the reason no raw PAN is ever handed to the classifier.
-    const maskedText = maskCardNumbers(normalized.text);
+    // both use, and the reason no raw secret is ever handed to the classifier.
+    // Every sensitive type a player can type (AI-26 · tm 300.2), not only a card.
+    const masked = maskForWrite(normalized.text, 'customer');
+    const maskedText = masked.text;
 
     // Looked up, not created: the spam gate below must be able to refuse without
     // leaving a trace, and `resolveCustomer` would already have written a
@@ -537,7 +539,12 @@ export class ChannelService {
     // workspace set a timeout, the idle sweep's rule (`rolloverIdleSeconds`).
     const { chat } = await chats.openOrContinueConnection(tenant, principal, {
       customerId,
-      event: { type: 'message', text: maskedText, recipients: 'all' },
+      event: {
+        type: 'message',
+        text: maskedText,
+        recipients: 'all',
+        ...(masked.types.length > 0 ? { sensitiveTypes: masked.types } : {}),
+      },
       audit: audit(tenant, customerId),
     });
     const chatId = chat.id;

@@ -5,10 +5,12 @@ import {
   SENSITIVE_WARNING_LANGUAGES,
   SENSITIVE_WARNING_TEXTS,
   isSensitiveType,
+  readSensitiveTypes,
   sensitiveWarningText,
   sensitiveWarningTypes,
   sharesAccountSecret,
 } from './sensitive-data.js';
+import { WIDGET_UI_LOCALES } from './widget.js';
 
 describe('DEFAULT_SENSITIVE_POLICY (AI-26-S2)', () => {
   it('masks every type in a player message', () => {
@@ -42,12 +44,30 @@ describe('warning and AI-context helpers', () => {
     expect(isSensitiveType('phone')).toBe(false);
     expect(isSensitiveType(null)).toBe(false);
   });
+
+  it('reads the masked types off event properties, catalogue order, unknowns dropped', () => {
+    expect(readSensitiveTypes({ sensitive_types: ['otp', 'card', 'phone', 'otp'] })).toEqual([
+      'card',
+      'otp',
+    ]);
+    expect(readSensitiveTypes({ sensitive_types: 'otp' })).toEqual([]);
+    expect(readSensitiveTypes({})).toEqual([]);
+    expect(readSensitiveTypes(null)).toEqual([]);
+  });
 });
 
 describe('sensitiveWarningText', () => {
   it('has a text for every warning language', () => {
     for (const language of SENSITIVE_WARNING_LANGUAGES) {
       expect(SENSITIVE_WARNING_TEXTS[language].length).toBeGreaterThan(40);
+    }
+  });
+
+  it('covers every language the widget ships in (tm 300.2)', () => {
+    for (const locale of WIDGET_UI_LOCALES) {
+      expect(sensitiveWarningText(locale)).toBe(
+        SENSITIVE_WARNING_TEXTS[locale as keyof typeof SENSITIVE_WARNING_TEXTS],
+      );
     }
   });
 

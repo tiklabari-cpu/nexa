@@ -96,6 +96,7 @@ import { awaitBatchWindow } from './conversation/batch-window.js';
 import {
   DEFAULT_HISTORY_BUDGET,
   loadConnectionContext,
+  SENSITIVE_SHARED_RISK_FLAG,
   newestVisitorEvent,
   type ConnectionContext,
   type HistoryBudget,
@@ -130,6 +131,7 @@ import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.j
 import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
 import { ApiError } from '../../lib/api-error.js';
+import { maskDeep } from '../../lib/sensitive-mask.js';
 
 /** How many drafts one turn may write: the first, and one after the visitor wrote again. */
 const DRAFTS_PER_TURN = 2;
@@ -285,6 +287,8 @@ export class AiResponder {
     /** The visitor's messages the turn answers, and the drafts it wrote. */
     let gathered = 1;
     let drafts = 0;
+    /** The messages answered gave away a password or a code (AI-26 §5) — on the record. */
+    let sensitiveShared = false;
     try {
       for (;;) {
         drafts += 1;
@@ -318,6 +322,7 @@ export class AiResponder {
         }
         read = loaded.conversation;
         gathered = loaded.context?.freshMessages || 1;
+        sensitiveShared = loaded.context?.sensitiveShared ?? false;
         const history = historyOf(loaded.context);
         result = await this.#engine.runTurn(
           loaded.state,
@@ -515,6 +520,9 @@ export class AiResponder {
           // The configuration the turn ran on (ADR-14b §2.7) — null until tm 316.
           configVersionId: read?.configVersionId ?? null,
           ...(applyFailed ? { errorType: decided.errorType ?? 'apply_failed' } : {}),
+          ...(sensitiveShared
+            ? { riskFlags: [...(decided.riskFlags ?? []), SENSITIVE_SHARED_RISK_FLAG] }
+            : {}),
           details: {
             ...decided.details,
             // A turn that answered several messages at once, or wrote a second
@@ -590,7 +598,8 @@ export class AiResponder {
             threadId: ref.threadId,
             licenseId: tenant.licenseId,
             status: run.status,
-            log: run.log as unknown as object,
+            // What a step did, in words that may quote the player (AI-26 · tm 300.2).
+            log: maskDeep(run.log, 'customer') as unknown as object,
             llmInputTokens: run.llmInputTokens,
             llmOutputTokens: run.llmOutputTokens,
             embeddingTokens: run.embeddingTokens,

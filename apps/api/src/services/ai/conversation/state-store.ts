@@ -36,6 +36,7 @@ import type {
   AiConversationOutcome,
   AiConversationStepStatus,
 } from '@siyahtus/types';
+import { maskDeep } from '../../../lib/sensitive-mask.js';
 import { type TenantClient, UUID_RE } from '../../../lib/tenant.js';
 
 /**
@@ -111,6 +112,14 @@ export type AiConversationPatchField = (typeof AI_CONVERSATION_PATCH_FIELDS)[num
 export type AiConversationPatch = Partial<Pick<AiConversationState, AiConversationPatchField>>;
 
 const PATCH_FIELDS: ReadonlySet<string> = new Set(AI_CONVERSATION_PATCH_FIELDS);
+
+/**
+ * The columns that hold what the player said, reworded (AI-26 · tm 300.2):
+ * the slots collected from their messages, a suspended topic's slots and the
+ * connection's digest. Written from masked text already; masked again here so
+ * a value a model reconstructed still comes to rest masked.
+ */
+const PLAYER_JSON_FIELDS: ReadonlySet<string> = new Set(['slots', 'suspended', 'digest']);
 
 /** The nullable JSON columns: a null there is SQL NULL, not JSON `null`. */
 const NULLABLE_JSON_FIELDS: ReadonlySet<string> = new Set([
@@ -213,7 +222,12 @@ function toUpdateData(patch: AiConversationPatch): Prisma.AiConversationUpdateMa
       throw new TypeError(`ai conversation field ${key} is not writable`);
     }
     if (value === undefined) continue;
-    data[key] = value === null && NULLABLE_JSON_FIELDS.has(key) ? Prisma.DbNull : value;
+    data[key] =
+      value === null && NULLABLE_JSON_FIELDS.has(key)
+        ? Prisma.DbNull
+        : PLAYER_JSON_FIELDS.has(key)
+          ? maskDeep(value, 'customer')
+          : value;
   }
   if (Object.keys(data).length === 0) throw new TypeError('ai conversation patch is empty');
   return data as Prisma.AiConversationUpdateManyMutationInput;

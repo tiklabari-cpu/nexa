@@ -26,19 +26,20 @@
  *     another licence's chat (RLS makes it invisible) is a 404, never a 403 —
  *     short ids must not become an enumeration oracle (NFR-S5).
  *
- *   - PII on the way out. Card masking happens at write time (`cc-mask.ts`), so
- *     a PAN typed into a conversation is already masked in `events.text`. But a
- *     tool that dumps transcript-derived text to an LLM client is a place a raw
- *     PAN would be unrecoverable if it ever reached the database by some other
- *     path, so the summary is passed through `maskCardNumbers` before it leaves
- *     — defence in depth, the boundary the KK ("PII/CC-mask sınırı") pins.
+ *   - PII on the way out. Sensitive values are masked at write time
+ *     (`sensitive-mask.ts`, AI-26), so a PAN or a password typed into a
+ *     conversation is already masked in `events.text`. But a tool that dumps
+ *     transcript-derived text to an LLM client is a place a raw secret would be
+ *     unrecoverable if it ever reached the database by some other path, so the
+ *     summary is masked again before it leaves — defence in depth, the boundary
+ *     the KK ("PII/CC-mask sınırı") pins.
  *
  * The tenant boundary itself is not this executor's to set: `ctx.tx` already
  * carries the caller's tenant context (RLS), the same as every other MCP tool.
  */
 import { summariseConversation } from '@siyahtus/ai-mock';
 import { ApiError } from '../../../lib/api-error.js';
-import { maskCardNumbers } from '../../../lib/cc-mask.js';
+import { maskForWrite } from '../../../lib/sensitive-mask.js';
 import { readConversationTurns } from '../../ai/copilot-service.js';
 import { chatVisibilityFilter, resolveVisibility } from '../../chat/access.js';
 import type { SummarizeChatArgs } from '../tool-catalog.js';
@@ -64,6 +65,6 @@ export const runSummarizeChat: McpToolExecutor = async (ctx, args) => {
   const turns = await readConversationTurns(ctx.tx, chat_id);
   const summary = summariseConversation(turns);
 
-  // Re-mask on the read path — a raw PAN must never leave through a tool result.
-  return { summary: maskCardNumbers(summary) };
+  // Re-mask on the read path — a raw secret must never leave through a tool result.
+  return { summary: maskForWrite(summary, 'bot').text };
 };

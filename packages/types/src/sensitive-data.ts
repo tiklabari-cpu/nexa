@@ -96,8 +96,46 @@ export function sharesAccountSecret(detected: Iterable<SensitiveType>): boolean 
   return false;
 }
 
+/**
+ * The event property naming what the server masked in an event's text, in
+ * catalogue order (tm 300.2) — the transcript's "Sensitive data hidden (OTP)"
+ * badge reads it. The server owns it: a caller-supplied value is stripped on
+ * send, so a client cannot badge a message it wrote.
+ */
+export const SENSITIVE_TYPES_PROPERTY = 'sensitive_types';
+
+/**
+ * `properties.system_event` of the warning the player is shown (AI-26 §4): one
+ * per chat per warned type, in the player's language, addressed to `all`. Its
+ * `sensitive_types` are the types this warning is the first for.
+ */
+export const SENSITIVE_WARNING_SYSTEM_EVENT = 'sensitive_data_warning';
+
+/** The masked types an event's `properties` name, or none — unknown values dropped. */
+export function readSensitiveTypes(
+  properties: Readonly<Record<string, unknown>> | null | undefined,
+): SensitiveType[] {
+  const value = properties?.[SENSITIVE_TYPES_PROPERTY];
+  if (!Array.isArray(value)) return [];
+  const seen = new Set(value.filter(isSensitiveType));
+  return SENSITIVE_TYPES.filter((type) => seen.has(type));
+}
+
 /** The languages the warning is written in. */
-export const SENSITIVE_WARNING_LANGUAGES = ['tr', 'en', 'ru', 'az', 'de', 'fr', 'es'] as const;
+export const SENSITIVE_WARNING_LANGUAGES = [
+  'tr',
+  'en',
+  'ru',
+  'az',
+  'de',
+  'fr',
+  'es',
+  // The rest of the widget's languages (WG-02), so no widget visitor is warned
+  // in a language they did not choose (tm 300.2).
+  'it',
+  'pt',
+  'ar',
+] as const;
 export type SensitiveWarningLanguage = (typeof SENSITIVE_WARNING_LANGUAGES)[number];
 
 /**
@@ -114,6 +152,9 @@ export const SENSITIVE_WARNING_TEXTS: Readonly<Record<SensitiveWarningLanguage, 
     de: 'Teilen Sie zu Ihrer Sicherheit keine Passwörter, SMS-Codes oder Kartendaten. Wir haben diese Angaben in Ihrer Nachricht ausgeblendet.',
     fr: 'Pour votre sécurité, ne partagez pas vos mots de passe, codes SMS ou données de carte. Nous avons masqué ces informations dans votre message.',
     es: 'Por su seguridad, no comparta contraseñas, códigos SMS ni datos de tarjeta. Hemos ocultado esta información en su mensaje.',
+    it: 'Per la tua sicurezza, non condividere password, codici SMS o dati della carta. Abbiamo nascosto queste informazioni nel tuo messaggio.',
+    pt: 'Para sua segurança, não compartilhe senhas, códigos SMS ou dados do cartão. Ocultamos essas informações na sua mensagem.',
+    ar: 'حفاظًا على أمانك، لا تشارك كلمات المرور أو رموز الرسائل القصيرة أو بيانات البطاقة. لقد أخفينا هذه المعلومات في رسالتك.',
   });
 
 /**

@@ -16,6 +16,7 @@ import {
   PRECHAT_FIELD_KEYS,
   prechatAsksAnything,
   readEditedAt,
+  SENSITIVE_WARNING_SYSTEM_EVENT,
   type PrechatConfig,
   type PrechatFieldKey,
   type WidgetFormField,
@@ -3288,7 +3289,13 @@ function renderBubble(
 
   if (event.type === 'system_message') {
     const notice = doc.createElement('p');
-    notice.className = 'nx-system';
+    // The sensitive-data warning (tm 300.2 · AI-26 §4) is a sentence the
+    // visitor has to read, not a "Chat transferred" pill: it is set as a
+    // note, in the text colour.
+    notice.className =
+      event.properties?.['system_event'] === SENSITIVE_WARNING_SYSTEM_EVENT
+        ? 'nx-system nx-system--warning'
+        : 'nx-system';
     notice.textContent = event.text ?? '';
     row.append(notice);
     return row;
@@ -4290,6 +4297,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .nx-system {
   margin: 0; padding: 5px 12px; border-radius: 999px; background: var(--nx-pill);
   font-size: 12px; font-weight: 600; color: var(--nx-muted); text-align: center;
+}
+.nx-system--warning {
+  border-radius: 12px; border: 1px solid var(--nx-border); color: var(--nx-text);
+  font-weight: 500; text-align: start; line-height: 18px;
 }
 .nx-time { font-size: 12px; font-weight: 500; color: var(--nx-muted); }
 .nx-meta { display: flex; align-items: center; gap: 6px; }

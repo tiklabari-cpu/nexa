@@ -28,6 +28,12 @@ import {
   isEditableEventType,
   isWithinEditWindow,
   MESSAGE_EDIT_WINDOW_SECONDS,
+  readSensitiveTypes,
+  SENSITIVE_TYPES,
+  SENSITIVE_TYPES_PROPERTY,
+  SENSITIVE_WARNING_SYSTEM_EVENT,
+  sensitiveWarningText,
+  sensitiveWarningTypes,
   SNEAK_PEEK_MAX_LENGTH,
   stripEditMarkers,
   type AdapterChannelType,
@@ -40,9 +46,11 @@ import {
   type EventRecipients,
   type EventType,
   type QueueEntryOutcome,
+  type SensitiveType,
   type TransferReason,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
+import { maskForWrite, sensitiveAuthorOf, type MaskedForWrite } from '../../lib/sensitive-mask.js';
 import { visitedPagesOf } from '../campaigns/campaign-matching.js';
 import {
   createGoalConversionRecorder,
@@ -131,6 +139,14 @@ export interface NewEventInput {
   attachmentUrl?: string;
   properties?: Record<string, unknown>;
   idempotencyKey?: string;
+  /**
+   * What the caller already masked out of `text` (tm 300.2 · AI-26): a write
+   * path masks the moment a message arrives — before its spam filter and the
+   * AI see it — and hands the types on, since the masked text no longer
+   * shows them. Stored as `properties.sensitive_types`, merged with whatever
+   * the append's own pass still finds.
+   */
+  sensitiveTypes?: readonly SensitiveType[];
 }
 
 interface RedisLike {
@@ -233,6 +249,8 @@ type ConnectionOutcome =
       chat: ChatRow;
       event: SerialisedEvent;
       recipients: EventRecipients;
+      /** The sensitive-data warning the message earned the player (AI-26 §4), if any. */
+      warning: SerialisedEvent | null;
     }
   | {
       kind: 'opened';
@@ -244,6 +262,7 @@ type ConnectionOutcome =
       event: SerialisedEvent;
       /** Yesterday's silent connection, closed under the member on the way in. */
       rolledOver: RolledOver | null;
+      warning: SerialisedEvent | null;
     };
 
 /** Yesterday's silent connection, closed at the turn of the day (`day_rollover`). */
@@ -1115,6 +1134,7 @@ export class ChatService {
         recipients: outcome.recipients,
         audience: this.#audienceFor(outcome.chat),
       });
+      await this.#announceWarning(tenant, outcome.chat, outcome.warning);
       return {
         chat: serialiseChat(outcome.chat),
         event: outcome.event,
@@ -1135,6 +1155,7 @@ export class ChatService {
       detail,
       outcome.createdChat ? null : { threadId: outcome.threadId, openedVia: outcome.openedVia },
     );
+    await this.#announceWarning(tenant, outcome.chat, outcome.warning);
     return { chat: detail, event: outcome.event, replayed: false, openedVia: outcome.openedVia };
   }
 
@@ -1166,7 +1187,14 @@ export class ChatService {
         input: message,
       });
       await input.outbox?.(tx, { tenant, chatId, threadId, event, openedVia });
-      return event;
+      const warning = await this.#warnSensitive(tx, tenant, {
+        chatId,
+        threadId,
+        customerId: input.customerId,
+        authorType,
+        event,
+      });
+      return { event, warning };
     };
 
     return withTenant(this.db, tenant, async (tx) => {
@@ -1202,8 +1230,14 @@ export class ChatService {
         if (await openChatTakesMessage(tx, open, openThread, now, day)) {
           const replay = await this.#replayedEvent(tx, tenant, [open.id], message.idempotencyKey);
           if (replay) return { kind: 'replayed', chat: open, event: replay };
-          const event = await append(tx, open.id, openThread.id, null);
-          return { kind: 'continued', chat: open, event, recipients: message.recipients };
+          const { event, warning } = await append(tx, open.id, openThread.id, null);
+          return {
+            kind: 'continued',
+            chat: open,
+            event,
+            recipients: message.recipients,
+            warning,
+          };
         }
       }
 
@@ -1259,12 +1293,21 @@ export class ChatService {
             metadata: { opened_via: openedVia },
           },
         });
-        const event = await append(tx, dayChat.id, threadId, openedVia);
+        const { event, warning } = await append(tx, dayChat.id, threadId, openedVia);
         const chat = await tx.chat.findUniqueOrThrow({
           where: { id: dayChat.id },
           include: chatInclude,
         });
-        return { kind: 'opened', chat, createdChat: false, threadId, openedVia, event, rolledOver };
+        return {
+          kind: 'opened',
+          chat,
+          createdChat: false,
+          threadId,
+          openedVia,
+          event,
+          rolledOver,
+          warning,
+        };
       }
 
       const created = await this.#createChatWithThread(tx, {
@@ -1277,7 +1320,7 @@ export class ChatService {
         openedVia,
       });
       const threadId = created.threads[0]!.id;
-      const event = await append(tx, created.id, threadId, openedVia);
+      const { event, warning } = await append(tx, created.id, threadId, openedVia);
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: created.id },
         include: chatInclude,
@@ -1290,6 +1333,7 @@ export class ChatService {
         openedVia,
         event,
         rolledOver,
+        warning,
       };
     });
   }
@@ -1482,6 +1526,13 @@ export class ChatService {
         event,
         openedVia: null,
       });
+      const warning = await this.#warnSensitive(tx, tenant, {
+        chatId: chat.id,
+        threadId: thread.id,
+        customerId: chat.customerId,
+        authorType,
+        event,
+      });
 
       // The implicit takeover (AI-11 §4): the thread's row is locked by the
       // append above, so an AI reply racing this one either committed before it
@@ -1517,7 +1568,15 @@ export class ChatService {
         });
       }
 
-      return { event, recipients, audience: this.#audienceFor(chat), id: event.id, mode };
+      return {
+        event,
+        recipients,
+        audience: this.#audienceFor(chat),
+        id: event.id,
+        mode,
+        chat,
+        warning,
+      };
     });
 
     if (idempotencyKey) {
@@ -1528,6 +1587,7 @@ export class ChatService {
     // After the transaction, never inside it: announcing an event a subscriber
     // could then fail to read would be worse than announcing it a moment late.
     await this.#announceEvent(tenant, result);
+    await this.#announceWarning(tenant, result.chat, result.warning);
     if (result.mode?.note) await this.#announceAiMode(tenant, result.mode.note);
     await this.#announceHandover(tenant, result.mode?.assigned ?? null);
     return {
@@ -1956,9 +2016,11 @@ export class ChatService {
     principal: Principal,
     chatId: string,
     eventId: string,
-    text: string,
+    /** The corrected wording, already masked by the route, and what was masked in it. */
+    edit: MaskedForWrite<string>,
     audit: AuditContext,
   ): Promise<SerialisedEvent> {
+    const { text } = edit;
     const actorId = actorOf(principal);
     const editedAt = new Date();
 
@@ -2006,8 +2068,12 @@ export class ChatService {
         );
       }
 
-      const properties = {
-        ...stripEditMarkers(existing.properties),
+      // The badge follows the wording: what the correction masked, not what
+      // the original did.
+      const { [SENSITIVE_TYPES_PROPERTY]: _before, ...kept } = existing.properties;
+      const properties: Record<string, unknown> = {
+        ...stripEditMarkers(kept),
+        ...(edit.types.length > 0 ? { [SENSITIVE_TYPES_PROPERTY]: edit.types } : {}),
         [EDITED_AT_PROPERTY]: editedAt.toISOString(),
         [EDITED_BY_PROPERTY]: actorId,
       };
@@ -3718,6 +3784,78 @@ export class ChatService {
    * two concurrent sends cannot both observe the same value and mint colliding
    * ids — which is what a read-then-write would allow.
    */
+  /**
+   * The warning a player's message earns when it carried a secret (tm 300.2 ·
+   * AI-26 §4): a `system_message` addressed to `all`, in the player's language,
+   * once per chat per type — a player who pastes their password twice is told
+   * once, and told again only about a kind of secret not yet warned about.
+   *
+   * Inside the message's transaction, after its append: the append holds the
+   * chat's row lock (`last_event_at`), so two messages racing on one chat
+   * read each other's warning rather than both writing it. Null when nothing
+   * new is owed — not a player's message, nothing warned about, or every type
+   * warned about already.
+   */
+  async #warnSensitive(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: {
+      chatId: string;
+      threadId: string;
+      customerId: string;
+      authorType: string;
+      event: SerialisedEvent;
+    },
+  ): Promise<SerialisedEvent | null> {
+    if (input.authorType !== 'customer' || input.event.recipients !== 'all') return null;
+    const owed = sensitiveWarningTypes(readSensitiveTypes(input.event.properties));
+    if (owed.length === 0) return null;
+
+    const warned = await tx.$queryRaw<Array<{ type: string }>>`
+      SELECT DISTINCT jsonb_array_elements_text(properties->${SENSITIVE_TYPES_PROPERTY}) AS type
+      FROM events
+      WHERE chat_id = ${input.chatId}
+        AND type = 'system_message'
+        AND properties->>'system_event' = ${SENSITIVE_WARNING_SYSTEM_EVENT}
+    `;
+    const already = new Set(warned.map((row) => row.type));
+    const fresh = owed.filter((type) => !already.has(type));
+    if (fresh.length === 0) return null;
+
+    const customer = await tx.customer.findUnique({
+      where: { id: input.customerId },
+      select: { locale: true },
+    });
+    return this.#appendEvent(tx, {
+      licenseId: tenant.licenseId,
+      chatId: input.chatId,
+      threadId: input.threadId,
+      authorId: null,
+      authorType: 'system',
+      input: {
+        type: 'system_message',
+        text: sensitiveWarningText(customer?.locale),
+        recipients: 'all',
+        properties: { system_event: SENSITIVE_WARNING_SYSTEM_EVENT },
+        sensitiveTypes: fresh,
+      },
+    });
+  }
+
+  /** After commit, like every event: the warning reaches the widget and the inbox. */
+  async #announceWarning(
+    tenant: TenantContext,
+    chat: AudienceSource,
+    warning: SerialisedEvent | null,
+  ): Promise<void> {
+    if (!warning) return;
+    await this.#announceEvent(tenant, {
+      event: warning,
+      recipients: 'all',
+      audience: this.#audienceFor(chat),
+    });
+  }
+
   async #appendEvent(
     tx: TenantClient,
     input: {
@@ -3768,14 +3906,29 @@ export class ChatService {
     // `properties` is free-form and comes from the caller, so the two keys the
     // edit path owns are stripped here — the one place an event is appended.
     // Without this a client could stamp `edited_at` on a message it is sending
-    // for the first time and have every transcript label it corrected.
-    const properties = stripEditMarkers(input.input.properties ?? {});
+    // for the first time and have every transcript label it corrected. The
+    // masking badge's key is the server's for the same reason.
+    const { [SENSITIVE_TYPES_PROPERTY]: _claimed, ...supplied } = input.input.properties ?? {};
+    const properties = stripEditMarkers(supplied);
+
+    // The last line before the text comes to rest (tm 300.2 · AI-26 · K12):
+    // whoever wrote it, masked under their author's policy. The write paths
+    // mask on arrival already; this catches a path that did not — a bot's
+    // reply, an automation, a future caller — because every event is appended
+    // here. A system line is the server's own words and is left as written.
+    const author = sensitiveAuthorOf(input.authorType);
+    const masked = author ? maskForWrite(input.input.text, author) : null;
+    const text = masked ? masked.text : input.input.text;
+    const types = new Set([...(input.input.sensitiveTypes ?? []), ...(masked?.types ?? [])]);
+    if (types.size > 0) {
+      properties[SENSITIVE_TYPES_PROPERTY] = SENSITIVE_TYPES.filter((type) => types.has(type));
+    }
 
     const rows = await tx.$queryRaw<RawEvent[]>`
       INSERT INTO events (id, thread_id, chat_id, license_id, type, text, author_id,
                           author_type, recipients, attachment_url, properties)
       VALUES (${eventId}, ${input.threadId}, ${input.chatId}, ${input.licenseId},
-              ${input.input.type}, ${input.input.text ?? null}, ${input.authorId},
+              ${input.input.type}, ${text ?? null}, ${input.authorId},
               ${input.authorType}, ${input.input.recipients},
               ${input.input.attachmentUrl ?? null}, ${JSON.stringify(properties)}::jsonb)
       RETURNING id, chat_id, thread_id, type, text, author_id, author_type,

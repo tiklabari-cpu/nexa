@@ -52,6 +52,7 @@
  * goes out (AI-01 §5, §7).
  */
 import { Prisma } from '@prisma/client';
+import { readSensitiveTypes, sharesAccountSecret } from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
 import { slotRecord } from './slots/extract.js';
@@ -89,6 +90,19 @@ export const CONTEXT_SYSTEM_EVENTS: readonly string[] = [
  * Its text is the line agents see, with their note for the AI after it.
  */
 const HAND_BACK_SYSTEM_EVENT = 'ai_mode_changed';
+
+/**
+ * The note a turn gets when the messages it answers had a password or a
+ * one-time code masked out of them (tm 300.2 · AI-26 §5 → AI-08): the AI tells
+ * the player never to share it, and does not ask for it again.
+ */
+export const SENSITIVE_SHARED_NOTE =
+  'sensitive_shared: the player just shared a password or a one-time code; it was hidden ' +
+  'from this transcript. Tell them never to share it with anyone, support included, and ' +
+  'do not ask for it.';
+
+/** The decision record's `risk_flags` entry for such a turn (AI-24 reads it; AI-27 may act on it). */
+export const SENSITIVE_SHARED_RISK_FLAG = 'sensitive_shared';
 
 /** Written where earlier messages were left out. */
 export const GAP_MARKER = '[… earlier messages not shown …]';
@@ -128,6 +142,12 @@ export interface ConnectionContext extends TurnHistory {
   readonly freshMessages: number;
   /** The newest event read; the turn covers the connection up to here. */
   readonly lastSeq: number;
+  /**
+   * A password or a one-time code was masked out of the messages this turn
+   * answers (`properties.sensitive_types`, AI-26 §5) — `SENSITIVE_SHARED_NOTE`
+   * is then among `systemNotes`.
+   */
+  readonly sensitiveShared: boolean;
 }
 
 export interface LoadConnectionOptions {
@@ -283,6 +303,7 @@ export function buildConnectionContext(
   const fresh: string[] = [];
   let visitorMessages = 0;
   let lastSeq = 0;
+  let sensitiveShared = false;
   let openingSeen = false;
   // The gap marker goes on the first earlier message past the gap.
   let gapPending = read.gapAfter === 0;
@@ -304,6 +325,7 @@ export function buildConnectionContext(
     if (message.role === 'user') openingSeen = true;
     if (event.authorType === 'customer' && event.sequence > input.processedThrough) {
       fresh.push(message.content);
+      if (sharesAccountSecret(readSensitiveTypes(event.properties))) sensitiveShared = true;
       continue;
     }
     if (message.role === 'user') visitorMessages += 1;
@@ -312,6 +334,7 @@ export function buildConnectionContext(
   }
 
   const kept = fitToChars(earlier, budget.maxChars);
+  if (sensitiveShared) systemNotes.push(SENSITIVE_SHARED_NOTE);
   return {
     messages: mergeSameRole(kept),
     systemNotes,
@@ -321,6 +344,7 @@ export function buildConnectionContext(
     newCustomerText: fresh.join('\n'),
     freshMessages: fresh.length,
     lastSeq,
+    sensitiveShared,
   };
 }
 

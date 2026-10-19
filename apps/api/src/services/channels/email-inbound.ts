@@ -22,7 +22,7 @@
  * and write to the licence the address pointed at.
  */
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import { maskCardNumbers } from '../../lib/cc-mask.js';
+import { maskForWrite } from '../../lib/sensitive-mask.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../security/spam-filter.js';
 import type { TicketService } from '../tickets/ticket-service.js';
 
@@ -116,10 +116,10 @@ export async function ingestInboundEmail(
   tickets: TicketService,
   email: InboundEmail,
 ): Promise<InboundResult> {
-  // Mask a card number in the subject once (FR-MOD-08.9.5), up front — the same
-  // value is what the spam classifier sees and what the ticket stores, so, as on
-  // the widget path, no raw PAN is ever handed to the classifier.
-  const maskedSubject = maskCardNumbers(email.subject);
+  // Mask the subject once (FR-MOD-08.9.5 · AI-26), up front — the same value is
+  // what the spam classifier sees and what the ticket stores, so, as on the
+  // widget path, no raw card, password or code is ever handed to the classifier.
+  const maskedSubject = maskForWrite(email.subject, 'customer').text;
 
   // The spam gate is the same engine the widget screens through (FR-MOD-08.9.3),
   // so the decision lives in one place rather than being reimplemented per

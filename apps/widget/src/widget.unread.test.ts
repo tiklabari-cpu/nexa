@@ -386,3 +386,38 @@ describe('widget reply preview', () => {
     expect(preview(root).hidden).toBe(true);
   });
 });
+
+describe('the sensitive-data warning (tm 300.2 · AI-26 §4)', () => {
+  const WARNING = {
+    ...message('e3', 'system', '2026-09-05T10:00:03.000Z', 'system_message'),
+    text: 'Güvenliğiniz için şifre, SMS kodu veya kart bilgilerinizi paylaşmayın.',
+    properties: { system_event: 'sensitive_data_warning', sensitive_types: ['password'] },
+  };
+
+  it('is set as a note the visitor reads, and is not an unread reply', async () => {
+    eventsAt = () => [VISITOR_ASK, WARNING];
+    returningVisitor();
+    const root = mountWidget();
+    await waitForPoll(1);
+    expect(badge(root).hidden).toBe(true);
+
+    launcher(root).click();
+    await vi.waitFor(() => expect(root.querySelector('.nx-system--warning')).not.toBeNull());
+    const note = root.querySelector<HTMLElement>('.nx-system--warning')!;
+    expect(note.textContent).toBe(WARNING.text);
+    expect(note.classList.contains('nx-system')).toBe(true);
+  });
+
+  it('leaves every other system notice a plain pill', async () => {
+    eventsAt = () => [
+      VISITOR_ASK,
+      message('e3', 'system', '2026-09-05T10:00:03.000Z', 'system_message'),
+    ];
+    returningVisitor();
+    const root = mountWidget();
+    await waitForPoll(1);
+    launcher(root).click();
+    await vi.waitFor(() => expect(root.querySelector('.nx-system')).not.toBeNull());
+    expect(root.querySelector('.nx-system--warning')).toBeNull();
+  });
+});

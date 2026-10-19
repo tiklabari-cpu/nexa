@@ -17,7 +17,10 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { SENSITIVE_WARNING_TEXTS } from '@siyahtus/types';
 import { FileMailer } from '../../src/services/mail/mailer.js';
+import { AI_PASSAGE, AI_QUESTION, LineSink, seedAiWorkspace } from '../helpers/ai-workspace.js';
+import { FAKE_LLM_REPLY, FakeLlmProvider } from '../helpers/fake-llm-provider.js';
 import {
   grantToken,
   ownerClient,
@@ -332,5 +335,311 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     expect(summary).not.toContain(PAN);
     // Nowhere in the whole response envelope, not just the parsed field.
     expect(res.payload).not.toContain(PAN);
+  });
+});
+
+/**
+ * tm 300.2 · AI-26 — every sensitive type, on every write path.
+ *
+ * The block above pins the card; this one pins the rest of the catalogue the
+ * same way — read back from Postgres, the log stream and the model's request
+ * body, never from the response alone — and the two things a card never had:
+ * the warning the player is shown, and the author policy that keeps an IBAN
+ * an agent sends whole.
+ */
+describe('sensitive data masked on every write path (FR-MOD-08.9.5)', () => {
+  let owner: PrismaClient;
+  let server: TestServer;
+  let fx: Fixtures;
+  let agentToken: string;
+  const sink = new LineSink();
+  /** What the model writes; a test sets it before the visitor asks. */
+  let modelReply = FAKE_LLM_REPLY;
+  const model = new FakeLlmProvider({ reply: () => modelReply });
+
+  const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+
+  const PASSWORD = 'Ali1234!';
+  const OTP = '482913';
+  const IBAN = 'TR33 0006 1005 1978 6457 8413 26';
+  const IBAN_MIDDLE = '0006 1005 1978 6457 84';
+  const SEED =
+    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  const SECRETS = [PASSWORD, OTP, IBAN_MIDDLE, SEED];
+
+  async function visitor(
+    t: { organizationId: string; trustedDomain: string } = fx.a,
+  ): Promise<string> {
+    const minted = await server.post(
+      '/customer/token',
+      { organization_id: t.organizationId },
+      { origin: `https://${t.trustedDomain}` },
+    );
+    expect(minted.statusCode).toBe(200);
+    return (minted.json() as { token: string }).token;
+  }
+
+  async function say(token: string, body: Record<string, unknown>) {
+    const sent = await server.post('/customer/chat/events', body, auth(token));
+    expect(sent.statusCode).toBeLessThan(300);
+    return sent.json() as { chat_id: string; event: { id: string; text: string } };
+  }
+
+  function stored(chatId: string) {
+    return owner.event.findMany({
+      where: { chatId },
+      orderBy: { createdAt: 'asc' },
+      select: { type: true, text: true, authorType: true, recipients: true, properties: true },
+    });
+  }
+
+  async function warnings(chatId: string) {
+    return (await stored(chatId)).filter(
+      (e) =>
+        e.type === 'system_message' &&
+        (e.properties as Record<string, unknown>)['system_event'] === 'sensitive_data_warning',
+    );
+  }
+
+  /** No raw secret anywhere in the licence's events. */
+  async function rawEvents(licenseId: bigint): Promise<number> {
+    let count = 0;
+    for (const secret of SECRETS) {
+      count += await owner.event.count({ where: { licenseId, text: { contains: secret } } });
+    }
+    return count;
+  }
+
+  beforeAll(async () => {
+    owner = ownerClient();
+    // Every line the server writes, down to debug: "not in the log" has to
+    // mean not at any level an operator could turn on.
+    server = await startTestServer(
+      { LOG_LEVEL: 'debug' },
+      { llm: model, logStream: sink as unknown as NodeJS.WritableStream },
+    );
+  });
+
+  afterAll(async () => {
+    await server.close();
+    await owner.$disconnect();
+  });
+
+  beforeEach(async () => {
+    fx = await seedFixtures(owner);
+    await clearRateLimits(server.app);
+    model.reset();
+    modelReply = FAKE_LLM_REPLY;
+    sink.lines.length = 0;
+    agentToken = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['chats--all:rw', 'chats--all:ro'],
+    });
+  });
+
+  it('masks a password, an SMS code and an IBAN in a widget message and records what it hid', async () => {
+    const token = await visitor();
+    const sent = await say(token, {
+      text: `Şifrem ${PASSWORD} SMS kodu ${OTP} IBAN ${IBAN}`,
+    });
+    expect(sent.event.text).toContain('Şifrem ********');
+    expect(sent.event.text).toContain('SMS kodu ********');
+    expect(sent.event.text).toMatch(/IBAN TR\*\* .*13 26$/);
+
+    const [message] = await stored(sent.chat_id);
+    expect(message!.text).toBe(sent.event.text);
+    expect(message!.properties).toMatchObject({ sensitive_types: ['otp', 'password', 'iban'] });
+    expect(await rawEvents(fx.a.licenseId)).toBe(0);
+  });
+
+  it('masks a 12-word seed phrase and leaves an ordinary Turkish sentence alone', async () => {
+    const token = await visitor();
+    const sent = await say(token, { text: `cüzdan kelimelerim ${SEED}` });
+    expect(sent.event.text).not.toContain('abandon');
+    const plain = 'Param yatmadı, iki saattir bekliyorum, lütfen yardım edin';
+    const second = await say(token, { text: plain });
+    expect(second.event.text).toBe(plain);
+    const events = await stored(sent.chat_id);
+    expect(events.at(-1)!.properties).not.toHaveProperty('sensitive_types');
+  });
+
+  it('leaves a reference, an amount, a phone number and a TXID exactly as typed, with no warning', async () => {
+    const token = await visitor();
+    const txid = 'ab'.repeat(32);
+    const text = `İşlem no PPR-20261014-482913, 2.500 TL yatırdım, tel 05321234567, TXID ${txid}`;
+    const sent = await say(token, { text });
+    expect(sent.event.text).toBe(text);
+    const events = await stored(sent.chat_id);
+    expect(events.map((e) => e.text)).toEqual([text]);
+    expect(events[0]!.properties).not.toHaveProperty('sensitive_types');
+  });
+
+  it("warns the player once per chat per type, in the player's language", async () => {
+    const token = await visitor();
+    const first = await say(token, { text: `my password: ${PASSWORD}`, locale: 'en' });
+    let warned = await warnings(first.chat_id);
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toMatchObject({
+      text: SENSITIVE_WARNING_TEXTS.en,
+      authorType: 'system',
+      recipients: 'all',
+      properties: { system_event: 'sensitive_data_warning', sensitive_types: ['password'] },
+    });
+
+    // The same kind again: no second warning. A new kind: one more, for it alone.
+    await say(token, { text: `password: ${PASSWORD}` });
+    expect(await warnings(first.chat_id)).toHaveLength(1);
+    await say(token, { text: `SMS kodu ${OTP}` });
+    warned = await warnings(first.chat_id);
+    expect(warned).toHaveLength(2);
+    expect(warned[1]!.properties).toMatchObject({ sensitive_types: ['otp'] });
+
+    // An IBAN is masked but not warned about — sharing your own is how a
+    // withdrawal is matched.
+    await say(token, { text: `IBAN ${IBAN}` });
+    expect(await warnings(first.chat_id)).toHaveLength(2);
+
+    // The widget reads the warning like any other line addressed to the player.
+    const widget = await server.get('/customer/chat', auth(token));
+    const texts = (widget.json() as { events: Array<{ text: string | null }> }).events.map(
+      (e) => e.text,
+    );
+    expect(texts.filter((t) => t === SENSITIVE_WARNING_TEXTS.en)).toHaveLength(2);
+  });
+
+  it('warns in Turkish when the player gave no language', async () => {
+    const token = await visitor();
+    const sent = await say(token, { text: `Şifrem ${PASSWORD}` });
+    const [warning] = await warnings(sent.chat_id);
+    expect(warning!.text).toBe(SENSITIVE_WARNING_TEXTS.tr);
+  });
+
+  it("shows the player an agent's IBAN whole and masks the agent's code (AI-26-S2)", async () => {
+    const token = await visitor();
+    const opened = await say(token, { text: 'Yatırım yapacağım, IBAN alabilir miyim?' });
+    const sent = await server.post(
+      `/chats/${opened.chat_id}/events`,
+      { text: `IBAN: ${IBAN} · doğrulama kodu ${OTP}` },
+      auth(agentToken),
+    );
+    expect(sent.statusCode).toBe(201);
+    expect(sent.json().text).toBe(`IBAN: ${IBAN} · doğrulama kodu ********`);
+
+    const widget = await server.get('/customer/chat', auth(token));
+    const agentLine = (
+      widget.json() as { events: Array<{ author_type: string; text: string | null }> }
+    ).events.find((e) => e.author_type === 'agent');
+    expect(agentLine!.text).toContain(IBAN);
+    // A staff message warns nobody: the warning is the player's.
+    expect(await warnings(opened.chat_id)).toHaveLength(0);
+  });
+
+  it('masks a correction under the agent policy and keeps the badge honest', async () => {
+    const token = await visitor();
+    const opened = await say(token, { text: 'merhaba' });
+    const sent = await server.post(
+      `/chats/${opened.chat_id}/events`,
+      { text: 'Hoş geldiniz' },
+      auth(agentToken),
+    );
+    const edited = await server.put(
+      `/chats/${opened.chat_id}/events/${sent.json().id as string}`,
+      { text: `şifreniz: ${PASSWORD}` },
+      auth(agentToken),
+    );
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json().text).toBe('şifreniz: ********');
+    expect(edited.json().properties).toMatchObject({ sensitive_types: ['password'] });
+  });
+
+  it('refuses a badge a client stamps on its own message', async () => {
+    const token = await visitor();
+    const opened = await say(token, { text: 'merhaba' });
+    const sent = await server.post(
+      `/chats/${opened.chat_id}/events`,
+      {
+        text: 'Nasıl yardımcı olabilirim?',
+        properties: { sensitive_types: ['card'], tone: 'warm' },
+      },
+      auth(agentToken),
+    );
+    expect(sent.statusCode).toBe(201);
+    expect(sent.json().properties).toEqual({ tone: 'warm' });
+  });
+
+  it('masks every type in a rating comment and an inbound e-mail subject too', async () => {
+    const token = await visitor();
+    await say(token, { text: 'teşekkürler' });
+    const rated = await server.post(
+      '/customer/chat/rating',
+      { value: 'good', comment: `Şifrem ${PASSWORD} idi` },
+      auth(token),
+    );
+    expect(rated.statusCode).toBe(201);
+    expect(await owner.rating.count({ where: { comment: { contains: PASSWORD } } })).toBe(0);
+
+    const mail = await server.post('/channels/email/inbound', {
+      to: `${fx.a.organizationId}@${DOMAIN}`,
+      from: 'buyer@shopper.example',
+      subject: `SMS kodu ${OTP} geldi`,
+      text: 'see subject',
+    });
+    expect(mail.statusCode).toBe(200);
+    expect(await owner.ticket.count({ where: { subject: { contains: OTP } } })).toBe(0);
+  });
+
+  it('keeps every raw value out of the log, the AI records and the model request', async () => {
+    // The passage shares the message's words, so the lexical stub retrieves it
+    // and the model is asked to write the answer (AI_QUESTION alone is
+    // load-bearing: anything appended to it can drop under the threshold).
+    const ws = await seedAiWorkspace(owner, { passage: `${AI_PASSAGE} Şifrem SMS kodu IBAN TR` });
+    const token = await visitor(ws);
+    const sent = await say(token, {
+      text: `${AI_QUESTION} Şifrem ${PASSWORD}, SMS kodu ${OTP}, IBAN ${IBAN}`,
+    });
+
+    // The model was asked — and never saw a secret, in any call.
+    const requests = [...model.understandCalls, ...model.calls];
+    expect(requests.length).toBeGreaterThan(0);
+    const body = JSON.stringify(requests);
+    for (const secret of SECRETS) expect(body).not.toContain(secret);
+    expect(body).toContain('********');
+
+    // Nor did any AI table keep one.
+    const rows = await Promise.all([
+      owner.aiDecisionLog.findMany({ where: { licenseId: ws.licenseId } }),
+      owner.aiConversation.findMany({ where: { licenseId: ws.licenseId } }),
+      owner.aiJob.findMany({ where: { licenseId: ws.licenseId } }),
+      owner.skillRun.findMany({ where: { chatId: sent.chat_id } }),
+    ]);
+    const records = JSON.stringify(rows, (_key, value: unknown) =>
+      typeof value === 'bigint' ? value.toString() : value,
+    );
+    for (const secret of SECRETS) expect(records).not.toContain(secret);
+
+    // Nor did the log.
+    expect(sink.lines.length).toBeGreaterThan(0);
+    for (const secret of SECRETS) expect(sink.text).not.toContain(secret);
+    expect(await rawEvents(ws.licenseId)).toBe(0);
+  });
+
+  it("masks the AI's own reply before it is sent, and tells the AI a code was shared", async () => {
+    // A model that echoes a code back — the reply is masked under the bot's
+    // policy on its way to the player, whatever the model wrote.
+    modelReply = `Lütfen doğrulama kodunuzu (${OTP}) kimseyle paylaşmayın.`;
+    const ws = await seedAiWorkspace(owner, { passage: `${AI_PASSAGE} Şifrem SMS kodu IBAN TR` });
+    const token = await visitor(ws);
+    const sent = await say(token, { text: `${AI_QUESTION} SMS kodu ${OTP}` });
+
+    const bot = (await stored(sent.chat_id)).find((e) => e.authorType === 'bot');
+    expect(bot?.text).toBe('Lütfen doğrulama kodunuzu (********) kimseyle paylaşmayın.');
+    expect(bot!.properties).toMatchObject({ sensitive_types: ['otp'] });
+
+    // The turn was told (AI-26 §5 → AI-08), and its record says so (AI-24).
+    expect(JSON.stringify(model.calls)).toContain('sensitive_shared');
+    const [decision] = await owner.aiDecisionLog.findMany({ where: { chatId: sent.chat_id } });
+    expect(decision?.riskFlags).toContain('sensitive_shared');
   });
 });

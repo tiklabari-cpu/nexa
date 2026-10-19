@@ -24,7 +24,7 @@
  * it leaves the process, and in the reply before it is stored.
  */
 import { summariseConversation, type ConversationTurn } from '@siyahtus/ai-mock';
-import { maskCardNumbers } from '../../lib/cc-mask.js';
+import { maskForWrite } from '../../lib/sensitive-mask.js';
 import {
   refuseOverlongPrompt,
   unhandledLlmProvider,
@@ -121,12 +121,16 @@ export function buildSummaryPrompt(
 ): { prompt: LlmPrompt; transcript: Transcript } {
   const system = `${SYSTEM_PROMPT}\n${LANGUAGE_LINE[options.language]}`;
 
-  // Masked before anything is measured or cut, so a card number is never sent
-  // and a cut can never leave the front of one behind.
+  // Masked before anything is measured or cut, so a secret is never sent and a
+  // cut can never leave the front of one behind — each turn under its writer's
+  // policy (AI-26-S2).
   const spoken: PromptTurn[] = turns
     .map((turn) => ({
       role: turn.role === 'customer' ? ('customer' as const) : ('team' as const),
-      text: clip(maskCardNumbers(turn.text), SUMMARY_TURN_MAX_CHARS),
+      text: clip(
+        maskForWrite(turn.text, turn.role === 'customer' ? 'customer' : 'agent').text,
+        SUMMARY_TURN_MAX_CHARS,
+      ),
     }))
     .filter((turn) => turn.text.length > 0);
 
@@ -242,7 +246,7 @@ export async function writeConversationSummary(
         maxOutputTokens: options.maxOutputTokens,
         timeoutMs: options.timeoutMs,
       });
-      return { text: maskCardNumbers(completion.text), usage: completion.usage };
+      return { text: maskForWrite(completion.text, 'bot').text, usage: completion.usage };
     }
     default:
       return unhandledLlmProvider(id);

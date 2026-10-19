@@ -1389,11 +1389,18 @@ components:
           type: object
           additionalProperties: true
           description: |
-            Free-form, with two reserved keys the server owns: `edited_at`
+            Free-form, with three reserved keys the server owns: `edited_at`
             (ISO-8601, present once the message has been corrected after
-            sending) and `edited_by` (the account that corrected it). Both are
-            stripped from a caller-supplied `properties` on send, so a client
-            cannot make a fresh message claim it was edited.
+            sending), `edited_by` (the account that corrected it) and
+            `sensitive_types` (tm 300.2 · AI-26: the kinds of value masked out
+            of `text` before it was stored — `card`, `cvv`, `otp`, `password`,
+            `iban`, `seed_phrase`, `private_key`, `banking_credential` — in that
+            order). All three are stripped from a caller-supplied `properties`
+            on send, so a client cannot make a fresh message claim it was
+            edited or masked. The warning a visitor is shown after sharing a
+            secret is a `system_message` addressed to `all` with
+            `system_event: sensitive_data_warning`, once per chat per type; its
+            `sensitive_types` are the types it is the first warning for.
         created_at: { type: string, format: date-time }
 
     EventEdit:

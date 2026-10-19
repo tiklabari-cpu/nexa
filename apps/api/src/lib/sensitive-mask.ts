@@ -190,6 +190,15 @@ const CURRENCY_SYMBOLS = '₺$€';
 const HEX_TOKEN = /(?<![\p{L}\p{N}])(?:0x)?[0-9a-f]{32,128}(?![\p{L}\p{N}])/gu;
 const PRIVATE_KEY_HEX_LENGTH = 64;
 
+/**
+ * A UUID (folded) — an id, never a secret. Its last two groups can be sixteen
+ * digits that pass Luhn (`…-8000-000000000011`), and a code-shaped group can sit
+ * near a keyword; neither is masked out of it (tm 300.2: an id in a prompt or a
+ * log line must survive whole). Fixed width, so it cannot backtrack.
+ */
+const UUID_TOKEN =
+  /(?<![\p{L}\p{N}-])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\p{L}\p{N}-])/gu;
+
 /** A WIF private key: base58, 51 characters from `5` or 52 from `K`/`L`. */
 const WIF =
   /(?<![0-9A-Za-z])(?:5[1-9A-HJ-NP-Za-km-z]{50}|[KL][1-9A-HJ-NP-Za-km-z]{51})(?![0-9A-Za-z])/g;
@@ -198,6 +207,18 @@ const WIF =
 const CVV_KEYWORD =
   /(?<![a-z0-9])(?:cvv2?|cvc2?|guvenlik (?:kodu|numarasi)|security code|arka(?:daki|sindaki)? ?(?:3|uc) hane)[a-z]*/g;
 const OTP_KEYWORD = /(?<![a-z0-9])(?:kod|code|sms|otp|dogrulama|verification|sifre|parola)[a-z]*/g;
+
+/**
+ * A number its own label names as a reference (folded, tested against at most
+ * `LABEL_WINDOW` characters before it): "SMS order 680112", "sipariş no 482913",
+ * "fatura #2041". The word right before the number decides — "SMS kodu 482913"
+ * is still a code (tm 300.2: the SMS channel's own order numbers were being
+ * masked as one-time codes). Anchored at the end of a bounded slice, so it costs
+ * a constant per number.
+ */
+const REFERENCE_LABEL =
+  /(?:^|[^a-z0-9])(?:order|siparis|islem|ref|referans|reference|no|numara|numarasi|number|id|fatura|invoice|takip|tracking|ticket|talep|kargo)[ \t]*[:#.]?[ \t]*$/;
+const LABEL_WINDOW = 24;
 const PRIVATE_KEY_KEYWORD =
   /(?<![a-z0-9])(?:private[ _-]?key|privkey|(?:ozel|gizli) anahtar|secret key)[a-z]*/g;
 const BANKING_KEYWORD =
@@ -440,7 +461,13 @@ function detectIbans(text: string, out: Candidate[]): void {
 }
 
 /** CVVs and OTPs: standalone digit runs that sit near their keyword. */
-function detectCodes(folded: string, wantCvv: boolean, wantOtp: boolean, out: Candidate[]): void {
+function detectCodes(
+  folded: string,
+  ids: readonly Span[],
+  wantCvv: boolean,
+  wantOtp: boolean,
+  out: Candidate[],
+): void {
   const cvvKeywords = wantCvv ? spansOf(CVV_KEYWORD, folded) : [];
   const otpKeywords = wantOtp ? spansOf(OTP_KEYWORD, folded) : [];
   if (cvvKeywords.length === 0 && otpKeywords.length === 0) return;
@@ -456,6 +483,8 @@ function detectCodes(folded: string, wantCvv: boolean, wantOtp: boolean, out: Ca
     const start = match.index;
     const end = start + match[0].length;
     if (isAmount(folded, start, end) || overlapsAny(chains, start, end)) continue;
+    if (overlapsAny(ids, start, end)) continue;
+    if (REFERENCE_LABEL.test(folded.slice(Math.max(0, start - LABEL_WINDOW), start))) continue;
     const length = end - start;
     if (length <= 4 && nearAny(cvvKeywords, start, end)) {
       out.push({ type: 'cvv', start, end, replacement: SECRET_MASK });
@@ -614,10 +643,15 @@ export function maskSensitive(text: string, options: MaskSensitiveOptions): Mask
   const candidates: Candidate[] = [];
   const hexTokens =
     masked.has('card') || masked.has('private_key') ? spansOf(HEX_TOKEN, folded) : [];
-  if (masked.has('card')) detectCards(text, hexTokens, candidates);
+  const ids = spansOf(UUID_TOKEN, folded);
+  if (masked.has('card')) {
+    // One sorted list: `overlapsAny` searches by position. The two never overlap.
+    const opaque = [...hexTokens, ...ids].sort((a, b) => a[0] - b[0]);
+    detectCards(text, opaque, candidates);
+  }
   detectIbans(text, candidates);
   if (masked.has('cvv') || masked.has('otp')) {
-    detectCodes(folded, masked.has('cvv'), masked.has('otp'), candidates);
+    detectCodes(folded, ids, masked.has('cvv'), masked.has('otp'), candidates);
   }
   if (masked.has('password')) detectPasswords(text, folded, candidates);
   if (masked.has('seed_phrase')) detectSeedPhrases(folded, candidates);
@@ -645,4 +679,64 @@ export function maskSensitive(text: string, options: MaskSensitiveOptions): Mask
   if (detections.length === 0) return { text, detections };
   parts.push(text.slice(cursor));
   return { text: parts.join(''), detections };
+}
+
+// ---------------------------------------------------------------------------
+// The write paths' view (tm 300.2)
+// ---------------------------------------------------------------------------
+
+/** A text as a write path stores it: masked, and the types that were masked in it. */
+export interface MaskedForWrite<T extends string | null | undefined = string> {
+  text: T;
+  /** Catalogue order, once each; empty when nothing was masked. */
+  types: SensitiveType[];
+}
+
+/**
+ * Mask a value that may be absent, for `author` — the shape a write path
+ * carries (`string | null | undefined`). A non-string comes back unchanged
+ * with no types, so a caller can pass a field through without widening it.
+ */
+export function maskForWrite<T extends string | null | undefined>(
+  value: T,
+  author: SensitiveAuthor,
+): MaskedForWrite<T> {
+  if (typeof value !== 'string' || value === '') return { text: value, types: [] };
+  const { text, detections } = maskSensitive(value, { author });
+  if (detections.length === 0) return { text: value, types: [] };
+  const seen = new Set(detections.map((d) => d.type));
+  return { text: text as T, types: SENSITIVE_TYPES.filter((type) => seen.has(type)) };
+}
+
+/**
+ * Whose policy an event's `author_type` writes under, or null for the
+ * system's own lines (a transfer notice, the warning itself), which no person
+ * typed and which are not masked.
+ */
+export function sensitiveAuthorOf(authorType: string): SensitiveAuthor | null {
+  return authorType === 'customer' || authorType === 'agent' || authorType === 'bot'
+    ? authorType
+    : null;
+}
+
+/** How deep {@link maskDeep} walks before it leaves a value as it is. */
+const DEEP_MAX = 32;
+
+/**
+ * Every string in a JSON value masked for `author` — keys untouched, numbers
+ * and booleans as they are. For the AI's own records (`ai_conversations` slots
+ * and digest, a run log, a decision's `details`), which are written from text
+ * that was already masked: this is the second line, so a value a model
+ * reconstructed or a path that skipped the first still comes to rest masked.
+ */
+export function maskDeep<T>(value: T, author: SensitiveAuthor, depth = 0): T {
+  if (typeof value === 'string') return maskSensitive(value, { author }).text as T;
+  if (depth >= DEEP_MAX || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => maskDeep(item, author, depth + 1)) as T;
+  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) {
+    return value; // a Date, a Decimal, Prisma's DbNull — not JSON text
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) out[key] = maskDeep(item, author, depth + 1);
+  return out as T;
 }

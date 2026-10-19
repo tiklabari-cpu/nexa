@@ -226,6 +226,16 @@ export const inbox: Messages = {
   'inbox.transcript.editSaving': 'Saving…',
   'inbox.transcript.edited': 'edited',
   'inbox.transcript.editFailed': 'The correction was not saved.',
+  // What the server masked out of a message (tm 300.2 · AI-26)
+  'inbox.transcript.sensitiveHidden': 'Sensitive data hidden ({types})',
+  'inbox.transcript.sensitiveType.card': 'Card',
+  'inbox.transcript.sensitiveType.cvv': 'CVV',
+  'inbox.transcript.sensitiveType.otp': 'OTP',
+  'inbox.transcript.sensitiveType.password': 'Password',
+  'inbox.transcript.sensitiveType.iban': 'IBAN',
+  'inbox.transcript.sensitiveType.seed_phrase': 'Seed phrase',
+  'inbox.transcript.sensitiveType.private_key': 'Private key',
+  'inbox.transcript.sensitiveType.banking_credential': 'Online banking login',
   'inbox.transcript.connection': '{label} {id} · {time}',
   'inbox.transcript.connectionWithTeam': '{label} {id} · {time} · {team}',
 

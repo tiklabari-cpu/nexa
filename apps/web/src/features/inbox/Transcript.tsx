@@ -1,5 +1,10 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { isEditableEventType, isWithinEditWindow, readEditedAt } from '@siyahtus/types';
+import {
+  isEditableEventType,
+  isWithinEditWindow,
+  readEditedAt,
+  readSensitiveTypes,
+} from '@siyahtus/types';
 import type { ChatEvent } from './types.js';
 import { connectionBreaks, type ConnectionLabel } from './dayConnections.js';
 import type { FailedSend } from './failedSends.js';
@@ -370,6 +375,9 @@ function Bubble({
   const isSystem = event.type === 'system_message' || event.author_type === 'system';
   const pending = event.properties?.['pending'] === true;
   const editedAt = readEditedAt(event.properties);
+  // What the server masked out of this message (tm 300.2 · AI-26) — the reader
+  // sees asterisks and is told why, rather than guessing at a garbled message.
+  const sensitive = readSensitiveTypes(event.properties);
   const t = useTranslate();
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -512,6 +520,15 @@ function Bubble({
                 conversation, not only the author's. */}
               {editedAt !== null && ` · ${t('inbox.transcript.edited')}`}
             </span>
+            {sensitive.length > 0 && (
+              <span className="rounded-sm border border-border px-1.5 font-medium text-content-secondary">
+                {t('inbox.transcript.sensitiveHidden', {
+                  types: sensitive
+                    .map((type) => t(`inbox.transcript.sensitiveType.${type}`))
+                    .join(', '),
+                })}
+              </span>
+            )}
             {canEdit && draft === null && (
               <button
                 type="button"

@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENT_MARKER,
   GAP_MARKER,
+  SENSITIVE_SHARED_NOTE,
   attachmentPlaceholder,
   buildConnectionContext,
   exchangeHistory,
@@ -306,5 +307,43 @@ line 5`,
 
   it('is no history at all for an empty exchange', () => {
     expect(exchangeHistory([])).toBeUndefined();
+  });
+});
+
+describe('sensitive_shared (tm 300.2 · AI-26 §5)', () => {
+  const masked = (types: string[]) => ({ properties: { sensitive_types: types } });
+
+  it('tells the turn when the messages it answers had a password or a code masked', () => {
+    const context = build(
+      [
+        event(1, 'customer', 'Param yatmadı'),
+        event(2, 'bot', 'Size nasıl yardımcı olabilirim?'),
+        event(3, 'customer', 'SMS kodu ********', masked(['otp'])),
+      ],
+      { processedThrough: 2 },
+    );
+    expect(context.sensitiveShared).toBe(true);
+    expect(context.systemNotes).toContain(SENSITIVE_SHARED_NOTE);
+  });
+
+  it('says nothing for a card or an IBAN, or for a secret an earlier turn already answered', () => {
+    const card = build(
+      [event(1, 'customer', 'kart **** **** **** 1111', masked(['card', 'iban']))],
+      {
+        processedThrough: 0,
+      },
+    );
+    expect(card.sensitiveShared).toBe(false);
+    expect(card.systemNotes).not.toContain(SENSITIVE_SHARED_NOTE);
+
+    const earlier = build(
+      [
+        event(1, 'customer', 'şifrem ********', masked(['password'])),
+        event(2, 'bot', 'Lütfen şifrenizi kimseyle paylaşmayın.'),
+        event(3, 'customer', 'tamam'),
+      ],
+      { processedThrough: 2 },
+    );
+    expect(earlier.sensitiveShared).toBe(false);
   });
 });

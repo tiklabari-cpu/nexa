@@ -12893,7 +12893,7 @@
           "300"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T02:36:00.309Z",
+        "updatedAt": "2026-10-19T04:19:56.744Z",
         "subtasks": [
           {
             "id": 1,
@@ -12901,11 +12901,11 @@
             "description": "guardrails.ts G1–G19 kataloğu + TR/EN sözlükler + normalizasyon",
             "details": "Üst görev 301 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Sözlük birim testleri (yanlış pozitif örnekleri dahil).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "301",
             "priority": "high",
-            "updatedAt": "2026-10-19T02:36:00.309Z"
+            "updatedAt": "2026-10-19T04:19:56.744Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T02:36:00.309Z",
+      "lastModified": "2026-10-19T04:19:56.745Z",
       "taskCount": 390,
       "completedCount": 299,
       "tags": [

@@ -12963,7 +12963,7 @@
           "301"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T11:39:38.447Z",
+        "updatedAt": "2026-10-19T13:29:17.783Z",
         "subtasks": [
           {
             "id": 1,
@@ -12983,13 +12983,13 @@
             "description": "Uçlar, AI motorunda devirle aynı transaction, kaldırma yetkisi, RTM, webhook, bildirim",
             "details": "Üst görev 302 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "302.1"
             ],
             "parentId": "302",
             "priority": "high",
-            "updatedAt": "2026-10-19T11:39:38.447Z"
+            "updatedAt": "2026-10-19T13:29:17.783Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T11:39:38.448Z",
+      "lastModified": "2026-10-19T13:29:17.783Z",
       "taskCount": 390,
       "completedCount": 300,
       "tags": [

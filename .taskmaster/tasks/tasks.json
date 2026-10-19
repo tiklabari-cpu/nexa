@@ -12963,7 +12963,7 @@
           "301"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T10:42:09.425Z",
+        "updatedAt": "2026-10-19T11:38:30.846Z",
         "subtasks": [
           {
             "id": 1,
@@ -12971,11 +12971,11 @@
             "description": "risk_flags tablosu + RISK_FLAG_TYPES + riskPolicy saf fonksiyonu",
             "details": "Üst görev 302 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Birim; RLS negatif.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "302",
             "priority": "high",
-            "updatedAt": "2026-10-19T10:42:09.425Z"
+            "updatedAt": "2026-10-19T11:38:30.846Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T10:42:09.426Z",
+      "lastModified": "2026-10-19T11:38:30.847Z",
       "taskCount": 390,
       "completedCount": 300,
       "tags": [

@@ -134,6 +134,52 @@ export const INTEGRATION_TRIGGERS: readonly IntegrationTrigger[] = [
       },
     },
   },
+  {
+    // AI-27-S4 (tm 302.2): the operator hears at once that a player asked to
+    // stop, may be a minor, or is at risk — the account is theirs to act on.
+    // What the flag is, where, and whose by the site's player key; never a word
+    // anyone wrote (`RiskFlagSignal`).
+    action: 'risk_flag_raised',
+    label: 'Risk flag raised',
+    description:
+      'Fires when a conversation is risk-flagged — by the AI or an agent — with the type, the chat and the member key; no message text.',
+    sample_payload: {
+      action: 'risk_flag_raised',
+      data: {
+        flag_id: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+        type: 'self_exclusion_request',
+        severity: 'urgent',
+        scope: 'member',
+        status: 'active',
+        chat_id: 'CH1H8CFKRV',
+        thread_id: 'TH1H8CFKRV',
+        member_key: 'oyuncu42',
+        raised_at: '2026-01-15T10:31:00.000Z',
+        cleared_at: null,
+      },
+    },
+  },
+  {
+    action: 'risk_flag_cleared',
+    label: 'Risk flag cleared',
+    description:
+      "Fires when someone with the authority clears a risk flag. Clearing support's mark changes nothing on the operator's side.",
+    sample_payload: {
+      action: 'risk_flag_cleared',
+      data: {
+        flag_id: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+        type: 'self_exclusion_request',
+        severity: 'urgent',
+        scope: 'member',
+        status: 'cleared',
+        chat_id: 'CH1H8CFKRV',
+        thread_id: 'TH1H8CFKRV',
+        member_key: 'oyuncu42',
+        raised_at: '2026-01-15T10:31:00.000Z',
+        cleared_at: '2026-01-20T09:00:00.000Z',
+      },
+    },
+  },
 ] as const;
 
 /** One existing write endpoint a Zapier/Make "action" step may call. */

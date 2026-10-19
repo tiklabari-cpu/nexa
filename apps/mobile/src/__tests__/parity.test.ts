@@ -945,7 +945,12 @@ describe('module parity matrix — what is still owed', () => {
       // 242 -> 250 with the eight `/ai-guardrails/*` paths (tm 301.2) — the
       // compliance guardrails an owner configures in the web panel's AI Agent
       // screen (tm 301.4). The app configures no AI agent; nothing here re-scopes.
-      contractEndpoints: 250,
+      // 250 -> 255 with `/chats/{chatId}/risk-flags`, `/risk-flags`,
+      // `/risk-flags/{flagId}`, `/risk-flags/settings` and
+      // `/customers/{customerId}/risk-flags` (tm 302.2) — AI-27's risk flags,
+      // shown, raised and cleared in the web inbox and settings (tm 302.3). The
+      // app's chat screen shows no flag yet; nothing here re-scopes.
+      contractEndpoints: 255,
       scopeBoundaries: 1,
     });
   });

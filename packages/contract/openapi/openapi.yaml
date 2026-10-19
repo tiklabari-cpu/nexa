@@ -227,6 +227,14 @@ paths:
     $ref: "./paths/chats.yaml#/tag"
   /chats/{chatId}/seen:
     $ref: "./paths/chats.yaml#/seen"
+  /chats/{chatId}/risk-flags:
+    $ref: "./paths/risk-flags.yaml#/chatRiskFlags"
+  /risk-flags:
+    $ref: "./paths/risk-flags.yaml#/riskFlags"
+  /risk-flags/settings:
+    $ref: "./paths/risk-flags.yaml#/riskFlagSettings"
+  /risk-flags/{flagId}:
+    $ref: "./paths/risk-flags.yaml#/riskFlag"
 
   /customer/chat:
     $ref: "./paths/customer-chat.yaml#/state"
@@ -273,6 +281,8 @@ paths:
     $ref: "./paths/customers.yaml#/revokeMemberTokens"
   /customers/{customerId}/possible-matches:
     $ref: "./paths/customers.yaml#/possibleMatches"
+  /customers/{customerId}/risk-flags:
+    $ref: "./paths/risk-flags.yaml#/customerRiskFlags"
   /customers/{customerId}/links:
     $ref: "./paths/customers.yaml#/identityLinks"
   /customers/{customerId}/links/{linkedCustomerId}:
@@ -1815,6 +1825,138 @@ components:
         updated_by: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    RiskFlagType:
+      type: string
+      description: |
+        AI-27's flag types (`RISK_FLAG_TYPES`). The first three are the
+        player's as well as the conversation's.
+      enum:
+        - rg_signal
+        - self_exclusion_request
+        - underage_suspected
+        - self_harm
+        - complaint_formal
+        - fraud_suspected
+        - account_takeover_suspected
+        - multi_account
+        - abusive
+        - account_security
+
+    RiskFlagStatus:
+      type: string
+      enum: [active, cleared]
+
+    RiskFlag:
+      type: object
+      description: |
+        A risk flag (AI-27). `note`, `evidence_event_ids` and `clear_reason`
+        are for the Responsible Gaming team and a Team Lead and up; for anyone
+        else they are null and `details_visible` is false.
+      required:
+        [
+          id,
+          scope,
+          chat_id,
+          thread_id,
+          customer_id,
+          member_key,
+          type,
+          severity,
+          source,
+          rule_ref,
+          basis,
+          status,
+          raised_by,
+          raised_at,
+          cleared_by,
+          cleared_at,
+          note,
+          evidence_event_ids,
+          clear_reason,
+          details_visible,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        scope:
+          type: string
+          enum: [chat, member]
+          description: "`member`: the player's too, in every later conversation, until cleared."
+        chat_id:
+          type: string
+          nullable: true
+          description: The conversation it was raised in (panel "Thread ID"); null once it is gone.
+        thread_id:
+          type: string
+          nullable: true
+          description: The connection (panel "Chat ID").
+        customer_id: { type: string, format: uuid, nullable: true }
+        member_key:
+          type: string
+          nullable: true
+          description: The player's key on the operator's site (the folded pre-chat username in F1).
+        type: { $ref: "#/components/schemas/RiskFlagType" }
+        severity: { type: string, enum: [info, high, urgent] }
+        source:
+          type: string
+          enum: [ai_rule, ai_classifier, agent, qa]
+          description: "A guardrail rule's hit (`rule_ref` names it), the AI's risk signal, a person, or QA."
+        rule_ref:
+          type: string
+          nullable: true
+          description: "`G1` … `G19` when a guardrail rule raised it."
+        basis:
+          type: string
+          enum: [declared, verified]
+          description: "`declared`: on the player's own claim of who they are (F1) — a warning, not a fact."
+        status: { $ref: "#/components/schemas/RiskFlagStatus" }
+        raised_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: The account that raised it; null when the AI did.
+        raised_at: { type: string, format: date-time }
+        cleared_by: { type: string, format: uuid, nullable: true }
+        cleared_at: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+        evidence_event_ids:
+          type: array
+          nullable: true
+          items: { type: string }
+          description: The messages that raised it.
+        clear_reason: { type: string, nullable: true }
+        details_visible:
+          type: boolean
+          description: Whether the caller reads the note, the evidence and the clear reason.
+
+    RiskFlagList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RiskFlag" }
+        next_page_id:
+          type: string
+          description: The next page's cursor; absent on the last page.
+
+    RiskFlagSettings:
+      type: object
+      required: [rg_group_id, notify_emails, updated_by, updated_at]
+      properties:
+        rg_group_id:
+          type: integer
+          nullable: true
+          description: |
+            The Responsible Gaming team: its members read a flag's note and
+            evidence and hear of an urgent flag. Null: none.
+        notify_emails:
+          type: array
+          maxItems: 5
+          items: { type: string }
+          description: Addresses an urgent flag is mailed to as well (AI-27-S4).
+        updated_by: { type: string, format: uuid, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
 
     AiGuardrailHit:
       type: object
@@ -3633,6 +3775,9 @@ components:
         (`reason: same_day_return`, ID-02). One opening is announced by one of
         the two, never both. `chat_deactivated` names the connection that
         closed (`thread_id`).
+
+        `risk_flag_raised` / `risk_flag_cleared` (AI-27-S4) carry what the flag
+        is, the chat and the member key — never a word anyone wrote.
       enum:
         - chat_started
         - chat_deactivated
@@ -3640,6 +3785,8 @@ components:
         - event_created
         - ticket_created
         - thread_started
+        - risk_flag_raised
+        - risk_flag_cleared
 
     Webhook:
       type: object

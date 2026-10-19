@@ -1,0 +1,272 @@
+# Risk flags (AI-27 · tm 302.2).
+#
+# Structured marks on a conversation, and on the player behind it, that keep
+# promotions and bonus talk away from a player at risk and the AI out of a
+# conversation that must stay with a person. The AI raises them with the
+# hand-over a guardrail forces (in the same transaction); an agent raises them
+# from the inbox. A flag is never deleted: clearing it takes a reason, and the
+# three responsible-gaming member types (`rg_signal`, `self_exclusion_request`,
+# `underage_suspected`) a Manager and up — Team Lead and up for the rest, which
+# is admin and up until the Team Lead role exists (RL-01).
+#
+# Everyone who sees the conversation sees that it is flagged and with what; the
+# note, the evidence and the reason it was cleared are for the Responsible
+# Gaming team (`risk_flag_settings.rg_group_id`) and a Team Lead and up — for
+# anyone else they are null and `details_visible` is false.
+#
+# Raising or clearing a flag is pushed (`risk_flag_raised` /
+# `risk_flag_cleared`) and delivered to the workspace's webhooks under the same
+# names, without any text; an urgent flag is mailed to the supervisors, the
+# Responsible Gaming team and the addresses the settings name.
+
+chatRiskFlags:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ChatId"
+
+  post:
+    tags: [Chats]
+    operationId: raiseChatRiskFlag
+    summary: Flag a conversation
+    description: |
+      An agent flags the conversation (AI-27): the type is required, a note
+      optional. Scope, severity and who may clear it follow the type
+      (`RISK_FLAG_DEFAULTS`): `rg_signal`, `self_exclusion_request` and
+      `underage_suspected` are the player's as well and stay on them, with no
+      end date, until cleared. The player's identity is their own claim in F1,
+      so `basis` is `declared`.
+
+      The conversation must be the caller's to write in (`404` otherwise). An
+      active flag of the same type on the conversation is returned as it is
+      (`200`) rather than raised twice. `evidence_event_ids` must be events of
+      this conversation.
+
+      A flag that keeps the AI out (`mustHandoff`) takes effect on the AI's
+      next turn: it writes nothing more and hands the conversation over.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [type]
+            properties:
+              type: { $ref: "../openapi.yaml#/components/schemas/RiskFlagType" }
+              note: { type: string, minLength: 1, maxLength: 1000 }
+              thread_id:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: The connection (panel "Chat ID"); defaults to the active one, else the latest.
+              evidence_event_ids:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 64 }
+    responses:
+      "200":
+        description: The conversation already carries an active flag of this type
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlag" }
+      "201":
+        description: Raised
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlag" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+riskFlag:
+  parameters:
+    - name: flagId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Chats]
+    operationId: clearRiskFlag
+    summary: Clear a risk flag, with a reason
+    description: |
+      Not a delete: the flag stays, `cleared`, with who cleared it, when and
+      why (AI-27-S2), and the audit log records `risk_flag.cleared`. The reason
+      is required. `rg_signal`, `self_exclusion_request` and
+      `underage_suspected` need a Manager and up, the rest a Team Lead and up
+      (admin and up until RL-01): below that, `403 authorization` with
+      `details.reason: risk_flag_clear_role` and `details.required_role`. A
+      flag already cleared is `403 not_allowed`,
+      `details.reason: risk_flag_already_cleared`.
+
+      Clearing `self_exclusion_request` changes nothing on the operator's
+      side: the self-exclusion is the operator's decision; this is support's
+      mark.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [reason]
+            properties:
+              reason: { type: string, minLength: 1, maxLength: 500 }
+    responses:
+      "200":
+        description: Cleared
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlag" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+customerRiskFlags:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Customers]
+    operationId: listCustomerRiskFlags
+    summary: A player's risk flags
+    description: |
+      Every flag about the customer, newest first:
+      the player's own (`member`) whichever conversation raised them — what an
+      agent needs the day after — and the conversation flags of the
+      conversations the caller may see.
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlagStatus" }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: page_id
+        in: query
+        schema: { type: string, maxLength: 512 }
+    responses:
+      "200":
+        description: The flags
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlagList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+riskFlags:
+  get:
+    tags: [Chats]
+    operationId: listRiskFlags
+    summary: The workspace's risk flags — reports and the archive filter
+    description: |
+      Newest first, in pages. Each filter narrows: `chat_id` is one
+      conversation's flags (the inbox's Risk section), `type` and `status`
+      what the archive filter and the report card ask. A caller limited to
+      their teams' conversations sees the flags of those.
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlagStatus" }
+      - name: type
+        in: query
+        description: One type, or several comma-separated.
+        schema: { type: string, maxLength: 400 }
+      - name: severity
+        in: query
+        schema: { type: string, enum: [info, high, urgent] }
+      - name: source
+        in: query
+        schema: { type: string, enum: [ai_rule, ai_classifier, agent, qa] }
+      - name: chat_id
+        in: query
+        schema: { type: string, minLength: 10, maxLength: 12 }
+      - name: customer_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: from
+        in: query
+        description: Raised at or after.
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        description: Raised at or before.
+        schema: { type: string, format: date-time }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: page_id
+        in: query
+        schema: { type: string, maxLength: 512 }
+    responses:
+      "200":
+        description: The flags
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlagList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+riskFlagSettings:
+  get:
+    tags: [Settings]
+    operationId: getRiskFlagSettings
+    summary: Who hears of an urgent flag, and which team is Responsible Gaming
+    description: |
+      Admin and up (Ayarlar › Risk bayrakları). A workspace nobody has
+      configured answers with no team and no addresses: an urgent flag then
+      reaches the supervisors only.
+    responses:
+      "200":
+        description: The settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlagSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: updateRiskFlagSettings
+    summary: Set the Responsible Gaming team and the addresses an urgent flag is mailed to
+    description: |
+      Admin and up. Either field alone; the other keeps its value.
+      `rg_group_id` must be a team of this workspace (null: none) — its
+      members read a flag's note and evidence and hear of an urgent flag.
+      At most five addresses.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            minProperties: 1
+            properties:
+              rg_group_id: { type: integer, nullable: true, minimum: 1 }
+              notify_emails:
+                type: array
+                maxItems: 5
+                items: { type: string, format: email, maxLength: 254 }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlagSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

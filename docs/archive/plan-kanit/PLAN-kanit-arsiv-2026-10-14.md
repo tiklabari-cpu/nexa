@@ -34,6 +34,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ℹ tm 301.2 · AI-08 2/4 (şema + API; sekme 301.4'te, damga `✅` kaldı): dört RLS'li tablo, `/ai-guardrails/*` 8 yol, platform kuralına yazma 403 `guardrail_platform_locked`, kriz metni onaysız ajan açma 409 `ai_guardrail_setup_incomplete`, güvenli regex lehçeli yasaklı ifadeler · `apps/api/src/routes/ai-guardrails.ts:1` · `ai-guardrails.test.ts` int (24) + types (16) + `guardrail-lock.test.ts` (5) · §D284
 
+- ℹ tm 301.3 · AI-08 3/4 (çalışma zamanı; sekme 301.4'te, damga `✅` kaldı): giriş taraması anlamadan önce (G1/G3/G5/G6/G16 ve uyarısı biten G19 aynı turda devir, G3 kriz metni birebir), anlama sinyalleri `decide()`'dan önce, her taslağa çıkış denetimi + bir yeniden yazma → güvenli metin + `guardrail_output_block` devri, hakem, kilitli + kiracı istem katmanı, `ai_guardrail_hits` tur kaydı · `apps/api/src/services/ai/conversation/conversation-engine.ts:598` · `guardrail-turn.test.ts` (37) + `guardrails/*.test.ts` (50) + `guardrail-hits.test.ts` (2) + int `ai-guardrails-runtime.test.ts` (6) · §D285
+
 #### K06.2.4 — 06.2.4 · Ordered steps (6 adım tipi; reorder + klavye alternatifi)
 
 ✅ drag + klavye (↑↓) reorder — ikisi de tek `moveStep` yolundan + aria-live duyuru; zorunlu-parametre kapısı (transfer hedefi boşsa Save engeli + `role="alert"` satır hatası) — `SkillEditor.tsx` (draggable liste + ↑↓ + `canSave = issues.length===0`) · saf `step-reorder.ts` (`moveStep`/`describeMove`/`stepIssues`) · test `step-reorder.test.ts` (10) + `SkillEditor.test.tsx` (5) · tm 33.2 · §D53

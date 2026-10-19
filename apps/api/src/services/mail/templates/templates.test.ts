@@ -11,6 +11,7 @@ import { escapeHtml, renderEmail, safeUrl, type MailLocale, type RenderedEmail }
 import {
   accountExistsMail,
   aiUsageAlertMail,
+  riskFlagUrgentMail,
   customerTranscriptMail,
   duration,
   invitationMail,
@@ -126,14 +127,23 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       resetsAt: new Date('2026-10-16T00:00:00Z'),
       usageUrl: `${APP}/app/settings/ai-usage`,
     }),
+    riskFlag: riskFlagUrgentMail(ctx, {
+      workspaceName: 'Acme',
+      type: 'self_exclusion_request',
+      chatId: 'CH1H8CFKRV',
+      raisedBy: 'ai',
+      raisedAt: new Date('2026-10-19T10:00:00Z'),
+      timeZone: 'Europe/Istanbul',
+      chatUrl: `${APP}/app/inbox?chat=CH1H8CFKRV`,
+    }),
   };
 }
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all fourteen in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all fifteen in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(14);
+      expect(Object.keys(mails)).toHaveLength(15);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();
@@ -283,8 +293,10 @@ describe('the Graphite + Indigo theme (tm 266)', () => {
         // The workspace's own words get no tile of ours; every other mail does.
         if (name === 'ticket') expect(mail.html, name).not.toContain('class="st-tile');
         else expect(mail.html, name).toContain('class="st-tile');
-        // Only the missed-SLA alert is tinted red.
-        expect(mail.html.includes('class="st-tile st-tile-alert"'), name).toBe(name === 'sla');
+        // Only the missed-SLA alert and the urgent risk flag are tinted red.
+        expect(mail.html.includes('class="st-tile st-tile-alert"'), name).toBe(
+          name === 'sla' || name === 'riskFlag',
+        );
       }
     }
   });

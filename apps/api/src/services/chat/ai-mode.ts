@@ -54,6 +54,7 @@ import {
   type AiModeReason,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
+import { chatRiskPolicy } from '../risk/risk-flags.js';
 
 /** One connection: `threadId` the connection (panel "Chat ID"), `chatId` its day (panel "Thread ID"). */
 export interface AiModeRef {
@@ -226,10 +227,11 @@ export async function claimAiTurn(tx: TenantClient, ref: AiModeRef): Promise<boo
  * AI-11 §6, AI-11-S3) — the one place a hand-back asks, so the check has one
  * definition whoever gives the connection back. Empty: nothing blocks it.
  *
- * Today the flags are what the connection's conversation carries in its state,
- * `ai_conversations.signals.risk_flags` (05 AI-01's `signals`); AI-27 (#302)
- * raises them as rows of its own, chat- and member-scoped, and reads those
- * here too. A connection the AI never opened a conversation on carries none.
+ * Two places hold them: what the connection's conversation carries in its
+ * state (`ai_conversations.signals.risk_flags`, 05 AI-01's `signals`), and the
+ * conversation's own stored flags (`risk_flags`, tm 302.2 · AI-27) — an
+ * agent's as much as the AI's. A player's member flag raised in another
+ * conversation keeps promotions off, not the AI out (`riskPolicy`).
  */
 export async function aiReturnBlockers(tx: TenantClient, ref: AiModeRef): Promise<string[]> {
   const conversation = await tx.aiConversation.findFirst({
@@ -238,7 +240,12 @@ export async function aiReturnBlockers(tx: TenantClient, ref: AiModeRef): Promis
   });
   const signals = conversation?.signals as { risk_flags?: unknown } | null | undefined;
   const raised = Array.isArray(signals?.risk_flags) ? (signals.risk_flags as unknown[]) : [];
-  return AI_RETURN_BLOCKING_RISK_FLAGS.filter((flag) => raised.includes(flag));
+  const stored = (await chatRiskPolicy(tx, ref.chatId)).flags
+    .filter((flag) => flag.chat_id === ref.chatId)
+    .map((flag): string => flag.type);
+  return AI_RETURN_BLOCKING_RISK_FLAGS.filter(
+    (flag) => raised.includes(flag) || stored.includes(flag),
+  );
 }
 
 /**

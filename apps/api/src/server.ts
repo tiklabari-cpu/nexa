@@ -62,6 +62,7 @@ import { MeteredLlm } from './services/ai/metered-llm.js';
 import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
 import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
+import { RiskFlagAnnouncer } from './services/risk/risk-announce.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
 import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
 import reportRoutes from './routes/reports.js';
@@ -78,6 +79,7 @@ import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
 import aiGuidanceRoutes from './routes/ai-guidance.js';
 import aiGuardrailRoutes from './routes/ai-guardrails.js';
+import { riskFlagRoutes } from './routes/risk-flags.js';
 import kbRoutes from './routes/kb.js';
 import publicKbRoutes from './routes/public-kb.js';
 import publicKbHtmlRoutes from './routes/public-kb-html.js';
@@ -491,6 +493,21 @@ export async function buildServer({
     ...(webhookSender ? { sender: webhookSender } : {}),
     logger: app.log,
   });
+  // What a raised or cleared risk flag sets off once committed (tm 302.2 ·
+  // AI-27): the push, the webhook, the urgent mail. One for the server — the
+  // routes and the AI's hand-over both raise flags — drained on close so an
+  // urgent notice that was decided is not abandoned mid-send.
+  const riskFlags = new RiskFlagAnnouncer(app.db, {
+    mailer,
+    publisher: new RealtimePublisher(app.redis, app.log),
+    automations,
+    appUrl: env.WEB_APP_URL.replace(/\/+$/, ''),
+    logger: app.log.child({ component: 'risk-flags' }),
+  });
+  app.decorate('riskFlags', riskFlags);
+  app.addHook('onClose', async () => {
+    await riskFlags.idle();
+  });
   // After both stores it reads through, before anything request-facing: the
   // five sweeps are background work, not part of answering a request.
   await app.register(scheduler, {
@@ -630,6 +647,7 @@ export async function buildServer({
       await api.register(playbookRoutes, { env, llm: meteredLlm, knowledge });
       await api.register(aiGuidanceRoutes, { env, llm: meteredLlm });
       await api.register(aiGuardrailRoutes);
+      await api.register(riskFlagRoutes);
       await api.register(kbRoutes);
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {

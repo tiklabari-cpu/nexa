@@ -57,6 +57,9 @@ export async function startTestServer(
     // run beside the response (tm 283.3); a suite that resets the database
     // next must not TRUNCATE under their transaction.
     await app.aiUsageAlerts.idle();
+    // A raised or cleared risk flag is announced beside the response too (tm
+    // 302.2): the push, the webhook, the urgent mail.
+    await app.riskFlags.idle();
     return response;
   };
 

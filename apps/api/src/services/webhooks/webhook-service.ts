@@ -29,6 +29,9 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
  * chat — the member back the same day. The contract's `WebhookAction` enum and
  * `INTEGRATION_TRIGGERS` carry the same list; `webhooks.test.ts` compares all
  * three.
+ *
+ * `risk_flag_raised` / `risk_flag_cleared` (AI-27-S4 · tm 302.2): a risk
+ * flag on a conversation, as `RiskFlagSignal` — no text anyone wrote.
  */
 export const WEBHOOK_ACTIONS = [
   'chat_started',
@@ -37,6 +40,8 @@ export const WEBHOOK_ACTIONS = [
   'event_created',
   'ticket_created',
   'thread_started',
+  'risk_flag_raised',
+  'risk_flag_cleared',
 ] as const;
 export type WebhookAction = (typeof WEBHOOK_ACTIONS)[number];
 

@@ -169,6 +169,11 @@ export const RTM_PUSH_ACTIONS = [
   // Workspace notices — a share of today's AI allowance used (tm 283.3), to
   // the owner and the alert's recipients only.
   'ai_usage_alert',
+  // A risk flag raised on a conversation or cleared (tm 302.2 · AI-27,
+  // `RiskFlagPush`): to its members, the supervisors and, when urgent, the
+  // Responsible Gaming team.
+  'risk_flag_raised',
+  'risk_flag_cleared',
   // Errors
   'incoming_error',
 ] as const;

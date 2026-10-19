@@ -21,6 +21,7 @@ import {
   PLATFORM_GUARDRAILS_VERSION,
   platformGuardrail,
   readPersona,
+  riskPolicy,
   splitSkillProcedure,
   validateProcedure,
   type Procedure,
@@ -881,5 +882,88 @@ describe('the record (AI-08 §9)', () => {
       guardrailHits: [],
       details: { guardrails: { catalog_version: PLATFORM_GUARDRAILS_VERSION } },
     });
+  });
+});
+
+describe('the stored risk flags on every turn (tm 302.2 · AI-27 §3)', () => {
+  const policy = (flags: Parameters<typeof riskPolicy>[0], chatId = 'c') =>
+    riskPolicy(flags, chatId);
+
+  it('a conversation flag that keeps the AI out: nothing said, no model asked, a hand-over to its team with its priority', async () => {
+    const bonus = saying('bonus', 'bonus nedir', 'Size özel bir bonus tanımlayabiliriz.');
+    const llm = new Capturing();
+    const result = await engine(llm).runTurn(
+      emptyTurnState(),
+      { text: 'bonus nedir', throughSeq: 4 },
+      context([bonus], {
+        risk: policy([{ type: 'underage_suspected', scope: 'member', chat_id: 'c' }]),
+      }),
+    );
+    expect(llm.requests).toEqual([]);
+    expect(result.reply).toBeNull();
+    expect(result.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        topic: 'responsible_gaming',
+        reason: 'risk_flag',
+        priority: 'urgent',
+      },
+    ]);
+    expect(result.decisions).toMatchObject({ outcome: 'handed_off', handoffReason: 'risk_flag' });
+    expect(result.nextState.lastProcessedEventSeq).toBe(4);
+    expect(skillDecision(result)).toMatchObject({
+      decision: 'handoff',
+      handoffReason: 'risk_flag',
+    });
+  });
+
+  it('self-harm still gets the crisis text first on a conversation already kept from the AI', async () => {
+    const result = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'artık yaşamak istemiyorum' },
+      context([ANSWERS], {
+        risk: policy([{ type: 'rg_signal', scope: 'member', chat_id: 'c' }]),
+      }),
+    );
+    expect(result.reply).toBe(CRISIS);
+    expect(result.decisions.handoffReason).toBe('guardrail_self_harm');
+  });
+
+  it('a player’s flag from another conversation: no bonus talk (G4), the AI still answers — and an agent with nothing to run takes no turn', async () => {
+    const bonus = saying('bonus', 'bonus nedir', 'Size özel bir bonus tanımlayabiliriz.');
+    const yesterday = policy([{ type: 'self_exclusion_request', scope: 'member', chat_id: 'old' }]);
+    expect(yesterday).toMatchObject({ noBonusTalk: true, mustHandoff: false });
+
+    const llm = new Capturing();
+    const blocked = await engine(llm).runTurn(
+      emptyTurnState(),
+      { text: 'bonus nedir' },
+      context([bonus], { risk: yesterday }),
+    );
+    expect(llm.written()[0]!.system).toContain(platformGuardrail('G4').prompt.tr);
+    expect(blocked.reply).toBe(SAFE);
+    expect(blocked.decisions.handoffReason).not.toBe('risk_flag');
+    expect(hitsOf(blocked)).toEqual([
+      'G4/input/prompt_block',
+      'G4/output/rewrite',
+      'G4/output/safe_text',
+    ]);
+
+    // A flag that only keeps promotions off (none here) changes nothing.
+    const plain = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'bonus nedir' },
+      context([bonus], { risk: policy([{ type: 'abusive', scope: 'chat', chat_id: 'c' }]) }),
+    );
+    expect(plain.reply).toBe('Size özel bir bonus tanımlayabiliriz.');
+
+    const idle = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'bonus nedir' },
+      context([], { risk: policy([{ type: 'rg_signal', scope: 'member', chat_id: 'c' }]) }),
+    );
+    expect(idle.sideEffects).toEqual([]);
+    expect(idle.reply).toBeNull();
   });
 });

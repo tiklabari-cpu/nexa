@@ -20,6 +20,7 @@ import {
   GUARDRAIL_SAFE_TEXT,
   type GuardrailPriority,
   type PersonaLanguage,
+  type RiskPolicy,
 } from '@siyahtus/types';
 import { NO_ANSWER_PHRASES } from '../knowledge-answer.js';
 import type { AiStateObject } from '../state-store.js';
@@ -274,6 +275,62 @@ export function guardrailHandoffTurn(input: GuardrailHandoffInput): TurnResult {
     nextState: {
       ...state,
       signals: withRiskFlags(state.signals, riskFlags),
+      counters: { ...state.counters, turns: turnsTaken(state) + 1 },
+      lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
+    },
+  };
+}
+
+/** The hand-over reason of a turn a stored risk flag keeps from the AI (tm 302.2). */
+export const RISK_FLAG_HANDOFF_REASON = 'risk_flag';
+
+/**
+ * A turn a stored risk flag keeps from the AI (tm 302.2 · AI-27 §3,
+ * `mustHandoff`): nothing is said — the flag says a person answers this
+ * conversation — and it goes to the flag's team with its priority. The
+ * procedure in progress stays where it stood, as with any forced hand-over.
+ */
+export function riskFlagHandoffTurn(
+  state: TurnState,
+  message: TurnMessage,
+  risk: RiskPolicy,
+): TurnResult {
+  return {
+    reply: null,
+    decisions: {
+      outcome: 'handed_off',
+      skillId: null,
+      skillName: null,
+      replyKind: null,
+      failure: null,
+      capped: null,
+      usage: { llmInputTokens: 0, llmOutputTokens: 0, embeddingTokens: 0 },
+      handoffReason: RISK_FLAG_HANDOFF_REASON,
+      log: [
+        {
+          step: 'risk_flag',
+          detail: [
+            'the conversation carries a risk flag that keeps the AI out — handed to a human',
+            risk.targetTeamKey ? `topic ${risk.targetTeamKey}` : '',
+            `priority ${risk.priority}`,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          ok: true,
+        },
+      ],
+    },
+    sideEffects: [
+      {
+        kind: 'handoff',
+        team: null,
+        ...(risk.targetTeamKey ? { topic: risk.targetTeamKey } : {}),
+        reason: RISK_FLAG_HANDOFF_REASON,
+        priority: risk.priority,
+      },
+    ],
+    nextState: {
+      ...state,
       counters: { ...state.counters, turns: turnsTaken(state) + 1 },
       lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
     },

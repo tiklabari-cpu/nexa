@@ -142,6 +142,7 @@ import {
   handOverAfterLockedProcedure,
   readAbuseWarnings,
   readRiskFlags,
+  riskFlagHandoffTurn,
   safeText,
 } from './guardrails/guardrail-turn.js';
 import {
@@ -599,6 +600,7 @@ export class ConversationEngine {
     const guard = this.#openGuard(state, message, ctx);
     const result =
       this.#inputGuardrails(state, message, ctx, guard) ??
+      this.#riskHandoff(state, message, ctx) ??
       this.#answerToOffer(state, message, ctx) ??
       this.#neverSilent(state, message, ctx, await this.#takeTurn(state, message, ctx));
     const settled =
@@ -611,7 +613,9 @@ export class ConversationEngine {
     const guard: TurnGuard = {
       config: ctx.config.guardrails ?? NO_GUARDRAIL_CONFIG,
       scan: scanInput(message.text),
-      riskFlagged: readRiskFlags(state.signals).length > 0,
+      // Flagged by a rule this conversation (its state), or by a stored flag
+      // of the conversation or its player that keeps bonus talk off (AI-27).
+      riskFlagged: readRiskFlags(state.signals).length > 0 || ctx.risk?.noBonusTalk === true,
       hits: [],
       deferred: [],
     };
@@ -643,6 +647,19 @@ export class ConversationEngine {
     return procedureCatalogue(ctx.config.skills).some(
       (item) => item.entry.locked && !item.skill.isFallback,
     );
+  }
+
+  /**
+   * A conversation a risk flag keeps from the AI (tm 302.2 · AI-27 §3,
+   * `mustHandoff`): an agent flagged it while the AI had it, or a flag was
+   * raised and the hand-over did not happen. The AI writes nothing and hands
+   * over, to the flag's team with its priority. After the input scan, so
+   * self-harm's crisis text still goes out first; only where the AI would
+   * answer at all.
+   */
+  #riskHandoff(state: TurnState, message: TurnMessage, ctx: TurnContext): TurnResult | null {
+    if (!ctx.risk?.mustHandoff || ctx.config.skills.length === 0) return null;
+    return riskFlagHandoffTurn(state, message, ctx.risk);
   }
 
   /**

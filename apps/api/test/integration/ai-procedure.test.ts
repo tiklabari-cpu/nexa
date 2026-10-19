@@ -22,7 +22,12 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId, splitSkillProcedure, type Procedure } from '@siyahtus/types';
+import {
+  PLATFORM_GUARDRAILS_VERSION,
+  generateShortId,
+  splitSkillProcedure,
+  type Procedure,
+} from '@siyahtus/types';
 import { withTenant, type TenantContext } from '../../src/lib/tenant.js';
 import { ConversationEngine } from '../../src/services/ai/conversation/conversation-engine.js';
 import {
@@ -254,7 +259,8 @@ describe('the §3.1 deposit procedure on the database (AI-03 acceptance)', () =>
     // Published mid-conversation: the stored skill changes, the pinned copy does not.
     const edited = depositProcedure((raw) => {
       for (const template of raw['templates'] as Array<{ key: string; text: string }>) {
-        if (template.key === 'normal_sure') template.text = 'YENİ: {yontem} birazdan yansır.';
+        if (template.key === 'normal_sure')
+          template.text = 'YENİ: {yontem} genellikle birazdan yansır.';
       }
     });
     await owner.skill.update({
@@ -279,7 +285,7 @@ describe('the §3.1 deposit procedure on the database (AI-03 acceptance)', () =>
     const fresh = await connection(fx.a);
     await turn(fresh, 'param yatmadı');
     const third = await turn(fresh, 'Papara 13:40');
-    expect(third.reply).toContain('YENİ: Papara birazdan yansır.');
+    expect(third.reply).toContain('YENİ: Papara genellikle birazdan yansır.');
     expect((await row(fresh)).digest).toMatchObject({ outcome: 'resolved_waiting' });
   });
 
@@ -294,7 +300,9 @@ describe('the §3.1 deposit procedure on the database (AI-03 acceptance)', () =>
           { id: 'bilgi', type: 'say', template_key: 'bilgi' },
           { id: 'bitti', type: 'resolve', outcome: 'resolved' },
         ];
-        raw['templates'] = [{ key: 'bilgi', text: 'Çekim talepleri 24 saat içinde işlenir.' }];
+        raw['templates'] = [
+          { key: 'bilgi', text: 'Çekim talepleri genellikle 24 saat içinde işlenir.' },
+        ];
         raw['handoff'] = { conditions: [], card_fields: [] };
       }),
       aiAgentId,
@@ -305,7 +313,7 @@ describe('the §3.1 deposit procedure on the database (AI-03 acceptance)', () =>
 
     const switched = await turn(ref, 'para çekemiyorum');
     expect(switched.reply).toBe(
-      'Çekim talepleri 24 saat içinde işlenir.\nÖnceki konuya dönelim mi?',
+      'Çekim talepleri genellikle 24 saat içinde işlenir.\nÖnceki konuya dönelim mi?',
     );
     const aside = await row(ref);
     expect(aside).toMatchObject({ activeSkillId: null, stepStatus: null });
@@ -408,7 +416,7 @@ describe('procedure skills on the live path (AI-03)', () => {
         ],
         templates: [
           { key: 'giris', text: 'Hemen bakalım.' },
-          { key: 'bekle', text: '{yontem} yatırımları 30 dakika içinde yansır.' },
+          { key: 'bekle', text: '{yontem} yatırımları genellikle 30 dakika içinde yansır.' },
         ],
       },
     };
@@ -502,7 +510,9 @@ describe('procedure skills on the live path (AI-03)', () => {
     expect(opened.procedureSnapshotHash).toBe(procedureHash(snapshot!.procedure));
 
     await send(headers, 'Papara, 10 dakika önce');
-    expect((await botTexts(first.chat_id))[1]).toBe('Papara yatırımları 30 dakika içinde yansır.');
+    expect((await botTexts(first.chat_id))[1]).toBe(
+      'Papara yatırımları genellikle 30 dakika içinde yansır.',
+    );
     expect(
       await owner.aiConversation.findFirstOrThrow({ where: { threadId: first.event.thread_id } }),
     ).toMatchObject({ activeSkillId: null, stepStatus: null, counters: { turns: 2 } });
@@ -659,7 +669,7 @@ describe('procedure skills on the live path (AI-03)', () => {
 
     expect(await botTexts(first.chat_id)).toEqual([
       'Hemen bakalım.\nHangi yöntemle yatırdınız? Ne zaman yatırdınız?',
-      'Papara yatırımları 30 dakika içinde yansır.',
+      'Papara yatırımları genellikle 30 dakika içinde yansır.',
     ]);
     expect(
       await owner.aiConversation.findFirstOrThrow({ where: { threadId: first.event.thread_id } }),
@@ -733,6 +743,8 @@ describe('procedure skills on the live path (AI-03)', () => {
         steps: ['detect_intent', 'tag', 'send_message'],
         failed_steps: [],
         embedding_tokens: 0,
+        // Every turn names the guardrail catalogue it ran under (tm 301.3 · AI-08 §9).
+        guardrails: { catalog_version: PLATFORM_GUARDRAILS_VERSION },
       },
     });
 

@@ -24,7 +24,9 @@
  * example sentences in every suite (AI-05 §6). So is the cited knowledge
  * answer (tm 298): `mockKnowledgeAnswer` reads the grounding
  * `buildAnswerPrompt` wrote and writes the stitched answer it always wrote,
- * citing the passages it used.
+ * citing the passages it used. And so is the guardrails' judge (tm 301.3):
+ * `mockJudge` reads the context `buildJudgePrompt` wrote and finds nothing —
+ * the deterministic output check is the stub's whole judgement.
  * The invalid, refused and cut-off replies a real model can give are not
  * produced here; tests inject a provider that gives them (§6a.6).
  *
@@ -42,6 +44,11 @@ import {
   KNOWLEDGE_ANSWER_RESPONSE_NAME,
   mockKnowledgeAnswer,
 } from '../conversation/knowledge-answer.js';
+import {
+  JUDGE_RESPONSE_NAME,
+  mockJudge,
+  readJudgeGrounding,
+} from '../conversation/guardrails/judge.js';
 import { mockUnderstanding } from '../conversation/understand-mock.js';
 import { readUnderstandGrounding, UNDERSTAND_RESPONSE_NAME } from '../conversation/understand.js';
 import { exampleForSchema } from './json-schema.js';
@@ -60,6 +67,15 @@ export class MockLlmProvider implements LlmProvider {
       }
       return {
         text: JSON.stringify(mockKnowledgeAnswer(grounding)),
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
+    if (request.responseFormat?.name === JUDGE_RESPONSE_NAME) {
+      const grounding = readJudgeGrounding(request.system);
+      if (!grounding)
+        throw new Error('A judge request without the context buildJudgePrompt writes.');
+      return {
+        text: JSON.stringify(mockJudge(grounding)),
         usage: { inputTokens: 0, outputTokens: 0 },
       };
     }

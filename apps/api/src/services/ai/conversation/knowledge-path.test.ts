@@ -61,7 +61,7 @@ const FAQ: RetrievedChunk = {
   id: 'chunk-faq',
   sourceId: 'source-faq',
   sourceName: 'SSS',
-  text: 'Çekim talepleri 24 saat içinde işlenir.',
+  text: 'Çekim talepleri genellikle 24 saat içinde işlenir.',
   score: 0.8,
 };
 
@@ -301,7 +301,8 @@ describe('a draft that guesses is not sent (AI-06 §6, §11)', () => {
   });
 
   it('a second draft that still invents is withheld, and the player is told the AI cannot answer', async () => {
-    const llm = freshDrafts({ reply: 'Çekim talepleri 2 saat içinde işlenir.' });
+    // Hedged, so the figure is all it breaks (an unhedged time is G7's, tm 301.3).
+    const llm = freshDrafts({ reply: 'Çekim talepleri genellikle 2 saat içinde işlenir.' });
     const result = await engine(knowledgeOf([FAQ]), llm).runTurn(
       emptyTurnState(),
       { text: 'çekimim ne zaman işlenir?' },

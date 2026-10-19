@@ -28,7 +28,7 @@ import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers
 import { depositProcedure } from '../helpers/procedure-fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
-const FAQ = 'Çekim talepleri 24 saat içinde işlenir.';
+const FAQ = 'Çekim talepleri genellikle 24 saat içinde işlenir.';
 const CANNOT_HAND_OVER =
   'Bu konuda size kesin bilgi veremiyorum. Sizi bir temsilcimize aktarıyorum.';
 const CANNOT_ASK = 'Bu konuda size kesin bilgi veremiyorum. Sizi bir temsilcimize aktarayım mı?';
@@ -341,7 +341,8 @@ describe('the knowledge answer and "I cannot answer this" (AI-06)', () => {
     await seedFaq(FAQ);
     script = () =>
       JSON.stringify({
-        reply: 'Çekim talepleri 2 saat içinde işlenir.',
+        // Hedged: the figure is all it breaks (an unhedged time is G7's, tm 301.3).
+        reply: 'Çekim talepleri genellikle 2 saat içinde işlenir.',
         grounded: 'full',
         cited_ids: ['P1'],
       });

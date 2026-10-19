@@ -259,11 +259,15 @@ describe('which rules a written call carries (AI-07 §2)', () => {
     expect(result.decisions.guidance).toEqual({ rule_ids: ['r-all'] });
   });
 
-  it('with no rule and no style, the compose prompt has no rules block at all', async () => {
+  it('with no rule and no style, the compose prompt carries the platform’s locked rules and nothing of the business’s', async () => {
     const llm = new Capturing();
     await engine(llm).runTurn(emptyTurnState(), { text: 'bonus nedir' }, context([BONUS], []));
     const [compose] = llm.written();
-    expect(compose).not.toContain('most binding first');
+    // The locked layer is the platform's (tm 301.3 · AI-08): never empty.
+    expect(compose).toContain('Platform rules (locked):');
+    expect(compose).not.toContain("The business's rules for how you behave:");
+    expect(compose).not.toContain("The business's compliance rules:");
+    expect(compose).not.toContain('Persona:');
   });
 
   it('past 30 rules the lowest priorities are left out and the record says guidance_truncated', async () => {

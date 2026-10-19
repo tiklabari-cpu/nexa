@@ -92,7 +92,9 @@ import {
   DEFAULT_CLARIFY_THRESHOLDS,
   DEFAULT_DAY_BOUNDARY,
   DEFAULT_NO_ANSWER,
+  GUARDRAIL_OUTPUT_BLOCK_REASON,
   maxQuestionsOf,
+  platformGuardrail,
   readPersona,
   validateSkillProcedure,
   type AiConversationOutcome,
@@ -125,6 +127,49 @@ import {
   type LlmProvider,
 } from '../provider/llm-provider.js';
 import { GAP_MARKER, shortenHistory } from './context-loader.js';
+import {
+  forbiddenPhrasesFor,
+  guardrailRulesFor,
+  guardrailSettingsFor,
+  NO_GUARDRAIL_CONFIG,
+  type GuardrailConfig,
+  type GuardrailRuleConfig,
+} from './guardrails/config.js';
+import {
+  ABUSE_WARNINGS_SIGNAL,
+  abuseWarning,
+  guardrailHandoffTurn,
+  handOverAfterLockedProcedure,
+  readAbuseWarnings,
+  readRiskFlags,
+  safeText,
+} from './guardrails/guardrail-turn.js';
+import {
+  mergeTriggers,
+  scanInput,
+  signalTriggers,
+  type GuardrailTrigger,
+  type InputScan,
+} from './guardrails/input-scan.js';
+import {
+  buildJudgePrompt,
+  judgeRules,
+  JUDGE_RESPONSE_FORMAT,
+  readJudgeReply,
+  type JudgeReply,
+} from './guardrails/judge.js';
+import {
+  checkOutput,
+  CLEAN_OUTPUT,
+  guardrailRewriteNote,
+  type OutputViolation,
+} from './guardrails/output-check.js';
+import { guardrailLayers } from './guardrails/prompt-block.js';
+import {
+  guardrailHit,
+  mergeGuardrailRecords,
+  type GuardrailHitRecord,
+} from './guardrails/record.js';
 import {
   guidanceLayer,
   guidanceRecord,
@@ -458,7 +503,50 @@ interface KnowledgeAnswer {
   missed?: UnansweredReason;
   /** The behaviour rules the call carried (tm 299.1) — absent when none applied. */
   guidance?: GuidanceRecord;
+  /**
+   * Nothing of the draft is sent (tm 301.3 · AI-08 §8): it still broke a
+   * guardrail after its one rewrite (`guardrail_output_block`), or the judge
+   * found the message under a workspace rule that hands over. The turn says
+   * the safe text and hands over for `reason`.
+   */
+  blocked?: { reason: string };
 }
+
+/**
+ * What one turn's guardrails hold while it runs (tm 301.3): the
+ * configuration, the input scan, whether the conversation was risk-flagged
+ * when the turn began (G4), and the hits its written calls found.
+ */
+interface TurnGuard {
+  readonly config: GuardrailConfig;
+  readonly scan: InputScan;
+  readonly riskFlagged: boolean;
+  readonly hits: GuardrailHitRecord[];
+  /**
+   * Rules held back for a locked procedure the decision order may start for
+   * the same message (AI-05 · AI-15): the turn hands over all the same
+   * (`#closeGuard`).
+   */
+  readonly deferred: GuardrailTrigger[];
+}
+
+/** A draft's verdict: the output check's, and the judge's where it ran. */
+interface DraftCheck {
+  readonly violations: readonly OutputViolation[];
+  /** Workspace rules the judge found the message under: the turn hands over. */
+  readonly handoff: readonly OutputViolation[];
+  readonly warnings: readonly OutputViolation[];
+  /** What the judge cost. */
+  readonly usage: { inputTokens: number; outputTokens: number } | null;
+  /** Run-log notes: the judge's verdict, what its shield dropped. */
+  readonly notes: readonly string[];
+}
+
+/** A workspace rule's hand-over (`force_handoff`, read by the judge) — AI-09 has no code of its own for it. */
+const WORKSPACE_RULE_HANDOFF_REASON = 'guardrail_workspace_rule';
+
+/** G19 warns this many times before it hands over (AI-09 `abuse_warnings`, #303 makes it a setting). */
+const ABUSE_WARNINGS_BEFORE_HANDOFF = platformGuardrail('G19').warningsBeforeHandoff ?? 2;
 
 export class ConversationEngine {
   readonly #knowledge: KnowledgeService;
@@ -472,6 +560,8 @@ export class ConversationEngine {
    * the knowledge search of the same turn reuses it rather than asking again.
    */
   readonly #turnEmbeddings = new WeakMap<TurnMessage, { text: string; query: EmbeddedQuery }>();
+  /** The turn's guardrails (tm 301.3), opened by `runTurn` and read by every written call. */
+  readonly #guards = new WeakMap<TurnMessage, TurnGuard>();
 
   constructor(options: ConversationEngineOptions) {
     this.#knowledge = options.knowledge;
@@ -498,11 +588,258 @@ export class ConversationEngine {
    * tables and the knowledge base (`#knowledgeTurn`); then the fallback (§5);
    * then the no-answer reply (`#noAnswer`). Whatever the turn did, the
    * silence rule has the last word (`#neverSilent`, AI-06 §9).
+   *
+   * The guardrails (tm 301.3 · AI-08) stand around all of it: the input scan
+   * first, before any model is asked — a rule the player's words set off hands
+   * over at once (`#inputGuardrails`) — and the output check last, on the
+   * reply the turn would send, whoever wrote it (`#closeGuard`). The written
+   * calls between check their own drafts and rewrite them once.
    */
   async runTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
-    const offer = this.#answerToOffer(state, message, ctx);
-    if (offer) return offer;
-    return this.#neverSilent(state, message, ctx, await this.#takeTurn(state, message, ctx));
+    const guard = this.#openGuard(state, message, ctx);
+    const result =
+      this.#inputGuardrails(state, message, ctx, guard) ??
+      this.#answerToOffer(state, message, ctx) ??
+      this.#neverSilent(state, message, ctx, await this.#takeTurn(state, message, ctx));
+    const settled =
+      guard.deferred.length > 0 ? this.#settleDeferred(state, message, ctx, guard, result) : result;
+    return this.#closeGuard(state, message, ctx, guard, settled);
+  }
+
+  /** The turn's guardrails: the configuration, the input scan, the risk flags it starts with. */
+  #openGuard(state: TurnState, message: TurnMessage, ctx: TurnContext): TurnGuard {
+    const guard: TurnGuard = {
+      config: ctx.config.guardrails ?? NO_GUARDRAIL_CONFIG,
+      scan: scanInput(message.text),
+      riskFlagged: readRiskFlags(state.signals).length > 0,
+      hits: [],
+      deferred: [],
+    };
+    this.#guards.set(message, guard);
+    return guard;
+  }
+
+  /** The turn's guardrails as a written call reads them — a fresh one outside `runTurn`. */
+  #guardOf(message: TurnMessage, ctx: TurnContext): TurnGuard {
+    return (
+      this.#guards.get(message) ?? {
+        config: ctx.config.guardrails ?? NO_GUARDRAIL_CONFIG,
+        scan: scanInput(message.text),
+        riskFlagged: false,
+        hits: [],
+        deferred: [],
+      }
+    );
+  }
+
+  /**
+   * Whether a rule's hand-over waits for the decision order (AI-05 · AI-15):
+   * when the agent has a locked procedure — the platform's own, compliant by
+   * construction — that may be the one the message selects. Never self-harm:
+   * its crisis text goes out first, whatever else is true.
+   */
+  #defers(triggers: readonly GuardrailTrigger[], ctx: TurnContext): boolean {
+    if (triggers.some((trigger) => trigger.rule.tenantText === 'crisis')) return false;
+    return procedureCatalogue(ctx.config.skills).some(
+      (item) => item.entry.locked && !item.skill.isFallback,
+    );
+  }
+
+  /**
+   * The input scan's verdict (AI-08 §1–§3), before anything else of the turn:
+   * a rule the player's words set off on their own — G1, G3, G5, G6, G16, and
+   * G19 once its warnings are spent — hands over now, with no model asked.
+   * Only where the AI would answer at all: an agent with nothing to run takes
+   * no turn, guardrails or not.
+   */
+  #inputGuardrails(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    guard: TurnGuard,
+  ): TurnResult | null {
+    if (ctx.config.skills.length === 0) return null;
+    const abusive =
+      guard.scan.abuse.length > 0 &&
+      readAbuseWarnings(state.signals) >= ABUSE_WARNINGS_BEFORE_HANDOFF;
+    const triggers = [
+      ...guard.scan.triggered,
+      ...(abusive
+        ? [
+            {
+              rule: platformGuardrail('G19'),
+              matches: guard.scan.abuse,
+              signals: [],
+              signalQuote: null,
+            },
+          ]
+        : []),
+    ];
+    if (triggers.length === 0) return null;
+    if (this.#defers(triggers, ctx)) {
+      guard.deferred.push(...triggers);
+      return null;
+    }
+    const agentId = turnAgentId(ctx.config.skills);
+    return guardrailHandoffTurn({
+      state,
+      message,
+      triggers,
+      answerIn: languageVerdict(message.text, agentPersona(ctx.config.skills), null).answerIn,
+      settings: guardrailSettingsFor(guard.config, agentId),
+      catalogVersion: guard.config.catalogVersion,
+      decided: {},
+    });
+  }
+
+  /**
+   * The rules held back for a locked procedure (`#defers`), once the turn is
+   * decided: the locked procedure answered — its turn stands and hands over
+   * (`handOverAfterLockedProcedure`) — or something else did, and nothing of
+   * it goes: the rules' hand-over takes its place, at the cost the turn ran up.
+   */
+  #settleDeferred(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    guard: TurnGuard,
+    result: TurnResult,
+  ): TurnResult {
+    const triggers = mergeTriggers(guard.deferred);
+    const skill = ctx.config.skills.find((candidate) => candidate.id === result.decisions.skillId);
+    const { decisions } = result;
+    if (skill?.locked && !decisions.failure && !decisions.capped) {
+      return handOverAfterLockedProcedure(result, triggers, guard.config.catalogVersion);
+    }
+    return guardrailHandoffTurn({
+      state,
+      message,
+      triggers,
+      answerIn: languageVerdict(
+        message.text,
+        agentPersona(ctx.config.skills),
+        decisions.understood?.language,
+      ).answerIn,
+      settings: guardrailSettingsFor(guard.config, turnAgentId(ctx.config.skills)),
+      catalogVersion: guard.config.catalogVersion,
+      decided: {
+        usage: decisions.usage,
+        ...(decisions.understood ? { understood: decisions.understood } : {}),
+        ...(decisions.policy ? { policy: decisions.policy } : {}),
+        log: decisions.log,
+      },
+    });
+  }
+
+  /**
+   * The turn's last word from the guardrails (AI-08 §6, §8, §9), on every turn
+   * the AI took:
+   *
+   *   - the reply it would send is checked once more, whoever wrote it — a
+   *     written part was checked and rewritten where it was written; this
+   *     catches the fixed texts (a `say` step, a template). Nothing a model
+   *     wrote is left to rewrite here, so a breach is the safe text and a
+   *     hand-over (`guardrail_output_block`). A reply a guardrail wrote — the
+   *     crisis text, the complaint procedure — is the workspace's own and goes
+   *     as it is;
+   *   - G19's warning, while its warnings last, in front of the reply;
+   *   - the evidence: a lexicon match no rule acted on (G2, G13, G15 without
+   *     the understanding call's signal);
+   *   - the record: every hit, the catalogue version the turn ran under, the
+   *     flags it raised.
+   */
+  #closeGuard(
+    state: TurnState,
+    message: TurnMessage,
+    ctx: TurnContext,
+    guard: TurnGuard,
+    result: TurnResult,
+  ): TurnResult {
+    this.#guards.delete(message);
+    if (!tookTurn(result)) return result;
+    let out = result;
+    const hits: GuardrailHitRecord[] = [...guard.hits];
+    const decidedHits = result.decisions.guardrails?.hits ?? [];
+    const forced = decidedHits.some(
+      (hit) => hit.stage === 'input' && (hit.action === 'handoff' || hit.action === 'crisis_text'),
+    );
+    const skill = ctx.config.skills.find((candidate) => candidate.id === result.decisions.skillId);
+    const situation = {
+      aiAgentId: skill?.aiAgentId ?? turnAgentId(ctx.config.skills),
+      skillId: result.decisions.skillId,
+    };
+    const { answerIn } = languageVerdict(
+      message.text,
+      skill?.persona ?? agentPersona(ctx.config.skills),
+      result.decisions.understood?.language,
+    );
+
+    if (!forced && out.reply) {
+      const check = checkOutput(out.reply, {
+        riskFlagged: guard.riskFlagged,
+        phrases: forbiddenPhrasesFor(guard.config, situation, answerIn),
+      });
+      for (const warning of check.warnings) {
+        hits.push(guardrailHit(warning.rule, 'output', 'warn', warning.quote));
+      }
+      if (check.violations.length > 0) {
+        for (const violation of check.violations) {
+          hits.push(
+            guardrailHit(violation.rule, 'output', 'safe_text', violation.quote, violation.pattern),
+          );
+        }
+        out = blockedReply(out, safeText(answerIn), check.violations);
+      }
+    }
+
+    let signals = out.nextState.signals;
+    const abusedBefore = readAbuseWarnings(state.signals);
+    const firstAbuse = guard.scan.abuse[0];
+    if (firstAbuse && abusedBefore < ABUSE_WARNINGS_BEFORE_HANDOFF) {
+      // G19 (AI-09 `abuse_warnings`): calm, no reply in kind — a warning in
+      // front of the answer, counted; the hand-over comes when they are spent.
+      hits.push(
+        guardrailHit(
+          { source: 'platform', id: 'G19' },
+          'input',
+          'warn',
+          firstAbuse.quote,
+          firstAbuse.pattern,
+        ),
+      );
+      signals = { ...signals, [ABUSE_WARNINGS_SIGNAL]: abusedBefore + 1 };
+      if (out.decisions.outcome !== 'handed_off' && out.reply) {
+        out = { ...out, reply: `${abuseWarning(answerIn)}\n${out.reply}` };
+      }
+    }
+
+    // A lexicon match no rule acted on: evidence, recorded (AI-08 §2).
+    const acted = new Set(decidedHits.map((hit) => hit.rule_key));
+    for (const match of guard.scan.matches) {
+      const rule = platformGuardrail(match.rule);
+      if (rule.lexiconAlone || acted.has(match.rule)) continue;
+      acted.add(match.rule);
+      hits.push(
+        guardrailHit(
+          { source: 'platform', id: match.rule },
+          'input',
+          'evidence',
+          match.quote,
+          match.pattern,
+        ),
+      );
+    }
+
+    const record = mergeGuardrailRecords(out.decisions.guardrails, {
+      catalog_version: guard.config.catalogVersion,
+      hits,
+      risk_flags: [],
+    });
+    return {
+      ...out,
+      decisions: { ...out.decisions, ...(record ? { guardrails: record } : {}) },
+      nextState: signals === out.nextState.signals ? out.nextState : { ...out.nextState, signals },
+    };
   }
 
   async #takeTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
@@ -828,6 +1165,7 @@ export class ConversationEngine {
     let reply: string | null = null;
     let replyKind: TurnDecisions['replyKind'] = null;
     let handedOver = false;
+    let handoffReason: string | null = null;
     let failure: SkillFailure | null = null;
     let capped: AiDailyCapError | null = null;
     let usage = NOTHING_SPENT;
@@ -929,6 +1267,13 @@ export class ConversationEngine {
             // silence (see the file header).
             reply = null;
             replyKind = null;
+          } else if (answer.blocked) {
+            // AI-08 §8: the draft is not sent — the safe text, and a person.
+            reply = safeText(input.answerIn);
+            replyKind = 'answer';
+            handedOver = true;
+            handoffReason = answer.blocked.reason;
+            sideEffects.push({ kind: 'handoff', team: null, reason: answer.blocked.reason });
           } else if (answer.text) {
             // K5 (an earlier connection's detail) is the answer's own check
             // (`#answerFromKnowledge`): a draft that repeats one comes back
@@ -936,7 +1281,11 @@ export class ConversationEngine {
             reply = answer.text;
             replyKind = 'answer';
           }
-          log.push({ step: name, detail: answer.detail, ok: answer.text !== null });
+          log.push({
+            step: name,
+            detail: answer.detail,
+            ok: answer.text !== null || answer.blocked !== undefined,
+          });
           break;
         }
 
@@ -959,6 +1308,7 @@ export class ConversationEngine {
         capped,
         usage,
         log,
+        ...(handoffReason ? { handoffReason } : {}),
         ...(knowledge ? { knowledge } : {}),
         ...(guidance ? { guidance } : {}),
       },
@@ -1017,6 +1367,31 @@ export class ConversationEngine {
       return notUnderstood(state, message, active, understood);
     }
     const { understanding } = understood;
+
+    // AI-08 §2: a risk signal sets its rule off on its own — before the
+    // decision order, so no procedure, no clarifying question and no answer
+    // comes between the player and the person (tm 301.3).
+    const guard = this.#guardOf(message, ctx);
+    const signalled = signalTriggers(understanding, guard.scan);
+    if (signalled.length > 0 && this.#defers(signalled, ctx)) {
+      guard.deferred.push(...signalled);
+    } else if (signalled.length > 0) {
+      const persona = agentPersona(ctx.config.skills);
+      return guardrailHandoffTurn({
+        state,
+        message,
+        triggers: signalled,
+        answerIn: languageVerdict(message.text, persona, understanding.language).answerIn,
+        settings: guardrailSettingsFor(guard.config, turnAgentId(ctx.config.skills)),
+        catalogVersion: guard.config.catalogVersion,
+        decided: {
+          usage: understood.spent,
+          ...(understood.record ? { understood: understood.record } : {}),
+          log: understood.log,
+        },
+      });
+    }
+
     const thresholds = ctx.config.clarifyThresholds ?? DEFAULT_CLARIFY_THRESHOLDS;
     const decided = decide({
       understanding,
@@ -1504,9 +1879,10 @@ export class ConversationEngine {
     let guidance: GuidanceRecord | undefined;
     let failure: SkillFailure | null = null;
     let capped: AiDailyCapError | null = null;
+    let blocked: { reason: string } | null = null;
     let failedAt: string | null = null;
     for (const part of result.parts) {
-      if (failure || capped) break;
+      if (failure || capped || blocked) break;
       switch (part.kind) {
         case 'template':
           segments.push({ kind: 'text', text: part.text });
@@ -1539,17 +1915,24 @@ export class ConversationEngine {
             failure = answer.failure ?? null;
             capped = answer.capped ?? null;
             failedAt = part.at;
+          } else if (answer.blocked) {
+            blocked = answer.blocked;
+            failedAt = part.at;
           } else if (answer.text) {
             // K5 (tm 294) is the answer's own check (`#answerFromKnowledge`).
             segments.push({ kind: 'text', text: answer.text });
           }
-          log.push({ step: part.at, detail: answer.detail, ok: answer.text !== null });
+          log.push({
+            step: part.at,
+            detail: answer.detail,
+            ok: answer.text !== null || answer.blocked !== undefined,
+          });
           break;
         }
       }
     }
 
-    if (!failure && !capped && instructions.length > 0) {
+    if (!failure && !capped && !blocked && instructions.length > 0) {
       const at = (instructions[0] as { at: string }).at;
       const written = await this.#compose({
         message,
@@ -1565,10 +1948,17 @@ export class ConversationEngine {
       });
       usage = addUsage(usage, written.spent);
       guidance = mergeGuidanceRecords(guidance, written.guidance);
-      log.push({ step: at, detail: written.detail, ok: written.text !== null });
+      log.push({
+        step: at,
+        detail: written.detail,
+        ok: written.text !== null || written.blocked !== undefined,
+      });
       if (written.failure || written.capped) {
         failure = written.failure ?? null;
         capped = written.capped ?? null;
+        failedAt = at;
+      } else if (written.blocked) {
+        blocked = written.blocked;
         failedAt = at;
       } else if (written.text) {
         const index = segments.findIndex((segment) => segment.kind === 'written');
@@ -1589,8 +1979,14 @@ export class ConversationEngine {
         target: null,
       };
     }
+    // AI-08 §8: a written part still in breach after its rewrite — nothing of
+    // the message goes, the safe text does, and a person answers (the steps'
+    // own hand-over, when the procedure was ending in one anyway).
+    if (blocked && end.kind !== 'handoff') {
+      end = { kind: 'handoff', stepId: failedAt, reason: blocked.reason, target: null };
+    }
 
-    let reply = aborted ? null : joinSegments(segments);
+    let reply = aborted ? null : blocked ? safeText(run.answerIn) : joinSegments(segments);
     let suspendedNext = run.suspended;
     if (
       !aborted &&
@@ -1706,46 +2102,92 @@ export class ConversationEngine {
       chatId: ctx.chatId,
       configVersionId: ctx.configVersionId,
     };
-    const rules = this.#rules(ctx, input.skill);
-    const prompt = fitHistory(
-      (history) =>
-        buildComposePrompt({
-          message: input.message.text,
-          instructions: input.instructions,
-          alongside: input.alongside,
-          notes: input.notes,
-          persona: input.persona,
-          answerIn: input.answerIn,
-          rules: rules.lines,
-          ...(history ? { history } : {}),
-        }),
-      input.message.history,
-      this.#maxPromptChars,
-    );
-    let completion: LlmCompletion;
-    try {
-      refuseOverlongPrompt(prompt, this.#maxPromptChars);
-      completion = await this.#llm.complete(
-        ctx.tenant,
-        { ...prompt, ...this.#limits },
-        attribution,
+    const rules = this.#rules(ctx, input.skill, input.message, input.answerIn);
+    const write = (rewrite: readonly string[]) => {
+      const prompt = fitHistory(
+        (history) =>
+          buildComposePrompt({
+            message: input.message.text,
+            instructions: input.instructions,
+            alongside: input.alongside,
+            notes: [...input.notes, ...rewrite],
+            persona: input.persona,
+            answerIn: input.answerIn,
+            rules: rules.lines,
+            ...(history ? { history } : {}),
+          }),
+        input.message.history,
+        this.#maxPromptChars,
       );
+      refuseOverlongPrompt(prompt, this.#maxPromptChars);
+      return this.#llm.complete(ctx.tenant, { ...prompt, ...this.#limits }, attribution);
+    };
+    const checking = {
+      message: input.message,
+      ctx,
+      skill: input.skill,
+      answerIn: input.answerIn,
+      workspaceRules: rules.workspaceRules,
+      llm: this.#llm.forTenant(ctx.tenant, attribution),
+    };
+
+    let spent = { llmInputTokens: 0, llmOutputTokens: 0 };
+    const bill = (usage: { inputTokens: number; outputTokens: number } | null | undefined) => {
+      spent = {
+        llmInputTokens: spent.llmInputTokens + (usage?.inputTokens ?? 0),
+        llmOutputTokens: spent.llmOutputTokens + (usage?.outputTokens ?? 0),
+      };
+    };
+    const checkNotes: string[] = [];
+    let completion: LlmCompletion;
+    let drafts: 1 | 2 = 1;
+    try {
+      // AI-08 §8: a draft that breaks a guardrail is written once more with
+      // the rule named; a second that still does is not sent.
+      completion = await write([]);
+      bill(completion.usage);
+      let check = await this.#checkDraft(completion.text, checking);
+      bill(check.usage);
+      checkNotes.push(...check.notes);
+      this.#recordCheck(input.message, ctx, check, 1);
+      if (check.handoff.length === 0 && check.violations.length > 0) {
+        drafts = 2;
+        completion = await write([guardrailRewriteNote(check.violations)]);
+        bill(completion.usage);
+        check = await this.#checkDraft(completion.text, checking);
+        bill(check.usage);
+        checkNotes.push(...check.notes);
+        this.#recordCheck(input.message, ctx, check, 2);
+      }
+      if (check.handoff.length > 0 || check.violations.length > 0) {
+        const workspace = check.handoff.length > 0;
+        return {
+          text: null,
+          blocked: {
+            reason: workspace ? WORKSPACE_RULE_HANDOFF_REASON : GUARDRAIL_OUTPUT_BLOCK_REASON,
+          },
+          spent,
+          ...(rules.record ? { guidance: rules.record } : {}),
+          detail: workspace
+            ? `the message falls under ${violationKeys(check.handoff)} — handed to a human`
+            : `blocked — written twice, and still broke ${violationKeys(check.violations)} — the safe text and a hand-over`,
+        };
+      }
     } catch (error) {
       if (error instanceof AiDailyCapError) {
         return {
           text: null,
           capped: error,
+          spent,
           detail: `today's AI cap is reached (${error.scope}) — handed to a human`,
         };
       }
       if (!(error instanceof LlmProviderError)) throw error;
+      bill(error.usage);
       return {
         text: null,
         failure: { provider: 'llm', kind: error.kind, ...failureFacts(error) },
-        spent: {
-          llmInputTokens: error.usage?.inputTokens ?? 0,
-          llmOutputTokens: error.usage?.outputTokens ?? 0,
-        },
+        spent,
         detail: `the model could not write the reply (${error.kind}) — handed to a human`,
       };
     }
@@ -1753,16 +2195,15 @@ export class ConversationEngine {
     const strayed = styleWarnings(completion.text, rules.style);
     return {
       text: completion.text,
-      spent: {
-        llmInputTokens: completion.usage.inputTokens,
-        llmOutputTokens: completion.usage.outputTokens,
-      },
+      spent,
       ...(rules.record ? { guidance: rules.record } : {}),
       detail: [
         `wrote ${input.instructions.length} instruction(s)`,
+        drafts === 2 ? 'written again' : '',
         `written by ${this.#llm.id}`,
         asked ? `persona: ${asked}` : '',
         rules.note,
+        ...checkNotes,
         strayed.length > 0 ? `style warning: ${strayed.join(', ')}` : '',
       ]
         .filter(Boolean)
@@ -1775,23 +2216,38 @@ export class ConversationEngine {
    * agent's behaviour rules in this call's scope — its procedure, the
    * conversation's brand once a turn knows it (#309) — under the turn's
    * budget, then the persona's address form and emoji, as prompt layers.
+   * Above them the guardrails' two (tm 301.3 · AI-08 §5): the platform's
+   * locked lines — G4's only on a risk-flagged conversation, which the record
+   * notes as a `prompt_block` — then the workspace's own rules in scope.
    */
   #rules(
     ctx: TurnContext,
     skill: { id?: string | null; aiAgentId: string | null },
+    message: TurnMessage,
+    answerIn: PersonaLanguage | null,
   ): {
     lines: string[];
     record: GuidanceRecord | null;
     style: PersonaStyle | undefined;
     note: string;
+    /** The workspace's guardrail rules in this call's scope — what the judge reads too. */
+    workspaceRules: GuardrailRuleConfig[];
   } {
-    const selection = selectGuidance(ctx.config.guidance ?? [], {
-      aiAgentId: skill.aiAgentId,
-      skillId: skill.id ?? null,
-    });
+    const situation = { aiAgentId: skill.aiAgentId, skillId: skill.id ?? null };
+    const selection = selectGuidance(ctx.config.guidance ?? [], situation);
     const style = styleOf(ctx.config.skills, skill.aiAgentId);
+    const guard = this.#guardOf(message, ctx);
+    const workspaceRules = guardrailRulesFor(guard.config, situation);
+    if (guard.riskFlagged) {
+      guard.hits.push(guardrailHit({ source: 'platform', id: 'G4' }, 'input', 'prompt_block'));
+    }
     return {
-      lines: renderLayers([guidanceLayer(selection.rules), personaStyleLayer(style)]),
+      lines: renderLayers([
+        ...guardrailLayers({ answerIn, riskFlagged: guard.riskFlagged, workspaceRules }),
+        guidanceLayer(selection.rules),
+        personaStyleLayer(style),
+      ]),
+      workspaceRules,
       record: guidanceRecord(selection),
       style,
       note: [
@@ -1803,6 +2259,95 @@ export class ConversationEngine {
         .filter(Boolean)
         .join(' · '),
     };
+  }
+
+  /**
+   * A written draft through the guardrails (tm 301.3 · AI-08 §6, §7): the
+   * output check, then — where the workspace turned it on and the message is
+   * about money, the account, a bonus or responsible gaming (AI-08-S3) — the
+   * judge, unless the check already faulted the draft (it is rewritten
+   * either way). The judge is a model call like the others: its failure and
+   * today's cap throw, and the caller ends the turn on them as on its own.
+   */
+  async #checkDraft(
+    draft: string,
+    input: {
+      message: TurnMessage;
+      ctx: TurnContext;
+      skill: { id?: string | null; aiAgentId: string | null };
+      answerIn: PersonaLanguage | null;
+      workspaceRules: readonly GuardrailRuleConfig[];
+      llm: LlmProvider;
+    },
+  ): Promise<DraftCheck> {
+    if (draft.trim() === '') return { ...CLEAN_OUTPUT, handoff: [], usage: null, notes: [] };
+    const guard = this.#guardOf(input.message, input.ctx);
+    const situation = { aiAgentId: input.skill.aiAgentId, skillId: input.skill.id ?? null };
+    const check = checkOutput(draft, {
+      riskFlagged: guard.riskFlagged,
+      phrases: forbiddenPhrasesFor(guard.config, situation, input.answerIn),
+    });
+    const settings = guardrailSettingsFor(guard.config, input.skill.aiAgentId);
+    const judged =
+      settings?.judgeEnabled === true &&
+      check.violations.length === 0 &&
+      noAnswerCategory(input.message.text, null) !== 'other';
+    if (!judged) return { ...check, handoff: [], usage: null, notes: [] };
+
+    const grounding = {
+      message: input.message.text,
+      draft,
+      rules: judgeRules({
+        riskFlagged: guard.riskFlagged,
+        workspaceRules: input.workspaceRules,
+      }),
+    };
+    const prompt = buildJudgePrompt(grounding);
+    refuseOverlongPrompt(prompt, this.#maxPromptChars);
+    const { value, usage } = await completeStructured<JudgeReply>(input.llm, {
+      ...prompt,
+      ...this.#limits,
+      tier: 'fast',
+      responseFormat: JUDGE_RESPONSE_FORMAT,
+    });
+    const verdict = readJudgeReply(value, grounding);
+    const faulted = [...verdict.violations, ...verdict.handoff];
+    return {
+      violations: verdict.violations,
+      handoff: verdict.handoff,
+      warnings: check.warnings,
+      usage,
+      notes: [
+        faulted.length > 0 ? `judge: ${violationKeys(faulted)}` : 'judge: ok',
+        ...verdict.dropped.map((dropped) => `judge dropped — ${dropped}`),
+      ],
+    };
+  }
+
+  /**
+   * A draft's check in the turn's record: what it broke and what the turn did
+   * about it — sent back for its one rewrite on the first draft, not sent on
+   * the second — the workspace rules the message falls under, the warnings.
+   */
+  #recordCheck(message: TurnMessage, ctx: TurnContext, check: DraftCheck, attempt: 1 | 2): void {
+    const { hits } = this.#guardOf(message, ctx);
+    for (const violation of check.violations) {
+      hits.push(
+        guardrailHit(
+          violation.rule,
+          'output',
+          attempt === 1 ? 'rewrite' : 'safe_text',
+          violation.quote,
+          violation.pattern,
+        ),
+      );
+    }
+    for (const rule of check.handoff) {
+      hits.push(guardrailHit(rule.rule, 'input', 'handoff', rule.quote));
+    }
+    for (const warning of check.warnings) {
+      hits.push(guardrailHit(warning.rule, 'output', 'warn', warning.quote));
+    }
   }
 
   async #answerFromKnowledge(input: {
@@ -1891,8 +2436,16 @@ export class ConversationEngine {
     // what applies it, so the run log records what was *asked for*.
     const labels = hits.map((_, index) => passageLabel(index));
     const sources = hits.map((hit) => hit.text);
-    const rules = this.#rules(ctx, input.skill);
+    const rules = this.#rules(ctx, input.skill, input.turn, input.answerIn);
     const llm = this.#llm.forTenant(ctx.tenant, attribution);
+    const checking = {
+      message: input.turn,
+      ctx,
+      skill: input.skill,
+      answerIn: input.answerIn,
+      workspaceRules: rules.workspaceRules,
+      llm,
+    };
     const draft = (notes: readonly string[]) => {
       const prompt = fitHistory(
         (history) =>
@@ -1951,6 +2504,39 @@ export class ConversationEngine {
         detail: `withheld — it repeated ${leaked.length} detail(s) from an earlier conversation today the player has not given again`,
       };
     };
+    const checkNotes: string[] = [];
+    /** A draft through the guardrails (tm 301.3): its check billed, noted and recorded. */
+    const guarded = async (answer: ReadKnowledgeAnswer, attempt: 1 | 2): Promise<DraftCheck> => {
+      const check = await this.#checkDraft(
+        answer.grounded === 'none' ? '' : answer.reply,
+        checking,
+      );
+      bill(check.usage);
+      checkNotes.push(...check.notes);
+      this.#recordCheck(input.turn, ctx, check, attempt);
+      return check;
+    };
+    /** Not sent (AI-08 §8): the safe text goes out instead, and a person answers. */
+    const blocked = (check: DraftCheck): KnowledgeAnswer => {
+      const workspace = check.handoff.length > 0;
+      return {
+        text: null,
+        blocked: {
+          reason: workspace ? WORKSPACE_RULE_HANDOFF_REASON : GUARDRAIL_OUTPUT_BLOCK_REASON,
+        },
+        spent,
+        record: {
+          grounded: 'none',
+          cited_ids: [],
+          source_ids: [],
+          ...(drafts === 2 ? { drafts } : {}),
+        },
+        ...(rules.record ? { guidance: rules.record } : {}),
+        detail: workspace
+          ? `the message falls under ${violationKeys(check.handoff)} — handed to a human`
+          : `blocked — written twice, and still broke ${violationKeys(check.violations)} — the safe text and a hand-over`,
+      };
+    };
     try {
       const first = await draft([]);
       bill(first.usage);
@@ -1960,15 +2546,24 @@ export class ConversationEngine {
       // say — withheld, and a person answers, with no second draft asked for.
       const leakedFirst = repeated(read);
       if (leakedFirst) return leakedFirst;
-      if (read.problems.length > 0) {
+      const checked = await guarded(read, 1);
+      if (checked.handoff.length > 0) return blocked(checked);
+      if (read.problems.length > 0 || checked.violations.length > 0) {
         // A citation it was not given, nothing cited, a figure no passage
-        // gives (AI-06 §6, §11): written once more with the rule named — the
-        // AI-08 output check's rewrite (#301) — and withheld if it breaks one
-        // again. A guess never reaches the player.
+        // gives (AI-06 §6, §11), a guardrail broken (AI-08 §6): written once
+        // more with the rules named, and not sent if it breaks one again. A
+        // guess never reaches the player, nor does a promise.
         drafts = 2;
-        const second = await draft([rewriteNote(read.problems)]);
+        const second = await draft([
+          ...(read.problems.length > 0 ? [rewriteNote(read.problems)] : []),
+          ...(checked.violations.length > 0 ? [guardrailRewriteNote(checked.violations)] : []),
+        ]);
         bill(second.usage);
         const again = readKnowledgeAnswer(second.value, { labels, sources });
+        const rechecked = await guarded(again, 2);
+        if (rechecked.handoff.length > 0 || rechecked.violations.length > 0) {
+          return blocked(rechecked);
+        }
         if (again.problems.length > 0) {
           return {
             text: null,
@@ -2056,6 +2651,7 @@ export class ConversationEngine {
         `written by ${this.#llm.id}`,
         asked ? `persona: ${asked}` : '',
         rules.note,
+        ...checkNotes,
         strayed.length > 0 ? `style warning: ${strayed.join(', ')}` : '',
       ]
         .filter(Boolean)
@@ -2145,7 +2741,7 @@ export class ConversationEngine {
     const line: SkillRunLogEntry = {
       step: 'knowledge',
       detail: answer.detail,
-      ok: answer.text !== null,
+      ok: answer.text !== null || answer.blocked !== undefined,
     };
     const knowledge = {
       ...(answer.record ? { knowledge: answer.record } : {}),
@@ -2175,6 +2771,24 @@ export class ConversationEngine {
             reason: failure ? `${failure.provider}_failure` : 'ai_cap_reached',
           },
         ],
+      });
+    }
+
+    if (answer.blocked) {
+      // AI-08 §8: the draft is not sent — the safe text, and a person answers.
+      return taken({
+        reply: safeText(answerIn),
+        decisions: {
+          ...NOTHING_DECIDED,
+          ...input.decided,
+          ...knowledge,
+          outcome: 'handed_off',
+          replyKind: 'answer',
+          handoffReason: answer.blocked.reason,
+          usage: spent,
+          log: [...input.log, line],
+        },
+        sideEffects: [{ kind: 'handoff', team: null, reason: answer.blocked.reason }],
       });
     }
 
@@ -2498,6 +3112,57 @@ function forcedHandoff(
         lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
       };
   return { ...executed, nextState };
+}
+
+/**
+ * The turn with its reply replaced by the safe text and a hand-over (tm 301.3
+ * · AI-08 §8): what it would send broke a guardrail and nothing of it is left
+ * to rewrite. Its tags and summary stay; a hand-over it already made stays
+ * the one it makes, with its own reason.
+ */
+function blockedReply(
+  result: TurnResult,
+  text: string,
+  violations: readonly OutputViolation[],
+): TurnResult {
+  const existing = handoffOf(result.sideEffects);
+  return {
+    ...result,
+    reply: text,
+    decisions: {
+      ...result.decisions,
+      outcome: 'handed_off',
+      replyKind: 'answer',
+      handoffReason: existing
+        ? (result.decisions.handoffReason ?? existing.reason ?? GUARDRAIL_OUTPUT_BLOCK_REASON)
+        : GUARDRAIL_OUTPUT_BLOCK_REASON,
+      log: [
+        ...result.decisions.log,
+        {
+          step: 'guardrail',
+          detail: `the reply broke ${violationKeys(violations)} — sent the safe text and handed to a human`,
+          ok: true,
+        },
+      ],
+    },
+    sideEffects: existing
+      ? result.sideEffects
+      : [
+          ...result.sideEffects,
+          { kind: 'handoff', team: null, reason: GUARDRAIL_OUTPUT_BLOCK_REASON },
+        ],
+  };
+}
+
+/** "G8, phrase:…" — the rules a draft broke, for a run-log line: keys, never the words. */
+function violationKeys(violations: readonly OutputViolation[]): string {
+  return [
+    ...new Set(
+      violations.map((violation) =>
+        violation.rule.source === 'platform' ? violation.rule.id : violation.rule.source,
+      ),
+    ),
+  ].join(', ');
 }
 
 /**

@@ -25,6 +25,7 @@
 import type {
   AiConversationMode,
   AiNoAnswerSettings,
+  GuardrailPriority,
   ClarifyThresholds,
   DailyMemorySettings,
   Persona,
@@ -38,6 +39,8 @@ import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
 import type { EarlierToday } from './daily-memory.js';
+import type { GuardrailConfig } from './guardrails/config.js';
+import type { GuardrailRecord } from './guardrails/record.js';
 import type { GuidanceRecord, GuidanceRuleConfig } from './guidance.js';
 import type { KnowledgeRecord, UnansweredRecord } from './knowledge-answer.js';
 import type { PolicyRecord } from './policy.js';
@@ -263,6 +266,12 @@ export interface TurnConfig {
    * Each written call picks the ones in its scope (`guidance.ts`). Absent: none.
    */
   readonly guidance?: readonly GuidanceRuleConfig[];
+  /**
+   * The workspace's side of the guardrails (tm 301.3 · AI-08): the crisis and
+   * complaint texts, the judge switch, the extra rules and the forbidden
+   * phrases. Absent: none — the platform's locked G1–G19 apply all the same.
+   */
+  readonly guardrails?: GuardrailConfig;
 }
 
 export interface TurnContext {
@@ -428,6 +437,12 @@ export interface TurnDecisions {
    * budget left out (tm 299.1 · AI-07 §2, §8) — absent when none applied.
    */
   guidance?: GuidanceRecord;
+  /**
+   * What the guardrails found and did (tm 301.3 · AI-08 §8, §9): the hits,
+   * with the words that set them off — for `ai_guardrail_hits`, never the
+   * decision record — the catalogue version and the risk flags raised.
+   */
+  guardrails?: GuardrailRecord;
 }
 
 /** The understanding as the decision record keeps it: keys and numbers, no words. */
@@ -462,6 +477,11 @@ export type TurnSideEffect =
       readonly topic?: string;
       /** The procedure's reason, for the card (AI-10). */
       readonly reason?: string;
+      /**
+       * How urgent (AI-12 §3): a guardrail's — `urgent` for self-harm, a minor,
+       * a self-exclusion. Carried for the routing that reads it (#307).
+       */
+      readonly priority?: GuardrailPriority;
     };
 
 export interface TurnResult {

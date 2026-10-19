@@ -399,7 +399,9 @@ describe('the AI usage screen’s API and the 80%/100% alerts (tm 283.3)', () =>
   describe('the 80% and 100% alerts', () => {
     it('announces 80% exactly once per day and meter — to the owner and the chosen admin, by mail and push (AI-16)', async () => {
       const ws = await seedAiWorkspace(owner);
-      await setOverride(ws.licenseId, 10_000);
+      // Room for a call's reservation (the prompt's characters + the reply's
+      // ceiling, the platform's locked rules among them since tm 301.3) under the cap.
+      await setOverride(ws.licenseId, 50_000);
       const admin = await addMember(ws, 'admin');
       const quiet = await addMember(ws, 'admin', false);
       const agent = await addMember(ws, 'agent');
@@ -411,7 +413,7 @@ describe('the AI usage screen’s API and the 80%/100% alerts (tm 283.3)', () =>
       });
       const ownerEmail = (await owner.account.findUniqueOrThrow({ where: { id: ws.ownerId } }))
         .email;
-      await seedCounter(ws.licenseId, today(), 'llm', 7_900);
+      await seedCounter(ws.licenseId, today(), 'llm', 39_900);
 
       const listener = server.app.redis.duplicate();
       const pushes: Array<{ action: string; audience: unknown; payload: unknown }> = [];
@@ -425,10 +427,10 @@ describe('the AI usage screen’s API and the 80%/100% alerts (tm 283.3)', () =>
       });
       await listener.subscribe(licenseChannel(ws.licenseId));
       try {
-        // 7,900 + 110 = 8,010 of 10,000: past 80%.
+        // 39,900 + 110 = 40,010 of 50,000: past 80%.
         await customerAsks(owner, server, ws);
         await server.app.aiUsageAlerts.idle();
-        // 8,120: still past 80%, nothing new to say.
+        // 40,120: still past 80%, nothing new to say.
         await clearRateLimits(server.app);
         await customerAsks(owner, server, ws);
         await server.app.aiUsageAlerts.idle();
@@ -436,7 +438,7 @@ describe('the AI usage screen’s API and the 80%/100% alerts (tm 283.3)', () =>
 
         const rows = await owner.aiUsageAlert.findMany({ where: { licenseId: ws.licenseId } });
         expect(rows.map((r) => [r.meter, r.threshold, Number(r.used), Number(r.cap)])).toEqual([
-          ['llm', 80, 8_010, 10_000],
+          ['llm', 80, 40_010, 50_000],
         ]);
         expect(mailsTo(ownerEmail)).toHaveLength(1);
         expect(mailsTo(admin.email)).toHaveLength(1);
@@ -445,7 +447,7 @@ describe('the AI usage screen’s API and the 80%/100% alerts (tm 283.3)', () =>
         expect(mailsTo(agent.email)).toHaveLength(0);
         const mail = mailsTo(ownerEmail)[0]!;
         expect(mail.subject).toContain('80%');
-        expect(mail.body).toContain('8,010 / 10,000');
+        expect(mail.body).toContain('40,010 / 50,000');
         expect(mail.body).toContain('/app/settings/ai-usage');
 
         expect(pushes).toHaveLength(1);
@@ -453,15 +455,15 @@ describe('the AI usage screen’s API and the 80%/100% alerts (tm 283.3)', () =>
           meter: 'llm',
           threshold: 80,
           day: isoToday(),
-          used: 8_010,
-          cap: 10_000,
+          used: 40_010,
+          cap: 50_000,
         });
         expect([...(pushes[0]!.audience as { agentIds: string[] }).agentIds].sort()).toEqual(
           [ws.ownerId, admin.id, quiet.id].sort(),
         );
 
         const listed = (await readUsage(server, ws)).json() as UsageBody;
-        expect(listed.alerts).toMatchObject([{ meter: 'llm', threshold: 80, used: 8_010 }]);
+        expect(listed.alerts).toMatchObject([{ meter: 'llm', threshold: 80, used: 40_010 }]);
       } finally {
         await listener.quit();
       }

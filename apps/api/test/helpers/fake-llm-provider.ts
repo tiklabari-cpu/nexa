@@ -26,6 +26,11 @@
  * such an object, which is how a test sends a partial answer, a citation of
  * nothing, or an invented figure. Counted in `calls` like any other.
  */
+import {
+  JUDGE_RESPONSE_NAME,
+  mockJudge,
+  readJudgeGrounding,
+} from '../../src/services/ai/conversation/guardrails/judge.js';
 import { mockUnderstanding } from '../../src/services/ai/conversation/understand-mock.js';
 import {
   readUnderstandGrounding,
@@ -61,6 +66,12 @@ export interface FakeLlmProviderOptions {
   understand?: ((request: LlmCompletionRequest) => string) | Error;
   /** What an understanding reply costs; nothing by default. */
   understandUsage?: LlmUsage;
+  /**
+   * How the guardrails' judge (tm 301.3) is answered: the mock's verdict —
+   * nothing found — by default, the reply this function writes, or this error
+   * thrown. Recorded in `judgeCalls`, not in `calls`.
+   */
+  judge?: ((request: LlmCompletionRequest) => string) | Error;
 }
 
 export class FakeLlmProvider implements LlmProvider {
@@ -69,6 +80,8 @@ export class FakeLlmProvider implements LlmProvider {
   readonly calls: LlmCompletionRequest[] = [];
   /** The understanding calls, in order (see the file header). */
   readonly understandCalls: LlmCompletionRequest[] = [];
+  /** The judge calls, in order. */
+  readonly judgeCalls: LlmCompletionRequest[] = [];
   /** Calls started and not yet answered, and the most there ever were at once. */
   inFlight = 0;
   maxInFlight = 0;
@@ -81,6 +94,7 @@ export class FakeLlmProvider implements LlmProvider {
 
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
     if (request.responseFormat?.name === UNDERSTAND_RESPONSE_NAME) return this.#understand(request);
+    if (request.responseFormat?.name === JUDGE_RESPONSE_NAME) return this.#judge(request);
     const call = this.calls.push(request) - 1;
     this.inFlight += 1;
     this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
@@ -109,9 +123,21 @@ export class FakeLlmProvider implements LlmProvider {
     return { text: JSON.stringify(mockUnderstanding(grounding)), usage };
   }
 
+  #judge(request: LlmCompletionRequest): LlmCompletion {
+    this.judgeCalls.push(request);
+    const answer = this.#options.judge;
+    if (answer instanceof Error) throw answer;
+    const usage = { inputTokens: 0, outputTokens: 0 };
+    if (answer) return { text: answer(request), usage };
+    const grounding = readJudgeGrounding(request.system);
+    if (!grounding) throw new Error('A judge request without its context line.');
+    return { text: JSON.stringify(mockJudge(grounding)), usage };
+  }
+
   reset(): void {
     this.calls.length = 0;
     this.understandCalls.length = 0;
+    this.judgeCalls.length = 0;
     this.inFlight = 0;
     this.maxInFlight = 0;
   }

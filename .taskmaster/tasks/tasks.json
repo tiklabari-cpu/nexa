@@ -12893,7 +12893,7 @@
           "300"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T06:22:29.009Z",
+        "updatedAt": "2026-10-19T08:17:58.562Z",
         "subtasks": [
           {
             "id": 1,
@@ -12927,13 +12927,13 @@
             "description": "input-scan, output-check, judge, prompt-block; yeniden yazma → güvenli metin → devir",
             "details": "Policy (#297) ve compose (#298) ile bağlanır.",
             "testStrategy": "Kabul kriterleri entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "301.2"
             ],
             "parentId": "301",
             "priority": "high",
-            "updatedAt": "2026-10-19T06:22:29.009Z"
+            "updatedAt": "2026-10-19T08:17:58.562Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T06:22:29.010Z",
+      "lastModified": "2026-10-19T08:17:58.562Z",
       "taskCount": 390,
       "completedCount": 299,
       "tags": [

@@ -18,6 +18,7 @@ import {
   FORBIDDEN_PHRASE_ACTIONS,
   FORBIDDEN_PHRASE_MATCHES,
   GUARDRAIL_CATEGORIES,
+  GUARDRAIL_PRIORITIES,
   GUARDRAIL_RULE_ACTIONS,
   PLATFORM_GUARDRAILS_VERSION,
   readBatchWindowSeconds,
@@ -26,6 +27,8 @@ import {
   readGuidanceScope,
   readPersona,
   readPersonaStyle,
+  readHandoffRuleTarget,
+  readHandoffRuleTrigger,
   type GuidanceCategory,
   type DailyMemorySettings,
   type SkillProcedureFields,
@@ -37,6 +40,7 @@ import type {
   GuardrailRuleConfig,
 } from './guardrails/config.js';
 import { orderGuidance, type GuidanceRuleConfig } from './guidance.js';
+import type { HandoffRuleConfig } from './handoff/rules.js';
 import { readHandoffConfig, type HandoffConfig } from './handoff/triggers.js';
 import { turnThresholds } from './policy.js';
 import type { TurnConfig } from './turn.js';
@@ -178,8 +182,9 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
 
 /**
  * The agent's hand-over triggers, messages and after-hours text (tm 303.2 ·
- * AI-09) — the package's `handoff` (ADR-14b §2.12: versioned, unlike
- * `assignment_mode`) — or null when the agent has no row: the defaults.
+ * AI-09) and its active hand-over rules (tm 303.3 · K9) — the package's
+ * `handoff` (ADR-14b §2.12: versioned, unlike `assignment_mode`) — or null
+ * when the agent has neither a row nor a rule: the defaults.
  */
 async function handoffSettings(
   tx: TenantClient,
@@ -190,7 +195,45 @@ async function handoffSettings(
     where: { aiAgentId },
     select: { triggers: true, messages: true, afterHours: true },
   });
-  return row ? readHandoffConfig(row) : null;
+  const rules = await activeHandoffRules(tx, aiAgentId);
+  if (!row && rules.length === 0) return null;
+  return { ...readHandoffConfig(row), ...(rules.length > 0 ? { rules } : {}) };
+}
+
+/**
+ * The agent's active hand-over rules, in the order they are tried. A row whose
+ * trigger or priority reads as nothing the API writes is not carried.
+ */
+async function activeHandoffRules(
+  tx: TenantClient,
+  aiAgentId: string,
+): Promise<HandoffRuleConfig[]> {
+  const rows = await tx.aiHandoffRule.findMany({
+    where: { aiAgentId, active: true },
+    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      title: true,
+      triggerType: true,
+      triggerValue: true,
+      targetGroupId: true,
+      targetTopic: true,
+      priority: true,
+    },
+  });
+  return rows.flatMap((row): HandoffRuleConfig[] => {
+    const trigger = readHandoffRuleTrigger(row.triggerType, row.triggerValue);
+    if (!trigger || !oneOf(row.priority, GUARDRAIL_PRIORITIES)) return [];
+    return [
+      {
+        id: row.id,
+        title: row.title,
+        trigger,
+        target: readHandoffRuleTarget(row.targetGroupId, row.targetTopic),
+        priority: row.priority,
+      },
+    ];
+  });
 }
 
 /**

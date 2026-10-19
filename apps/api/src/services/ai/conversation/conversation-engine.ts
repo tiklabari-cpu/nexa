@@ -219,6 +219,7 @@ import {
   type HandoffConfig,
   type HandoffWatch,
 } from './handoff/triggers.js';
+import { inputRule, procedureRule, type HandoffRuleConfig } from './handoff/rules.js';
 import {
   buildDigest,
   earlierTodayLines,
@@ -627,6 +628,7 @@ export class ConversationEngine {
     const result =
       this.#inputGuardrails(state, message, ctx, guard) ??
       this.#riskHandoff(state, message, ctx) ??
+      this.#tenantRuleHandoff(state, message, ctx) ??
       this.#answerToTopic(state, message, ctx) ??
       this.#answerToOffer(state, message, ctx) ??
       this.#neverSilent(state, message, ctx, await this.#takeTurn(state, message, ctx));
@@ -726,7 +728,11 @@ export class ConversationEngine {
     const skill = input.active
       ? { id: input.active.skillId, name: input.active.snapshot.skill_name }
       : null;
-    const handOver = (reasons: HandoffReason[], detail: string): TurnResult =>
+    const handOver = (
+      reasons: HandoffReason[],
+      detail: string,
+      rule?: HandoffRuleConfig,
+    ): TurnResult =>
       triggerHandoffTurn(state, message, {
         reasons,
         detail,
@@ -735,11 +741,20 @@ export class ConversationEngine {
           ...(input.active ? { trace: [], procedureHash: input.active.hash } : {}),
         },
         skill,
+        ...(rule ? { rule } : {}),
       });
     switch (verdict.kind) {
-      case 'go_on':
+      case 'go_on': {
+        // A workspace rule for the procedure the call named (K9): the one in
+        // progress was the input's to judge.
+        const rule =
+          reading.procedureKey !== input.active?.skillId
+            ? procedureRule(handoffConfigOf(ctx).rules ?? [], reading.procedureKey)
+            : null;
+        if (rule) return handOver(['tenant_rule'], tenantRuleDetail(rule), rule);
         watch.offer = verdict.offer;
         return null;
+      }
       case 'ask_topic':
         if (language.unsupported) {
           return handOver(
@@ -864,6 +879,33 @@ export class ConversationEngine {
   #riskHandoff(state: TurnState, message: TurnMessage, ctx: TurnContext): TurnResult | null {
     if (!ctx.risk?.mustHandoff || ctx.config.skills.length === 0) return null;
     return riskFlagHandoffTurn(state, message, ctx.risk);
+  }
+
+  /**
+   * The workspace's hand-over rules the input sets off (tm 303.3 · K9): a
+   * topic or a phrase in the message, a risk flag the conversation carries,
+   * the procedure in progress — the first active rule in the list's order.
+   * Before any model is asked, after the locked rules (the input scan, a
+   * stored risk flag); only where the AI would answer at all. The procedure in
+   * progress stays where it stood, as with any forced hand-over.
+   */
+  #tenantRuleHandoff(state: TurnState, message: TurnMessage, ctx: TurnContext): TurnResult | null {
+    const rules = handoffConfigOf(ctx).rules;
+    if (!rules || rules.length === 0 || ctx.config.skills.length === 0) return null;
+    const active = activeProcedure(state);
+    const rule = inputRule(rules, {
+      text: message.text,
+      activeProcedureId: active?.skillId ?? null,
+      riskFlags: ctx.riskFlags ?? [],
+    });
+    if (!rule) return null;
+    return triggerHandoffTurn(state, message, {
+      reasons: ['tenant_rule'],
+      detail: tenantRuleDetail(rule),
+      decided: active ? { trace: [], procedureHash: active.hash } : {},
+      skill: active ? { id: active.skillId, name: active.snapshot.skill_name } : null,
+      rule,
+    });
   }
 
   /**
@@ -3260,6 +3302,11 @@ export class ConversationEngine {
 /** The turn agent's hand-over settings (tm 303.2) — the defaults when it has none. */
 function handoffConfigOf(ctx: TurnContext): HandoffConfig {
   return ctx.config.handoff ?? DEFAULT_HANDOFF_CONFIG;
+}
+
+/** The run log's line for a workspace rule's hand-over — its title, never the player's words. */
+function tenantRuleDetail(rule: HandoffRuleConfig): string {
+  return `the hand-over rule "${rule.title}" (${rule.trigger.type}) — handed to a human`;
 }
 
 /** The procedure's gates; all of them must match. */

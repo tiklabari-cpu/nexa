@@ -344,6 +344,34 @@ const TRACKED = [
     reason: 'the write half of the same settings — the same screen (HandoffSettings.tsx).',
   },
   {
+    op: 'GET /ai-agents/{aiAgentId}/handoff-rules',
+    owner: 'tm 303.5',
+    reason:
+      "K9's hand-over rules (tm 303.3) — the list, its locked G rows and the ready-made " +
+      'examples. Its screen is the "Devir kuralları" card of HandoffSettings.tsx (Playbook › ' +
+      'AI Agent › Davranış), which tm 303.5 builds; until then the rules are kept over the API.',
+  },
+  {
+    op: 'POST /ai-agents/{aiAgentId}/handoff-rules',
+    owner: 'tm 303.5',
+    reason: 'adding a hand-over rule — the same card (HandoffSettings.tsx).',
+  },
+  {
+    op: 'PUT /ai-agents/{aiAgentId}/handoff-rules/order',
+    owner: 'tm 303.5',
+    reason: 'dragging the hand-over rules into a new order — the same card (HandoffSettings.tsx).',
+  },
+  {
+    op: 'PATCH /ai-agents/{aiAgentId}/handoff-rules/{ruleId}',
+    owner: 'tm 303.5',
+    reason: 'editing or turning off a hand-over rule — the same card (HandoffSettings.tsx).',
+  },
+  {
+    op: 'DELETE /ai-agents/{aiAgentId}/handoff-rules/{ruleId}',
+    owner: 'tm 303.5',
+    reason: 'deleting a hand-over rule — the same card (HandoffSettings.tsx).',
+  },
+  {
     op: 'GET /chats/{chatId}/ai-digests',
     owner: 'tm 331',
     reason:

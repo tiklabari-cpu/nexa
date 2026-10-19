@@ -58,6 +58,7 @@ import {
   type PersonaLanguage,
 } from '@siyahtus/types';
 import { safeText } from '../guardrails/guardrail-turn.js';
+import { morePressing, routingRule, ruleTarget, type HandoffRuleConfig } from './rules.js';
 import {
   NO_ANSWER_PHRASES,
   NO_ANSWER_SIGNAL,
@@ -86,6 +87,11 @@ export interface HandoffConfig {
   readonly triggers: HandoffTriggers;
   readonly messages: HandoffMessages;
   readonly afterHours: HandoffAfterHours;
+  /**
+   * The workspace's active hand-over rules, in order (tm 303.3 · K9 —
+   * `./rules.ts`). Absent: none.
+   */
+  readonly rules?: readonly HandoffRuleConfig[];
 }
 
 /** An agent with no `ai_handoff_settings` row: AI-09-S1/S2's defaults, the default words. */
@@ -396,9 +402,12 @@ export function triggerHandoffTurn(
     detail: string;
     decided: Partial<TurnDecisions>;
     skill?: { id: string; name: string } | null;
+    /** The workspace's rule that set it off (`tenant_rule`): its team and priority. */
+    rule?: HandoffRuleConfig;
   },
 ): TurnResult {
   const reasons = orderHandoffReasons(input.reasons);
+  const { rule } = input;
   const primary = reasons[0] as HandoffReason;
   return {
     reply: null,
@@ -414,7 +423,15 @@ export function triggerHandoffTurn(
       handoffReason: primary,
       log: [...(input.decided.log ?? []), { step: 'handoff', detail: input.detail, ok: true }],
     },
-    sideEffects: [{ kind: 'handoff', team: null, reason: primary, reasons }],
+    sideEffects: [
+      {
+        kind: 'handoff',
+        team: null,
+        reason: primary,
+        reasons,
+        ...(rule ? { ...ruleTarget(rule), priority: rule.priority, ruleId: rule.id } : {}),
+      },
+    ],
     nextState: stepped(state, message),
   };
 }
@@ -645,7 +662,18 @@ export function settleHandoffTurn(input: {
       ...extra,
     ]);
     const primary = reasons[0] as HandoffReason;
-    const priority = handoffPriority(reasons, handoff.priority, watch.angry);
+    // A routing rule (K9): the AI could not solve it, or a person was asked
+    // for — the workspace's team and priority, unless the hand-over names its own.
+    const routed = routingRule(config.rules ?? [], reasons);
+    const computed = handoffPriority(reasons, handoff.priority, watch.angry);
+    const priority = routed ? morePressing(computed, routed.priority) : computed;
+    const routedTo =
+      routed &&
+      handoff.groupId === undefined &&
+      handoff.topic === undefined &&
+      handoff.team === null
+        ? ruleTarget(routed)
+        : {};
     const own = isMessageReason(primary) ? config.messages[primary] : null;
     // A language the persona does not speak is told in English, the likelier read.
     const lang = primary === 'unsupported_language' ? 'en' : answerIn;
@@ -677,7 +705,14 @@ export function settleHandoffTurn(input: {
       },
       sideEffects: out.sideEffects.map((effect) =>
         effect.kind === 'handoff'
-          ? { ...effect, reason: effect.reason ?? primary, reasons, priority }
+          ? {
+              ...effect,
+              ...routedTo,
+              reason: effect.reason ?? primary,
+              reasons,
+              priority,
+              ...(routed ? { ruleId: routed.id } : {}),
+            }
           : effect,
       ),
     };

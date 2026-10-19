@@ -28,6 +28,7 @@ import { skillDecision } from '../decision-log.js';
 import { MockLlmProvider } from '../provider/mock-llm-provider.js';
 import { ConversationEngine } from './conversation-engine.js';
 import { DEFAULT_HANDOFF_CONFIG, HANDOFF_PHRASES, type HandoffConfig } from './handoff/triggers.js';
+import type { HandoffRuleConfig } from './handoff/rules.js';
 import { NO_ANSWER_PHRASES } from './knowledge-answer.js';
 import {
   emptyTurnState,
@@ -386,5 +387,175 @@ describe('a loop (AI-09 `loop_detected`)', () => {
     );
     expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.loop_detected.tr);
     expect(reasonsOf(result)).toEqual(['loop_detected']);
+  });
+});
+
+describe("the workspace's hand-over rules (K9 · tm 303.3)", () => {
+  const deposit: HandoffRuleConfig = {
+    id: 'rule-deposit',
+    title: 'Para yatırma',
+    trigger: { type: 'topic', value: 'deposit' },
+    target: { topic: 'finance' },
+    priority: 'high',
+  };
+  const phrase: HandoffRuleConfig = {
+    id: 'rule-phrase',
+    title: 'Yatırım ekibi',
+    trigger: { type: 'phrase', value: 'para yatır' },
+    target: { group_id: 7 },
+    priority: 'normal',
+  };
+  const withRules = (rules: HandoffRuleConfig[]): HandoffConfig => ({
+    ...DEFAULT_HANDOFF_CONFIG,
+    rules,
+  });
+
+  it('"Para yatırma → Finans, high" hands a deposit question over before any model is asked; off, it does not (AI-09 acceptance)', async () => {
+    const result = await conversation(withRules([deposit])).say(
+      'Param yatmadı, yardım eder misiniz',
+    );
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.tenant_rule.tr);
+    expect(result.decisions).toMatchObject({
+      outcome: 'handed_off',
+      handoffReasons: ['tenant_rule'],
+    });
+    expect(result.decisions.usage.llmInputTokens).toBe(0);
+    expect(handoffOf(result.sideEffects)).toMatchObject({
+      reasons: ['tenant_rule'],
+      topic: 'finance',
+      priority: 'high',
+      ruleId: 'rule-deposit',
+    });
+    expect(skillDecision(result)).toMatchObject({
+      decision: 'handoff',
+      details: { reason_codes: ['tenant_rule'] },
+    });
+
+    // Turned off — the turn carries active rules only: the deposit procedure answers.
+    const off = await conversation(withRules([])).say('Param yatmadı, yardım eder misiniz');
+    expect(handoffOf(off.sideEffects)).toBeNull();
+    expect(off.decisions.skillId).toBe('deposit');
+  });
+
+  it('the order decides between two rules that both match', async () => {
+    const text = 'Paramı yatırdım ama görünmüyor';
+    const first = await conversation(withRules([phrase, deposit])).say(text);
+    expect(handoffOf(first.sideEffects)).toMatchObject({
+      groupId: 7,
+      priority: 'normal',
+      ruleId: 'rule-phrase',
+    });
+    const swapped = await conversation(withRules([deposit, phrase])).say(text);
+    expect(handoffOf(swapped.sideEffects)).toMatchObject({
+      topic: 'finance',
+      priority: 'high',
+      ruleId: 'rule-deposit',
+    });
+  });
+
+  it('a phrase matches whatever the case, the letters and the endings; another message passes', async () => {
+    const reset: HandoffRuleConfig = {
+      id: 'rule-reset',
+      title: 'Şifre',
+      trigger: { type: 'phrase', value: 'Şifre sıfırla' },
+      target: null,
+      priority: 'normal',
+    };
+    const hit = await conversation(withRules([reset])).say('ŞİFREMİ SIFIRLAMAK istiyorum');
+    expect(reasonsOf(hit)).toEqual(['tenant_rule']);
+    expect(handoffOf(hit.sideEffects)).not.toHaveProperty('groupId');
+    const miss = await conversation(withRules([reset])).say('çekim yapamıyorum');
+    expect(handoffOf(miss.sideEffects)).toBeNull();
+  });
+
+  it('a risk flag the conversation carries sets its rule off; another flag does not', async () => {
+    const fraud: HandoffRuleConfig = {
+      id: 'rule-fraud',
+      title: 'Dolandırıcılık şüphesi',
+      trigger: { type: 'risk_flag', value: 'fraud_suspected' },
+      target: { topic: 'kyc_risk' },
+      priority: 'urgent',
+    };
+    const flagged = await conversation(withRules([fraud])).say('çekim yapamıyorum', {
+      riskFlags: ['fraud_suspected'],
+    });
+    expect(handoffOf(flagged.sideEffects)).toMatchObject({
+      reasons: ['tenant_rule'],
+      topic: 'kyc_risk',
+      priority: 'urgent',
+    });
+    const other = await conversation(withRules([fraud])).say('çekim yapamıyorum', {
+      riskFlags: ['multi_account'],
+    });
+    expect(handoffOf(other.sideEffects)).toBeNull();
+  });
+
+  it('a procedure rule fires when the understanding names the procedure', async () => {
+    const rule: HandoffRuleConfig = {
+      id: 'rule-withdrawal',
+      title: 'Çekimler insana',
+      trigger: { type: 'procedure', value: 'withdrawal' },
+      target: { group_id: 3 },
+      priority: 'normal',
+    };
+    const result = await conversation(withRules([rule])).say('çekim yapamıyorum');
+    expect(result.decisions.outcome).toBe('handed_off');
+    expect(handoffOf(result.sideEffects)).toMatchObject({
+      reasons: ['tenant_rule'],
+      groupId: 3,
+      ruleId: 'rule-withdrawal',
+    });
+    // After the understanding call named it — not on the input's words.
+    expect(result.decisions.log.map((line) => line.step)).toEqual(['understand', 'handoff']);
+    expect(result.decisions.understood).toMatchObject({ procedure_key: 'withdrawal' });
+  });
+
+  it('the locked rules come first: a self-exclusion request with deposit words is G1, not the rule', async () => {
+    const result = await conversation(withRules([deposit])).say(
+      'Hesabımı kapatmak istiyorum, para yatırmayı bırakacağım',
+    );
+    expect(reasonsOf(result)?.[0]).toBe('guardrail_rg');
+    expect(reasonsOf(result)).not.toContain('tenant_rule');
+  });
+
+  it('"AI çözemedi" routes the AI\'s own hand-over: its team and priority, the AI\'s reasons', async () => {
+    const unresolved: HandoffRuleConfig = {
+      id: 'rule-unresolved',
+      title: 'AI çözemedi',
+      trigger: { type: 'ai_unresolved', value: null },
+      target: { group_id: 9 },
+      priority: 'high',
+    };
+    const nothing = {
+      procedure: {
+        facts: depositFacts(),
+        options: DEPOSIT_OPTIONS,
+        understanding: { intent: { procedure_key: null, confidence: 0 } },
+      },
+    };
+    const chat = conversation(withRules([unresolved]));
+    await chat.say('asdfgh qwerty', nothing);
+    const second = await chat.say('zxcvb poiuy', nothing);
+    expect(second.decisions.handoffReasons).toEqual(['no_knowledge', 'not_understood']);
+    expect(handoffOf(second.sideEffects)).toMatchObject({
+      groupId: 9,
+      priority: 'high',
+      ruleId: 'rule-unresolved',
+    });
+  });
+
+  it("a `player_request` rule routes the person asked for; the reason stays the player's", async () => {
+    const asked: HandoffRuleConfig = {
+      id: 'rule-asked',
+      title: 'İnsan istedi',
+      trigger: { type: 'player_request', value: null },
+      target: { topic: 'general' },
+      priority: 'normal',
+    };
+    const chat = conversation(withRules([asked]));
+    await chat.say('param yatmadı');
+    const result = await chat.say('müşteri temsilcisiyle görüşmek istiyorum');
+    expect(reasonsOf(result)).toEqual(['player_request']);
+    expect(handoffOf(result.sideEffects)).toMatchObject({ topic: 'general', ruleId: 'rule-asked' });
   });
 });

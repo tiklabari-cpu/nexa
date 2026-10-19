@@ -336,6 +336,12 @@ paths:
     $ref: "./paths/playbook.yaml#/aiAgent"
   /ai-agents/{aiAgentId}/handoff-settings:
     $ref: "./paths/playbook.yaml#/aiAgentHandoffSettings"
+  /ai-agents/{aiAgentId}/handoff-rules:
+    $ref: "./paths/playbook.yaml#/aiAgentHandoffRules"
+  /ai-agents/{aiAgentId}/handoff-rules/order:
+    $ref: "./paths/playbook.yaml#/aiAgentHandoffRulesOrder"
+  /ai-agents/{aiAgentId}/handoff-rules/{ruleId}:
+    $ref: "./paths/playbook.yaml#/aiAgentHandoffRule"
   /ai-guidance:
     $ref: "./paths/ai-guidance.yaml#/guidanceRules"
   /ai-guidance/check:
@@ -2252,6 +2258,136 @@ components:
         max_turns: { type: string, nullable: true, maxLength: 500 }
         unsupported_language: { type: string, nullable: true, maxLength: 500 }
         ai_failure: { type: string, nullable: true, maxLength: 500 }
+
+    AiHandoffRulePriority:
+      type: string
+      enum: [urgent, high, normal]
+      description: How urgent the hand-over is (AI-12). Default `normal`.
+
+    AiHandoffRuleTrigger:
+      type: object
+      required: [type, value]
+      additionalProperties: false
+      description: |
+        What sets the rule off (AI-09, K9). `topic` — the player's message is
+        about one of the topics (`deposit`, `withdrawal`, `account_recovery`,
+        `bonus`, `verification`); `procedure` — the understanding names this
+        procedure skill (its id), or it is the one in progress; `phrase` —
+        the message holds these words (case, accents and word endings
+        ignored); `risk_flag` — the conversation carries an active flag of
+        this type. These four hand the conversation over themselves, reason
+        `tenant_rule`. `ai_unresolved` (the AI could not solve it) and
+        `player_request` (the player asked for a person) take no value: the
+        AI hands over for its own reasons, and the rule says where to and how
+        urgently.
+      properties:
+        type:
+          type: string
+          enum: [topic, procedure, phrase, ai_unresolved, player_request, risk_flag]
+        value:
+          type: string
+          nullable: true
+          maxLength: 100
+
+    AiHandoffRuleTarget:
+      nullable: true
+      description: |
+        Where the hand-over goes: a team (`group_id`) or a routing topic
+        (`topic`, ADR-08a). Null: the usual routing.
+      oneOf:
+        - type: object
+          required: [group_id]
+          additionalProperties: false
+          properties:
+            group_id: { type: integer, minimum: 1 }
+        - type: object
+          required: [topic]
+          additionalProperties: false
+          properties:
+            topic: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+
+    AiHandoffRule:
+      type: object
+      required:
+        [
+          id,
+          ai_agent_id,
+          position,
+          active,
+          title,
+          trigger,
+          target,
+          priority,
+          created_by,
+          updated_by,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        position: { type: integer, minimum: 1, description: "1 is tried first." }
+        active: { type: boolean }
+        title: { type: string }
+        trigger: { $ref: "#/components/schemas/AiHandoffRuleTrigger" }
+        target: { $ref: "#/components/schemas/AiHandoffRuleTarget" }
+        priority: { $ref: "#/components/schemas/AiHandoffRulePriority" }
+        created_by: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AiHandoffLockedRule:
+      type: object
+      required: [id, title, reason, target, priority]
+      description: |
+        A platform compliance rule (AI-08) the list shows greyed out: always
+        on, above the workspace's rules, never moved.
+      properties:
+        id: { type: string, enum: [G1, G2, G3, G4, G5, G13, G15] }
+        title:
+          type: object
+          required: [tr, en]
+          properties:
+            tr: { type: string }
+            en: { type: string }
+        reason:
+          type: string
+          nullable: true
+          description: The hand-over reason; null for G4, which hands nothing over.
+        target: { $ref: "#/components/schemas/AiHandoffRuleTarget" }
+        priority: { $ref: "#/components/schemas/AiHandoffRulePriority" }
+
+    AiHandoffRuleExample:
+      type: object
+      required: [key, title, trigger, target, priority]
+      properties:
+        key: { type: string, enum: [ai_unresolved, account_recovery, deposit] }
+        title:
+          type: object
+          required: [tr, en]
+          properties:
+            tr: { type: string }
+            en: { type: string }
+        trigger: { $ref: "#/components/schemas/AiHandoffRuleTrigger" }
+        target: { $ref: "#/components/schemas/AiHandoffRuleTarget" }
+        priority: { $ref: "#/components/schemas/AiHandoffRulePriority" }
+
+    AiHandoffRuleList:
+      type: object
+      required: [ai_agent_id, locked, items, examples]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        locked:
+          type: array
+          items: { $ref: "#/components/schemas/AiHandoffLockedRule" }
+        items:
+          type: array
+          description: The workspace's rules, in the order they are tried.
+          items: { $ref: "#/components/schemas/AiHandoffRule" }
+        examples:
+          type: array
+          items: { $ref: "#/components/schemas/AiHandoffRuleExample" }
 
     AiHandoffAfterHours:
       type: object

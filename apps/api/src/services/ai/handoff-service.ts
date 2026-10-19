@@ -52,6 +52,8 @@ export interface PlannedHandoff {
   readonly reasonCodes: readonly HandoffReason[];
   readonly primaryReason: HandoffReason;
   readonly priority: GuardrailPriority;
+  /** The workspace's hand-over rule that set it off or routed it (tm 303.3 · K9). */
+  readonly ruleId?: string;
 }
 
 /** Writes the hand-over card (AI-10, #304) in the hand-over's transaction. */
@@ -71,6 +73,7 @@ export function planHandoff(effect: TurnHandoff, failed: boolean): PlannedHandof
     reasonCodes,
     primaryReason: (primaryHandoffReason(reasonCodes) as HandoffReason | null) ?? 'procedure_rule',
     priority: effect.priority ?? 'normal',
+    ...(effect.ruleId ? { ruleId: effect.ruleId } : {}),
   };
 }
 
@@ -93,6 +96,7 @@ export function handoffEventProperties(plan: PlannedHandoff): Record<string, unk
     reason_codes: [...plan.reasonCodes],
     primary_reason: plan.primaryReason,
     priority: plan.priority,
+    ...(plan.ruleId ? { handoff_rule_id: plan.ruleId } : {}),
   };
 }
 

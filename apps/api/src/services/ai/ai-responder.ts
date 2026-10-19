@@ -96,6 +96,7 @@ import {
   type AiConversationMode,
   type AiNoAnswerSettings,
   type IdentityTrust,
+  type RiskFlagType,
   type RiskPolicy,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
@@ -414,6 +415,7 @@ export class AiResponder {
             aiMode: loaded.aiMode,
             noAnswer: loaded.noAnswer,
             risk: loaded.risk,
+            ...(loaded.riskFlags.length > 0 ? { riskFlags: loaded.riskFlags } : {}),
             handoffAvailable: loaded.handoffAvailable,
           },
         );
@@ -636,6 +638,7 @@ export class AiResponder {
             ...(drafts > 1 ? { drafts } : {}),
             // The hand-over's id, which its events and its card carry (AI-09 §6).
             ...(planned ? { handoff_id: planned.handoffId } : {}),
+            ...(planned?.ruleId ? { handoff_rule_id: planned.ruleId } : {}),
           },
         });
         // What the guardrails found and did, under the same turn (tm 301.3 ·
@@ -899,7 +902,11 @@ export class AiResponder {
       : null;
     const noAnswer = readNoAnswerSettings(handoff?.noAnswer ?? null);
     // The conversation's risk flags and its player's (AI-27 §3, §6), live.
-    const { policy: risk } = await chatRiskPolicy(tx, ref.chatId);
+    const { flags, policy: risk } = await chatRiskPolicy(tx, ref.chatId);
+    // The conversation's own flag types, for the `risk_flag` hand-over rules (K9).
+    const riskFlags = [
+      ...new Set(flags.filter((flag) => flag.chat_id === ref.chatId).map((flag) => flag.type)),
+    ];
     // Whether anyone could take a hand-over now (AI-12 §4): if not, it says so.
     const handoffAvailable = await anyoneAccepting(tx, licenseId);
     if (trigger === null) {
@@ -914,6 +921,7 @@ export class AiResponder {
         aiMode,
         noAnswer,
         risk,
+        riskFlags,
         handoffAvailable,
       };
     }
@@ -940,6 +948,7 @@ export class AiResponder {
       aiMode,
       noAnswer,
       risk,
+      riskFlags,
       handoffAvailable,
     };
   }
@@ -963,6 +972,8 @@ interface TurnRead {
   noAnswer: AiNoAnswerSettings;
   /** What the conversation's risk flags and its player's mean (tm 302.2 · AI-27). */
   risk: RiskPolicy;
+  /** The types of the conversation's own active risk flags (tm 303.3 · K9 `risk_flag` rules). */
+  riskFlags: RiskFlagType[];
   /** Whether anyone in the workspace is accepting chats now (tm 303.2 · AI-12 §4). */
   handoffAvailable: boolean;
 }

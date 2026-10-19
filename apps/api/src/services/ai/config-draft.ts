@@ -11,7 +11,8 @@
  *
  * This first form does §2.5 step 1 only: it stamps the row's `updated_at` —
  * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
- * settings, rules and forbidden phrases (tm 301.2).
+ * settings, rules and forbidden phrases (tm 301.2), and the hand-over rules
+ * (tm 303.3).
  * A route that writes `updated_at` itself, or opens a `status`/`version`
  * column, breaks the rule.
  */
@@ -141,4 +142,43 @@ export async function upsertHandoffSettingsDraft<S extends Prisma.AiHandoffSetti
     update,
     select,
   });
+}
+
+// Hand-over rules (tm 303.3 · AI-09, K9). Their order is behaviour — the first
+// active rule that matches decides — so a reorder is a write like any other.
+
+type HandoffRuleCreate = Omit<Prisma.AiHandoffRuleUncheckedCreateInput, 'updatedAt'>;
+type HandoffRuleUpdate = Omit<Prisma.AiHandoffRuleUncheckedUpdateInput, 'updatedAt'>;
+
+export async function createHandoffRuleDraft(tx: TenantClient, data: HandoffRuleCreate) {
+  return tx.aiHandoffRule.create({ data: { ...data, updatedAt: new Date() } });
+}
+
+export async function updateHandoffRuleDraft(
+  tx: TenantClient,
+  id: string,
+  data: HandoffRuleUpdate,
+) {
+  return tx.aiHandoffRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+}
+
+/** How many rows went — 0 when the rule is not this workspace's. */
+export async function deleteHandoffRuleDraft(tx: TenantClient, id: string): Promise<number> {
+  const { count } = await tx.aiHandoffRule.deleteMany({ where: { id } });
+  return count;
+}
+
+/** Positions 1…n in the order given; the caller has checked the ids are the agent's, all of them. */
+export async function reorderHandoffRulesDraft(
+  tx: TenantClient,
+  orderedIds: readonly string[],
+  updatedBy: string | null,
+): Promise<void> {
+  const updatedAt = new Date();
+  for (const [index, id] of orderedIds.entries()) {
+    await tx.aiHandoffRule.update({
+      where: { id },
+      data: { position: index + 1, updatedBy, updatedAt },
+    });
+  }
 }

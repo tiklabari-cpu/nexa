@@ -78,6 +78,7 @@ import mcpRoutes from './routes/mcp.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
 import aiGuidanceRoutes from './routes/ai-guidance.js';
+import aiHandoffRulesRoutes from './routes/ai-handoff-rules.js';
 import aiGuardrailRoutes from './routes/ai-guardrails.js';
 import { riskFlagRoutes } from './routes/risk-flags.js';
 import kbRoutes from './routes/kb.js';
@@ -646,6 +647,7 @@ export async function buildServer({
       await api.register(uploadRoutes, { env });
       await api.register(playbookRoutes, { env, llm: meteredLlm, knowledge });
       await api.register(aiGuidanceRoutes, { env, llm: meteredLlm });
+      await api.register(aiHandoffRulesRoutes);
       await api.register(aiGuardrailRoutes);
       await api.register(riskFlagRoutes);
       await api.register(kbRoutes);

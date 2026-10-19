@@ -31,6 +31,7 @@ import type {
   DailyMemorySettings,
   Persona,
   PersonaStyle,
+  RiskFlagType,
   RiskPolicy,
   SkillMode,
   SkillProcedureFields,
@@ -330,6 +331,11 @@ export interface TurnContext {
    */
   readonly risk?: RiskPolicy;
   /**
+   * The types of the conversation's own active risk flags (tm 303.3), for the
+   * workspace's `risk_flag` hand-over rules (K9). Absent: none.
+   */
+  readonly riskFlags?: readonly RiskFlagType[];
+  /**
    * Whether anyone in the workspace is accepting chats now, read live with the
    * turn (tm 303.2 · AI-12 §4): false and a hand-over says the after-hours
    * text after its message. Absent: not known — nothing is said of it.
@@ -514,6 +520,8 @@ export type TurnSideEffect =
        * §3) — the transfer event and the card (AI-10) carry them.
        */
       readonly reasons?: readonly HandoffReason[];
+      /** The workspace's hand-over rule that set it off or routed it (tm 303.3 · K9). */
+      readonly ruleId?: string;
     };
 
 export interface TurnResult {

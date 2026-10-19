@@ -373,6 +373,168 @@ aiAgentHandoffSettings:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+aiAgentHandoffRules:
+  parameters:
+    - name: aiAgentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: listAiAgentHandoffRules
+    summary: The agent's hand-over rules
+    description: |
+      The workspace's hand-over rules (AI-09, K9), in the order they are
+      tried: the first active rule that matches decides. `locked` are the
+      platform's compliance rules (G1–G5, G13, G15) — shown above the list,
+      always on, never moved. `examples` are the ready-made rules a workspace
+      may add ("AI çözemedi", "Hesap ve şifre kurtarma", "Para yatırma"); none
+      is installed until it is posted.
+    responses:
+      "200":
+        description: Hand-over rules
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRuleList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiAgentHandoffRule
+    summary: Add a hand-over rule
+    description: |
+      Added at the end of the list. A `procedure` trigger names a procedure
+      skill of this agent; a `group_id` target a team of this workspace.
+      At most 50 rules per agent (400 `details.reason: handoff_rules_limit`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [title, trigger]
+            additionalProperties: false
+            properties:
+              title: { type: string, minLength: 1, maxLength: 80 }
+              trigger: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRuleTrigger" }
+              target: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRuleTarget" }
+              priority: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRulePriority" }
+              active: { type: boolean }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiAgentHandoffRulesOrder:
+  parameters:
+    - name: aiAgentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  put:
+    tags: [Playbook]
+    operationId: reorderAiAgentHandoffRules
+    summary: Reorder the hand-over rules
+    description: |
+      `rule_ids` is every rule of the agent, once, in the new order. A locked
+      rule's id (`G1` …) is 400 `validation` with `details.reason:
+      handoff_trigger_locked`: the locked rules always come first.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [rule_ids]
+            additionalProperties: false
+            properties:
+              rule_ids:
+                type: array
+                maxItems: 50
+                items: { type: string }
+    responses:
+      "200":
+        description: The list in its new order
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRuleList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiAgentHandoffRule:
+  parameters:
+    - name: aiAgentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: ruleId
+      in: path
+      required: true
+      description: A rule's id; a locked rule's (`G1` …) is refused.
+      schema: { type: string }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateAiAgentHandoffRule
+    summary: Edit, turn on or turn off a hand-over rule
+    description: |
+      Any field alone; the others keep their value. A locked rule (`G1` …)
+      cannot be changed or turned off: 400 `validation` with
+      `details.reason: handoff_trigger_locked`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              title: { type: string, minLength: 1, maxLength: 80 }
+              trigger: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRuleTrigger" }
+              target: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRuleTarget" }
+              priority: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRulePriority" }
+              active: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiHandoffRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteAiAgentHandoffRule
+    summary: Delete a hand-over rule
+    description: The rules after it move up. A locked rule is 400 `handoff_trigger_locked`.
+    responses:
+      "204": { description: Deleted }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 skills:
   get:
     tags: [Playbook]

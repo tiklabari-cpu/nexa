@@ -190,6 +190,7 @@ model License {
   aiConversations        AiConversation[]
   aiHandoffSettings      AiHandoffSettings[]
   aiGuidanceRules        AiGuidanceRule[]
+  aiHandoffRules         AiHandoffRule[]
   aiGuardrailSettings    AiGuardrailSettings[]
   aiGuardrailRules       AiGuardrailRule[]
   aiForbiddenPhrases     AiForbiddenPhrase[]
@@ -1800,6 +1801,7 @@ model AiAgent {
   knowledgeSources KnowledgeSource[]
   handoffSettings   AiHandoffSettings?
   guidanceRules     AiGuidanceRule[]
+  handoffRules      AiHandoffRule[]
   guardrailSettings AiGuardrailSettings?
   guardrailRules    AiGuardrailRule[]
   forbiddenPhrases  AiForbiddenPhrase[]
@@ -1882,6 +1884,41 @@ model AiGuidanceRule {
 
   @@index([licenseId, aiAgentId])
   @@map("ai_guidance_rules")
+}
+
+/// The workspace's hand-over rules (tm 303.3 · AI-09, K9): an ordered list per
+/// customer-facing agent, read by a turn through `AiConfigSource` and written
+/// only through `config-draft.ts`. Lists and lengths by CHECK
+/// (`@siyahtus/types` `handoff-rules.ts`).
+model AiHandoffRule {
+  id            String   @id @default(uuid()) @db.Uuid
+  licenseId     BigInt   @map("license_id")
+  aiAgentId     String   @map("ai_agent_id") @db.Uuid
+  /// 1-based; the first active rule that matches decides.
+  position      Int
+  active        Boolean  @default(true)
+  title         String
+  /// `HANDOFF_RULE_TRIGGER_TYPES`.
+  triggerType   String   @map("trigger_type")
+  /// The topic, the procedure skill's id, the phrase or the risk flag type;
+  /// null for `ai_unresolved` and `player_request`.
+  triggerValue  String?  @map("trigger_value")
+  /// A soft reference to `groups.id` — a team deleted later is the usual routing.
+  targetGroupId BigInt?  @map("target_group_id")
+  /// A routing topic (ADR-08a); never with `targetGroupId`.
+  targetTopic   String?  @map("target_topic")
+  /// `urgent` | `high` | `normal`.
+  priority      String   @default("normal")
+  createdBy     String?  @map("created_by") @db.Uuid
+  updatedBy     String?  @map("updated_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, aiAgentId, position])
+  @@map("ai_handoff_rules")
 }
 
 /// A customer-facing agent's guardrail settings (tm 301.2 · AI-08): the crisis

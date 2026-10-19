@@ -3252,6 +3252,93 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai-agents/{aiAgentId}/handoff-rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * The agent's hand-over rules
+     * @description The workspace's hand-over rules (AI-09, K9), in the order they are
+     *     tried: the first active rule that matches decides. `locked` are the
+     *     platform's compliance rules (G1–G5, G13, G15) — shown above the list,
+     *     always on, never moved. `examples` are the ready-made rules a workspace
+     *     may add ("AI çözemedi", "Hesap ve şifre kurtarma", "Para yatırma"); none
+     *     is installed until it is posted.
+     */
+    get: operations['listAiAgentHandoffRules'];
+    put?: never;
+    /**
+     * Add a hand-over rule
+     * @description Added at the end of the list. A `procedure` trigger names a procedure
+     *     skill of this agent; a `group_id` target a team of this workspace.
+     *     At most 50 rules per agent (400 `details.reason: handoff_rules_limit`).
+     */
+    post: operations['createAiAgentHandoffRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-agents/{aiAgentId}/handoff-rules/order': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Reorder the hand-over rules
+     * @description `rule_ids` is every rule of the agent, once, in the new order. A locked
+     *     rule's id (`G1` …) is 400 `validation` with `details.reason:
+     *     handoff_trigger_locked`: the locked rules always come first.
+     */
+    put: operations['reorderAiAgentHandoffRules'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-agents/{aiAgentId}/handoff-rules/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+        /** @description A rule's id; a locked rule's (`G1` …) is refused. */
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a hand-over rule
+     * @description The rules after it move up. A locked rule is 400 `handoff_trigger_locked`.
+     */
+    delete: operations['deleteAiAgentHandoffRule'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit, turn on or turn off a hand-over rule
+     * @description Any field alone; the others keep their value. A locked rule (`G1` …)
+     *     cannot be changed or turned off: 400 `validation` with
+     *     `details.reason: handoff_trigger_locked`.
+     */
+    patch: operations['updateAiAgentHandoffRule'];
+    trace?: never;
+  };
   '/ai-guidance': {
     parameters: {
       query?: never;
@@ -10220,6 +10307,99 @@ export interface components {
       max_turns?: string | null;
       unsupported_language?: string | null;
       ai_failure?: string | null;
+    };
+    /**
+     * @description How urgent the hand-over is (AI-12). Default `normal`.
+     * @enum {string}
+     */
+    AiHandoffRulePriority: 'urgent' | 'high' | 'normal';
+    /**
+     * @description What sets the rule off (AI-09, K9). `topic` — the player's message is
+     *     about one of the topics (`deposit`, `withdrawal`, `account_recovery`,
+     *     `bonus`, `verification`); `procedure` — the understanding names this
+     *     procedure skill (its id), or it is the one in progress; `phrase` —
+     *     the message holds these words (case, accents and word endings
+     *     ignored); `risk_flag` — the conversation carries an active flag of
+     *     this type. These four hand the conversation over themselves, reason
+     *     `tenant_rule`. `ai_unresolved` (the AI could not solve it) and
+     *     `player_request` (the player asked for a person) take no value: the
+     *     AI hands over for its own reasons, and the rule says where to and how
+     *     urgently.
+     */
+    AiHandoffRuleTrigger: {
+      /** @enum {string} */
+      type: 'topic' | 'procedure' | 'phrase' | 'ai_unresolved' | 'player_request' | 'risk_flag';
+      value: string | null;
+    };
+    /**
+     * @description Where the hand-over goes: a team (`group_id`) or a routing topic
+     *     (`topic`, ADR-08a). Null: the usual routing.
+     */
+    AiHandoffRuleTarget:
+      | (
+          | {
+              group_id: number;
+            }
+          | {
+              topic: string;
+            }
+        )
+      | null;
+    AiHandoffRule: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** @description 1 is tried first. */
+      position: number;
+      active: boolean;
+      title: string;
+      trigger: components['schemas']['AiHandoffRuleTrigger'];
+      target: components['schemas']['AiHandoffRuleTarget'];
+      priority: components['schemas']['AiHandoffRulePriority'];
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: uuid */
+      updated_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description A platform compliance rule (AI-08) the list shows greyed out: always
+     *     on, above the workspace's rules, never moved.
+     */
+    AiHandoffLockedRule: {
+      /** @enum {string} */
+      id: 'G1' | 'G2' | 'G3' | 'G4' | 'G5' | 'G13' | 'G15';
+      title: {
+        tr: string;
+        en: string;
+      };
+      /** @description The hand-over reason; null for G4, which hands nothing over. */
+      reason: string | null;
+      target: components['schemas']['AiHandoffRuleTarget'];
+      priority: components['schemas']['AiHandoffRulePriority'];
+    };
+    AiHandoffRuleExample: {
+      /** @enum {string} */
+      key: 'ai_unresolved' | 'account_recovery' | 'deposit';
+      title: {
+        tr: string;
+        en: string;
+      };
+      trigger: components['schemas']['AiHandoffRuleTrigger'];
+      target: components['schemas']['AiHandoffRuleTarget'];
+      priority: components['schemas']['AiHandoffRulePriority'];
+    };
+    AiHandoffRuleList: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      locked: components['schemas']['AiHandoffLockedRule'][];
+      /** @description The workspace's rules, in the order they are tried. */
+      items: components['schemas']['AiHandoffRule'][];
+      examples: components['schemas']['AiHandoffRuleExample'][];
     };
     /**
      * @description What the player is told when the hand-over lands where nobody is
@@ -20803,6 +20983,168 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AiHandoffSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiAgentHandoffRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Hand-over rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiHandoffRuleList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiAgentHandoffRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          title: string;
+          trigger: components['schemas']['AiHandoffRuleTrigger'];
+          target?: components['schemas']['AiHandoffRuleTarget'];
+          priority?: components['schemas']['AiHandoffRulePriority'];
+          active?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiHandoffRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  reorderAiAgentHandoffRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          rule_ids: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description The list in its new order */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiHandoffRuleList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteAiAgentHandoffRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+        /** @description A rule's id; a locked rule's (`G1` …) is refused. */
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiAgentHandoffRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+        /** @description A rule's id; a locked rule's (`G1` …) is refused. */
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          title?: string;
+          trigger?: components['schemas']['AiHandoffRuleTrigger'];
+          target?: components['schemas']['AiHandoffRuleTarget'];
+          priority?: components['schemas']['AiHandoffRulePriority'];
+          active?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiHandoffRule'];
         };
       };
       400: components['responses']['BadRequest'];

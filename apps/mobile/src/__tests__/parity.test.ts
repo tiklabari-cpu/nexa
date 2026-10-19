@@ -950,7 +950,11 @@ describe('module parity matrix — what is still owed', () => {
       // `/customers/{customerId}/risk-flags` (tm 302.2) — AI-27's risk flags,
       // shown, raised and cleared in the web inbox and settings (tm 302.3). The
       // app's chat screen shows no flag yet; nothing here re-scopes.
-      contractEndpoints: 255,
+      // 255 -> 258 with `/ai-agents/{aiAgentId}/handoff-rules`, `…/order` and
+      // `…/{ruleId}` (tm 303.3) — K9's hand-over rules, kept in the web panel's
+      // AI Agent screen (tm 303.5). The app configures no AI agent; nothing
+      // here re-scopes.
+      contractEndpoints: 258,
       scopeBoundaries: 1,
     });
   });

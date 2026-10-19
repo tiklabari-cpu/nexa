@@ -685,6 +685,21 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     },
   });
 
+  // The crisis text G3 sends a player at risk before its hand-over, approved
+  // by the owner — without it the agent could not be switched (back) on
+  // (tm 301.2 · AI-08-S1).
+  await prisma.aiGuardrailSettings.create({
+    data: {
+      licenseId,
+      aiAgentId: aiAgent.id,
+      crisisText:
+        'You are not alone. If you are thinking about harming yourself, call 112 or your local crisis line now. I am connecting you with a person.',
+      approvedBy: owner.id,
+      approvedAt: new Date(),
+      updatedBy: owner.id,
+    },
+  });
+
   // Copilot is a second AI surface with its own, agent-only knowledge base
   // (FR-MOD-12.2) — internal guidance a customer never sees. Seeded with a
   // playbook so "Draft a reply" has something to answer from in the demo.

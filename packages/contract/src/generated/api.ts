@@ -3047,6 +3047,12 @@ export interface paths {
      *     Deactivating an agent stops every skill under it at once, which is what an
      *     admin reaches for when automation is misbehaving. It does not delete
      *     anything.
+     *
+     *     Switching a customer-facing agent on needs its crisis text written and
+     *     approved by the owner (`/ai-guardrails/settings`, AI-08): otherwise 409
+     *     `ai_guardrail_setup_incomplete` with `details.reason`
+     *     `crisis_text_missing` or `crisis_text_not_approved`. An agent already on
+     *     is not affected.
      */
     patch: operations['updateAiAgent'];
     trace?: never;
@@ -3168,6 +3174,224 @@ export interface paths {
      * @description Any field alone; the others keep their value. Refused like a new rule.
      */
     patch: operations['updateAiGuidanceRule'];
+    trace?: never;
+  };
+  '/ai-guardrails/hits': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What the guardrails caught
+     * @description Newest first, a page at a time (`next_page_id`). Without `from` the log
+     *     opens on the last 30 days — except for one conversation (`chat_id`),
+     *     whose hits are returned whatever their age. `evidence` quotes the
+     *     player's or the AI's words, masked.
+     */
+    get: operations['listAiGuardrailHits'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-guardrails/phrases': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The phrases the AI's replies must not carry */
+    get: operations['listAiForbiddenPhrases'];
+    put?: never;
+    /**
+     * Add a forbidden phrase
+     * @description Owner only. `match` defaults to `word`, `action` to `block`, `lang` to
+     *     every language, `scope` to every conversation; at most 200 per agent, 20
+     *     of them patterns. Refusals are `validation` with `details.reason`:
+     *     `forbidden_phrase_empty`, `forbidden_phrase_too_long`,
+     *     `forbidden_phrase_regex_invalid`, `forbidden_phrase_regex_unsafe` (outside
+     *     the dialect — see `AiForbiddenPhraseMatch`),
+     *     `forbidden_phrase_regex_matches_empty`, `forbidden_phrase_exists`,
+     *     `forbidden_phrases_limit`, `forbidden_phrase_regex_limit`.
+     */
+    post: operations['createAiForbiddenPhrase'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-guardrails/phrases/{phraseId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        phraseId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a forbidden phrase
+     * @description Owner only.
+     */
+    delete: operations['deleteAiForbiddenPhrase'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a forbidden phrase
+     * @description Owner only. Any field alone; a new phrase is read under the stored
+     *     `match` and a new `match` re-reads the stored phrase, both refused like a
+     *     new one.
+     */
+    patch: operations['updateAiForbiddenPhrase'];
+    trace?: never;
+  };
+  '/ai-guardrails/platform': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The platform's locked guardrails
+     * @description G1–G19 and the catalogue version every turn records. Read-only: the
+     *     lexicons that detect each rule are not part of the answer.
+     */
+    get: operations['getAiGuardrailPlatform'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-guardrails/platform/{ruleKey}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A platform rule's key, `G1` … `G19`. */
+        ruleKey: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Refused — a platform rule cannot be switched off
+     * @description Always 403, as `PATCH`.
+     */
+    delete: operations['deleteAiGuardrailPlatformRule'];
+    options?: never;
+    head?: never;
+    /**
+     * Refused — a platform rule cannot be changed
+     * @description Always 403 `not_allowed` with `details.reason: guardrail_platform_locked`
+     *     and `details.locked_rule` for G1–G19 (404 for any other key). A
+     *     workspace adds stricter rules through `/ai-guardrails/rules` instead.
+     */
+    patch: operations['updateAiGuardrailPlatformRule'];
+    trace?: never;
+  };
+  '/ai-guardrails/rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's compliance rules
+     * @description Every compliance rule of the workspace's AI agents, or of the one named, oldest first.
+     */
+    get: operations['listAiGuardrailRules'];
+    put?: never;
+    /**
+     * Add a compliance rule
+     * @description Owner only. `action` defaults to `prompt_only`, `scope` to every
+     *     conversation, `active` to true; at most 50 per agent. A rule that would
+     *     switch a locked platform rule off — it names G1–G19 or the locked rules
+     *     and says to ignore, disable or not apply them — or one that asks for a
+     *     password, a one-time code or a card, or makes a bonus offer mandatory, is
+     *     403 `not_allowed` with `details.reason: guardrail_platform_locked` and
+     *     `details.locked_rule`.
+     */
+    post: operations['createAiGuardrailRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-guardrails/rules/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description The compliance rule's id. A platform rule's key (`G1` … `G19`) here is
+         *     403 `not_allowed`, `guardrail_platform_locked`.
+         */
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a compliance rule
+     * @description Owner only.
+     */
+    delete: operations['deleteAiGuardrailRule'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a compliance rule
+     * @description Owner only. Any field alone; refused like a new rule.
+     */
+    patch: operations['updateAiGuardrailRule'];
+    trace?: never;
+  };
+  '/ai-guardrails/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The AI agent's guardrail settings
+     * @description An agent nobody has configured answers with no texts, the judge off and
+     *     `setup_problem: crisis_text_missing`.
+     */
+    get: operations['getAiGuardrailSettings'];
+    /**
+     * Write the crisis text, the complaint text, the judge switch; approve the crisis text
+     * @description Owner only. Any field alone; the others keep their value, `null` clears
+     *     a text. The approval is of the crisis text as it stands: a changed text
+     *     is unapproved unless the same request sets `approve_crisis_text: true`;
+     *     `false` withdraws it. Approving with no crisis text is `validation`,
+     *     `details.reason: guardrail_crisis_text_missing`.
+     */
+    put: operations['updateAiGuardrailSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/skills': {
@@ -9397,6 +9621,182 @@ export interface components {
       checked_by: 'model' | 'rules';
     };
     /**
+     * @description What a guardrail protects — the five groups of the platform catalogue (AI-08).
+     * @enum {string}
+     */
+    AiGuardrailCategory:
+      'responsible_gaming' | 'money' | 'data_security' | 'legal' | 'transparency';
+    /**
+     * @description One locked platform rule. `prompt` is the line every written call's
+     *     system prompt opens with; `stages` says where it is checked — the
+     *     player's message (`input`), the AI's draft (`output`).
+     */
+    AiPlatformGuardrail: {
+      id: string;
+      title: {
+        tr: string;
+        en: string;
+      };
+      prompt: {
+        tr: string;
+        en: string;
+      };
+      category: components['schemas']['AiGuardrailCategory'];
+      /** @enum {string} */
+      action: 'force_handoff' | 'block_output' | 'block_promo' | 'warn';
+      /**
+       * @description The hand-over's topic; null follows the procedure's own routing.
+       * @enum {string|null}
+       */
+      target: 'responsible_gaming' | 'kyc_risk' | 'complaints' | null;
+      /** @enum {string} */
+      priority: 'urgent' | 'high' | 'normal';
+      handoff_reason: string | null;
+      risk_flag: string | null;
+      understand_risks: string[];
+      /** @description Whether a lexicon hit on the player's message triggers the rule on its own. */
+      lexicon_alone: boolean;
+      /** @enum {string} */
+      applies_when: 'always' | 'risk_flagged';
+      /**
+       * @description The workspace text the rule sends or answers from.
+       * @enum {string|null}
+       */
+      tenant_text: 'crisis' | 'complaint' | 'access_info' | null;
+      warnings_before_handoff: number | null;
+      stages: ('input' | 'output')[];
+      /** @enum {boolean} */
+      locked: true;
+    };
+    AiPlatformGuardrails: {
+      /** @description `PLATFORM_GUARDRAILS_VERSION` — what every turn records. */
+      version: string;
+      rules: components['schemas']['AiPlatformGuardrail'][];
+    };
+    /**
+     * @description A customer-facing agent's guardrail settings (AI-08). `setup_problem`
+     *     is what keeps the agent from being switched on — null once the owner
+     *     has approved the crisis text as it stands.
+     */
+    AiGuardrailSettings: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** @description Sent verbatim, whatever the hour, before G3 hands a player at risk over. */
+      crisis_text: string | null;
+      /** @description The complaint procedure G15 gives before its hand-over. */
+      complaint_text: string | null;
+      /** @description Whether a third model call checks drafts in money, account, bonus and responsible-gaming procedures. */
+      judge_enabled: boolean;
+      crisis_text_approved: boolean;
+      /** Format: uuid */
+      approved_by: string | null;
+      /** Format: date-time */
+      approved_at: string | null;
+      /** @description The platform's suggested crisis text for the workspace's country; null when it has none. */
+      crisis_text_draft: string | null;
+      /** @enum {string|null} */
+      setup_problem: 'crisis_text_missing' | 'crisis_text_not_approved' | null;
+      /** Format: uuid */
+      updated_by: string | null;
+      /**
+       * Format: date-time
+       * @description Null while nothing has been written.
+       */
+      updated_at: string | null;
+    };
+    /**
+     * @description What a compliance rule makes the turn do besides standing in the
+     *     prompt: nothing more, block a draft that breaks it (rewritten once,
+     *     then the safe text), or hand over a player message that falls under it.
+     * @enum {string}
+     */
+    AiGuardrailRuleAction: 'prompt_only' | 'block_output' | 'force_handoff';
+    /** @description A workspace's compliance rule — stricter than the platform's, never looser. */
+    AiGuardrailRule: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      title: string;
+      body: string;
+      category: components['schemas']['AiGuardrailCategory'];
+      action: components['schemas']['AiGuardrailRuleAction'];
+      scope: components['schemas']['AiGuidanceScope'];
+      active: boolean;
+      /** Format: uuid */
+      created_by?: string | null;
+      /** Format: uuid */
+      updated_by?: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description How a phrase matches the reply, both folded (lower-case ASCII, Turkish
+     *     letters folded, punctuation a space, a sentence end a line break):
+     *     `exact` anywhere, inside a word too; `word` as whole words; `regex` a
+     *     pattern of at most 120 characters, case-insensitive, `^`/`$` at a
+     *     sentence's edges — no back-references, look-arounds or named groups,
+     *     only `?` after a group, every repetition capped at 30 (`*` reads as
+     *     `{0,30}`), and repetition ranges × optional parts × alternatives at
+     *     most 256 (`.*` is 31, `\d{1,3} .*` 93, `\d+ .*` is refused).
+     * @enum {string}
+     */
+    AiForbiddenPhraseMatch: 'exact' | 'word' | 'regex';
+    AiForbiddenPhrase: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      phrase: string;
+      match: components['schemas']['AiForbiddenPhraseMatch'];
+      /** @description The reply language it applies to; null is every language. */
+      lang: string | null;
+      scope: components['schemas']['AiGuidanceScope'];
+      /**
+       * @description `block` rewrites the reply once, then sends the safe text and hands over; `warn` records it.
+       * @enum {string}
+       */
+      action: 'block' | 'warn';
+      active: boolean;
+      /** Format: uuid */
+      created_by?: string | null;
+      /** Format: uuid */
+      updated_by?: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /** @description One rule a turn found broken, and what the turn did about it. */
+    AiGuardrailHit: {
+      /** Format: uuid */
+      id: string;
+      /** @description The day container (panel "Thread ID"). */
+      chat_id: string;
+      /** @description The connection (panel "Chat ID"). */
+      thread_id: string;
+      /**
+       * Format: uuid
+       * @description The turn's decision record (`ai_decision_logs.id`).
+       */
+      turn_id: string;
+      /** @description `G1` … `G19`, `rule:<id>` or `phrase:<id>`. */
+      rule_key: string;
+      /** @enum {string} */
+      stage: 'input' | 'output';
+      /** @enum {string} */
+      action_taken:
+        'handoff' | 'crisis_text' | 'rewrite' | 'safe_text' | 'prompt_block' | 'warn' | 'evidence';
+      /** @description The words that matched, masked. */
+      evidence: string | null;
+      pattern_index: number | null;
+      catalog_version: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
      * @description How sure the agent must be of a procedure (AI-05). The understanding
      *     call rates each message 0–1 against the agent's procedures: at `high`
      *     or above the procedure starts; between `low` and `high` the agent asks
@@ -14783,6 +15183,7 @@ export interface components {
      * @enum {string}
      */
     ErrorType:
+      | 'ai_guardrail_setup_incomplete'
       | 'ai_mode_transition_refused'
       | 'ai_return_blocked'
       | 'authentication'
@@ -19694,6 +20095,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -19935,6 +20337,431 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiGuardrailHits: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+        /** @description `G1` … `G19`, `rule:<id>` or `phrase:<id>`. */
+        rule_key?: string;
+        stage?: 'input' | 'output';
+        /** @description One conversation's day container (panel "Thread ID"). */
+        chat_id?: string;
+        /** @description Page size, 50 by default; above 100 is read as 100. */
+        limit?: number;
+        /** @description The previous page's `next_page_id`; any other value is 400. */
+        page_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of hits */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiGuardrailHit'][];
+            next_page_id?: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiForbiddenPhrases: {
+    parameters: {
+      query?: {
+        ai_agent_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Forbidden phrases, oldest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiForbiddenPhrase'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiForbiddenPhrase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          ai_agent_id: string;
+          phrase: string;
+          match?: components['schemas']['AiForbiddenPhraseMatch'];
+          lang?: string | null;
+          scope?: components['schemas']['AiGuidanceScope'];
+          /** @enum {string} */
+          action?: 'block' | 'warn';
+          active?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiForbiddenPhrase'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteAiForbiddenPhrase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        phraseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiForbiddenPhrase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        phraseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          phrase?: string;
+          match?: components['schemas']['AiForbiddenPhraseMatch'];
+          lang?: string | null;
+          scope?: components['schemas']['AiGuidanceScope'];
+          /** @enum {string} */
+          action?: 'block' | 'warn';
+          active?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiForbiddenPhrase'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiGuardrailPlatform: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The locked catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiPlatformGuardrails'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteAiGuardrailPlatformRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A platform rule's key, `G1` … `G19`. */
+        ruleKey: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiGuardrailPlatformRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A platform rule's key, `G1` … `G19`. */
+        ruleKey: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiGuardrailRules: {
+    parameters: {
+      query?: {
+        ai_agent_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Compliance rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiGuardrailRule'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiGuardrailRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          ai_agent_id: string;
+          title: string;
+          body: string;
+          category: components['schemas']['AiGuardrailCategory'];
+          action?: components['schemas']['AiGuardrailRuleAction'];
+          scope?: components['schemas']['AiGuidanceScope'];
+          active?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiGuardrailRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteAiGuardrailRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description The compliance rule's id. A platform rule's key (`G1` … `G19`) here is
+         *     403 `not_allowed`, `guardrail_platform_locked`.
+         */
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiGuardrailRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /**
+         * @description The compliance rule's id. A platform rule's key (`G1` … `G19`) here is
+         *     403 `not_allowed`, `guardrail_platform_locked`.
+         */
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          title?: string;
+          body?: string;
+          category?: components['schemas']['AiGuardrailCategory'];
+          action?: components['schemas']['AiGuardrailRuleAction'];
+          scope?: components['schemas']['AiGuidanceScope'];
+          active?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiGuardrailRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiGuardrailSettings: {
+    parameters: {
+      query: {
+        ai_agent_id: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Guardrail settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiGuardrailSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiGuardrailSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          ai_agent_id: string;
+          crisis_text?: string | null;
+          complaint_text?: string | null;
+          judge_enabled?: boolean;
+          approve_crisis_text?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiGuardrailSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

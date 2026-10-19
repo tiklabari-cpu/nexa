@@ -49,6 +49,12 @@ aiAgent:
       Deactivating an agent stops every skill under it at once, which is what an
       admin reaches for when automation is misbehaving. It does not delete
       anything.
+
+      Switching a customer-facing agent on needs its crisis text written and
+      approved by the owner (`/ai-guardrails/settings`, AI-08): otherwise 409
+      `ai_guardrail_setup_incomplete` with `details.reason`
+      `crisis_text_missing` or `crisis_text_not_approved`. An agent already on
+      is not affected.
     requestBody:
       required: true
       content:
@@ -119,6 +125,7 @@ aiAgent:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 aiAgentHandoffSettings:

@@ -1,0 +1,429 @@
+# Compliance guardrails (AI-08 · tm 301.2).
+#
+# The platform's locked rules, G1–G19, are code: every turn runs under them
+# and records their version, and no workspace can switch one off or edit it —
+# the write endpoints on `/ai-guardrails/platform/{ruleKey}` exist to answer
+# 403 `not_allowed` with `details.reason: guardrail_platform_locked`. What a
+# workspace may do is add stricter things: the crisis text G3 sends verbatim
+# before its hand-over and the complaint procedure G15 gives (settings),
+# compliance rules for the prompt, and forbidden phrases no reply may carry.
+#
+# The owner writes, an admin reads. A customer-facing AI agent cannot be
+# switched on until the owner has approved its crisis text
+# (`PATCH /ai-agents/{aiAgentId}` → 409 `ai_guardrail_setup_incomplete`).
+
+guardrailPlatform:
+  get:
+    tags: [Playbook]
+    operationId: getAiGuardrailPlatform
+    summary: The platform's locked guardrails
+    description: |
+      G1–G19 and the catalogue version every turn records. Read-only: the
+      lexicons that detect each rule are not part of the answer.
+    responses:
+      "200":
+        description: The locked catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiPlatformGuardrails" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guardrailPlatformRule:
+  parameters:
+    - name: ruleKey
+      in: path
+      required: true
+      description: A platform rule's key, `G1` … `G19`.
+      schema: { type: string, maxLength: 8 }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateAiGuardrailPlatformRule
+    summary: Refused — a platform rule cannot be changed
+    description: |
+      Always 403 `not_allowed` with `details.reason: guardrail_platform_locked`
+      and `details.locked_rule` for G1–G19 (404 for any other key). A
+      workspace adds stricter rules through `/ai-guardrails/rules` instead.
+    responses:
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteAiGuardrailPlatformRule
+    summary: Refused — a platform rule cannot be switched off
+    description: Always 403, as `PATCH`.
+    responses:
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guardrailSettings:
+  get:
+    tags: [Playbook]
+    operationId: getAiGuardrailSettings
+    summary: The AI agent's guardrail settings
+    description: |
+      An agent nobody has configured answers with no texts, the judge off and
+      `setup_problem: crisis_text_missing`.
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: Guardrail settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Playbook]
+    operationId: updateAiGuardrailSettings
+    summary: Write the crisis text, the complaint text, the judge switch; approve the crisis text
+    description: |
+      Owner only. Any field alone; the others keep their value, `null` clears
+      a text. The approval is of the crisis text as it stands: a changed text
+      is unapproved unless the same request sets `approve_crisis_text: true`;
+      `false` withdraws it. Approving with no crisis text is `validation`,
+      `details.reason: guardrail_crisis_text_missing`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            minProperties: 2
+            required: [ai_agent_id]
+            properties:
+              ai_agent_id: { type: string, format: uuid }
+              crisis_text: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+              complaint_text: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+              judge_enabled: { type: boolean }
+              approve_crisis_text: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guardrailRules:
+  get:
+    tags: [Playbook]
+    operationId: listAiGuardrailRules
+    summary: The workspace's compliance rules
+    description: Every compliance rule of the workspace's AI agents, or of the one named, oldest first.
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: Compliance rules
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiGuardrailRule
+    summary: Add a compliance rule
+    description: |
+      Owner only. `action` defaults to `prompt_only`, `scope` to every
+      conversation, `active` to true; at most 50 per agent. A rule that would
+      switch a locked platform rule off — it names G1–G19 or the locked rules
+      and says to ignore, disable or not apply them — or one that asks for a
+      password, a one-time code or a card, or makes a bonus offer mandatory, is
+      403 `not_allowed` with `details.reason: guardrail_platform_locked` and
+      `details.locked_rule`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [ai_agent_id, title, body, category]
+            properties:
+              ai_agent_id: { type: string, format: uuid }
+              title: { type: string, minLength: 1, maxLength: 120 }
+              body: { type: string, minLength: 1, maxLength: 600 }
+              category: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailCategory" }
+              action: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailRuleAction" }
+              scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
+              active: { type: boolean }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guardrailRule:
+  parameters:
+    - name: ruleId
+      in: path
+      required: true
+      description: |
+        The compliance rule's id. A platform rule's key (`G1` … `G19`) here is
+        403 `not_allowed`, `guardrail_platform_locked`.
+      schema: { type: string, maxLength: 36 }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateAiGuardrailRule
+    summary: Edit a compliance rule
+    description: Owner only. Any field alone; refused like a new rule.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              title: { type: string, minLength: 1, maxLength: 120 }
+              body: { type: string, minLength: 1, maxLength: 600 }
+              category: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailCategory" }
+              action: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailRuleAction" }
+              scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
+              active: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteAiGuardrailRule
+    summary: Delete a compliance rule
+    description: Owner only.
+    responses:
+      "204": { description: Deleted }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guardrailPhrases:
+  get:
+    tags: [Playbook]
+    operationId: listAiForbiddenPhrases
+    summary: The phrases the AI's replies must not carry
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: Forbidden phrases, oldest first
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiForbiddenPhrase" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiForbiddenPhrase
+    summary: Add a forbidden phrase
+    description: |
+      Owner only. `match` defaults to `word`, `action` to `block`, `lang` to
+      every language, `scope` to every conversation; at most 200 per agent, 20
+      of them patterns. Refusals are `validation` with `details.reason`:
+      `forbidden_phrase_empty`, `forbidden_phrase_too_long`,
+      `forbidden_phrase_regex_invalid`, `forbidden_phrase_regex_unsafe` (outside
+      the dialect — see `AiForbiddenPhraseMatch`),
+      `forbidden_phrase_regex_matches_empty`, `forbidden_phrase_exists`,
+      `forbidden_phrases_limit`, `forbidden_phrase_regex_limit`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [ai_agent_id, phrase]
+            properties:
+              ai_agent_id: { type: string, format: uuid }
+              phrase: { type: string, minLength: 1, maxLength: 200 }
+              match: { $ref: "../openapi.yaml#/components/schemas/AiForbiddenPhraseMatch" }
+              lang: { type: string, pattern: "^[a-z]{2}$", nullable: true }
+              scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
+              action: { type: string, enum: [block, warn] }
+              active: { type: boolean }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiForbiddenPhrase" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guardrailPhrase:
+  parameters:
+    - name: phraseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateAiForbiddenPhrase
+    summary: Edit a forbidden phrase
+    description: |
+      Owner only. Any field alone; a new phrase is read under the stored
+      `match` and a new `match` re-reads the stored phrase, both refused like a
+      new one.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              phrase: { type: string, minLength: 1, maxLength: 200 }
+              match: { $ref: "../openapi.yaml#/components/schemas/AiForbiddenPhraseMatch" }
+              lang: { type: string, pattern: "^[a-z]{2}$", nullable: true }
+              scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
+              action: { type: string, enum: [block, warn] }
+              active: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiForbiddenPhrase" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteAiForbiddenPhrase
+    summary: Delete a forbidden phrase
+    description: Owner only.
+    responses:
+      "204": { description: Deleted }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+guardrailHits:
+  get:
+    tags: [Playbook]
+    operationId: listAiGuardrailHits
+    summary: What the guardrails caught
+    description: |
+      Newest first, a page at a time (`next_page_id`). Without `from` the log
+      opens on the last 30 days — except for one conversation (`chat_id`),
+      whose hits are returned whatever their age. `evidence` quotes the
+      player's or the AI's words, masked.
+    parameters:
+      - name: from
+        in: query
+        required: false
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        required: false
+        schema: { type: string, format: date-time }
+      - name: rule_key
+        in: query
+        required: false
+        description: "`G1` … `G19`, `rule:<id>` or `phrase:<id>`."
+        schema: { type: string, maxLength: 64 }
+      - name: stage
+        in: query
+        required: false
+        schema: { type: string, enum: [input, output] }
+      - name: chat_id
+        in: query
+        required: false
+        description: One conversation's day container (panel "Thread ID").
+        schema: { type: string, maxLength: 12 }
+      - name: limit
+        in: query
+        required: false
+        description: Page size, 50 by default; above 100 is read as 100.
+        schema: { type: integer, minimum: 1 }
+      - name: page_id
+        in: query
+        required: false
+        description: The previous page's `next_page_id`; any other value is 400.
+        schema: { type: string, maxLength: 512 }
+    responses:
+      "200":
+        description: A page of hits
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailHit" }
+                next_page_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

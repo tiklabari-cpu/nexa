@@ -12893,7 +12893,7 @@
           "300"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-19T04:19:56.744Z",
+        "updatedAt": "2026-10-19T04:22:37.877Z",
         "subtasks": [
           {
             "id": 1,
@@ -12913,13 +12913,13 @@
             "description": "Migration (settings/rules/phrases/hits) + kontrat + kilit 403 + yayın kapısı 409",
             "details": "Üst görev 301 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon; RLS negatif.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "301.1"
             ],
             "parentId": "301",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-19T04:22:37.877Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T04:19:56.745Z",
+      "lastModified": "2026-10-19T04:22:37.878Z",
       "taskCount": 390,
       "completedCount": 299,
       "tags": [

@@ -70,15 +70,25 @@ export function isNegated(folded: string): boolean {
   return last !== undefined && last.length > 3 && NEGATIVE_VERB.test(last);
 }
 
-/** The locked platform rule a rule's text goes against, or null (AI-07 §5). */
-export function lockedRuleViolation(text: string): LockedRuleViolation | null {
+/**
+ * The locked platform rule a rule's text goes against, or null (AI-07 §5).
+ * `topicDisable: false` leaves out the locked-topic reading of
+ * `disable_locked` — a compliance rule (`guardrail-lock.ts`) is about those
+ * topics by nature and has its own, narrower check.
+ */
+export function lockedRuleViolation(
+  text: string,
+  options: { topicDisable?: boolean } = {},
+): LockedRuleViolation | null {
   const folded = foldTr(text);
   const negated = isNegated(folded);
   const hit = (key: LockedRuleKey): LockedRuleViolation => ({
     locked_rule: key,
     explanation: EXPLANATIONS[key],
   });
-  if (DISABLE.test(folded) && LOCKED_TOPIC.test(folded)) return hit('disable_locked');
+  if (options.topicDisable !== false && DISABLE.test(folded) && LOCKED_TOPIC.test(folded)) {
+    return hit('disable_locked');
+  }
   if (negated) return null;
   if (CREDENTIAL.test(folded) && CREDENTIAL_ASK.test(folded)) {
     const onlyCardDigits =

@@ -190,6 +190,10 @@ model License {
   aiConversations        AiConversation[]
   aiHandoffSettings      AiHandoffSettings[]
   aiGuidanceRules        AiGuidanceRule[]
+  aiGuardrailSettings    AiGuardrailSettings[]
+  aiGuardrailRules       AiGuardrailRule[]
+  aiForbiddenPhrases     AiForbiddenPhrase[]
+  aiGuardrailHits        AiGuardrailHit[]
   aiProcedureExamples    AiProcedureExample[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
@@ -963,6 +967,7 @@ model Chat {
   goalAchievements GoalAchievement[]
   trackedSales     TrackedSale[]
   aiDecisionLogs   AiDecisionLog[]
+  aiGuardrailHits  AiGuardrailHit[]
   aiJobs           AiJob[]
 
   @@index([licenseId, createdAt(sort: Desc)])
@@ -1015,6 +1020,7 @@ model Thread {
   events          Event[]
   skillRuns       SkillRun[]
   aiDecisionLogs  AiDecisionLog[]
+  aiGuardrailHits AiGuardrailHit[]
   aiJobs          AiJob[]
   queueEntries    QueueEntry[]
   aiConversations AiConversation[]
@@ -1787,8 +1793,11 @@ model AiAgent {
   license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   skills           Skill[]
   knowledgeSources KnowledgeSource[]
-  handoffSettings  AiHandoffSettings?
-  guidanceRules    AiGuidanceRule[]
+  handoffSettings   AiHandoffSettings?
+  guidanceRules     AiGuidanceRule[]
+  guardrailSettings AiGuardrailSettings?
+  guardrailRules    AiGuardrailRule[]
+  forbiddenPhrases  AiForbiddenPhrase[]
 
   @@index([licenseId, kind])
   @@map("ai_agents")
@@ -1859,6 +1868,128 @@ model AiGuidanceRule {
 
   @@index([licenseId, aiAgentId])
   @@map("ai_guidance_rules")
+}
+
+/// A customer-facing agent's guardrail settings (tm 301.2 · AI-08): the crisis
+/// text G3 sends verbatim before its hand-over, the complaint procedure G15
+/// gives, whether the judge call reads risky drafts, and the Founder's approval
+/// of the crisis text as it stands — editing the text clears it, and the agent
+/// cannot be switched on without it (`409 ai_guardrail_setup_incomplete`,
+/// `guardrailSetupProblem`). One row per agent; no row is no crisis text. An
+/// editing table (ADR-14b §2.12): writes go through `config-draft.ts`. The
+/// CHECKs and the trigger holding the row to an agent of its own licence live
+/// in the migration (20261019150000_ai_guardrails).
+model AiGuardrailSettings {
+  aiAgentId     String    @id @map("ai_agent_id") @db.Uuid
+  licenseId     BigInt    @map("license_id")
+  crisisText    String?   @map("crisis_text")
+  complaintText String?   @map("complaint_text")
+  judgeEnabled  Boolean   @default(false) @map("judge_enabled")
+  /// Soft references to `accounts.id`: who approved the crisis text, and when.
+  approvedBy    String?   @map("approved_by") @db.Uuid
+  approvedAt    DateTime? @map("approved_at") @db.Timestamptz(6)
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId])
+  @@map("ai_guardrail_settings")
+}
+
+/// A workspace's compliance addition to the locked catalogue (tm 301.2 ·
+/// AI-08): one imperative line for the prompt's `tenant_compliance` layer, a
+/// category (`GUARDRAIL_CATEGORIES`), what it makes the turn do
+/// (`GUARDRAIL_RULE_ACTIONS`) and a scope read through `readGuidanceScope`. An
+/// editing table: `active` is "on in this version", writes go through
+/// `config-draft.ts`.
+model AiGuardrailRule {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  aiAgentId String   @map("ai_agent_id") @db.Uuid
+  title     String
+  /// ≤ 600 characters by CHECK (`GUARDRAIL_RULE_BODY_MAX`).
+  body      String
+  category  String
+  action    String   @default("prompt_only")
+  scope     Json     @default("{\"all\": true}")
+  active    Boolean  @default(true)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, aiAgentId])
+  @@map("ai_guardrail_rules")
+}
+
+/// What a workspace's AI replies must not say (tm 301.2 · AI-08): a phrase
+/// matched against the folded reply exactly, as whole words or by a pattern of
+/// the bounded dialect `forbiddenPhraseProblem` accepts; `block` rewrites, then
+/// hands over, `warn` records. `lang` null applies to every reply. An editing
+/// table, like the rules.
+model AiForbiddenPhrase {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  aiAgentId String   @map("ai_agent_id") @db.Uuid
+  phrase    String
+  /// `FORBIDDEN_PHRASE_MATCHES`, by CHECK.
+  match     String   @default("word")
+  lang      String?
+  scope     Json     @default("{\"all\": true}")
+  action    String   @default("block")
+  active    Boolean  @default(true)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, aiAgentId])
+  @@map("ai_forbidden_phrases")
+}
+
+/// One guardrail hit (tm 301.2 · AI-08 §8): which rule a turn found broken at
+/// the player's message or the AI's draft, and what the turn did. A record,
+/// not configuration — never edited (`siyahtus_app` holds SELECT, INSERT,
+/// DELETE). `turn_id` is the turn's `ai_decision_logs.id`, `rule_key` is `G3`,
+/// `rule:<uuid>` or `phrase:<uuid>` (`guardrailHitRuleKey`) — neither a
+/// relation. `evidence` quotes masked words, so the row goes with its
+/// conversation (`chat_id`/`thread_id` cascade).
+model AiGuardrailHit {
+  id             String   @id @default(uuid()) @db.Uuid
+  licenseId      BigInt   @map("license_id")
+  /// The day container (panel "Thread ID").
+  chatId         String   @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID").
+  threadId       String   @map("thread_id") @db.VarChar(12)
+  turnId         String   @map("turn_id") @db.Uuid
+  ruleKey        String   @map("rule_key")
+  /// `GUARDRAIL_STAGES`, by CHECK.
+  stage          String
+  /// `GUARDRAIL_HIT_ACTIONS`, by CHECK.
+  actionTaken    String   @map("action_taken")
+  evidence       String?
+  patternIndex   Int?     @map("pattern_index")
+  catalogVersion String   @map("catalog_version")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  thread  Thread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt(sort: Desc)])
+  @@index([licenseId, ruleKey, createdAt(sort: Desc)])
+  @@index([chatId, createdAt])
+  @@index([threadId])
+  @@map("ai_guardrail_hits")
 }
 
 // ===========================================================================

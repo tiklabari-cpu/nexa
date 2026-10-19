@@ -942,7 +942,10 @@ describe('module parity matrix — what is still owed', () => {
       // `/ai-guidance/{ruleId}` (tm 299.1) — the AI agent's behaviour rules,
       // written by an admin in the web panel's AI Agent screen (tm 299.2). The
       // app configures no AI agent; nothing here re-scopes.
-      contractEndpoints: 242,
+      // 242 -> 250 with the eight `/ai-guardrails/*` paths (tm 301.2) — the
+      // compliance guardrails an owner configures in the web panel's AI Agent
+      // screen (tm 301.4). The app configures no AI agent; nothing here re-scopes.
+      contractEndpoints: 250,
       scopeBoundaries: 1,
     });
   });

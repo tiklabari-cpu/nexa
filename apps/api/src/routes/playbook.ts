@@ -26,6 +26,7 @@ import {
   MAX_QUESTIONS_PER_MESSAGE_MIN,
   readPersonaStyle,
   fallbackTakenProblem,
+  guardrailSetupProblem,
   readClarifyThresholds,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   DEFAULT_SKILL_MODE,
@@ -708,9 +709,31 @@ export default async function playbookRoutes(
       const updated = await request.withTenant(async (tx) => {
         const existing = await tx.aiAgent.findFirst({
           where: { id },
-          select: { id: true, persona: true },
+          select: { id: true, kind: true, active: true, persona: true },
         });
         if (!existing) throw ApiError.notFound('AI agent not found.');
+
+        // The guardrail gate (AI-08-S1 · tm 301.2): a customer-facing agent
+        // goes live only once the Founder has approved its crisis text — the
+        // text G3 sends a player at risk, whatever the hour. Only switching it
+        // on is gated; an agent already live keeps answering, and Copilot never
+        // talks to a player.
+        if (body.active === true && !existing.active && existing.kind === 'ai_agent') {
+          const settings = await tx.aiGuardrailSettings.findUnique({
+            where: { aiAgentId: id },
+            select: { crisisText: true, approvedAt: true },
+          });
+          const problem = guardrailSetupProblem(settings);
+          if (problem) {
+            throw new ApiError(
+              'ai_guardrail_setup_incomplete',
+              problem === 'crisis_text_missing'
+                ? 'Write the crisis text in the guardrail settings and approve it before switching the AI agent on.'
+                : 'The crisis text has not been approved by the owner; approve it before switching the AI agent on.',
+              { details: { reason: problem } },
+            );
+          }
+        }
 
         // `answer_length`, `batch_window_seconds`, `daily_memory`,
         // `clarify_thresholds` and the style (tm 299.1) live inside the persona JSON alongside anything else an admin has set (a

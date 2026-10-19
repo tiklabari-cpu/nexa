@@ -10,7 +10,8 @@
  * on an editing table itself; it calls this.
  *
  * This first form does §2.5 step 1 only: it stamps the row's `updated_at` —
- * for skills (tm 296.2) and behaviour rules (tm 299.1).
+ * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
+ * settings, rules and forbidden phrases (tm 301.2).
  * A route that writes `updated_at` itself, or opens a `status`/`version`
  * column, breaks the rule.
  */
@@ -53,5 +54,67 @@ export async function updateGuidanceRuleDraft(
 /** How many rows went — 0 when the rule is not this workspace's. */
 export async function deleteGuidanceRuleDraft(tx: TenantClient, id: string): Promise<number> {
   const { count } = await tx.aiGuidanceRule.deleteMany({ where: { id } });
+  return count;
+}
+
+// Compliance guardrails (tm 301.2 · AI-08). A change to any of these touches
+// compliance: tm 316 asks the Founder to approve the version that carries it.
+
+type GuardrailSettingsCreate = Omit<Prisma.AiGuardrailSettingsUncheckedCreateInput, 'updatedAt'>;
+type GuardrailSettingsUpdate = Omit<Prisma.AiGuardrailSettingsUncheckedUpdateInput, 'updatedAt'>;
+
+/** An agent's guardrail settings — the row is made on its first write. */
+export async function upsertGuardrailSettingsDraft(
+  tx: TenantClient,
+  create: GuardrailSettingsCreate,
+  update: GuardrailSettingsUpdate,
+) {
+  const updatedAt = new Date();
+  return tx.aiGuardrailSettings.upsert({
+    where: { aiAgentId: create.aiAgentId },
+    create: { ...create, updatedAt },
+    update: { ...update, updatedAt },
+  });
+}
+
+type GuardrailRuleCreate = Omit<Prisma.AiGuardrailRuleUncheckedCreateInput, 'updatedAt'>;
+type GuardrailRuleUpdate = Omit<Prisma.AiGuardrailRuleUncheckedUpdateInput, 'updatedAt'>;
+
+export async function createGuardrailRuleDraft(tx: TenantClient, data: GuardrailRuleCreate) {
+  return tx.aiGuardrailRule.create({ data: { ...data, updatedAt: new Date() } });
+}
+
+export async function updateGuardrailRuleDraft(
+  tx: TenantClient,
+  id: string,
+  data: GuardrailRuleUpdate,
+) {
+  return tx.aiGuardrailRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+}
+
+/** How many rows went — 0 when the rule is not this workspace's. */
+export async function deleteGuardrailRuleDraft(tx: TenantClient, id: string): Promise<number> {
+  const { count } = await tx.aiGuardrailRule.deleteMany({ where: { id } });
+  return count;
+}
+
+type ForbiddenPhraseCreate = Omit<Prisma.AiForbiddenPhraseUncheckedCreateInput, 'updatedAt'>;
+type ForbiddenPhraseUpdate = Omit<Prisma.AiForbiddenPhraseUncheckedUpdateInput, 'updatedAt'>;
+
+export async function createForbiddenPhraseDraft(tx: TenantClient, data: ForbiddenPhraseCreate) {
+  return tx.aiForbiddenPhrase.create({ data: { ...data, updatedAt: new Date() } });
+}
+
+export async function updateForbiddenPhraseDraft(
+  tx: TenantClient,
+  id: string,
+  data: ForbiddenPhraseUpdate,
+) {
+  return tx.aiForbiddenPhrase.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+}
+
+/** How many rows went — 0 when the phrase is not this workspace's. */
+export async function deleteForbiddenPhraseDraft(tx: TenantClient, id: string): Promise<number> {
+  const { count } = await tx.aiForbiddenPhrase.deleteMany({ where: { id } });
   return count;
 }

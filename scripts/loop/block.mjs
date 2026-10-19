@@ -6,8 +6,10 @@
  *     node scripts/loop/block.mjs <dosya>                  # sorgu yok → dosyanın yapısı
  *
  * Sorgu: `send` (bildirilen ad) · `ChatService.send` (sahibiyle) · `412` (o satırı içeren
- * blok) · `it:metin` / `describe:metin` (başlığında metin geçen test bloğu). .md'de başlık
- * metni, .prisma'da model/enum adı. Diğer dosya türlerinde grep çıktısı verir.
+ * blok) · `it:metin` / `describe:metin` (başlığında metin geçen test bloğu) · `re:desen` ya da
+ * `rei:desen` (regex, rei harf duyarsız: eşleşen satırlar + onları kapsayan bloklar; grep -n +
+ * sed -n yerine. `/desen/` biçimi yok — Git Bash onu bir yola çevirir).
+ * .md'de başlık metni, .prisma'da model/enum adı. Diğer dosya türlerinde grep çıktısı verir.
  *
  * Neden: pencereler bir bloğu okumak için önce `grep -n`, sonra `sed -n a,bp` çağırıyordu
  * (26 pencerede 760 çift, %10'unda aralık ıskalanıp yeniden okundu). Her ayrı çağrı o anki
@@ -37,6 +39,7 @@ const GREP_CONTEXT = 8;
 const LINE_WINDOW = 15;
 const MAX_INLINE_MATCHES = 3;
 const OUTLINE_ROWS = 150;
+const PATTERN_LIST_LINES = 40;
 const BOM = String.fromCharCode(0xfeff);
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
@@ -167,9 +170,10 @@ const label = (e) => (e.kind === 'it' || e.kind === 'describe' ? `${e.kind}('${e
 const span = (e) => e.end - e.start + 1;
 const contains = (outer, inner) => outer.start <= inner.start && inner.end <= outer.end && span(outer) > span(inner);
 
-function body(lines, start, end) {
+/** `mark` kümesindeki satırlar `>` ile işaretlenir (desen sorgusunda eşleşen satırlar). */
+function body(lines, start, end, mark = null) {
   const out = [];
-  for (let n = start; n <= end; n++) out.push(`${String(n).padStart(6)}\t${lines[n - 1] ?? ''}`);
+  for (let n = start; n <= end; n++) out.push(`${String(n).padStart(6)}${mark?.has(n) ? '>' : ''}\t${lines[n - 1] ?? ''}`);
   return out.join('\n');
 }
 
@@ -186,14 +190,14 @@ function innerRows(parsed, lines, outer) {
   return direct.slice(0, 60).map((p) => `${`${p.start}-${p.end}`.padStart(11)}  ${p.text}`);
 }
 
-function printBlock(ctx, e, note = '') {
+function printBlock(ctx, e, note = '', mark = null) {
   const { rel, lines, parsed, full } = ctx;
   const head = `== ${rel}:${e.start}-${e.end} · ${note || label(e)} · ${span(e)} satır${parsed.warning ? ` · ${parsed.warning}` : ''}`;
-  if (span(e) <= MAX_LINES || full) return `${head}\n${body(lines, e.start, e.end)}`;
+  if (span(e) <= MAX_LINES || full) return `${head}\n${body(lines, e.start, e.end, mark)}`;
   const inner = innerRows(parsed, lines, e);
   return [
     `${head} — ${MAX_LINES} satırdan uzun: ilk ${HEAD_LINES} satır + iç bloklar (tamamı için --full ya da iç bloğun satırı)`,
-    body(lines, e.start, e.start + HEAD_LINES - 1),
+    body(lines, e.start, e.start + HEAD_LINES - 1, mark),
     inner.length ? `  iç bloklar:\n${inner.join('\n')}` : '  (iç blok yok)',
   ].join('\n');
 }
@@ -215,13 +219,14 @@ function outline(ctx) {
   const hidden = rows.length - Math.min(shown.length, OUTLINE_ROWS);
   if (hidden > 0) out.push(`  … ${hidden} iç blok gizlendi — ilgili satırla sor: block.mjs ${rel} <satır>`);
   if (parsed.entries.length === 0) out.push('  (tanınan blok yok)');
+  out.push(`  → blok: node scripts/loop/block.mjs ${rel} <ad|satır|re:desen>`);
   return out.join('\n');
 }
 
+/** `query` metin (içerir) ya da RegExp. */
 function grepFallback(ctx, query) {
   const { rel, lines } = ctx;
-  const hits = [];
-  lines.forEach((l, i) => l.includes(query) && hits.push(i + 1));
+  const hits = matchLines(lines, query);
   if (hits.length === 0) return null;
   const ranges = [];
   for (const h of hits) {
@@ -231,7 +236,8 @@ function grepFallback(ctx, query) {
     else ranges.push({ start: s, end: e });
   }
   const why = ctx.kind === 'md' ? 'başlıklarda yok' : 'AST yok';
-  const out = [`== ${rel} · '${query}' · ${hits.length} eşleşme (${why} — grep çıktısı, ±${GREP_CONTEXT} satır)`];
+  const shown = query instanceof RegExp ? String(query) : `'${query}'`;
+  const out = [`== ${rel} · ${shown} · ${hits.length} eşleşme (${why} — grep çıktısı, ±${GREP_CONTEXT} satır)`];
   let budget = MAX_LINES;
   for (const r of ranges) {
     if (budget <= 0) {
@@ -247,23 +253,68 @@ function grepFallback(ctx, query) {
 
 // ───────────────────────── sorgu ─────────────────────────
 
-function lineQuery(ctx, n) {
+/**
+ * Satırı "kapsayan blok": obje alanları ve iç içe yerel `const`'lar sayılmaz (çevreleyen
+ * fonksiyon/test daha anlamlı). Blok sınırdan büyükse satırı içeren, sığan en geniş ifade;
+ * o da yoksa ±LINE_WINDOW penceresi. @returns {{ range, note: string }}
+ */
+function holderOf(ctx, n) {
   const { lines, parsed, full } = ctx;
-  if (n < 1 || n > lines.length) return { text: `satır ${n} dosyanın dışında (${lines.length} satır)`, found: false };
-  // Obje alanları ve iç içe yerel `const`'lar satırın "bloğu" sayılmaz — çevreleyen fonksiyon/test daha anlamlı.
   const nested = (e) => parsed.entries.some((o) => o !== e && contains(o, e));
   const holders = parsed.entries
     .filter((e) => e.start <= n && n <= e.end && e.kind !== 'object' && !(e.kind === 'const' && nested(e)))
     .sort((a, b) => span(a) - span(b));
   const deepest = holders[0];
-  if (deepest && (span(deepest) <= MAX_LINES || full)) return { text: printBlock(ctx, deepest), found: true };
-  // Büyük blok ya da blok dışı: satırı içeren, sınıra sığan en geniş ifade.
+  if (deepest && (span(deepest) <= MAX_LINES || full)) return { range: deepest, note: '' };
   const fits = parsed.stmts.filter((s) => s.start <= n && n <= s.end && span(s) <= MAX_LINES && (!deepest || contains(deepest, s) || span(deepest) === span(s)));
   fits.sort((a, b) => span(b) - span(a));
   const where = deepest ? ` (${label(deepest)} ${deepest.start}-${deepest.end} içinde)` : '';
-  if (fits[0]) return { text: printBlock(ctx, fits[0], `satır ${n}'i içeren ifade${where}`), found: true };
+  if (fits[0]) return { range: fits[0], note: `satır ${n}'i içeren ifade${where}` };
   const s = Math.max(1, n - LINE_WINDOW), e = Math.min(lines.length, n + LINE_WINDOW);
-  return { text: printBlock(ctx, { start: s, end: e }, `satır ${n} ±${LINE_WINDOW}${where}`), found: true };
+  return { range: { start: s, end: e }, note: `satır ${n} ±${LINE_WINDOW}${where}` };
+}
+
+function lineQuery(ctx, n) {
+  if (n < 1 || n > ctx.lines.length) return { text: `satır ${n} dosyanın dışında (${ctx.lines.length} satır)`, found: false };
+  const { range, note } = holderOf(ctx, n);
+  return { text: printBlock(ctx, range, note), found: true };
+}
+
+const matchLines = (lines, query) => {
+  const hits = [];
+  lines.forEach((l, i) => (query instanceof RegExp ? query.test(l) : l.includes(query)) && hits.push(i + 1));
+  return hits;
+};
+
+/** `re:desen`: eşleşen satırlar (grep -n yerine) + onları kapsayan bloklar (sed -n yerine). */
+function patternQuery(ctx, re) {
+  const { rel, lines, parsed, isAst } = ctx;
+  const hits = matchLines(lines, re);
+  if (hits.length === 0) return { text: `== ${rel} · ${re} · bulunamadı (yokluk kanıtı değildir; dosyayı bilmiyorsan grep -rln)`, found: false };
+  if (!isAst) return { text: grepFallback(ctx, re), found: true };
+  const inImports = (n) => parsed.imports && parsed.imports.start <= n && n <= parsed.imports.end;
+  // Aynı bloğa düşen eşleşmeler tek blokta toplanır.
+  const blocks = [];
+  for (const n of hits) {
+    if (inImports(n)) continue;
+    const h = holderOf(ctx, n);
+    const same = blocks.find((b) => b.range.start === h.range.start && b.range.end === h.range.end);
+    if (same) same.marks.add(n);
+    else blocks.push({ ...h, marks: new Set([n]) });
+  }
+  const list = [
+    `== ${rel} · ${re} · ${hits.length} eşleşme · ${blocks.length} blok`,
+    ...hits.slice(0, PATTERN_LIST_LINES).map((n) => `${String(n).padStart(6)}:\t${lines[n - 1].trim().slice(0, 120)}${inImports(n) ? '   (import)' : ''}`),
+  ];
+  if (hits.length > PATTERN_LIST_LINES) list.push(`  … +${hits.length - PATTERN_LIST_LINES} eşleşme daha (daralt ya da satırla sor)`);
+  const total = blocks.reduce((s, b) => s + Math.min(span(b.range), MAX_LINES), 0);
+  if (blocks.length <= MAX_INLINE_MATCHES && total <= MAX_LINES * 1.5) {
+    return { text: [list.join('\n'), ...blocks.map((b) => printBlock(ctx, b.range, b.note, b.marks))].join('\n\n'), found: true };
+  }
+  const rows = blocks.slice(0, 40).map((b) =>
+    `${`${b.range.start}-${b.range.end}`.padStart(11)}  ${b.note || label(b.range)}  (eşleşme: ${[...b.marks].join(', ')})`);
+  list.push(`  bloklar — hangisi? (satırla ya da adla sor: block.mjs ${rel} <satır|ad>)`, ...rows);
+  return { text: list.join('\n'), found: true };
 }
 
 function nameQuery(ctx, query) {
@@ -332,7 +383,7 @@ export function run(argv) {
   const isFile = (a) => existsSync(a) && statSync(a).isFile();
   if (args.length === 0 || !isFile(args[0])) {
     return {
-      out: `kullanım: node scripts/loop/block.mjs <dosya> [<ad|satır|it:başlık|describe:başlık> …] [<dosya> …] [--full]${args[0] ? `\ndosya bulunamadı: ${args[0]}` : ''}\n`,
+      out: `kullanım: node scripts/loop/block.mjs <dosya> [<ad|satır|re:desen|it:başlık|describe:başlık> …] [<dosya> …] [--full]${args[0] ? `\ndosya bulunamadı: ${args[0]}` : ''}\n`,
       code: 2,
     };
   }
@@ -350,7 +401,19 @@ export function run(argv) {
       continue;
     }
     for (const q of queries) {
-      const r = /^\d+$/.test(q) ? (ctx.isAst ? lineQuery(ctx, Number(q)) : { text: printBlock(ctx, { start: Math.max(1, +q - LINE_WINDOW), end: Math.min(ctx.lines.length, +q + LINE_WINDOW) }, `satır ${q} ±${LINE_WINDOW} (AST yok)`), found: +q >= 1 && +q <= ctx.lines.length }) : nameQuery(ctx, q);
+      const pat = /^(re|rei):(.+)$/s.exec(q);
+      let r;
+      if (pat) {
+        let re;
+        try {
+          re = new RegExp(pat[2], pat[1] === 'rei' ? 'i' : '');
+        } catch (err) {
+          return { out: `geçersiz desen ${q}: ${err.message}\n`, code: 2 };
+        }
+        r = patternQuery(ctx, re);
+      } else if (/^\d+$/.test(q)) {
+        r = ctx.isAst ? lineQuery(ctx, Number(q)) : { text: printBlock(ctx, { start: Math.max(1, +q - LINE_WINDOW), end: Math.min(ctx.lines.length, +q + LINE_WINDOW) }, `satır ${q} ±${LINE_WINDOW} (AST yok)`), found: +q >= 1 && +q <= ctx.lines.length };
+      } else r = nameQuery(ctx, q);
       if (!r.found) missing = true;
       parts.push(r.text);
     }

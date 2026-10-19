@@ -3,10 +3,14 @@
 // Kullanım: node scripts/loop/loop-metrics.cjs [--from 281] [--to 999]
 // Sütunlar: model, süre (dk), API çağrısı, maliyet ($), ilk tur bağlamı, okuma (Σ çağrı bağlamı,
 // M token), araç çıktısı (k token, ~3,5 karakter/token), bunun okuma/arama payı, block.mjs
-// kullanımı, grep'ten hemen sonra gelen ayrı okuma çağrısı, yüklenen araç sayısı.
+// kullanımı (yapı/ad-satır/desen çağrı sayıları), grep'ten hemen sonra gelen ayrı okuma
+// çağrısı, yüklenen araç sayısı.
 // Çağrı = tekil message.id (2026-10-19): akış kaydı bir yanıtın parçalarını ayrı satırlarda
-// yazar; eskiden her parça ayrı çağrı sayılıyordu (≈2 kat). block.mjs'in etkisi için 295–303
-// tabanını sonraki görevlerle karşılaştır.
+// yazar; eskiden her parça ayrı çağrı sayılıyordu (≈2 kat).
+// Taban 295.1–303.1 (n=26, medyan): çağrı 132, $10,66, okuma 28,9M, grep→oku 39.
+// Tarif v1 (303.2–303.4): block yalnız yapı modunda 3/5/5 kez; çağrı 185/153/232, grep→oku
+// 50/49/70 — kısayol olmadı. 2026-10-20'den itibaren re:desen sorgusu + örnekli tarif (v2);
+// ölçmek istenen sorgulu kullanım, o yüzden gruplar "sorgulu block yok / var".
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -24,6 +28,18 @@ const shell = (u) => u.name === 'Bash' || u.name === 'PowerShell';
 const isRead = (u) => u.name === 'Read' || u.name === 'Grep' || u.name === 'Glob' ||
   (shell(u) && /(^|[\s|;&(])(cat|sed|head|tail|grep|rg|ls|find|wc)\s/.test(u.cmd));
 const isBlock = (u) => shell(u) && /scripts\/loop\/block\.mjs/.test(u.cmd);
+// Bir komut metnindeki block.mjs çağrılarının modu: yapı (sorgusuz) · ad/satır · desen (re:/rei:).
+const blockModes = (cmd) => {
+  const modes = { yapı: 0, ad: 0, desen: 0 };
+  for (const m of cmd.matchAll(/scripts\/loop\/block\.mjs\s+([^|;&\n]*)/g)) {
+    const args = m[1].trim().split(/\s+/).filter((a) => a && a !== '--full');
+    const queries = args.slice(1).filter((a) => !/[\\/]|\.\w+$/.test(a) || /^(re|rei):/.test(a));
+    if (queries.length === 0) modes.yapı++;
+    else if (queries.some((a) => /^(re|rei):/.test(a))) modes.desen++;
+    else modes.ad++;
+  }
+  return modes;
+};
 const isGrep = (u) => u.name === 'Grep' || (shell(u) && /\b(grep|rg) -[a-zA-Z]*n/.test(u.cmd) && !isBlock(u));
 const isRangeRead = (u) => u.name === 'Read' || (shell(u) && /\bsed -n|\bcat\s|\bhead -|\btail -/.test(u.cmd) && !isBlock(u));
 const ctxOf = (u) => (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
@@ -63,9 +79,10 @@ for (const f of walk(DIR).filter((p) => /task-[\d.]+\.jsonl(\.gz)?$/.test(p))) {
   }
   if (!res) continue;
   const calls = [...msgs.values()];
-  let blocks = 0, grepThenRead = 0;
+  const blocks = { yapı: 0, ad: 0, desen: 0 };
+  let grepThenRead = 0;
   calls.forEach((c, i) => {
-    blocks += c.tools.filter(isBlock).length;
+    for (const t of c.tools.filter(isBlock)) for (const [k, v] of Object.entries(blockModes(t.cmd))) blocks[k] += v;
     if (i > 0 && calls[i - 1].tools.some(isGrep) && c.tools.some(isRangeRead)) grepThenRead++;
   });
   const model = Object.entries(res.modelUsage || {}).sort((a, b) => b[1].costUSD - a[1].costUSD)[0];
@@ -79,7 +96,8 @@ for (const f of walk(DIR).filter((p) => /task-[\d.]+\.jsonl(\.gz)?$/.test(p))) {
     'okuma (M)': +(calls.reduce((s, c) => s + c.ctx, 0) / 1e6).toFixed(1),
     'araç çıktısı (k)': Math.round(out / 3500),
     'okuma %': out ? Math.round((100 * readOut) / out) : 0,
-    block: blocks,
+    'block yapı/ad/desen': `${blocks.yapı}/${blocks.ad}/${blocks.desen}`,
+    sorgulu: blocks.ad + blocks.desen,
     'grep→oku': grepThenRead,
     araç: tools,
   });
@@ -94,5 +112,5 @@ const grp = (name, f) => {
     `ilk tur ${med(r.map((x) => x['ilk tur (k)']))}k  okuma ${med(r.map((x) => x['okuma (M)']))}M  ` +
     `grep→oku ${med(r.map((x) => x['grep→oku']))}  (medyan)`);
 };
-grp('block yok', (r) => r.block === 0);
-grp('block kullanıldı', (r) => r.block > 0);
+grp('sorgulu block yok', (r) => r.sorgulu === 0);
+grp('sorgulu block var', (r) => r.sorgulu > 0);

@@ -41,14 +41,19 @@ Sırayla oku:
 
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
-7. **Kod okuma yardımcısı — isteğe bağlı.** Bir fonksiyonu, metodu, bileşeni, `describe`/`it`
-   bloğunu ya da bir .md bölümünü okuyacaksan grep + `sed -n` yerine tek çağrı:
-   `node scripts/loop/block.mjs <dosya> <ad|satır|it:başlık|describe:başlık> [<dosya> <ad> …]`.
-   Bloğu tam sınırlarıyla, satır numaralı basar; `<dosya>` tek başına dosyanın yapısını
-   (bildirimler, metodlar, testler + satır aralıkları) listeler. TS/JS dışı dosyada grep çıktısı verir.
+7. **Kod okuma kısayolu — isteğe bağlı.** Bir dosyada bir şeyi bulup bloğunu okuyacağın zaman
+   iki çağrı yerine çoğu zaman tek çağrı yeter:
+   `grep -n "handoff" x.ts; sed -n 120,220p x.ts` → `node scripts/loop/block.mjs x.ts re:handoff`
+   Eşleşen satırları listeler (grep -n gibi) ve onları kapsayan blokları (fonksiyon/metod/test)
+   tam sınırlarıyla, satır numaralı basar; eşleşen satırlar `>` ile işaretli. `rei:` harf
+   duyarsız; `|` içeren deseni tırnakla (`'re:transfer|handOver'`). Ad (`ChatService.send`),
+   satır (`412`) ya da `it:başlık` ile de sorgulanır; `<dosya>` tek başına yapıyı listeler;
+   birden çok dosya aynı komutta olabilir. TS/JS dışı dosyada grep çıktısı verir.
+   - Hangi dosyada olduğunu bilmiyorsan önce `grep -rln` ile dosyayı bul.
    - Birbirinden bağımsız okumaları aynı dönüşte paralel yap.
-   - Değiştireceğin kodun çevresini, importlarını ve testlerini her zaman oku; gerekiyorsa
-     dosyanın tamamını oku. Edit'ten önce Read şartı aynen sürer.
+   - Bu bir kısayoldur, kural değil: dosyanın tamamını okumak ya da `sed`/`Read` kullanmak
+     gereken yerde gerektiği gibi oku. Değiştireceğin kodun çevresini, importlarını ve
+     testlerini her zaman oku. Edit'ten önce Read şartı aynen sürer.
    - "bulunamadı" derse grep ile ara; yokluk kanıtı sayma.
 
 ## 1) Resume kontrolü + durum damgası (yeniden deneme olabilir)

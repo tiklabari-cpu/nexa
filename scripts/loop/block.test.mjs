@@ -178,6 +178,80 @@ describe('büyük blok ve çoklu eşleşme', () => {
   });
 });
 
+describe('desen sorgusu (re: / rei:)', () => {
+  const f = file('pattern.ts', SERVICE);
+
+  test('tek eşleşme: satır listesi + kapsayan blok, eşleşen satır > ile işaretli', () => {
+    const { out, code } = run([f, 're:Math\\.PI']);
+    assert.equal(code, 0);
+    assert.match(out, /\/Math\\\.PI\/ · 1 eşleşme · 1 blok/);
+    assert.match(out, /^\s+40:\texport const area/m, 'grep -n satırı');
+    assert.deepEqual(ranges(out), [[40, 40]]);
+    assert.match(out, /^\s+40>\texport const area/m, 'blokta işaret');
+  });
+
+  test('aynı bloktaki eşleşmeler tek blokta toplanır; farklı bloklar ayrı', () => {
+    const two = file('two.ts', 'function a() {\n  const x = needle(1);\n  return needle(x);\n}\n\nfunction b() {\n  return needle(2);\n}\n');
+    const { out } = run([two, 're:needle']);
+    assert.match(out, /3 eşleşme · 2 blok/);
+    assert.deepEqual(ranges(out), [[1, 4], [6, 8]]);
+    assert.equal((out.match(/^\s+\d+>\t/gm) || []).length, 3, 'üç işaretli satır');
+  });
+
+  test('en içteki blok seçilir (iç fonksiyondaki eşleşme dış metoda yazılmaz)', () => {
+    const { out } = run([f, 're:return sql']);
+    assert.deepEqual(ranges(out), [[20, 22]]);
+    assert.match(out, /function ChatService\.push\.inner/);
+  });
+
+  test('rei: harf duyarsız; re: duyarlı', () => {
+    assert.equal(run([f, 're:chatservice']).code, 1);
+    const { out, code } = run([f, 'rei:chatservice']);
+    assert.equal(code, 0);
+    assert.match(out, /class ChatService/);
+  });
+
+  test('import satırındaki eşleşme listede (import) olarak görünür, blok olmaz', () => {
+    const { out } = run([f, "re:from '\\./"]);
+    assert.match(out, /2 eşleşme · 0 blok/);
+    assert.match(out, /import \{ x \}.*\(import\)/);
+    assert.deepEqual(ranges(out), []);
+  });
+
+  test('çok blokta eşleşme: liste modu, gövde basılmaz', () => {
+    const many = file('manyp.ts', Array.from({ length: 6 }, (_, i) => `function f${i}() {\n  return needle + ${i};\n}\n`).join(''));
+    const { out } = run([many, 're:needle']);
+    assert.match(out, /6 eşleşme · 6 blok/);
+    assert.match(out, /bloklar — hangisi\?/);
+    assert.match(out, /\d+-\d+\s+function f5\s+\(eşleşme: \d+\)/);
+    assert.ok(!/^\s+\d+>\t/m.test(out), 'blok gövdesi yok');
+  });
+
+  test('geçersiz regex exit 2, eşleşme yok exit 1', () => {
+    const bad = run([f, 're:(']);
+    assert.equal(bad.code, 2);
+    assert.match(bad.out, /geçersiz desen/);
+    const none = run([f, 're:zzqqxx']);
+    assert.equal(none.code, 1);
+    assert.match(none.out, /bulunamadı/);
+  });
+
+  test('.md: kapsayan bölüm; .sql: regex ile grep geri düşüşü', () => {
+    const md = file('p.md', '# A\n\nmetin bir\n\n## B\n\nkural iki\n');
+    const r = run([md, 'rei:KURAL']);
+    assert.match(r.out, /1 eşleşme · 1 blok/);
+    assert.deepEqual(ranges(r.out), [[5, 7]]);
+    const sql = file('p.sql', 'CREATE TABLE a (id int);\nALTER TABLE a ADD COLUMN b int;\n');
+    const s = run([sql, 're:^ALTER|CREATE']);
+    assert.equal(s.code, 0);
+    assert.match(s.out, /2 eşleşme \(AST yok — grep/);
+  });
+
+  test('yapı çıktısı sonraki adımı gösterir', () => {
+    assert.match(run([f]).out, /→ blok: node scripts\/loop\/block\.mjs .*pattern\.ts <ad\|satır\|re:desen>/);
+  });
+});
+
 describe('diğer dosya türleri', () => {
   test('.md: başlık bölümü; başlıkta yoksa grep', () => {
     const f = file('doc.md', '# Başlık\n\ngiriş\n\n## §K Kapanış\n\nsatır bir\nkırmızı kapı kuralı\n\n## Sonraki\n\nson\n');

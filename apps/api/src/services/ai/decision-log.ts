@@ -10,7 +10,8 @@
  *      not the customer's message, the reply or the prompt (ID-08). `details`
  *      is the one free-form column, so the keys text would arrive under are
  *      dropped here at any depth, and the table's CHECK refuses them at the
- *      top level anyway.
+ *      top level anyway. A string that stays is masked (AI-26 · tm 300.2), so
+ *      a secret under a key nobody named still comes to rest masked.
  *   2. **A record that cannot be written does not hold the reply back.** The
  *      write fails into one `error` log line and a `null`; it never throws.
  *      The customer's conversation matters more than the paper trail about it.
@@ -30,6 +31,7 @@ import {
   isAcceptableRequestId,
   type AiDecision,
 } from '@siyahtus/types';
+import { maskSensitive } from '../../lib/sensitive-mask.js';
 import { type TenantContext, UUID_RE } from '../../lib/tenant.js';
 import type { StepDecision } from './conversation/procedure/executor.js';
 import {
@@ -328,6 +330,7 @@ function withoutText(value: unknown): unknown {
     // JSON has no bigint, and a bigint is what this codebase's ids are; a
     // string keeps the digits a number would lose. Anything else JSON cannot
     // hold (a function, a symbol, `undefined`) is dropped by the serialiser.
+    if (typeof value === 'string') return maskSensitive(value, { author: 'customer' }).text;
     return typeof value === 'bigint' ? value.toString() : value;
   }
   const out: Record<string, unknown> = {};

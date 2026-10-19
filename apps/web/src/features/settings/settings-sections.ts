@@ -356,6 +356,17 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'FileSharing',
     keywords: ['attachments', 'uploads', 'mime types'],
   },
+  // What the API masks out of a conversation and for whom (tm 300.2 · AI-26) —
+  // static, built from the policy; shown to whoever manages the workspace's
+  // security settings, the owner first among them.
+  {
+    slug: 'sensitive-data',
+    group: 'security',
+    labelKey: 'settings.nav.section.sensitiveData',
+    scope: ACCESS_RULES,
+    file: 'SensitiveData',
+    keywords: ['masking', 'pii', 'otp', 'password', 'iban', 'kvkk', 'maskeleme', 'şifre'],
+  },
   {
     slug: 'ip-allowlist',
     group: 'security',

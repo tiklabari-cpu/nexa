@@ -37,10 +37,11 @@ export interface WidgetEvent {
   type: string;
   attachment_url: string | null;
   /**
-   * Free-form event metadata. The widget reads exactly one key from it —
-   * `edited_at`, which the server stamps when the agent corrects a message
-   * already sent (FR-MOD-02.3.7) — and is optional because the poll and the
-   * socket both predate it and a server that has not sent it is not an error.
+   * Free-form event metadata. The widget reads two keys from it — `edited_at`,
+   * which the server stamps when the agent corrects a message already sent
+   * (FR-MOD-02.3.7), and a system notice's `system_event`, which marks the
+   * sensitive-data warning (tm 300.2) — and is optional because the poll and
+   * the socket both predate it and a server that has not sent it is not an error.
    */
   properties?: Record<string, unknown>;
 }

@@ -15,7 +15,13 @@ import {
   type AiReservation,
   type AiTokenUsage,
 } from './ai-daily-budget.js';
-import { billedOnFailure, llmEstimate, llmEstimateUsage, MeteredLlm } from './metered-llm.js';
+import {
+  billedOnFailure,
+  llmEstimate,
+  llmEstimateUsage,
+  maskPrompt,
+  MeteredLlm,
+} from './metered-llm.js';
 import { LlmProviderError } from './provider/llm-error.js';
 import type {
   LlmCompletion,
@@ -245,4 +251,47 @@ describe('billedOnFailure', () => {
       outputTokens: 4,
     });
   });
+});
+
+describe('the prompt is masked on its way to any provider (tm 300.2 · AI-26 · K12)', () => {
+  const SECRETS: LlmCompletionRequest = {
+    system:
+      'Slots: password=şifrem Ali1234! · card 4111 1111 1111 1111 · IBAN TR33 0006 1005 1978 6457 8413 26',
+    messages: [
+      { role: 'user', content: 'SMS kodu 482913, skill 00000000-0000-4000-8000-000000000011' },
+      { role: 'assistant', content: 'Teşekkürler.' },
+    ],
+    maxOutputTokens: 400,
+    timeoutMs: 20_000,
+  };
+
+  it('masks a card, a code and a password in the system prompt and every message', () => {
+    const masked = maskPrompt(SECRETS);
+    const body = JSON.stringify(masked);
+    for (const secret of ['Ali1234!', '4111 1111 1111 1111', '482913']) {
+      expect(body).not.toContain(secret);
+    }
+    // The team's policy: the workspace's IBAN and an id stay as they were.
+    expect(masked.system).toContain('TR33 0006 1005 1978 6457 8413 26');
+    expect(masked.messages[0]!.content).toContain('00000000-0000-4000-8000-000000000011');
+    expect(masked.messages[1]).toBe(SECRETS.messages[1]);
+  });
+
+  it('hands an untouched request on as the same object', () => {
+    expect(maskPrompt(REQUEST)).toBe(REQUEST);
+  });
+
+  for (const id of ['mock', 'openai'] as const) {
+    it(`sends the ${id} provider the masked request`, async () => {
+      const seen: LlmCompletionRequest[] = [];
+      const { llm } = metered(async (request) => {
+        seen.push(request);
+        return answered();
+      }, id);
+      await llm.complete(TENANT, SECRETS, AGENT);
+      expect(seen).toHaveLength(1);
+      expect(JSON.stringify(seen[0])).not.toContain('482913');
+      expect(JSON.stringify(seen[0])).not.toContain('Ali1234!');
+    });
+  }
 });

@@ -44,7 +44,16 @@
  * and output — an estimate kept for an unknown bill is split as the prompt's
  * characters and the reply's ceiling — and the tier the request asked for.
  * A `simulation` is counted on the `llm_test` meter.
+ *
+ * **Nothing secret leaves (tm 300.2 · AI-26 · K12).** Every request is masked
+ * on its way through — the system prompt and every message — before the
+ * provider, metered or mock, sees it. The text was masked when it was written;
+ * this is the second line, for a value a path rebuilt or skipped. Under the
+ * team's policy, not the player's: a card, a CVV, a code, a password, a seed
+ * phrase or a private key never reaches a model, while an IBAN in the
+ * workspace's own instructions or an agent's draft stays as it was written.
  */
+import { maskSensitive } from '../../lib/sensitive-mask.js';
 import type { TenantContext } from '../../lib/tenant.js';
 import type { AiAttribution, AiDailyBudget, AiTokenUsage } from './ai-daily-budget.js';
 import { LlmProviderError, type LlmFailureKind } from './provider/llm-error.js';
@@ -82,6 +91,27 @@ export function billedOnFailure(error: unknown, estimate: AiTokenUsage): AiToken
   return BILLING_UNKNOWN.has(error.kind) ? estimate : NOTHING;
 }
 
+/** One text of a prompt, under the team's policy. */
+function maskText(text: string): string {
+  return maskSensitive(text, { author: 'bot' }).text;
+}
+
+/**
+ * The request with every secret masked out of its prompt (the file header's
+ * last rule) — the same object when there was nothing to mask.
+ */
+export function maskPrompt(request: LlmCompletionRequest): LlmCompletionRequest {
+  const system = maskText(request.system);
+  let changed = system !== request.system;
+  const messages = request.messages.map((message) => {
+    const content = maskText(message.content);
+    if (content === message.content) return message;
+    changed = true;
+    return { ...message, content };
+  });
+  return changed ? { ...request, system, messages } : request;
+}
+
 export class MeteredLlm {
   readonly #llm: LlmProvider;
   readonly #budget: AiDailyBudget | null;
@@ -112,9 +142,10 @@ export class MeteredLlm {
 
   async complete(
     tenant: TenantContext,
-    request: LlmCompletionRequest,
+    unmasked: LlmCompletionRequest,
     attribution: AiAttribution,
   ): Promise<LlmCompletion> {
+    const request = maskPrompt(unmasked);
     const budget = this.#budget;
     if (!budget || this.#llm.id === 'mock') return this.#llm.complete(request);
 

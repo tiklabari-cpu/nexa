@@ -28,7 +28,7 @@
  * as a bad response rather than offered.
  */
 import { enhanceText, type EnhanceMode } from '@siyahtus/ai-mock';
-import { maskCardNumbers } from '../../lib/cc-mask.js';
+import { maskForWrite } from '../../lib/sensitive-mask.js';
 import { LlmProviderError } from './provider/llm-error.js';
 import {
   refuseOverlongPrompt,
@@ -97,7 +97,9 @@ export function enhanceOutputBudget(textLength: number, configuredMax: number): 
 export function buildEnhancePrompt(text: string, mode: EnhanceMode): LlmPrompt {
   return {
     system: `${COMMON_RULES}\n${ENHANCE_INSTRUCTIONS[mode]}`,
-    messages: [{ role: 'user', content: maskCardNumbers(text) }],
+    // An agent's draft, masked under the agent's policy (AI-26-S2): an IBAN they
+    // are sending the player stays whole, a card or a code does not leave.
+    messages: [{ role: 'user', content: maskForWrite(text, 'agent').text }],
   };
 }
 
@@ -134,7 +136,7 @@ export async function writeEnhancedText(
         maxOutputTokens: enhanceOutputBudget(text.length, options.maxOutputTokens),
         timeoutMs: options.timeoutMs,
       });
-      const rewritten = maskCardNumbers(completion.text);
+      const rewritten = maskForWrite(completion.text, 'agent').text;
       if (rewritten.length > ENHANCE_TEXT_MAX_CHARS) {
         throw new LlmProviderError('bad_response', {
           reason: 'too_long',

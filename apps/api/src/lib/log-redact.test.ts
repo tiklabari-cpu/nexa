@@ -45,6 +45,20 @@ describe('maskPii', () => {
     expect(maskPii('order 1234567890123456')).toBe('order 1234567890123456');
   });
 
+  it('masks every sensitive type a player can type, as the write paths do (AI-26)', () => {
+    const line = maskPii(
+      'mail failed: Şifrem Ali1234! SMS kodu 482913 IBAN TR33 0006 1005 1978 6457 8413 26',
+    );
+    expect(line).not.toContain('Ali1234!');
+    expect(line).not.toContain('482913');
+    expect(line).not.toContain('1978 6457');
+    expect(line).toContain('mail failed:');
+    expect(line).toContain('13 26');
+    // An operator still reads the reference, the amount and the transaction hash.
+    const kept = 'İşlem no PPR-20261014-482913, 2.500 TL, tx ' + 'ab'.repeat(32);
+    expect(maskPii(kept)).toBe(kept);
+  });
+
   it('leaves text with nothing identifying in it exactly as it was', () => {
     const line = 'GET /chats/abc123def456/events?page_id=xyz&limit=50';
     expect(maskPii(line)).toBe(line);

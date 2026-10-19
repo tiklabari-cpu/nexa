@@ -211,6 +211,16 @@ export const inbox: Messages = {
   'inbox.transcript.editSaving': 'Kaydediliyor…',
   'inbox.transcript.edited': 'düzenlendi',
   'inbox.transcript.editFailed': 'Düzeltme kaydedilemedi.',
+  // Sunucunun mesajdan gizlediği değerler (tm 300.2 · AI-26)
+  'inbox.transcript.sensitiveHidden': 'Hassas veri gizlendi ({types})',
+  'inbox.transcript.sensitiveType.card': 'Kart',
+  'inbox.transcript.sensitiveType.cvv': 'CVV',
+  'inbox.transcript.sensitiveType.otp': 'OTP',
+  'inbox.transcript.sensitiveType.password': 'Şifre',
+  'inbox.transcript.sensitiveType.iban': 'IBAN',
+  'inbox.transcript.sensitiveType.seed_phrase': 'Kurtarma kelimeleri',
+  'inbox.transcript.sensitiveType.private_key': 'Özel anahtar',
+  'inbox.transcript.sensitiveType.banking_credential': 'İnternet bankacılığı bilgisi',
   'inbox.transcript.connection': '{label} {id} · {time}',
   'inbox.transcript.connectionWithTeam': '{label} {id} · {time} · {team}',
 

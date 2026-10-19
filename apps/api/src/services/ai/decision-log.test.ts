@@ -190,6 +190,18 @@ describe('boundedDetails', () => {
     expect(bounded['bytes']).toBeGreaterThan(AI_DECISION_DETAILS_MAX_BYTES);
   });
 
+  it('masks a secret left under a key nobody named (tm 300.2 · AI-26)', () => {
+    expect(
+      boundedDetails({
+        slots: { note: 'şifrem Ali1234!', code: 'SMS kodu 482913' },
+        step: 'collect',
+      }),
+    ).toEqual({
+      slots: { note: 'şifrem ********', code: 'SMS kodu ********' },
+      step: 'collect',
+    });
+  });
+
   it('turns a non-object into {} and a bigint into its digits', () => {
     expect(boundedDetails(undefined)).toEqual({});
     expect(boundedDetails([1, 2] as unknown as Record<string, unknown>)).toEqual({});

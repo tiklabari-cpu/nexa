@@ -81,6 +81,7 @@ export const settings: Messages = {
   'settings.nav.section.bannedCustomers': 'Engellenen IP adresleri',
   'settings.nav.section.memberRecognition': 'Üye tanıma',
   'settings.nav.section.fileSharing': 'Dosya paylaşımı',
+  'settings.nav.section.sensitiveData': 'Hassas veri',
   'settings.nav.section.ipAllowlist': 'IP izin listesi',
   'settings.nav.section.sso': 'Tek oturum açma',
   'settings.nav.section.twoFactor': 'İki adımlı doğrulama',
@@ -1010,6 +1011,45 @@ export const settings: Messages = {
   'settings.bannedIps.empty.title': 'Engellenen adres yok',
   'settings.bannedIps.empty.description':
     'Ondan gelen sohbetleri reddetmek için bir IP adresi ekleyin. Siz eklemedikçe hiçbir şey engellenmez.',
+
+  // Hassas veri — SensitiveData.tsx (tm 300.2 · AI-26)
+  'settings.sensitiveData.title': 'Hassas veri',
+  'settings.sensitiveData.description':
+    'Ziyaretçinin sohbete yazdığı gizli bilgiler mesaj gelir gelmez maskelenir — kaydedilmeden, loglanmadan ve yapay zekâya gösterilmeden önce. Bu kapatılamaz.',
+  'settings.sensitiveData.tableCaption': 'Neyin, kimin mesajında maskelendiği',
+  'settings.sensitiveData.col.type': 'Tür',
+  'settings.sensitiveData.col.detected': 'Nasıl tanınır',
+  'settings.sensitiveData.col.player': 'Ziyaretçi mesajları',
+  'settings.sensitiveData.col.team': 'Ekip ve AI mesajları',
+  'settings.sensitiveData.masked': 'Maskelenir',
+  'settings.sensitiveData.shown': 'Tam gösterilir',
+  'settings.sensitiveData.detected.card':
+    'Luhn kontrolünden geçen kart numarası; son dört hane korunur',
+  'settings.sensitiveData.detected.cvv': '"CVV", "CVC" ya da "güvenlik kodu" yanındaki 3–4 hane',
+  'settings.sensitiveData.detected.otp':
+    '"kod", "SMS", "OTP" ya da "doğrulama" yanındaki 4–8 hane — tek başına sayı, tutar ya da referans asla',
+  'settings.sensitiveData.detected.password':
+    '"şifrem", "parolam", "şifre:" ya da "pw" gibi bir sözcüğün ardındaki değer',
+  'settings.sensitiveData.detected.iban':
+    'Kontrol hanesi geçerli IBAN; ülke kodu ve son dört karakter korunur',
+  'settings.sensitiveData.detected.seed_phrase':
+    'Art arda 12 ya da daha fazla cüzdan kurtarma kelimesi',
+  'settings.sensitiveData.detected.private_key':
+    'Cüzdan özel anahtarı — tek başına 64 karakterlik işlem özeti (TXID) dokunulmadan kalır',
+  'settings.sensitiveData.detected.banking_credential':
+    'İnternet bankacılığı müşteri numarası ve şifresi birlikte',
+  'settings.sensitiveData.note.everywhere':
+    'Asıl değer hiçbir yerde tutulmaz: ne dökümde, ne loglarda, ne AI kayıtlarında, ne de döküm e-postasında.',
+  'settings.sensitiveData.note.warning':
+    'Ziyaretçiye her gizli bilgi türü için sohbet başına bir kez, kendi dilinde, değerin gizlendiği ve paylaşmaması gerektiği söylenir.',
+  'settings.sensitiveData.note.iban':
+    'Temsilcinin ziyaretçiye gönderdiği IBAN tam kalır; yatırım ona yapılabilsin diye. AI kendisi asla IBAN göndermez.',
+  'settings.sensitiveData.note.ai':
+    'Ziyaretçi bir şifre ya da kod paylaştığında AI’ya onu kimseyle paylaşmaması için uyarması söylenir — değeri hiç görmez.',
+  'settings.sensitiveData.note.attachments':
+    'Görseller ve dosyalar maskelenmez: bir dekontta kart numarası ya da IBAN görünebilir.',
+  'settings.sensitiveData.note.badge':
+    'Gelen kutusunda maskelenen mesajda neyin gizlendiğini söyleyen "Hassas veri gizlendi" etiketi görünür.',
 
   // Dosya paylaşımı — FileSharing.tsx
   'settings.fileSharing.title': 'Dosya paylaşımı',

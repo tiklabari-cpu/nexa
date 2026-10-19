@@ -11,7 +11,7 @@ import {
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
-import { maskCardNumbers } from '../lib/cc-mask.js';
+import { maskForWrite, sensitiveAuthorOf } from '../lib/sensitive-mask.js';
 import { ChatService, type ChatAiModeResult } from '../services/chat/chat-service.js';
 import { ChannelService } from '../services/channels/channel-service.js';
 import { createLiveTelegram } from '../services/channels/telegram-live.js';
@@ -25,7 +25,7 @@ import { conversationView } from '../services/ai/conversation/conversation-view.
 import { loadConversation } from '../services/ai/conversation/state-store.js';
 import { toTurnState } from '../services/ai/conversation/turn.js';
 import { SupervisionService } from '../services/traffic/supervision-service.js';
-import { roleAtLeast } from '../services/auth/principal.js';
+import { roleAtLeast, type Principal } from '../services/auth/principal.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
 import type { PushProvider } from '../services/push/push-provider.js';
 import { pushToAgentDevices } from '../services/notifications/push.js';
@@ -220,18 +220,22 @@ export default async function chatRoutes(
    * An event body must carry something. A `message` with neither text nor an
    * attachment renders as an empty bubble the recipient cannot interpret.
    */
-  function normaliseEvent(raw: z.infer<typeof newEventSchema>) {
+  function normaliseEvent(raw: z.infer<typeof newEventSchema>, principal: Principal) {
     if (raw.type === 'message' && !raw.text?.trim() && !raw.attachment_url) {
       throw ApiError.validation('A message must have text or an attachment.');
     }
+    // Mask at the source, under the writer's policy (FR-MOD-08.9.5 · AI-26-S2,
+    // tm 300.2): the masked text is what gets persisted on the event, pushed
+    // over realtime and mailed in the transcript — never the raw secret. A
+    // person on the team keeps an IBAN they send the player whole; a card, a
+    // password or a code is masked whoever typed it. Shared by the send and the
+    // start-chat initial event, since both shape through here.
+    const masked = maskForWrite(raw.text, sensitiveAuthorOf(principal.kind) ?? 'customer');
     return {
       type: raw.type,
       recipients: raw.recipients,
-      // Mask a card number at the source (FR-MOD-08.9.5): the masked text is
-      // what gets persisted on the event, pushed over realtime and mailed in the
-      // transcript — never the raw PAN. Shared by the agent send and the
-      // start-chat initial event, since both shape through here.
-      ...(raw.text !== undefined ? { text: maskCardNumbers(raw.text) } : {}),
+      ...(masked.text !== undefined ? { text: masked.text } : {}),
+      ...(masked.types.length > 0 ? { sensitiveTypes: masked.types } : {}),
       ...(raw.attachment_url !== undefined ? { attachmentUrl: raw.attachment_url } : {}),
       ...(raw.properties !== undefined ? { properties: raw.properties } : {}),
       ...(raw.idempotency_key !== undefined ? { idempotencyKey: raw.idempotency_key } : {}),
@@ -284,7 +288,7 @@ export default async function chatRoutes(
         audit: request.auditContext(),
         ...(body.group_ids !== undefined ? { groupIds: body.group_ids } : {}),
         ...(body.initial_event !== undefined
-          ? { initialEvent: normaliseEvent(body.initial_event) }
+          ? { initialEvent: normaliseEvent(body.initial_event, principal) }
           : {}),
         ...(body.routing !== undefined
           ? {
@@ -432,7 +436,7 @@ export default async function chatRoutes(
         request.tenant(),
         principal,
         chatId,
-        normaliseEvent(body),
+        normaliseEvent(body, principal),
       );
       // The agent took the connection from the AI by writing to the player
       // (AI-11 · tm 293.1) — one line that ties the change to the request.
@@ -463,10 +467,11 @@ export default async function chatRoutes(
    * surface. The service then re-checks authorship per event, because the
    * principal list only says *what kind* of caller this is.
    *
-   * Card numbers are masked here for the same reason they are on the send
+   * Sensitive values are masked here for the same reason they are on the send
    * path: the corrected text is what comes to rest in `events.text`, and an
-   * edit that reintroduced a raw PAN would walk straight around `cc-mask`
-   * (NFR-C5/S9).
+   * edit that reintroduced a raw PAN or a password would walk straight around
+   * the masker (NFR-C5/S9 · AI-26). Under the agent's policy — only an agent
+   * edits.
    */
   app.put<{ Params: { chatId: string; eventId: string } }>(
     '/chats/:chatId/events/:eventId',
@@ -485,7 +490,7 @@ export default async function chatRoutes(
         request.requirePrincipal(),
         chatId,
         request.params.eventId,
-        maskCardNumbers(body.text),
+        maskForWrite(body.text, 'agent'),
         request.auditContext(),
       );
 

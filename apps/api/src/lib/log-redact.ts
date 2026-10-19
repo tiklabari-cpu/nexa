@@ -15,7 +15,10 @@
  * that does not exist yet is a mask that is absent. `lib/cc-mask.ts` (GL-5)
  * settled the same question the same way — mask at write time, for everyone,
  * not only in the surface that happens to display it — and card masking is
- * reused here rather than re-implemented.
+ * reused here rather than re-implemented. Since tm 300.2 that is the whole
+ * sensitive-data masker (`lib/sensitive-mask.ts`, AI-26) under the player's
+ * policy: a password, an SMS code, an IBAN or a seed phrase is masked in a log
+ * line exactly as it is in `events.text`.
  *
  * The bias is the opposite of cc-mask's, on purpose. Card masking accepts
  * over-masking because a false positive costs a support agent a digit. Here the
@@ -25,7 +28,7 @@
  * the pagination cursor — survives, because a log line nobody can read is a log
  * line nobody keeps.
  */
-import { maskCardNumbers } from './cc-mask.js';
+import { maskSensitive } from './sensitive-mask.js';
 
 /** What a masked value reads as. Matches the server's pino `censor`. */
 const CENSOR = '[redacted]';
@@ -153,7 +156,8 @@ const SENSITIVE_QUERY_KEY =
   /([?&](?:access_token|refresh_token|code_verifier|client_secret|signature|password|secret|token|email|query|code|state|key|sig)=)[^&#]*/gi;
 
 /**
- * Mask personal data in free text — an address, a card number.
+ * Mask personal data in free text — an address, a card number, and every other
+ * secret a player can type (AI-26: a password, a one-time code, an IBAN …).
  *
  * Used on anything that is about to be written to a log or attached to a span.
  * A non-string or empty value is returned untouched so callers can pass a field
@@ -161,7 +165,7 @@ const SENSITIVE_QUERY_KEY =
  */
 export function maskPii(input: string): string {
   if (!input) return input;
-  return maskCardNumbers(input.replace(EMAIL, CENSOR));
+  return maskSensitive(input.replace(EMAIL, CENSOR), { author: 'customer' }).text;
 }
 
 /**

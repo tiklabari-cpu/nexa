@@ -28,7 +28,7 @@ import {
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
-import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';
+import { maskForWrite } from '../lib/sensitive-mask.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../services/security/spam-filter.js';
 import type { Env } from '../config/env.js';
@@ -260,18 +260,19 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 }
 
 /**
- * Form answers with a card number masked out of each value (FR-MOD-08.9.5),
- * before any of them reaches the database. Every widget form goes through this
- * — the pre-chat answers riding the first message, the post-chat ones and both
- * halves of the offline form — so a visitor typing a PAN into a free-text
- * question is masked wherever they were asked it.
+ * Form answers with every sensitive value masked out of each one
+ * (FR-MOD-08.9.5 · AI-26 · tm 300.2) — a card, a password, a one-time code, an
+ * IBAN — before any of them reaches the database. Every widget form goes
+ * through this — the pre-chat answers riding the first message, the post-chat
+ * ones and both halves of the offline form — so a visitor typing a secret into
+ * a free-text question is masked wherever they were asked it.
  */
 function maskAnswers(
   values: Record<string, string | null> | undefined,
 ): Record<string, string | null> {
   if (!values) return {};
   return Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [key, maskOptional(value)]),
+    Object.entries(values).map(([key, value]) => [key, maskForWrite(value, 'customer').text]),
   );
 }
 
@@ -762,11 +763,15 @@ export default async function customerRoutes(
         throw new ApiError('customer_banned', 'This customer is banned.');
       }
 
-      // Mask a card number the moment the message arrives (FR-MOD-08.9.5), then
-      // use the masked text for everything downstream — the persisted event, the
-      // realtime push and the AI skill matcher — so a raw PAN never reaches the
-      // database, a log or the AI path.
-      const maskedText = maskOptional(body.text);
+      // Mask every sensitive value the moment the message arrives
+      // (FR-MOD-08.9.5 · AI-26 · K12, tm 300.2) — a card, a password, an SMS
+      // code, an IBAN, a seed phrase — then use the masked text for everything
+      // downstream: the spam filter, the persisted event, the realtime push and
+      // the AI, so a raw secret never reaches the database, a log or a model.
+      // Mask once, at the very start. The types go with the event; the masked
+      // text no longer shows them, and they are what the player is warned about.
+      const masked = maskForWrite(body.text, 'customer');
+      const maskedText = masked.text;
 
       // An attachment must be a file this workspace uploaded through `/uploads`
       // (FR-MOD-08.9.4) — the same check the agent path runs, before it can be
@@ -963,6 +968,7 @@ export default async function customerRoutes(
         event: {
           type: 'message',
           ...(maskedText !== undefined ? { text: maskedText } : {}),
+          ...(masked.types.length > 0 ? { sensitiveTypes: masked.types } : {}),
           ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
@@ -1068,9 +1074,9 @@ export default async function customerRoutes(
         bindChatLogContext(request, { chatId: chat.id });
         await chats.publishCustomerTyping(request.tenant(), principal, chat.id, {
           isTyping: body.is_typing,
-          // The sneak-peek is pushed to the agent as the visitor types; mask a
-          // card there too (FR-MOD-08.9.5) so a PAN is not exposed mid-type.
-          ...(body.text !== undefined ? { text: maskOptional(body.text) } : {}),
+          // The sneak-peek is pushed to the agent as the visitor types; mask it
+          // there too (FR-MOD-08.9.5 · AI-26) so a secret is not exposed mid-type.
+          ...(body.text !== undefined ? { text: maskForWrite(body.text, 'customer').text } : {}),
         });
       }
 
@@ -1185,8 +1191,8 @@ export default async function customerRoutes(
     }
 
     // Masked once, up front — the same value is what the spam classifier sees
-    // and what the ticket stores, so no raw PAN reaches either.
-    const subject = maskCardNumbers(body.subject);
+    // and what the ticket stores, so no raw secret reaches either (AI-26).
+    const subject = maskForWrite(body.subject, 'customer').text;
 
     const spamFilterOn = await request.withTenant((tx) => isSpamFilterEnabled(tx));
     if (evaluateSpam({ filterEnabled: spamFilterOn, text: subject }).spam) {
@@ -1288,8 +1294,8 @@ export default async function customerRoutes(
             threadId: chat.threads[0]?.id ?? null,
             value: body.value,
             // A rating comment is visitor free text written to the database —
-            // masked at the source like every other write path (FR-MOD-08.9.5).
-            ...(body.comment ? { comment: maskCardNumbers(body.comment) } : {}),
+            // masked at the source like every other write path (FR-MOD-08.9.5 · AI-26).
+            ...(body.comment ? { comment: maskForWrite(body.comment, 'customer').text } : {}),
           },
           select: { id: true, value: true, chatId: true },
         });

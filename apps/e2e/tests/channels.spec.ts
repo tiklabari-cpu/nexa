@@ -162,7 +162,9 @@ const SUBJECTS: readonly Subject[] = [
 
 /** The customer's question and the agent's answer, per channel. */
 const question = (subject: Subject): string => `${subject.label} order ${STAMP}: where is my bike?`;
-const answer = (subject: Subject): string => `It ships tomorrow — ${subject.label} ${STAMP}`;
+// The stamp is labelled a reference: "SMS 680112" on its own reads as a
+// one-time code and is masked out of an agent's message (tm 300.2 · AI-26-S3).
+const answer = (subject: Subject): string => `It ships tomorrow — ${subject.label} (ref ${STAMP})`;
 
 /** The chat each inbound message opened, so teardown can archive it by id. */
 const chatIds = new Map<string, string>();

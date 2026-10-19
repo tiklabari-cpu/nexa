@@ -22,6 +22,7 @@ import {
   type MetricKey,
   type RelativeRange,
 } from '@siyahtus/ai-mock';
+import { maskForWrite } from '../../lib/sensitive-mask.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
@@ -169,7 +170,11 @@ export class CopilotService {
         chatId,
         licenseId: tenant.licenseId,
         status: 'succeeded',
-        log: { outcome: `copilot_${action}`, entries: [{ step: action, detail, ok: true }] },
+        // The detail may quote the conversation; masked like every AI record (AI-26).
+        log: {
+          outcome: `copilot_${action}`,
+          entries: [{ step: action, detail: maskForWrite(detail, 'agent').text, ok: true }],
+        },
         ...(usage
           ? { llmInputTokens: usage.inputTokens, llmOutputTokens: usage.outputTokens }
           : {}),

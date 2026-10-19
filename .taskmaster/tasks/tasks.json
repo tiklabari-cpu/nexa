@@ -12849,7 +12849,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-19T00:19:26.390Z",
+        "updatedAt": "2026-10-19T00:21:08.077Z",
         "subtasks": [
           {
             "id": 1,
@@ -12869,13 +12869,13 @@
             "description": "Maskelemeyi bütün yazma yollarına, log, AI ve LLM prompt'una bağla + uyarı olayı + rozet/bilgi sayfası/widget uyarısı",
             "details": "maskSensitive üst görevdeki ÇAĞRI NOKTALARI'na (satırlar kaymış olabilir — kod haritasıyla doğrula) SIRA ilkesiyle bağlanır: kalıcı yazım, RTM, log, spam filtresi ve AI'dan önce; AI yanıtı gönderim öncesi + LLM prompt (savunma derinliği) + AI-22/23/24 kayıtları; UYARI system olayı (sohbet × tür bir kez, oyuncunun dili) + sensitive_shared; web Transcript rozeti + Ayarlar › Güvenlik › Hassas veri bilgi sayfası; widget uyarı mesajı. Kabul: üst görevin son üç kabul maddesi. Ayrıntı ve kabul maddeleri: üst görev #300 details (tek kaynak).",
             "testStrategy": "Her yazma yolu için entegrasyon (cc-masking.test.ts genişler), log redaksiyonu, mock prompt kontrolü, rozet e2e; `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "300.1"
             ],
             "parentId": "300",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-19T00:21:08.077Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-19T00:19:26.390Z",
+      "lastModified": "2026-10-19T00:21:08.078Z",
       "taskCount": 390,
       "completedCount": 298,
       "tags": [

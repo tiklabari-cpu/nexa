@@ -94,6 +94,7 @@ export const settings: Messages = {
   'settings.nav.section.bannedCustomers': 'Blocked IP addresses',
   'settings.nav.section.memberRecognition': 'Member recognition',
   'settings.nav.section.fileSharing': 'File sharing',
+  'settings.nav.section.sensitiveData': 'Sensitive data',
   'settings.nav.section.ipAllowlist': 'IP allowlist',
   'settings.nav.section.sso': 'Single sign-on',
   'settings.nav.section.twoFactor': 'Two-factor authentication',
@@ -962,6 +963,44 @@ export const settings: Messages = {
   'settings.bannedIps.empty.title': 'No blocked addresses',
   'settings.bannedIps.empty.description':
     'Add an IP address to refuse chats from it. Nothing is blocked until you do.',
+
+  // Sensitive data — SensitiveData.tsx (tm 300.2 · AI-26)
+  'settings.sensitiveData.title': 'Sensitive data',
+  'settings.sensitiveData.description':
+    'Secrets a visitor types into a conversation are masked the moment the message arrives — before it is stored, logged or shown to the AI. This cannot be switched off.',
+  'settings.sensitiveData.tableCaption': 'What is masked, and in whose messages',
+  'settings.sensitiveData.col.type': 'Type',
+  'settings.sensitiveData.col.detected': 'Recognised as',
+  'settings.sensitiveData.col.player': "Visitor's messages",
+  'settings.sensitiveData.col.team': "Team's and AI's messages",
+  'settings.sensitiveData.masked': 'Masked',
+  'settings.sensitiveData.shown': 'Shown in full',
+  'settings.sensitiveData.detected.card':
+    'A card number that passes the Luhn check; the last four digits are kept',
+  'settings.sensitiveData.detected.cvv': '3–4 digits next to "CVV", "CVC" or "security code"',
+  'settings.sensitiveData.detected.otp':
+    '4–8 digits next to "code", "SMS", "OTP" or "verification" — never a bare number, an amount or a reference',
+  'settings.sensitiveData.detected.password':
+    'The word after "my password", "password:" or "pw" and similar',
+  'settings.sensitiveData.detected.iban':
+    'An IBAN with a valid checksum; the country and the last four characters are kept',
+  'settings.sensitiveData.detected.seed_phrase': '12 or more wallet recovery words in a row',
+  'settings.sensitiveData.detected.private_key':
+    'A wallet private key — a 64-character transaction hash on its own is left alone',
+  'settings.sensitiveData.detected.banking_credential':
+    'A customer number for online banking together with its password',
+  'settings.sensitiveData.note.everywhere':
+    'The original value is not kept anywhere: not in the transcript, the logs, the AI records or the transcript e-mail.',
+  'settings.sensitiveData.note.warning':
+    'The visitor is told once per conversation for each kind of secret, in their own language, that the value was hidden and that they should not share it.',
+  'settings.sensitiveData.note.iban':
+    'An IBAN an agent sends the visitor stays whole, so a deposit can be made to it. The AI never sends one itself.',
+  'settings.sensitiveData.note.ai':
+    'When a visitor shares a password or a code, the AI is told to warn them never to share it — it never sees the value.',
+  'settings.sensitiveData.note.attachments':
+    'Images and files are not masked: a receipt may show a card number or an IBAN.',
+  'settings.sensitiveData.note.badge':
+    'In the inbox, a masked message carries a "Sensitive data hidden" label naming what was hidden.',
 
   // File sharing — FileSharing.tsx
   'settings.fileSharing.title': 'File sharing',

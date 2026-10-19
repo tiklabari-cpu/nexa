@@ -1334,4 +1334,29 @@ export const settings: Messages = {
   'settings.aiUsage.recipientsSaved': 'Kaydedildi.',
   'settings.aiUsage.capNote':
     'Günlük kota SiyahTuş ekibi tarafından belirlenir ve buradan değiştirilemez. Artırmak için bizimle iletişime geçin.',
+  // Risk bayrakları (AI-27 · tm 302.3) — RiskFlagSettings.tsx
+  'settings.nav.section.riskFlags': 'Risk bayrakları',
+  'settings.riskFlags.title': 'Risk bayrakları',
+  'settings.riskFlags.description':
+    'Sorumlu oyunu kimin yürüttüğü ve acil bir bayrak konduğu anda kimin haberdar edildiği. Bayrak, riskli bir oyuncuyu promosyonlardan ve bonus konuşmasından, AI’ı da bir kişide kalması gereken görüşmeden uzak tutar.',
+  'settings.riskFlags.loadError': 'Risk bayrağı ayarları yüklenemedi.',
+  'settings.riskFlags.teamLabel': 'Sorumlu Oyun ekibi',
+  'settings.riskFlags.teamNone': 'Ekip seçilmedi',
+  'settings.riskFlags.teamUnknown': 'Ekip #{id} (artık yok)',
+  'settings.riskFlags.teamHint':
+    'Bu ekibin üyeleri bayraklardaki notları okur ve her acil bayraktan haberdar edilir. Bayraklı bir görüşme devredilirken onlara gider.',
+  'settings.riskFlags.emailsLabel': 'Acil bayrakları ayrıca şu adreslere e-postayla bildir',
+  'settings.riskFlags.emailsHint':
+    'En fazla {max} adres, virgülle ayrılmış. Çalışma alanı sahipleri ve yöneticiler her zaman haberdar edilir. E-posta bayrağın konduğunu söyler, oyuncunun ne yazdığını asla.',
+  'settings.riskFlags.emailsTooMany': 'En fazla {max} adres girilebilir.',
+  'settings.riskFlags.emailsInvalid': '“{address}” geçerli bir e-posta adresi değil.',
+  'settings.riskFlags.saved': 'Kaydedildi.',
+  'settings.riskFlags.legend.title': 'Bayrak türleri',
+  'settings.riskFlags.legend.description':
+    'Bunları platform belirler. Bir görüşmeyi görebilen herkes bayraklarını görür; yalnızca notlar kısıtlıdır.',
+  'settings.riskFlags.legend.type': 'Bayrak',
+  'settings.riskFlags.legend.severity': 'Önem',
+  'settings.riskFlags.legend.clearedBy': 'Kaldırabilen',
+  'settings.riskFlags.legend.effect': 'Ne yapar',
+  'settings.riskFlags.legend.andUp': '{role} ve üstü',
 };

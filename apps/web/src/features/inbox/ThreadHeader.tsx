@@ -14,6 +14,7 @@
 import { useState, type ReactElement } from 'react';
 import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
+import { RiskChips } from '../risk/RiskChips.js';
 import { AiModeControls } from './AiModeControls.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
 import { actionClass } from './headerAction.js';
@@ -81,6 +82,7 @@ export function ThreadHeader({
         tone={active ? 'success' : 'neutral'}
         label={active ? t('inbox.thread.statusActive') : t('inbox.thread.statusArchived')}
       />
+      {chat && <RiskChips chatId={chatId} customerId={chat.customer_id} compact={narrow} />}
       {chat && <AiModeControls chat={chat} chatId={chatId} compact={narrow} />}
       <CopyLinkButton chatId={chatId} compact={narrow} />
       <CreateTicketButton

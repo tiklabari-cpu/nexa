@@ -372,6 +372,15 @@ export interface ChatAiModeResult {
   assignee_id: string | null;
 }
 
+/**
+ * What an AI hand-over (`handOverFromAi`, `transfer`) writes with it, in its
+ * own transaction: the risk flags its turn raised (tm 302.2 · AI-27), so a
+ * flag is never there without the hand-over, nor the hand-over without it.
+ */
+export interface HandOverOptions {
+  alongside?: (tx: TenantClient) => Promise<void>;
+}
+
 export class ChatService {
   /**
    * The hand-back's watch (tm 293.3): whoever gave an AI-first connection back
@@ -2895,6 +2904,7 @@ export class ChatService {
     principal: Principal,
     chatId: string,
     target: { groupId?: bigint; agentId?: string; reason: TransferReason },
+    options: HandOverOptions = {},
   ): Promise<ChatDetail> {
     if ((target.groupId === undefined) === (target.agentId === undefined)) {
       throw ApiError.validation('Provide exactly one of group_id or agent_id.');
@@ -3013,6 +3023,9 @@ export class ChatService {
             ? target.reason
             : 'transfer',
       });
+
+      // In the transfer's transaction: a transfer refused rolls it back too.
+      await options.alongside?.(tx);
 
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: chat.id },
@@ -3592,8 +3605,12 @@ export class ChatService {
     tenant: TenantContext,
     ref: { chatId: string; threadId: string },
     reason: 'ai_handoff' | 'ai_failure',
+    options: HandOverOptions = {},
   ): Promise<boolean> {
     const result = await withTenant(this.db, tenant, async (tx) => {
+      // What the hand-over must not happen without (the AI's risk flags, tm
+      // 302.2) — written even when the chat closed meanwhile.
+      await options.alongside?.(tx);
       const chat = await tx.chat.findUnique({ where: { id: ref.chatId }, include: chatInclude });
       const thread = chat?.threads.find((t) => t.id === ref.threadId);
       if (!chat?.active || !thread?.active) return null;

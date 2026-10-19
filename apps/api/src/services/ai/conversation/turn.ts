@@ -30,6 +30,7 @@ import type {
   DailyMemorySettings,
   Persona,
   PersonaStyle,
+  RiskPolicy,
   SkillMode,
   SkillProcedureFields,
 } from '@siyahtus/types';
@@ -314,6 +315,13 @@ export interface TurnContext {
    * with the turn (`ai_handoff_settings`). Absent: `DEFAULT_NO_ANSWER`.
    */
   readonly noAnswer?: AiNoAnswerSettings;
+  /**
+   * What the conversation's risk flags mean (tm 302.2 · AI-27 §3), read live
+   * with the turn (`chatRiskPolicy`): its own flags and its player's member
+   * flags. `mustHandoff`: the AI writes nothing and hands over; `noBonusTalk`:
+   * the risk-flagged guardrails (G4) apply. Absent: no flag.
+   */
+  readonly risk?: RiskPolicy;
 }
 
 /**

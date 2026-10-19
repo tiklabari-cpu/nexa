@@ -79,6 +79,7 @@
  * pool, the two gates, and the job's mark and fence for the reply.
  */
 import { randomUUID } from 'node:crypto';
+import type { RiskFlag } from '@prisma/client';
 import {
   AI_BOT_ID,
   DEFAULT_DAILY_MEMORY,
@@ -87,6 +88,7 @@ import {
   type AiConversationMode,
   type AiNoAnswerSettings,
   type IdentityTrust,
+  type RiskPolicy,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { BotPrincipal } from '../auth/principal.js';
@@ -134,6 +136,9 @@ import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../cha
 import { readDayBoundary } from '../chat/day-boundary.js';
 import { ApiError } from '../../lib/api-error.js';
 import { maskDeep } from '../../lib/sensitive-mask.js';
+import type { RiskFlagAnnouncer } from '../risk/risk-announce.js';
+import { chatRiskPolicy, raiseRiskFlag } from '../risk/risk-flags.js';
+import { turnRiskFlagRaises } from './turn-risk-flags.js';
 
 /** How many drafts one turn may write: the first, and one after the visitor wrote again. */
 const DRAFTS_PER_TURN = 2;
@@ -150,6 +155,11 @@ export interface AiResponderOptions {
    * `AI_HISTORY_MAX_CHARS`). {@link DEFAULT_HISTORY_BUDGET} when absent.
    */
   readonly historyBudget?: HistoryBudget;
+  /**
+   * Announces the risk flags a turn raises once its hand-over committed (tm
+   * 302.2 · AI-27: push, webhook, urgent mail). Absent: written, not announced.
+   */
+  readonly riskFlags?: RiskFlagAnnouncer;
 }
 
 /**
@@ -168,6 +178,7 @@ export class AiResponder {
   readonly #engine: ConversationEngine;
   readonly #batchWindowMs: number;
   readonly #historyBudget: HistoryBudget;
+  readonly #riskFlags: RiskFlagAnnouncer | null;
 
   constructor(
     private readonly chats: ChatService,
@@ -178,6 +189,7 @@ export class AiResponder {
     this.#engine = engine;
     this.#batchWindowMs = options.batchWindowMs ?? 0;
     this.#historyBudget = options.historyBudget ?? DEFAULT_HISTORY_BUDGET;
+    this.#riskFlags = options.riskFlags ?? null;
   }
 
   /**
@@ -355,6 +367,7 @@ export class AiResponder {
             timeZone: loaded.timeZone,
             aiMode: loaded.aiMode,
             noAnswer: loaded.noAnswer,
+            risk: loaded.risk,
           },
         );
         const { decisions } = result;
@@ -460,12 +473,40 @@ export class AiResponder {
           .catch((error: unknown) => log.warn({ err: error, tag }, 'skill could not apply tag'));
       }
 
+      // The risk flags the turn's guardrails raised (AI-27), written in the
+      // hand-over's own transaction — a flag is never there without the
+      // hand-over, nor the hand-over without it — and announced once it
+      // committed. A turn that hands nothing over writes them on their own.
+      const raises = turnRiskFlagRaises(result.decisions.guardrails, {
+        chatId,
+        threadId: turn.threadId,
+        evidenceEventIds: turn.triggerEventId ? [turn.triggerEventId] : [],
+      });
+      const raised: RiskFlag[] = [];
+      const alongside =
+        raises.length > 0
+          ? async (tx: TenantClient): Promise<void> => {
+              // From the start each time: a transfer refused rolled its own back.
+              raised.length = 0;
+              for (const raise of raises) {
+                const outcome = await raiseRiskFlag(tx, tenant.licenseId, raise);
+                if (outcome.created) raised.push(outcome.flag);
+              }
+            }
+          : undefined;
+
+      const handoff = handoffOf(result.sideEffects);
       if (transferTo) {
-        await this.#transfer(turn, transferTo);
-      } else {
-        const handoff = handoffOf(result.sideEffects);
-        if (handoff) await this.#handOver(turn, ref, handoff, result.decisions.failure !== null);
+        await this.#transfer(turn, transferTo, alongside);
+      } else if (handoff) {
+        await this.#handOver(turn, ref, handoff, result.decisions.failure !== null, alongside);
+      } else if (alongside) {
+        await turn.withTenant(alongside);
       }
+      this.#riskFlags?.announce(
+        tenant,
+        raised.map((flag) => ({ kind: 'raised' as const, flag })),
+      );
 
       return result;
     } catch (error) {
@@ -747,6 +788,8 @@ export class AiResponder {
         })
       : null;
     const noAnswer = readNoAnswerSettings(handoff?.noAnswer ?? null);
+    // The conversation's risk flags and its player's (AI-27 §3, §6), live.
+    const { policy: risk } = await chatRiskPolicy(tx, ref.chatId);
     if (trigger === null) {
       return {
         conversation,
@@ -758,6 +801,7 @@ export class AiResponder {
         timeZone,
         aiMode,
         noAnswer,
+        risk,
       };
     }
     const newest = await newestVisitorEvent(tx, ref);
@@ -782,6 +826,7 @@ export class AiResponder {
       timeZone,
       aiMode,
       noAnswer,
+      risk,
     };
   }
 
@@ -796,14 +841,19 @@ export class AiResponder {
     ref: ConnectionRef,
     handoff: NonNullable<ReturnType<typeof handoffOf>>,
     failed: boolean,
+    alongside?: (tx: TenantClient) => Promise<void>,
   ): Promise<void> {
     const { tenant, chatId } = turn;
+    const options = alongside ? { alongside } : {};
     if (handoff.groupId !== undefined && !failed) {
       try {
-        await this.chats.transfer(tenant, botPrincipal(tenant), chatId, {
-          groupId: BigInt(handoff.groupId),
-          reason: 'ai_handoff',
-        });
+        await this.chats.transfer(
+          tenant,
+          botPrincipal(tenant),
+          chatId,
+          { groupId: BigInt(handoff.groupId), reason: 'ai_handoff' },
+          options,
+        );
         return;
       } catch (error) {
         if (!(error instanceof ApiError)) throw error;
@@ -813,10 +863,14 @@ export class AiResponder {
         );
       }
     }
-    await this.chats.handOverFromAi(tenant, ref, failed ? 'ai_failure' : 'ai_handoff');
+    await this.chats.handOverFromAi(tenant, ref, failed ? 'ai_failure' : 'ai_handoff', options);
   }
 
-  async #transfer(turn: VisitorTurn, groupName: string): Promise<void> {
+  async #transfer(
+    turn: VisitorTurn,
+    groupName: string,
+    alongside?: (tx: TenantClient) => Promise<void>,
+  ): Promise<void> {
     const { tenant, chatId } = turn;
 
     const group = await turn.withTenant((tx) =>
@@ -827,13 +881,17 @@ export class AiResponder {
       // The skill names a team that no longer exists. Leaving the conversation
       // where it is means a human still sees it; silently dropping it would not.
       turn.log.warn({ group: groupName }, 'skill targets an unknown team');
+      if (alongside) await turn.withTenant(alongside);
       return;
     }
 
-    await this.chats.transfer(tenant, botPrincipal(tenant), chatId, {
-      groupId: group.id,
-      reason: 'ai_handoff',
-    });
+    await this.chats.transfer(
+      tenant,
+      botPrincipal(tenant),
+      chatId,
+      { groupId: group.id, reason: 'ai_handoff' },
+      alongside ? { alongside } : {},
+    );
 
     await this.publisher.publish(
       tenant,
@@ -860,6 +918,8 @@ interface TurnRead {
   aiMode: AiConversationMode | null;
   /** The turn's agent's `no_answer` setting (tm 298 · AI-06 §8). */
   noAnswer: AiNoAnswerSettings;
+  /** What the conversation's risk flags and its player's mean (tm 302.2 · AI-27). */
+  risk: RiskPolicy;
 }
 
 /**

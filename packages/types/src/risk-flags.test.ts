@@ -8,15 +8,20 @@ import {
   PLATFORM_GUARDRAILS,
   UNDERSTAND_RISK_FLAGS,
 } from './guardrails.js';
+import { INTEGRATION_TRIGGERS } from './integrations.js';
+import { RTM_PUSH_ACTIONS } from './rtm.js';
 import {
   canClearRiskFlag,
+  canSeeRiskFlagDetails,
   isRiskFlagType,
   RISK_FLAG_CLEAR_MIN_ROLE,
   RISK_FLAG_CLEARERS,
   RISK_FLAG_DEFAULTS,
+  RISK_FLAG_NOTIFY_EMAILS_MAX,
   RISK_FLAG_SEVERITIES,
   RISK_FLAG_TYPES,
   riskPolicy,
+  type RiskFlagSignal,
   type RiskFlagType,
   type RiskPolicyFlag,
 } from './risk-flags.js';
@@ -200,5 +205,49 @@ describe('riskPolicy (AI-27 §3 · tm 302.1)', () => {
     expect(
       riskPolicy([flag('self_exclusion_request', YESTERDAY), flag('complaint_formal')], HERE),
     ).toEqual({ ...NONE, noPromotions: true, noBonusTalk: true, targetTeamKey: 'complaints' });
+  });
+});
+
+describe('who reads a flag’s note and evidence (AI-27 “Görünürlük” · tm 302.2)', () => {
+  it('the Responsible Gaming team and a Team Lead and up (admin until RL-01); a Team Member reads the type only', () => {
+    const read = (role: AgentRole, team: boolean) => canSeeRiskFlagDetails(role, team);
+    expect(AGENT_ROLES.filter((role) => read(role, false))).toEqual(
+      AGENT_ROLES.filter((role) => role !== 'agent'),
+    );
+    expect(read('agent', false)).toBe(false);
+    expect(read('agent', true)).toBe(true);
+  });
+});
+
+describe('what a flag says outside the panel (AI-27-S4 · tm 302.2)', () => {
+  it('the webhook samples carry what, where and whose — never a word anyone wrote', () => {
+    const samples = INTEGRATION_TRIGGERS.filter((trigger) =>
+      trigger.action.startsWith('risk_flag_'),
+    );
+    expect(samples.map((trigger) => trigger.action)).toEqual([
+      'risk_flag_raised',
+      'risk_flag_cleared',
+    ]);
+    const signal: Record<keyof RiskFlagSignal, true> = {
+      flag_id: true,
+      type: true,
+      severity: true,
+      scope: true,
+      status: true,
+      chat_id: true,
+      thread_id: true,
+      member_key: true,
+      raised_at: true,
+      cleared_at: true,
+    };
+    for (const trigger of samples) {
+      expect(Object.keys(trigger.sample_payload['data'] as object).sort()).toEqual(
+        Object.keys(signal).sort(),
+      );
+    }
+    expect(RTM_PUSH_ACTIONS).toEqual(
+      expect.arrayContaining(['risk_flag_raised', 'risk_flag_cleared']),
+    );
+    expect(RISK_FLAG_NOTIFY_EMAILS_MAX).toBe(5);
   });
 });

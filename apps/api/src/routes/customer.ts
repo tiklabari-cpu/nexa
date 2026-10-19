@@ -346,6 +346,8 @@ export default async function customerRoutes(
         maxMessages: env.AI_HISTORY_MAX_MESSAGES,
         maxChars: env.AI_HISTORY_MAX_CHARS,
       },
+      // The flags a hand-over raises are pushed, delivered and mailed (tm 302.2).
+      riskFlags: app.riskFlags,
     },
   );
   const ruleBots = new RuleBotResponder(chats, publisher);

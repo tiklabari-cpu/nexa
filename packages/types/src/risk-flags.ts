@@ -201,6 +201,60 @@ export function canClearRiskFlag(type: RiskFlagType, role: AgentRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[minimum];
 }
 
+/**
+ * Whether a member reads a flag's note, its evidence and the reason it was
+ * cleared (AI-27 "Görünürlük", RL-02): what a player said about their health
+ * or their gambling is for the Responsible Gaming team and a Team Lead and up.
+ * Everyone who sees the conversation sees that it is flagged, and with what.
+ */
+export function canSeeRiskFlagDetails(role: AgentRole, inResponsibleGamingTeam: boolean): boolean {
+  return (
+    inResponsibleGamingTeam || ROLE_RANK[role] >= ROLE_RANK[RISK_FLAG_CLEAR_MIN_ROLE.team_lead]
+  );
+}
+
+/** `details.reason` of the 403 a clear below the type's clearer gets. */
+export const RISK_FLAG_CLEAR_ROLE_REASON = 'risk_flag_clear_role';
+/** `details.reason` of the 403 a clear of a flag already cleared gets. */
+export const RISK_FLAG_ALREADY_CLEARED_REASON = 'risk_flag_already_cleared';
+
+/** The addresses an urgent flag is mailed to besides the members (`risk_flag_settings.notify_emails`). */
+export const RISK_FLAG_NOTIFY_EMAILS_MAX = 5;
+
+/**
+ * What a raised or cleared flag says outside the panel — the webhook's
+ * `risk_flag_raised` / `risk_flag_cleared` delivery (AI-27-S4): what it is,
+ * where, and whose, by the player's key on the operator's site. Never what
+ * anyone wrote: no note, no evidence, no reason, no quote of the player.
+ */
+export interface RiskFlagSignal {
+  readonly flag_id: string;
+  readonly type: RiskFlagType;
+  readonly severity: RiskFlagSeverity;
+  readonly scope: RiskFlagScope;
+  readonly status: RiskFlagStatus;
+  /** The conversation (panel "Thread ID"); null once it is gone. */
+  readonly chat_id: string | null;
+  /** The connection (panel "Chat ID"). */
+  readonly thread_id: string | null;
+  readonly member_key: string | null;
+  readonly raised_at: string;
+  readonly cleared_at: string | null;
+}
+
+/**
+ * The realtime push of the same moment (`risk_flag_raised` /
+ * `risk_flag_cleared`), to the conversation's members, the supervisors and,
+ * for an urgent flag, the Responsible Gaming team: the signal, and what the
+ * panel shows of the flag without asking — still nothing anyone wrote.
+ */
+export interface RiskFlagPush extends RiskFlagSignal {
+  readonly customer_id: string | null;
+  readonly source: RiskFlagSource;
+  readonly rule_ref: string | null;
+  readonly basis: RiskFlagBasis;
+}
+
 /** A flag as {@link riskPolicy} reads it — a `risk_flags` row, or its API shape. */
 export interface RiskPolicyFlag {
   readonly type: RiskFlagType;

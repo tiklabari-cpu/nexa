@@ -195,6 +195,7 @@ model License {
   aiForbiddenPhrases     AiForbiddenPhrase[]
   aiGuardrailHits        AiGuardrailHit[]
   riskFlags              RiskFlag[]
+  riskFlagSettings       RiskFlagSettings?
   aiProcedureExamples    AiProcedureExample[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
@@ -2050,6 +2051,26 @@ model RiskFlag {
   @@index([threadId])
   @@index([customerId])
   @@map("risk_flags")
+}
+
+/// Risk flag settings (tm 302.2 · AI-27, Ayarlar › Risk bayrakları): the
+/// workspace's Responsible Gaming team — its members read a flag's note and
+/// evidence and hear of an urgent flag — and the addresses an urgent flag is
+/// mailed to. One row per workspace; none is no team and no address.
+/// `rg_group_id` is a soft reference to `groups` (keyed by licence and id): a
+/// deleted team reads as none. ≤ 5 addresses by CHECK
+/// (`RISK_FLAG_NOTIFY_EMAILS_MAX`). RLS and grants in the migration
+/// (20261019200000_risk_flag_settings).
+model RiskFlagSettings {
+  licenseId    BigInt   @id @map("license_id")
+  rgGroupId    BigInt?  @map("rg_group_id")
+  notifyEmails String[] @default([]) @map("notify_emails")
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("risk_flag_settings")
 }
 
 // ===========================================================================

@@ -799,6 +799,98 @@ export function slaBreachMail(
  * to the owner and the recipients the owner chose; numbers only — no
  * conversation, no text a visitor wrote.
  */
+/** A risk flag's type, in the mail's words (AI-27 · `RISK_FLAG_TYPES`). */
+const RISK_FLAG_LABELS: Readonly<Record<string, { en: string; tr: string }>> = {
+  rg_signal: { en: 'Responsible gaming signal', tr: 'Sorumlu oyun sinyali' },
+  self_exclusion_request: { en: 'Self-exclusion request', tr: 'Kendini oyundan men talebi' },
+  underage_suspected: { en: 'Suspected minor', tr: 'Reşit olmama şüphesi' },
+  self_harm: { en: 'Self-harm', tr: 'Kendine zarar ifadesi' },
+  complaint_formal: { en: 'Formal complaint', tr: 'Resmi şikâyet' },
+  fraud_suspected: { en: 'Suspected fraud', tr: 'Dolandırıcılık şüphesi' },
+  account_takeover_suspected: { en: 'Suspected account takeover', tr: 'Hesap ele geçirme şüphesi' },
+  multi_account: { en: 'Multiple accounts', tr: 'Çoklu hesap' },
+  abusive: { en: 'Abuse', tr: 'Hakaret / tehdit' },
+  account_security: { en: 'Account security', tr: 'Hesap güvenliği' },
+};
+
+/**
+ * An urgent risk flag was raised (tm 302.2 · AI-27-S4): self-harm, a suspected
+ * minor, a self-exclusion request. Sent to the supervisors, the Responsible
+ * Gaming team and the addresses the workspace chose — what was flagged and
+ * where, never what the player wrote.
+ */
+export function riskFlagUrgentMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    type: string;
+    /** The conversation (panel "Thread ID"); null once it is gone. */
+    chatId: string | null;
+    /** By the AI's guardrail, its risk signal, or a person. */
+    raisedBy: 'ai' | 'agent';
+    raisedAt: Date;
+    timeZone: string;
+    chatUrl: string | null;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const label = RISK_FLAG_LABELS[input.type]?.[t ? 'tr' : 'en'] ?? input.type;
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: t
+        ? `${input.workspaceName} çalışma alanında bir konuşmaya acil risk bayrağı kondu. Konuşma bir yetkiliye devredildi; lütfen hemen ilgilenin.`
+        : `A conversation in ${input.workspaceName} was given an urgent risk flag. It has been handed to a person; please look at it now.`,
+    },
+    {
+      type: 'facts',
+      rows: [
+        [t ? 'Bayrak' : 'Flag', label],
+        [
+          t ? 'Koyan' : 'Raised by',
+          input.raisedBy === 'ai' ? (t ? 'Yapay zekâ' : 'The AI') : t ? 'Temsilci' : 'An agent',
+        ],
+        ...(input.chatId ? [['Thread ID', input.chatId] as [string, string]] : []),
+        [
+          t ? 'Zaman' : 'When',
+          `${formatDateTime(input.raisedAt, ctx.locale, input.timeZone)} ${zoneLabel(input.timeZone)}`,
+        ],
+      ],
+    },
+  ];
+  if (input.chatUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Konuşmayı aç' : 'Open the conversation',
+      url: input.chatUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  blocks.push({
+    type: 'note',
+    text: t
+      ? 'Oyuncunun yazdıkları bu e-postada yer almaz; ayrıntılar yalnız panelde, yetkili kişilere görünür.'
+      : 'Nothing the player wrote is in this email; the details are in the panel, for the people entitled to them.',
+  });
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t ? `SiyahTuş: acil risk bayrağı — ${label}` : `SiyahTuş: urgent risk flag — ${label}`,
+    preheader: t ? 'Bir konuşma acil ilgi bekliyor.' : 'A conversation needs attention now.',
+    icon: ICON.alarm,
+    tone: 'alert',
+    heading: t ? 'Acil risk bayrağı' : 'Urgent risk flag',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanında acil risk bayraklarının alıcısı olduğunuz için aldınız.'
+        : 'You received this email because you receive urgent risk flags for this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
 export function aiUsageAlertMail(
   ctx: MailContext,
   input: {

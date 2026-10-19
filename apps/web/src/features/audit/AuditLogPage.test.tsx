@@ -210,6 +210,8 @@ describe('AuditLogPage', () => {
       // Who answers the conversation now (AI-11 · tm 293.3).
       'chat.ai_returned',
       'chat.ai_paused',
+      // A risk flag taken off a conversation and its player (AI-27 · tm 302.2).
+      'risk_flag.cleared',
       // The correction entry (FR-MOD-02.3.7). It belongs in this group for the
       // reason the others do, and it is the only one whose subject — the words
       // in the transcript — no longer exists anywhere else once it is written.

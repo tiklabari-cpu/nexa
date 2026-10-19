@@ -247,6 +247,9 @@ export const AUDIT_ACTIONS = [
   // 283.3). The ids before and after — choosing who is told is the owner's
   // decision, and "why did nobody hear?" is the question this answers.
   'settings.ai_usage_alerts_updated',
+  // Who hears of an urgent risk flag and which team reads flags' notes (tm
+  // 302.2 · AI-27): the Responsible Gaming team and how many addresses.
+  'settings.risk_flags_updated',
   // SLA targets (FR-MOD-11.5 · 11.5-d). Recorded with the *values*, not just the
   // changed field names — unlike most settings entries. A target is a promise
   // the workspace made about response time, and the question asked after an
@@ -345,6 +348,12 @@ export const AUDIT_ACTIONS = [
   // it, the agent it left; never the note, which stays in the transcript.
   'chat.ai_returned',
   'chat.ai_paused',
+  // A risk flag cleared (AI-27-S2 · tm 302.2): a self-exclusion request, a
+  // suspected minor, a sign of problem gambling taken off a conversation and
+  // its player — by a Manager and up, with a reason. Metadata is the flag's
+  // type, scope, severity, chat and customer; never the reason, which may be
+  // about the player's health and stays on the row.
+  'risk_flag.cleared',
   // Conversation lifecycle (FR-MOD-02.8). Archiving a conversation is the
   // moment its transcript becomes read-only, and reopening it is the moment it
   // stops being — the two points at which the record of what was said starts or

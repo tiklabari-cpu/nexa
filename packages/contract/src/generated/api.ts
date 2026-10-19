@@ -1509,6 +1509,127 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/risk-flags': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Flag a conversation
+     * @description An agent flags the conversation (AI-27): the type is required, a note
+     *     optional. Scope, severity and who may clear it follow the type
+     *     (`RISK_FLAG_DEFAULTS`): `rg_signal`, `self_exclusion_request` and
+     *     `underage_suspected` are the player's as well and stay on them, with no
+     *     end date, until cleared. The player's identity is their own claim in F1,
+     *     so `basis` is `declared`.
+     *
+     *     The conversation must be the caller's to write in (`404` otherwise). An
+     *     active flag of the same type on the conversation is returned as it is
+     *     (`200`) rather than raised twice. `evidence_event_ids` must be events of
+     *     this conversation.
+     *
+     *     A flag that keeps the AI out (`mustHandoff`) takes effect on the AI's
+     *     next turn: it writes nothing more and hands the conversation over.
+     */
+    post: operations['raiseChatRiskFlag'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/risk-flags': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's risk flags — reports and the archive filter
+     * @description Newest first, in pages. Each filter narrows: `chat_id` is one
+     *     conversation's flags (the inbox's Risk section), `type` and `status`
+     *     what the archive filter and the report card ask. A caller limited to
+     *     their teams' conversations sees the flags of those.
+     */
+    get: operations['listRiskFlags'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/risk-flags/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Who hears of an urgent flag, and which team is Responsible Gaming
+     * @description Admin and up (Ayarlar › Risk bayrakları). A workspace nobody has
+     *     configured answers with no team and no addresses: an urgent flag then
+     *     reaches the supervisors only.
+     */
+    get: operations['getRiskFlagSettings'];
+    /**
+     * Set the Responsible Gaming team and the addresses an urgent flag is mailed to
+     * @description Admin and up. Either field alone; the other keeps its value.
+     *     `rg_group_id` must be a team of this workspace (null: none) — its
+     *     members read a flag's note and evidence and hear of an urgent flag.
+     *     At most five addresses.
+     */
+    put: operations['updateRiskFlagSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/risk-flags/{flagId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        flagId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Clear a risk flag, with a reason
+     * @description Not a delete: the flag stays, `cleared`, with who cleared it, when and
+     *     why (AI-27-S2), and the audit log records `risk_flag.cleared`. The reason
+     *     is required. `rg_signal`, `self_exclusion_request` and
+     *     `underage_suspected` need a Manager and up, the rest a Team Lead and up
+     *     (admin and up until RL-01): below that, `403 authorization` with
+     *     `details.reason: risk_flag_clear_role` and `details.required_role`. A
+     *     flag already cleared is `403 not_allowed`,
+     *     `details.reason: risk_flag_already_cleared`.
+     *
+     *     Clearing `self_exclusion_request` changes nothing on the operator's
+     *     side: the self-exclusion is the operator's decision; this is support's
+     *     mark.
+     */
+    delete: operations['clearRiskFlag'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/chat': {
     parameters: {
       query?: never;
@@ -2289,6 +2410,31 @@ export interface paths {
      *     `customers:ro` — every agent sees them; linking needs more.
      */
     get: operations['listCustomerPossibleMatches'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customers/{customerId}/risk-flags': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * A player's risk flags
+     * @description Every flag about the customer, newest first:
+     *     the player's own (`member`) whichever conversation raised them — what an
+     *     agent needs the day after — and the conversation flags of the
+     *     conversations the caller may see.
+     */
+    get: operations['listCustomerRiskFlags'];
     put?: never;
     post?: never;
     delete?: never;
@@ -9769,6 +9915,97 @@ export interface components {
       /** Format: date-time */
       updated_at: string;
     };
+    /**
+     * @description AI-27's flag types (`RISK_FLAG_TYPES`). The first three are the
+     *     player's as well as the conversation's.
+     * @enum {string}
+     */
+    RiskFlagType:
+      | 'rg_signal'
+      | 'self_exclusion_request'
+      | 'underage_suspected'
+      | 'self_harm'
+      | 'complaint_formal'
+      | 'fraud_suspected'
+      | 'account_takeover_suspected'
+      | 'multi_account'
+      | 'abusive'
+      | 'account_security';
+    /** @enum {string} */
+    RiskFlagStatus: 'active' | 'cleared';
+    /**
+     * @description A risk flag (AI-27). `note`, `evidence_event_ids` and `clear_reason`
+     *     are for the Responsible Gaming team and a Team Lead and up; for anyone
+     *     else they are null and `details_visible` is false.
+     */
+    RiskFlag: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description `member`: the player's too, in every later conversation, until cleared.
+       * @enum {string}
+       */
+      scope: 'chat' | 'member';
+      /** @description The conversation it was raised in (panel "Thread ID"); null once it is gone. */
+      chat_id: string | null;
+      /** @description The connection (panel "Chat ID"). */
+      thread_id: string | null;
+      /** Format: uuid */
+      customer_id: string | null;
+      /** @description The player's key on the operator's site (the folded pre-chat username in F1). */
+      member_key: string | null;
+      type: components['schemas']['RiskFlagType'];
+      /** @enum {string} */
+      severity: 'info' | 'high' | 'urgent';
+      /**
+       * @description A guardrail rule's hit (`rule_ref` names it), the AI's risk signal, a person, or QA.
+       * @enum {string}
+       */
+      source: 'ai_rule' | 'ai_classifier' | 'agent' | 'qa';
+      /** @description `G1` … `G19` when a guardrail rule raised it. */
+      rule_ref: string | null;
+      /**
+       * @description `declared`: on the player's own claim of who they are (F1) — a warning, not a fact.
+       * @enum {string}
+       */
+      basis: 'declared' | 'verified';
+      status: components['schemas']['RiskFlagStatus'];
+      /**
+       * Format: uuid
+       * @description The account that raised it; null when the AI did.
+       */
+      raised_by: string | null;
+      /** Format: date-time */
+      raised_at: string;
+      /** Format: uuid */
+      cleared_by: string | null;
+      /** Format: date-time */
+      cleared_at: string | null;
+      note: string | null;
+      /** @description The messages that raised it. */
+      evidence_event_ids: string[] | null;
+      clear_reason: string | null;
+      /** @description Whether the caller reads the note, the evidence and the clear reason. */
+      details_visible: boolean;
+    };
+    RiskFlagList: {
+      items: components['schemas']['RiskFlag'][];
+      /** @description The next page's cursor; absent on the last page. */
+      next_page_id?: string;
+    };
+    RiskFlagSettings: {
+      /**
+       * @description The Responsible Gaming team: its members read a flag's note and
+       *     evidence and hear of an urgent flag. Null: none.
+       */
+      rg_group_id: number | null;
+      /** @description Addresses an urgent flag is mailed to as well (AI-27-S4). */
+      notify_emails: string[];
+      /** Format: uuid */
+      updated_by: string | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
     /** @description One rule a turn found broken, and what the turn did about it. */
     AiGuardrailHit: {
       /** Format: uuid */
@@ -11188,6 +11425,9 @@ export interface components {
      *     (`reason: same_day_return`, ID-02). One opening is announced by one of
      *     the two, never both. `chat_deactivated` names the connection that
      *     closed (`thread_id`).
+     *
+     *     `risk_flag_raised` / `risk_flag_cleared` (AI-27-S4) carry what the flag
+     *     is, the chat and the member key — never a word anyone wrote.
      * @enum {string}
      */
     WebhookAction:
@@ -11196,7 +11436,9 @@ export interface components {
       | 'chat_transferred'
       | 'event_created'
       | 'ticket_created'
-      | 'thread_started';
+      | 'thread_started'
+      | 'risk_flag_raised'
+      | 'risk_flag_cleared';
     /**
      * @description A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
      *     deliberately absent — it is returned only once, by the register call
@@ -17933,6 +18175,178 @@ export interface operations {
       404: components['responses']['NotFound'];
     };
   };
+  raiseChatRiskFlag: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          type: components['schemas']['RiskFlagType'];
+          note?: string;
+          /** @description The connection (panel "Chat ID"); defaults to the active one, else the latest. */
+          thread_id?: string;
+          evidence_event_ids?: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description The conversation already carries an active flag of this type */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RiskFlag'];
+        };
+      };
+      /** @description Raised */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RiskFlag'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listRiskFlags: {
+    parameters: {
+      query?: {
+        status?: components['schemas']['RiskFlagStatus'];
+        /** @description One type, or several comma-separated. */
+        type?: string;
+        severity?: 'info' | 'high' | 'urgent';
+        source?: 'ai_rule' | 'ai_classifier' | 'agent' | 'qa';
+        chat_id?: string;
+        customer_id?: string;
+        /** @description Raised at or after. */
+        from?: string;
+        /** @description Raised at or before. */
+        to?: string;
+        limit?: number;
+        page_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The flags */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RiskFlagList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getRiskFlagSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RiskFlagSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateRiskFlagSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          rg_group_id?: number | null;
+          notify_emails?: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RiskFlagSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  clearRiskFlag: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        flagId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Cleared */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RiskFlag'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getCustomerChatState: {
     parameters: {
       query?: never;
@@ -18973,6 +19387,37 @@ export interface operations {
           'application/json': components['schemas']['PossibleMatchList'];
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCustomerRiskFlags: {
+    parameters: {
+      query?: {
+        status?: components['schemas']['RiskFlagStatus'];
+        limit?: number;
+        page_id?: string;
+      };
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The flags */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RiskFlagList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];

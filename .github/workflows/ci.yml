@@ -108,6 +108,9 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Loop tools
+        run: node --test scripts/loop/block.test.mjs
+
       - name: Requirement coverage
         run: pnpm audit:req-coverage
 

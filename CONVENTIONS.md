@@ -98,7 +98,7 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   kırmızısını yalıtırken. Zaman aşımı kırmızısında önce bir kez aynı varsayılanla, sonra
   `--jobs=3` ile koş — yine çıkarsa gerçek. Özet satırı (`Test Files … (n)`) tüm parçaların
   toplamıdır.
-- **Başlıklı kapı:** `pnpm test:gate` = `build` → `statik` (typecheck+lint, format:check) ∥
+- **Başlıklı kapı:** `pnpm test:gate` = `build` → `statik` (typecheck+lint, format:check, loop-tools) ∥
   `birim` → `entegrasyon` → isteğe bağlı `e2e` (`--e2e`). Yalnız bazı başlıklar:
   `pnpm test:gate birim entegrasyon`; önbelleksiz: `--force`. Tam kapı ~11 dk, pencerenin 10 dk
   komut tavanını aşabilir: arka planda koş, log yolu ilk satırda.

@@ -41,24 +41,15 @@ Sırayla oku:
 
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
-7. **Kod haritası (codebase-memory MCP) — isteğe bağlı bir araç, zorunlu adım değil.**
-   Kod kalitesi için en güvenilir kaynak kendi okumandır; harita yalnız yön bulmayı kısaltır.
-   - **Ne zaman işe yarar:** çok adımlı çağrı zinciri ("bunu kim çağırıyor, onu kim çağırıyor" —
-     `trace_path`, depth 2–3), bir imza değişikliğinin paketler arası etki alanı, rota → işleyici,
-     yabancı bir alanda genel yön (`get_architecture`, `search_graph`). Bunlar grep ile çok tur ve
-     çok çıktı ister.
-   - **Ne zaman grep/Read doğrudur:** tek dosyada satır bulma, bilinen bir tanımın yeri, düz metin
-     (tablo adı, log metni, test başlığı), SQL migrasyonları ve `schema.prisma`, yapılandırma
-     (yaml/json/nginx), doküman ↔ kod bağı, bu pencerede değiştirdiğin dosyalar.
-   - **Kullanacaksan:** `.loop-logs/cbm-state.json` `ok:true` ve `head` = `git rev-parse HEAD`
-     olmalı (değilse bir kez `index_repository`, mode `full`; olmazsa haritayı bu pencerede
-     kullanma). Araçlar ertelenmiştir, önce yükle:
-     `ToolSearch` → `select:mcp__codebase-memory__trace_path,mcp__codebase-memory__search_graph,mcp__codebase-memory__get_code_snippet,mcp__codebase-memory__get_file_outline`
-     Proje adı: `C-Users-Hobbie-Desktop-nexa-main`.
-   - **Harita yön verir, son söz kaynağındır:** haritanın gösterdiği yeri düzenlemeden önce Read
-     ile oku. Harita test dosyalarındaki çağrıları listelemeyebilir ve çözemediği çağrıyı ayrı
-     sayar (`USAGE`); "bulunamadı" derse grep ile doğrula, "yok" sayma.
-   - Yenilemeyi döngü yapar (her görev bitince); kapanışta çağırma.
+7. **Kod okuma yardımcısı — isteğe bağlı.** Bir fonksiyonu, metodu, bileşeni, `describe`/`it`
+   bloğunu ya da bir .md bölümünü okuyacaksan grep + `sed -n` yerine tek çağrı:
+   `node scripts/loop/block.mjs <dosya> <ad|satır|it:başlık|describe:başlık> [<dosya> <ad> …]`.
+   Bloğu tam sınırlarıyla, satır numaralı basar; `<dosya>` tek başına dosyanın yapısını
+   (bildirimler, metodlar, testler + satır aralıkları) listeler. TS/JS dışı dosyada grep çıktısı verir.
+   - Birbirinden bağımsız okumaları aynı dönüşte paralel yap.
+   - Değiştireceğin kodun çevresini, importlarını ve testlerini her zaman oku; gerekiyorsa
+     dosyanın tamamını oku. Edit'ten önce Read şartı aynen sürer.
+   - "bulunamadı" derse grep ile ara; yokluk kanıtı sayma.
 
 ## 1) Resume kontrolü + durum damgası (yeniden deneme olabilir)
 

@@ -11,8 +11,8 @@ Her pencere (interaktif veya `run-loop.sh` ile açılan) aşağıdaki kurallara 
 - **Şema tek doğruluk kaynağı:** PRD §8.4 + `rapor-2-teknik-mimari.md` §5.3.
   `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili).
 - **Tek orkestratör:** implementasyon subagent'a dağıtılmaz; pencere kendi araçlarıyla çalışır.
-- **Kod haritası:** `codebase-memory` MCP (çağıran/çağrılan, sembol, rota, test ↔ kaynak). Ne zaman
-  güvenilir, ne zaman grep/Read: `TASK-RUNNER-PROMPT.md` §0.7.
+- **Kod okuma:** bir sembolün/testin bloğunu tek çağrıda okumak için
+  `node scripts/loop/block.mjs <dosya> <ad|satır>`; ayrıntı `TASK-RUNNER-PROMPT.md` §0.7.
 
 ## Otonom döngüde
 

@@ -2118,7 +2118,16 @@ components:
 
     AiHandoffSettings:
       type: object
-      required: [ai_agent_id, assignment_mode, ai_stall_timeout_seconds, no_answer]
+      required:
+        [
+          ai_agent_id,
+          assignment_mode,
+          ai_stall_timeout_seconds,
+          no_answer,
+          triggers,
+          messages,
+          after_hours,
+        ]
       properties:
         ai_agent_id: { type: string, format: uuid }
         assignment_mode:
@@ -2141,6 +2150,125 @@ components:
             oldest unanswered visitor message is older than this, is routed to
             a person as an `ai_failure` hand-over. Default 60.
         no_answer: { $ref: "#/components/schemas/AiNoAnswerSettings" }
+        triggers: { $ref: "#/components/schemas/AiHandoffTriggers" }
+        messages: { $ref: "#/components/schemas/AiHandoffMessages" }
+        after_hours: { $ref: "#/components/schemas/AiHandoffAfterHours" }
+
+    AiHandoffTriggers:
+      type: object
+      required:
+        [not_understood, negative_sentiment, abuse, loop_detected, max_turns, repeat_same_day]
+      additionalProperties: false
+      description: |
+        When the agent hands a conversation to a person on its own (AI-09),
+        beside a procedure's hand-over step and the guardrails. These are the
+        triggers a workspace tunes; the compliance ones (G1–G5, G13, G15,
+        G19), a person asked for (G16) and the agent never going silent are
+        locked on and not listed — `@siyahtus/types` `LOCKED_HANDOFF_REASONS`.
+        Defaults: 2 turns not understood (asked about first), 2 negative turns,
+        2 warnings for abuse, 12 turns per procedure.
+      properties:
+        not_understood:
+          type: object
+          required: [enabled, turns, ask_first]
+          additionalProperties: false
+          description: |
+            `turns` turns in a row the agent could not tell what the player
+            wants; then it asks once whether to pass them to an agent
+            (`ask_first`) or hands over.
+          properties:
+            enabled: { type: boolean }
+            turns: { type: integer, minimum: 1, maximum: 10 }
+            ask_first: { type: boolean }
+        negative_sentiment:
+          type: object
+          required: [enabled, consecutive, ask_first]
+          additionalProperties: false
+          description: An angry player, or negative turns in a row (`consecutive`).
+          properties:
+            enabled: { type: boolean }
+            consecutive: { type: integer, minimum: 1, maximum: 10 }
+            ask_first: { type: boolean }
+        abuse:
+          type: object
+          required: [warnings]
+          additionalProperties: false
+          description: Locked on (G19); the calm warnings before the hand-over are the workspace's.
+          properties:
+            warnings: { type: integer, minimum: 1, maximum: 5 }
+        loop_detected:
+          type: object
+          required: [enabled]
+          additionalProperties: false
+          description: The same agent question twice in a row, or the same player message three times.
+          properties:
+            enabled: { type: boolean }
+        max_turns:
+          type: object
+          required: [enabled, turns]
+          additionalProperties: false
+          description: The agent turns one procedure may take before it hands over (`turns`).
+          properties:
+            enabled: { type: boolean }
+            turns: { type: integer, minimum: 2, maximum: 50 }
+        repeat_same_day:
+          type: object
+          required: [enabled]
+          additionalProperties: false
+          description: |
+            The same problem again the same day: the diagnosis is skipped,
+            only missing required answers are asked, then a person.
+          properties:
+            enabled: { type: boolean }
+
+    AiHandoffMessages:
+      type: object
+      additionalProperties: false
+      description: |
+        What the player is told as the agent hands over, by reason — the
+        workspace's own sentence, said as written (no model). Null: the
+        default for that reason (`DEFAULT_HANDOFF_MESSAGES`) in the reply's
+        language. `no_knowledge` is not here: its sentence is
+        `no_answer.text`.
+      properties:
+        guardrail_self_harm: { type: string, nullable: true, maxLength: 500 }
+        guardrail_minor: { type: string, nullable: true, maxLength: 500 }
+        guardrail_rg: { type: string, nullable: true, maxLength: 500 }
+        risk_flag: { type: string, nullable: true, maxLength: 500 }
+        guardrail_account_security: { type: string, nullable: true, maxLength: 500 }
+        guardrail_complaint: { type: string, nullable: true, maxLength: 500 }
+        guardrail_output_block: { type: string, nullable: true, maxLength: 500 }
+        guardrail_workspace_rule: { type: string, nullable: true, maxLength: 500 }
+        abuse: { type: string, nullable: true, maxLength: 500 }
+        player_request: { type: string, nullable: true, maxLength: 500 }
+        tenant_rule: { type: string, nullable: true, maxLength: 500 }
+        procedure_rule: { type: string, nullable: true, maxLength: 500 }
+        missing_required_info: { type: string, nullable: true, maxLength: 500 }
+        repeat_same_day: { type: string, nullable: true, maxLength: 500 }
+        negative_sentiment: { type: string, nullable: true, maxLength: 500 }
+        player_said_unresolved: { type: string, nullable: true, maxLength: 500 }
+        not_understood: { type: string, nullable: true, maxLength: 500 }
+        loop_detected: { type: string, nullable: true, maxLength: 500 }
+        max_turns: { type: string, nullable: true, maxLength: 500 }
+        unsupported_language: { type: string, nullable: true, maxLength: 500 }
+        ai_failure: { type: string, nullable: true, maxLength: 500 }
+
+    AiHandoffAfterHours:
+      type: object
+      required: [text]
+      additionalProperties: false
+      description: |
+        What the player is told when the hand-over lands where nobody is
+        accepting chats (AI-12): the conversation waits in the team's queue.
+      properties:
+        text:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: |
+            The workspace's own text — it may say when the team is back. Null:
+            "Ekibimiz şu anda müsait değil. Mesajınız sırada; ekibimiz
+            döndüğünde size yazacak." in the reply's language.
 
     AiNoAnswerSettings:
       type: object

@@ -172,6 +172,14 @@ aiAgentHandoffSettings:
       answer (AI-06): the groups it names change, the others keep their
       policy; `text: null` goes back to the default sentence.
 
+      `triggers` tunes the agent's own hand-over triggers (AI-09): the
+      triggers and fields named change, the others keep their value. A locked
+      trigger may only be named with `enabled: true`; turning one off is
+      400 `validation` with `details.reason: handoff_trigger_locked` (and
+      `details.trigger`). `messages` writes the hand-over sentence per
+      reason; `null` goes back to the default. `after_hours` is the text
+      for a hand-over nobody can take now.
+
       Any field may be sent alone; the others keep their value.
     requestBody:
       required: true
@@ -200,6 +208,159 @@ aiAgentHandoffSettings:
                       rg: { $ref: "../openapi.yaml#/components/schemas/AiNoAnswerPolicy" }
                       other: { $ref: "../openapi.yaml#/components/schemas/AiNoAnswerPolicy" }
                   text: { type: string, nullable: true, maxLength: 500 }
+              triggers:
+                type: object
+                minProperties: 1
+                additionalProperties: false
+                properties:
+                  not_understood:
+                    type: object
+                    minProperties: 1
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean }
+                      turns: { type: integer, minimum: 1, maximum: 10 }
+                      ask_first: { type: boolean }
+                  negative_sentiment:
+                    type: object
+                    minProperties: 1
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean }
+                      consecutive: { type: integer, minimum: 1, maximum: 10 }
+                      ask_first: { type: boolean }
+                  abuse:
+                    type: object
+                    minProperties: 1
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                      warnings: { type: integer, minimum: 1, maximum: 5 }
+                  loop_detected:
+                    type: object
+                    minProperties: 1
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean }
+                  max_turns:
+                    type: object
+                    minProperties: 1
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean }
+                      turns: { type: integer, minimum: 2, maximum: 50 }
+                  repeat_same_day:
+                    type: object
+                    minProperties: 1
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean }
+                  guardrail_self_harm:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  guardrail_minor:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  guardrail_rg:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  risk_flag:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  guardrail_account_security:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  guardrail_complaint:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  guardrail_output_block:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  player_request:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  missing_required_info:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  unsupported_language:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+                  ai_failure:
+                    type: object
+                    required: [enabled]
+                    additionalProperties: false
+                    properties:
+                      enabled: { type: boolean, enum: [true] }
+              messages:
+                type: object
+                minProperties: 1
+                additionalProperties: false
+                properties:
+                  guardrail_self_harm:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  guardrail_minor: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  guardrail_rg: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  risk_flag: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  guardrail_account_security:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  guardrail_complaint:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  guardrail_output_block:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  guardrail_workspace_rule:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  abuse: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  player_request: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  tenant_rule: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  procedure_rule: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  missing_required_info:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  repeat_same_day: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  negative_sentiment: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  player_said_unresolved:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  not_understood: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  loop_detected: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  max_turns: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  unsupported_language:
+                    { type: string, nullable: true, minLength: 1, maxLength: 500 }
+                  ai_failure: { type: string, nullable: true, minLength: 1, maxLength: 500 }
+              after_hours:
+                type: object
+                required: [text]
+                additionalProperties: false
+                properties:
+                  text: { type: string, nullable: true, minLength: 1, maxLength: 500 }
     responses:
       "200":
         description: Updated

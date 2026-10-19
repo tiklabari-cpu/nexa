@@ -21,7 +21,12 @@
  *     message no AI turn follows.
  */
 import { PrismaClient } from '@prisma/client';
-import { AI_ASSIGNMENT_MODES } from '@siyahtus/types';
+import {
+  AI_ASSIGNMENT_MODES,
+  readHandoffAfterHours,
+  readHandoffMessages,
+  readHandoffTriggers,
+} from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import {
@@ -222,6 +227,10 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 Â
           },
           text: null,
         },
+        // The hand-over triggers, messages and after-hours text (tm 303.1): the defaults.
+        triggers: readHandoffTriggers(null),
+        messages: readHandoffMessages(null),
+        after_hours: readHandoffAfterHours(null),
       });
 
       const written = await putMode('ai_first');
@@ -240,6 +249,10 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 Â
           },
           text: null,
         },
+        // The hand-over triggers, messages and after-hours text (tm 303.1): the defaults.
+        triggers: readHandoffTriggers(null),
+        messages: readHandoffMessages(null),
+        after_hours: readHandoffAfterHours(null),
       });
       expect((await read()).json()).toMatchObject({ assignment_mode: 'ai_first' });
 

@@ -3234,6 +3234,14 @@ export interface paths {
      *     answer (AI-06): the groups it names change, the others keep their
      *     policy; `text: null` goes back to the default sentence.
      *
+     *     `triggers` tunes the agent's own hand-over triggers (AI-09): the
+     *     triggers and fields named change, the others keep their value. A locked
+     *     trigger may only be named with `enabled: true`; turning one off is
+     *     400 `validation` with `details.reason: handoff_trigger_locked` (and
+     *     `details.trigger`). `messages` writes the hand-over sentence per
+     *     reason; `null` goes back to the default. `after_hours` is the text
+     *     for a hand-over nobody can take now.
+     *
      *     Any field may be sent alone; the others keep their value.
      */
     put: operations['updateAiAgentHandoffSettings'];
@@ -10132,6 +10140,98 @@ export interface components {
        */
       ai_stall_timeout_seconds: number;
       no_answer: components['schemas']['AiNoAnswerSettings'];
+      triggers: components['schemas']['AiHandoffTriggers'];
+      messages: components['schemas']['AiHandoffMessages'];
+      after_hours: components['schemas']['AiHandoffAfterHours'];
+    };
+    /**
+     * @description When the agent hands a conversation to a person on its own (AI-09),
+     *     beside a procedure's hand-over step and the guardrails. These are the
+     *     triggers a workspace tunes; the compliance ones (G1–G5, G13, G15,
+     *     G19), a person asked for (G16) and the agent never going silent are
+     *     locked on and not listed — `@siyahtus/types` `LOCKED_HANDOFF_REASONS`.
+     *     Defaults: 2 turns not understood (asked about first), 2 negative turns,
+     *     2 warnings for abuse, 12 turns per procedure.
+     */
+    AiHandoffTriggers: {
+      /**
+       * @description `turns` turns in a row the agent could not tell what the player
+       *     wants; then it asks once whether to pass them to an agent
+       *     (`ask_first`) or hands over.
+       */
+      not_understood: {
+        enabled: boolean;
+        turns: number;
+        ask_first: boolean;
+      };
+      /** @description An angry player, or negative turns in a row (`consecutive`). */
+      negative_sentiment: {
+        enabled: boolean;
+        consecutive: number;
+        ask_first: boolean;
+      };
+      /** @description Locked on (G19); the calm warnings before the hand-over are the workspace's. */
+      abuse: {
+        warnings: number;
+      };
+      /** @description The same agent question twice in a row, or the same player message three times. */
+      loop_detected: {
+        enabled: boolean;
+      };
+      /** @description The agent turns one procedure may take before it hands over (`turns`). */
+      max_turns: {
+        enabled: boolean;
+        turns: number;
+      };
+      /**
+       * @description The same problem again the same day: the diagnosis is skipped,
+       *     only missing required answers are asked, then a person.
+       */
+      repeat_same_day: {
+        enabled: boolean;
+      };
+    };
+    /**
+     * @description What the player is told as the agent hands over, by reason — the
+     *     workspace's own sentence, said as written (no model). Null: the
+     *     default for that reason (`DEFAULT_HANDOFF_MESSAGES`) in the reply's
+     *     language. `no_knowledge` is not here: its sentence is
+     *     `no_answer.text`.
+     */
+    AiHandoffMessages: {
+      guardrail_self_harm?: string | null;
+      guardrail_minor?: string | null;
+      guardrail_rg?: string | null;
+      risk_flag?: string | null;
+      guardrail_account_security?: string | null;
+      guardrail_complaint?: string | null;
+      guardrail_output_block?: string | null;
+      guardrail_workspace_rule?: string | null;
+      abuse?: string | null;
+      player_request?: string | null;
+      tenant_rule?: string | null;
+      procedure_rule?: string | null;
+      missing_required_info?: string | null;
+      repeat_same_day?: string | null;
+      negative_sentiment?: string | null;
+      player_said_unresolved?: string | null;
+      not_understood?: string | null;
+      loop_detected?: string | null;
+      max_turns?: string | null;
+      unsupported_language?: string | null;
+      ai_failure?: string | null;
+    };
+    /**
+     * @description What the player is told when the hand-over lands where nobody is
+     *     accepting chats (AI-12): the conversation waits in the team's queue.
+     */
+    AiHandoffAfterHours: {
+      /**
+       * @description The workspace's own text — it may say when the team is back. Null:
+       *     "Ekibimiz şu anda müsait değil. Mesajınız sırada; ekibimiz
+       *     döndüğünde size yazacak." in the reply's language.
+       */
+      text: string | null;
     };
     /**
      * @description What the agent does when the knowledge base has no answer to a
@@ -20594,6 +20694,103 @@ export interface operations {
               other?: components['schemas']['AiNoAnswerPolicy'];
             };
             text?: string | null;
+          };
+          triggers?: {
+            not_understood?: {
+              enabled?: boolean;
+              turns?: number;
+              ask_first?: boolean;
+            };
+            negative_sentiment?: {
+              enabled?: boolean;
+              consecutive?: number;
+              ask_first?: boolean;
+            };
+            abuse?: {
+              /** @enum {boolean} */
+              enabled?: true;
+              warnings?: number;
+            };
+            loop_detected?: {
+              enabled?: boolean;
+            };
+            max_turns?: {
+              enabled?: boolean;
+              turns?: number;
+            };
+            repeat_same_day?: {
+              enabled?: boolean;
+            };
+            guardrail_self_harm?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            guardrail_minor?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            guardrail_rg?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            risk_flag?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            guardrail_account_security?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            guardrail_complaint?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            guardrail_output_block?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            player_request?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            missing_required_info?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            unsupported_language?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+            ai_failure?: {
+              /** @enum {boolean} */
+              enabled: true;
+            };
+          };
+          messages?: {
+            guardrail_self_harm?: string | null;
+            guardrail_minor?: string | null;
+            guardrail_rg?: string | null;
+            risk_flag?: string | null;
+            guardrail_account_security?: string | null;
+            guardrail_complaint?: string | null;
+            guardrail_output_block?: string | null;
+            guardrail_workspace_rule?: string | null;
+            abuse?: string | null;
+            player_request?: string | null;
+            tenant_rule?: string | null;
+            procedure_rule?: string | null;
+            missing_required_info?: string | null;
+            repeat_same_day?: string | null;
+            negative_sentiment?: string | null;
+            player_said_unresolved?: string | null;
+            not_understood?: string | null;
+            loop_detected?: string | null;
+            max_turns?: string | null;
+            unsupported_language?: string | null;
+            ai_failure?: string | null;
+          };
+          after_hours?: {
+            text: string | null;
           };
         };
       };

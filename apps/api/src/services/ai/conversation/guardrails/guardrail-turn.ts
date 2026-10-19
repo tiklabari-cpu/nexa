@@ -21,6 +21,7 @@ import {
   type GuardrailPriority,
   type PersonaLanguage,
   type RiskPolicy,
+  type HandoffReason,
 } from '@siyahtus/types';
 import { NO_ANSWER_PHRASES } from '../knowledge-answer.js';
 import type { AiStateObject } from '../state-store.js';
@@ -282,7 +283,7 @@ export function guardrailHandoffTurn(input: GuardrailHandoffInput): TurnResult {
 }
 
 /** The hand-over reason of a turn a stored risk flag keeps from the AI (tm 302.2). */
-export const RISK_FLAG_HANDOFF_REASON = 'risk_flag';
+export const RISK_FLAG_HANDOFF_REASON: HandoffReason = 'risk_flag';
 
 /**
  * A turn a stored risk flag keeps from the AI (tm 302.2 · AI-27 §3,

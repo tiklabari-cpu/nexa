@@ -1808,8 +1808,9 @@ model AiAgent {
   @@map("ai_agents")
 }
 
-/// An AI agent's hand-over settings (tm 293.2 · AI-11 §3; 05 AI-09 — tm 303
-/// widens it with triggers and messages, tm 293.6 with the stall timeout).
+/// An AI agent's hand-over settings (tm 293.2 · AI-11 §3; 05 AI-09 — tm 303.1
+/// widens it with triggers, messages and after-hours text, tm 293.6 with the
+/// stall timeout).
 /// One row per agent; no row is `DEFAULT_AI_ASSIGNMENT_MODE`.
 ///
 /// `assignment_mode` (`AI_ASSIGNMENT_MODES`) decides when a visitor's
@@ -1828,6 +1829,14 @@ model AiHandoffSettings {
   /// What the AI does when the knowledge base has no answer (tm 298 · AI-06);
   /// null is `DEFAULT_NO_ANSWER`, read through `readNoAnswerSettings`.
   noAnswer              Json?    @map("no_answer")
+  /// The hand-over triggers (tm 303.1 · AI-09); null is `DEFAULT_HANDOFF_TRIGGERS`,
+  /// read through `readHandoffTriggers`. Versioned, unlike `assignment_mode`.
+  triggers              Json?
+  /// The workspace's hand-over message per reason, only the ones written
+  /// (`readHandoffMessages`); a reason left out says `DEFAULT_HANDOFF_MESSAGES`.
+  messages              Json?
+  /// `{ text }` said when nobody is accepting chats (AI-12 §4); `readHandoffAfterHours`.
+  afterHours            Json?    @map("after_hours")
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   /// Set by the write trigger, not by the writer.
   updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)

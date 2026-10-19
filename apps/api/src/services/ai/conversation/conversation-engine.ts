@@ -104,6 +104,7 @@ import {
   type PersonaStyle,
   type Procedure,
   type SkillProcedureFields,
+  type HandoffReason,
 } from '@siyahtus/types';
 import type { TenantContext } from '../../../lib/tenant.js';
 import {
@@ -543,8 +544,8 @@ interface DraftCheck {
   readonly notes: readonly string[];
 }
 
-/** A workspace rule's hand-over (`force_handoff`, read by the judge) — AI-09 has no code of its own for it. */
-const WORKSPACE_RULE_HANDOFF_REASON = 'guardrail_workspace_rule';
+/** A workspace rule's hand-over (`force_handoff`, read by the judge) — the catalogue's own code since tm 303.1. */
+const WORKSPACE_RULE_HANDOFF_REASON: HandoffReason = 'guardrail_workspace_rule';
 
 /** G19 warns this many times before it hands over (AI-09 `abuse_warnings`, #303 makes it a setting). */
 const ABUSE_WARNINGS_BEFORE_HANDOFF = platformGuardrail('G19').warningsBeforeHandoff ?? 2;

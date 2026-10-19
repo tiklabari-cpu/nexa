@@ -30,6 +30,18 @@ import {
   readClarifyThresholds,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   DEFAULT_SKILL_MODE,
+  HANDOFF_MESSAGE_MAX,
+  HANDOFF_MESSAGE_REASONS,
+  HANDOFF_TRIGGER_BOUNDS,
+  HANDOFF_TRIGGER_LOCKED_REASON,
+  LOCKED_HANDOFF_REASONS,
+  isLockedHandoffReason,
+  mergeHandoffMessages,
+  mergeHandoffTriggers,
+  readHandoffAfterHours,
+  readHandoffMessages,
+  readHandoffTriggers,
+  storedHandoffMessages,
   NO_ANSWER_POLICIES,
   NO_ANSWER_TEXT_MAX,
   SKILL_MODES,
@@ -42,6 +54,9 @@ import {
   validateSkillSelection,
   type AiAssignmentMode,
   type AiNoAnswerSettings,
+  type HandoffAfterHours,
+  type HandoffMessages,
+  type HandoffTriggers,
   type Procedure,
   type ProcedureProblem,
   type SkillMode,
@@ -55,6 +70,7 @@ import {
   createSkillDraft,
   deleteSkillDraft,
   updateSkillDraft,
+  upsertHandoffSettingsDraft,
 } from '../services/ai/config-draft.js';
 import {
   refuseUnembeddable,
@@ -452,7 +468,99 @@ const updateAgentBody = z
 
 const noAnswerPolicy = z.enum(NO_ANSWER_POLICIES).optional();
 
-/** Any field alone; the ones left out keep their value (tm 293.6, tm 298). */
+const triggerCount = (bounds: { min: number; max: number }) =>
+  z.number().int().min(bounds.min).max(bounds.max).optional();
+
+/** A trigger's fields: any of them alone, at least one (AI-09-S2). */
+function triggerFields<T extends z.ZodRawShape>(shape: T) {
+  return z
+    .object(shape)
+    .strict()
+    .refine((value) => Object.keys(value).length > 0, 'at least one field is required')
+    .optional();
+}
+
+/**
+ * A locked trigger may be named only to say it stays on: `{ enabled: true }`.
+ * Turning one off is refused before this schema runs (`refuseLockedTriggerOff`).
+ */
+const LOCKED_TRIGGER_SHAPE = Object.fromEntries(
+  LOCKED_HANDOFF_REASONS.filter((reason) => reason !== 'abuse').map((reason) => [
+    reason,
+    z
+      .object({ enabled: z.literal(true) })
+      .strict()
+      .optional(),
+  ]),
+);
+
+/** The triggers a PUT changes; the ones left out keep their value (tm 303.1 · AI-09). */
+const handoffTriggersBody = z
+  .object({
+    not_understood: triggerFields({
+      enabled: z.boolean().optional(),
+      turns: triggerCount(HANDOFF_TRIGGER_BOUNDS.not_understood_turns),
+      ask_first: z.boolean().optional(),
+    }),
+    negative_sentiment: triggerFields({
+      enabled: z.boolean().optional(),
+      consecutive: triggerCount(HANDOFF_TRIGGER_BOUNDS.negative_sentiment_consecutive),
+      ask_first: z.boolean().optional(),
+    }),
+    // G19 is locked; only how many warnings come first is the workspace's.
+    abuse: triggerFields({
+      enabled: z.literal(true).optional(),
+      warnings: triggerCount(HANDOFF_TRIGGER_BOUNDS.abuse_warnings),
+    }),
+    loop_detected: triggerFields({ enabled: z.boolean().optional() }),
+    max_turns: triggerFields({
+      enabled: z.boolean().optional(),
+      turns: triggerCount(HANDOFF_TRIGGER_BOUNDS.max_turns),
+    }),
+    repeat_same_day: triggerFields({ enabled: z.boolean().optional() }),
+    ...LOCKED_TRIGGER_SHAPE,
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'at least one trigger is required');
+
+/** The messages a PUT writes, by reason; null goes back to the default. */
+const handoffMessagesBody = z
+  .object(
+    Object.fromEntries(
+      HANDOFF_MESSAGE_REASONS.map((reason) => [
+        reason,
+        z.string().trim().min(1).max(HANDOFF_MESSAGE_MAX).nullable().optional(),
+      ]),
+    ),
+  )
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'at least one message is required');
+
+/**
+ * 400 `handoff_trigger_locked` for a request that turns a locked trigger off
+ * (AI-09 KK: "Kilitli tetikleyiciler API'den kapatılamaz") — named apart from a
+ * malformed body so the panel can say why.
+ */
+function refuseLockedTriggerOff(body: unknown): void {
+  if (body === null || typeof body !== 'object') return;
+  const triggers = (body as Record<string, unknown>)['triggers'];
+  if (triggers === null || typeof triggers !== 'object') return;
+  for (const [trigger, fields] of Object.entries(triggers as Record<string, unknown>)) {
+    if (!isLockedHandoffReason(trigger)) continue;
+    const enabled =
+      fields !== null && typeof fields === 'object'
+        ? (fields as Record<string, unknown>)['enabled']
+        : undefined;
+    if (enabled !== undefined && enabled !== true) {
+      throw ApiError.validation(`${trigger} is a locked trigger and cannot be turned off.`, {
+        reason: HANDOFF_TRIGGER_LOCKED_REASON,
+        trigger,
+      });
+    }
+  }
+}
+
+/** Any field alone; the ones left out keep their value (tm 293.6, tm 298, tm 303.1). */
 const handoffSettingsBody = z
   .object({
     assignment_mode: z.enum(AI_ASSIGNMENT_MODES).optional(),
@@ -480,6 +588,12 @@ const handoffSettingsBody = z
       })
       .strict()
       .refine((value) => Object.keys(value).length > 0, 'at least one field is required')
+      .optional(),
+    triggers: handoffTriggersBody.optional(),
+    messages: handoffMessagesBody.optional(),
+    after_hours: z
+      .object({ text: z.string().trim().min(1).max(HANDOFF_MESSAGE_MAX).nullable() })
+      .strict()
       .optional(),
   })
   .strict()
@@ -839,18 +953,21 @@ export default async function playbookRoutes(
     { config: { scopes: WRITE } },
     async (request, reply) => {
       const id = parse(uuid, request.params.aiAgentId);
+      refuseLockedTriggerOff(request.body);
       const body = parse(handoffSettingsBody, request.body);
       const tenant = request.tenant();
       const settings = await request.withTenant(async (tx) => {
         await customerFacingAgent(tx, id);
-        // `no_answer` is merged over what is stored, under the row the upsert
-        // then writes: a group left out keeps its policy.
-        const stored = body.no_answer
-          ? await tx.aiHandoffSettings.findUnique({
-              where: { aiAgentId: id },
-              select: { noAnswer: true },
-            })
-          : null;
+        // `no_answer`, the triggers and the messages are merged over what is
+        // stored, under the row the upsert then writes: what a write leaves
+        // out keeps its value.
+        const stored =
+          body.no_answer || body.triggers || body.messages
+            ? await tx.aiHandoffSettings.findUnique({
+                where: { aiAgentId: id },
+                select: { noAnswer: true, triggers: true, messages: true },
+              })
+            : null;
         const fields = {
           ...(body.assignment_mode !== undefined ? { assignmentMode: body.assignment_mode } : {}),
           ...(body.ai_stall_timeout_seconds !== undefined
@@ -864,13 +981,29 @@ export default async function playbookRoutes(
                 ) as unknown as Prisma.InputJsonObject,
               }
             : {}),
+          ...(body.triggers
+            ? {
+                triggers: mergeHandoffTriggers(
+                  stored?.triggers ?? null,
+                  body.triggers,
+                ) as unknown as Prisma.InputJsonObject,
+              }
+            : {}),
+          ...(body.messages
+            ? {
+                messages: storedHandoffMessages(
+                  mergeHandoffMessages(stored?.messages ?? null, body.messages),
+                ),
+              }
+            : {}),
+          ...(body.after_hours ? { afterHours: { text: body.after_hours.text } } : {}),
         };
-        return tx.aiHandoffSettings.upsert({
-          where: { aiAgentId: id },
-          create: { aiAgentId: id, licenseId: tenant.licenseId, ...fields },
-          update: fields,
-          select: HANDOFF_SETTINGS_SELECT,
-        });
+        return upsertHandoffSettingsDraft(
+          tx,
+          { aiAgentId: id, licenseId: tenant.licenseId, ...fields },
+          fields,
+          HANDOFF_SETTINGS_SELECT,
+        );
       });
       return reply.send(serialiseHandoffSettings(id, settings));
     },
@@ -2045,17 +2178,30 @@ const HANDOFF_SETTINGS_SELECT = {
   assignmentMode: true,
   aiStallTimeoutSeconds: true,
   noAnswer: true,
+  triggers: true,
+  messages: true,
+  afterHours: true,
 } as const;
 
 /** `AiHandoffSettings` (contract): an agent with no row has the defaults. */
 function serialiseHandoffSettings(
   aiAgentId: string,
-  row: { assignmentMode: string; aiStallTimeoutSeconds: number; noAnswer: unknown } | null,
+  row: {
+    assignmentMode: string;
+    aiStallTimeoutSeconds: number;
+    noAnswer: unknown;
+    triggers: unknown;
+    messages: unknown;
+    afterHours: unknown;
+  } | null,
 ): {
   ai_agent_id: string;
   assignment_mode: AiAssignmentMode;
   ai_stall_timeout_seconds: number;
   no_answer: AiNoAnswerSettings;
+  triggers: HandoffTriggers;
+  messages: HandoffMessages;
+  after_hours: HandoffAfterHours;
 } {
   return {
     ai_agent_id: aiAgentId,
@@ -2064,6 +2210,9 @@ function serialiseHandoffSettings(
       (row?.assignmentMode as AiAssignmentMode | undefined) ?? DEFAULT_AI_ASSIGNMENT_MODE,
     ai_stall_timeout_seconds: row?.aiStallTimeoutSeconds ?? DEFAULT_AI_STALL_TIMEOUT_SECONDS,
     no_answer: readNoAnswerSettings(row?.noAnswer ?? null),
+    triggers: readHandoffTriggers(row?.triggers ?? null),
+    messages: readHandoffMessages(row?.messages ?? null),
+    after_hours: readHandoffAfterHours(row?.afterHours ?? null),
   };
 }
 

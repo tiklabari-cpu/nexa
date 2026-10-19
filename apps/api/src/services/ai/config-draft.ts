@@ -118,3 +118,27 @@ export async function deleteForbiddenPhraseDraft(tx: TenantClient, id: string): 
   const { count } = await tx.aiForbiddenPhrase.deleteMany({ where: { id } });
   return count;
 }
+
+// Hand-over settings (tm 303.1 · AI-09). The row's `updated_at` is its write
+// trigger's (20261017120000) — the app role may not write that column — so
+// step 1 is the database's here. `assignment_mode` and the stall timeout share
+// the row but are read live, outside the package (ADR-14b §2.2); the triggers,
+// messages and after-hours text are versioned.
+
+type HandoffSettingsCreate = Omit<Prisma.AiHandoffSettingsUncheckedCreateInput, 'updatedAt'>;
+type HandoffSettingsUpdate = Omit<Prisma.AiHandoffSettingsUncheckedUpdateInput, 'updatedAt'>;
+
+/** An agent's hand-over settings — the row is made on its first write. */
+export async function upsertHandoffSettingsDraft<S extends Prisma.AiHandoffSettingsSelect>(
+  tx: TenantClient,
+  create: HandoffSettingsCreate,
+  update: HandoffSettingsUpdate,
+  select: S,
+) {
+  return tx.aiHandoffSettings.upsert({
+    where: { aiAgentId: create.aiAgentId },
+    create,
+    update,
+    select,
+  });
+}

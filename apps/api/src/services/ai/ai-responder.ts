@@ -78,6 +78,7 @@
  * job, not the request: its tenant, its logger, a runner over the server's
  * pool, the two gates, and the job's mark and fence for the reply.
  */
+import { randomUUID } from 'node:crypto';
 import {
   AI_BOT_ID,
   DEFAULT_DAILY_MEMORY,
@@ -127,6 +128,7 @@ import {
 } from './conversation/turn.js';
 import { readAndCompile, type AiConfigRead } from './conversation/turn-config.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
+import { recordGuardrailHits } from './guardrail-hits.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
@@ -289,9 +291,16 @@ export class AiResponder {
     let drafts = 0;
     /** The messages answered gave away a password or a code (AI-26 §5) — on the record. */
     let sensitiveShared = false;
+    /**
+     * The turn's decision record id, minted before it runs: its guardrail
+     * hits are filed under it (`ai_guardrail_hits.turn_id`, tm 301.3). A
+     * second draft is a turn of its own.
+     */
+    let turnId = randomUUID();
     try {
       for (;;) {
         drafts += 1;
+        if (drafts > 1) turnId = randomUUID();
         // The visitor may still be typing (AI-01 §5): the turn starts once
         // they have been quiet for the window, so it answers all of it. Not
         // where the AI has nothing to run — no turn could come of the wait.
@@ -402,6 +411,7 @@ export class AiResponder {
           if (draft) {
             await record({
               ...draft,
+              id: turnId,
               decision: 'expired',
               handoffReason: null,
               latencyMs: performance.now() - startedAt,
@@ -480,6 +490,7 @@ export class AiResponder {
         if (draft) {
           await record({
             ...draft,
+            id: turnId,
             decision: 'expired',
             handoffReason: null,
             latencyMs: performance.now() - startedAt,
@@ -515,6 +526,7 @@ export class AiResponder {
       if (decided) {
         await record({
           ...decided,
+          id: turnId,
           replyEventId,
           latencyMs: performance.now() - startedAt,
           // The configuration the turn ran on (ADR-14b §2.7) — null until tm 316.
@@ -531,6 +543,18 @@ export class AiResponder {
             ...(drafts > 1 ? { drafts } : {}),
           },
         });
+        // What the guardrails found and did, under the same turn (tm 301.3 ·
+        // AI-08 §8): only for a turn that was applied — a draft overtaken or
+        // lost to another writer acted on nothing.
+        const guardrails = result?.decisions.guardrails;
+        if (guardrails) {
+          await recordGuardrailHits(
+            turn.withTenant,
+            tenant,
+            { chatId, threadId: turn.threadId, turnId, record: guardrails },
+            log,
+          );
+        }
       }
     }
   }

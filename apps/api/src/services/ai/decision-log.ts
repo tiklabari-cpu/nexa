@@ -33,6 +33,7 @@ import {
 } from '@siyahtus/types';
 import { maskSensitive } from '../../lib/sensitive-mask.js';
 import { type TenantContext, UUID_RE } from '../../lib/tenant.js';
+import { guardrailDetails, guardrailHitKeys } from './conversation/guardrails/record.js';
 import type { StepDecision } from './conversation/procedure/executor.js';
 import {
   describeSideEffects,
@@ -44,6 +45,12 @@ import {
 
 /** What a turn decided, as its caller knows it. Only `decision` is required. */
 export interface AiDecisionInput {
+  /**
+   * The row's id, when the caller minted it first: a turn's hits
+   * (`ai_guardrail_hits.turn_id`, tm 301.3) are filed under it. Absent: the
+   * table's default.
+   */
+  id?: string;
   decision: AiDecision;
   /** The day container (panel "Thread ID"). */
   chatId?: string | null;
@@ -118,6 +125,7 @@ export function toDecisionRow(
     throw new TypeError(`unknown AI decision "${String(input.decision)}"`);
   }
   return {
+    ...(typeof input.id === 'string' && UUID_RE.test(input.id) ? { id: input.id } : {}),
     licenseId,
     decision: input.decision,
     chatId: matching(input.chatId, CONVERSATION_ID_RE),
@@ -211,9 +219,16 @@ export function skillDecision(
           : 'answered';
 
   const failure = decisions.failure;
+  const guardrails = decisions.guardrails;
   return {
     decision,
     procedureId: decisions.skillId,
+    // The guardrails' hits by rule key, and the risk flags they raised
+    // (tm 301.3 · AI-08 §8 → ID-08): keys, never the evidence.
+    ...(guardrails ? { guardrailHits: guardrailHitKeys(guardrails) } : {}),
+    ...(guardrails && guardrails.risk_flags.length > 0
+      ? { riskFlags: [...guardrails.risk_flags] }
+      : {}),
     // A procedure turn stopped on the last step it decided; the log's last line
     // can be the compose call or the offer to go back to a set-aside topic.
     step: decisions.trace?.at(-1)?.step_id ?? decisions.log.at(-1)?.step ?? null,
@@ -248,6 +263,9 @@ export function skillDecision(
         // The behaviour rules the turn carried, and `truncated` when the budget
         // left some out (tm 299.1 · AI-07 §2, §8) — ids, no text.
         ...(decisions.guidance ? { guidance: decisions.guidance } : {}),
+        // The catalogue version the turn ran under and its hits (tm 301.3 ·
+        // AI-08 §9) — rule keys and actions, no evidence.
+        ...(guardrails ? { guardrails: guardrailDetails(guardrails) } : {}),
       },
       turn,
     ),

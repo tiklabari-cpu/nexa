@@ -15,6 +15,11 @@
  * so the seam takes no tenant beside it.
  */
 import {
+  FORBIDDEN_PHRASE_ACTIONS,
+  FORBIDDEN_PHRASE_MATCHES,
+  GUARDRAIL_CATEGORIES,
+  GUARDRAIL_RULE_ACTIONS,
+  PLATFORM_GUARDRAILS_VERSION,
   readBatchWindowSeconds,
   readClarifyThresholds,
   readDailyMemory,
@@ -26,6 +31,11 @@ import {
   type SkillProcedureFields,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
+import type {
+  ForbiddenPhraseConfig,
+  GuardrailConfig,
+  GuardrailRuleConfig,
+} from './guardrails/config.js';
 import { orderGuidance, type GuidanceRuleConfig } from './guidance.js';
 import { turnThresholds } from './policy.js';
 import type { TurnConfig } from './turn.js';
@@ -114,10 +124,11 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       aiAgent: { select: { tone: true, languages: true, persona: true } },
     },
   });
-  const guidance = await activeGuidance(
-    tx,
-    aiAgentId ? [aiAgentId] : [...new Set(skills.flatMap((skill) => skill.aiAgentId ?? []))],
-  );
+  const agentIds = aiAgentId
+    ? [aiAgentId]
+    : [...new Set(skills.flatMap((skill) => skill.aiAgentId ?? []))];
+  const guidance = await activeGuidance(tx, agentIds);
+  const guardrails = await activeGuardrails(tx, agentIds);
   const waits = skills
     .map((skill) => readBatchWindowSeconds(skill.aiAgent?.persona))
     .filter((seconds): seconds is number => seconds !== null);
@@ -157,6 +168,7 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
         }
       : {}),
     ...(guidance.length > 0 ? { guidance } : {}),
+    ...(guardrails ? { guardrails } : {}),
   };
 }
 
@@ -180,6 +192,84 @@ async function activeGuidance(
       return scope ? [{ ...row, category: row.category as GuidanceCategory, scope }] : [];
     }),
   );
+}
+
+/**
+ * The agents' guardrail settings, active rules and active forbidden phrases
+ * (tm 301.3 · AI-08) — the package's `guardrails` (ADR-14b §2.12) — or null
+ * when the agents have none of them. A row whose stored value reads as
+ * nothing the API writes (an action, a category, a scope) is not carried: the
+ * CHECKs hold the first two, `readGuidanceScope` the third.
+ */
+async function activeGuardrails(
+  tx: TenantClient,
+  aiAgentIds: readonly string[],
+): Promise<GuardrailConfig | null> {
+  if (aiAgentIds.length === 0) return null;
+  const agents = { in: [...aiAgentIds] };
+  const settings = await tx.aiGuardrailSettings.findMany({
+    where: { aiAgentId: agents },
+    select: {
+      aiAgentId: true,
+      crisisText: true,
+      complaintText: true,
+      judgeEnabled: true,
+      approvedAt: true,
+    },
+  });
+  const rules = await tx.aiGuardrailRule.findMany({
+    where: { active: true, aiAgentId: agents },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      aiAgentId: true,
+      title: true,
+      body: true,
+      category: true,
+      action: true,
+      scope: true,
+    },
+  });
+  const phrases = await tx.aiForbiddenPhrase.findMany({
+    where: { active: true, aiAgentId: agents },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      aiAgentId: true,
+      phrase: true,
+      match: true,
+      lang: true,
+      scope: true,
+      action: true,
+    },
+  });
+  if (settings.length === 0 && rules.length === 0 && phrases.length === 0) return null;
+  return {
+    catalogVersion: PLATFORM_GUARDRAILS_VERSION,
+    settings: settings.map((row) => ({
+      aiAgentId: row.aiAgentId,
+      crisisText: row.crisisText,
+      crisisApproved: row.approvedAt !== null,
+      complaintText: row.complaintText,
+      judgeEnabled: row.judgeEnabled,
+    })),
+    rules: rules.flatMap((row): GuardrailRuleConfig[] => {
+      const scope = readGuidanceScope(row.scope);
+      if (!scope || !oneOf(row.action, GUARDRAIL_RULE_ACTIONS)) return [];
+      if (!oneOf(row.category, GUARDRAIL_CATEGORIES)) return [];
+      return [{ ...row, category: row.category, action: row.action, scope }];
+    }),
+    phrases: phrases.flatMap((row): ForbiddenPhraseConfig[] => {
+      const scope = readGuidanceScope(row.scope);
+      if (!scope || !oneOf(row.match, FORBIDDEN_PHRASE_MATCHES)) return [];
+      if (!oneOf(row.action, FORBIDDEN_PHRASE_ACTIONS)) return [];
+      return [{ ...row, match: row.match, action: row.action, scope }];
+    }),
+  };
+}
+
+function oneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
+  return (allowed as readonly string[]).includes(value);
 }
 
 /**
@@ -211,9 +301,11 @@ async function previewTurnConfig(tx: TenantClient, input: DraftConfigInput): Pro
       })
     : null;
   const guidance = await activeGuidance(tx, aiAgentId ? [aiAgentId] : []);
+  const guardrails = await activeGuardrails(tx, aiAgentId ? [aiAgentId] : []);
   return {
     ...(agent ? { clarifyThresholds: readClarifyThresholds(agent.persona) } : {}),
     ...(guidance.length > 0 ? { guidance } : {}),
+    ...(guardrails ? { guardrails } : {}),
     skills: [
       {
         id: 'preview',

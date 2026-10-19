@@ -151,7 +151,7 @@ const WITHDRAWAL = build({
     { id: 'bilgi', type: 'say', template_key: 'bilgi' },
     { id: 'bitti', type: 'resolve', outcome: 'resolved' },
   ],
-  templates: [{ key: 'bilgi', text: 'Çekim talepleri 24 saat içinde işlenir.' }],
+  templates: [{ key: 'bilgi', text: 'Çekim talepleri genellikle 24 saat içinde işlenir.' }],
 });
 
 const DEPOSIT_SKILL = procedureSkill('deposit', 'Yatırım geçmedi', depositProcedure());
@@ -445,7 +445,7 @@ describe('a topic change mid-procedure (AI-03 §7 acceptance)', () => {
     const switched = await chat.say('para çekemiyorum');
     expect(switched.decisions.skillId).toBe('withdrawal');
     expect(switched.reply).toBe(
-      'Çekim talepleri 24 saat içinde işlenir.\nÖnceki konuya dönelim mi?',
+      'Çekim talepleri genellikle 24 saat içinde işlenir.\nÖnceki konuya dönelim mi?',
     );
     expect(switched.decisions.log.map((entry) => entry.detail)).toContain(
       'Yatırım geçmedi set aside for Çekim',
@@ -1134,7 +1134,7 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
     await chat.say('param çekim');
     const answered = await chat.say('çekim');
     expect(answered.decisions.skillId).toBe('withdrawal');
-    expect(answered.reply).toBe('Çekim talepleri 24 saat içinde işlenir.');
+    expect(answered.reply).toBe('Çekim talepleri genellikle 24 saat içinde işlenir.');
     expect(answered.decisions.policy).toMatchObject({ step: 4, rule: 'clarified' });
   });
 

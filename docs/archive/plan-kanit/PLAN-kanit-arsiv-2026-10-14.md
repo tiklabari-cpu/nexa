@@ -28,6 +28,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ✅ Sekmeli kabuk (ARIA tablist) + readiness — `PlaybookPage.tsx` (`VIEW_TABS` 4 panel) · `readiness.ts` `evaluateReadiness` → boş KB+skill'de aktivasyon engeli + banner + devre dışı toggle · test `readiness.test.ts` (5) · tm 33.1 · §D27
 
+- ✅ tm 180.1 (denetim §3 D8 · M-READY): readiness operatörü tersti ve `active` bayrağı hiç okunmuyordu. PRD KK4 "Knowledge boş VEYA hiç aktif skill yokken uyarı gösterilir" → `ready = hasKnowledge && hasSkill` gerektirirken kod `hasKnowledge || hasSkill` yazıyordu (yalnız ikisi birden boşken uyarı çıkıyordu, tek biri boşken agent yanlışlıkla "hazır" görünüyordu); `hasSkill` de yalnız adım sayısına bakıp `Skill.active`'i hiç sorgulamıyordu (pasif ama adımlı bir skill "çalıştırılabilir" sayılıyordu). `readiness.ts`: operatör `&&`'e çevrildi, `hasSteps` → `isRunnable` (`skill.active && steps.length>0`) oldu, `reason` metni AND anlamına güncellendi. Testler PRD'nin 5 senaryosuna göre yeniden yazıldı (yalnız knowledge → değil, yalnız skill → değil, ikisi → hazır, adımlı-ama-pasif skill → değil, ikisi boş → değil) + 2 mevcut kenar durumu (indekslenmemiş kaynak, adımsız skill) korundu · test `readiness.test.ts` (7) · tm 180.1
+
 #### K06.2.4 — 06.2.4 · Ordered steps (6 adım tipi; reorder + klavye alternatifi)
 
 ✅ drag + klavye (↑↓) reorder — ikisi de tek `moveStep` yolundan + aria-live duyuru; zorunlu-parametre kapısı (transfer hedefi boşsa Save engeli + `role="alert"` satır hatası) — `SkillEditor.tsx` (draggable liste + ↑↓ + `canSave = issues.length===0`) · saf `step-reorder.ts` (`moveStep`/`describeMove`/`stepIssues`) · test `step-reorder.test.ts` (10) + `SkillEditor.test.tsx` (5) · tm 33.2 · §D53

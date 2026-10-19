@@ -306,7 +306,7 @@ describe('the decision order on the API and the live path (AI-05 · tm 297.2)', 
       );
       const withdrawal = await storeProcedure(
         'Çekim',
-        topic(['çekim yapamıyorum'], 'Çekim talepleri 24 saat içinde işlenir.'),
+        topic(['çekim yapamıyorum'], 'Çekim talepleri genellikle 24 saat içinde işlenir.'),
       );
       const { chatId, reply } = await ask('param çekim');
       expect(reply).toBe(
@@ -334,7 +334,7 @@ describe('the decision order on the API and the live path (AI-05 · tm 297.2)', 
       );
       await storeProcedure(
         'Çekim',
-        topic(['çekim yapamıyorum'], 'Çekim talepleri 24 saat içinde işlenir.'),
+        topic(['çekim yapamıyorum'], 'Çekim talepleri genellikle 24 saat içinde işlenir.'),
       );
       await server.patch(
         `/ai-agents/${aiAgentId}`,

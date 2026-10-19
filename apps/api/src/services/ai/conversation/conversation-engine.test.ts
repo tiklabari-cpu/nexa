@@ -40,6 +40,8 @@ import { AiDailyCapError, type AiAttribution, type AiDailyBudget } from '../ai-d
 import { MeteredLlm } from '../metered-llm.js';
 import { OpenAiLlmProvider } from '../provider/openai-llm-provider.js';
 import { ConversationEngine } from './conversation-engine.js';
+import { guardrailLayers } from './guardrails/prompt-block.js';
+import { renderLayers } from './guidance.js';
 import {
   describeSideEffects,
   emptyTurnState,
@@ -735,6 +737,10 @@ describe('the per-call ceilings reach the provider, or stop the call before it',
         persona: { tone: null, languages: [], answerLength: null },
         answerIn: null,
         cite: { ids: ['P1'], notes: [] },
+        // The platform's locked rules ride on every written call (tm 301.3).
+        rules: renderLayers(
+          guardrailLayers({ answerIn: null, riskFlagged: false, workspaceRules: [] }),
+        ),
       }),
     );
     expect(length).toBeGreaterThan(2_000);
@@ -1205,7 +1211,9 @@ describe('the model reads the conversation, not just the message (AI-01 · tm 29
       visitorMessages: 15,
     };
 
-    const result = await engine(model, 20_000, knowledge, 4_000).runTurn(
+    // Room for the instructions — the platform's locked rules among them
+    // (tm 301.3) — the passage and the message, and some of the history.
+    const result = await engine(model, 20_000, knowledge, 6_000).runTurn(
       emptyTurnState(),
       { text: MESSAGE, history: long },
       context(workspace(CATCH_ALL)),
@@ -1213,7 +1221,7 @@ describe('the model reads the conversation, not just the message (AI-01 · tm 29
 
     expect(result.decisions).toMatchObject({ outcome: 'answered', failure: null });
     const [request] = model.calls;
-    expect(promptLength(request!)).toBeLessThanOrEqual(4_000);
+    expect(promptLength(request!)).toBeLessThanOrEqual(6_000);
     expect(request!.messages.length).toBeLessThan(long.messages.length);
     expect(request!.messages[0]!.content.startsWith('OPENING question')).toBe(true);
     expect(request!.messages.at(-1)!.content.endsWith(MESSAGE)).toBe(true);

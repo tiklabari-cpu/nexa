@@ -407,6 +407,23 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'DataRetention',
     keywords: ['gdpr', 'delete data', 'storage'],
   },
+  // Responsible Gaming team + urgent-flag mail (AI-27 · tm 302.3). Both routes are
+  // admin and up; the component keeps that courtesy gate, the route the real one.
+  {
+    slug: 'risk-flags',
+    group: 'security',
+    labelKey: 'settings.nav.section.riskFlags',
+    scope: ACCESS_RULES,
+    file: 'RiskFlagSettings',
+    keywords: [
+      'responsible gaming',
+      'self-exclusion',
+      'underage',
+      'risk',
+      'sorumlu oyun',
+      'bayrak',
+    ],
+  },
   {
     slug: 'audit-log',
     group: 'security',

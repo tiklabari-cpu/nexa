@@ -27,6 +27,7 @@ import { useTypingStore } from './typing.js';
 import { useConflictStore, type ConflictAgent } from './conflict.js';
 import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
+import { RISK_FLAGS_KEY } from '../risk/riskFlags.js';
 import { withAiModeChange, type AiReturnInput, type ChatAiModeResult } from './aiMode.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
 import {
@@ -1086,6 +1087,10 @@ export function useRealtime(onPush?: PushHandler): void {
         // Who answers a connection changed (AI-11): the header's badge, and the
         // AI view a chat moves into or out of.
         'chat_ai_mode_changed',
+        // A risk flag raised or cleared (AI-27): the header's chips and the
+        // Details panel's Risk section, whoever moved it — the AI included.
+        'risk_flag_raised',
+        'risk_flag_cleared',
         'routing_status_set',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
@@ -1402,6 +1407,13 @@ export function applyPush(
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;
     }
+
+    case 'risk_flag_raised':
+    case 'risk_flag_cleared':
+      // The push carries no text a person wrote, so the panel re-reads: the
+      // note is the server's to show or hide for this caller.
+      void queryClient.invalidateQueries({ queryKey: RISK_FLAGS_KEY });
+      return;
 
     case 'chat_ai_mode_changed': {
       // The badge moves at once (AI-11); the re-read that follows settles

@@ -14,6 +14,7 @@ import {
   possibleMatchesKey,
   type PossibleMatchList,
 } from '../customers/MemberIdentity.js';
+import { RiskSection } from '../risk/RiskSection.js';
 import { SUPERVISOR_ROLES } from './roles.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
@@ -241,6 +242,13 @@ export function DetailsPanel({
             <span className="text-xs">{formatDateTime(chat.created_at)}</span>
           </Row>
         </PanelSection>
+
+        {/* What the conversation and the player are flagged for (AI-27 · tm 302.3). */}
+        <RiskSection
+          chatId={chatId}
+          customerId={chat.customer_id}
+          canFlag={hasAnyScope(scopes, ['chats--all:rw', 'chats--access:rw'])}
+        />
 
         {/* The member's day, connection by connection (ID-02 · tm 286.4). A
           chat with no `local_day` is not a day and lists only its newest

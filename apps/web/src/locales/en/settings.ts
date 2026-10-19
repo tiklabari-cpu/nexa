@@ -1337,4 +1337,29 @@ export const settings: Messages = {
     'Every visitor your website recognised so far starts again as a new visitor on their next visit. This cannot be undone.',
   'settings.memberRecognition.forgetConfirm': 'Forget all visitors',
   'settings.memberRecognition.forgetFailure': 'The visitors could not be forgotten.',
+  // Risk flags (AI-27 · tm 302.3) — RiskFlagSettings.tsx
+  'settings.nav.section.riskFlags': 'Risk flags',
+  'settings.riskFlags.title': 'Risk flags',
+  'settings.riskFlags.description':
+    'Who handles responsible gaming, and who is told the moment an urgent flag is raised. A flag keeps promotions and bonus talk away from a player at risk and the AI out of a conversation that must stay with a person.',
+  'settings.riskFlags.loadError': 'The risk flag settings could not be loaded.',
+  'settings.riskFlags.teamLabel': 'Responsible Gaming team',
+  'settings.riskFlags.teamNone': 'No team chosen',
+  'settings.riskFlags.teamUnknown': 'Team #{id} (no longer exists)',
+  'settings.riskFlags.teamHint':
+    'Members of this team read the notes on flags and are told of every urgent flag. A flagged conversation goes to them when it is handed over.',
+  'settings.riskFlags.emailsLabel': 'Also email urgent flags to',
+  'settings.riskFlags.emailsHint':
+    'Up to {max} addresses, separated by commas. Workspace owners and admins are always told. The email says that a flag was raised, never what the player wrote.',
+  'settings.riskFlags.emailsTooMany': 'At most {max} addresses.',
+  'settings.riskFlags.emailsInvalid': '“{address}” is not a valid email address.',
+  'settings.riskFlags.saved': 'Saved.',
+  'settings.riskFlags.legend.title': 'Kinds of flag',
+  'settings.riskFlags.legend.description':
+    'These are fixed by the platform. Anyone who can see a conversation sees its flags; only the notes are restricted.',
+  'settings.riskFlags.legend.type': 'Flag',
+  'settings.riskFlags.legend.severity': 'Severity',
+  'settings.riskFlags.legend.clearedBy': 'Cleared by',
+  'settings.riskFlags.legend.effect': 'What it does',
+  'settings.riskFlags.legend.andUp': '{role} and up',
 };

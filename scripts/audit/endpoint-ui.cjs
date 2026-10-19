@@ -358,40 +358,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  {
-    op: 'POST /chats/{chatId}/risk-flags',
-    owner: 'tm 302.3',
-    reason:
-      'an agent flags a conversation (tm 302.2 · AI-27) — the inbox\'s "Bayrak ekle" action ' +
-      'in ThreadHeader/DetailsPanel, which tm 302.3 draws.',
-  },
-  {
-    op: 'DELETE /risk-flags/{flagId}',
-    owner: 'tm 302.3',
-    reason: 'clearing a flag with a reason — the "Bayrağı kaldır" action of the same Risk section.',
-  },
-  {
-    op: 'GET /risk-flags',
-    owner: 'tm 302.3',
-    reason:
-      "a conversation's flags (the Risk section's list and ThreadHeader chips) and the " +
-      'report/archive filter — tm 302.3.',
-  },
-  {
-    op: 'GET /customers/{customerId}/risk-flags',
-    owner: 'tm 302.3',
-    reason: "a player's flags the day after, in the DetailsPanel Risk section — tm 302.3.",
-  },
-  {
-    op: 'GET /risk-flags/settings',
-    owner: 'tm 302.3',
-    reason: 'Ayarlar › Risk bayrakları (the Responsible Gaming team, the urgent-mail addresses).',
-  },
-  {
-    op: 'PUT /risk-flags/settings',
-    owner: 'tm 302.3',
-    reason: 'the write half of the same settings screen.',
-  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

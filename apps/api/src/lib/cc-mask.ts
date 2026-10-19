@@ -19,39 +19,22 @@
  * The trade deliberately favours over-masking a Luhn-valid non-card (rare) over
  * leaking a real PAN (the thing PCI SAQ A cares about) — a chosen false-positive
  * bias, not an accident.
- */
-
-/** The masked form the KK names verbatim; the last four digits are preserved. */
-const MASK_PREFIX = '**** **** **** ';
-
-/**
- * A run of 13–19 digits, its groups optionally split by a single space or
- * hyphen ("4111 1111 1111 1111" / "4111-1111-1111-1111" / contiguous). The
- * digit-boundary lookarounds stop a longer number — a 20-digit account, an
- * all-digit id — from having a card-length window carved out of its middle.
  *
- * The `[ -]` class is space-or-hyphen: the hyphen is the final character in the
- * class, so it is a literal, not a range. The separator is kept this narrow on
- * purpose — allowing arbitrary whitespace would let a line break splice two
- * unrelated numbers into one false candidate.
+ * Since tm 300.1 the detector lives in `sensitive-mask.ts`, which masks the
+ * other seven sensitive types too (AI-26). This module is the cards-only view of
+ * it, kept so existing callers behave exactly as before until they move to
+ * `maskSensitive`. Two edges changed, both toward not masking a non-card: a
+ * Luhn-valid run inside a valid IBAN or inside a hex string (a TXID) is no
+ * longer taken for a card.
  */
-const CARD_CANDIDATE = /(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)/g;
+import type { SensitivePolicy } from '@siyahtus/types';
+import { maskSensitive } from './sensitive-mask.js';
 
-/** Luhn (mod-10) checksum — the check every card network's PAN satisfies. */
-function luhnValid(digits: string): boolean {
-  let sum = 0;
-  let double = false;
-  for (let i = digits.length - 1; i >= 0; i -= 1) {
-    let d = digits.charCodeAt(i) - 48; // '0' is 48
-    if (double) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-    double = !double;
-  }
-  return sum % 10 === 0;
-}
+const CARDS_ONLY: SensitivePolicy = Object.freeze({
+  customer: ['card'],
+  agent: ['card'],
+  bot: ['card'],
+});
 
 /**
  * Replace every Luhn-valid 13–19 digit card number in `input` with
@@ -61,12 +44,7 @@ function luhnValid(digits: string): boolean {
  */
 export function maskCardNumbers(input: string): string {
   if (!input) return input;
-  return input.replace(CARD_CANDIDATE, (match) => {
-    const digits = match.replace(/[ -]/g, '');
-    if (digits.length < 13 || digits.length > 19) return match;
-    if (!luhnValid(digits)) return match;
-    return MASK_PREFIX + digits.slice(-4);
-  });
+  return maskSensitive(input, { author: 'customer', policy: CARDS_ONLY }).text;
 }
 
 /**

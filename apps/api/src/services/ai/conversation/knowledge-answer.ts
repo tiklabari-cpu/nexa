@@ -39,7 +39,9 @@
 import {
   ANSWER_BUDGETS,
   DEFAULT_ANSWER_PASSAGES,
+  isHandoffReason,
   shapeAnswer,
+  type HandoffReason,
   type NoAnswerCategory,
   type NoAnswerPolicy,
   type PersonaLanguage,
@@ -442,21 +444,28 @@ export const NO_ANSWER_PHRASES: Readonly<Record<PersonaLanguage, NoAnswerPhrases
 /** Where the offer of a person is kept between turns (`ai_conversations.signals`). */
 export const NO_ANSWER_SIGNAL = 'no_answer';
 
-/** The offer: the AI turn it was made on. Its presence is "asked once" (AI-06-S1). */
+/**
+ * The offer: the AI turn it was made on, and — when a hand-over trigger made
+ * it rather than a knowledge miss (tm 303.2 · AI-09 `ask_first`) — the reason
+ * a "yes" hands over with. Its presence is "asked once" (AI-06-S1).
+ */
 export interface NoAnswerMark {
   readonly turn: number;
+  /** Absent: `no_knowledge`. */
+  readonly reason?: HandoffReason;
 }
 
-export function noAnswerSignal(turn: number): AiStateObject {
-  return { turn };
+export function noAnswerSignal(turn: number, reason?: HandoffReason): AiStateObject {
+  return reason && reason !== 'no_knowledge' ? { turn, reason } : { turn };
 }
 
 /** The offer kept in `signals`, or null for none or a malformed one. */
 export function readNoAnswerMark(signals: AiStateObject): NoAnswerMark | null {
   const raw = signals[NO_ANSWER_SIGNAL];
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const { turn } = raw as Record<string, unknown>;
-  return typeof turn === 'number' && Number.isInteger(turn) ? { turn } : null;
+  const { turn, reason } = raw as Record<string, unknown>;
+  if (typeof turn !== 'number' || !Number.isInteger(turn)) return null;
+  return isHandoffReason(reason) && reason !== 'no_knowledge' ? { turn, reason } : { turn };
 }
 
 const ENGLISH_YES = new Set(['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'ja', 'oui', 'si']);

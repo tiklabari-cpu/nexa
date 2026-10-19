@@ -18,6 +18,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
+import { DEFAULT_HANDOFF_MESSAGES } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,
@@ -285,7 +286,8 @@ describe('AI persona shapes the answer (FR-MOD-06.4)', () => {
         { type: 'send_message', source: 'text', text: 'One moment.' },
       ]);
 
-      expect(await ask(GERMAN)).toBeNull();
+      // Not a silence (tm 303.2 · AI-09): the fixed sentence, in English, and a person.
+      expect(await ask(GERMAN)).toBe(DEFAULT_HANDOFF_MESSAGES.unsupported_language.en);
 
       // Not a silent nothing: the admin can see the decision in the run log.
       const run = await owner.skillRun.findFirst({

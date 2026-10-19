@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_HANDOFF_MESSAGES,
   DEFAULT_NO_ANSWER,
   readPersona,
   splitSkillProcedure,
@@ -240,7 +241,15 @@ describe('an answer from the knowledge base (AI-06 §4–§7)', () => {
     const yes = await chat.say('evet');
     expect(yes.reply).toBe('Sizi bir temsilcimize aktarıyorum.');
     expect(yes.decisions).toMatchObject({ outcome: 'handed_off', handoffReason: 'no_knowledge' });
-    expect(yes.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'no_knowledge' }]);
+    expect(yes.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'no_knowledge',
+        reasons: ['no_knowledge'],
+        priority: 'normal',
+      },
+    ]);
   });
 
   it('asks the AI-13 tables before the knowledge base, and their row is the answer (AI-06 §3 · #310 seam)', async () => {
@@ -353,7 +362,15 @@ describe('no answer: the AI says so, never a silence (AI-06 §8, AI-06-S1)', () 
     );
     expect(llm.calls).toHaveLength(0);
     expect(result.reply).toBe(CANNOT_HAND_OVER);
-    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'no_knowledge' }]);
+    expect(result.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'no_knowledge',
+        reasons: ['no_knowledge'],
+        priority: 'normal',
+      },
+    ]);
     expect(skillDecision(result)).toMatchObject({
       decision: 'handoff',
       handoffReason: 'no_knowledge',
@@ -386,7 +403,15 @@ describe('no answer: the AI says so, never a silence (AI-06 §8, AI-06-S1)', () 
     await other.say('canlı casino hangi saatlerde açık?');
     const yes = await other.say('evet');
     expect(yes.reply).toBe('Sizi bir temsilcimize aktarıyorum.');
-    expect(yes.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'no_knowledge' }]);
+    expect(yes.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'no_knowledge',
+        reasons: ['no_knowledge'],
+        priority: 'normal',
+      },
+    ]);
   });
 
   it('a longer message after the question is a new message, read the ordinary way', async () => {
@@ -478,7 +503,13 @@ describe('the silence rule on the AI’s connection (AI-06 §9)', () => {
     expect(result.decisions.skillId).toBe('tagger');
     expect(result.sideEffects).toEqual([
       { kind: 'tag', tag: 'bonus-question' },
-      { kind: 'handoff', team: null, reason: 'no_knowledge' },
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'no_knowledge',
+        reasons: ['no_knowledge'],
+        priority: 'normal',
+      },
     ]);
     expect(result.decisions.unanswered).toMatchObject({
       category: 'bonus',
@@ -500,9 +531,19 @@ describe('the silence rule on the AI’s connection (AI-06 §9)', () => {
       { text: 'refund please' },
       context([answering], { aiMode: 'ai' }),
     );
-    expect(result.reply).toBeNull();
+    // A fixed sentence, no model (tm 303.2 · AI-09 `ai_failure`).
+    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.ai_failure.tr);
     expect(result.decisions.outcome).toBe('handed_off');
-    expect(result.sideEffects).toEqual([{ kind: 'handoff', team: null, reason: 'llm_failure' }]);
+    expect(result.decisions.handoffReasons).toEqual(['ai_failure']);
+    expect(result.sideEffects).toEqual([
+      {
+        kind: 'handoff',
+        team: null,
+        reason: 'llm_failure',
+        reasons: ['ai_failure'],
+        priority: 'normal',
+      },
+    ]);
   });
 
   it('off the AI’s connection, a failed answer is left as it was: routing’s person has it', async () => {

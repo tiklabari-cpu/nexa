@@ -364,9 +364,12 @@ describe('the AI answers only a connection that is its own (AI-11)', () => {
       'AI handed the chat over',
     ]);
 
+    // The hand-over's own sentence (tm 303.2 · AI-09), then nothing more.
+    const handedOver = await botEvents(chatId);
+    expect(handedOver).toHaveLength(1);
     await send(headers, QUESTION);
     expect(model.calls).toHaveLength(0);
-    expect(await botEvents(chatId)).toEqual([]);
+    expect(await botEvents(chatId)).toEqual(handedOver);
   });
 
   it('turns `human` when an agent opens the chat by writing to the player', async () => {

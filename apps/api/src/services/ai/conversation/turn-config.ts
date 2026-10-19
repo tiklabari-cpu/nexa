@@ -37,6 +37,7 @@ import type {
   GuardrailRuleConfig,
 } from './guardrails/config.js';
 import { orderGuidance, type GuidanceRuleConfig } from './guidance.js';
+import { readHandoffConfig, type HandoffConfig } from './handoff/triggers.js';
 import { turnThresholds } from './policy.js';
 import type { TurnConfig } from './turn.js';
 
@@ -129,6 +130,8 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
     : [...new Set(skills.flatMap((skill) => skill.aiAgentId ?? []))];
   const guidance = await activeGuidance(tx, agentIds);
   const guardrails = await activeGuardrails(tx, agentIds);
+  // The turn agent's (the first skill's, `turnAgentId`): one per workspace in v1.
+  const handoff = await handoffSettings(tx, aiAgentId ?? skills[0]?.aiAgentId ?? null);
   const waits = skills
     .map((skill) => readBatchWindowSeconds(skill.aiAgent?.persona))
     .filter((seconds): seconds is number => seconds !== null);
@@ -169,7 +172,25 @@ async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promi
       : {}),
     ...(guidance.length > 0 ? { guidance } : {}),
     ...(guardrails ? { guardrails } : {}),
+    ...(handoff ? { handoff } : {}),
   };
+}
+
+/**
+ * The agent's hand-over triggers, messages and after-hours text (tm 303.2 ·
+ * AI-09) — the package's `handoff` (ADR-14b §2.12: versioned, unlike
+ * `assignment_mode`) — or null when the agent has no row: the defaults.
+ */
+async function handoffSettings(
+  tx: TenantClient,
+  aiAgentId: string | null,
+): Promise<HandoffConfig | null> {
+  if (!aiAgentId) return null;
+  const row = await tx.aiHandoffSettings.findUnique({
+    where: { aiAgentId },
+    select: { triggers: true, messages: true, afterHours: true },
+  });
+  return row ? readHandoffConfig(row) : null;
 }
 
 /**
@@ -302,10 +323,12 @@ async function previewTurnConfig(tx: TenantClient, input: DraftConfigInput): Pro
     : null;
   const guidance = await activeGuidance(tx, aiAgentId ? [aiAgentId] : []);
   const guardrails = await activeGuardrails(tx, aiAgentId ? [aiAgentId] : []);
+  const handoff = await handoffSettings(tx, aiAgentId);
   return {
     ...(agent ? { clarifyThresholds: readClarifyThresholds(agent.persona) } : {}),
     ...(guidance.length > 0 ? { guidance } : {}),
     ...(guardrails ? { guardrails } : {}),
+    ...(handoff ? { handoff } : {}),
     skills: [
       {
         id: 'preview',

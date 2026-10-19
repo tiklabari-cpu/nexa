@@ -23,6 +23,7 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_HANDOFF_MESSAGES,
   PLATFORM_GUARDRAILS_VERSION,
   generateShortId,
   splitSkillProcedure,
@@ -791,9 +792,13 @@ describe('procedure skills on the live path (AI-03)', () => {
     });
     expect(decision.handoffReason).toBe('expected_time_exceeded');
 
-    // A person has it now: a further message gets no AI turn.
+    // A person has it now: a further message gets no AI turn. Two texts: the
+    // question, and the hand-over's own sentence (tm 303.2 · AI-09).
     await send(headers, 'hâlâ yok');
-    expect(await botTexts(first.chat_id)).toHaveLength(1);
+    expect(await botTexts(first.chat_id)).toEqual([
+      expect.any(String),
+      DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr,
+    ]);
   });
 
   it.each([

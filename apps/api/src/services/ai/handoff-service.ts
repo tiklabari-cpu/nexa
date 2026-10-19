@@ -1,0 +1,232 @@
+/**
+ * The AI's hand-over, executed (tm 303.2 · SiyahTuş analysis AI-09 §5, §6).
+ *
+ * The engine decides that a person answers and why (`conversation/handoff/
+ * triggers.ts`) and writes nothing; this is where it happens to the real
+ * conversation, in one order and one place — `execute`:
+ *
+ *   1. **the card** (AI-10): a {@link HandoffCardWriter}, in the hand-over's own
+ *      transaction, so a card is never there without the hand-over — the seam
+ *      #304 writes `ai_handoffs` through; none until then;
+ *   2. **the connection to `human`** (AI-11): the AI stays silent from here on;
+ *   3. **the target** (AI-12): the team a single-message skill names, the team
+ *      a procedure names by id, or — a routing topic (#307 resolves those), no
+ *      target, a team that cannot take it now — whoever routing gives it;
+ *   4. **the pushes**: the transfer and the AI mode, to the teams that watch.
+ *
+ * Every system event the hand-over writes — the transfer line, the AI-mode
+ * line — carries `handoff_id`, `reason_codes` (catalogue codes, most severe
+ * first), `primary_reason` and `priority` (AI-09 §6), for the reports and the
+ * search. The id is minted before the hand-over ({@link planHandoff}) so the
+ * turn's decision record names it too; #304's card takes it as its own.
+ *
+ * **Idempotent.** A connection a person has already — they took it between
+ * the turn's commit and this — is left as it is: no second transfer, no team
+ * moved under them. What must not be lost with the hand-over (the turn's risk
+ * flags) is written all the same.
+ */
+import { randomUUID } from 'node:crypto';
+import {
+  AI_BOT_ID,
+  primaryHandoffReason,
+  type GuardrailPriority,
+  type HandoffReason,
+} from '@siyahtus/types';
+import type { TenantClient } from '../../lib/tenant.js';
+import { ApiError } from '../../lib/api-error.js';
+import type { BotPrincipal } from '../auth/principal.js';
+import { aiMayAnswer, readAiMode } from '../chat/ai-mode.js';
+import type { ChatService } from '../chat/chat-service.js';
+import type { VisitorTurn } from '../chat/visitor-turn.js';
+import type { RealtimePublisher } from '../realtime/publisher.js';
+import { catalogueReason, orderHandoffReasons } from './conversation/handoff/triggers.js';
+import type { ConnectionRef } from './conversation/state-store.js';
+import type { handoffOf } from './conversation/turn.js';
+
+export type TurnHandoff = NonNullable<ReturnType<typeof handoffOf>>;
+
+/** One hand-over, as its events and its card name it. */
+export interface PlannedHandoff {
+  readonly handoffId: string;
+  /** Catalogue codes, most severe first. */
+  readonly reasonCodes: readonly HandoffReason[];
+  readonly primaryReason: HandoffReason;
+  readonly priority: GuardrailPriority;
+}
+
+/** Writes the hand-over card (AI-10, #304) in the hand-over's transaction. */
+export type HandoffCardWriter = (
+  tx: TenantClient,
+  input: { chatId: string; threadId: string; handoff: PlannedHandoff; effect: TurnHandoff },
+) => Promise<void>;
+
+/** The hand-over's id, reasons and priority, before anything is written. */
+export function planHandoff(effect: TurnHandoff, failed: boolean): PlannedHandoff {
+  const reasonCodes = orderHandoffReasons([
+    ...(effect.reasons ?? [catalogueReason(effect.reason)]),
+    ...(failed ? (['ai_failure'] as const) : []),
+  ]);
+  return {
+    handoffId: randomUUID(),
+    reasonCodes,
+    primaryReason: (primaryHandoffReason(reasonCodes) as HandoffReason | null) ?? 'procedure_rule',
+    priority: effect.priority ?? 'normal',
+  };
+}
+
+/**
+ * Whether anyone in the workspace is accepting chats now — what decides the
+ * after-hours text (AI-12 §4). The workspace, not the target team: the team is
+ * routing's to find until #307 resolves it.
+ */
+export async function anyoneAccepting(tx: TenantClient, licenseId: bigint): Promise<boolean> {
+  const accepting = await tx.agentMembership.count({
+    where: { licenseId, routingStatus: 'accepting_chats', suspended: false },
+  });
+  return accepting > 0;
+}
+
+/** The system events' share of the hand-over (AI-09 §6). */
+export function handoffEventProperties(plan: PlannedHandoff): Record<string, unknown> {
+  return {
+    handoff_id: plan.handoffId,
+    reason_codes: [...plan.reasonCodes],
+    primary_reason: plan.primaryReason,
+    priority: plan.priority,
+  };
+}
+
+export interface HandoffServiceOptions {
+  /** The card (AI-10). Absent until #304: no card is written. */
+  readonly card?: HandoffCardWriter;
+}
+
+export class HandoffService {
+  readonly #card: HandoffCardWriter | null;
+
+  constructor(
+    private readonly chats: ChatService,
+    private readonly publisher: RealtimePublisher,
+    options: HandoffServiceOptions = {},
+  ) {
+    this.#card = options.card ?? null;
+  }
+
+  /**
+   * Hand the connection over: the card, `human`, the target, the pushes — see
+   * the file header. False when a person had it already and nothing was
+   * handed over. `alongside` is written in the hand-over's transaction (the
+   * turn's risk flags), or on its own when there is none to be in.
+   */
+  async execute(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    effect: TurnHandoff,
+    input: {
+      plan: PlannedHandoff;
+      failed: boolean;
+      alongside?: (tx: TenantClient) => Promise<void>;
+    },
+  ): Promise<boolean> {
+    const { plan } = input;
+    const card = this.#card;
+    const alongside = async (tx: TenantClient): Promise<void> => {
+      await input.alongside?.(tx);
+      await card?.(tx, { chatId: ref.chatId, threadId: ref.threadId, handoff: plan, effect });
+    };
+    const options = { alongside, properties: handoffEventProperties(plan) };
+
+    // Idempotent: a person who took it meanwhile keeps it as it is.
+    const mode = await turn.withTenant((tx) => readAiMode(tx, ref));
+    if (!aiMayAnswer(mode)) {
+      if (input.alongside) await turn.withTenant(input.alongside);
+      turn.log.info(
+        { ai_mode: mode, handoff_id: plan.handoffId },
+        'a person has this conversation already; the ai hand-over is not needed',
+      );
+      return false;
+    }
+
+    if (effect.team) return this.#toTeamNamed(turn, effect.team, options);
+    const { tenant, chatId } = turn;
+    if (effect.groupId !== undefined && !input.failed) {
+      try {
+        await this.chats.transfer(
+          tenant,
+          botPrincipal(tenant),
+          chatId,
+          { groupId: BigInt(effect.groupId), reason: 'ai_handoff' },
+          options,
+        );
+        return true;
+      } catch (error) {
+        if (!(error instanceof ApiError)) throw error;
+        turn.log.warn(
+          { group_id: effect.groupId, err_type: error.type },
+          'procedure hand-over team cannot take the conversation; routing it instead',
+        );
+      }
+    }
+    return this.chats.handOverFromAi(
+      tenant,
+      ref,
+      input.failed ? 'ai_failure' : 'ai_handoff',
+      options,
+    );
+  }
+
+  /** A single-message skill's `transfer_to_team`: the team by its name. */
+  async #toTeamNamed(
+    turn: VisitorTurn,
+    groupName: string,
+    options: {
+      alongside: (tx: TenantClient) => Promise<void>;
+      properties: Record<string, unknown>;
+    },
+  ): Promise<boolean> {
+    const { tenant, chatId } = turn;
+    const group = await turn.withTenant((tx) =>
+      tx.group.findFirst({ where: { name: groupName }, select: { id: true } }),
+    );
+    if (!group) {
+      // The skill names a team that no longer exists. Leaving the conversation
+      // where it is means a human still sees it; silently dropping it would not.
+      turn.log.warn({ group: groupName }, 'skill targets an unknown team');
+      await turn.withTenant(options.alongside);
+      return false;
+    }
+
+    await this.chats.transfer(
+      tenant,
+      botPrincipal(tenant),
+      chatId,
+      { groupId: group.id, reason: 'ai_handoff' },
+      options,
+    );
+    await this.publisher.publish(
+      tenant,
+      'chat_transferred',
+      { allAgents: true },
+      { chat_id: chatId, reason: 'ai_handoff', transferred_to: { group_ids: [Number(group.id)] } },
+    );
+    return true;
+  }
+}
+
+/**
+ * The AI acts as a bot principal, not as an agent.
+ *
+ * It carries the scopes the engine's own actions need and nothing else, so a
+ * skill cannot reach further into the API than the steps it declares.
+ */
+export function botPrincipal(tenant: { licenseId: bigint; organizationId: string }): BotPrincipal {
+  return {
+    kind: 'bot',
+    botId: AI_BOT_ID,
+    licenseId: tenant.licenseId,
+    organizationId: tenant.organizationId,
+    scopes: ['chats--all:rw', 'tags--all:rw'],
+    tokenId: AI_BOT_ID,
+    tokenKind: 'bot',
+  };
+}

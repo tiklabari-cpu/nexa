@@ -130,6 +130,14 @@ const KNOWN_UNMODELLABLE = [
     reason:
       'partial unique index (one chat per member per conversation day) — Prisma cannot express a WHERE predicate',
   },
+  {
+    // Created as `ON risk_flags(license_id, customer_id) WHERE status =
+    // 'active'` in 20261019180000_risk_flags — a player's active flags, read
+    // on every AI turn (AI-27).
+    pattern: /CREATE INDEX "risk_flags_active_customer_idx" ON "public"\."risk_flags"/,
+    reason:
+      "partial index (a player's active risk flags) — Prisma cannot express a WHERE predicate",
+  },
 ];
 
 async function main(): Promise<void> {

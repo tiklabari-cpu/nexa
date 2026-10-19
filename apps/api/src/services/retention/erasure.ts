@@ -21,7 +21,9 @@
  * the AI conversation state (`ai_conversations`, tm 292.1), whose slot
  * values are the subject's own data, through its thread, and the guardrail
  * hits (`ai_guardrail_hits`, tm 301.2), whose evidence quotes the subject's
- * words, through `chat_id`.
+ * words, through `chat_id`, and the risk flags (`risk_flags`, tm 302.1), whose
+ * note can be about their health, through `customer_id` — a flag outlives its
+ * chat (`chat_id` is SET NULL), not its subject.
  *
  * Two relations are `ON DELETE SET NULL`, and they are the interesting ones:
  *

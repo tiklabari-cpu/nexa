@@ -194,6 +194,7 @@ model License {
   aiGuardrailRules       AiGuardrailRule[]
   aiForbiddenPhrases     AiForbiddenPhrase[]
   aiGuardrailHits        AiGuardrailHit[]
+  riskFlags              RiskFlag[]
   aiProcedureExamples    AiProcedureExample[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
@@ -457,6 +458,7 @@ model Customer {
   goalAchievements  GoalAchievement[]
   trackedSales      TrackedSale[]
   aiDecisionLogs    AiDecisionLog[]
+  riskFlags         RiskFlag[]
 
   memberTokenRevocations MemberTokenRevocation[]
   identityLinksAsA       CustomerIdentityLink[]  @relation("IdentityLinkA")
@@ -968,6 +970,7 @@ model Chat {
   trackedSales     TrackedSale[]
   aiDecisionLogs   AiDecisionLog[]
   aiGuardrailHits  AiGuardrailHit[]
+  riskFlags        RiskFlag[]
   aiJobs           AiJob[]
 
   @@index([licenseId, createdAt(sort: Desc)])
@@ -1021,6 +1024,7 @@ model Thread {
   skillRuns       SkillRun[]
   aiDecisionLogs  AiDecisionLog[]
   aiGuardrailHits AiGuardrailHit[]
+  riskFlags       RiskFlag[]
   aiJobs          AiJob[]
   queueEntries    QueueEntry[]
   aiConversations AiConversation[]
@@ -1990,6 +1994,62 @@ model AiGuardrailHit {
   @@index([chatId, createdAt])
   @@index([threadId])
   @@map("ai_guardrail_hits")
+}
+
+/// A risk flag (tm 302.1 · AI-27): a structured mark on a conversation
+/// (`chat`), or on the player behind it as well (`member` — `rg_signal`,
+/// `self_exclusion_request`, `underage_suspected`, AI-27-S1), that
+/// `riskPolicy` (`@siyahtus/types`) turns into no promotions, no bonus talk
+/// and a forced hand-over. Never deleted, never rewritten: the one change is
+/// `active` → `cleared` with who, when and why (the `risk_flags_before_write`
+/// trigger; `siyahtus_app` holds no DELETE). `chat_id`/`thread_id` go null when
+/// the retention sweep takes the conversation — a member flag outlives it —
+/// and the customer's erasure takes the row. The CHECKs, the trigger and the
+/// partial index of active flags per customer live in 20261019180000_risk_flags.
+model RiskFlag {
+  id               String    @id @default(uuid()) @db.Uuid
+  licenseId        BigInt    @map("license_id")
+  /// `RISK_FLAG_SCOPES`, by CHECK.
+  scope            String
+  /// The day container (panel "Thread ID") it was raised in.
+  chatId           String?   @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID") it was raised in.
+  threadId         String?   @map("thread_id") @db.VarChar(12)
+  /// The chat's customer when raised in a chat (the trigger fills it in).
+  customerId       String?   @map("customer_id") @db.Uuid
+  /// The player's key on the operator's site (ID-03), when known.
+  memberKey        String?   @map("member_key")
+  /// `RISK_FLAG_TYPES`, by CHECK.
+  type             String
+  /// `RISK_FLAG_SEVERITIES`, by CHECK.
+  severity         String
+  /// `RISK_FLAG_SOURCES`, by CHECK.
+  source           String
+  /// The guardrail rule (`G1`…`G19`) that raised it; only when `source` is `ai_rule`.
+  ruleRef          String?   @map("rule_ref")
+  evidenceEventIds String[]  @default([]) @map("evidence_event_ids")
+  note             String?
+  /// `RISK_FLAG_BASES`, by CHECK; `declared` in F1 (AI-27-S3).
+  basis            String    @default("declared")
+  /// `RISK_FLAG_STATUSES`, by CHECK.
+  status           String    @default("active")
+  /// The account that raised it; null when the AI did.
+  raisedBy         String?   @map("raised_by") @db.Uuid
+  raisedAt         DateTime  @default(now()) @map("raised_at") @db.Timestamptz(6)
+  clearedBy        String?   @map("cleared_by") @db.Uuid
+  clearedAt        DateTime? @map("cleared_at") @db.Timestamptz(6)
+  clearReason      String?   @map("clear_reason")
+
+  license  License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat     Chat?     @relation(fields: [chatId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  thread   Thread?   @relation(fields: [threadId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([licenseId, status, type])
+  @@index([chatId, raisedAt])
+  @@index([threadId])
+  @@index([customerId])
+  @@map("risk_flags")
 }
 
 // ===========================================================================

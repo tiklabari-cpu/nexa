@@ -322,6 +322,65 @@ describe('SkillEditor — saving a procedure', () => {
     });
   });
 
+  it('writes the procedure’s own “solved” criteria, and drops them when the box is unticked (AI-09 · K9)', async () => {
+    const user = userEvent.setup();
+    renderEditor(procedureSkill());
+
+    const handoff = screen.getByRole('region', { name: 'Hand-over' });
+    const own = within(handoff).getByRole('checkbox', {
+      name: 'This procedure has its own criteria',
+    });
+    expect(within(handoff).getByText(/The agent’s default applies/)).toBeInTheDocument();
+    await user.click(own);
+    // Starts on the platform's default; the author can ask for more.
+    await user.selectOptions(
+      within(handoff).getByLabelText('Compare', { selector: '#procedure-resolution-kind' }),
+      'slot',
+    );
+    await user.selectOptions(
+      within(handoff).getByLabelText('Information', { selector: '#procedure-resolution-subject' }),
+      'tutar',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1));
+    expect(api.patch.mock.calls[0]![1].procedure.resolution_criteria).toStrictEqual({
+      slot: { name: 'tutar', op: 'exists' },
+    });
+
+    await user.click(own);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(2));
+    expect(api.patch.mock.calls[1]![1].procedure).not.toHaveProperty('resolution_criteria');
+  });
+
+  it('keeps a stored “solved” criteria through an unrelated edit (AI-09 · K9)', async () => {
+    const user = userEvent.setup();
+    const criteria = {
+      all: [
+        { slot: { name: 'tutar', op: 'exists' } },
+        { fn: { name: 'player_confirmed', args: [] } },
+      ],
+    };
+    const base = procedureSkill();
+    renderEditor({
+      ...base,
+      procedure: { ...base.procedure!, resolution_criteria: criteria } as Skill['procedure'],
+    });
+
+    const handoff = screen.getByRole('region', { name: 'Hand-over' });
+    expect(
+      within(handoff).getByRole('checkbox', { name: 'This procedure has its own criteria' }),
+    ).toBeChecked();
+    const priority = screen.getByLabelText('Priority');
+    await user.clear(priority);
+    await user.type(priority, '20');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1));
+    expect(api.patch.mock.calls[0]![1].procedure.resolution_criteria).toStrictEqual(criteria);
+  });
+
   it('switching back to one message sends the mode, and keeps the step list', async () => {
     const user = userEvent.setup();
     renderEditor(procedureSkill({ steps: [{ type: 'summarize' }] }));

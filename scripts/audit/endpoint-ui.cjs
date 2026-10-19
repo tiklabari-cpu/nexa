@@ -330,48 +330,6 @@ const INDIRECT = [
  */
 const TRACKED = [
   {
-    op: 'GET /ai-agents/{aiAgentId}/handoff-settings',
-    owner: 'tm 303.5',
-    reason:
-      'the AI agent\'s hand-over settings — today the "Önce AI / Paralel" assignment mode ' +
-      '(tm 293.2). Its screen is the agent\'s "Devir ve Yönlendirme" tab, HandoffSettings.tsx, ' +
-      'which tm 303 builds once the triggers and messages it shows exist; until then it is set ' +
-      'over the API.',
-  },
-  {
-    op: 'PUT /ai-agents/{aiAgentId}/handoff-settings',
-    owner: 'tm 303.5',
-    reason: 'the write half of the same settings — the same screen (HandoffSettings.tsx).',
-  },
-  {
-    op: 'GET /ai-agents/{aiAgentId}/handoff-rules',
-    owner: 'tm 303.5',
-    reason:
-      "K9's hand-over rules (tm 303.3) — the list, its locked G rows and the ready-made " +
-      'examples. Its screen is the "Devir kuralları" card of HandoffSettings.tsx (Playbook › ' +
-      'AI Agent › Davranış), which tm 303.5 builds; until then the rules are kept over the API.',
-  },
-  {
-    op: 'POST /ai-agents/{aiAgentId}/handoff-rules',
-    owner: 'tm 303.5',
-    reason: 'adding a hand-over rule — the same card (HandoffSettings.tsx).',
-  },
-  {
-    op: 'PUT /ai-agents/{aiAgentId}/handoff-rules/order',
-    owner: 'tm 303.5',
-    reason: 'dragging the hand-over rules into a new order — the same card (HandoffSettings.tsx).',
-  },
-  {
-    op: 'PATCH /ai-agents/{aiAgentId}/handoff-rules/{ruleId}',
-    owner: 'tm 303.5',
-    reason: 'editing or turning off a hand-over rule — the same card (HandoffSettings.tsx).',
-  },
-  {
-    op: 'DELETE /ai-agents/{aiAgentId}/handoff-rules/{ruleId}',
-    owner: 'tm 303.5',
-    reason: 'deleting a hand-over rule — the same card (HandoffSettings.tsx).',
-  },
-  {
     op: 'GET /chats/{chatId}/ai-digests',
     owner: 'tm 331',
     reason:

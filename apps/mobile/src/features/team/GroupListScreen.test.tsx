@@ -14,6 +14,7 @@ function group(overrides: Partial<Group> & { id: number }): Group {
     topic_role: null,
     after_hours_mode: 'queue',
     required_expertise_ids: [],
+    accepting_count: 0,
     agents: [],
     ...overrides,
   };

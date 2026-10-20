@@ -230,6 +230,13 @@ export interface ChatDeactivatedPush {
   requester_id: string | null;
 }
 
+/**
+ * A conversation was handed to a team or an agent (IN-04). `outcome` says
+ * what became of it: someone has it (`assignee_id`), or it waits in the
+ * team's queue. `unstaffed` marks a hand-off to the Responsible Gambling team
+ * that found nobody free — the one the supervisors are told of as well
+ * (IN-04-S1), so they are in this push's audience.
+ */
 export interface ChatTransferredPush {
   chat_id: string;
   thread_id: string;
@@ -237,7 +244,13 @@ export interface ChatTransferredPush {
   reason: TransferReason;
   transferred_to: { group_ids: number[]; agent_ids: string[] };
   queue?: { position: number; wait_time: number; queued_at: string };
+  outcome?: ChatTransferOutcome;
+  assignee_id?: string | null;
+  unstaffed?: boolean;
 }
+
+/** What a hand-off came to (`POST /chats/{id}/transfer` · `ChatTransferResult.outcome`). */
+export type ChatTransferOutcome = 'assigned' | 'queued';
 
 /**
  * A supervisor forcibly seized a chat from whoever held it (FR-MOD-08.6.3).

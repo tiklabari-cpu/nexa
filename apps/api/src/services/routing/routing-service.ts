@@ -52,7 +52,7 @@ import {
   type ThreadPriority,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
-import { leaveQueue } from './queue-entries.js';
+import { enterQueue, leaveQueue } from './queue-entries.js';
 
 export interface RoutingContext {
   /** Page the visitor was on — matched against rule conditions. */
@@ -148,6 +148,10 @@ interface TeamRules {
   topicRole: string | null;
   expertiseIds: bigint[];
 }
+
+/** What a hand-off to a team came to (`assignWithinGroup`). */
+export type TeamHandOff =
+  { outcome: 'assigned'; assigneeId: string } | { outcome: 'queued'; assigneeId: null };
 
 /** The waiting connection at the front of a team's queue (`#drainTeam`). */
 interface HeadRow {
@@ -408,32 +412,91 @@ export class RoutingService {
   }
 
   /**
-   * A waiting connection handed to another team waits on in that team's queue
-   * (ADR-08a §2.1): it joins the back of its priority there — its wait in the
-   * new queue starts `at`, as its queue record's stay does — and both queues
-   * are renumbered.
+   * Hand a connection to a team (IN-04 · `POST /chats/{id}/transfer`, the
+   * AI's and a rule bot's hand-off to a named team): one of its members by
+   * the order `route()` uses — the team's required expertise applied — or,
+   * with nobody free, the back of its priority in that team's queue, which
+   * the drain hands out when someone is (`drainQueue`). Never refused for
+   * being unstaffed, and never the fallback team: the hand-off named this
+   * team, so this team's people answer it (IN-04-S1).
+   *
+   * `exclude` are agents not to give it to — whoever handed it off and
+   * whoever held it: a hand-off to one's own team means "someone else". It
+   * may still reach them later through the queue.
+   *
+   * Writes the connection's assignment or its place in the queue, its
+   * queue stay (the one it leaves, the one it starts) and the assignee's
+   * presence, in the caller's transaction. Both teams' queue locks are taken
+   * in ascending order (`#lockTeam`) when it was waiting in another.
    */
-  async moveQueued(
+  async assignWithinGroup(
     tx: TenantClient,
     licenseId: bigint,
+    groupId: bigint,
     threadId: string,
-    toGroupId: bigint,
-    at: Date,
-  ): Promise<void> {
-    const [row] = await tx.$queryRaw<Array<{ queue_group_id: bigint | null }>>`
-      SELECT queue_group_id FROM threads WHERE id = ${threadId} FOR UPDATE
+    options: { exclude?: readonly string[]; at?: Date } = {},
+  ): Promise<TeamHandOff> {
+    const at = options.at ?? new Date();
+    const [row] = await tx.$queryRaw<
+      Array<{ chat_id: string; queue_group_id: bigint | null; queued: boolean }>
+    >`
+      SELECT chat_id, queue_group_id,
+             (assignee_id IS NULL AND queue_position IS NOT NULL) AS queued
+      FROM threads
+      WHERE id = ${threadId} AND license_id = ${licenseId}
+      FOR UPDATE
     `;
-    const teams = teamOrder([row?.queue_group_id ?? null, toGroupId]);
+    if (!row) throw new Error(`assignWithinGroup: no connection ${threadId}`);
+    const left = row.queued ? row.queue_group_id : null;
+    const teams = teamOrder([left, groupId]);
     for (const team of teams) await this.#lockTeam(tx, licenseId, team, true);
+
+    // The stay it waited out ends with this hand-off, whatever comes next.
+    await leaveQueue(tx, threadId, 'transferred', at);
+
+    const team = await this.#team(tx, licenseId, groupId);
+    const assignee = await this.#claimFromTeam(
+      tx,
+      licenseId,
+      groupId,
+      team.expertiseIds,
+      options.exclude,
+    );
+    if (assignee) {
+      await tx.thread.update({
+        where: { id: threadId },
+        data: {
+          assigneeId: assignee,
+          groupId,
+          queuePosition: null,
+          queuedAt: null,
+          queueGroupId: null,
+        },
+      });
+      await tx.chatUser.upsert({
+        where: { chatId_userId: { chatId: row.chat_id, userId: assignee } },
+        create: { chatId: row.chat_id, userId: assignee, userType: 'agent', present: true },
+        update: { present: true },
+      });
+      if (left !== null) await this.#renumber(tx, licenseId, left);
+      return { outcome: 'assigned', assigneeId: assignee };
+    }
+
     await tx.thread.update({
       where: { id: threadId },
       data: {
-        queueGroupId: toGroupId,
-        queuePosition: await this.#nextQueuePosition(tx, licenseId, toGroupId),
+        assigneeId: null,
+        groupId,
+        queueGroupId: groupId,
+        // Behind everyone already waiting; the renumber below puts it in its
+        // priority's place.
+        queuePosition: await this.#nextQueuePosition(tx, licenseId, groupId),
         queuedAt: at,
       },
     });
+    await enterQueue(tx, { licenseId, threadId, groupId, enteredAt: at });
     for (const team of teams) await this.#renumber(tx, licenseId, team);
+    return { outcome: 'queued', assigneeId: null };
   }
 
   /**
@@ -726,8 +789,10 @@ export class RoutingService {
     licenseId: bigint,
     groupId: bigint,
     requiredExpertiseIds: bigint[],
+    exclude: readonly string[] = [],
   ): Promise<string | null> {
     for (const agentId of await this.#candidates(tx, licenseId, groupId, requiredExpertiseIds)) {
+      if (exclude.includes(agentId)) continue;
       if (await this.#claim(tx, licenseId, agentId)) return agentId;
     }
     return null;

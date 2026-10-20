@@ -1166,16 +1166,18 @@ describe('agent chat api', () => {
   // =========================================================================
 
   describe('transfer', () => {
-    it('refuses to hand a chat to a team with nobody accepting', async () => {
+    it('refuses to hand a chat to a team with no members at all', async () => {
       const chat = await startChat(acmeAdminToken);
-      // Sales has no members at all.
+      // Sales has no members at all: it would hold the chat for nobody, ever.
+      // (A team whose members are merely away queues it — IN-04-S1,
+      // `inbox-transfer-team.test.ts`.)
       const response = await server.post(
         `/chats/${chat.id}/transfer`,
         { group_id: Number(salesGroupId) },
         auth(acmeAdminToken),
       );
       expect(response.statusCode).toBe(409);
-      expect(response.json().error.type).toBe('group_offline');
+      expect(response.json().error.type).toBe('group_unavailable');
     });
 
     it('refuses to transfer to a team in another tenant', async () => {

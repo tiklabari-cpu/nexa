@@ -1255,6 +1255,20 @@ export interface paths {
      *     records it as the open connection's `group_id`; a hand-off to an agent
      *     changes neither. (A customer returning the same day adds a team instead
      *     — ID-02-S7 — because a return is not a hand-off.)
+     *
+     *     A hand-off to a team gives the conversation to one of its members by
+     *     the usual routing order (`outcome: assigned`) — not the caller, nor the
+     *     agent who held it — and with nobody free it waits in that team's queue
+     *     (`outcome: queued`) for the next member who is (IN-04 · IN-04-S1); it is
+     *     never refused for being unstaffed, and never overflows to the fallback
+     *     team. A team with no members at all is a 409 `group_unavailable`. A
+     *     `note` is written into the conversation as a line only agents see; a
+     *     person handing to the Responsible Gambling or the Complaints team must
+     *     give one (IN-04-S2, 400 `validation`). A queued hand-off to the
+     *     Responsible Gambling team is also announced to the workspace's
+     *     supervisors. `visible_to_caller` says whether the caller can still open
+     *     the conversation: a team hand-off narrows its access to the receiving
+     *     team.
      */
     post: operations['transferChat'];
     delete?: never;
@@ -9618,6 +9632,26 @@ export interface components {
        */
       visitor?: components['schemas']['ChatVisitor'] | null;
     };
+    /**
+     * @description The chat after a hand-off (`POST /chats/{chatId}/transfer`), with what
+     *     became of it (IN-04).
+     */
+    ChatTransferResult: components['schemas']['Chat'] & {
+      /**
+       * @description `assigned` — someone has it (the named agent, or a member of
+       *     the team); `queued` — nobody in the team was free, so it waits
+       *     in that team's queue for the next member who is.
+       * @enum {string}
+       */
+      outcome: 'assigned' | 'queued';
+      /**
+       * @description Whether the caller can still open the conversation. False after
+       *     a team hand-off by someone outside the receiving team who never
+       *     joined the conversation: the console moves on instead of
+       *     re-reading a chat it would be refused.
+       */
+      visible_to_caller: boolean;
+    };
     ChatSummary: {
       /** @description Panelde: Thread ID (günlük) — the same `chat_id` token as `Chat.id`. */
       id: string;
@@ -14319,6 +14353,12 @@ export interface components {
       /** Format: int64 */
       id: number;
       name: string;
+      /**
+       * @description How many of the team's members are accepting chats right now —
+       *     not suspended, not awaiting approval — whatever their load (IN-04:
+       *     "Finance · 2 online" in the hand-off menu).
+       */
+      accepting_count: number;
       language_code: string;
       /** @description The topic this team's queue is for; null for an ordinary team. */
       topic_role: components['schemas']['QueueTopicRole'] | null;
@@ -18425,6 +18465,11 @@ export interface operations {
           /** Format: uuid */
           agent_id?: string;
           /**
+           * @description What the receiving side should know, written as an internal
+           *     note (`recipients: agents`) — never shown to the customer.
+           */
+          note?: string;
+          /**
            * @description Who handed the conversation over. `ai_handoff` is the AI
            *     Agent's and is what the AI report attributes a transfer to;
            *     `bot_handoff` is the deterministic rule bot's (FR-MOD-06.6),
@@ -18443,12 +18488,15 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['Chat'];
+          'application/json': components['schemas']['ChatTransferResult'];
         };
       };
       400: components['responses']['BadRequest'];
       404: components['responses']['NotFound'];
-      /** @description The target team is offline or the chat is closed */
+      /**
+       * @description The chat is closed (`chat_inactive`), the target agent is offline or
+       *     the target team has no members (`group_unavailable`)
+       */
       409: {
         headers: {
           [name: string]: unknown;

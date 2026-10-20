@@ -1216,6 +1216,30 @@ components:
             - $ref: "#/components/schemas/ChatVisitor"
           nullable: true
 
+    ChatTransferResult:
+      description: |
+        The chat after a hand-off (`POST /chats/{chatId}/transfer`), with what
+        became of it (IN-04).
+      allOf:
+        - $ref: "#/components/schemas/Chat"
+        - type: object
+          required: [outcome, visible_to_caller]
+          properties:
+            outcome:
+              type: string
+              enum: [assigned, queued]
+              description: |
+                `assigned` — someone has it (the named agent, or a member of
+                the team); `queued` — nobody in the team was free, so it waits
+                in that team's queue for the next member who is.
+            visible_to_caller:
+              type: boolean
+              description: |
+                Whether the caller can still open the conversation. False after
+                a team hand-off by someone outside the receiving team who never
+                joined the conversation: the console moves on instead of
+                re-reading a chat it would be refused.
+
     ChatSummary:
       type: object
       required: [id, customer_id, active, created_at]
@@ -7358,10 +7382,26 @@ components:
     Group:
       type: object
       required:
-        [id, name, language_code, topic_role, after_hours_mode, required_expertise_ids, agents]
+        [
+          id,
+          name,
+          language_code,
+          topic_role,
+          after_hours_mode,
+          required_expertise_ids,
+          accepting_count,
+          agents,
+        ]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
+        accepting_count:
+          type: integer
+          minimum: 0
+          description: |
+            How many of the team's members are accepting chats right now —
+            not suspended, not awaiting approval — whatever their load (IN-04:
+            "Finance · 2 online" in the hand-off menu).
         language_code: { type: string }
         topic_role:
           description: The topic this team's queue is for; null for an ordinary team.

@@ -44,8 +44,10 @@ import type {
   ChatDetail,
   ChatEvent,
   ChatSummary,
+  ChatTransferResult,
   InboxView,
   SendInput,
+  TransferTarget,
 } from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
@@ -999,6 +1001,24 @@ export function useChatAction(chatId: string | null) {
     assign: useMutation({
       mutationFn: (agentId: string) => api.post(`/chats/${chatId}/transfer`, { agent_id: agentId }),
       ...optimisticAssign,
+    }),
+    // The hand-off dialog's (IN-04): to a team — someone free in it has the
+    // chat, or it waits in that team's queue — or to a teammate, with a note
+    // only agents read. Not optimistic: who ends up with it is the server's
+    // answer (`outcome`). A team hand-off can take the chat out of the
+    // caller's sight (`visible_to_caller`): then the chat itself is not read
+    // again — it would answer 404 — only the list, awaited so the caller
+    // moves to a list that no longer holds it.
+    transfer: useMutation({
+      mutationFn: (target: TransferTarget) =>
+        api.post<ChatTransferResult>(`/chats/${chatId}/transfer`, target),
+      onSuccess: async (result) => {
+        if (result.visible_to_caller) {
+          invalidate();
+          return;
+        }
+        await queryClient.invalidateQueries({ queryKey: ['chats'] });
+      },
     }),
     // Supervisor seizure (FR-MOD-08.6.3) — role-gated at the route; this mutation
     // just calls it. A losing race surfaces as `takeover_conflict` (409) on

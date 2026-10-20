@@ -392,9 +392,9 @@ describe('agent push notifications', () => {
       expect(await push.delivered()).toEqual([]);
     });
 
-    it('does not push when a chat is handed to a team', async () => {
-      // A team transfer unassigns; there is nobody to address until routing
-      // picks someone, and that pick is not this route's event.
+    it('pushes to the member a team hand-off gives the chat to', async () => {
+      // A team transfer seats one of its free members (IN-04): that member is
+      // addressed as a named hand-off's target is.
       const team = await owner.group.create({
         data: { licenseId: fx.a.licenseId, name: 'Billing' },
         select: { id: true },
@@ -418,6 +418,50 @@ describe('agent push notifications', () => {
         auth(agentToken),
       );
       expect(response.statusCode).toBe(200);
+      expect(response.json().outcome).toBe('assigned');
+
+      const delivered = await push.delivered();
+      expect(delivered).toHaveLength(1);
+      expect(delivered[0]).toMatchObject({
+        account_id: fx.a.ownerAccountId,
+        kind: 'assignment',
+        chat_id: chatId,
+      });
+    });
+
+    it('does not push when a team hand-off waits in the queue', async () => {
+      // Nobody in the team is free: there is nobody to address until the drain
+      // picks someone, and that pick is not this route's event.
+      await owner.agentMembership.update({
+        where: {
+          licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.ownerAccountId },
+        },
+        data: { routingStatus: 'not_accepting_chats' },
+      });
+      const team = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Billing' },
+        select: { id: true },
+      });
+      await owner.groupAgent.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          groupId: team.id,
+          agentId: fx.a.ownerAccountId,
+          priority: 'normal',
+        },
+      });
+      await registerDevice(fx.a.licenseId, fx.a.ownerAccountId, 'apns-token-a-colleague', 'ios');
+
+      const chatId = await openChat();
+      await rm(pushDir, { recursive: true, force: true });
+
+      const response = await server.post(
+        `/chats/${chatId}/transfer`,
+        { group_id: Number(team.id), reason: 'manual' },
+        auth(agentToken),
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.json().outcome).toBe('queued');
 
       expect(await push.delivered()).toEqual([]);
     });

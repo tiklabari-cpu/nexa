@@ -850,6 +850,61 @@ describe('procedure skills on the live path (AI-03)', () => {
     ]);
   });
 
+  /** A second team, Ödemeler, with the fixture agent in it — free unless `away`. */
+  async function paymentsTeam(away = false): Promise<bigint> {
+    const licenseId = fx.a.licenseId;
+    const payments = (
+      await owner.group.create({ data: { licenseId, name: 'Ödemeler' }, select: { id: true } })
+    ).id;
+    await owner.groupAgent.create({
+      data: { licenseId, groupId: payments, agentId: fx.a.agentAccountId },
+    });
+    if (away) {
+      await owner.agentMembership.update({
+        where: { licenseId_agentId: { licenseId, agentId: fx.a.agentAccountId } },
+        data: { routingStatus: 'offline' },
+      });
+    }
+    return payments;
+  }
+
+  it('leaves no hand-over to a named team unassigned, IN-04: a free member of it has the conversation (FR-MOD-08.6.1)', async () => {
+    // Finans, where it opens, has nobody: the connection waits in its queue
+    // while the AI answers. The hand-over names Ödemeler, where someone is free.
+    const payments = await paymentsTeam();
+    await createProcedure({ group_id: Number(payments) });
+    const headers = await customerAuth();
+    const first = await send(headers, 'param yatmadı');
+    await send(headers, 'Havale, 2 saat önce');
+
+    expect(
+      await owner.thread.findUniqueOrThrow({
+        where: { id: first.event.thread_id },
+        select: { assigneeId: true, queuePosition: true, groupId: true, aiMode: true },
+      }),
+    ).toEqual({
+      assigneeId: fx.a.agentAccountId,
+      queuePosition: null,
+      groupId: payments,
+      aiMode: 'human',
+    });
+  });
+
+  it("waits a hand-over to a named team nobody in it can take now in that team's queue, IN-04-S1 (FR-MOD-08.6.1)", async () => {
+    const payments = await paymentsTeam(true);
+    await createProcedure({ group_id: Number(payments) });
+    const headers = await customerAuth();
+    const first = await send(headers, 'param yatmadı');
+    await send(headers, 'Havale, 2 saat önce');
+
+    expect(
+      await owner.thread.findUniqueOrThrow({
+        where: { id: first.event.thread_id },
+        select: { assigneeId: true, queuePosition: true, queueGroupId: true, aiMode: true },
+      }),
+    ).toEqual({ assigneeId: null, queuePosition: 1, queueGroupId: payments, aiMode: 'human' });
+  });
+
   /** Finans takes conversations routing gives it: the first team, with someone free. */
   const staffFinance = () =>
     owner.groupAgent.create({

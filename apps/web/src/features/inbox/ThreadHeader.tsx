@@ -12,17 +12,21 @@
  * panel — are dropped (tm 259.12 · UX audit O3 + O4 · tm 286.4).
  */
 import { useState, type ReactElement } from 'react';
+import { hasAnyScope } from '@siyahtus/types';
+import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { RiskChips } from '../risk/RiskChips.js';
 import { AiModeControls } from './AiModeControls.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
 import { actionClass } from './headerAction.js';
+import { TransferDialog } from './TransferDialog.js';
+import type { TransferNotice } from './transfer.js';
 import { useNarrow } from './useNarrow.js';
 import type { ChatDetail } from './types.js';
 
-/** Below this header width the actions drop their words (the longest Turkish row needs ~620). */
-const NARROW_BELOW = 680;
+/** Below this header width the actions drop their words (the longest Turkish row needs ~690). */
+const NARROW_BELOW = 750;
 
 export function ThreadHeader({
   chatId,
@@ -33,6 +37,7 @@ export function ThreadHeader({
   onOpenCopilot,
   onShowDetails,
   chat = null,
+  onTransferred,
 }: {
   chatId: string;
   /** The newest connection (`ids.chat`); null when the chat has none. */
@@ -45,6 +50,8 @@ export function ThreadHeader({
   onShowDetails: (() => void) | null;
   /** The open chat — who answers it (AI-11), and what the caller may do about that. */
   chat?: ChatDetail | null;
+  /** After a hand-off from `Transfer…` (IN-04): its notice, and whether the chat left the caller's sight. */
+  onTransferred?: (outcome: { notice: TransferNotice; left: boolean }) => void;
 }): ReactElement {
   const t = useTranslate();
   const [ref, narrow] = useNarrow<HTMLElement>(NARROW_BELOW);
@@ -84,6 +91,14 @@ export function ThreadHeader({
       />
       {chat && <RiskChips chatId={chatId} customerId={chat.customer_id} compact={narrow} />}
       {chat && <AiModeControls chat={chat} chatId={chatId} compact={narrow} />}
+      {chat && active && (
+        <TransferButton
+          chatId={chatId}
+          assigneeId={chat.thread?.assignee_id ?? null}
+          compact={narrow}
+          onTransferred={onTransferred}
+        />
+      )}
       <CopyLinkButton chatId={chatId} compact={narrow} />
       <CreateTicketButton
         chatId={chatId}
@@ -147,6 +162,51 @@ function CopilotButton({
       <span aria-hidden="true">✧</span>
       {!compact && t('inbox.thread.copilotLabel')}
     </button>
+  );
+}
+
+/**
+ * `Transfer…` (IN-04): the hand-off dialog — a teammate or a team, with a
+ * note. Offered to whoever may write to the chat, which is what
+ * `POST /chats/{id}/transfer` asks for (the Details panel's assignee menu
+ * asks the same).
+ */
+function TransferButton({
+  chatId,
+  assigneeId,
+  compact,
+  onTransferred,
+}: {
+  chatId: string;
+  assigneeId: string | null;
+  compact: boolean;
+  onTransferred?: (outcome: { notice: TransferNotice; left: boolean }) => void;
+}): ReactElement | null {
+  const t = useTranslate();
+  const scopes = useAuth((s) => s.agent?.scopes) ?? [];
+  const [open, setOpen] = useState(false);
+  if (!hasAnyScope(scopes, ['chats--all:rw', 'chats--access:rw'])) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={t('inbox.thread.transfer')}
+        title={t('inbox.thread.transfer')}
+        className={actionClass(compact)}
+      >
+        <span aria-hidden="true">⇄</span>
+        {!compact && t('inbox.thread.transfer')}
+      </button>
+      {open && (
+        <TransferDialog
+          chatId={chatId}
+          assigneeId={assigneeId}
+          onClose={() => setOpen(false)}
+          onTransferred={onTransferred}
+        />
+      )}
+    </>
   );
 }
 

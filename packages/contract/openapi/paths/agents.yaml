@@ -415,6 +415,11 @@ agentExpertise:
       cross-tenant id is a `404` that keeps ids un-enumerable across tenants
       (NFR-S5). Admin or owner only — both the scope and the role are checked.
 
+      Dropping an area the `responsible_gambling` team requires while the agent
+      is on that team is a 409 `group_expertise_missing` (`details.group_id`,
+      `details.expertise_ids`): its members hold its training at all times
+      (K14) — take them off the team first.
+
       The response is the agent with its updated `expertise`, the same shape
       `GET /agents` returns.
     requestBody:
@@ -439,6 +444,7 @@ agentExpertise:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 workSchedule:
@@ -536,7 +542,9 @@ groups:
       a `General` team with the owner in it; this is how the rest are made.
       The queue settings (AU-01) may be given at once: a topic role another
       team holds is a 409 `group_topic_role_taken`, an expertise id that names
-      no area on this licence a 404.
+      no area on this licence a 404. A `responsible_gambling` team is made
+      with its training: without `required_expertise_ids` it is a 409
+      `group_protected` (`details.reason: required_expertise`).
     requestBody:
       required: true
       content:
@@ -567,7 +575,12 @@ group:
       400 rather than a no-op, so a client cannot believe it saved something.
       A topic role another team holds is a 409 `group_topic_role_taken`
       (`details.group_id` names it); `required_expertise_ids` replaces the set,
-      and an id that names no area on this licence is a 404.
+      and an id that names no area on this licence is a 404. The
+      `responsible_gambling` team is renamed only: clearing or changing its
+      role, or emptying its requirement, is a 409 `group_protected`; growing
+      its requirement past what its members hold, or giving the role to a team
+      with a member who lacks the requirement, is a 409
+      `group_expertise_missing` naming `details.agent_ids`.
     requestBody:
       required: true
       content:
@@ -598,7 +611,8 @@ group:
       while any conversation reachable only through it is still open. Neither
       reference carries a foreign key, so this refusal — not the database — is
       what stops a delete from stranding them. Memberships are removed with the
-      team.
+      team. The `responsible_gambling` team is never deleted (409
+      `group_protected`, `details.reason: delete`; K14) — rename it instead.
     responses:
       "204": { description: Deleted }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
@@ -619,6 +633,12 @@ groupMember:
       Idempotent: the same call adds the member and later moves their tier. The
       priority is what routing picks between available agents with (ADR-08) —
       `primary` is the PRD's "Primary agent" tier.
+
+      A team that requires areas of expertise (`required_expertise_ids`) takes
+      only an agent who holds every one of them: anyone else is a 409
+      `group_expertise_missing` with `details.expertise_ids`, the areas they
+      lack (AU-01 · K14 — the Responsible Gambling team's training). Moving an
+      existing member's tier is not re-checked.
     requestBody:
       required: false
       content:
@@ -640,6 +660,7 @@ groupMember:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
   delete:
     tags: [Configuration]
@@ -651,4 +672,32 @@ groupMember:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+routingQueues:
+  get:
+    tags: [Configuration]
+    operationId: listRoutingQueues
+    summary: Which team serves each topic queue
+    description: |
+      The six topic roles (AU-01 · K14 · `@siyahtus/types` `QUEUE_TOPIC_ROLES`),
+      in that order, each with the team that holds it — or nulls while no team
+      does. This is the resolution the AI's hand-over, a hand-over rule's
+      `{ topic }` target and the pre-chat topic use (`resolveQueue`): by role,
+      never by the team's name, so a renamed team keeps its topic. The same
+      teams `GET /groups` lists, read with the same scopes.
+    responses:
+      "200":
+        description: One entry per topic role
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/RoutingQueue" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

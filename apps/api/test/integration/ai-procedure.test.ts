@@ -13,8 +13,10 @@
  *   2. **The live path.** A procedure skill written and turned on through the
  *      API (`POST`/`PATCH /skills` — turning one on is no longer refused) is
  *      run by the AI job worker on real visitor messages: the reply, the row,
- *      the run, the decision record, and the hand-over — to a team by id, and
- *      to routing when the team cannot take it.
+ *      the run, the decision record, and the hand-over — to a team by id, to
+ *      the team holding a topic's queue role (tm 305.3 · AU-01, renamed or
+ *      not), and to routing when the team cannot take it — except the
+ *      Responsible Gambling team's, which waits in its own queue.
  *
  * Every model is the in-process stub (MASTER-PROMPT: the LLM is a
  * deterministic stub); the understanding call is answered by its reading
@@ -848,9 +850,91 @@ describe('procedure skills on the live path (AI-03)', () => {
     ]);
   });
 
+  /** Finans takes conversations routing gives it: the first team, with someone free. */
+  const staffFinance = () =>
+    owner.groupAgent.create({
+      data: { licenseId: fx.a.licenseId, groupId: financeId, agentId: fx.a.agentAccountId },
+    });
+
+  async function handOver(target: Record<string, unknown>): Promise<string> {
+    await createProcedure(target);
+    const headers = await customerAuth();
+    const first = await send(headers, 'param yatmadı');
+    await send(headers, 'Havale, 2 saat önce');
+    return first.event.thread_id;
+  }
+
+  it('hands a { topic } target to the team holding that role — by role, so a renamed team still gets it (FR-MOD-08.6.1)', async () => {
+    await staffFinance();
+    // The finance role is another team's, since renamed; the owner is free in it.
+    const payments = (
+      await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Finance', topicRole: 'finance' },
+        select: { id: true },
+      })
+    ).id;
+    await owner.groupAgent.create({
+      data: { licenseId: fx.a.licenseId, groupId: payments, agentId: fx.a.ownerAccountId },
+    });
+    await owner.group.update({
+      where: { licenseId_id: { licenseId: fx.a.licenseId, id: payments } },
+      data: { name: 'Ödemeler' },
+    });
+
+    const threadId = await handOver({ topic: 'finance' });
+    expect(
+      await owner.thread.findUniqueOrThrow({
+        where: { id: threadId },
+        select: { groupId: true, assigneeId: true, aiMode: true },
+      }),
+    ).toEqual({ groupId: payments, assigneeId: fx.a.ownerAccountId, aiMode: 'human' });
+  });
+
+  it("waits a Responsible Gambling hand-over its team cannot take now in that team's queue, never in the team it opened in (FR-MOD-08.6.1)", async () => {
+    const licenseId = fx.a.licenseId;
+    // AI first: nobody has the conversation until the hand-over, and Finans —
+    // the team it opens in — has somebody free.
+    await owner.aiHandoffSettings.create({
+      data: { aiAgentId, licenseId, assignmentMode: 'ai_first' },
+    });
+    await staffFinance();
+    // The RG team's one trained member is away.
+    const rg = (
+      await owner.group.create({
+        data: { licenseId, name: 'Sorumlu Oyun', topicRole: 'responsible_gambling' },
+        select: { id: true },
+      })
+    ).id;
+    const training = (
+      await owner.expertise.create({
+        data: { licenseId, name: 'Sorumlu oyun eğitimi', slug: 'rg-training' },
+        select: { id: true },
+      })
+    ).id;
+    await owner.groupExpertise.create({ data: { licenseId, groupId: rg, expertiseId: training } });
+    await owner.groupAgent.create({
+      data: { licenseId, groupId: rg, agentId: fx.a.ownerAccountId },
+    });
+    await owner.agentExpertise.create({
+      data: { licenseId, agentId: fx.a.ownerAccountId, expertiseId: training },
+    });
+    await owner.agentMembership.update({
+      where: { licenseId_agentId: { licenseId, agentId: fx.a.ownerAccountId } },
+      data: { routingStatus: 'offline' },
+    });
+
+    const threadId = await handOver({ topic: 'responsible_gambling' });
+    expect(
+      await owner.thread.findUniqueOrThrow({
+        where: { id: threadId },
+        select: { assigneeId: true, queuePosition: true, queueGroupId: true, aiMode: true },
+      }),
+    ).toEqual({ assigneeId: null, queuePosition: 1, queueGroupId: rg, aiMode: 'human' });
+  });
+
   it.each([
     ['a team nobody in it can take now', () => ({ group_id: Number(financeId) })],
-    ['a routing topic (#307 resolves topics)', () => ({ topic: 'finance' })],
+    ['a routing topic no team holds', () => ({ topic: 'finance' })],
   ])('%s still hands over: the conversation goes to routing', async (_, target) => {
     await createProcedure(target());
     const headers = await customerAuth();

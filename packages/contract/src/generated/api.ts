@@ -2879,6 +2879,11 @@ export interface paths {
      *     cross-tenant id is a `404` that keeps ids un-enumerable across tenants
      *     (NFR-S5). Admin or owner only — both the scope and the role are checked.
      *
+     *     Dropping an area the `responsible_gambling` team requires while the agent
+     *     is on that team is a 409 `group_expertise_missing` (`details.group_id`,
+     *     `details.expertise_ids`): its members hold its training at all times
+     *     (K14) — take them off the team first.
+     *
      *     The response is the agent with its updated `expertise`, the same shape
      *     `GET /agents` returns.
      */
@@ -3130,7 +3135,9 @@ export interface paths {
      *     a `General` team with the owner in it; this is how the rest are made.
      *     The queue settings (AU-01) may be given at once: a topic role another
      *     team holds is a 409 `group_topic_role_taken`, an expertise id that names
-     *     no area on this licence a 404.
+     *     no area on this licence a 404. A `responsible_gambling` team is made
+     *     with its training: without `required_expertise_ids` it is a 409
+     *     `group_protected` (`details.reason: required_expertise`).
      */
     post: operations['createGroup'];
     delete?: never;
@@ -3158,7 +3165,8 @@ export interface paths {
      *     while any conversation reachable only through it is still open. Neither
      *     reference carries a foreign key, so this refusal — not the database — is
      *     what stops a delete from stranding them. Memberships are removed with the
-     *     team.
+     *     team. The `responsible_gambling` team is never deleted (409
+     *     `group_protected`, `details.reason: delete`; K14) — rename it instead.
      */
     delete: operations['deleteGroup'];
     options?: never;
@@ -3169,7 +3177,12 @@ export interface paths {
      *     400 rather than a no-op, so a client cannot believe it saved something.
      *     A topic role another team holds is a 409 `group_topic_role_taken`
      *     (`details.group_id` names it); `required_expertise_ids` replaces the set,
-     *     and an id that names no area on this licence is a 404.
+     *     and an id that names no area on this licence is a 404. The
+     *     `responsible_gambling` team is renamed only: clearing or changing its
+     *     role, or emptying its requirement, is a 409 `group_protected`; growing
+     *     its requirement past what its members hold, or giving the role to a team
+     *     with a member who lacks the requirement, is a 409
+     *     `group_expertise_missing` naming `details.agent_ids`.
      */
     patch: operations['updateGroup'];
     trace?: never;
@@ -3192,11 +3205,42 @@ export interface paths {
      * @description Idempotent: the same call adds the member and later moves their tier. The
      *     priority is what routing picks between available agents with (ADR-08) —
      *     `primary` is the PRD's "Primary agent" tier.
+     *
+     *     A team that requires areas of expertise (`required_expertise_ids`) takes
+     *     only an agent who holds every one of them: anyone else is a 409
+     *     `group_expertise_missing` with `details.expertise_ids`, the areas they
+     *     lack (AU-01 · K14 — the Responsible Gambling team's training). Moving an
+     *     existing member's tier is not re-checked.
      */
     put: operations['setGroupMember'];
     post?: never;
     /** Remove an agent from a team */
     delete: operations['removeGroupMember'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/routing/queues': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Which team serves each topic queue
+     * @description The six topic roles (AU-01 · K14 · `@siyahtus/types` `QUEUE_TOPIC_ROLES`),
+     *     in that order, each with the team that holds it — or nulls while no team
+     *     does. This is the resolution the AI's hand-over, a hand-over rule's
+     *     `{ topic }` target and the pre-chat topic use (`resolveQueue`): by role,
+     *     never by the team's name, so a renamed team keeps its topic. The same
+     *     teams `GET /groups` lists, read with the same scopes.
+     */
+    get: operations['listRoutingQueues'];
+    put?: never;
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -5205,8 +5249,11 @@ export interface paths {
     /**
      * Remove an expertise area
      * @description Admin or owner only. Deleting an area also removes it from every agent it
-     *     was assigned to (the assignment rows cascade), so routing stops drawing on
-     *     it immediately.
+     *     was assigned to and from every team that required it (the rows cascade),
+     *     so routing stops drawing on it immediately. The one area the
+     *     `responsible_gambling` team still requires — its training — is refused
+     *     (409 `group_protected`, `details.reason: required_expertise`): that team
+     *     never goes without one (K14).
      */
     delete: operations['deleteExpertise'];
     options?: never;
@@ -14211,7 +14258,11 @@ export interface components {
        * @description The topic this team's queue is for (AU-01 · K14). At most one team
        *     per workspace holds a role — naming one another team holds is a 409
        *     `group_topic_role_taken` with `details.group_id`. `null` clears it.
-       *     Omitted on create: no role.
+       *     Omitted on create: no role. The `responsible_gambling` team keeps
+       *     its role (clearing or changing it is a 409 `group_protected`), must
+       *     require at least one area of expertise — its training — and every
+       *     member must hold all of it (409 `group_expertise_missing` naming
+       *     `details.agent_ids`).
        */
       topic_role?: components['schemas']['QueueTopicRole'] | null;
       /** @default queue */
@@ -14219,8 +14270,10 @@ export interface components {
       /**
        * @description The complete set of expertise areas (`Expertise.id`) an agent must
        *     hold — every one of them — to be given this team's conversations
-       *     (AU-01). Replaces the current set; `[]` clears it. An id that names
-       *     no area on this licence is a 404. Omitted on create: none.
+       *     and to join it (AU-01). Replaces the current set; `[]` clears it. An
+       *     id that names no area on this licence is a 404. Omitted on create:
+       *     none. The `responsible_gambling` team's set cannot be empty (409
+       *     `group_protected`, `details.reason: required_expertise`).
        */
       required_expertise_ids?: number[];
     };
@@ -14276,6 +14329,21 @@ export interface components {
          */
         priority: 'primary' | 'first' | 'normal' | 'last';
       }[];
+    };
+    /**
+     * @description One topic role and the team whose queue serves it (AU-01 · K14 ·
+     *     ADR-08a). The AI's hand-over, a hand-over rule's `{ topic }` target and
+     *     the pre-chat topic resolve the role, never the team's name, so renaming
+     *     a team does not move its topic. `group_id` is null — and so are the
+     *     team's fields — while no team holds the role.
+     */
+    RoutingQueue: {
+      topic_role: components['schemas']['QueueTopicRole'];
+      /** Format: int64 */
+      group_id: number | null;
+      group_name: string | null;
+      /** @description What the team's queue does when nobody is on shift; null with no team. */
+      after_hours_mode: components['schemas']['AfterHoursMode'] | null;
     };
     /**
      * @description An agent's declared weekly availability (PRD §5.3-Vardiya). One slot per
@@ -15967,8 +16035,10 @@ export interface components {
       | 'chat_inactive'
       | 'customer_banned'
       | 'greeting_not_found'
+      | 'group_expertise_missing'
       | 'group_not_found'
       | 'group_offline'
+      | 'group_protected'
       | 'group_topic_role_taken'
       | 'group_unavailable'
       | 'groups_offline'
@@ -20550,6 +20620,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -21018,6 +21089,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -21046,6 +21118,31 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listRoutingQueues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One entry per topic role */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['RoutingQueue'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -24300,6 +24397,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
     };
   };

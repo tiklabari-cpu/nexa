@@ -55,8 +55,21 @@ export const ERROR_TYPES = [
   // between a delete and silently unroutable chats. 409, like the other
   // "the state says no" codes, rather than a generic 400.
   'group_in_use',
+  // SiyahTuş addition — team queues (AU-01 · K14 · tm 305.3). A team that
+  // requires areas of expertise takes only members who hold every one of them
+  // (routing gives them nothing otherwise), and the Responsible Gambling team's
+  // members hold its training at all times. Raised by the membership write, and
+  // for that team by whatever would leave a member short of it — a requirement
+  // grown, the role given to a staffed team, an agent's area removed.
+  // `details` names the team and the areas or agents short of it.
+  'group_expertise_missing',
   'group_not_found',
   'group_offline',
+  // SiyahTuş addition — team queues (AU-01 · K14 · tm 305.3). The Responsible
+  // Gambling team (ADR-08a §2.6) cannot be deleted, cannot lose its topic role
+  // and cannot go without a training requirement: only its name changes.
+  // `details.reason` says which (`delete` · `topic_role` · `required_expertise`).
+  'group_protected',
   // SiyahTuş addition — team queues (AU-01 · K14 · tm 305.1). A topic role
   // (`QUEUE_TOPIC_ROLES`) names one team per workspace, because the AI's
   // hand-over and the pre-chat topic resolve the role to a team; giving it to a
@@ -146,8 +159,10 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   fallback_rule_exists: 409,
   greeting_not_found: 404,
   group_in_use: 409,
+  group_expertise_missing: 409,
   group_not_found: 404,
   group_offline: 409,
+  group_protected: 409,
   group_topic_role_taken: 409,
   group_unavailable: 409,
   groups_offline: 409,

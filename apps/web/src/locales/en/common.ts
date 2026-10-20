@@ -34,8 +34,12 @@ export const common: Messages = {
   'common.errors.greeting_not_found': 'We could not find that greeting.',
   'common.errors.group_in_use':
     'This team is still in use — a routing rule points at it, or conversations are open with it.',
+  'common.errors.group_expertise_missing':
+    'This team requires skills that are missing — add them to the agent first.',
   'common.errors.group_not_found': 'We could not find that team.',
   'common.errors.group_offline': 'That team is offline right now.',
+  'common.errors.group_protected':
+    'The responsible gambling team cannot be deleted, lose its topic or go without its training skill — rename it instead.',
   'common.errors.group_topic_role_taken':
     'Another team already handles this topic — clear it there first.',
   'common.errors.group_unavailable': 'That team cannot take this conversation right now.',

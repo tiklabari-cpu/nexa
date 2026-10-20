@@ -20,8 +20,12 @@ export const common: Messages = {
   'common.errors.greeting_not_found': 'Bu karşılamayı bulamadık.',
   'common.errors.group_in_use':
     'Bu ekip hâlâ kullanımda — bir yönlendirme kuralı onu hedefliyor ya da açık sohbetleri var.',
+  'common.errors.group_expertise_missing':
+    'Bu ekip temsilcide olmayan yetenekler istiyor — önce yetenekleri temsilciye ekleyin.',
   'common.errors.group_not_found': 'Bu ekibi bulamadık.',
   'common.errors.group_offline': 'Bu ekip şu anda çevrimdışı.',
+  'common.errors.group_protected':
+    'Sorumlu oyun ekibi silinemez, konusu kaldırılamaz ve eğitim yeteneği boş bırakılamaz — yalnızca adını değiştirebilirsiniz.',
   'common.errors.group_topic_role_taken':
     'Bu konuya zaten başka bir ekip bakıyor — önce oradan kaldırın.',
   'common.errors.group_unavailable': 'Bu ekip şu anda bu sohbeti alamıyor.',

@@ -401,6 +401,14 @@ export interface HandOverOptions {
    * front of its own team's queue (`RoutingService.raisePriority`).
    */
   priority?: ThreadPriority;
+  /**
+   * The team `handOverFromAi` routes a connection nobody has into, in place of
+   * the team the rules gave it on open (ADR-08a §2.4: the hand-over's target
+   * team is the pool). The AI's hand-over names it for the Responsible
+   * Gambling team it could not transfer to, so the conversation waits in that
+   * team's queue rather than reach another team (§2.6 · tm 305.3).
+   */
+  groupId?: bigint;
 }
 
 export class ChatService {
@@ -1667,6 +1675,9 @@ export class ChatService {
    * `line` is what a person asked for besides the change (tm 293.3): their note,
    * written into the line after its words, and properties the line carries.
    *
+   * `targetGroupId` is the team the hand-over routes into in place of the
+   * connection's own (`HandOverOptions.groupId`).
+   *
    * Returns the change, the line to announce after commit and the assignment
    * the hand-over made, or null when there was no change to make.
    */
@@ -1678,6 +1689,7 @@ export class ChatService {
     by: string,
     request: AiModeRequest,
     line: { note?: string | null; properties?: Record<string, unknown> } = {},
+    targetGroupId?: bigint,
   ): Promise<{
     change: AiModeChange;
     note: AiModeNote | null;
@@ -1689,7 +1701,9 @@ export class ChatService {
     if (change.from === null && change.to === 'human')
       return { change, note: null, assigned: null };
     const assigned =
-      change.to === 'human' ? await this.#routeHandover(tx, tenant, chat, threadId, change) : null;
+      change.to === 'human'
+        ? await this.#routeHandover(tx, tenant, chat, threadId, change, targetGroupId)
+        : null;
     const words = aiModeNoteText(change);
     const event = await this.#appendEvent(tx, {
       licenseId: tenant.licenseId,
@@ -1742,6 +1756,10 @@ export class ChatService {
    * §2.1). The team request carries no rule's expertise requirement; the
    * team's own (`group_expertise`) holds, as in the drain (`routing-service.ts`).
    *
+   * `targetGroupId` is the hand-over's own team when it names one the
+   * connection is not in (`HandOverOptions.groupId`): routing is asked for
+   * that team instead of the connection's.
+   *
    * Returns the assignment to announce after commit; null when nobody was
    * assigned (it waits in the queue, or the workspace has no team).
    */
@@ -1751,6 +1769,7 @@ export class ChatService {
     chat: ChatRow,
     threadId: string,
     change: AiModeChange,
+    targetGroupId?: bigint,
   ): Promise<DrainedAssignment | null> {
     // Read after the change's own writes, under the row lock `writeAiMode` took.
     const thread = await tx.thread.findUnique({
@@ -1759,8 +1778,8 @@ export class ChatService {
     });
     if (!thread || thread.assigneeId !== null || thread.queuePosition !== null) return null;
 
-    const inTeam: RoutingContext =
-      thread.groupId !== null ? { requestedGroupId: thread.groupId } : {};
+    const team = targetGroupId ?? thread.groupId;
+    const inTeam: RoutingContext = team !== null ? { requestedGroupId: team } : {};
     let route: ConnectionRoute;
     if (change.reason === 'agent_message') {
       route = { groupIds: [], assigneeId: change.by, queuePosition: null, groupId: thread.groupId };
@@ -3758,8 +3777,9 @@ export class ChatService {
    * teams), to no target, or to a team that cannot take it now. The connection
    * moves to `human` with `reason` — `ai_handoff`, or `ai_failure` when the
    * model could not answer — and is routed as the watchdog's is
-   * (`#routeHandover`: nobody named a team). Under the thread's row lock, so a
-   * person who took it meanwhile keeps it: false.
+   * (`#routeHandover`: nobody named a team), or into `options.groupId` when
+   * the hand-over names the team it must wait in. Under the thread's row
+   * lock, so a person who took it meanwhile keeps it: false.
    */
   async handOverFromAi(
     tenant: TenantContext,
@@ -3784,6 +3804,7 @@ export class ChatService {
         AI_MODE_SYSTEM_ACTOR,
         { to: 'human', reason },
         options.properties ? { properties: options.properties } : {},
+        options.groupId,
       );
       // After the routing above, as in `transfer`.
       if (options.priority) {

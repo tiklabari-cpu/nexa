@@ -1978,13 +1978,17 @@ expertiseItem:
     summary: Remove an expertise area
     description: |
       Admin or owner only. Deleting an area also removes it from every agent it
-      was assigned to (the assignment rows cascade), so routing stops drawing on
-      it immediately.
+      was assigned to and from every team that required it (the rows cascade),
+      so routing stops drawing on it immediately. The one area the
+      `responsible_gambling` team still requires — its training — is refused
+      (409 `group_protected`, `details.reason: required_expertise`): that team
+      never goes without one (K14).
     responses:
       "204": { description: Deleted }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 tags:

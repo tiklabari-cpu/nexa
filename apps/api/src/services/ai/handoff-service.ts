@@ -10,15 +10,19 @@
  *      hand-over — `ai_handoffs`, the connection's summary and the
  *      agents-only line; announced once the hand-over committed;
  *   2. **the connection to `human`** (AI-11): the AI stays silent from here on;
- *   3. **the target** (AI-12): the team a single-message skill names (by id
- *      since tm 307.1, by name for a step saved before ids), the team
- *      a procedure names by id, the team holding the queue role a `{ topic }`
- *      target names (AU-01 · `resolveQueue`, by role, so a renamed team still
- *      receives it), or — another topic (#307 maps those), no target, a team
- *      that cannot take it now — whoever routing gives it; except that a
- *      hand-over named for the Responsible Gambling team waits in that team's
- *      queue rather than reach another (ADR-08a §2.6);
- *   4. **the pushes**: the transfer and the AI mode, to the teams that watch.
+ *   3. **the target** (AI-12, tm 307.2): the team `resolveHandoffTarget`
+ *      settles on (`conversation/handoff/target-resolver.ts` — the step's,
+ *      the rule's, a reason or topic route, the topic's team, the same-day
+ *      return, the fallback team for one that is gone), by id, so a renamed
+ *      team still receives it. Someone there takes it — trained, when its
+ *      route requires an expertise — or it waits in that team's queue: never
+ *      refused for an empty desk, and urgent when only the trained may take
+ *      it (AI-12-S3). No team: whoever routing gives it; a team that cannot
+ *      take it at all (nobody belongs to it): routing too, except that the
+ *      Responsible Gambling team's waits in its own queue (ADR-08a §2.6);
+ *   4. **after hours** (AI-12 §4): nobody there accepting chats, and the
+ *      player left an e-mail — a ticket from the conversation, once;
+ *   5. **the pushes**: the transfer and the AI mode, to the teams that watch.
  *
  * Every system event the hand-over writes — the transfer line, the AI-mode
  * line — carries `handoff_id`, `reason_codes` (catalogue codes, most severe
@@ -35,7 +39,6 @@ import { randomUUID } from 'node:crypto';
 import {
   AI_BOT_ID,
   RESPONSIBLE_GAMBLING_ROLE,
-  isQueueTopicRole,
   primaryHandoffReason,
   type GuardrailPriority,
   type HandoffReason,
@@ -47,8 +50,17 @@ import type { BotPrincipal } from '../auth/principal.js';
 import { aiMayAnswer, readAiMode } from '../chat/ai-mode.js';
 import type { ChatService, SerialisedEvent } from '../chat/chat-service.js';
 import type { VisitorTurn } from '../chat/visitor-turn.js';
-import type { RealtimePublisher } from '../realtime/publisher.js';
 import { resolveQueue } from '../routing/queues.js';
+import { TicketService } from '../tickets/ticket-service.js';
+import {
+  HANDOFF_ROUTE_SELECT,
+  readHandoffRoute,
+  resolveHandoffTarget,
+  type HandoffRouteConfig,
+  type HandoffTarget,
+  type HandoffTargetLookup,
+} from './conversation/handoff/target-resolver.js';
+import { morePressing } from './conversation/handoff/rules.js';
 import { catalogueReason, orderHandoffReasons } from './conversation/handoff/triggers.js';
 import type { ConnectionRef } from './conversation/state-store.js';
 import type { handoffOf, TurnResult } from './conversation/turn.js';
@@ -125,15 +137,154 @@ export function planHandoff(effect: TurnHandoff, failed: boolean): PlannedHandof
 }
 
 /**
- * Whether anyone in the workspace is accepting chats now — what decides the
- * after-hours text (AI-12 §4). The workspace, not the target team: the team is
- * routing's to find until #307 resolves it.
+ * Whether anyone in the workspace is accepting chats now — the after-hours
+ * text's question (AI-12 §4) before the target is known, and for a hand-over
+ * routing places.
  */
 export async function anyoneAccepting(tx: TenantClient, licenseId: bigint): Promise<boolean> {
   const accepting = await tx.agentMembership.count({
     where: { licenseId, routingStatus: 'accepting_chats', suspended: false },
   });
   return accepting > 0;
+}
+
+/**
+ * Whether anyone could take the hand-over at its target now (AI-12 §4): a
+ * member of the team accepting chats who holds what the team and the route
+ * require — or, with no team, anyone in the workspace. Load is not asked: a
+ * full desk answers soon, an empty one after hours.
+ */
+export async function targetAccepting(
+  tx: TenantClient,
+  licenseId: bigint,
+  target: HandoffTarget,
+): Promise<boolean> {
+  if (target.groupId === null) return anyoneAccepting(tx, licenseId);
+  // A team nobody belongs to cannot take it (IN-04): routing places it, as
+  // with no team — save the Responsible Gambling team's, which waits in its queue.
+  const team = await tx.group.findUnique({
+    where: { licenseId_id: { licenseId, id: target.groupId } },
+    select: { topicRole: true, _count: { select: { agents: true } } },
+  });
+  if (!team || (team._count.agents === 0 && team.topicRole !== RESPONSIBLE_GAMBLING_ROLE)) {
+    return anyoneAccepting(tx, licenseId);
+  }
+  const route = target.requiredExpertiseId === null ? [] : [String(target.requiredExpertiseId)];
+  const [row] = await tx.$queryRaw<Array<{ accepting: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM group_agents ga
+      JOIN agent_memberships m ON m.license_id = ga.license_id AND m.agent_id = ga.agent_id
+      WHERE ga.license_id = ${licenseId}
+        AND ga.group_id = ${target.groupId}
+        AND m.routing_status = 'accepting_chats'
+        AND NOT m.suspended
+        AND NOT m.awaiting_approval
+        AND NOT EXISTS (
+          SELECT 1
+          FROM (
+            SELECT ge.expertise_id AS id
+            FROM group_expertise ge
+            WHERE ge.license_id = ga.license_id AND ge.group_id = ga.group_id
+            UNION
+            SELECT unnest(${route}::text[])::bigint
+          ) need
+          WHERE NOT EXISTS (
+            SELECT 1 FROM agent_expertise ae
+            WHERE ae.license_id = ga.license_id
+              AND ae.agent_id = ga.agent_id
+              AND ae.expertise_id = need.id
+          )
+        )
+    ) AS accepting
+  `;
+  return row?.accepting === true;
+}
+
+/**
+ * The live reads the target order makes (`target-resolver.ts`), in the
+ * caller's transaction — row level security keeps them to the workspace.
+ */
+export function handoffTargetLookup(
+  tx: TenantClient,
+  at: { licenseId: bigint; chatId: string; threadId: string },
+): HandoffTargetLookup {
+  const { licenseId, chatId, threadId } = at;
+  return {
+    async groupExists(groupId) {
+      const team = await tx.group.findUnique({
+        where: { licenseId_id: { licenseId, id: groupId } },
+        select: { id: true },
+      });
+      return team !== null;
+    },
+    async teamNamed(name) {
+      const team = await tx.group.findFirst({
+        where: { name },
+        orderBy: { id: 'asc' },
+        select: { id: true },
+      });
+      return team?.id ?? null;
+    },
+    async liveRoute(matchType, matchKey, brandId) {
+      const row = await tx.handoffRoute.findFirst({
+        where: { matchType, matchKey, brandId, active: true },
+        select: HANDOFF_ROUTE_SELECT,
+      });
+      return row ? readHandoffRoute(row) : null;
+    },
+    async roleTeam(role) {
+      return (await resolveQueue(tx, licenseId, role))?.groupId ?? null;
+    },
+    async sameDay() {
+      // The day's previous hand-over (the chat is the day, ID-02): the team
+      // its connection ended up with, and the agent who had it.
+      const earlier = await tx.aiHandoff.findFirst({
+        where: { chatId, threadId: { not: threadId } },
+        orderBy: { createdAt: 'desc' },
+        select: { targetGroupId: true, thread: { select: { groupId: true, assigneeId: true } } },
+      });
+      const groupId = earlier?.thread.groupId ?? earlier?.targetGroupId ?? null;
+      return groupId !== null ? { groupId, agentId: earlier?.thread.assigneeId ?? null } : null;
+    },
+    async fallbackGroup() {
+      const rule = await tx.routingRule.findFirst({
+        where: { kind: 'chat', isFallback: true, enabled: true },
+        select: { targetGroupId: true },
+      });
+      return rule?.targetGroupId ?? null;
+    },
+  };
+}
+
+/**
+ * The hand-over with its target's route priority as a floor (AI-12 §3): what
+ * its plan, its events and its card say, and what the connection waits with.
+ */
+export function aimedHandoff(effect: TurnHandoff, target: HandoffTarget): TurnHandoff {
+  if (!target.priority) return effect;
+  return { ...effect, priority: morePressing(effect.priority ?? 'normal', target.priority) };
+}
+
+/** The target of a turn's hand-over, by the order in `target-resolver.ts`. */
+export function resolveTurnTarget(
+  tx: TenantClient,
+  at: { licenseId: bigint; chatId: string; threadId: string; brandId: string | null },
+  effect: TurnHandoff,
+  routes: readonly HandoffRouteConfig[],
+): Promise<HandoffTarget> {
+  return resolveHandoffTarget(
+    {
+      ...(effect.groupId !== undefined ? { groupId: effect.groupId } : {}),
+      team: effect.team,
+      ...(effect.topic !== undefined ? { topic: effect.topic } : {}),
+      ...(effect.ruleId !== undefined ? { ruleId: effect.ruleId } : {}),
+      reasons: orderHandoffReasons(effect.reasons ?? [catalogueReason(effect.reason)]),
+      routes,
+      brandId: at.brandId,
+    },
+    handoffTargetLookup(tx, at),
+  );
 }
 
 /** The system events' share of the hand-over (AI-09 §6). */
@@ -154,10 +305,10 @@ export interface HandoffServiceOptions {
 
 export class HandoffService {
   readonly #card: HandoffCardWriter | null;
+  readonly #tickets = new TicketService();
 
   constructor(
     private readonly chats: ChatService,
-    private readonly publisher: RealtimePublisher,
     options: HandoffServiceOptions = {},
   ) {
     this.#card = options.card ?? null;
@@ -179,22 +330,47 @@ export class HandoffService {
       alongside?: (tx: TenantClient) => Promise<void>;
       /** What the card is built from (AI-10); absent: the hand-over alone. */
       card?: HandoffCardContext;
+      /**
+       * Where it goes (tm 307.2), resolved by the caller with the routes the
+       * turn ran on; absent: resolved here, with none.
+       */
+      target?: HandoffTarget;
+      /** Nobody at the target accepting chats (AI-12 §4): a ticket when the player left an e-mail. */
+      afterHours?: boolean;
     },
   ): Promise<boolean> {
     const { plan } = input;
+    const target =
+      input.target ??
+      (await turn.withTenant((tx) =>
+        resolveTurnTarget(
+          tx,
+          { ...ref, licenseId: turn.tenant.licenseId, brandId: turn.tenant.brandId ?? null },
+          effect,
+          [],
+        ),
+      ));
     const card = this.#card;
     let written: WrittenHandoffCard | null = null;
+    // The card names the team the hand-over goes to, whichever step named it.
+    const carded: TurnHandoff =
+      target.groupId !== null ? { ...effect, groupId: Number(target.groupId) } : effect;
     const alongside = async (tx: TenantClient): Promise<void> => {
       await input.alongside?.(tx);
-      if (!card) return;
-      written = await card.write(tx, {
-        tenant: turn.tenant,
-        chatId: ref.chatId,
-        threadId: ref.threadId,
-        handoff: plan,
-        effect,
-        context: input.card ?? { result: null, trust: null, turnText: null },
-      });
+      if (card) {
+        written = await card.write(tx, {
+          tenant: turn.tenant,
+          chatId: ref.chatId,
+          threadId: ref.threadId,
+          handoff: plan,
+          effect: carded,
+          context: input.card ?? { result: null, trust: null, turnText: null },
+        });
+      }
+      if (input.afterHours) {
+        const summary = (written as WrittenHandoffCard | null)?.summary ?? null;
+        await this.#afterHoursTicket(tx, turn.tenant, ref.chatId, summary ?? plan.primaryReason);
+      }
     };
     // The hand-over's priority is the connection's from here on (ADR-08a
     // §2.3): urgent waits at the front of its team's queue.
@@ -204,7 +380,7 @@ export class HandoffService {
       priority: plan.priority,
       priorityReason: plan.primaryReason,
     };
-    const handedOver = await this.#execute(turn, ref, effect, input, options);
+    const handedOver = await this.#execute(turn, ref, target, input, options);
     // Once committed: the card reaches the agents who see the conversation.
     const done = written as WrittenHandoffCard | null;
     if (card && done) await card.announce(turn.tenant, done);
@@ -214,7 +390,7 @@ export class HandoffService {
   async #execute(
     turn: VisitorTurn,
     ref: ConnectionRef,
-    effect: TurnHandoff,
+    target: HandoffTarget,
     input: {
       plan: PlannedHandoff;
       failed: boolean;
@@ -224,6 +400,7 @@ export class HandoffService {
       alongside: (tx: TenantClient) => Promise<void>;
       properties: Record<string, unknown>;
       priority: GuardrailPriority;
+      priorityReason: string;
     },
   ): Promise<boolean> {
     const { plan } = input;
@@ -239,52 +416,51 @@ export class HandoffService {
       return false;
     }
 
-    if (effect.team) return this.#toSkillTeam(turn, effect.groupId, effect.team, options);
     const { tenant, chatId } = turn;
-    const groupId =
-      effect.groupId !== undefined
-        ? BigInt(effect.groupId)
-        : await this.#topicTeam(turn, effect.topic);
+    const { groupId } = target;
+    // The route's priority is a floor beside the hand-over's own (AI-12 §3).
+    const pressed = {
+      ...options,
+      priority: target.priority
+        ? morePressing(options.priority, target.priority)
+        : options.priority,
+    };
     if (groupId !== null && !input.failed) {
       try {
         await this.chats.transfer(
           tenant,
           botPrincipal(tenant),
           chatId,
-          { groupId, reason: 'ai_handoff' },
-          options,
+          {
+            groupId,
+            reason: 'ai_handoff',
+            requiredExpertiseId: target.requiredExpertiseId,
+            preferAgentId: target.preferAgentId,
+          },
+          // Only the trained may take it: it waits at the front (AI-12-S3).
+          target.requiredExpertiseId !== null ? { ...pressed, queuedPriority: 'urgent' } : pressed,
         );
         return true;
       } catch (error) {
         if (!(error instanceof ApiError)) throw error;
         turn.log.warn(
           { group_id: Number(groupId), err_type: error.type },
-          'procedure hand-over team cannot take the conversation; routing it instead',
+          'hand-over team cannot take the conversation; routing it instead',
         );
       }
     }
-    // The Responsible Gambling team has no other team to give its
-    // conversations to (ADR-08a §2.6): one it cannot take now waits in its
-    // queue — not in the team the rules opened it in.
-    const waitIn =
-      groupId !== null && (await this.#isResponsibleGambling(turn, groupId)) ? groupId : null;
+    // Routing places it: in the target team's pool when there is one (ADR-08a
+    // §2.4) — a failed turn's, or one whose team nobody belongs to. The
+    // Responsible Gambling team has no other team to give its conversations
+    // to (§2.6): one it cannot take waits in its queue.
     return this.chats.handOverFromAi(
       tenant,
       ref,
       input.failed ? 'ai_failure' : 'ai_handoff',
-      waitIn !== null ? { ...options, groupId: waitIn } : options,
+      groupId !== null && (input.failed || (await this.#isResponsibleGambling(turn, groupId)))
+        ? { ...pressed, groupId }
+        : pressed,
     );
-  }
-
-  /**
-   * The team holding the queue role a `{ topic }` target names (AU-01 ·
-   * `resolveQueue`), or null — no topic, a topic that is no queue role (#307
-   * maps the guardrails' spellings), or no team holding it.
-   */
-  async #topicTeam(turn: VisitorTurn, topic: string | undefined): Promise<bigint | null> {
-    if (!isQueueTopicRole(topic)) return null;
-    const queue = await turn.withTenant((tx) => resolveQueue(tx, turn.tenant.licenseId, topic));
-    return queue?.groupId ?? null;
   }
 
   async #isResponsibleGambling(turn: VisitorTurn, groupId: bigint): Promise<boolean> {
@@ -295,61 +471,36 @@ export class HandoffService {
   }
 
   /**
-   * A single-message skill's `transfer_to_team`: the team by its id (AI-12 ·
-   * tm 307.1), so a renamed team still receives it; by its name only for a
-   * step saved before ids, or one whose id names a team that is gone — the
-   * lowest id of that name, the team the step backfill
-   * (20261020180100_skill_steps_group_id_backfill) settles on.
+   * After hours (AI-12 §4 · HD-01): the player who left an e-mail is answered
+   * by ticket — one from the conversation, unless one is open for it already.
+   * In the hand-over's transaction, so a refused attempt leaves none behind.
    */
-  async #toSkillTeam(
-    turn: VisitorTurn,
-    groupId: number | undefined,
-    groupName: string,
-    options: {
-      alongside: (tx: TenantClient) => Promise<void>;
-      properties: Record<string, unknown>;
-      priority: GuardrailPriority;
-    },
-  ): Promise<boolean> {
-    const { tenant, chatId } = turn;
-    const group = await turn.withTenant(
-      async (tx) =>
-        (groupId !== undefined
-          ? await tx.group.findFirst({ where: { id: BigInt(groupId) }, select: { id: true } })
-          : null) ??
-        (await tx.group.findFirst({
-          where: { name: groupName },
-          orderBy: { id: 'asc' },
-          select: { id: true },
-        })),
-    );
-    if (!group) {
-      // The skill names a team that no longer exists. Leaving the conversation
-      // where it is means a human still sees it; silently dropping it would not.
-      turn.log.warn(
-        { group: groupName, group_id: groupId ?? null },
-        'skill targets an unknown team',
-      );
-      await turn.withTenant(options.alongside);
-      return false;
-    }
-
-    await this.chats.transfer(
-      tenant,
-      botPrincipal(tenant),
-      chatId,
-      { groupId: group.id, reason: 'ai_handoff' },
-      options,
-    );
-    await this.publisher.publish(
-      tenant,
-      'chat_transferred',
-      { allAgents: true },
-      { chat_id: chatId, reason: 'ai_handoff', transferred_to: { group_ids: [Number(group.id)] } },
-    );
-    return true;
+  async #afterHoursTicket(
+    tx: TenantClient,
+    tenant: TenantContext,
+    chatId: string,
+    subject: string,
+  ): Promise<void> {
+    const chat = await tx.chat.findUnique({
+      where: { id: chatId },
+      select: { customerId: true, customer: { select: { email: true } } },
+    });
+    if (!chat?.customer.email) return;
+    const open = await tx.ticket.findFirst({
+      where: { sourceChatId: chatId, status: { in: ['open', 'pending'] } },
+      select: { id: true },
+    });
+    if (open) return;
+    await this.#tickets.createFromWidget(tx, tenant, {
+      subject: subject.slice(0, AFTER_HOURS_TICKET_SUBJECT_MAX),
+      customerId: chat.customerId,
+      sourceChatId: chatId,
+    });
   }
 }
+
+/** How much of the card's summary an after-hours ticket's subject keeps. */
+const AFTER_HOURS_TICKET_SUBJECT_MAX = 140;
 
 /**
  * The AI acts as a bot principal, not as an agent.

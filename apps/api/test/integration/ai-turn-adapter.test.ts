@@ -199,8 +199,10 @@ describe('the live turn adapter (AI-01 · AI-19)', () => {
     expect((await botEvents(sent.chat_id)).map((event) => event.text)).toEqual([
       DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr,
     ]);
+    // The turn's save, then the hand-over's: Logistics has nobody in it, so
+    // routing places the connection and the AI stops (tm 307.2).
     expect(await conversations()).toEqual([
-      expect.objectContaining({ counters: { turns: 1 }, version: 1 }),
+      expect.objectContaining({ counters: { turns: 1 }, version: 2, mode: 'human' }),
     ]);
     expect(await owner.skillRun.count({ where: { skillId } })).toBe(1);
     const logistics = await owner.group.findFirst({

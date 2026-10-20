@@ -20,6 +20,7 @@ import {
   GUARDRAIL_CATEGORIES,
   GUARDRAIL_PRIORITIES,
   GUARDRAIL_RULE_ACTIONS,
+  HANDOFF_ROUTES_MAX,
   PLATFORM_GUARDRAILS_VERSION,
   readBatchWindowSeconds,
   readClarifyThresholds,
@@ -41,6 +42,11 @@ import type {
 } from './guardrails/config.js';
 import { orderGuidance, type GuidanceRuleConfig } from './guidance.js';
 import type { HandoffRuleConfig } from './handoff/rules.js';
+import {
+  HANDOFF_ROUTE_SELECT,
+  readHandoffRoute,
+  type HandoffRouteConfig,
+} from './handoff/target-resolver.js';
 import { readHandoffConfig, type HandoffConfig } from './handoff/triggers.js';
 import { turnThresholds } from './policy.js';
 import type { TurnConfig } from './turn.js';
@@ -197,8 +203,28 @@ async function handoffSettings(
     select: { triggers: true, messages: true, afterHours: true, resolutionCriteria: true },
   });
   const rules = await activeHandoffRules(tx, aiAgentId);
-  if (!row && rules.length === 0) return null;
-  return { ...readHandoffConfig(row), ...(rules.length > 0 ? { rules } : {}) };
+  const routes = await activeHandoffRoutes(tx);
+  if (!row && rules.length === 0 && routes.length === 0) return null;
+  return {
+    ...readHandoffConfig(row),
+    ...(rules.length > 0 ? { rules } : {}),
+    ...(routes.length > 0 ? { routes } : {}),
+  };
+}
+
+/**
+ * The workspace's active hand-over routes (tm 307.2 · ADR-14b §2.12), shared
+ * with human routing (AU-01) — every brand's the transaction sees. A row whose
+ * type or priority reads as nothing the API writes is not carried.
+ */
+async function activeHandoffRoutes(tx: TenantClient): Promise<HandoffRouteConfig[]> {
+  const rows = await tx.handoffRoute.findMany({
+    where: { active: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: HANDOFF_ROUTES_MAX,
+    select: HANDOFF_ROUTE_SELECT,
+  });
+  return rows.flatMap((row) => readHandoffRoute(row) ?? []);
 }
 
 /**

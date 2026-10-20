@@ -1070,6 +1070,12 @@ model Thread {
   /// of the hand-over that raised it, written with it; null while nothing
   /// has. Shape by the CHECK `threads_priority_reason_check`.
   priorityReason   String?   @map("priority_reason")
+  /// The expertise whoever takes the connection must hold (AI-12 · tm 307.2):
+  /// the AI's hand-over route's, read by the queue drain while it waits. A soft
+  /// reference to `expertise.id` — one deleted later is held by nobody, so the
+  /// connection waits rather than reach an untrained agent. Null: the team's
+  /// own requirement alone (`group_expertise`).
+  requiredExpertiseId BigInt? @map("required_expertise_id")
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]

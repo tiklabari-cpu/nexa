@@ -63,11 +63,23 @@ function isBlank(value: string | undefined): boolean {
   return !value || value.trim().length === 0;
 }
 
+/**
+ * Whether a hand-over names a team — by id (AI-12), or by name as steps did
+ * before ids. A `group_id` that is not a team id fails whatever the name says,
+ * as the server's `validateStep` has it.
+ */
+export function namesTeam(step: SkillStep): boolean {
+  if (step.group_id !== undefined) {
+    return Number.isSafeInteger(step.group_id) && step.group_id > 0;
+  }
+  return !isBlank(step.group);
+}
+
 /** The one missing required parameter for a step, or null when it is runnable. */
 function issueFor(step: SkillStep): string | null {
   switch (step.type) {
     case 'transfer_to_team':
-      return isBlank(step.group) ? 'Choose a team to hand the conversation over to.' : null;
+      return namesTeam(step) ? null : 'Choose a team to hand the conversation over to.';
     case 'detect_intent':
       return isBlank(step.intent) ? 'Name the intent this step should match.' : null;
     case 'request_info':

@@ -75,13 +75,21 @@ function renderEditor(
   );
 }
 
+// The workspace's teams — what a hand-over step's picker lists (AI-12 · tm 307.3).
+const TEAMS = [
+  { id: 7, name: 'Support' },
+  { id: 8, name: 'Billing' },
+];
+
 beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
   api.delete.mockReset();
   api.patch.mockResolvedValue(makeSkill([]));
-  api.get.mockResolvedValue({ items: [] });
+  api.get.mockImplementation((path: string) =>
+    Promise.resolve({ items: path === '/groups' ? TEAMS : [] }),
+  );
 });
 
 /**
@@ -99,11 +107,12 @@ async function openStep(
 describe('SkillEditor — required transfer target', () => {
   it('blocks the save and shows an error when the hand-over team is cleared', async () => {
     const user = userEvent.setup();
-    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Support' }]));
+    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Support', group_id: 7 }]));
 
     await openStep(user, /Hand over to Support/);
     const team = screen.getByLabelText('Team');
-    await user.clear(team);
+    await waitFor(() => expect(team).toHaveValue('7'));
+    await user.selectOptions(team, 'Choose a team');
 
     // Empty required parameter → named error + a save that refuses.
     expect(screen.getByText(/Choose a team to hand the conversation over to/)).toBeInTheDocument();
@@ -111,14 +120,15 @@ describe('SkillEditor — required transfer target', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
 
-  it('re-enables the save once a team is named again', async () => {
+  it('re-enables the save once a team is chosen, and saves it by id with its name beside', async () => {
     const user = userEvent.setup();
-    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Support' }]));
+    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Support', group_id: 7 }]));
 
     await openStep(user, /Hand over to Support/);
     const team = screen.getByLabelText('Team');
-    await user.clear(team);
-    await user.type(team, 'Billing');
+    await waitFor(() => expect(team).toHaveValue('7'));
+    await user.selectOptions(team, 'Choose a team');
+    await user.selectOptions(team, 'Billing');
 
     expect(screen.queryByText(/Fix 1 step before saving/)).not.toBeInTheDocument();
     const save = screen.getByRole('button', { name: 'Save changes' });
@@ -128,9 +138,54 @@ describe('SkillEditor — required transfer target', () => {
     expect(api.patch).toHaveBeenCalledWith(
       '/skills/skill-1',
       expect.objectContaining({
-        steps: [{ type: 'transfer_to_team', group: 'Billing' }],
+        steps: [{ type: 'transfer_to_team', group: 'Billing', group_id: 8 }],
       }),
     );
+  });
+
+  // AI-12 KK: "Ekip yeniden adlandırılınca devir çalışır (id)". The step keeps
+  // the id; the picker shows the team's name now, not the one it was saved with.
+  it('shows a renamed team by its current name, the id being what the step holds', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Old name', group_id: 8 }]));
+
+    await openStep(user, /Hand over to Old name/);
+    const team = screen.getByLabelText('Team');
+    await waitFor(() => expect(team).toHaveValue('8'));
+    expect(screen.getByRole('option', { name: 'Billing' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Old name/ })).toBeNull();
+  });
+
+  it('reads a step that only has a name as the team of that name, without rewriting it', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'support' }]));
+
+    await openStep(user, /Hand over to/);
+    await waitFor(() => expect(screen.getByLabelText('Team')).toHaveValue('7'));
+    // Nothing edited, nothing to save.
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('keeps a team the workspace no longer has visible and marked, not swapped for another', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Gone', group_id: 99 }]));
+
+    await openStep(user, /Hand over to Gone/);
+    const team = screen.getByLabelText('Team');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Gone (no longer a team)' })).toBeInTheDocument(),
+    );
+    expect(team).toHaveValue('saved');
+    // The step is still a named hand-over; the server answers for the id.
+    expect(screen.queryByText(/Fix 1 step before saving/)).not.toBeInTheDocument();
+  });
+
+  it('is read-only for a viewer', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Support', group_id: 7 }]), false);
+
+    await openStep(user, /Hand over to Support/);
+    expect(screen.getByLabelText('Team')).toBeDisabled();
   });
 });
 
@@ -352,7 +407,7 @@ describe('SkillEditor — step authoring (FR-MOD-06.2.4)', () => {
     await user.type(screen.getByLabelText('Reply text'), 'On it.');
 
     await addStepOfType(user, 'transfer_to_team');
-    await user.type(screen.getByLabelText('Team'), 'Support');
+    await user.selectOptions(await screen.findByLabelText('Team'), 'Support');
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
@@ -363,7 +418,7 @@ describe('SkillEditor — step authoring (FR-MOD-06.2.4)', () => {
           { type: 'tag', tag: 'ship' },
           { type: 'summarize' },
           { type: 'send_message', source: 'text', text: 'On it.' },
-          { type: 'transfer_to_team', group: 'Support' },
+          { type: 'transfer_to_team', group: 'Support', group_id: 7 },
         ],
       }),
     );
@@ -427,7 +482,7 @@ describe('SkillEditor — step authoring (FR-MOD-06.2.4)', () => {
     renderEditor(
       makeSkill([
         { type: 'tag', tag: 'shipping' },
-        { type: 'transfer_to_team', group: 'Support' },
+        { type: 'transfer_to_team', group: 'Support', group_id: 7 },
       ]),
     );
 
@@ -437,7 +492,7 @@ describe('SkillEditor — step authoring (FR-MOD-06.2.4)', () => {
     // Rows key by identity rather than position, so the open step travels with
     // its form — the whole reason a step carries a client id.
     const rows = screen.getAllByRole('listitem');
-    expect(within(rows[0]!).getByLabelText('Team')).toHaveValue('Support');
+    await waitFor(() => expect(within(rows[0]!).getByLabelText('Team')).toHaveValue('7'));
   });
 
   /**

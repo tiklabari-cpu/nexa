@@ -30,7 +30,10 @@ export interface SkillStep {
   tag?: string;
   source?: 'text' | 'knowledge';
   text?: string;
+  /** The team's name, kept beside its id (AI-12 · tm 307.1); read by a release that predates ids. */
   group?: string;
+  /** The team, by id — renaming it keeps the step working. */
+  group_id?: number;
 }
 
 export interface Skill {

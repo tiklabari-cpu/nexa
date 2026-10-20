@@ -1,13 +1,14 @@
 /**
  * The AI agent's hand-over settings (tm 303.5 · AI-09, owner decision K9):
- * Playbook › AI Agent › Behaviour › Hand-over. Four cards, one per thing an
+ * Playbook › AI Agent › Behaviour › Hand-over. Five cards, one per thing an
  * admin decides:
  *
  *   - **when** the agent hands over on its own — the compliance triggers
  *     greyed out and locked, the others with their thresholds — and whether a
  *     conversation opens with the agent or with a person;
  *   - **what the player is told**, by reason, in the workspace's own words;
- *   - **where it goes** — the ordered rule list (`HandoffRules.tsx`);
+ *   - **where it goes** — the ordered rule list (`HandoffRules.tsx`) and the
+ *     topic and reason routes (`HandoffRoutes.tsx`);
  *   - **when it counts as solved** — the default "resolved" criteria (a
  *     procedure may carry its own, in the procedure editor).
  *
@@ -34,6 +35,7 @@ import { LoadError } from '../../components/LoadError.js';
 import { Card, CardSkeleton } from '../../components/Page.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useLocale, useTranslate } from '../../lib/i18n.js';
+import { HandoffRoutes } from './HandoffRoutes.js';
 import { HandoffRules, type HandoffSkillOption } from './HandoffRules.js';
 import {
   afterHoursChanged,
@@ -80,6 +82,7 @@ export function HandoffSettings({
       <TriggersCard agent={agent} canEdit={canEdit} />
       <MessagesCard agent={agent} canEdit={canEdit} />
       <HandoffRules agent={agent} skills={skills} canEdit={canEdit} />
+      <HandoffRoutes canEdit={canEdit} />
       <ResolutionCard agent={agent} canEdit={canEdit} />
     </section>
   );

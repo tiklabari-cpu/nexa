@@ -88,6 +88,8 @@ export const inbox: Messages = {
   'inbox.list.sort.ariaLabel': 'Sohbetleri sırala',
   'inbox.list.sort.newest': 'En yeni',
   'inbox.list.sort.oldest': 'En eski',
+  'inbox.list.priorityFilter.ariaLabel': 'Önceliğe göre süz',
+  'inbox.list.priorityFilter.all': 'Tüm öncelikler',
 
   // Transcript header + empty state
   'inbox.thread.visitorFallback': 'Ziyaretçi',

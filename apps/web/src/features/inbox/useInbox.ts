@@ -16,7 +16,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { ROUTING_STATUSES, type AdapterChannelType } from '@siyahtus/types';
+import { ROUTING_STATUSES, type AdapterChannelType, type ThreadPriority } from '@siyahtus/types';
 import { RtmClient, type PushHandler } from '../../lib/realtime.js';
 import { noteTrafficVisitorUpdated } from '../../lib/traffic-live.js';
 import { setRealtimeStatus } from '../../lib/realtime-status.js';
@@ -85,7 +85,9 @@ export function chatsKey(
   sort: ChatSort = DEFAULT_CHAT_SORT,
   channel: AdapterChannelType | null = null,
   queueGroupId: number | null = null,
+  priority: ThreadPriority | null = null,
 ): unknown[] {
+  if (priority !== null) return ['chats', view, sort, channel, queueGroupId, priority];
   return queueGroupId === null
     ? ['chats', view, sort, channel]
     : ['chats', view, sort, channel, queueGroupId];
@@ -99,6 +101,7 @@ function chatListUrl(
   sort: ChatSort,
   channel: AdapterChannelType | null,
   queueGroupId: number | null,
+  priority: ThreadPriority | null,
   pageId: string | undefined,
 ): string {
   const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
@@ -109,7 +112,9 @@ function chatListUrl(
   const onChannel = channel ? `&channel=${channel}` : '';
   // A team's queue tab (AU-01), filtered by the server for the same reason.
   const onQueue = queueGroupId !== null ? `&queue_group_id=${queueGroupId}` : '';
-  return `/chats?view=${view}&sort=${sort}${onChannel}${onQueue}&limit=${CHAT_PAGE_SIZE}${cursor}`;
+  // How pressing (AI-12), the same: the server narrows and `total` agrees.
+  const onPriority = priority !== null ? `&priority=${priority}` : '';
+  return `/chats?view=${view}&sort=${sort}${onChannel}${onQueue}${onPriority}&limit=${CHAT_PAGE_SIZE}${cursor}`;
 }
 
 /**
@@ -276,6 +281,7 @@ const headRefreshers = new Map<
     sort: ChatSort;
     channel: AdapterChannelType | null;
     queueGroupId: number | null;
+    priority: ThreadPriority | null;
     run: () => Promise<void>;
   }
 >();
@@ -294,8 +300,9 @@ function headKey(
   sort: ChatSort,
   channel: AdapterChannelType | null,
   queueGroupId: number | null = null,
+  priority: ThreadPriority | null = null,
 ): string {
-  return `${view}:${sort}:${channel ?? ''}:${queueGroupId ?? ''}`;
+  return `${view}:${sort}:${channel ?? ''}:${queueGroupId ?? ''}:${priority ?? ''}`;
 }
 
 /**
@@ -307,7 +314,7 @@ function headKey(
 export function refreshChatHeads(): void {
   const done = new Set<string>();
   for (const entry of headRefreshers.values()) {
-    const key = headKey(entry.view, entry.sort, entry.channel, entry.queueGroupId);
+    const key = headKey(entry.view, entry.sort, entry.channel, entry.queueGroupId, entry.priority);
     if (done.has(key)) continue;
     done.add(key);
     void entry.run();
@@ -329,23 +336,25 @@ export function refreshChatHeads(): void {
  * stay cached under their own key, not spliced into the oldest-sorted list.
  *
  * `queueGroupId` narrows to one team's queue — the Queued view's team tabs
- * (AU-01) — server-side, like `channel`.
+ * (AU-01) — server-side, like `channel`; so does `priority` (AI-12, `chat-priority.ts`).
  */
 export function useChatList(
   view: InboxView,
   sort: ChatSort = DEFAULT_CHAT_SORT,
   channel: AdapterChannelType | null = null,
   queueGroupId: number | null = null,
+  priority: ThreadPriority | null = null,
 ): PagedQueryResult<ChatSummary> {
   const api = useApiClient();
   const queryClient = useQueryClient();
 
   const buildUrl = useCallback(
-    (pageId: string | undefined) => chatListUrl(view, sort, channel, queueGroupId, pageId),
-    [view, sort, channel, queueGroupId],
+    (pageId: string | undefined) =>
+      chatListUrl(view, sort, channel, queueGroupId, priority, pageId),
+    [view, sort, channel, queueGroupId, priority],
   );
   const query = usePagedQuery<ChatSummary>({
-    queryKey: chatsKey(view, sort, channel, queueGroupId),
+    queryKey: chatsKey(view, sort, channel, queueGroupId, priority),
     buildUrl,
   });
 
@@ -358,7 +367,7 @@ export function useChatList(
 
   const refreshHead = useCallback(async (): Promise<void> => {
     if (fetchingNextRef.current) return;
-    const cacheKey = chatsKey(view, sort, channel, queueGroupId);
+    const cacheKey = chatsKey(view, sort, channel, queueGroupId, priority);
     // Nothing loaded yet: the query's own first fetch is the refresh.
     if (!queryClient.getQueryData(cacheKey)) return;
 
@@ -368,7 +377,7 @@ export function useChatList(
     // read already in flight when the second lands is usually too early to
     // contain it — dropping it would leave the row saying "no messages yet"
     // until the next tick.
-    const burstKey = headKey(view, sort, channel, queueGroupId);
+    const burstKey = headKey(view, sort, channel, queueGroupId, priority);
     if (headInFlight.has(burstKey)) {
       headPending.add(burstKey);
       return;
@@ -379,7 +388,7 @@ export function useChatList(
         headPending.delete(burstKey);
         if (sort === 'newest') {
           const fresh = await api.get<PagedResponse<ChatSummary>>(
-            chatListUrl(view, sort, channel, queueGroupId, undefined),
+            chatListUrl(view, sort, channel, queueGroupId, priority, undefined),
           );
           queryClient.setQueryData<ChatListCache>(cacheKey, (cache) => mergeChatHead(cache, fresh));
         } else {
@@ -405,11 +414,11 @@ export function useChatList(
     } finally {
       headInFlight.delete(burstKey);
     }
-  }, [api, queryClient, view, sort, channel, queueGroupId]);
+  }, [api, queryClient, view, sort, channel, queueGroupId, priority]);
 
   useEffect(() => {
     const token = Symbol('chat-head');
-    headRefreshers.set(token, { view, sort, channel, queueGroupId, run: refreshHead });
+    headRefreshers.set(token, { view, sort, channel, queueGroupId, priority, run: refreshHead });
     // One timer for all views rather than one per mounted list, so the eight
     // lists on screen cost seven requests every interval, not eight.
     headTicker ??= setInterval(refreshChatHeads, CHAT_HEAD_REFRESH_MS);
@@ -420,7 +429,7 @@ export function useChatList(
         headTicker = null;
       }
     };
-  }, [view, sort, channel, queueGroupId, refreshHead]);
+  }, [view, sort, channel, queueGroupId, priority, refreshHead]);
 
   const items = useMemo(() => {
     const seen = new Set<string>();

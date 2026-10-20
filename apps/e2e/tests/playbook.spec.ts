@@ -191,7 +191,12 @@ test.describe('playbook — step authoring', () => {
 
     await agentPage.getByLabel('Step type to add').selectOption('transfer_to_team');
     await agentPage.getByRole('button', { name: 'Add step' }).click();
-    await stepList.getByLabel('Team', { exact: true }).fill('Support');
+    // The team is picked from the workspace's own (AI-12 · tm 307.3), and
+    // saved by id with its name beside it.
+    const teamPicker = stepList.getByLabel('Team', { exact: true });
+    await expect(teamPicker.locator('option')).not.toHaveCount(1);
+    const teamName = (await teamPicker.locator('option').nth(1).textContent()) ?? '';
+    await teamPicker.selectOption({ index: 1 });
 
     // Order is behaviour: a hand-over before the tag means the tag never runs.
     // The keyboard alternative to drag does the reordering (NFR-A11Y4).
@@ -222,7 +227,7 @@ test.describe('playbook — step authoring', () => {
     const editor = agentPage.getByRole('region', { name: SKILL_NAME });
     const steps = editor.getByRole('list', { name: 'Steps' }).getByRole('listitem');
     await expect(steps).toHaveCount(2);
-    await expect(steps.nth(0)).toContainText('Hand over to Support');
+    await expect(steps.nth(0)).toContainText(`Hand over to ${teamName}`);
     await expect(steps.nth(1)).toContainText('Tag the conversation');
   });
 });

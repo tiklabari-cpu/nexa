@@ -75,6 +75,12 @@ import {
   writeTicketView,
   type TicketSortKey,
 } from './ticket-grid.js';
+import {
+  CHAT_PRIORITY_FILTERS,
+  parseChatPriority,
+  writeChatPriority,
+  type ChatPriorityFilter,
+} from './chat-priority.js';
 import { parseChatSort, writeChatSort, type ChatSort } from './chat-sort.js';
 import type { InboxView, TicketView, TrafficTab } from './types.js';
 
@@ -285,7 +291,21 @@ export function InboxPage(): ReactElement {
   // Both narrowed by the channel view, so the rail badge and the list it labels
   // are counting the same filter (FR-MOD-02.1.4; the tm 179.4 rule).
   const counts = useViewCounts(activeChannel);
-  const list = useChatList(view, chatSort, activeChannel, view === 'queued' ? queueTeam : null);
+  // How pressing (AI-12 · tm 307.3): the URL's job and the server's, like the
+  // sort — see `chat-priority.ts`. An archived chat has no priority, so that
+  // view neither offers the filter nor sends it.
+  const priorityParam = useMemo(() => parseChatPriority(searchParams), [searchParams]);
+  const priorityFilter = view === 'archived' ? null : priorityParam;
+  const changeChatPriority = (priority: ChatPriorityFilter | null): void => {
+    setSearchParams(writeChatPriority(searchParams, priority), { replace: true });
+  };
+  const list = useChatList(
+    view,
+    chatSort,
+    activeChannel,
+    view === 'queued' ? queueTeam : null,
+    priorityFilter,
+  );
   const chat = useChat(selectedId);
   // The day's earlier connections join the transcript only while the chat read
   // is the selected one's — a stale detail from the chat before would walk the
@@ -672,6 +692,24 @@ export function InboxPage(): ReactElement {
                   <option value="newest">{t('inbox.list.sort.newest')}</option>
                   <option value="oldest">{t('inbox.list.sort.oldest')}</option>
                 </select>
+                {/* Priority filter (AI-12): the server's `priority` param. */}
+                {view !== 'archived' && (
+                  <select
+                    aria-label={t('inbox.list.priorityFilter.ariaLabel')}
+                    value={priorityFilter ?? ''}
+                    onChange={(event) =>
+                      changeChatPriority((event.target.value || null) as ChatPriorityFilter | null)
+                    }
+                    className="shrink-0 rounded-md border border-border bg-inset px-1.5 py-1 text-2xs text-content-secondary"
+                  >
+                    <option value="">{t('inbox.list.priorityFilter.all')}</option>
+                    {CHAT_PRIORITY_FILTERS.map((priority) => (
+                      <option key={priority} value={priority}>
+                        {t(`inbox.priority.${priority}`)}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <span className="tabular shrink-0 text-2xs text-content-tertiary">
                   {list.isError ? <CountUnavailable /> : visibleChats.length}
                 </span>

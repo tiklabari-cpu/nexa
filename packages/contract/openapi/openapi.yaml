@@ -1233,6 +1233,18 @@ components:
           description: "Panelde: Chat ID (bağlantı) — the most recent connection of this day."
         assignee_id: { type: string, format: uuid, nullable: true }
         queue_position: { type: integer, nullable: true }
+        queue_group_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            The team whose queue the newest connection waits in (AU-01 ·
+            ADR-08a §2.1) — null while it waits in none (`queue_position`
+            null). The `queue_position` is that team's number.
+        priority:
+          description: How pressing the newest connection is; `normal` for a chat with none.
+          allOf:
+            - $ref: "#/components/schemas/ThreadPriority"
         unread_count: { type: integer }
         connection_count:
           type: integer

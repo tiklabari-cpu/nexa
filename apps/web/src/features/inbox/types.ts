@@ -1,4 +1,4 @@
-import type { AiHandoffCardView, CustomFieldValue } from '@siyahtus/types';
+import type { AiHandoffCardView, CustomFieldValue, ThreadPriority } from '@siyahtus/types';
 
 export interface ChatEvent {
   id: string;
@@ -39,6 +39,13 @@ export interface ChatSummary {
   thread_id: string | null;
   assignee_id: string | null;
   queue_position: number | null;
+  /**
+   * The team whose queue the newest connection waits in (AU-01); null when it
+   * waits in none. Optional: fixtures and older servers omit it.
+   */
+  queue_group_id?: number | null;
+  /** How pressing the newest connection is (ADR-08a); omitted by older servers. */
+  priority?: ThreadPriority;
   unread_count: number;
   /** The day's connections (ID-02); absent from a server that predates them. */
   connection_count?: number;

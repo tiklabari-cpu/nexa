@@ -73,13 +73,20 @@ const CHAT_HEAD_REFRESH_MS = 30_000;
  * correctly in every list mounted at once. `null` rather than omitted, so the
  * unfiltered list and a channel view are two keys rather than one being a
  * prefix of the other.
+ *
+ * A team's queue tab (AU-01) appends the team: the plain lists keep the key
+ * they always had, and a tab's list sits under its view's, so refreshing the
+ * Queued view refreshes its tabs with it.
  */
 export function chatsKey(
   view: InboxView,
   sort: ChatSort = DEFAULT_CHAT_SORT,
   channel: AdapterChannelType | null = null,
+  queueGroupId: number | null = null,
 ): unknown[] {
-  return ['chats', view, sort, channel];
+  return queueGroupId === null
+    ? ['chats', view, sort, channel]
+    : ['chats', view, sort, channel, queueGroupId];
 }
 export function eventsKey(chatId: string): unknown[] {
   return ['events', chatId];
@@ -89,6 +96,7 @@ function chatListUrl(
   view: InboxView,
   sort: ChatSort,
   channel: AdapterChannelType | null,
+  queueGroupId: number | null,
   pageId: string | undefined,
 ): string {
   const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
@@ -97,7 +105,9 @@ function chatListUrl(
   // fifty and then keep asking for the next page of *everything*, so a busy
   // workspace's WhatsApp view would be mostly empty and its counter wrong.
   const onChannel = channel ? `&channel=${channel}` : '';
-  return `/chats?view=${view}&sort=${sort}${onChannel}&limit=${CHAT_PAGE_SIZE}${cursor}`;
+  // A team's queue tab (AU-01), filtered by the server for the same reason.
+  const onQueue = queueGroupId !== null ? `&queue_group_id=${queueGroupId}` : '';
+  return `/chats?view=${view}&sort=${sort}${onChannel}${onQueue}&limit=${CHAT_PAGE_SIZE}${cursor}`;
 }
 
 /**
@@ -259,7 +269,13 @@ export function mergeChatHead(
  */
 const headRefreshers = new Map<
   symbol,
-  { view: InboxView; sort: ChatSort; channel: AdapterChannelType | null; run: () => Promise<void> }
+  {
+    view: InboxView;
+    sort: ChatSort;
+    channel: AdapterChannelType | null;
+    queueGroupId: number | null;
+    run: () => Promise<void>;
+  }
 >();
 const headInFlight = new Set<string>();
 const headPending = new Set<string>();
@@ -271,8 +287,13 @@ let headTicker: ReturnType<typeof setInterval> | null = null;
  * channel filter. Two lists that differ only by channel are two different
  * requests, so collapsing them onto one key would leave one of them stale.
  */
-function headKey(view: InboxView, sort: ChatSort, channel: AdapterChannelType | null): string {
-  return `${view}:${sort}:${channel ?? ''}`;
+function headKey(
+  view: InboxView,
+  sort: ChatSort,
+  channel: AdapterChannelType | null,
+  queueGroupId: number | null = null,
+): string {
+  return `${view}:${sort}:${channel ?? ''}:${queueGroupId ?? ''}`;
 }
 
 /**
@@ -284,7 +305,7 @@ function headKey(view: InboxView, sort: ChatSort, channel: AdapterChannelType | 
 export function refreshChatHeads(): void {
   const done = new Set<string>();
   for (const entry of headRefreshers.values()) {
-    const key = headKey(entry.view, entry.sort, entry.channel);
+    const key = headKey(entry.view, entry.sort, entry.channel, entry.queueGroupId);
     if (done.has(key)) continue;
     done.add(key);
     void entry.run();
@@ -304,21 +325,25 @@ export function refreshChatHeads(): void {
  * a different one starts an entirely fresh page chain rather than continuing
  * the old one — the newest-sorted pages an agent already scrolled through
  * stay cached under their own key, not spliced into the oldest-sorted list.
+ *
+ * `queueGroupId` narrows to one team's queue — the Queued view's team tabs
+ * (AU-01) — server-side, like `channel`.
  */
 export function useChatList(
   view: InboxView,
   sort: ChatSort = DEFAULT_CHAT_SORT,
   channel: AdapterChannelType | null = null,
+  queueGroupId: number | null = null,
 ): PagedQueryResult<ChatSummary> {
   const api = useApiClient();
   const queryClient = useQueryClient();
 
   const buildUrl = useCallback(
-    (pageId: string | undefined) => chatListUrl(view, sort, channel, pageId),
-    [view, sort, channel],
+    (pageId: string | undefined) => chatListUrl(view, sort, channel, queueGroupId, pageId),
+    [view, sort, channel, queueGroupId],
   );
   const query = usePagedQuery<ChatSummary>({
-    queryKey: chatsKey(view, sort, channel),
+    queryKey: chatsKey(view, sort, channel, queueGroupId),
     buildUrl,
   });
 
@@ -331,7 +356,7 @@ export function useChatList(
 
   const refreshHead = useCallback(async (): Promise<void> => {
     if (fetchingNextRef.current) return;
-    const cacheKey = chatsKey(view, sort, channel);
+    const cacheKey = chatsKey(view, sort, channel, queueGroupId);
     // Nothing loaded yet: the query's own first fetch is the refresh.
     if (!queryClient.getQueryData(cacheKey)) return;
 
@@ -341,7 +366,7 @@ export function useChatList(
     // read already in flight when the second lands is usually too early to
     // contain it — dropping it would leave the row saying "no messages yet"
     // until the next tick.
-    const burstKey = headKey(view, sort, channel);
+    const burstKey = headKey(view, sort, channel, queueGroupId);
     if (headInFlight.has(burstKey)) {
       headPending.add(burstKey);
       return;
@@ -352,7 +377,7 @@ export function useChatList(
         headPending.delete(burstKey);
         if (sort === 'newest') {
           const fresh = await api.get<PagedResponse<ChatSummary>>(
-            chatListUrl(view, sort, channel, undefined),
+            chatListUrl(view, sort, channel, queueGroupId, undefined),
           );
           queryClient.setQueryData<ChatListCache>(cacheKey, (cache) => mergeChatHead(cache, fresh));
         } else {
@@ -378,11 +403,11 @@ export function useChatList(
     } finally {
       headInFlight.delete(burstKey);
     }
-  }, [api, queryClient, view, sort, channel]);
+  }, [api, queryClient, view, sort, channel, queueGroupId]);
 
   useEffect(() => {
     const token = Symbol('chat-head');
-    headRefreshers.set(token, { view, sort, channel, run: refreshHead });
+    headRefreshers.set(token, { view, sort, channel, queueGroupId, run: refreshHead });
     // One timer for all views rather than one per mounted list, so the eight
     // lists on screen cost seven requests every interval, not eight.
     headTicker ??= setInterval(refreshChatHeads, CHAT_HEAD_REFRESH_MS);
@@ -393,7 +418,7 @@ export function useChatList(
         headTicker = null;
       }
     };
-  }, [view, sort, channel, refreshHead]);
+  }, [view, sort, channel, queueGroupId, refreshHead]);
 
   const items = useMemo(() => {
     const seen = new Set<string>();

@@ -69,6 +69,16 @@ chats:
       - name: group_id
         in: query
         schema: { type: integer, format: int64 }
+      - name: queue_group_id
+        in: query
+        description: |
+          Narrows to the conversations waiting in one team's queue (AU-01 ·
+          ADR-08a) — the inbox's queue tabs. A chat matches while its open
+          connection is queued for that team (`ChatSummary.queue_group_id`);
+          the team that merely grants access to it (`group_id`) is a different
+          question. Composes with `view` and `channel`, and `total` counts the
+          same intersection.
+        schema: { type: integer, format: int64 }
       - name: sort
         in: query
         schema: { type: string, enum: [newest, oldest], default: newest }

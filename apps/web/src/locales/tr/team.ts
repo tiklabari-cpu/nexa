@@ -136,6 +136,63 @@ export const team: Messages = {
   'team.teams.editor.discardConfirm': 'Kaydedilmemiş değişiklikleriniz atılsın mı?',
   'team.teams.editor.deleteButton': 'Ekibi sil',
   'team.teams.editor.deleting': 'Siliniyor…',
+  // Kuyruk ayarları (AU-01 · K14) — TeamEditor.tsx
+  'team.teams.editor.queue.legend': 'Kuyruk ayarları',
+  'team.teams.editor.queue.description':
+    'Bu ekibin kuyruğunun hangi konuya baktığı, sohbetlerini kimin alabileceği ve mesai dışında ne olacağı.',
+  'team.teams.editor.queue.topicLabel': 'Konu kuyruğu',
+  'team.teams.editor.queue.topicNone': 'Yok — sıradan bir ekip',
+  'team.teams.editor.queue.topicHeld': '{topic} ({team} bakıyor)',
+  'team.teams.editor.queue.topicHint':
+    'AI devirleri bu ekibe konusuyla ulaşır; ekibin adını değiştirmek bunu bozmaz.',
+  'team.teams.editor.queue.topicLocked':
+    'Sorumlu oyun ekibinin konusu değişmez — yalnızca adı değiştirilebilir.',
+  'team.teams.editor.queue.afterHoursLabel': 'Mesai dışında',
+  'team.teams.editor.queue.skillsLabel': 'Gerekli yetenekler',
+  'team.teams.editor.queue.skillsHint':
+    'Bir temsilcinin bu ekibe katılması ve sohbetlerini alması için işaretli yeteneklerin hepsine sahip olması gerekir.',
+  'team.teams.editor.queue.skillsLoading': 'Yetenekler yükleniyor…',
+  'team.teams.editor.queue.skillsError': 'Yetenekler yüklenemedi.',
+  'team.teams.editor.queue.skillsEmpty':
+    'Henüz yetenek yok — Ayarlar › Yetenekler bölümünden ekleyin.',
+  'team.teams.editor.queue.trainingRequired':
+    'Sorumlu oyun ekibi en az bir gerekli yetenek ister — eğitimi.',
+  'team.teams.editor.queue.protectedNote':
+    'Sorumlu oyun ekibi silinemez — yalnızca adını değiştirebilirsiniz.',
+  'team.teams.card.topic': 'Konu: {topic}',
+  'team.queue.role.finance': 'Finans',
+  'team.queue.role.kyc_risk': 'KYC / Risk',
+  'team.queue.role.bonus': 'Bonus',
+  'team.queue.role.responsible_gambling': 'Sorumlu oyun',
+  'team.queue.role.technical': 'Teknik',
+  'team.queue.role.complaint': 'Şikâyet',
+  'team.queue.afterHours.queue': 'Sıradaki temsilciyi kuyrukta bekler',
+  'team.queue.afterHours.ticket': 'E-postayla yanıtlanan bir talebe dönüşür',
+
+  // iGaming kuyruk şablonu (AU-01 · K14) — QueueTemplateButton.tsx
+  'team.queueTemplate.button': 'iGaming kuyruk şablonunu kur',
+  'team.queueTemplate.title': 'iGaming kuyruk şablonunu kur',
+  'team.queueTemplate.description':
+    'Henüz hiçbir ekibin bakmadığı her konu kuyruğu için bir ekip ve Sorumlu Oyun ekibinin istediği eğitim yeteneğini oluşturur. Onaylayana dek hiçbir şey oluşturulmaz; bakılan konular olduğu gibi kalır.',
+  'team.queueTemplate.loading': 'Hangi konulara bakıldığı denetleniyor…',
+  'team.queueTemplate.served': '“{team}” bakıyor',
+  'team.queueTemplate.willCreate': '“{team}” oluşturulur',
+  'team.queueTemplate.allServed': 'Her konunun zaten bir ekibi var.',
+  'team.queueTemplate.trainingNote':
+    'Sorumlu Oyun ekibine yalnızca “{skill}” yeteneği olan temsilciler katılabilir — bu yeteneği Ekip › Ekip arkadaşları bölümünden verin.',
+  'team.queueTemplate.failed':
+    'Şablon yarıda kaldı: {reason} Oluşturulanlar korunur — tamamlamak için yeniden çalıştırın.',
+  'team.queueTemplate.cancel': 'İptal',
+  'team.queueTemplate.applying': 'Kuruluyor…',
+  'team.queueTemplate.apply.one': '{count} ekip oluştur',
+  'team.queueTemplate.apply.other': '{count} ekip oluştur',
+  'team.queueTemplate.trainingName': 'Sorumlu oyun eğitimi',
+  'team.queueTemplate.teamName.finance': 'Finans',
+  'team.queueTemplate.teamName.kyc_risk': 'KYC / Risk',
+  'team.queueTemplate.teamName.bonus': 'Bonus',
+  'team.queueTemplate.teamName.responsible_gambling': 'Sorumlu Oyun',
+  'team.queueTemplate.teamName.technical': 'Teknik',
+  'team.queueTemplate.teamName.complaint': 'Şikâyet',
   'team.teams.members.title': 'Üyeler — {name}',
   'team.teams.members.description':
     'Birden fazla üye müsaitken bir sohbetin önce kime gideceğini öncelik belirler.',

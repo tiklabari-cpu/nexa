@@ -17,6 +17,12 @@ services:
       - max_connections=200
       - -c
       - shared_preload_libraries=pg_stat_statements
+      # Dev/test database only (no customer data): trade crash-safety for speed.
+      # Never copy these to docker-compose.pilot.yml.
+      - -c
+      - fsync=off
+      - -c
+      - full_page_writes=off
     ports:
       - '5433:5432'
     volumes:

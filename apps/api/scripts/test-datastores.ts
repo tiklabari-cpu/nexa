@@ -336,6 +336,9 @@ export async function provisionIsolatedDatastores(
     await bookkeeping.set(databaseKey(databaseName), runId, 'PX', LEASE_MS);
     await admin.$executeRawUnsafe(`CREATE DATABASE "${databaseName}"`);
     created = true;
+    // Throwaway data: nobody needs a commit to survive a crash, so don't make
+    // every one wait for the WAL flush.
+    await admin.$executeRawUnsafe(`ALTER DATABASE "${databaseName}" SET synchronous_commit = off`);
 
     await migrate(withDatabaseName(ownerUrl, databaseName));
 

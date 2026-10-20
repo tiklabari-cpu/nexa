@@ -81,6 +81,7 @@ import aiGuidanceRoutes from './routes/ai-guidance.js';
 import aiHandoffRulesRoutes from './routes/ai-handoff-rules.js';
 import aiGuardrailRoutes from './routes/ai-guardrails.js';
 import { riskFlagRoutes } from './routes/risk-flags.js';
+import { aiHandoffRoutes } from './routes/ai-handoffs.js';
 import kbRoutes from './routes/kb.js';
 import publicKbRoutes from './routes/public-kb.js';
 import publicKbHtmlRoutes from './routes/public-kb-html.js';
@@ -650,6 +651,7 @@ export async function buildServer({
       await api.register(aiHandoffRulesRoutes);
       await api.register(aiGuardrailRoutes);
       await api.register(riskFlagRoutes);
+      await api.register(aiHandoffRoutes);
       await api.register(kbRoutes);
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {

@@ -174,6 +174,9 @@ export const RTM_PUSH_ACTIONS = [
   // Responsible Gaming team.
   'risk_flag_raised',
   'risk_flag_cleared',
+  // The AI's hand-over card was written (tm 304.1 · AI-10, `AiHandoffCreatedPush`):
+  // to the agents who see the conversation and the target team.
+  'ai_handoff_created',
   // Errors
   'incoming_error',
 ] as const;
@@ -271,6 +274,16 @@ export interface ChatAiModeChangedPush {
   by: string;
   /** Null for the AI's own first turn, which needs no reason. */
   reason: AiModeReason | null;
+}
+
+/**
+ * A connection's one-line summary changed (`threads.summary`) — the AI's
+ * hand-over card writes it (tm 304.1 · AI-10 §4). Agents only.
+ */
+export interface ThreadSummarySetPush {
+  chat_id: string;
+  thread_id: string;
+  summary: string | null;
 }
 
 export interface TypingIndicatorPush {

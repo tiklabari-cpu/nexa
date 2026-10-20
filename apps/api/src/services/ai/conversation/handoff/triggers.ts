@@ -61,6 +61,7 @@ import {
   type PersonaLanguage,
 } from '@siyahtus/types';
 import { safeText } from '../guardrails/guardrail-turn.js';
+import { playerSummaryLine } from './card-builder.js';
 import { morePressing, routingRule, ruleTarget, type HandoffRuleConfig } from './rules.js';
 import {
   NO_ANSWER_PHRASES,
@@ -195,6 +196,22 @@ export function handoffPriority(
 
 function isMessageReason(reason: HandoffReason): reason is HandoffMessageReason {
   return (HANDOFF_MESSAGE_REASONS as readonly string[]).includes(reason);
+}
+
+/**
+ * Whether the hand-over tells the player what they gave (AI-10-S1): not when a
+ * guardrail, a stored risk flag or abuse set it off — a crisis text or a
+ * refusal is no place for "Papara, 2.500 TL" — nor in a language the persona
+ * does not speak.
+ */
+function tellsPlayerSummary(reasons: readonly HandoffReason[]): boolean {
+  return !reasons.some(
+    (reason) =>
+      reason.startsWith('guardrail_') ||
+      reason === 'risk_flag' ||
+      reason === 'abuse' ||
+      reason === 'unsupported_language',
+  );
 }
 
 function guardrailLang(lang: PersonaLanguage | null): GuardrailLang {
@@ -708,6 +725,14 @@ export function settleHandoffTurn(input: {
       // The crisis text first, whatever else is said (AI-08 G3).
       reply = `${reply}\n${own}`;
     }
+    // What the player gave, told back with the hand-over (tm 304.1 ·
+    // AI-10-S1): a value read wrong can be corrected before a person starts
+    // from it. Not with a guardrail's, a risk flag's or abuse's hand-over.
+    const told =
+      reply !== null && tellsPlayerSummary(reasons)
+        ? playerSummaryLine(out.nextState, answerIn)
+        : null;
+    if (told && reply !== null && !reply.includes(told)) reply = `${reply}\n${told}`;
     if (input.available === false && reply !== null) {
       reply = `${reply}\n${afterHoursWords(config, answerIn)}`;
     }
@@ -721,6 +746,8 @@ export function settleHandoffTurn(input: {
         outcome: 'handed_off',
         replyKind: reply === null ? null : (decisions.replyKind ?? 'answer'),
         handoffReasons: reasons,
+        // For the card (AI-10): how the player came across, when it was read.
+        ...(watch.reading ? { sentiment: watch.reading.sentiment } : {}),
       },
       sideEffects: out.sideEffects.map((effect) =>
         effect.kind === 'handoff'

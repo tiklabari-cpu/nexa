@@ -362,7 +362,7 @@ describe('after a failure the AI stops talking; the steps for the human still ru
     // Nothing the steps queued — the hand-over's own fixed sentence (tm 303.2 · AI-09).
     expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.procedure_rule.en);
     expect(result.tags).toEqual(['delivery']);
-    expect(result.summary).toMatch(/^Customer asked: How long does delivery take\?/);
+    expect(result.summary).toMatch(/^Soru: How long does delivery take\?/);
     expect(result.transferTo).toBe('Logistics');
     expect(result.log.map((entry) => [entry.step, entry.ok])).toEqual([
       ['detect_intent', true],
@@ -491,7 +491,7 @@ describe('a knowledge search that cannot run hands the conversation to a human (
       tags: ['delivery'],
       transferTo: 'Logistics',
     });
-    expect(result.summary).toMatch(/^Customer asked: How long does delivery take\?/);
+    expect(result.summary).toMatch(/^Soru: How long does delivery take\?/);
     expect(llm.calls).toHaveLength(0);
   });
 
@@ -981,7 +981,7 @@ describe('the turn returns what it would do and does none of it (AI-19)', () => 
     expect(result.reply).toBe('Passing you to logistics.');
     expect(result.sideEffects).toEqual([
       { kind: 'tag', tag: 'delivery' },
-      { kind: 'summary', text: `Customer asked: ${MESSAGE}` },
+      { kind: 'summary', text: `Soru: ${MESSAGE}` },
       {
         kind: 'handoff',
         team: 'Logistics',
@@ -1251,8 +1251,6 @@ describe('the model reads the conversation, not just the message (AI-01 · tm 29
       { text: 'Papara 13:40', history: HISTORY },
       context(workspace([{ type: 'summarize' }])),
     );
-    expect(describeSideEffects(result.sideEffects).summary).toBe(
-      'Customer opened with: Param yatmadı (2 messages so far)',
-    );
+    expect(describeSideEffects(result.sideEffects).summary).toBe('Soru: Param yatmadı (2 mesaj)');
   });
 });

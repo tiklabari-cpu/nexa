@@ -3703,7 +3703,9 @@ function fitHistory(
 /**
  * A one-line summary for the agent who picks the conversation up: the
  * visitor's opening message — the history's first visitor line — and how many
- * messages they have written.
+ * messages they have written. "Soru: …", the hand-over card's form for a
+ * conversation no procedure ran (tm 304.1 · AI-10 §2); a card the hand-over
+ * writes replaces it.
  */
 function buildSummary(message: string, history: TurnHistory | undefined, contact: number): string {
   const opened = history?.messages
@@ -3713,12 +3715,9 @@ function buildSummary(message: string, history: TurnHistory | undefined, contact
   const count = (history?.visitorMessages ?? 0) + 1;
   const first = opened ?? message;
   const opening = first.length > 160 ? `${first.slice(0, 157)}…` : first;
-  const said =
-    count > 1
-      ? `Customer opened with: ${opening} (${count} messages so far)`
-      : `Customer asked: ${opening}`;
+  const said = count > 1 ? `Soru: ${opening} (${count} mesaj)` : `Soru: ${opening}`;
   // The card says when the member is back the same day (tm 294 · AI-02).
-  return contact > 1 ? `Same day, contact ${contact} · ${said}` : said;
+  return contact > 1 ? `Aynı gün, ${contact}. temas · ${said}` : said;
 }
 
 /**

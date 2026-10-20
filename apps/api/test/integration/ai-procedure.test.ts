@@ -835,11 +835,16 @@ describe('procedure skills on the live path (AI-03)', () => {
     expect(decision.handoffReason).toBe('expected_time_exceeded');
 
     // A person has it now: a further message gets no AI turn. Two texts: the
-    // question, and the hand-over's own sentence (tm 303.2 · AI-09).
+    // question, and the hand-over's own sentence (tm 303.2 · AI-09) with what
+    // the player gave (tm 304.1 · AI-10-S1).
     await send(headers, 'hâlâ yok');
     expect(await botTexts(first.chat_id)).toEqual([
       expect.any(String),
-      DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr,
+      expect.stringMatching(
+        new RegExp(
+          `^${DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr}\\nŞu bilgileri ilettim: Havale, .+\\. Yanlış bir bilgi varsa yazabilirsiniz\\.$`,
+        ),
+      ),
     ]);
   });
 

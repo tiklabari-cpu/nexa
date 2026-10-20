@@ -196,6 +196,7 @@ model License {
   aiForbiddenPhrases     AiForbiddenPhrase[]
   aiGuardrailHits        AiGuardrailHit[]
   riskFlags              RiskFlag[]
+  aiHandoffs             AiHandoff[]
   riskFlagSettings       RiskFlagSettings?
   aiProcedureExamples    AiProcedureExample[]
   mailDailyUsage         MailDailyUsage[]
@@ -973,6 +974,7 @@ model Chat {
   aiDecisionLogs   AiDecisionLog[]
   aiGuardrailHits  AiGuardrailHit[]
   riskFlags        RiskFlag[]
+  aiHandoffs       AiHandoff[]
   aiJobs           AiJob[]
 
   @@index([licenseId, createdAt(sort: Desc)])
@@ -1027,6 +1029,7 @@ model Thread {
   aiDecisionLogs  AiDecisionLog[]
   aiGuardrailHits AiGuardrailHit[]
   riskFlags       RiskFlag[]
+  aiHandoffs      AiHandoff[]
   aiJobs          AiJob[]
   queueEntries    QueueEntry[]
   aiConversations AiConversation[]
@@ -2101,6 +2104,78 @@ model RiskFlag {
   @@index([threadId])
   @@index([customerId])
   @@map("risk_flags")
+}
+
+/// The AI's hand-over card (tm 304.1 · SiyahTuş analysis AI-10): what the
+/// person who takes a connection from the AI starts from, built from the
+/// conversation's state in the hand-over's own transaction — never by a model.
+/// `id` is the hand-over's `handoff_id` (its transfer and AI-mode events carry
+/// it). Written once; afterwards only `accepted_*` (the agent's first message
+/// after it) and `feedback_*` (one verdict, the last click wins) change — the
+/// trigger refuses every other edit. A `pii: 'high'` slot's value is never in
+/// it. The CHECKs and `ai-handoff-card.ts`'s lists are one vocabulary.
+model AiHandoff {
+  id                    String    @id @db.Uuid
+  licenseId             BigInt    @map("license_id")
+  /// The day container (panel "Thread ID").
+  chatId                String    @map("chat_id") @db.VarChar(12)
+  /// The connection handed over (panel "Chat ID").
+  threadId              String    @map("thread_id") @db.VarChar(12)
+  /// The AI's conversation row, when it had one. No relation: it goes with the thread.
+  aiConversationId      String?   @map("ai_conversation_id") @db.Uuid
+  /// The procedure (today: the skill). No relation: deleting it must not erase the card.
+  skillId               String?   @map("skill_id") @db.Uuid
+  procedureKey          String?   @map("procedure_key")
+  procedureSnapshotHash String?   @map("procedure_snapshot_hash")
+  /// The procedure's name — the card's subject.
+  intentLabel           String?   @map("intent_label")
+  summary               String
+  /// The player's question, on a hand-over no procedure ran.
+  question              String?
+  /// `AiHandoffPlayer`: the player's own claim, and whether the device is known.
+  player                Json      @default("{}")
+  /// `HANDOFF_REASONS`, most severe first; `primary_reason` is the first.
+  reasonCodes           String[]  @map("reason_codes")
+  primaryReason         String    @map("primary_reason")
+  /// `AiHandoffSlotLine[]`.
+  slotsSnapshot         Json      @default("[]") @map("slots_snapshot")
+  /// `AiHandoffFact[]`.
+  decisionFacts         Json      @default("[]") @map("decision_facts")
+  /// What a person must check, since no tool could (AI-28 `pending_checks`).
+  checks                Json      @default("[]")
+  /// `AiHandoffStatement[]`.
+  aiStatements          Json      @default("[]") @map("ai_statements")
+  /// `AI_HANDOFF_OUTPUT_FLAGS`.
+  outputCheckFlags      String[]  @default([]) @map("output_check_flags")
+  riskFlags             String[]  @default([]) @map("risk_flags")
+  /// `AI_HANDOFF_SENTIMENTS`, or null.
+  sentiment             String?
+  suggestedNextStep     String?   @map("suggested_next_step")
+  /// `AiHandoffAttachment[]`.
+  attachments           Json      @default("[]")
+  /// The team it was handed to, when one was named. No relation: a team removed later stays named.
+  targetGroupId         BigInt?   @map("target_group_id")
+  /// `GUARDRAIL_PRIORITIES`.
+  priority              String
+  cardText              String    @map("card_text")
+  configVersionId       String?   @map("config_version_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  acceptedBy            String?   @map("accepted_by") @db.Uuid
+  acceptedAt            DateTime? @map("accepted_at") @db.Timestamptz(6)
+  /// `AI_HANDOFF_FEEDBACK_VALUES`, or null.
+  feedback              String?
+  feedbackReason        String?   @map("feedback_reason")
+  feedbackBy            String?   @map("feedback_by") @db.Uuid
+  feedbackAt            DateTime? @map("feedback_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  thread  Thread  @relation(fields: [threadId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([licenseId, createdAt])
+  @@index([chatId, createdAt])
+  @@index([threadId])
+  @@map("ai_handoffs")
 }
 
 /// Risk flag settings (tm 302.2 · AI-27, Ayarlar › Risk bayrakları): the

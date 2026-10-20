@@ -227,6 +227,10 @@ paths:
     $ref: "./paths/chats.yaml#/tag"
   /chats/{chatId}/seen:
     $ref: "./paths/chats.yaml#/seen"
+  /chats/{chatId}/ai-handoffs:
+    $ref: "./paths/ai-handoffs.yaml#/chatAiHandoffs"
+  /ai-handoffs/{handoffId}/feedback:
+    $ref: "./paths/ai-handoffs.yaml#/aiHandoffFeedback"
   /chats/{chatId}/risk-flags:
     $ref: "./paths/risk-flags.yaml#/chatRiskFlags"
   /risk-flags:
@@ -1191,6 +1195,14 @@ components:
             lists every connection of that day. A chat without one lists only
             its newest connection: it is not a day, and its older threads are
             earlier visits rather than today's connections.
+        latest_ai_handoff:
+          description: |
+            The newest card the AI wrote in this chat (AI-10) — on the agent's
+            fetch of a single chat (`GET /chats/{chatId}`) only; null when the AI
+            handed nothing over. Never on the customer's view.
+          allOf:
+            - $ref: "#/components/schemas/AiHandoffCard"
+          nullable: true
         visitor:
           description: |
             The customer's most recent visit for this license, projected onto
@@ -1852,6 +1864,176 @@ components:
     RiskFlagStatus:
       type: string
       enum: [active, cleared]
+
+    AiHandoffCard:
+      type: object
+      description: |
+        The AI's hand-over card (AI-10): built from the conversation's state
+        when the AI handed the connection to a person, never by a model. Its
+        `id` is the hand-over's `handoff_id`, which the transfer and AI-mode
+        events carry. `reason_codes`, `primary_reason` and `risk_flags` are
+        closed vocabularies of `@siyahtus/types` (`HANDOFF_REASONS`,
+        `RISK_FLAG_TYPES`). A `sensitive` slot was given and is kept off the
+        card (`text` null).
+      required:
+        [
+          id,
+          chat_id,
+          thread_id,
+          skill_id,
+          procedure_key,
+          procedure_snapshot_hash,
+          topic,
+          summary,
+          question,
+          player,
+          slots,
+          decision_facts,
+          checks,
+          ai_statements,
+          output_check_flags,
+          reason_codes,
+          primary_reason,
+          risk_flags,
+          sentiment,
+          suggested_next_step,
+          attachments,
+          target_group_id,
+          priority,
+          card_text,
+          created_at,
+          accepted_by,
+          accepted_at,
+          feedback,
+          feedback_reason,
+          feedback_by,
+          feedback_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id:
+          type: string
+          description: "Panelde: Thread ID (günlük)."
+        thread_id:
+          type: string
+          description: "Panelde: Chat ID (bağlantı) — the connection handed over."
+        skill_id: { type: string, format: uuid, nullable: true }
+        procedure_key: { type: string, nullable: true }
+        procedure_snapshot_hash: { type: string, nullable: true }
+        topic:
+          type: string
+          nullable: true
+          description: The procedure's name; null when no procedure ran.
+        summary:
+          type: string
+          description: |
+            One sentence: the procedure's name and what was collected, or
+            "Soru: <the player's first message>" when no procedure ran. Also
+            the connection's `Thread.summary`.
+        question:
+          type: string
+          nullable: true
+          description: The player's question, on a hand-over no procedure ran.
+        player:
+          type: object
+          required: [username, name, email, basis, recognized_device]
+          properties:
+            username: { type: string, nullable: true }
+            name: { type: string, nullable: true }
+            email: { type: string, nullable: true }
+            basis:
+              type: string
+              enum: [declared]
+              description: The player's own claim — not verified in F1.
+            recognized_device:
+              type: boolean
+              description: A member token this workspace signed came with the message.
+        slots:
+          type: array
+          description: The procedure's `show_in_card` slots, in its order, once there is something to say.
+          items:
+            type: object
+            required: [slot, label, status, text, source]
+            properties:
+              slot: { type: string }
+              label: { type: string }
+              status:
+                type: string
+                enum: [missing, partial, filled, refused, unknown, invalid, carried]
+              text: { type: string, nullable: true }
+              source: { type: string, enum: [player, carried, inferred], nullable: true }
+              sensitive: { type: boolean, enum: [true] }
+              out_of_range: { type: string, enum: [below_min, above_max] }
+        decision_facts:
+          type: array
+          description: The procedure's `handoff.card_fields`, filled — null when unknown.
+          items:
+            type: object
+            required: [field, text]
+            properties:
+              field: { type: string }
+              text: { type: string, nullable: true }
+        checks:
+          type: array
+          description: What a person must check, since no tool could (AI-28).
+          items: { type: string }
+        ai_statements:
+          type: array
+          description: The AI's last messages to the player in the connection (at most 5), oldest first.
+          items:
+            type: object
+            required: [event_id, text, created_at]
+            properties:
+              event_id: { type: string }
+              text: { type: string }
+              created_at: { type: string, format: date-time }
+        output_check_flags:
+          type: array
+          description: |
+            What the draft checks found on the AI's replies (AI-08). Empty: no
+            promise was caught.
+          items: { type: string, enum: [draft_rewritten, draft_blocked, draft_warned] }
+        reason_codes:
+          type: array
+          description: Every reason the AI handed over for, most severe first.
+          items: { type: string }
+        primary_reason: { type: string }
+        risk_flags:
+          type: array
+          items: { type: string }
+        sentiment:
+          type: string
+          enum: [positive, neutral, negative, angry]
+          nullable: true
+        suggested_next_step:
+          type: string
+          nullable: true
+          description: The procedure's `handoff.next_step_hint`, filled; null without one.
+        attachments:
+          type: array
+          items:
+            type: object
+            required: [event_id, name, created_at]
+            properties:
+              event_id: { type: string }
+              name: { type: string, nullable: true }
+              created_at: { type: string, format: date-time }
+        target_group_id: { type: integer, format: int64, nullable: true }
+        priority: { type: string, enum: [urgent, high, normal] }
+        card_text:
+          type: string
+          description: The card as plain text — the agents-only line in the transcript.
+        created_at: { type: string, format: date-time }
+        accepted_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: The agent whose first message after the hand-over took it up.
+        accepted_at: { type: string, format: date-time, nullable: true }
+        feedback: { type: string, enum: [sufficient, insufficient], nullable: true }
+        feedback_reason: { type: string, nullable: true }
+        feedback_by: { type: string, format: uuid, nullable: true }
+        feedback_at: { type: string, format: date-time, nullable: true }
 
     RiskFlag:
       type: object

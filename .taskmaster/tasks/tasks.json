@@ -13306,7 +13306,7 @@
           "274"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T17:43:54.008Z",
+        "updatedAt": "2026-10-20T18:47:05.618Z",
         "subtasks": [
           {
             "id": 1,
@@ -13314,11 +13314,11 @@
             "description": "Genişlet: knowledge_sources yeni kolonlar + chats.brand_id + GIN indeksleri (ayrı dosyalar) + kontrat",
             "details": "Üst görev 309 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "db:check-drift.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "309",
             "priority": "high",
-            "updatedAt": "2026-10-20T17:43:54.008Z"
+            "updatedAt": "2026-10-20T18:47:05.618Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T17:43:54.008Z",
+      "lastModified": "2026-10-20T18:47:05.619Z",
       "taskCount": 390,
       "completedCount": 306,
       "tags": [

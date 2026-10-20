@@ -13148,7 +13148,7 @@
           "291"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T05:41:43.422Z",
+        "updatedAt": "2026-10-20T07:22:24.692Z",
         "subtasks": [
           {
             "id": 1,
@@ -13182,13 +13182,13 @@
             "description": "Üyelikte eğitim kontrolü (409), RG silinemez, resolveQueue(topicRole), GET /routing/queues",
             "details": "XHIGH GEREKÇESİ: (1) yetkili endpoint kuralı.",
             "testStrategy": "Entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "305.1"
             ],
             "parentId": "305",
             "priority": "high",
-            "updatedAt": "2026-10-20T05:41:43.422Z"
+            "updatedAt": "2026-10-20T07:22:24.692Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T05:41:43.423Z",
+      "lastModified": "2026-10-20T07:22:24.693Z",
       "taskCount": 390,
       "completedCount": 303,
       "tags": [

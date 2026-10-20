@@ -10,7 +10,8 @@
  *      hand-over — `ai_handoffs`, the connection's summary and the
  *      agents-only line; announced once the hand-over committed;
  *   2. **the connection to `human`** (AI-11): the AI stays silent from here on;
- *   3. **the target** (AI-12): the team a single-message skill names, the team
+ *   3. **the target** (AI-12): the team a single-message skill names (by id
+ *      since tm 307.1, by name for a step saved before ids), the team
  *      a procedure names by id, the team holding the queue role a `{ topic }`
  *      target names (AU-01 · `resolveQueue`, by role, so a renamed team still
  *      receives it), or — another topic (#307 maps those), no target, a team
@@ -201,6 +202,7 @@ export class HandoffService {
       alongside,
       properties: handoffEventProperties(plan),
       priority: plan.priority,
+      priorityReason: plan.primaryReason,
     };
     const handedOver = await this.#execute(turn, ref, effect, input, options);
     // Once committed: the card reaches the agents who see the conversation.
@@ -237,7 +239,7 @@ export class HandoffService {
       return false;
     }
 
-    if (effect.team) return this.#toTeamNamed(turn, effect.team, options);
+    if (effect.team) return this.#toSkillTeam(turn, effect.groupId, effect.team, options);
     const { tenant, chatId } = turn;
     const groupId =
       effect.groupId !== undefined
@@ -292,9 +294,16 @@ export class HandoffService {
     return team?.topicRole === RESPONSIBLE_GAMBLING_ROLE;
   }
 
-  /** A single-message skill's `transfer_to_team`: the team by its name. */
-  async #toTeamNamed(
+  /**
+   * A single-message skill's `transfer_to_team`: the team by its id (AI-12 ·
+   * tm 307.1), so a renamed team still receives it; by its name only for a
+   * step saved before ids, or one whose id names a team that is gone — the
+   * lowest id of that name, the team the step backfill
+   * (20261020180100_skill_steps_group_id_backfill) settles on.
+   */
+  async #toSkillTeam(
     turn: VisitorTurn,
+    groupId: number | undefined,
     groupName: string,
     options: {
       alongside: (tx: TenantClient) => Promise<void>;
@@ -303,13 +312,24 @@ export class HandoffService {
     },
   ): Promise<boolean> {
     const { tenant, chatId } = turn;
-    const group = await turn.withTenant((tx) =>
-      tx.group.findFirst({ where: { name: groupName }, select: { id: true } }),
+    const group = await turn.withTenant(
+      async (tx) =>
+        (groupId !== undefined
+          ? await tx.group.findFirst({ where: { id: BigInt(groupId) }, select: { id: true } })
+          : null) ??
+        (await tx.group.findFirst({
+          where: { name: groupName },
+          orderBy: { id: 'asc' },
+          select: { id: true },
+        })),
     );
     if (!group) {
       // The skill names a team that no longer exists. Leaving the conversation
       // where it is means a human still sees it; silently dropping it would not.
-      turn.log.warn({ group: groupName }, 'skill targets an unknown team');
+      turn.log.warn(
+        { group: groupName, group_id: groupId ?? null },
+        'skill targets an unknown team',
+      );
       await turn.withTenant(options.alongside);
       return false;
     }

@@ -53,6 +53,24 @@ const REFUSED: Array<[string, unknown, string, string]> = [
     'transfer_to_team_needs_team',
     'transfer_to_team needs a team',
   ],
+  [
+    'transfer_to_team with a team id as text',
+    [{ type: 'transfer_to_team', group_id: '7' }],
+    'transfer_to_team_needs_team',
+    'transfer_to_team group_id must be a team id',
+  ],
+  [
+    'transfer_to_team with a team id of zero',
+    [{ type: 'transfer_to_team', group_id: 0, group: 'Finance' }],
+    'transfer_to_team_needs_team',
+    'transfer_to_team group_id must be a team id',
+  ],
+  [
+    'transfer_to_team with a name that is not text',
+    [{ type: 'transfer_to_team', group_id: 7, group: 7 }],
+    'transfer_to_team_needs_team',
+    'transfer_to_team group must be the team name',
+  ],
 ];
 
 describe('step problem codes', () => {
@@ -85,9 +103,19 @@ describe('step problem codes', () => {
     });
   });
 
+  it.each([
+    ['by id', { type: 'transfer_to_team', group_id: 7 }],
+    ['by name (a step saved before ids)', { type: 'transfer_to_team', group: 'Finance' }],
+    ['by id with the name beside it', { type: 'transfer_to_team', group_id: 7, group: 'Finance' }],
+  ])('takes a transfer_to_team %s (AI-12 · tm 307.1)', (_name, step) => {
+    expect(validateSteps([step])).toEqual({ ok: true, steps: [step] });
+  });
+
   it('every code has a refusal above (no orphan code)', () => {
     const covered = new Set(REFUSED.map(([, , code]) => code));
     covered.add('steps_not_array');
+    // The API's: whether a team id is the workspace's is a database question.
+    covered.add('transfer_to_team_unknown_team');
     expect([...STEP_PROBLEM_CODES].filter((code) => !covered.has(code))).toEqual([]);
   });
 });

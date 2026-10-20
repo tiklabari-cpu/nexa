@@ -86,6 +86,21 @@ const BRAND_SCOPED_TABLES: ReadonlyArray<{
     plant: (db, at) =>
       db.inboxSettings.create({ data: { licenseId: at.licenseId, brandId: at.brandId } }),
   },
+  {
+    // A brand's hand-over route (tm 307.1 · AI-12); its every-brand routes
+    // (`brand_id` NULL) are every brand's and are not counted here.
+    table: 'handoff_routes',
+    plant: (db, at) =>
+      db.handoffRoute.create({
+        data: {
+          licenseId: at.licenseId,
+          brandId: at.brandId,
+          matchType: 'topic',
+          matchKey: 'finance',
+          groupId: 1n,
+        },
+      }),
+  },
 ];
 
 /** Every public table carrying a `brand_id` column, read straight from the

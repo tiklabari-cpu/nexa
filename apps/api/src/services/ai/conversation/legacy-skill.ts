@@ -54,10 +54,14 @@ export interface CollectStep extends AdaptedStep {
   readonly prompt: string;
 }
 
-/** Hand the conversation to a team; nothing after it runs. */
+/**
+ * Hand the conversation to a team; nothing after it runs. The team by id
+ * first (AI-12 · tm 307.1), by its name for a step saved before ids.
+ */
 export interface HandoffStep extends AdaptedStep {
   readonly type: 'handoff';
-  readonly target: string;
+  readonly target: string | null;
+  readonly groupId?: number;
 }
 
 export interface TagStep extends AdaptedStep {
@@ -119,7 +123,12 @@ export function adaptLegacySkill(steps: readonly SkillStep[]): SingleTurnProcedu
         );
         break;
       case 'transfer_to_team':
-        adapted.push({ type: 'handoff', target: step.group, authored: 'transfer_to_team' });
+        adapted.push({
+          type: 'handoff',
+          target: step.group ?? null,
+          ...(step.group_id !== undefined ? { groupId: step.group_id } : {}),
+          authored: 'transfer_to_team',
+        });
         break;
       case 'tag':
         adapted.push({ type: 'tag', tag: step.tag, authored: 'tag' });

@@ -962,7 +962,11 @@ describe('module parity matrix — what is still owed', () => {
       // topic queue (AU-01), read by the web panel's team editor (tm 305.4)
       // and hand-over routes (tm 307). The app configures no team; nothing
       // here re-scopes.
-      contractEndpoints: 261,
+      // 261 -> 263 with `/handoff-routes` and `/handoff-routes/{routeId}`
+      // (tm 307.1) — AI-12's topic and reason routes, kept in the web panel's
+      // hand-over screen (tm 307.3). The app configures no routing; nothing
+      // here re-scopes.
+      contractEndpoints: 263,
       scopeBoundaries: 1,
     });
   });

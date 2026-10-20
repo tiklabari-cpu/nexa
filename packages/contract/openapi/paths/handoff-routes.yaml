@@ -1,0 +1,99 @@
+handoffRoutes:
+  get:
+    tags: [Settings]
+    operationId: listHandoffRoutes
+    summary: The workspace's hand-over routes
+    description: |
+      Which team a conversation goes to for a routing topic or a hand-over
+      reason (AI-12, shared with AU-01's topic queues). Every route of the
+      workspace, every-brand routes first, then by brand, match type and key.
+    responses:
+      "200":
+        description: Routes
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 200
+                  items: { $ref: "../openapi.yaml#/components/schemas/HandoffRoute" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createHandoffRoute
+    summary: Add a hand-over route
+    description: |
+      One route per key and brand. Refusals are 400 `validation` with
+      `details.reason`: `handoff_route_bad_key` (the key is not one the match
+      type takes), `handoff_route_taken` (the key and brand have a route —
+      edit it), `handoff_route_unknown_team`, `handoff_route_unknown_expertise`,
+      `handoff_route_unknown_brand` (not this workspace's), `handoff_routes_limit`
+      (200 routes).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/HandoffRouteCreate" }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/HandoffRoute" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+handoffRoute:
+  parameters:
+    - name: routeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Settings]
+    operationId: updateHandoffRoute
+    summary: Edit, turn on or turn off a hand-over route
+    description: |
+      Any field alone; the others keep their value. What it matches (type,
+      key, brand) is fixed — delete the route and add another. Refusals as on
+      create.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/HandoffRouteUpdate" }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/HandoffRoute" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteHandoffRoute
+    summary: Delete a hand-over route
+    description: |
+      A topic's conversations go to the team holding the topic's queue role
+      again; a reason's go wherever the hand-over would send them without it.
+    responses:
+      "204": { description: Deleted }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

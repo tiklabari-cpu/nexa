@@ -372,6 +372,8 @@ export const playbook: Messages = {
     '{step}. adım: gönderilecek yanıtı yazın ya da bunun yerine bilgi tabanından yanıtlatın.',
   'playbook.editor.stepProblem.transfer_to_team_needs_team':
     '{step}. adım: sohbetin devredileceği bir takım seçin.',
+  'playbook.editor.stepProblem.transfer_to_team_unknown_team':
+    '{step}. adım: bu takım artık yok, başka bir takım seçin.',
   'playbook.editor.replyLabel': 'Müşteriye yanıt',
   'playbook.editor.summaryLabel': 'Sonraki temsilci için özet',
   'playbook.editor.handsOverTo': '{name} ekibine devrediliyor',

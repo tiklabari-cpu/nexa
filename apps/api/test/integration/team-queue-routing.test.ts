@@ -543,18 +543,23 @@ describe('team queues in routing (AU-01 · ADR-08a)', () => {
       ]);
     });
 
-    it('raises a priority and never lowers it', async () => {
+    it('raises a priority and never lowers it; the reason is the raise that stands (tm 307.1)', async () => {
       const financeAgent = await addAgent({ groupIds: [financeId], limit: 1 });
       await holdChat(financeAgent, financeId);
       const chat = await openChat('https://casino.test/finance/1');
 
       await withTenant(owner, ctx(), (tx) =>
-        routing.raisePriority(tx, fx.a.licenseId, chat.threadId, 'high'),
+        routing.raisePriority(tx, fx.a.licenseId, chat.threadId, 'high', 'repeat_same_day'),
       );
       await withTenant(owner, ctx(), (tx) =>
-        routing.raisePriority(tx, fx.a.licenseId, chat.threadId, 'normal'),
+        routing.raisePriority(tx, fx.a.licenseId, chat.threadId, 'normal', 'abuse'),
       );
       expect((await threadOf(chat.threadId)).priority).toBe(1);
+      const { priorityReason } = await owner.thread.findUniqueOrThrow({
+        where: { id: chat.threadId },
+        select: { priorityReason: true },
+      });
+      expect(priorityReason).toBe('repeat_same_day');
     });
   });
 

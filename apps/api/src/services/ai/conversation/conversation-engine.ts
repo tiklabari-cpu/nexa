@@ -1580,8 +1580,16 @@ export class ConversationEngine {
 
         case 'handoff':
           handedOver = true;
-          sideEffects.push({ kind: 'handoff', team: step.target });
-          log.push({ step: name, detail: `handing over to ${step.target}`, ok: true });
+          sideEffects.push({
+            kind: 'handoff',
+            team: step.target,
+            ...(step.groupId !== undefined ? { groupId: step.groupId } : {}),
+          });
+          log.push({
+            step: name,
+            detail: `handing over to ${step.target ?? `team ${step.groupId}`}`,
+            ok: true,
+          });
           break;
       }
     }

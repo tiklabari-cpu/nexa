@@ -33,6 +33,7 @@ export * from './id-glossary.js';
 export * from './conversation-day.js';
 export * from './queue-entry.js';
 export * from './team-queues.js';
+export * from './handoff-routes.js';
 export * from './member-recognition.js';
 export * from './realtime-bus.js';
 export * from './widget.js';

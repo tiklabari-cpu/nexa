@@ -3260,6 +3260,66 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/handoff-routes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's hand-over routes
+     * @description Which team a conversation goes to for a routing topic or a hand-over
+     *     reason (AI-12, shared with AU-01's topic queues). Every route of the
+     *     workspace, every-brand routes first, then by brand, match type and key.
+     */
+    get: operations['listHandoffRoutes'];
+    put?: never;
+    /**
+     * Add a hand-over route
+     * @description One route per key and brand. Refusals are 400 `validation` with
+     *     `details.reason`: `handoff_route_bad_key` (the key is not one the match
+     *     type takes), `handoff_route_taken` (the key and brand have a route —
+     *     edit it), `handoff_route_unknown_team`, `handoff_route_unknown_expertise`,
+     *     `handoff_route_unknown_brand` (not this workspace's), `handoff_routes_limit`
+     *     (200 routes).
+     */
+    post: operations['createHandoffRoute'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/handoff-routes/{routeId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        routeId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a hand-over route
+     * @description A topic's conversations go to the team holding the topic's queue role
+     *     again; a reason's go wherever the hand-over would send them without it.
+     */
+    delete: operations['deleteHandoffRoute'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit, turn on or turn off a hand-over route
+     * @description Any field alone; the others keep their value. What it matches (type,
+     *     key, brand) is fixed — delete the route and add another. Refusals as on
+     *     create.
+     */
+    patch: operations['updateHandoffRoute'];
+    trace?: never;
+  };
   '/ai-agents': {
     parameters: {
       query?: never;
@@ -9722,6 +9782,17 @@ export interface components {
        */
       ai_mode?: 'ai' | 'human' | 'paused' | null;
       /**
+       * @description How pressing the connection is (AI-12 · ADR-08a §2.3); `normal`
+       *     until a hand-over or a route raises it. Never lowered.
+       */
+      priority?: components['schemas']['ThreadPriority'];
+      /**
+       * @description The hand-over reason (a catalogue code such as
+       *     `guardrail_self_harm`) that last raised `priority`; null while
+       *     nothing has.
+       */
+      priority_reason?: string | null;
+      /**
        * @description Whether the AI has answered in this connection — what tells a
        *     `human` connection the AI was taken off from one a person answered
        *     from the start. Present only on the agent's fetch of a single chat
@@ -10846,7 +10917,20 @@ export interface components {
       source?: 'text' | 'knowledge';
       /** @description send_message with source=text. */
       text?: string;
-      /** @description transfer_to_team: the team name. */
+      /**
+       * Format: int64
+       * @description transfer_to_team: the team (AI-12), so renaming it keeps the skill
+       *     working. A team the workspace does not have is 400 `validation`
+       *     with `transfer_to_team_unknown_team`. Filled by the API on save
+       *     from `group` when only the name is sent.
+       */
+      group_id?: number;
+      /**
+       * @description transfer_to_team: the team's name. The API writes the team's
+       *     current name beside `group_id`; a step sent with the name only is
+       *     given the id of the team of that name (the lowest id when two
+       *     share it), and keeps the name alone when no team has it.
+       */
       group?: string;
     };
     Skill: {
@@ -10960,7 +11044,8 @@ export interface components {
         | 'tag_needs_tag'
         | 'send_message_bad_source'
         | 'send_message_needs_text'
-        | 'transfer_to_team_needs_team';
+        | 'transfer_to_team_needs_team'
+        | 'transfer_to_team_unknown_team';
       /** @description The 1-based position of the step; absent when the list as a whole was refused. */
       step?: number;
       /** @description The unrecognised type, for `unknown_step_type`. */
@@ -14349,6 +14434,81 @@ export interface components {
      * @enum {string}
      */
     ThreadPriority: 'urgent' | 'high' | 'normal';
+    /**
+     * @description What a hand-over route matches (AI-12; `@siyahtus/types`
+     *     `HANDOFF_ROUTE_MATCH_TYPES`): `topic` — a routing topic, one of the
+     *     queue roles (`QueueTopicRole`); `reason` — the reason the AI handed
+     *     the conversation over, a catalogue code (`guardrail_self_harm`,
+     *     `repeat_same_day`, …; `HANDOFF_REASONS`).
+     * @enum {string}
+     */
+    HandoffRouteMatchType: 'topic' | 'reason';
+    /**
+     * @description Which team a conversation goes to for a key (AI-12, shared with
+     *     AU-01). The team is held by id, so renaming it keeps the route. A
+     *     `topic` route refines the team holding that queue role
+     *     (`Group.topic_role`): one brand's route first, then the every-brand
+     *     route, then the role's team. Human routing reads the routes live;
+     *     the AI's hand-over reads them from its published configuration
+     *     (ADR-14b §2.12).
+     */
+    HandoffRoute: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * Format: uuid
+       * @description The brand the route is for; null for every brand.
+       */
+      brand_id: string | null;
+      match_type: components['schemas']['HandoffRouteMatchType'];
+      /** @description A `QueueTopicRole` for `topic`, a hand-over reason code for `reason`. */
+      match_key: string;
+      /**
+       * Format: int64
+       * @description The team. A team deleted later leaves the route in place; the
+       *     hand-over skips it and the console shows it as missing.
+       */
+      group_id: number;
+      /**
+       * Format: int64
+       * @description Only agents with this expertise take a conversation routed here;
+       *     with none available it waits in the team's queue rather than
+       *     reach an untrained agent (AI-12-S3). An expertise deleted later
+       *     is met by nobody.
+       */
+      required_expertise_id: number | null;
+      /** @description The priority a conversation routed here starts with. */
+      default_priority: components['schemas']['ThreadPriority'];
+      active: boolean;
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: uuid */
+      updated_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    HandoffRouteCreate: {
+      /** Format: uuid */
+      brand_id?: string | null;
+      match_type: components['schemas']['HandoffRouteMatchType'];
+      match_key: string;
+      /** Format: int64 */
+      group_id: number;
+      /** Format: int64 */
+      required_expertise_id?: number | null;
+      default_priority?: components['schemas']['ThreadPriority'];
+      active?: boolean;
+    };
+    HandoffRouteUpdate: {
+      /** Format: int64 */
+      group_id?: number;
+      /** Format: int64 */
+      required_expertise_id?: number | null;
+      default_priority?: components['schemas']['ThreadPriority'];
+      active?: boolean;
+    };
     Group: {
       /** Format: int64 */
       id: number;
@@ -18125,6 +18285,13 @@ export interface operations {
          *     same intersection.
          */
         queue_group_id?: number;
+        /**
+         * @description Narrows to the chats whose open connection has this priority
+         *     (AI-12 · `ChatSummary.priority`) — an archived chat has none and
+         *     never matches. Composes with the other filters, and `total` counts
+         *     the same intersection.
+         */
+        priority?: components['schemas']['ThreadPriority'];
         sort?: 'newest' | 'oldest';
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
@@ -21209,6 +21376,115 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listHandoffRoutes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Routes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['HandoffRoute'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createHandoffRoute: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HandoffRouteCreate'];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HandoffRoute'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteHandoffRoute: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        routeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateHandoffRoute: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        routeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HandoffRouteUpdate'];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HandoffRoute'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

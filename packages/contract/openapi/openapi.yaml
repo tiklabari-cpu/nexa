@@ -335,6 +335,10 @@ paths:
     $ref: "./paths/agents.yaml#/groupMember"
   /routing/queues:
     $ref: "./paths/agents.yaml#/routingQueues"
+  /handoff-routes:
+    $ref: "./paths/handoff-routes.yaml#/handoffRoutes"
+  /handoff-routes/{routeId}:
+    $ref: "./paths/handoff-routes.yaml#/handoffRoute"
 
   /ai-agents:
     $ref: "./paths/playbook.yaml#/aiAgents"
@@ -1328,6 +1332,20 @@ components:
             back without a person having taken it. Null until the AI or a
             person takes part — the AI may still answer. Changes are pushed to
             agents as `chat_ai_mode_changed`.
+        priority:
+          description: |
+            How pressing the connection is (AI-12 · ADR-08a §2.3); `normal`
+            until a hand-over or a route raises it. Never lowered.
+          allOf:
+            - $ref: "#/components/schemas/ThreadPriority"
+        priority_reason:
+          type: string
+          nullable: true
+          pattern: "^[a-z][a-z0-9_]{0,63}$"
+          description: |
+            The hand-over reason (a catalogue code such as
+            `guardrail_self_harm`) that last raised `priority`; null while
+            nothing has.
         ai_took_part:
           type: boolean
           description: |
@@ -2832,7 +2850,22 @@ components:
           enum: [text, knowledge]
           description: "send_message: a fixed reply, or one retrieved from knowledge."
         text: { type: string, description: "send_message with source=text." }
-        group: { type: string, description: "transfer_to_team: the team name." }
+        group_id:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            transfer_to_team: the team (AI-12), so renaming it keeps the skill
+            working. A team the workspace does not have is 400 `validation`
+            with `transfer_to_team_unknown_team`. Filled by the API on save
+            from `group` when only the name is sent.
+        group:
+          type: string
+          description: |
+            transfer_to_team: the team's name. The API writes the team's
+            current name beside `group_id`; a step sent with the name only is
+            given the id of the team of that name (the lowest id when two
+            share it), and keeps the name alone when no team has it.
 
     Skill:
       type: object
@@ -2999,6 +3032,7 @@ components:
             - send_message_bad_source
             - send_message_needs_text
             - transfer_to_team_needs_team
+            - transfer_to_team_unknown_team
         step:
           type: integer
           minimum: 1
@@ -7378,6 +7412,101 @@ components:
         pressing first, then the longest waiting. Stored as a rank
         (`threads.priority`), so it never sorts by spelling.
       enum: [urgent, high, normal]
+
+    HandoffRouteMatchType:
+      type: string
+      description: |
+        What a hand-over route matches (AI-12; `@siyahtus/types`
+        `HANDOFF_ROUTE_MATCH_TYPES`): `topic` — a routing topic, one of the
+        queue roles (`QueueTopicRole`); `reason` — the reason the AI handed
+        the conversation over, a catalogue code (`guardrail_self_harm`,
+        `repeat_same_day`, …; `HANDOFF_REASONS`).
+      enum: [topic, reason]
+
+    HandoffRoute:
+      type: object
+      description: |
+        Which team a conversation goes to for a key (AI-12, shared with
+        AU-01). The team is held by id, so renaming it keeps the route. A
+        `topic` route refines the team holding that queue role
+        (`Group.topic_role`): one brand's route first, then the every-brand
+        route, then the role's team. Human routing reads the routes live;
+        the AI's hand-over reads them from its published configuration
+        (ADR-14b §2.12).
+      required:
+        [
+          id,
+          brand_id,
+          match_type,
+          match_key,
+          group_id,
+          required_expertise_id,
+          default_priority,
+          active,
+          created_by,
+          updated_by,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        brand_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The brand the route is for; null for every brand.
+        match_type: { $ref: "#/components/schemas/HandoffRouteMatchType" }
+        match_key:
+          type: string
+          pattern: "^[a-z][a-z0-9_]{0,63}$"
+          description: A `QueueTopicRole` for `topic`, a hand-over reason code for `reason`.
+        group_id:
+          type: integer
+          format: int64
+          description: |
+            The team. A team deleted later leaves the route in place; the
+            hand-over skips it and the console shows it as missing.
+        required_expertise_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            Only agents with this expertise take a conversation routed here;
+            with none available it waits in the team's queue rather than
+            reach an untrained agent (AI-12-S3). An expertise deleted later
+            is met by nobody.
+        default_priority:
+          description: The priority a conversation routed here starts with.
+          allOf:
+            - $ref: "#/components/schemas/ThreadPriority"
+        active: { type: boolean }
+        created_by: { type: string, format: uuid, nullable: true }
+        updated_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    HandoffRouteCreate:
+      type: object
+      required: [match_type, match_key, group_id]
+      additionalProperties: false
+      properties:
+        brand_id: { type: string, format: uuid, nullable: true }
+        match_type: { $ref: "#/components/schemas/HandoffRouteMatchType" }
+        match_key: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+        group_id: { type: integer, format: int64, minimum: 1 }
+        required_expertise_id: { type: integer, format: int64, minimum: 1, nullable: true }
+        default_priority: { $ref: "#/components/schemas/ThreadPriority" }
+        active: { type: boolean }
+
+    HandoffRouteUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        group_id: { type: integer, format: int64, minimum: 1 }
+        required_expertise_id: { type: integer, format: int64, minimum: 1, nullable: true }
+        default_priority: { $ref: "#/components/schemas/ThreadPriority" }
+        active: { type: boolean }
 
     Group:
       type: object

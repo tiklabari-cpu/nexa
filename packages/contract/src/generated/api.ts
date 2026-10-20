@@ -1509,6 +1509,53 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/ai-handoffs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The AI's hand-over cards of a conversation
+     * @description Every card the AI wrote in the chat's day (panel "Thread ID"), newest
+     *     first — or one connection's (panel "Chat ID") with `thread_id`. A chat
+     *     the caller may not see is `404`, as its transcript is.
+     */
+    get: operations['listChatAiHandoffs'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-handoffs/{handoffId}/feedback': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        handoffId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark a hand-over card sufficient or not
+     * @description One click, optional (AI-10-S2). The card keeps one verdict: a second
+     *     click overwrites the first (who, when, the reason) and adds no row. Any
+     *     agent who sees the conversation may mark it, the archive included. A card
+     *     of a conversation the caller may not see is `404`.
+     */
+    post: operations['setAiHandoffFeedback'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/risk-flags': {
     parameters: {
       query?: never;
@@ -9504,6 +9551,12 @@ export interface components {
        */
       connections?: components['schemas']['ChatConnection'][];
       /**
+       * @description The newest card the AI wrote in this chat (AI-10) — on the agent's
+       *     fetch of a single chat (`GET /chats/{chatId}`) only; null when the AI
+       *     handed nothing over. Never on the customer's view.
+       */
+      latest_ai_handoff?: components['schemas']['AiHandoffCard'] | null;
+      /**
        * @description The customer's most recent visit for this license, projected onto
        *     the chat so the Details panel can show where the visitor came from
        *     without a second call (FR-MOD-02.4). Null when nothing was recorded,
@@ -10035,6 +10088,118 @@ export interface components {
       | 'account_security';
     /** @enum {string} */
     RiskFlagStatus: 'active' | 'cleared';
+    /**
+     * @description The AI's hand-over card (AI-10): built from the conversation's state
+     *     when the AI handed the connection to a person, never by a model. Its
+     *     `id` is the hand-over's `handoff_id`, which the transfer and AI-mode
+     *     events carry. `reason_codes`, `primary_reason` and `risk_flags` are
+     *     closed vocabularies of `@siyahtus/types` (`HANDOFF_REASONS`,
+     *     `RISK_FLAG_TYPES`). A `sensitive` slot was given and is kept off the
+     *     card (`text` null).
+     */
+    AiHandoffCard: {
+      /** Format: uuid */
+      id: string;
+      /** @description Panelde: Thread ID (günlük). */
+      chat_id: string;
+      /** @description Panelde: Chat ID (bağlantı) — the connection handed over. */
+      thread_id: string;
+      /** Format: uuid */
+      skill_id: string | null;
+      procedure_key: string | null;
+      procedure_snapshot_hash: string | null;
+      /** @description The procedure's name; null when no procedure ran. */
+      topic: string | null;
+      /**
+       * @description One sentence: the procedure's name and what was collected, or
+       *     "Soru: <the player's first message>" when no procedure ran. Also
+       *     the connection's `Thread.summary`.
+       */
+      summary: string;
+      /** @description The player's question, on a hand-over no procedure ran. */
+      question: string | null;
+      player: {
+        username: string | null;
+        name: string | null;
+        email: string | null;
+        /**
+         * @description The player's own claim — not verified in F1.
+         * @enum {string}
+         */
+        basis: 'declared';
+        /** @description A member token this workspace signed came with the message. */
+        recognized_device: boolean;
+      };
+      /** @description The procedure's `show_in_card` slots, in its order, once there is something to say. */
+      slots: {
+        slot: string;
+        label: string;
+        /** @enum {string} */
+        status: 'missing' | 'partial' | 'filled' | 'refused' | 'unknown' | 'invalid' | 'carried';
+        text: string | null;
+        /** @enum {string|null} */
+        source: 'player' | 'carried' | 'inferred' | null;
+        /** @enum {boolean} */
+        sensitive?: true;
+        /** @enum {string} */
+        out_of_range?: 'below_min' | 'above_max';
+      }[];
+      /** @description The procedure's `handoff.card_fields`, filled — null when unknown. */
+      decision_facts: {
+        field: string;
+        text: string | null;
+      }[];
+      /** @description What a person must check, since no tool could (AI-28). */
+      checks: string[];
+      /** @description The AI's last messages to the player in the connection (at most 5), oldest first. */
+      ai_statements: {
+        event_id: string;
+        text: string;
+        /** Format: date-time */
+        created_at: string;
+      }[];
+      /**
+       * @description What the draft checks found on the AI's replies (AI-08). Empty: no
+       *     promise was caught.
+       */
+      output_check_flags: ('draft_rewritten' | 'draft_blocked' | 'draft_warned')[];
+      /** @description Every reason the AI handed over for, most severe first. */
+      reason_codes: string[];
+      primary_reason: string;
+      risk_flags: string[];
+      /** @enum {string|null} */
+      sentiment: 'positive' | 'neutral' | 'negative' | 'angry' | null;
+      /** @description The procedure's `handoff.next_step_hint`, filled; null without one. */
+      suggested_next_step: string | null;
+      attachments: {
+        event_id: string;
+        name: string | null;
+        /** Format: date-time */
+        created_at: string;
+      }[];
+      /** Format: int64 */
+      target_group_id: number | null;
+      /** @enum {string} */
+      priority: 'urgent' | 'high' | 'normal';
+      /** @description The card as plain text — the agents-only line in the transcript. */
+      card_text: string;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: uuid
+       * @description The agent whose first message after the hand-over took it up.
+       */
+      accepted_by: string | null;
+      /** Format: date-time */
+      accepted_at: string | null;
+      /** @enum {string|null} */
+      feedback: 'sufficient' | 'insufficient' | null;
+      feedback_reason: string | null;
+      /** Format: uuid */
+      feedback_by: string | null;
+      /** Format: date-time */
+      feedback_at: string | null;
+    };
     /**
      * @description A risk flag (AI-27). `note`, `evidence_event_ids` and `clear_reason`
      *     are for the Responsible Gaming team and a Team Lead and up; for anyone
@@ -18480,6 +18645,73 @@ export interface operations {
         content?: never;
       };
       404: components['responses']['NotFound'];
+    };
+  };
+  listChatAiHandoffs: {
+    parameters: {
+      query?: {
+        /** @description Only this connection's cards. */
+        thread_id?: string;
+      };
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The cards */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiHandoffCard'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  setAiHandoffFeedback: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        handoffId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          value: 'sufficient' | 'insufficient';
+          reason?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The card, with the verdict */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiHandoffCard'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   raiseChatRiskFlag: {

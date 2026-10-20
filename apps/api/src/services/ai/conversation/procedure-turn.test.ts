@@ -405,8 +405,11 @@ describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', ()
       'Kullanıcı adınızı yazar mısınız?',
       'İşlemin referans numarasını paylaşır mısınız?',
     ]);
-    // The procedure hands over without a word of its own: the reason's message (tm 303.2).
-    expect(replies[5]).toBe(DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr);
+    // The procedure hands over without a word of its own: the reason's message (tm 303.2),
+    // then what the player gave, for them to correct (tm 304.1 · AI-10-S1).
+    expect(replies[5]).toBe(
+      `${DEFAULT_HANDOFF_MESSAGES.procedure_rule.tr}\nŞu bilgileri ilettim: ahmet77, Papara, 2.500 TRY, 18.10.2026 12:00, Evet, Evet, REF12345. Yanlış bir bilgi varsa yazabilirsiniz.`,
+    );
     expect(last).toMatchObject({
       activeSkillId: 'deposit',
       stepId: 'finansa_devir',
@@ -442,7 +445,9 @@ describe('the §3.1 deposit procedure through the engine (AI-03 acceptance)', ()
       outcome: 'handed_off',
       handoffReason: 'no_site_request',
     });
-    expect(result!.reply).toBe(DEPOSIT_TEMPLATES.talep_yok);
+    expect(result!.reply).toBe(
+      `${DEPOSIT_TEMPLATES.talep_yok}\nŞu bilgileri ilettim: Papara, 18.10.2026 12:00, Hayır, Hayır. Yanlış bir bilgi varsa yazabilirsiniz.`,
+    );
     expect(result!.sideEffects).toEqual([
       {
         kind: 'handoff',

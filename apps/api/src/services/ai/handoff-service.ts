@@ -5,9 +5,10 @@
  * triggers.ts`) and writes nothing; this is where it happens to the real
  * conversation, in one order and one place — `execute`:
  *
- *   1. **the card** (AI-10): a {@link HandoffCardWriter}, in the hand-over's own
- *      transaction, so a card is never there without the hand-over — the seam
- *      #304 writes `ai_handoffs` through; none until then;
+ *   1. **the card** (AI-10, tm 304.1): a {@link HandoffCardWriter}, in the
+ *      hand-over's own transaction, so a card is never there without the
+ *      hand-over — `ai_handoffs`, the connection's summary and the
+ *      agents-only line; announced once the hand-over committed;
  *   2. **the connection to `human`** (AI-11): the AI stays silent from here on;
  *   3. **the target** (AI-12): the team a single-message skill names, the team
  *      a procedure names by id, or — a routing topic (#307 resolves those), no
@@ -32,16 +33,17 @@ import {
   type GuardrailPriority,
   type HandoffReason,
 } from '@siyahtus/types';
-import type { TenantClient } from '../../lib/tenant.js';
+import type { IdentityTrust } from '@siyahtus/types';
+import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { ApiError } from '../../lib/api-error.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import { aiMayAnswer, readAiMode } from '../chat/ai-mode.js';
-import type { ChatService } from '../chat/chat-service.js';
+import type { ChatService, SerialisedEvent } from '../chat/chat-service.js';
 import type { VisitorTurn } from '../chat/visitor-turn.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { catalogueReason, orderHandoffReasons } from './conversation/handoff/triggers.js';
 import type { ConnectionRef } from './conversation/state-store.js';
-import type { handoffOf } from './conversation/turn.js';
+import type { handoffOf, TurnResult } from './conversation/turn.js';
 
 export type TurnHandoff = NonNullable<ReturnType<typeof handoffOf>>;
 
@@ -56,11 +58,48 @@ export interface PlannedHandoff {
   readonly ruleId?: string;
 }
 
-/** Writes the hand-over card (AI-10, #304) in the hand-over's transaction. */
-export type HandoffCardWriter = (
-  tx: TenantClient,
-  input: { chatId: string; threadId: string; handoff: PlannedHandoff; effect: TurnHandoff },
-) => Promise<void>;
+/** What the card is built from besides the hand-over itself (AI-10). */
+export interface HandoffCardContext {
+  /** The turn that handed over; null when none ran (today's cap refused it). */
+  readonly result: TurnResult | null;
+  /** How the visitor proved who they are (K4). */
+  readonly trust: IdentityTrust | null;
+  /** What the player wrote that the hand-over answered. */
+  readonly turnText: string | null;
+}
+
+/** A card written in the hand-over's transaction, for its announcement after commit. */
+export interface WrittenHandoffCard {
+  readonly handoffId: string;
+  readonly chatId: string;
+  readonly threadId: string;
+  readonly summary: string;
+  readonly primaryReason: HandoffReason;
+  readonly priority: GuardrailPriority;
+  readonly targetGroupId: number | null;
+  /** The agents-only line with the card's text; null when the connection was closed. */
+  readonly note: SerialisedEvent | null;
+}
+
+/**
+ * The hand-over card (AI-10, tm 304.1): written in the hand-over's
+ * transaction — again from the start when a refused transfer rolled the first
+ * attempt back — and announced once it committed.
+ */
+export interface HandoffCardWriter {
+  write(
+    tx: TenantClient,
+    input: {
+      tenant: TenantContext;
+      chatId: string;
+      threadId: string;
+      handoff: PlannedHandoff;
+      effect: TurnHandoff;
+      context: HandoffCardContext;
+    },
+  ): Promise<WrittenHandoffCard>;
+  announce(tenant: TenantContext, written: WrittenHandoffCard): Promise<void>;
+}
 
 /** The hand-over's id, reasons and priority, before anything is written. */
 export function planHandoff(effect: TurnHandoff, failed: boolean): PlannedHandoff {
@@ -101,7 +140,7 @@ export function handoffEventProperties(plan: PlannedHandoff): Record<string, unk
 }
 
 export interface HandoffServiceOptions {
-  /** The card (AI-10). Absent until #304: no card is written. */
+  /** The card (AI-10). Absent: no card is written (a test's choice). */
   readonly card?: HandoffCardWriter;
 }
 
@@ -130,15 +169,48 @@ export class HandoffService {
       plan: PlannedHandoff;
       failed: boolean;
       alongside?: (tx: TenantClient) => Promise<void>;
+      /** What the card is built from (AI-10); absent: the hand-over alone. */
+      card?: HandoffCardContext;
     },
   ): Promise<boolean> {
     const { plan } = input;
     const card = this.#card;
+    let written: WrittenHandoffCard | null = null;
     const alongside = async (tx: TenantClient): Promise<void> => {
       await input.alongside?.(tx);
-      await card?.(tx, { chatId: ref.chatId, threadId: ref.threadId, handoff: plan, effect });
+      if (!card) return;
+      written = await card.write(tx, {
+        tenant: turn.tenant,
+        chatId: ref.chatId,
+        threadId: ref.threadId,
+        handoff: plan,
+        effect,
+        context: input.card ?? { result: null, trust: null, turnText: null },
+      });
     };
     const options = { alongside, properties: handoffEventProperties(plan) };
+    const handedOver = await this.#execute(turn, ref, effect, input, options);
+    // Once committed: the card reaches the agents who see the conversation.
+    const done = written as WrittenHandoffCard | null;
+    if (card && done) await card.announce(turn.tenant, done);
+    return handedOver;
+  }
+
+  async #execute(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    effect: TurnHandoff,
+    input: {
+      plan: PlannedHandoff;
+      failed: boolean;
+      alongside?: (tx: TenantClient) => Promise<void>;
+    },
+    options: {
+      alongside: (tx: TenantClient) => Promise<void>;
+      properties: Record<string, unknown>;
+    },
+  ): Promise<boolean> {
+    const { plan } = input;
 
     // Idempotent: a person who took it meanwhile keeps it as it is.
     const mode = await turn.withTenant((tx) => readAiMode(tx, ref));

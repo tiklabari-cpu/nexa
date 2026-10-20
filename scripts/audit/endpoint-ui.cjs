@@ -224,6 +224,24 @@ const HEADLESS = [
  */
 const INDIRECT = [
   {
+    op: 'PUT /ai-agents/{aiAgentId}/handoff-rules/order',
+    reason:
+      '`HandoffRules.tsx` (tm 303.5) builds `` `/ai-agents/${agent.id}/handoff-rules` `` once ' +
+      'as `base`; the drag-and-drop reorder sends `` `${base}/order` ``.',
+    site: {
+      file: 'apps/web/src/features/playbook/HandoffRules.tsx',
+      contains: 'api.put<HandoffRuleList>(`${base}/order`',
+    },
+  },
+  {
+    op: 'DELETE /ai-agents/{aiAgentId}/handoff-rules/{ruleId}',
+    reason: 'the same `base` — a rule is removed at `` `${base}/${rule.id}` ``.',
+    site: {
+      file: 'apps/web/src/features/playbook/HandoffRules.tsx',
+      contains: 'api.delete(`${base}/${rule.id}`)',
+    },
+  },
+  {
     op: 'POST /settings/sso/{connectionId}/domains/{domain}/challenge',
     reason:
       'the last segment is the action, chosen by the caller — `SsoConnection.tsx` builds ' +
@@ -329,6 +347,21 @@ const INDIRECT = [
  * thing can be made but not changed, or made but not removed.
  */
 const TRACKED = [
+  {
+    op: 'GET /chats/{chatId}/ai-handoffs',
+    owner: 'tm 304.2',
+    reason:
+      "the AI's hand-over cards of a conversation (tm 304.1 · AI-10) — the archive's list; " +
+      'the inbox reads the newest with the chat (`latest_ai_handoff`). `AiHandoffCard.tsx` ' +
+      '(CARD-WEB, tm 304.2) draws them.',
+  },
+  {
+    op: 'POST /ai-handoffs/{handoffId}/feedback',
+    owner: 'tm 304.2',
+    reason:
+      'the card\'s "Yeterli / Yetersiz" button (tm 304.1 · AI-10-S2) — drawn with the card ' +
+      'by CARD-WEB (tm 304.2).',
+  },
   {
     op: 'GET /chats/{chatId}/ai-digests',
     owner: 'tm 331',

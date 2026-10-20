@@ -99,11 +99,11 @@ describe('the side effects', () => {
     expect(
       describeSideEffects([
         { kind: 'tag', tag: 'a' },
-        { kind: 'summary', text: 'Customer asked: x' },
+        { kind: 'summary', text: 'Soru: x' },
         { kind: 'tag', tag: 'b' },
         { kind: 'handoff', team: 'Finance' },
       ]),
-    ).toEqual({ tags: ['a', 'b'], transferTo: 'Finance', summary: 'Customer asked: x' });
+    ).toEqual({ tags: ['a', 'b'], transferTo: 'Finance', summary: 'Soru: x' });
     expect(describeSideEffects([])).toEqual({ tags: [], transferTo: null, summary: null });
   });
 });

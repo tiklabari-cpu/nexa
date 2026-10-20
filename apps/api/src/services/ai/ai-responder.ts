@@ -152,6 +152,7 @@ import {
   type PlannedHandoff,
 } from './handoff-service.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
+import { HandoffCardService } from './handoff-card.js';
 import { recordGuardrailHits } from './guardrail-hits.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
@@ -181,8 +182,11 @@ export interface AiResponderOptions {
    * 302.2 · AI-27: push, webhook, urgent mail). Absent: written, not announced.
    */
   readonly riskFlags?: RiskFlagAnnouncer;
-  /** The hand-over card's writer (AI-10, #304) — none until then. */
-  readonly handoffCard?: HandoffCardWriter;
+  /**
+   * The hand-over card's writer (AI-10, tm 304.1): `HandoffCardService` when
+   * absent; null writes no card (a test's choice).
+   */
+  readonly handoffCard?: HandoffCardWriter | null;
 }
 
 /**
@@ -214,11 +218,11 @@ export class AiResponder {
     this.#batchWindowMs = options.batchWindowMs ?? 0;
     this.#historyBudget = options.historyBudget ?? DEFAULT_HISTORY_BUDGET;
     this.#riskFlags = options.riskFlags ?? null;
-    this.#handoffs = new HandoffService(
-      chats,
-      publisher,
-      options.handoffCard ? { card: options.handoffCard } : {},
-    );
+    const card =
+      options.handoffCard === undefined
+        ? new HandoffCardService(chats, publisher)
+        : options.handoffCard;
+    this.#handoffs = new HandoffService(chats, publisher, card ? { card } : {});
   }
 
   /**
@@ -340,6 +344,8 @@ export class AiResponder {
     const startedAt = performance.now();
     let read: AiConversationState | null = null;
     let result: TurnResult | null = null;
+    /** What the visitor wrote that the turn answered — the card's question (AI-10). */
+    let answeredText: string | null = null;
     let replyEventId: string | null = null;
     let applyFailed = false;
     let unrecorded = false;
@@ -392,12 +398,13 @@ export class AiResponder {
         gathered = loaded.context?.freshMessages || 1;
         sensitiveShared = loaded.context?.sensitiveShared ?? false;
         const history = historyOf(loaded.context);
+        answeredText = loaded.context?.newCustomerText || message;
         result = await this.#engine.runTurn(
           loaded.state,
           {
             // Everything the visitor wrote from the job's message on, merged —
             // or the job's message alone when it is not on the connection.
-            text: loaded.context?.newCustomerText || message,
+            text: answeredText,
             ...(history ? { history } : {}),
             ...(loaded.through !== null ? { throughSeq: loaded.through } : {}),
             ...(loaded.earlierToday ? { earlierToday: loaded.earlierToday } : {}),
@@ -553,6 +560,7 @@ export class AiResponder {
           plan: planned,
           failed,
           ...(alongside ? { alongside } : {}),
+          card: { result, trust: turn.identityTrust, turnText: answeredText ?? message },
         });
       } else if (alongside) {
         await turn.withTenant(alongside);
@@ -849,7 +857,11 @@ export class AiResponder {
         priority: 'normal' as const,
       };
       const plan = planHandoff(effect, true);
-      await this.#handoffs.execute(turn, ref, effect, { plan, failed: true });
+      await this.#handoffs.execute(turn, ref, effect, {
+        plan,
+        failed: true,
+        card: { result: null, trust: turn.identityTrust, turnText: message },
+      });
       return plan;
     } catch (error) {
       if (error instanceof AiJobReplyRefusedError) throw error;

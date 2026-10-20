@@ -307,7 +307,7 @@ describe("the AI recalls the member's day (AI-02 · K4 · K5)", () => {
       where: { id: noon.threadId },
       select: { summary: true },
     });
-    expect(card.summary).toBe(`Same day, contact 2 · Customer asked: ${AGAIN}`);
+    expect(card.summary).toBe(`Aynı gün, 2. temas · Soru: ${AGAIN}`);
   });
 
   it('recalls nothing the next day', async () => {
@@ -329,7 +329,7 @@ describe("the AI recalls the member's day (AI-02 · K4 · K5)", () => {
       where: { id: today.threadId },
       select: { summary: true },
     });
-    expect(card.summary).toBe(`Customer asked: ${AGAIN}`);
+    expect(card.summary).toBe(`Soru: ${AGAIN}`);
   });
 
   it('gives a claimed identity neither the earlier amount, method nor topic — in the model request or the reply (K4)', async () => {

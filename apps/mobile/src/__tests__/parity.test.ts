@@ -954,7 +954,11 @@ describe('module parity matrix — what is still owed', () => {
       // `…/{ruleId}` (tm 303.3) — K9's hand-over rules, kept in the web panel's
       // AI Agent screen (tm 303.5). The app configures no AI agent; nothing
       // here re-scopes.
-      contractEndpoints: 258,
+      // 258 -> 260 with `/chats/{chatId}/ai-handoffs` and
+      // `/ai-handoffs/{handoffId}/feedback` (tm 304.1) — AI-10's hand-over card,
+      // drawn and judged in the web inbox (tm 304.2). The app's chat screen
+      // shows no card yet; nothing here re-scopes.
+      contractEndpoints: 260,
       scopeBoundaries: 1,
     });
   });

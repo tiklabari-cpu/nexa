@@ -24,6 +24,7 @@
  */
 import type {
   AiConversationMode,
+  AiHandoffSentiment,
   AiNoAnswerSettings,
   GuardrailPriority,
   ClarifyThresholds,
@@ -438,6 +439,12 @@ export interface TurnDecisions {
    * every hand-over at the end of the turn (`settleHandoffTurn`).
    */
   handoffReasons?: HandoffReason[];
+  /**
+   * How the player came across when the turn handed over, as the
+   * understanding read them (tm 304.1 · AI-10 card) — absent when no call
+   * read it, or no hand-over.
+   */
+  sentiment?: AiHandoffSentiment | null;
   /** A procedure turn's step decisions (ID-08: step_id, type, cond_result, detail). */
   trace?: StepDecision[];
   /**

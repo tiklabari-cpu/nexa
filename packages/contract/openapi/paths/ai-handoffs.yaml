@@ -1,0 +1,87 @@
+# The AI's hand-over cards (AI-10 · tm 304.1).
+#
+# When the AI hands a connection to a person it writes one card, in the
+# hand-over's own transaction: what it was about, who the player says they
+# are, what the AI collected and decided on, what it told the player, why it
+# handed over, the risk and the mood, and the step it suggests. Built from the
+# conversation's state, never by a model. The card's one-line summary becomes
+# the connection's `Thread.summary`, and its plain text an agents-only line in
+# the transcript (`system_event: ai_handoff_card`). A card is pushed as
+# `ai_handoff_created` to the agents who see the conversation and the target
+# team.
+#
+# Agents only, behind the conversation's visibility: never to a customer
+# token, never in a webhook. A `pii: high` slot's value is never on a card,
+# nor is an internal note.
+
+chatAiHandoffs:
+  get:
+    tags: [Chats]
+    operationId: listChatAiHandoffs
+    summary: The AI's hand-over cards of a conversation
+    description: |
+      Every card the AI wrote in the chat's day (panel "Thread ID"), newest
+      first — or one connection's (panel "Chat ID") with `thread_id`. A chat
+      the caller may not see is `404`, as its transcript is.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+      - name: thread_id
+        in: query
+        required: false
+        description: Only this connection's cards.
+        schema: { type: string, minLength: 1, maxLength: 64 }
+    responses:
+      "200":
+        description: The cards
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiHandoffCard" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+aiHandoffFeedback:
+  parameters:
+    - name: handoffId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Chats]
+    operationId: setAiHandoffFeedback
+    summary: Mark a hand-over card sufficient or not
+    description: |
+      One click, optional (AI-10-S2). The card keeps one verdict: a second
+      click overwrites the first (who, when, the reason) and adds no row. Any
+      agent who sees the conversation may mark it, the archive included. A card
+      of a conversation the caller may not see is `404`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [value]
+            properties:
+              value: { type: string, enum: [sufficient, insufficient] }
+              reason: { type: string, minLength: 1, maxLength: 500 }
+    responses:
+      "200":
+        description: The card, with the verdict
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiHandoffCard" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

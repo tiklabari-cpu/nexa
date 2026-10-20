@@ -48,6 +48,7 @@ import {
   type QueueEntryOutcome,
   type SensitiveType,
   type TransferReason,
+  type AiHandoffCardView,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { maskForWrite, sensitiveAuthorOf, type MaskedForWrite } from '../../lib/sensitive-mask.js';
@@ -77,6 +78,7 @@ import {
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import { loadDailyDigests, settleDailyDigest, type DailyDigest } from './ai-digest.js';
+import { serialiseAiHandoff } from './ai-handoff-view.js';
 import {
   AI_MODE_SYSTEM_ACTOR,
   aiModeNoteText,
@@ -511,6 +513,13 @@ export class ChatService {
           });
           detail.thread.ai_took_part = turn !== null;
         }
+        // The newest hand-over card (tm 304.1 · AI-10 §9): the inbox reads it
+        // with the chat, in one query.
+        const card = await tx.aiHandoff.findFirst({
+          where: { chatId: chat.id },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+        detail.latest_ai_handoff = card ? serialiseAiHandoff(card) : null;
       }
       return detail;
     });
@@ -1562,6 +1571,16 @@ export class ChatService {
         ? await this.#changeAiMode(tx, tenant, chat, thread.id, actorOf(principal), modeRequest)
         : null;
 
+      // The AI's hand-over card is taken up by the first message an agent
+      // writes to the player after it (tm 304.1 · AI-10 §7) — once: AI-25's
+      // time to a person. Only where the AI took part (`ai_mode` set).
+      if (authorType === 'agent' && recipients === 'all' && thread.aiMode !== null) {
+        await tx.aiHandoff.updateMany({
+          where: { threadId: thread.id, acceptedAt: null },
+          data: { acceptedBy: actorOf(principal), acceptedAt: new Date(event.created_at) },
+        });
+      }
+
       // First agent reply drives the first-response-time report; recorded here
       // so it cannot drift from the events it summarises.
       if (authorType === 'agent' && recipients === 'all' && !thread.firstResponseAt) {
@@ -1855,6 +1874,64 @@ export class ChatService {
 
     await this.#announceEvent(tenant, result);
     return result.event;
+  }
+
+  /**
+   * The AI hand-over card's line for the agents (tm 304.1 · AI-10 §5), in the
+   * hand-over's own transaction: the card as text, authored by `system`, so
+   * the archive, the search and an export carry it. Never to the visitor
+   * (`recipients: 'agents'`). Null when the connection is closed already.
+   */
+  async appendAgentsNote(
+    tx: TenantClient,
+    tenant: TenantContext,
+    at: { chatId: string; threadId: string },
+    note: { text: string; properties: Record<string, unknown> },
+  ): Promise<SerialisedEvent | null> {
+    const thread = await tx.thread.findFirst({
+      where: { id: at.threadId, chatId: at.chatId },
+      select: { active: true },
+    });
+    if (!thread?.active) return null;
+    return this.#appendEvent(tx, {
+      licenseId: tenant.licenseId,
+      chatId: at.chatId,
+      threadId: at.threadId,
+      authorId: null,
+      authorType: 'system',
+      input: {
+        type: 'system_message',
+        text: note.text,
+        recipients: 'agents',
+        properties: note.properties,
+      },
+    });
+  }
+
+  /**
+   * After commit: an agents-only line written by {@link appendAgentsNote} to
+   * the chat's agents as it stands now, and that audience — what the caller's
+   * own pushes go to. Null when the chat is gone.
+   */
+  async announceAgentsNote(
+    tenant: TenantContext,
+    chatId: string,
+    event: SerialisedEvent | null,
+  ): Promise<{ groupIds: number[]; agentIds: string[] } | null> {
+    const chat = await withTenant(this.db, tenant, (tx) =>
+      tx.chat.findUnique({
+        where: { id: chatId },
+        select: {
+          customerId: true,
+          access: { select: { groupId: true } },
+          users: { select: { userId: true, userType: true } },
+        },
+      }),
+    );
+    if (!chat) return null;
+    const audience = this.#audienceFor(chat);
+    if (event) await this.#announceEvent(tenant, { event, recipients: 'agents', audience });
+    return { groupIds: audience.groupIds, agentIds: audience.agentIds };
   }
 
   /**
@@ -4802,6 +4879,11 @@ export interface ChatDetail {
    * other responses (start/resume/…) and on the customer's own view.
    */
   visitor?: ChatVisitor | null;
+  /**
+   * The newest AI hand-over card of the chat (tm 304.1 · AI-10) — only on an
+   * agent's or bot's `get`; null when the AI handed nothing over.
+   */
+  latest_ai_handoff?: AiHandoffCardView | null;
 }
 
 interface ThreadRow {

@@ -25,7 +25,7 @@ set -uo pipefail
 # Etiketteki "sonnet"/"opus" bir aile adıdır; pencere aşağıdaki TAM kimlikle açılır
 # (2026-10-02 · PLAN §5.1.1): Opus = Opus 5.5, Sonnet = Sonnet 5.5. Etiket listesi ve
 # pick_schema'daki enum aynen kalır — çeviriyi görev döngüsündeki `case "$mdl"` yapar.
-MODEL="claude-opus-5-5"     # varsayılan/geri-uyum modeli (bootstrap + pick_next)
+MODEL="claude-opus-5-5"     # varsayılan/geri-uyum modeli (bootstrap); pick_next = MODEL_SMALL + medium (2026-10-20)
 MODEL_BIG="claude-opus-5-5"
 MODEL_SMALL="claude-sonnet-5-5"
 EFFORT_MAX="max"            # opus 'max' desteklemiyorsa: "high"
@@ -224,7 +224,7 @@ Sekiz etiketin sekizi de TANIMLIDIR; hiçbiri belirsiz sayılmaz:
   [OPUS-MAX]     -> model=\"opus\",   effort=\"max\"
 Eski tek boyutlu etiketler (Faz-0/v1 tarihcesi): [MAX] -> opus+max; [XHIGH] veya etiket YOK -> opus+xhigh.
 Etiket bu listede yoksa ya da çelişkiliyse GÜVENLİ tarafa düş: model=\"opus\", effort=\"max\"." \
-    --model "$MODEL" --effort low --permission-mode "$PERM" --max-turns 10 $ALLOW --strict-mcp-config \
+    --model "$MODEL_SMALL" --effort medium --permission-mode "$PERM" --max-turns 10 $ALLOW --strict-mcp-config \
     --output-format json --json-schema "$pick_schema" 2>>"$LOG_DIR/pick.err" \
     | jq -c '.structured_output' 2>/dev/null
 }

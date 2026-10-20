@@ -13236,7 +13236,7 @@
           "306"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T13:21:01.407Z",
+        "updatedAt": "2026-10-20T14:34:01.966Z",
         "subtasks": [
           {
             "id": 1,
@@ -13256,13 +13256,13 @@
             "description": "target-resolver.ts çözme sırası + uzmanlık + öncelik + mesai dışı + queue_if_offline",
             "details": "Üst görev 307 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Kabul kriterleri entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "307.1"
             ],
             "parentId": "307",
             "priority": "high",
-            "updatedAt": "2026-10-20T13:21:01.407Z"
+            "updatedAt": "2026-10-20T14:34:01.966Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T13:21:01.407Z",
+      "lastModified": "2026-10-20T14:34:01.967Z",
       "taskCount": 390,
       "completedCount": 305,
       "tags": [

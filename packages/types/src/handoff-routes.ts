@@ -17,7 +17,7 @@
  * the role's team (tm 307.2).
  */
 import { HANDOFF_REASONS } from './handoff.js';
-import { QUEUE_TOPIC_ROLES } from './team-queues.js';
+import { QUEUE_TOPIC_ROLES, isQueueTopicRole, type QueueTopicRole } from './team-queues.js';
 
 /** What a route matches on (AI-12 §1 steps 2 and 3). */
 export const HANDOFF_ROUTE_MATCH_TYPES = ['topic', 'reason'] as const;
@@ -36,6 +36,27 @@ export function isHandoffRouteKey(matchType: string, key: unknown): boolean {
   if (matchType === 'topic') return (QUEUE_TOPIC_ROLES as readonly string[]).includes(key);
   if (matchType === 'reason') return (HANDOFF_REASONS as readonly string[]).includes(key);
   return false;
+}
+
+/**
+ * The queue roles the guardrails' and the risk flags' topics mean
+ * (`GUARDRAIL_HANDOFF_TOPICS`, `RiskFlagDefault.topic` — AI-08's and AI-27's
+ * spellings, older than ADR-08a's single list): `kyc_risk` is a role as it is.
+ */
+export const HANDOFF_TOPIC_ROLE_ALIASES: Readonly<Record<string, QueueTopicRole>> = {
+  responsible_gaming: 'responsible_gambling',
+  complaints: 'complaint',
+};
+
+/**
+ * The queue role a hand-over's topic names (tm 307.2): a role as it is, a
+ * guardrail's or risk flag's spelling as the role it means, null for any other
+ * key (a procedure's `general`) — which no team holds and no route matches.
+ */
+export function handoffTopicRole(topic: unknown): QueueTopicRole | null {
+  if (isQueueTopicRole(topic)) return topic;
+  if (typeof topic !== 'string' || !Object.hasOwn(HANDOFF_TOPIC_ROLE_ALIASES, topic)) return null;
+  return HANDOFF_TOPIC_ROLE_ALIASES[topic] ?? null;
 }
 
 /**

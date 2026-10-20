@@ -158,6 +158,7 @@ interface HeadRow {
   id: string;
   chat_id: string;
   customer_id: string;
+  required_expertise_id: bigint | null;
 }
 
 /**
@@ -424,6 +425,13 @@ export class RoutingService {
    * whoever held it: a hand-off to one's own team means "someone else". It
    * may still reach them later through the queue.
    *
+   * `requiredExpertiseId` is the expertise the AI's hand-over route requires
+   * (AI-12 §2 · tm 307.2), on top of the team's own: kept on the connection
+   * (`threads.required_expertise_id`) so the drain gives it to a trained agent
+   * or nobody. Every hand-off writes it — null clears a former route's.
+   * `prefer` is the agent tried first when they could take it (the one a
+   * same-day return had, AI-12 §1.5); otherwise the order is `route()`'s.
+   *
    * Writes the connection's assignment or its place in the queue, its
    * queue stay (the one it leaves, the one it starts) and the assignee's
    * presence, in the caller's transaction. Both teams' queue locks are taken
@@ -434,9 +442,15 @@ export class RoutingService {
     licenseId: bigint,
     groupId: bigint,
     threadId: string,
-    options: { exclude?: readonly string[]; at?: Date } = {},
+    options: {
+      exclude?: readonly string[];
+      at?: Date;
+      requiredExpertiseId?: bigint | null;
+      prefer?: string | null;
+    } = {},
   ): Promise<TeamHandOff> {
     const at = options.at ?? new Date();
+    const requiredExpertiseId = options.requiredExpertiseId ?? null;
     const [row] = await tx.$queryRaw<
       Array<{ chat_id: string; queue_group_id: bigint | null; queued: boolean }>
     >`
@@ -459,8 +473,9 @@ export class RoutingService {
       tx,
       licenseId,
       groupId,
-      team.expertiseIds,
+      allOf(team.expertiseIds, requiredExpertiseId !== null ? [requiredExpertiseId] : []),
       options.exclude,
+      options.prefer ?? null,
     );
     if (assignee) {
       await tx.thread.update({
@@ -471,6 +486,7 @@ export class RoutingService {
           queuePosition: null,
           queuedAt: null,
           queueGroupId: null,
+          requiredExpertiseId,
         },
       });
       await tx.chatUser.upsert({
@@ -488,6 +504,7 @@ export class RoutingService {
         assigneeId: null,
         groupId,
         queueGroupId: groupId,
+        requiredExpertiseId,
         // Behind everyone already waiting; the renumber below puts it in its
         // priority's place.
         queuePosition: await this.#nextQueuePosition(tx, licenseId, groupId),
@@ -540,7 +557,10 @@ export class RoutingService {
    * The team's own required expertise is applied here (`group_expertise`). A
    * routing rule's requirement is not: a queued chat does not carry the rule
    * that matched it, so that one narrows the initial decision (`route()`)
-   * only.
+   * only. A hand-over route's is (`threads.required_expertise_id`, AI-12 §2 ·
+   * tm 307.2), and a chat asking that narrower pool is the one exception to
+   * the stop: nobody trained free is not the team being full, so it keeps its
+   * place and the chats behind it, which ask the team's pool, go on.
    */
   async #drainTeam(
     tx: TenantClient,
@@ -550,6 +570,8 @@ export class RoutingService {
   ): Promise<DrainedAssignment[]> {
     const team = await this.#team(tx, licenseId, groupId);
     const assigned: DrainedAssignment[] = [];
+    // Waiting for an expertise nobody free holds: passed over, not given away.
+    const passed: string[] = [];
 
     while (assigned.length < limit) {
       // `customer_id` rides along because a drained chat is a row on the
@@ -557,19 +579,32 @@ export class RoutingService {
       // assignment lands, and the board's signal is keyed on the visitor
       // rather than on the chat (FR-MOD-03.1.1).
       const [head] = await tx.$queryRaw<HeadRow[]>`
-        SELECT t.id, t.chat_id, c.customer_id::text AS customer_id
+        SELECT t.id, t.chat_id, c.customer_id::text AS customer_id, t.required_expertise_id
         FROM threads t
         JOIN chats c ON c.id = t.chat_id
         WHERE t.license_id = ${licenseId}
           AND t.active AND t.assignee_id IS NULL AND t.queue_position IS NOT NULL
           AND t.queue_group_id = ${groupId}
+          AND NOT (t.id = ANY(${passed}::text[]))
         ORDER BY t.priority DESC, t.queued_at ASC NULLS LAST, t.created_at ASC, t.id ASC
         LIMIT 1
         FOR UPDATE OF t SKIP LOCKED
       `;
       if (!head) break;
 
-      const assignee = await this.#claimFromTeam(tx, licenseId, groupId, team.expertiseIds);
+      const narrower =
+        head.required_expertise_id !== null &&
+        !team.expertiseIds.includes(head.required_expertise_id);
+      const assignee = await this.#claimFromTeam(
+        tx,
+        licenseId,
+        groupId,
+        narrower ? allOf(team.expertiseIds, [head.required_expertise_id!]) : team.expertiseIds,
+      );
+      if (!assignee && narrower) {
+        passed.push(head.id);
+        continue;
+      }
       if (!assignee) break;
 
       await tx.thread.update({
@@ -785,7 +820,8 @@ export class RoutingService {
 
   /**
    * The agent who takes this chat in this team, or null when nobody can: the
-   * candidates in ADR-08 order, the first one `#claim` holds.
+   * candidates in ADR-08 order — `prefer` first when they are one — the first
+   * one `#claim` holds.
    */
   async #claimFromTeam(
     tx: TenantClient,
@@ -793,8 +829,14 @@ export class RoutingService {
     groupId: bigint,
     requiredExpertiseIds: bigint[],
     exclude: readonly string[] = [],
+    prefer: string | null = null,
   ): Promise<string | null> {
-    for (const agentId of await this.#candidates(tx, licenseId, groupId, requiredExpertiseIds)) {
+    const candidates = await this.#candidates(tx, licenseId, groupId, requiredExpertiseIds);
+    const ordered =
+      prefer !== null && candidates.includes(prefer)
+        ? [prefer, ...candidates.filter((id) => id !== prefer)]
+        : candidates;
+    for (const agentId of ordered) {
       if (exclude.includes(agentId)) continue;
       if (await this.#claim(tx, licenseId, agentId)) return agentId;
     }

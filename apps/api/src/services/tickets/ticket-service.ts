@@ -352,7 +352,7 @@ export class TicketService {
   async createFromWidget(
     tx: TenantClient,
     tenant: TenantContext,
-    input: { subject: string; customerId: string },
+    input: { subject: string; customerId: string; sourceChatId?: string },
   ): Promise<{ id: string }> {
     const subject = input.subject.trim() || '(no subject)';
     const created = await tx.ticket.create({
@@ -362,6 +362,8 @@ export class TicketService {
         subject,
         status: 'open',
         customerId: input.customerId,
+        // The conversation it was left from (AI-12 §4: an after-hours hand-over).
+        sourceChatId: input.sourceChatId ?? null,
         // Set on creation so the ticket sorts from its first moment, matching
         // both other creation paths.
         lastMessageAt: new Date(),

@@ -401,6 +401,11 @@ export interface ChatAiModeResult {
   assignee_id: string | null;
 }
 
+/** The more pressing of two priorities, by the rank `threads.priority` stores. */
+function morePressing(a: ThreadPriority, b: ThreadPriority): ThreadPriority {
+  return THREAD_PRIORITY_RANK[b] > THREAD_PRIORITY_RANK[a] ? b : a;
+}
+
 /**
  * What an AI hand-over (`handOverFromAi`, `transfer`) writes with it, in its
  * own transaction: the risk flags its turn raised (tm 302.2 · AI-27), so a
@@ -423,6 +428,12 @@ export interface HandOverOptions {
   priority?: ThreadPriority;
   /** Why (`threads.priority_reason`, tm 307.1): the hand-over's primary reason code. */
   priorityReason?: string;
+  /**
+   * How pressing it is when a team hand-off leaves it waiting instead — the
+   * floor `priority` is raised to then (AI-12 §2 · tm 307.2: a conversation
+   * whose route requires an expertise nobody free holds waits urgent).
+   */
+  queuedPriority?: ThreadPriority;
   /**
    * The team `handOverFromAi` routes a connection nobody has into, in place of
    * the team the rules gave it on open (ADR-08a §2.4: the hand-over's target
@@ -3076,7 +3087,19 @@ export class ChatService {
     tenant: TenantContext,
     principal: Principal,
     chatId: string,
-    target: { groupId?: bigint; agentId?: string; reason: TransferReason; note?: string },
+    target: {
+      groupId?: bigint;
+      agentId?: string;
+      reason: TransferReason;
+      note?: string;
+      /**
+       * The AI's hand-over route's expertise (AI-12 §2 · tm 307.2): whoever in
+       * the team takes it must hold it, now or from the queue.
+       */
+      requiredExpertiseId?: bigint | null;
+      /** The member tried first when they can take it (AI-12 §1.5, a same-day return). */
+      preferAgentId?: string | null;
+    },
     options: HandOverOptions = {},
   ): Promise<ChatTransferResult> {
     if ((target.groupId === undefined) === (target.agentId === undefined)) {
@@ -3126,8 +3149,14 @@ export class ChatService {
             : [];
         handOff = await this.routing.assignWithinGroup(tx, tenant.licenseId, group.id, thread.id, {
           exclude,
+          requiredExpertiseId: target.requiredExpertiseId ?? null,
+          prefer: target.preferAgentId ?? null,
         });
-        unstaffed = handOff.outcome === 'queued' && group.topicRole === RESPONSIBLE_GAMBLING_ROLE;
+        // Nobody trained could take it (IN-04-S1 · AI-12-S3): the Responsible
+        // Gambling team's queue, or a route's expertise nobody free holds.
+        unstaffed =
+          handOff.outcome === 'queued' &&
+          (group.topicRole === RESPONSIBLE_GAMBLING_ROLE || target.requiredExpertiseId != null);
       } else {
         const membership = await tx.agentMembership.findUnique({
           where: {
@@ -3215,12 +3244,16 @@ export class ChatService {
       );
       // After the routing above, so the only queue it can move up is the one
       // the transfer left it in.
-      if (options.priority) {
+      const priority =
+        handOff.outcome === 'queued' && options.queuedPriority
+          ? morePressing(options.priority ?? 'normal', options.queuedPriority)
+          : options.priority;
+      if (priority) {
         await this.routing.raisePriority(
           tx,
           tenant.licenseId,
           thread.id,
-          options.priority,
+          priority,
           options.priorityReason ?? null,
         );
       }

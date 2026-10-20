@@ -144,13 +144,21 @@ import {
 } from './conversation/handoff/triggers.js';
 import { languageVerdict } from './conversation/policy.js';
 import {
+  aimedHandoff,
   anyoneAccepting,
   botPrincipal,
   HandoffService,
   planHandoff,
+  resolveTurnTarget,
+  targetAccepting,
   type HandoffCardWriter,
   type PlannedHandoff,
+  type TurnHandoff,
 } from './handoff-service.js';
+import {
+  handoffTargetDetails,
+  type HandoffTarget,
+} from './conversation/handoff/target-resolver.js';
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
 import { HandoffCardService } from './handoff-card.js';
 import { recordGuardrailHits } from './guardrail-hits.js';
@@ -222,7 +230,7 @@ export class AiResponder {
       options.handoffCard === undefined
         ? new HandoffCardService(chats, publisher)
         : options.handoffCard;
-    this.#handoffs = new HandoffService(chats, publisher, card ? { card } : {});
+    this.#handoffs = new HandoffService(chats, card ? { card } : {});
   }
 
   /**
@@ -362,6 +370,8 @@ export class AiResponder {
     let turnId = randomUUID();
     /** The turn's hand-over, once it has one (tm 303.2): its id goes on the record. */
     let planned: PlannedHandoff | null = null;
+    /** Where it goes and whether anyone there takes chats now (tm 307.2): on the record too. */
+    let aimed: { target: HandoffTarget; afterHours: boolean } | null = null;
     try {
       for (;;) {
         drafts += 1;
@@ -461,6 +471,12 @@ export class AiResponder {
         }
         if (!tookTurn(result)) return result;
 
+        // Where a hand-over goes, before its words do (AI-12 §4): nobody there
+        // taking chats is told now.
+        const aim = await this.#aim(turn, ref, result, loaded, answeredText);
+        result = aim.result;
+        aimed = aim.aimed;
+
         try {
           // The last draft goes out whatever the visitor wrote meanwhile.
           const recheck = drafts < DRAFTS_PER_TURN ? loaded.through : null;
@@ -555,12 +571,14 @@ export class AiResponder {
       const handoff = handoffOf(result.sideEffects);
       if (handoff) {
         const failed = result.decisions.failure !== null;
-        planned = planHandoff(handoff, failed);
-        await this.#handoffs.execute(turn, ref, handoff, {
+        const aimedAt = aimed ? aimedHandoff(handoff, aimed.target) : handoff;
+        planned = planHandoff(aimedAt, failed);
+        await this.#handoffs.execute(turn, ref, aimedAt, {
           plan: planned,
           failed,
           ...(alongside ? { alongside } : {}),
           card: { result, trust: turn.identityTrust, turnText: answeredText ?? message },
+          ...(aimed ? { target: aimed.target, afterHours: aimed.afterHours } : {}),
         });
       } else if (alongside) {
         await turn.withTenant(alongside);
@@ -647,6 +665,8 @@ export class AiResponder {
             // The hand-over's id, which its events and its card carry (AI-09 §6).
             ...(planned ? { handoff_id: planned.handoffId } : {}),
             ...(planned?.ruleId ? { handoff_rule_id: planned.ruleId } : {}),
+            // Where it went, and a team named on the way that was gone (AI-12 · ADR-14b §2.12).
+            ...(planned && aimed ? handoffTargetDetails(aimed.target) : {}),
           },
         });
         // What the guardrails found and did, under the same turn (tm 301.3 ·
@@ -817,6 +837,56 @@ export class AiResponder {
   }
 
   /**
+   * A hand-over's target (tm 307.2 · AI-12 §1–§4), resolved before the
+   * turn's reply goes out with the routes the turn ran on. The engine asked
+   * whether anyone in the workspace takes chats; whether anyone at the target
+   * does is asked here, and when nobody does the after-hours text follows the
+   * reply (after the crisis text, which leads it). `aimed` is null when the
+   * turn hands nothing over.
+   */
+  async #aim(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    result: TurnResult,
+    loaded: TurnRead,
+    message: string | null,
+  ): Promise<{ result: TurnResult; aimed: { target: HandoffTarget; afterHours: boolean } | null }> {
+    const handoff: TurnHandoff | null = handoffOf(result.sideEffects);
+    if (!handoff) return { result, aimed: null };
+    const { tenant } = turn;
+    const config = loaded.config.pkg.handoff ?? DEFAULT_HANDOFF_CONFIG;
+    const { target, accepting } = await turn.withTenant(async (tx) => {
+      const target = await resolveTurnTarget(
+        tx,
+        { ...ref, licenseId: tenant.licenseId, brandId: tenant.brandId ?? null },
+        handoff,
+        config.routes ?? [],
+      );
+      return { target, accepting: await targetAccepting(tx, tenant.licenseId, target) };
+    });
+    let { reply } = result;
+    // Nobody in the workspace: the engine said so already.
+    if (!accepting && loaded.handoffAvailable && reply !== null) {
+      const { skills } = loaded.config.pkg;
+      const persona =
+        skills.find((skill) => skill.id === result.decisions.skillId)?.persona ??
+        skills[0]?.persona ??
+        readPersona(null);
+      const language = languageVerdict(
+        message ?? '',
+        persona,
+        result.decisions.understood?.language,
+      );
+      const words = afterHoursWords(config, language.unsupported ? 'en' : language.answerIn);
+      if (!reply.includes(words)) reply = `${reply}\n${words}`;
+    }
+    return {
+      result: reply === result.reply ? result : { ...result, reply },
+      aimed: { target, afterHours: !accepting },
+    };
+  }
+
+  /**
    * Today's cap refused the turn on a connection the AI answers (tm 303.2 ·
    * AI-09 `ai_failure`): the player is told in a fixed sentence — the
    * workspace's or the default, with the after-hours text when nobody is
@@ -835,7 +905,22 @@ export class AiResponder {
     const persona = config.pkg.skills[0]?.persona ?? readPersona(null);
     const { answerIn } = languageVerdict(message, persona, null);
     try {
-      const available = await turn.withTenant((tx) => anyoneAccepting(tx, tenant.licenseId));
+      const effect = {
+        kind: 'handoff' as const,
+        team: null,
+        reason: 'ai_cap_reached',
+        reasons: ['ai_failure' as const],
+        priority: 'normal' as const,
+      };
+      const { target, available } = await turn.withTenant(async (tx) => {
+        const target = await resolveTurnTarget(
+          tx,
+          { ...ref, licenseId: tenant.licenseId, brandId: tenant.brandId ?? null },
+          effect,
+          handoff.routes ?? [],
+        );
+        return { target, available: await targetAccepting(tx, tenant.licenseId, target) };
+      });
       const words = handoffWords(handoff, 'ai_failure', answerIn) as string;
       await this.chats.sendEvent(
         tenant,
@@ -849,18 +934,14 @@ export class AiResponder {
         },
         { outbox: (tx, written) => turn.replyOutbox(tx, written) },
       );
-      const effect = {
-        kind: 'handoff' as const,
-        team: null,
-        reason: 'ai_cap_reached',
-        reasons: ['ai_failure' as const],
-        priority: 'normal' as const,
-      };
-      const plan = planHandoff(effect, true);
-      await this.#handoffs.execute(turn, ref, effect, {
+      const aimedAt = aimedHandoff(effect, target);
+      const plan = planHandoff(aimedAt, true);
+      await this.#handoffs.execute(turn, ref, aimedAt, {
         plan,
         failed: true,
         card: { result: null, trust: turn.identityTrust, turnText: message },
+        target,
+        afterHours: !available,
       });
       return plan;
     } catch (error) {

@@ -63,6 +63,7 @@ import {
 import { safeText } from '../guardrails/guardrail-turn.js';
 import { playerSummaryLine } from './card-builder.js';
 import { morePressing, routingRule, ruleTarget, type HandoffRuleConfig } from './rules.js';
+import type { HandoffRouteConfig } from './target-resolver.js';
 import {
   NO_ANSWER_PHRASES,
   NO_ANSWER_SIGNAL,
@@ -96,6 +97,12 @@ export interface HandoffConfig {
    * `./rules.ts`). Absent: none.
    */
   readonly rules?: readonly HandoffRuleConfig[];
+  /**
+   * The workspace's active hand-over routes (tm 307.2 · AI-12 · ADR-14b
+   * §2.12): the AI's copy, which its target is resolved from
+   * (`./target-resolver.ts`). Absent: none.
+   */
+  readonly routes?: readonly HandoffRouteConfig[];
   /**
    * The workspace's default "resolved" criteria (tm 303.4 · K9 —
    * `../resolution.ts`). Absent: the platform's, the player's yes.

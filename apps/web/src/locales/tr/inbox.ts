@@ -57,6 +57,8 @@ export const inbox: Messages = {
 
   // Conversation list
   'inbox.list.ariaLabel': 'Sohbetler',
+  'inbox.list.queueTeams.ariaLabel': 'Ekip kuyrukları',
+  'inbox.list.queueTeams.all': 'Tüm ekipler',
   'inbox.list.trafficAriaLabel': 'Gerçek zamanlı sekmeler',
   'inbox.list.traffic.all': 'Tümü',
   'inbox.list.traffic.chatting': 'Sohbet ediyor',

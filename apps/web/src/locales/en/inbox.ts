@@ -72,6 +72,8 @@ export const inbox: Messages = {
 
   // Conversation list
   'inbox.list.ariaLabel': 'Conversations',
+  'inbox.list.queueTeams.ariaLabel': 'Team queues',
+  'inbox.list.queueTeams.all': 'All teams',
   'inbox.list.trafficAriaLabel': 'Real-time tabs',
   'inbox.list.traffic.all': 'All',
   'inbox.list.traffic.chatting': 'Chatting',

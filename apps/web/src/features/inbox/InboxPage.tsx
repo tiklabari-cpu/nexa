@@ -60,6 +60,7 @@ import {
 } from './ticket-selection.js';
 import { ThreadHeader } from './ThreadHeader.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
+import { QueueTeamTabs } from './QueueTeamTabs.js';
 import {
   clearTicketSort,
   clearTicketView,
@@ -171,6 +172,12 @@ export function InboxPage(): ReactElement {
    * writes a third field into `localStorage`.
    */
   const [activeChannel, setActiveChannel] = useState<ChannelViewType | null>(null);
+  /**
+   * The Queued view's team tab (AU-01), or null for every team's queue. A
+   * working filter like the channel above — component state, out of the URL
+   * and out of saved views — and it applies only while the Queued view is on.
+   */
+  const [queueTeam, setQueueTeam] = useState<number | null>(null);
 
   // A deep link opens a specific chat or ticket (from the command palette or a
   // shared URL). The record's own detail query loads it regardless of which
@@ -274,7 +281,7 @@ export function InboxPage(): ReactElement {
   // Both narrowed by the channel view, so the rail badge and the list it labels
   // are counting the same filter (FR-MOD-02.1.4; the tm 179.4 rule).
   const counts = useViewCounts(activeChannel);
-  const list = useChatList(view, chatSort, activeChannel);
+  const list = useChatList(view, chatSort, activeChannel, view === 'queued' ? queueTeam : null);
   const chat = useChat(selectedId);
   // The day's earlier connections join the transcript only while the chat read
   // is the selected one's — a stale detail from the chat before would walk the
@@ -657,6 +664,17 @@ export function InboxPage(): ReactElement {
                 </span>
               </header>
 
+              {/* The Queued view split by team (AU-01): each team's own queue. */}
+              {view === 'queued' && (
+                <QueueTeamTabs
+                  selected={queueTeam}
+                  onSelect={setQueueTeam}
+                  channel={activeChannel}
+                  total={counts.queued}
+                  renderCount={(count) => (count === null ? <CountUnavailable /> : (count ?? ''))}
+                />
+              )}
+
               {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list. */}
               <div
                 role="tablist"
@@ -767,6 +785,17 @@ export function InboxPage(): ReactElement {
                             <span className="flex-1 truncate text-sm font-medium">
                               {item.customer_name ?? t('inbox.list.item.visitorFallback')}
                             </span>
+                            {/* How pressing it is (ADR-08a): an urgent chat is
+                              first in its team's queue, and should say why. */}
+                            {(item.priority === 'urgent' || item.priority === 'high') && (
+                              <span
+                                className={`shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-medium ${
+                                  item.priority === 'urgent' ? 'text-danger' : 'text-warning'
+                                }`}
+                              >
+                                {t(`inbox.priority.${item.priority}`)}
+                              </span>
+                            )}
                             {item.queue_position !== null && (
                               <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
                                 {t('inbox.list.item.queuePosition', {

@@ -16,13 +16,19 @@
  */
 import { useMemo, useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { GROUP_PRIORITIES, type GroupPriority } from '@siyahtus/types';
+import {
+  GROUP_PRIORITIES,
+  type AfterHoursMode,
+  type GroupPriority,
+  type QueueTopicRole,
+} from '@siyahtus/types';
 import { Card, CardSkeleton, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatLanguage } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { QueueTemplateButton } from './QueueTemplateButton.js';
 import { TeamEditor } from './TeamEditor.js';
 import { TeamMembers } from './TeamMembers.js';
 
@@ -30,6 +36,11 @@ export interface Group {
   id: number;
   name: string;
   language_code: string;
+  /** The topic this team's queue serves (AU-01); null for an ordinary team. */
+  topic_role: QueueTopicRole | null;
+  after_hours_mode: AfterHoursMode;
+  /** Skills an agent needs — every one — to join and be given its chats. */
+  required_expertise_ids: number[];
   agents: Array<{ agent_id: string; priority: GroupPriority }>;
 }
 
@@ -69,7 +80,10 @@ export function Teams({ agents, canManage }: TeamsProps): ReactElement {
   return (
     <Section title={t('team.page.teams.title')} description={t('team.page.teams.description')}>
       {canManage && !list.isPending && !list.isError && groups.length > 0 && (
-        <div className="flex justify-end">{newTeamButton}</div>
+        <div className="flex justify-end gap-2">
+          <QueueTemplateButton />
+          {newTeamButton}
+        </div>
       )}
 
       {list.isPending ? (
@@ -89,7 +103,14 @@ export function Teams({ agents, canManage }: TeamsProps): ReactElement {
           <EmptyState
             title={t('team.page.empty.noTeamsTitle')}
             description={t('team.page.empty.noTeamsDescription')}
-            action={canManage ? newTeamButton : undefined}
+            action={
+              canManage ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  {newTeamButton}
+                  <QueueTemplateButton />
+                </div>
+              ) : undefined
+            }
           />
         </Card>
       ) : (
@@ -99,6 +120,17 @@ export function Teams({ agents, canManage }: TeamsProps): ReactElement {
               <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-2.5">
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-medium">{group.name}</h3>
+                  {/* The topic queue it serves (AU-01) — by role, so a renamed
+                      team still says which topic is its. */}
+                  {group.topic_role && (
+                    <p className="mt-0.5">
+                      <span className="rounded-sm bg-brand-100 px-1.5 py-0.5 text-2xs font-medium text-brand-700 dark:bg-brand-950 dark:text-content">
+                        {t('team.teams.card.topic', {
+                          topic: t(`team.queue.role.${group.topic_role}`),
+                        })}
+                      </span>
+                    </p>
+                  )}
                   <p className="text-2xs text-content-tertiary">
                     {t('team.page.memberCount', { count: group.agents.length })} ·{' '}
                     {formatLanguage(group.language_code)}

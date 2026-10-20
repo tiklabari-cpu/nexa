@@ -9632,6 +9632,15 @@ export interface components {
       /** Format: uuid */
       assignee_id?: string | null;
       queue_position?: number | null;
+      /**
+       * Format: int64
+       * @description The team whose queue the newest connection waits in (AU-01 ·
+       *     ADR-08a §2.1) — null while it waits in none (`queue_position`
+       *     null). The `queue_position` is that team's number.
+       */
+      queue_group_id?: number | null;
+      /** @description How pressing the newest connection is; `normal` for a chat with none. */
+      priority?: components['schemas']['ThreadPriority'];
       unread_count?: number;
       /**
        * @description How many connections `Chat.connections` lists for this chat — the
@@ -18067,6 +18076,15 @@ export interface operations {
         channel?: 'messenger' | 'twilio' | 'whatsapp' | 'instagram' | 'telegram';
         customer_id?: string;
         group_id?: number;
+        /**
+         * @description Narrows to the conversations waiting in one team's queue (AU-01 ·
+         *     ADR-08a) — the inbox's queue tabs. A chat matches while its open
+         *     connection is queued for that team (`ChatSummary.queue_group_id`);
+         *     the team that merely grants access to it (`group_id`) is a different
+         *     question. Composes with `view` and `channel`, and `total` counts the
+         *     same intersection.
+         */
+        queue_group_id?: number;
         sort?: 'newest' | 'oldest';
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];

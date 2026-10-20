@@ -36,6 +36,7 @@ import {
   sensitiveWarningTypes,
   SNEAK_PEEK_MAX_LENGTH,
   stripEditMarkers,
+  threadPriorityFromRank,
   type AdapterChannelType,
   type AgentConflictWarningPush,
   type AiConversationMode,
@@ -123,6 +124,13 @@ export interface ChatListOptions {
   view: 'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
   customerId?: string;
   groupId?: bigint;
+  /**
+   * The inbox's queue tabs (AU-01 · ADR-08a §2.1): chats whose open connection
+   * waits in this team's queue (`threads.queue_group_id`). Not `groupId`, which
+   * is the team that grants access — a chat one team can see may wait in
+   * another's queue.
+   */
+  queueGroupId?: bigint;
   /**
    * The inbox's channel views (FR-MOD-02.1.4) — an axis of its own, deliberately
    * NOT a ninth `view`. The two compose (`view=my&channel=whatsapp`), and the
@@ -4276,6 +4284,16 @@ export async function listChatsInTenant(
   const visibilityFilter = chatVisibilityFilter(visibility);
   if (Object.keys(visibilityFilter).length > 0) scope.push(visibilityFilter);
 
+  // A team's queue tab. Its own AND clause too: the view's filter is also a
+  // `threads: { some }`, and spread beside it one would overwrite the other.
+  if (options.queueGroupId !== undefined) {
+    scope.push({
+      threads: {
+        some: { active: true, queuePosition: { not: null }, queueGroupId: options.queueGroupId },
+      },
+    });
+  }
+
   // The channel view's own narrowing (FR-MOD-02.1.4), resolved to chat ids
   // before the page is read — see `chatIdsOnChannel` for why it is a separate
   // read and what that costs. It joins `where` rather than the cursor clause,
@@ -4403,6 +4421,13 @@ export async function listChatsInTenant(
       thread_id: thread?.id ?? null,
       assignee_id: thread?.assigneeId ?? null,
       queue_position: thread?.queuePosition ?? null,
+      // Read only while the connection is queued (§D297-2): a row assigned or
+      // closed since keeps the column, and is in no team's queue.
+      queue_group_id:
+        thread?.queuePosition != null && thread.queueGroupId !== null
+          ? Number(thread.queueGroupId)
+          : null,
+      priority: threadPriorityFromRank(thread?.priority ?? 0),
       unread_count: countUnread(lastEvents.get(chat.id), seenUpTo),
       connection_count: connectionCount(
         chat.localDay,
@@ -4895,6 +4920,9 @@ export interface ChatSummary {
   thread_id: string | null;
   assignee_id: string | null;
   queue_position: number | null;
+  /** The team whose queue the newest connection waits in (AU-01); null when not queued. */
+  queue_group_id: number | null;
+  priority: ThreadPriority;
   unread_count: number;
   /** How many connections `ChatDetail.connections` lists for the chat (ID-02). */
   connection_count: number;

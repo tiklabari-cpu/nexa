@@ -228,6 +228,9 @@ const SUPPORT: Group = {
   id: 1,
   name: 'Support',
   language_code: 'en',
+  topic_role: null,
+  after_hours_mode: 'queue',
+  required_expertise_ids: [],
   agents: [{ agent_id: 'agent-1', priority: 'primary' }],
 };
 

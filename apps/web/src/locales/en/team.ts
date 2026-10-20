@@ -144,6 +144,62 @@ export const team: Messages = {
   'team.teams.editor.discardConfirm': 'Discard your unsaved changes?',
   'team.teams.editor.deleteButton': 'Delete team',
   'team.teams.editor.deleting': 'Deleting…',
+  // Queue settings (AU-01 · K14) — TeamEditor.tsx
+  'team.teams.editor.queue.legend': 'Queue settings',
+  'team.teams.editor.queue.description':
+    "Which topic this team's queue serves, who may take its conversations and what happens out of hours.",
+  'team.teams.editor.queue.topicLabel': 'Topic queue',
+  'team.teams.editor.queue.topicNone': 'None — an ordinary team',
+  'team.teams.editor.queue.topicHeld': '{topic} (handled by {team})',
+  'team.teams.editor.queue.topicHint':
+    "The AI's hand-overs reach this team by its topic, so renaming the team keeps them.",
+  'team.teams.editor.queue.topicLocked':
+    'The responsible gambling team keeps its topic — it can only be renamed.',
+  'team.teams.editor.queue.afterHoursLabel': 'Out of hours',
+  'team.teams.editor.queue.skillsLabel': 'Required skills',
+  'team.teams.editor.queue.skillsHint':
+    'An agent needs every ticked skill to join this team and to be given its conversations.',
+  'team.teams.editor.queue.skillsLoading': 'Loading skills…',
+  'team.teams.editor.queue.skillsError': "Skills couldn't be loaded.",
+  'team.teams.editor.queue.skillsEmpty': 'No skills yet — add them under Settings › Skills.',
+  'team.teams.editor.queue.trainingRequired':
+    'The responsible gambling team needs at least one required skill — its training.',
+  'team.teams.editor.queue.protectedNote':
+    "The responsible gambling team can't be deleted — rename it instead.",
+  'team.teams.card.topic': 'Topic: {topic}',
+  'team.queue.role.finance': 'Finance',
+  'team.queue.role.kyc_risk': 'KYC / Risk',
+  'team.queue.role.bonus': 'Bonus',
+  'team.queue.role.responsible_gambling': 'Responsible gambling',
+  'team.queue.role.technical': 'Technical',
+  'team.queue.role.complaint': 'Complaints',
+  'team.queue.afterHours.queue': 'Wait in the queue for the next agent',
+  'team.queue.afterHours.ticket': 'Become a ticket answered by email',
+
+  // The iGaming queue template (AU-01 · K14) — QueueTemplateButton.tsx
+  'team.queueTemplate.button': 'Set up iGaming queues',
+  'team.queueTemplate.title': 'Set up the iGaming queue template',
+  'team.queueTemplate.description':
+    'Creates a team for each topic queue no team serves yet, and the training skill the Responsible Gambling team requires. Nothing is created until you confirm, and topics already served stay as they are.',
+  'team.queueTemplate.loading': 'Checking which topics are served…',
+  'team.queueTemplate.served': 'Served by “{team}”',
+  'team.queueTemplate.willCreate': 'Creates “{team}”',
+  'team.queueTemplate.allServed': 'Every topic already has a team.',
+  'team.queueTemplate.trainingNote':
+    'Only agents with the “{skill}” skill can join Responsible Gambling — give it to them under Team › Teammates.',
+  'team.queueTemplate.failed':
+    'The template stopped part-way: {reason} What was created is kept — run it again to finish.',
+  'team.queueTemplate.cancel': 'Cancel',
+  'team.queueTemplate.applying': 'Setting up…',
+  'team.queueTemplate.apply.one': 'Create {count} team',
+  'team.queueTemplate.apply.other': 'Create {count} teams',
+  'team.queueTemplate.trainingName': 'Responsible gambling training',
+  'team.queueTemplate.teamName.finance': 'Finance',
+  'team.queueTemplate.teamName.kyc_risk': 'KYC / Risk',
+  'team.queueTemplate.teamName.bonus': 'Bonus',
+  'team.queueTemplate.teamName.responsible_gambling': 'Responsible Gambling',
+  'team.queueTemplate.teamName.technical': 'Technical',
+  'team.queueTemplate.teamName.complaint': 'Complaints',
   'team.teams.members.title': 'Members — {name}',
   'team.teams.members.description':
     'Priority decides who gets a conversation first when more than one member is free.',

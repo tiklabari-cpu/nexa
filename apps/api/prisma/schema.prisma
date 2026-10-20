@@ -991,6 +991,17 @@ model Chat {
   localDay    DateTime? @map("local_day") @db.Date
   /// The IANA zone `localDay` was counted in — the boundary may change later.
   dayTz       String?   @map("day_tz")
+  /// The brand the member came in through (tm 309.1 · AI-14): the website the
+  /// widget's token was minted for (WG-01 `resolveWidgetBrandId`), written
+  /// when the chat opens; an agent reopening an earlier day carries that day's.
+  /// Null when unknown — a channel, an agent's start, a token without a brand
+  /// — and from the moment a later connection the same day comes in through
+  /// another brand's site or an unknown one (`ChatService` `#keepChatBrand`),
+  /// so one brand's knowledge never answers another brand's member. A label
+  /// read by the knowledge filter (tm 309.2), not a scope: RLS stays per
+  /// licence and no inbox narrows on it. Soft, like
+  /// `knowledge_sources.brand_ids` — a deleted brand leaves its id behind.
+  brandId     String?   @map("brand_id") @db.Uuid
 
   license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -2723,39 +2734,78 @@ model Workflow {
   @@map("workflows")
 }
 
-/// A document, page or FAQ the AI may draw on.
+/// A document, page or FAQ the AI may draw on — one store for the AI agent and
+/// Copilot (tm 309 · AI-14, K11; `docs/adr/single-knowledge-store.md`).
+///
+/// The scope columns (`audiences`, `aiAgentIds`, `brandIds`, `validUntil`)
+/// come in ahead of their readers (tm 309.1, expand): until tm 309.2 moves
+/// retrieval onto them, a source still answers for the agent record it is
+/// filed under (`aiAgentId`), and every create writes `audiences` and
+/// `aiAgentIds` from that filing (`config-draft.ts`
+/// `createKnowledgeSourceDraft`) so a row is already what tm 309.2's backfill
+/// makes of the older ones. Their CHECKs, the `reviewedAt` backfill and the
+/// GIN indexes on `audiences` and `brandIds` are in 20261020220000–0400.
 model KnowledgeSource {
-  id        String   @id @default(uuid()) @db.Uuid
-  aiAgentId String   @map("ai_agent_id") @db.Uuid
-  licenseId BigInt   @map("license_id")
-  type      String
-  name      String
-  sourceUrl String?  @map("source_url")
-  content   String?
-  status    String   @default("ready")
-  addedBy   String?  @map("added_by")
+  id                 String    @id @default(uuid()) @db.Uuid
+  aiAgentId          String    @map("ai_agent_id") @db.Uuid
+  licenseId          BigInt    @map("license_id")
+  type               String
+  name               String
+  sourceUrl          String?   @map("source_url")
+  content            String?
+  status             String    @default("ready")
+  addedBy            String?   @map("added_by")
+  /// Who may use the source (`KNOWLEDGE_AUDIENCES`): `ai_agent` — the AI's
+  /// answers to players — and `copilot`. Never empty, in that order, no repeats.
+  audiences          String[]  @default(["ai_agent", "copilot"])
+  /// The AI agents (`kind = 'ai_agent'`) the source is for; empty = every one.
+  aiAgentIds         String[]  @default([]) @map("ai_agent_ids") @db.Uuid
+  /// The brands the source is for; empty = every brand. An array holds no
+  /// foreign key: these are soft references, checked when written (tm 309.2).
+  brandIds           String[]  @default([]) @map("brand_ids") @db.Uuid
+  /// A primary language subtag (`KNOWLEDGE_LANGUAGE_PATTERN`); null = not said.
+  language           String?
+  /// Soft reference to `accounts.id`, like `addedBy` — a meta field (ADR-14b
+  /// §2.2): whoever a due review falls to.
+  ownerId            String?   @map("owner_id") @db.Uuid
+  /// When a person last confirmed the source (AI-14-S3). A new source is
+  /// reviewed as it is added; a re-crawl or an edit is not a review.
+  reviewedAt         DateTime  @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+  /// `KNOWLEDGE_REVIEW_INTERVAL_DAYS`: due again this many days after `reviewedAt`.
+  reviewIntervalDays Int       @default(90) @map("review_interval_days")
+  /// Past this the source answers nothing (tm 309.2); null = no end.
+  validUntil         DateTime? @map("valid_until") @db.Timestamptz(6)
+  /// The KB article this source mirrors once published (AI-14-S2, tm 309.2) —
+  /// one source per article, gone with it.
+  kbArticleId        String?   @unique @map("kb_article_id") @db.Uuid
+  /// The structured-table row this source renders (AI-13, tm 310): both or neither.
+  sourceTable        String?   @map("source_table")
+  sourceRowId        String?   @map("source_row_id") @db.Uuid
   /// Freshness window in days for a `website` source (FR-MOD-06.3.3, tm 198.4).
   /// NULL means "never automatically" — every source's behaviour before this
   /// field existed, and every source an admin has not opted in.
-  refreshAfterDays Int? @map("refresh_after_days")
+  refreshAfterDays   Int?      @map("refresh_after_days")
   /// When the freshness sweep should next attempt this source. Recomputed from
   /// `refreshAfterDays` every time the source is actually refreshed — an edit,
   /// a manual reindex, or the sweep itself — never read as a hard deadline.
-  nextRefreshAt DateTime? @map("next_refresh_at") @db.Timestamptz(6)
+  nextRefreshAt      DateTime? @map("next_refresh_at") @db.Timestamptz(6)
   /// Why the most recent refresh attempt failed, if it did. Cleared on the next
   /// success. A failed refresh never touches `content` or the source's chunks
   /// (services/ai/knowledge-refresh.ts), so this is a status to read, not a
   /// sign that anything was lost.
-  lastRefreshError String?  @map("last_refresh_error")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastRefreshError   String?   @map("last_refresh_error")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  aiAgent AiAgent          @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
-  chunks  KnowledgeChunk[]
+  aiAgent   AiAgent          @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  kbArticle KbArticle?       @relation(fields: [kbArticleId], references: [id], onDelete: Cascade)
+  chunks    KnowledgeChunk[]
 
   @@index([aiAgentId, type])
   @@index([licenseId])
   @@index([type, nextRefreshAt])
+  @@index([audiences(ops: ArrayOps)], type: Gin)
+  @@index([brandIds(ops: ArrayOps)], type: Gin)
   @@map("knowledge_sources")
 }
 
@@ -3775,12 +3825,17 @@ model KbArticle {
   /// 'draft' | 'published'.
   status         String    @default("draft")
   publishedAt    DateTime? @map("published_at") @db.Timestamptz(6)
+  /// Who besides the reader may use the article once it is published (tm 309 ·
+  /// AI-14-S2, `KNOWLEDGE_AUDIENCES`): both unless switched off, empty = the AI
+  /// does not use it. Read by the publish hook from tm 309.2.
+  aiAudiences    String[]  @default(["ai_agent", "copilot"]) @map("ai_audiences")
   createdBy      String?   @map("created_by")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  license  License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  category KbCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  license         License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  category        KbCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  knowledgeSource KnowledgeSource?
 
   @@unique([licenseId, slug])
   @@index([licenseId, status, publishedAt(sort: Desc)])

@@ -1,0 +1,15 @@
+-- Who may use a source, indexed for the knowledge filter (tm 309.1 · AI-14 ·
+-- `docs/adr/single-knowledge-store.md` §2.8): `audiences @> '{ai_agent}'` for
+-- the AI agent, `= '{copilot}'` for the agents-only view (tm 309.2 reads both).
+-- `schema.prisma` models it (`@@index(..., type: Gin)`).
+--
+-- Alone in this file on purpose: `CREATE INDEX CONCURRENTLY` cannot run inside
+-- a transaction block (CONVENTIONS §6.3), and a plain build would hold writes
+-- on `knowledge_sources` for the length of the scan while the pods still
+-- serving traffic add and edit sources.
+--
+-- NO `IF NOT EXISTS`, for 20261018180100's reason: a failed concurrent build
+-- leaves an INVALID index of this name behind, which the retry must not keep.
+-- Recover by `DROP INDEX CONCURRENTLY knowledge_sources_audiences_idx`, then
+-- `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE INDEX CONCURRENTLY "knowledge_sources_audiences_idx" ON "knowledge_sources" USING GIN ("audiences" array_ops);

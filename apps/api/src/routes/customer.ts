@@ -976,6 +976,9 @@ export default async function customerRoutes(
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         },
         ...(body.url ? { routing: { url: body.url } } : {}),
+        // The brand of the site the widget runs on, as its token was minted
+        // (WG-01): the chat this opens is that brand's (tm 309.1 · AI-14).
+        ...(principal.brandId ? { brandId: principal.brandId } : {}),
         // The job below asks the AI to answer — when there is text to answer
         // (`answerVisitorMessage`); only then may an opening be AI-first (tm 293.2).
         aiAnswers: Boolean(maskedText?.trim()),

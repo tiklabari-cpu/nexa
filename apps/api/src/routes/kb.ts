@@ -21,6 +21,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { KNOWLEDGE_AUDIENCES, normalizeKnowledgeAudiences } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { normalizeKbSlug } from '../lib/kb-slug.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -32,6 +33,17 @@ const uuid = z.string().uuid();
 
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
+/**
+ * Who besides the reader may use the article once it is published (tm 309 ·
+ * AI-14-S2) — kept in the store's one spelling, so a repeat is folded rather
+ * than refused. Empty is a value: the AI does not use this article.
+ */
+const aiAudiences = z
+  .array(z.enum(KNOWLEDGE_AUDIENCES))
+  .max(KNOWLEDGE_AUDIENCES.length)
+  .transform((values) => normalizeKnowledgeAudiences(values))
+  .optional();
+
 const createArticleBody = z.object({
   title: z.string().trim().min(1).max(200),
   body: z.string().min(1).max(100_000),
@@ -40,6 +52,7 @@ const createArticleBody = z.object({
   excerpt: optionalText(500),
   seo_title: optionalText(200),
   seo_description: optionalText(500),
+  ai_audiences: aiAudiences,
 });
 
 const updateArticleBody = z
@@ -52,6 +65,7 @@ const updateArticleBody = z
     seo_title: optionalText(200),
     seo_description: optionalText(500),
     status: z.enum(['draft', 'published']).optional(),
+    ai_audiences: aiAudiences,
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -139,6 +153,7 @@ interface ArticleRow {
   seoDescription: string | null;
   status: string;
   publishedAt: Date | null;
+  aiAudiences: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -155,6 +170,7 @@ function serialiseArticle(row: ArticleRow) {
     seo_description: row.seoDescription,
     status: row.status,
     published_at: row.publishedAt ? row.publishedAt.toISOString() : null,
+    ai_audiences: row.aiAudiences,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -229,6 +245,8 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
             ...(body.excerpt !== undefined ? { excerpt: body.excerpt } : {}),
             ...(body.seo_title !== undefined ? { seoTitle: body.seo_title } : {}),
             ...(body.seo_description !== undefined ? { seoDescription: body.seo_description } : {}),
+            // Omitted: the column's default, open to both (AI-14-S2).
+            ...(body.ai_audiences !== undefined ? { aiAudiences: body.ai_audiences } : {}),
             // Never public on creation (KK): publishing is a separate PATCH.
             status: 'draft',
             createdBy: principal.kind === 'agent' ? principal.accountId : null,
@@ -273,6 +291,7 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
         if (body.excerpt !== undefined) data.excerpt = body.excerpt;
         if (body.seo_title !== undefined) data.seoTitle = body.seo_title;
         if (body.seo_description !== undefined) data.seoDescription = body.seo_description;
+        if (body.ai_audiences !== undefined) data.aiAudiences = body.ai_audiences;
         if (body.slug !== undefined) data.slug = resolveArticleSlug(body.slug, existing.title);
 
         if (body.category_id !== undefined) {

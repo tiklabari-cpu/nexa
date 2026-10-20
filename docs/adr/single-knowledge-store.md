@@ -57,7 +57,7 @@ Sorun (AI-14): aynı "Papara limitleri" bilgisi AI Agent ve Copilot için iki ke
   6. Taşımada `reviewed_at = updated_at` (bir onay değil, son düzenleme — panel bunu "taşımadan" diye gösterebilir).
   7. Geçiş sürümünde `ai_agent_id` geri dönüşü bozmayacak biçimde yazılır (§2 madde 8.2). Bugün `AiAgent` silen bir uç yok (doğrulandı); daraltmadan önce eklenirse ortak bilgi `Cascade` ile silinir — böyle bir uç daraltmadan önce açılmamalı.
   8. Arama süzgeci tek SQL koşuludur (05 § AI-14 kodlama mantığı 3; `s.status='published'` yerine bugünkü `s.status = 'ready'`). Süzgeçli yaklaşık HNSW aramasının satır kaçırma riski (`schema.prisma` `KnowledgeChunk` notu) için tm 254'teki ölçüm 309.2'de yeniden yapılır; gerekirse süzgeç kolonları `knowledge_chunks`'a denormalize edilir.
-- **Açık kalan:** marka çözümünün tek tanımı (`chats.brand_id`'nin widget'ın web sitesinden çözülmesi; WG-01/WG-02 ile ortak) — tm 309.1 sabitler. "Benzer kaynak" uyarısı (0.95) isteğe bağlı.
+- **Açık kalan:** ~~marka çözümünün tek tanımı (`chats.brand_id`'nin widget'ın web sitesinden çözülmesi; WG-01/WG-02 ile ortak) — tm 309.1 sabitler~~ → sabitlendi, §5 madde 4. "Benzer kaynak" uyarısı (0.95) isteğe bağlı.
 - **Bu kararı delen bir değişiklik** (`{copilot}` kaynağını oyuncu cevabına açan bir yol, kitlenin yeniden ajan kaydına bağlanması, Genel KB'ye depodan otomatik yayın) yeni bir karar kaydı ve sahip onayı ister.
 
 ## 4. Kaynaklar
@@ -68,3 +68,12 @@ Sorun (AI-14): aynı "Papara limitleri" bilgisi AI Agent ve Copilot için iki ke
 - `SiyahTus-Analiz/07-gorev-plani.md` — #274 Dalga 0; AI-14 → #309 (bağımlılık #274); §4 "Düzenleme tablolarında `status`" ve Q6 satır kayması.
 - `SiyahTus-Analiz/kaynaklar/livechat-kesif-raporu.md` §2.3 — Knowledge hub, "For internal use only".
 - `docs/archive/handoff/HANDOFF-arsiv-2026-10-14.md` — Q6 kayıtları (`grep -n 'Q6'`).
+
+## 5. Uygulama kayıtları
+
+**tm 309.1 — genişlet (2026-10-20 · PLAN §D305).** Migration `20261020220000`–`0400`, `@siyahtus/types` `knowledge-store.ts`.
+
+1. **CHECK §2 madde 2'den sıkı:** `audiences` yalnız üç kümeden biri — `{ai_agent}`, `{copilot}`, `{ai_agent,copilot}` — bu sırayla, tekrarsız. `<@ … AND cardinality >= 1` `{copilot,copilot}`'u kabul ederdi; o da `= '{copilot}'` tam eşitliğini (§3 ayrıntı 1) atlatırdı. Yazanlar `normalizeKnowledgeAudiences` ile tek yazıma indirir. `kb_articles.ai_audiences` aynı kümeler ve boş küme.
+2. **`reviewed_at = updated_at` taşıma değil genişletme adımında** (`20261020220100`, tek ifade): bu sürüm `review_due_at` ve `?stale=`'i zaten sunuyor; geri doldurma 309.2'ye kalsaydı eski kaynaklar 90 gün "yeni gözden geçirilmiş" görünür, 309.2'de koşsa arada kaydedilmiş gözden geçirmelerin üstüne yazardı.
+3. **Kapsam girdileri arama ile birlikte gelir (tm 309.2):** `audiences`, `ai_agent_ids`, `brand_ids`, `valid_until` istek ve yanıtta, `?audience=` / `?brand_id=` süzgeçleri bu adımda kontrata girmedi — arama okumadan kabul edilen bir `brand_ids` A markasının kaynağını B oyuncusuna açardı. Bu adım kolonları her yeni satıra kaydedildiği ajan kaydından yazar (`config-draft.ts` `knowledgeScopeOfFiling`: `kind = 'ai_agent'` → `{ai_agent,copilot}` + o ajan; başka her tür → `{copilot}` + boş), böylece 309.2'nin geçişinde eski replikaların yazdığı satır varsayılanda kalmaz. 309.2'nin geri doldurması yine gerekir (309.1'den önceki replikaların yazdıkları).
+4. **`chats.brand_id`'nin tek tanımı:** ziyaretçi mesajının açtığı sohbet, widget token'ının markasıdır (WG-01 `resolveWidgetBrandId` — host'un kayıtlı web sitesi, yoksa lisansın varsayılan markası). Kanal, ajanın kendi başlatması ve markasız token → NULL ("bilinmiyor", §2 madde 4'te yalnız tüm markalar). Aynı gün başka bir markanın — ya da markası bilinmeyen — girişinden gelen bağlantı sohbetin markasını kalıcı olarak NULL yapar (`ChatService` `#keepChatBrand`); ajanın önceki günü yeniden açması o günün markasını taşır. **Etiket, kapsam değil:** RLS lisans düzeyinde kalır (çok markalı lisansta konsol her istekte marka başlığı gönderir; sohbeti politikayla daraltmak ajandan öteki markanın sohbetini gizlerdi). `brand-isolation.test.ts` bunu `BRAND_LABEL_TABLES` ile bildirir ve lisans geneli göründüğünü kanıtlar. Kanal sohbetinin markası (kanalın `brand_id`'si) çözülmedi: `channel_resolve_license` markayı döndürmüyor — ayrı iş.

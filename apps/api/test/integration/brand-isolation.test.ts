@@ -25,9 +25,14 @@
  * *matrix* that generates the cross-brand invisibility test for every one of
  * those tables from a single list — so a brand-scoped table added later cannot
  * ship untested (v2-04 §7.1: a forgotten table is a silent leak).
+ *
+ * tm 309.1 adds the second kind of `brand_id`: a label, which RLS deliberately
+ * does not narrow (`chats.brand_id`, AI-14). Labels are declared beside the
+ * matrix and proven licence-wide by it, so the alarm still knows every column.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -100,6 +105,47 @@ const BRAND_SCOPED_TABLES: ReadonlyArray<{
           groupId: 1n,
         },
       }),
+  },
+];
+
+// === Brand labels (tm 309.1) ================================================
+// Tables whose `brand_id` labels a row without scoping it: RLS stays per
+// licence, every brand of the licence sees the row, and the brand is read by
+// the query that needs it. Declared here so the coverage alarm still fires for
+// a table that is neither, and proven licence-wide below — a table cannot
+// move into this list to dodge the matrix, because one whose policy narrowed
+// by brand would fail there.
+const BRAND_LABEL_TABLES: ReadonlyArray<{
+  table: string;
+  /** Why the brand is a label here and not a scope. */
+  reason: string;
+  plant: (
+    db: PrismaClient,
+    at: { licenseId: bigint; organizationId: string; brandId: string },
+  ) => Promise<unknown>;
+}> = [
+  {
+    // The brand a member came in through (AI-14): the knowledge filter answers
+    // the chat from that brand's sources (tm 309.2), while the inbox stays
+    // licence-wide — the console sends a brand on every request of a
+    // multi-brand workspace, and narrowing chats by it would hide one brand's
+    // conversations from an agent working another.
+    table: 'chats',
+    reason: 'the knowledge filter reads it; the inbox is licence-wide',
+    plant: async (db, at) => {
+      const customer = await db.customer.create({
+        data: { organizationId: at.organizationId, name: 'Brand probe' },
+        select: { id: true },
+      });
+      return db.chat.create({
+        data: {
+          id: generateShortId(),
+          licenseId: at.licenseId,
+          customerId: customer.id,
+          brandId: at.brandId,
+        },
+      });
+    },
   },
 ];
 
@@ -363,15 +409,22 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
   // === The coverage alarm — the matrix must equal the schema (78.8) ===========
   // Modelled on contract-parity.test.ts: derive one set from a declaration and
   // one from the live schema, then fail in both directions. Here the declaration
-  // is BRAND_SCOPED_TABLES and the schema set is every `brand_id` column, so a
-  // brand-scoped table can never be added without a matching isolation test.
+  // is BRAND_SCOPED_TABLES with BRAND_LABEL_TABLES (tm 309.1) and the schema set
+  // is every `brand_id` column, so a table with one can never be added without
+  // a test saying which of the two it is.
   describe('brand-scope coverage alarm (schema-derived · v2-04 §7.1)', () => {
-    const declared = new Set(BRAND_SCOPED_TABLES.map((t) => t.table));
+    const declared = new Set([...BRAND_SCOPED_TABLES, ...BRAND_LABEL_TABLES].map((t) => t.table));
+
+    it('declares a table as a scope or as a label, never both', () => {
+      const scoped = new Set(BRAND_SCOPED_TABLES.map((t) => t.table));
+      expect(BRAND_LABEL_TABLES.filter((t) => scoped.has(t.table))).toEqual([]);
+      for (const label of BRAND_LABEL_TABLES) expect(label.reason).not.toBe('');
+    });
 
     it('covers exactly the brand_id tables the schema has — no leak, no phantom', async () => {
       const inSchema = await brandScopedTablesInSchema(owner);
       // Guard against a vacuously-passing comparison of two empty sets.
-      expect(inSchema.size).toBeGreaterThanOrEqual(BRAND_SCOPED_TABLES.length);
+      expect(inSchema.size).toBeGreaterThanOrEqual(declared.size);
 
       const gaps = scopeCoverageGaps(declared, inSchema);
       expect(
@@ -457,6 +510,40 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
         // is unchanged.
         expect(await countByBrand(underA(), table, brandA2)).toBe(1);
         // Another license never sees it — the cross-tenant floor still holds.
+        expect(
+          await countByBrand(
+            { licenseId: fx.b.licenseId, organizationId: fx.b.organizationId, brandId: brandB },
+            table,
+            brandA2,
+          ),
+        ).toBe(0);
+      },
+    );
+
+    // The labels (tm 309.1): the same plant, the opposite answer for a sibling
+    // brand. That is the declaration being true — a label table whose policy
+    // narrowed by brand belongs in the matrix above, and fails here.
+    it.each(BRAND_LABEL_TABLES.map((t) => t.table))(
+      '%s: a brand label — a brand-A2 row is seen under every brand of A, never from license B',
+      async (table) => {
+        const entry = BRAND_LABEL_TABLES.find((t) => t.table === table)!;
+        await entry.plant(owner, {
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          brandId: brandA2,
+        });
+
+        const underA = (
+          brandId?: string,
+        ): { licenseId: bigint; organizationId: string; brandId?: string } => ({
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          ...(brandId ? { brandId } : {}),
+        });
+
+        expect(await countByBrand(underA(brandA2), table, brandA2)).toBe(1);
+        expect(await countByBrand(underA(brandA1), table, brandA2)).toBe(1);
+        expect(await countByBrand(underA(), table, brandA2)).toBe(1);
         expect(
           await countByBrand(
             { licenseId: fx.b.licenseId, organizationId: fx.b.organizationId, brandId: brandB },

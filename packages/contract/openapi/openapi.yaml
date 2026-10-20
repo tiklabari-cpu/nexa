@@ -394,6 +394,8 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSource"
   /knowledge-sources/{sourceId}/reindex:
     $ref: "./paths/playbook.yaml#/knowledgeSourceReindex"
+  /knowledge-sources/{sourceId}/review:
+    $ref: "./paths/playbook.yaml#/knowledgeSourceReview"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"
@@ -3530,8 +3532,24 @@ components:
           type: array
           items: { $ref: "#/components/schemas/SkillLogEntry" }
 
+    KnowledgeAudience:
+      type: string
+      enum: [ai_agent, copilot]
+      description: |
+        Who may use a piece of knowledge (tm 309 · AI-14, `@siyahtus/types`
+        `KNOWLEDGE_AUDIENCES`): `ai_agent` — every answer the AI agent gives a
+        player, previews included — and `copilot`, the agents' assistant.
+        Copilot uses whatever either audience names; knowledge for `copilot`
+        alone is for agents only and never reaches a player.
+
     KnowledgeSource:
       type: object
+      description: |
+        A source in the workspace's knowledge store — one store for what the
+        AI agent answers players from and what Copilot drafts replies from
+        (tm 309 · AI-14, owner decision K11; `docs/adr/single-knowledge-store.md`).
+        "Copilot's own knowledge" (FR-MOD-12.2) is the store's sources that are
+        for agents only; none of them ever reaches a player.
       required: [id, name, type, status, chunk_count]
       properties:
         id: { type: string, format: uuid }
@@ -3551,8 +3569,52 @@ components:
             from the soft `added_by` reference — never a raw account id. Null
             for a source with no known author (bot/seed-created, or the
             authoring account was later deleted). Not present on
-            `/copilot/knowledge`, which predates this field and keeps its own
-            knowledge base separate (FR-MOD-12.2).
+            `/copilot/knowledge`, the older, narrower view of the agents-only
+            sources (see its `deprecated` note).
+        language:
+          type: string
+          nullable: true
+          pattern: "^[a-z]{2,3}$"
+          description: |
+            The language the source is written in, as a primary language
+            subtag (`tr`, `en`); null when nobody said (tm 309.1). A label for
+            now — retrieval does not filter on it. Not present on
+            `/copilot/knowledge`, like every field below.
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            The member who keeps this source true — the person a due review
+            falls to (AI-14). Null for an unowned source, which the panel shows
+            as such. A meta field: it changes nothing the AI says.
+        owner_name:
+          type: string
+          nullable: true
+          description: |
+            `owner_id`'s account name, resolved like `added_by_name`. Null when
+            there is no owner or the account is no longer a member.
+        reviewed_at:
+          type: string
+          format: date-time
+          description: |
+            When a person last confirmed the source is still right (AI-14-S3;
+            `POST /knowledge-sources/{sourceId}/review`). A new source is
+            reviewed when it is added; a source older than the review step
+            counts its last edit. An automatic re-crawl is not a review.
+        review_interval_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: How many days a review holds before the source is due another (default 90).
+        review_due_at:
+          type: string
+          format: date-time
+          description: |
+            `reviewed_at` plus `review_interval_days` whole days. Past it the
+            source needs a review — the panel warns, and `?stale=true` lists it.
+            A source due a review still answers; it is not taken out of
+            retrieval for it.
         refresh_after_days:
           type: integer
           nullable: true
@@ -6633,6 +6695,7 @@ components:
           seo_description,
           status,
           published_at,
+          ai_audiences,
           created_at,
           updated_at,
         ]
@@ -6649,6 +6712,17 @@ components:
           type: string
           enum: [draft, published]
         published_at: { type: string, format: date-time, nullable: true }
+        ai_audiences:
+          type: array
+          items: { $ref: "#/components/schemas/KnowledgeAudience" }
+          description: |
+            Who besides the reader may use this article once it is published
+            (tm 309 · AI-14-S2): `ai_agent` — the AI's answers to players —
+            and `copilot`, the agents' assistant. Both unless switched off; an
+            empty list keeps the article out of the AI's knowledge altogether.
+            Kept in `[ai_agent, copilot]` order without repeats. The published
+            article enters the AI's knowledge with tm 309.2; until then this is
+            the stored switch only.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

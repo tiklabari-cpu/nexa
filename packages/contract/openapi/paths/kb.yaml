@@ -69,6 +69,14 @@ kbArticles:
               excerpt: { type: string, maxLength: 500, nullable: true }
               seo_title: { type: string, maxLength: 200, nullable: true }
               seo_description: { type: string, maxLength: 500, nullable: true }
+              ai_audiences:
+                type: array
+                maxItems: 2
+                items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeAudience" }
+                description: |
+                  Who besides the reader may use the article once it is
+                  published (`KbArticle.ai_audiences`). Omitted — both
+                  (AI-14-S2); empty — neither. Repeats are folded.
     responses:
       "201":
         description: Created (as a draft)
@@ -130,6 +138,14 @@ kbArticle:
                 type: string
                 enum: [draft, published]
                 description: The publish state. draft→published stamps published_at; published→draft clears it.
+              ai_audiences:
+                type: array
+                maxItems: 2
+                items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeAudience" }
+                description: |
+                  Who besides the reader may use the article once it is
+                  published (`KbArticle.ai_audiences`); empty switches the AI
+                  off for this article. Repeats are folded.
     responses:
       "200":
         description: Updated

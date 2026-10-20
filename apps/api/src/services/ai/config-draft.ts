@@ -12,11 +12,12 @@
  * This first form does §2.5 step 1 only: it stamps the row's `updated_at` —
  * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
  * settings, rules and forbidden phrases (tm 301.2), the hand-over rules
- * (tm 303.3) and the hand-over routes (tm 307.1).
- * A route that writes `updated_at` itself, or opens a `status`/`version`
- * column, breaks the rule.
+ * (tm 303.3), the hand-over routes (tm 307.1) and the knowledge sources
+ * (tm 309.1). A route that writes `updated_at` itself, or opens a
+ * `status`/`version` column, breaks the rule.
  */
 import type { Prisma } from '@prisma/client';
+import type { KnowledgeAudience } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 type SkillCreate = Omit<Prisma.SkillUncheckedCreateInput, 'updatedAt'>;
@@ -205,5 +206,116 @@ export async function updateHandoffRouteDraft(
 /** How many rows went — 0 when the route is not this workspace's. */
 export async function deleteHandoffRouteDraft(tx: TenantClient, id: string): Promise<number> {
   const { count } = await tx.handoffRoute.deleteMany({ where: { id } });
+  return count;
+}
+
+// Knowledge sources (tm 309.1 · AI-14, `docs/adr/single-knowledge-store.md`):
+// one store for the AI agent and Copilot. Until tm 309.2 moves retrieval onto
+// its scope columns, a source still answers for the agent record it is filed
+// under, so a create writes `audiences` and `ai_agent_ids` from that filing —
+// every row is already what tm 309.2's backfill makes of the older ones, and a
+// release reading the columns never meets one this release left at the
+// defaults. Two writers stay outside: `KnowledgeService.index`, the one writer
+// of chunks, which marks the indexing `status` as it goes (ADR-14b §2.8), and
+// the freshness sweep's re-crawl (`knowledge-refresh-sweep.ts`), a system
+// refresh rather than an edit — tm 316 settles how either is versioned.
+
+type KnowledgeSourceCreate = Omit<
+  Prisma.KnowledgeSourceUncheckedCreateInput,
+  'updatedAt' | 'aiAgentId' | 'audiences' | 'aiAgentIds' | 'reviewedAt'
+>;
+type KnowledgeSourceUpdate = Omit<
+  Prisma.KnowledgeSourceUncheckedUpdateManyInput,
+  'updatedAt' | 'aiAgentId' | 'audiences' | 'aiAgentIds' | 'reviewedAt'
+>;
+
+/** The agent record a source is filed under. */
+export interface KnowledgeFiling {
+  id: string;
+  kind: string;
+}
+
+/**
+ * Who a source filed under `agent` is for, in the store's terms — ADR §2.8's
+ * mapping, the one tm 309.2's backfill applies to the older rows. An AI agent's
+ * source is for the AI's answers and Copilot, that agent alone; any other
+ * record's (Copilot's) is for agents only, so a kind this does not know can
+ * never put a source in front of a player.
+ */
+export function knowledgeScopeOfFiling(agent: KnowledgeFiling): {
+  audiences: KnowledgeAudience[];
+  aiAgentIds: string[];
+} {
+  return agent.kind === 'ai_agent'
+    ? { audiences: ['ai_agent', 'copilot'], aiAgentIds: [agent.id] }
+    : { audiences: ['copilot'], aiAgentIds: [] };
+}
+
+/** A new source counts as reviewed the moment it is added (AI-14-S3). */
+export async function createKnowledgeSourceDraft(
+  tx: TenantClient,
+  filedUnder: KnowledgeFiling,
+  data: KnowledgeSourceCreate,
+) {
+  const at = new Date();
+  return tx.knowledgeSource.create({
+    data: {
+      ...data,
+      aiAgentId: filedUnder.id,
+      ...knowledgeScopeOfFiling(filedUnder),
+      reviewedAt: at,
+      updatedAt: at,
+    },
+  });
+}
+
+/**
+ * How many rows changed — 0 when the source is not this workspace's or has
+ * gone. `at` is the moment the caller counts from (a refresh schedule), so the
+ * row's `updated_at` and what was computed from it agree.
+ */
+export async function updateKnowledgeSourceDraft(
+  tx: TenantClient,
+  id: string,
+  data: KnowledgeSourceUpdate,
+  at: Date = new Date(),
+): Promise<number> {
+  const { count } = await tx.knowledgeSource.updateMany({
+    where: { id },
+    data: { ...data, updatedAt: at },
+  });
+  return count;
+}
+
+/**
+ * A person confirmed the source still holds (AI-14-S3): its review moves to
+ * `at`. A meta write (ADR-14b §2.2) — nothing the AI says changes — yet a
+ * write, so `updated_at` moves with it. The only writer of `reviewed_at`.
+ */
+export async function reviewKnowledgeSourceDraft(
+  tx: TenantClient,
+  id: string,
+  at: Date = new Date(),
+): Promise<number> {
+  const { count } = await tx.knowledgeSource.updateMany({
+    where: { id },
+    data: { reviewedAt: at, updatedAt: at },
+  });
+  return count;
+}
+
+/**
+ * How many rows went — 0 when the source is not this workspace's, or not filed
+ * under `filedUnder` when that is named (the Copilot view removes only its
+ * own). The chunks go with it.
+ */
+export async function deleteKnowledgeSourceDraft(
+  tx: TenantClient,
+  id: string,
+  filedUnder?: string,
+): Promise<number> {
+  const { count } = await tx.knowledgeSource.deleteMany({
+    where: { id, ...(filedUnder === undefined ? {} : { aiAgentId: filedUnder }) },
+  });
   return count;
 }

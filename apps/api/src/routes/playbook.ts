@@ -75,6 +75,7 @@ import {
   updateSkillDraft,
   upsertHandoffSettingsDraft,
 } from '../services/ai/config-draft.js';
+import { withStepTeamIds } from '../services/ai/step-teams.js';
 import {
   refuseUnembeddable,
   type KnowledgeService,
@@ -1077,7 +1078,7 @@ export default async function playbookRoutes(
         kind: 'ai_agent',
         ...(body.ai_agent_id ? { aiAgentId: body.ai_agent_id } : {}),
         ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
-        steps: steps as object,
+        steps: (await withStepTeamIds(tx, steps)) as object,
         ...(body.is_fallback !== undefined ? { isFallback: body.is_fallback } : {}),
         // Never live on creation.
         active: false,
@@ -1190,7 +1191,7 @@ export default async function playbookRoutes(
           ...(body.is_fallback !== undefined ? { isFallback: body.is_fallback } : {}),
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...(body.instruction !== undefined ? { instruction: body.instruction } : {}),
-          ...(steps !== undefined ? { steps: steps as object } : {}),
+          ...(steps !== undefined ? { steps: (await withStepTeamIds(tx, steps)) as object } : {}),
           ...(body.active !== undefined ? { active: body.active } : {}),
         });
 

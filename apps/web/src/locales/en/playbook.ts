@@ -373,6 +373,8 @@ export const playbook: Messages = {
     'Step {step}: write the reply to send, or answer from knowledge instead.',
   'playbook.editor.stepProblem.transfer_to_team_needs_team':
     'Step {step}: choose a team to hand the conversation over to.',
+  'playbook.editor.stepProblem.transfer_to_team_unknown_team':
+    'Step {step}: that team no longer exists — choose another.',
   'playbook.editor.replyLabel': 'Reply to the customer',
   'playbook.editor.summaryLabel': 'Summary for the next agent',
   'playbook.editor.handsOverTo': 'Hands over to {name}',

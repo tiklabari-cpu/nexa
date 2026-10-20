@@ -503,18 +503,21 @@ export class RoutingService {
    * Raise how pressing a connection is (ADR-08a §2.3) — never lower it: a
    * hand-over's priority (AI-09 · the guardrails, the workspace's rules) is a
    * floor. Waiting already, the connection moves up its own team's queue and
-   * no other.
+   * no other. `reason` (a `HANDOFF_REASONS` code, tm 307.1) is written with
+   * the raise as `threads.priority_reason`; a call that raises nothing keeps
+   * the reason of the raise that stands.
    */
   async raisePriority(
     tx: TenantClient,
     licenseId: bigint,
     threadId: string,
     priority: ThreadPriority,
+    reason: string | null = null,
   ): Promise<void> {
     const rank = THREAD_PRIORITY_RANK[priority];
     const [raised] = await tx.$queryRaw<Array<{ queue_group_id: bigint | null; queued: boolean }>>`
       UPDATE threads
-      SET priority = ${rank}
+      SET priority = ${rank}, priority_reason = ${reason}
       WHERE id = ${threadId} AND license_id = ${licenseId} AND priority < ${rank}
       RETURNING queue_group_id,
                 (active AND assignee_id IS NULL AND queue_position IS NOT NULL) AS queued

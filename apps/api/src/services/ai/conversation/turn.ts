@@ -513,9 +513,11 @@ export type TurnSideEffect =
   | { readonly kind: 'tag'; readonly tag: string }
   | { readonly kind: 'summary'; readonly text: string }
   /**
-   * Hand the conversation over: to a team by name (a single-message skill's
-   * `transfer_to_team`), by id or routing topic (a procedure's target), or —
-   * all three absent — to whoever routing gives it (tm 296.3).
+   * Hand the conversation over: to a team a single-message skill's
+   * `transfer_to_team` names (`team`, with its `groupId` since tm 307.1 — the
+   * id decides, the name is for a step saved before ids), by id or routing
+   * topic (a procedure's target), or — all absent — to whoever routing gives
+   * it (tm 296.3).
    */
   | {
       readonly kind: 'handoff';

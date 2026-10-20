@@ -5,6 +5,7 @@ import {
   AI_RETURN_RESUMES,
   EVENT_RECIPIENTS,
   EVENT_TYPES,
+  THREAD_PRIORITIES,
   TRANSFER_REASONS,
   isShortId,
 } from '@siyahtus/types';
@@ -52,6 +53,8 @@ const listQuery = z.object({
   group_id: z.coerce.bigint().optional(),
   /** The inbox's queue tabs (AU-01): waiting in this team's queue. */
   queue_group_id: z.coerce.bigint().optional(),
+  /** How pressing (AI-12): the open connection's priority. */
+  priority: z.enum(THREAD_PRIORITIES).optional(),
   sort: z.enum(['newest', 'oldest']).default('newest'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   page_id: z.string().max(512).optional(),
@@ -262,6 +265,7 @@ export default async function chatRoutes(
         ...(query.customer_id !== undefined ? { customerId: query.customer_id } : {}),
         ...(query.group_id !== undefined ? { groupId: query.group_id } : {}),
         ...(query.queue_group_id !== undefined ? { queueGroupId: query.queue_group_id } : {}),
+        ...(query.priority !== undefined ? { priority: query.priority } : {}),
         ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),
       });
 

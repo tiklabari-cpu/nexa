@@ -79,6 +79,14 @@ chats:
           question. Composes with `view` and `channel`, and `total` counts the
           same intersection.
         schema: { type: integer, format: int64 }
+      - name: priority
+        in: query
+        description: |
+          Narrows to the chats whose open connection has this priority
+          (AI-12 · `ChatSummary.priority`) — an archived chat has none and
+          never matches. Composes with the other filters, and `total` counts
+          the same intersection.
+        schema: { $ref: "../openapi.yaml#/components/schemas/ThreadPriority" }
       - name: sort
         in: query
         schema: { type: string, enum: [newest, oldest], default: newest }

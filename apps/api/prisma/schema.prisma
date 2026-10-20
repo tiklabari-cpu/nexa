@@ -191,6 +191,7 @@ model License {
   aiHandoffSettings      AiHandoffSettings[]
   aiGuidanceRules        AiGuidanceRule[]
   aiHandoffRules         AiHandoffRule[]
+  handoffRoutes          HandoffRoute[]
   aiGuardrailSettings    AiGuardrailSettings[]
   aiGuardrailRules       AiGuardrailRule[]
   aiForbiddenPhrases     AiForbiddenPhrase[]
@@ -1065,6 +1066,10 @@ model Thread {
   /// `threads_priority_check`. A rank rather than the word, so a queue orders
   /// by `priority DESC` (ADR-08a §2.3).
   priority         Int       @default(0) @db.SmallInt
+  /// Why the priority was raised (AI-12 · tm 307): the `HANDOFF_REASONS` code
+  /// of the hand-over that raised it, written with it; null while nothing
+  /// has. Shape by the CHECK `threads_priority_reason_check`.
+  priorityReason   String?   @map("priority_reason")
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]
@@ -1970,6 +1975,42 @@ model AiHandoffRule {
 
   @@index([licenseId, aiAgentId, position])
   @@map("ai_handoff_rules")
+}
+
+/// Which team a conversation goes to for a key (tm 307.1 · AI-12, shared
+/// with AU-01; ADR-14b §2.12): a routing topic (`QUEUE_TOPIC_ROLES`) or a
+/// hand-over reason (`HANDOFF_REASONS`), for one brand or — `brandId` null —
+/// for every brand. Written only through `config-draft.ts`; human routing
+/// reads it live, the AI from its published package (tm 316). Lists and
+/// shapes by CHECK; at most one route per key and brand by two partial unique
+/// indexes (hand-written in 20261020180000_handoff_routes).
+model HandoffRoute {
+  id                  String   @id @default(uuid()) @db.Uuid
+  licenseId           BigInt   @map("license_id")
+  brandId             String?  @map("brand_id") @db.Uuid
+  /// `HANDOFF_ROUTE_MATCH_TYPES`.
+  matchType           String   @map("match_type")
+  matchKey            String   @map("match_key")
+  /// A soft reference to `groups.id`, like `ai_handoff_rules.target_group_id`:
+  /// the resolver checks the team still exists and moves on when it does not.
+  groupId             BigInt   @map("group_id")
+  /// A soft reference to `expertise.id`. A requirement whose expertise is gone
+  /// is met by nobody — the conversation waits rather than reach an untrained
+  /// agent.
+  requiredExpertiseId BigInt?  @map("required_expertise_id")
+  /// `THREAD_PRIORITIES`: the priority a conversation routed here starts with.
+  defaultPriority     String   @default("normal") @map("default_priority")
+  active              Boolean  @default(true)
+  createdBy           String?  @map("created_by") @db.Uuid
+  updatedBy           String?  @map("updated_by") @db.Uuid
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  brand   Brand?  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, matchType, matchKey])
+  @@map("handoff_routes")
 }
 
 /// A customer-facing agent's guardrail settings (tm 301.2 · AI-08): the crisis
@@ -2920,6 +2961,7 @@ model Brand {
   securitySettings SecuritySettings[]
   inboxSettings    InboxSettings[]
   widgetSettings   WidgetSettings[]
+  handoffRoutes    HandoffRoute[]
 
   @@unique([licenseId, slug])
   @@map("brands")

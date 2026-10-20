@@ -11,8 +11,8 @@
  *
  * This first form does §2.5 step 1 only: it stamps the row's `updated_at` —
  * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
- * settings, rules and forbidden phrases (tm 301.2), and the hand-over rules
- * (tm 303.3).
+ * settings, rules and forbidden phrases (tm 301.2), the hand-over rules
+ * (tm 303.3) and the hand-over routes (tm 307.1).
  * A route that writes `updated_at` itself, or opens a `status`/`version`
  * column, breaks the rule.
  */
@@ -181,4 +181,29 @@ export async function reorderHandoffRulesDraft(
       data: { position: index + 1, updatedBy, updatedAt },
     });
   }
+}
+
+// Hand-over routes (tm 307.1 · AI-12, shared with AU-01). Human routing reads
+// them live; the AI's hand-over target is versioned with the package
+// (ADR-14b §2.12), so they are written here like any editing table.
+
+type HandoffRouteCreate = Omit<Prisma.HandoffRouteUncheckedCreateInput, 'updatedAt'>;
+type HandoffRouteUpdate = Omit<Prisma.HandoffRouteUncheckedUpdateInput, 'updatedAt'>;
+
+export async function createHandoffRouteDraft(tx: TenantClient, data: HandoffRouteCreate) {
+  return tx.handoffRoute.create({ data: { ...data, updatedAt: new Date() } });
+}
+
+export async function updateHandoffRouteDraft(
+  tx: TenantClient,
+  id: string,
+  data: HandoffRouteUpdate,
+) {
+  return tx.handoffRoute.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+}
+
+/** How many rows went — 0 when the route is not this workspace's. */
+export async function deleteHandoffRouteDraft(tx: TenantClient, id: string): Promise<number> {
+  const { count } = await tx.handoffRoute.deleteMany({ where: { id } });
+  return count;
 }

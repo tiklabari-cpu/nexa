@@ -521,6 +521,7 @@ describe('hand-over rules (AI-09 · K9 · tm 303.3)', () => {
         select: { decision: true, details: true },
       });
       return {
+        chatId,
         said: bot.map((event) => event.text),
         lines: events
           .map((event) => event.properties as Record<string, unknown>)
@@ -543,6 +544,14 @@ describe('hand-over rules (AI-09 · K9 · tm 303.3)', () => {
           handoff_rule_id: rule.id,
         });
       }
+      // The hand-over's priority, and why, on the connection (tm 307.1).
+      expect(
+        await owner.thread.findFirstOrThrow({
+          where: { chatId: handed.chatId },
+          orderBy: { createdAt: 'desc' },
+          select: { priority: true, priorityReason: true },
+        }),
+      ).toEqual({ priority: 1, priorityReason: 'tenant_rule' });
       expect(handed.records).toEqual([
         expect.objectContaining({
           decision: 'handoff',

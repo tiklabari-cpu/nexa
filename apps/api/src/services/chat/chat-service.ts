@@ -38,6 +38,7 @@ import {
   sensitiveWarningTypes,
   SNEAK_PEEK_MAX_LENGTH,
   stripEditMarkers,
+  THREAD_PRIORITY_RANK,
   threadPriorityFromRank,
   transferNoteRequired,
   type AdapterChannelType,
@@ -137,6 +138,11 @@ export interface ChatListOptions {
    * another's queue.
    */
   queueGroupId?: bigint;
+  /**
+   * Chats whose open connection is this pressing (AI-12 · tm 307.1). An
+   * archived chat has no open connection and never matches.
+   */
+  priority?: ThreadPriority;
   /**
    * The inbox's channel views (FR-MOD-02.1.4) — an axis of its own, deliberately
    * NOT a ninth `view`. The two compose (`view=my&channel=whatsapp`), and the
@@ -415,6 +421,8 @@ export interface HandOverOptions {
    * front of its own team's queue (`RoutingService.raisePriority`).
    */
   priority?: ThreadPriority;
+  /** Why (`threads.priority_reason`, tm 307.1): the hand-over's primary reason code. */
+  priorityReason?: string;
   /**
    * The team `handOverFromAi` routes a connection nobody has into, in place of
    * the team the rules gave it on open (ADR-08a §2.4: the hand-over's target
@@ -3208,7 +3216,13 @@ export class ChatService {
       // After the routing above, so the only queue it can move up is the one
       // the transfer left it in.
       if (options.priority) {
-        await this.routing.raisePriority(tx, tenant.licenseId, thread.id, options.priority);
+        await this.routing.raisePriority(
+          tx,
+          tenant.licenseId,
+          thread.id,
+          options.priority,
+          options.priorityReason ?? null,
+        );
       }
 
       // In the transfer's transaction: a transfer refused rolls it back too.
@@ -3873,7 +3887,13 @@ export class ChatService {
       );
       // After the routing above, as in `transfer`.
       if (options.priority) {
-        await this.routing.raisePriority(tx, tenant.licenseId, thread.id, options.priority);
+        await this.routing.raisePriority(
+          tx,
+          tenant.licenseId,
+          thread.id,
+          options.priority,
+          options.priorityReason ?? null,
+        );
       }
       if (!mode?.note) return mode;
       const reloaded = await tx.chat.findUniqueOrThrow({
@@ -4348,6 +4368,12 @@ export async function listChatsInTenant(
       threads: {
         some: { active: true, queuePosition: { not: null }, queueGroupId: options.queueGroupId },
       },
+    });
+  }
+  // How pressing (AI-12): its own AND clause, for the same reason.
+  if (options.priority !== undefined) {
+    scope.push({
+      threads: { some: { active: true, priority: THREAD_PRIORITY_RANK[options.priority] } },
     });
   }
 
@@ -5045,6 +5071,10 @@ export interface ChatDetail {
     created_at: string;
     closed_at: string | null;
     opened_via: string | null;
+    /** How pressing the connection is (`threads.priority`, AI-12). */
+    priority: ThreadPriority;
+    /** The hand-over reason that last raised it (`threads.priority_reason`). */
+    priority_reason: string | null;
     /** Who answers the connection (`threads.ai_mode`, AI-11); null until anyone takes part. */
     ai_mode: AiConversationMode | null;
     /** Whether the AI answered in the connection — only on an agent's `get`. */
@@ -5090,6 +5120,9 @@ interface ThreadRow {
   groupId: bigint | null;
   /** One of `AI_CONVERSATION_MODES` (the column's CHECK), or null. */
   aiMode: string | null;
+  /** `THREAD_PRIORITY_RANK` (the column's CHECK). */
+  priority: number;
+  priorityReason: string | null;
   tags: Array<{ tag: { name: string } }>;
 }
 
@@ -5133,6 +5166,8 @@ function serialiseChat(chat: ChatRow): ChatDetail {
           created_at: thread.createdAt.toISOString(),
           closed_at: thread.closedAt?.toISOString() ?? null,
           opened_via: thread.openedVia,
+          priority: threadPriorityFromRank(thread.priority),
+          priority_reason: thread.priorityReason,
           ai_mode: thread.aiMode as AiConversationMode | null,
           tags: thread.tags.map((t) => t.tag.name).sort(),
         }

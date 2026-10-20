@@ -175,6 +175,7 @@ describe('reasonMessage — the refusals worded in tm 261', () => {
         'send_message_bad_source',
         'send_message_needs_text',
         'transfer_to_team_needs_team',
+        'transfer_to_team_unknown_team',
       ],
     };
     const missing: string[] = [];

@@ -48,9 +48,17 @@ export interface SendMessageStep {
   text?: string;
 }
 
+/**
+ * Hand the conversation to a team. `group_id` names it (AI-12 · tm 307.1), so
+ * renaming the team keeps the skill working; `group` is its name, kept beside
+ * the id while the previous release still reads it and for a step saved
+ * before ids (the API fills the id on every write, and a migration filled the
+ * steps already stored). The hand-over looks the team up by id first.
+ */
 export interface TransferToTeamStep {
   type: 'transfer_to_team';
-  group: string;
+  group?: string;
+  group_id?: number;
 }
 
 export type SkillStep =
@@ -78,6 +86,7 @@ export const STEP_PROBLEM_CODES = [
   'send_message_bad_source',
   'send_message_needs_text',
   'transfer_to_team_needs_team',
+  'transfer_to_team_unknown_team',
 ] as const;
 
 export type StepProblemCode = (typeof STEP_PROBLEM_CODES)[number];
@@ -174,15 +183,31 @@ export function validateStep(value: unknown): { ok: true; step: SkillStep } | St
       }
       return { ok: true, step: value as SendMessageStep };
     }
-    case 'transfer_to_team':
-      if (!nonEmptyString(step['group'])) {
+    case 'transfer_to_team': {
+      const groupId = step['group_id'];
+      if (groupId !== undefined && !isTeamId(groupId)) {
+        return {
+          ok: false,
+          reason: 'transfer_to_team group_id must be a team id',
+          code: 'transfer_to_team_needs_team',
+        };
+      }
+      if (groupId === undefined && !nonEmptyString(step['group'])) {
         return {
           ok: false,
           reason: 'transfer_to_team needs a team',
           code: 'transfer_to_team_needs_team',
         };
       }
+      if (step['group'] !== undefined && typeof step['group'] !== 'string') {
+        return {
+          ok: false,
+          reason: 'transfer_to_team group must be the team name',
+          code: 'transfer_to_team_needs_team',
+        };
+      }
       return { ok: true, step: value as TransferToTeamStep };
+    }
   }
 }
 
@@ -220,6 +245,11 @@ export function stepProblemDetails(problem: StepProblem & { index: number }): St
     ...(problem.index >= 0 ? { step: problem.index + 1 } : {}),
     ...(problem.type !== undefined ? { type: problem.type } : {}),
   };
+}
+
+/** A team id as JSON carries it: a positive whole number. */
+function isTeamId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
 function nonEmptyString(value: unknown): value is string {

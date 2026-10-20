@@ -13236,7 +13236,7 @@
           "306"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T11:02:45.537Z",
+        "updatedAt": "2026-10-20T13:00:00.835Z",
         "subtasks": [
           {
             "id": 1,
@@ -13244,11 +13244,11 @@
             "description": "handoff_routes + adım hedefi group_id taşıması (genişlet → taşı) + kontrat",
             "details": "Üst görev 307 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Taşıma testi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "307",
             "priority": "high",
-            "updatedAt": "2026-10-20T11:02:45.537Z"
+            "updatedAt": "2026-10-20T13:00:00.835Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T11:02:45.537Z",
+      "lastModified": "2026-10-20T13:00:00.836Z",
       "taskCount": 390,
       "completedCount": 305,
       "tags": [

@@ -851,15 +851,25 @@ model DeviceToken {
 /// Departments / chatting teams. PRD §8.4 gives groups a per-license integer id
 /// rather than a uuid, so the primary key is composite.
 model Group {
-  id           BigInt   @default(autoincrement())
-  licenseId    BigInt   @map("license_id")
-  name         String
-  languageCode String   @default("en") @map("language_code")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             BigInt   @default(autoincrement())
+  licenseId      BigInt   @map("license_id")
+  name           String
+  languageCode   String   @default("en") @map("language_code")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// The topic this team's queue is for (AU-01 · K14 · tm 305.1): one of
+  /// `QUEUE_TOPIC_ROLES` (`@siyahtus/types`), enforced by the CHECK
+  /// `groups_topic_role_check`; at most one team per licence holds a role (the
+  /// partial unique index `groups_license_id_topic_role_key`, hand-written in
+  /// the migration). Null for an ordinary team.
+  topicRole      String?  @map("topic_role")
+  /// What the team's queue does when nobody is on shift: one of
+  /// `AFTER_HOURS_MODES`, enforced by `groups_after_hours_mode_check`.
+  afterHoursMode String   @default("queue") @map("after_hours_mode")
 
-  license License      @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  agents  GroupAgent[]
-  bots    BotGroup[]
+  license           License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agents            GroupAgent[]
+  bots              BotGroup[]
+  requiredExpertise GroupExpertise[]
 
   @@id([licenseId, id])
   @@map("groups")
@@ -901,6 +911,7 @@ model Expertise {
 
   license License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   agents  AgentExpertise[]
+  groups  GroupExpertise[]
 
   @@id([licenseId, id])
   @@unique([licenseId, slug])
@@ -922,6 +933,26 @@ model AgentExpertise {
   @@id([licenseId, agentId, expertiseId])
   @@index([agentId])
   @@map("agent_expertise")
+}
+
+/// An area of expertise a team requires of the agents it gives conversations
+/// to (AU-01 · tm 305.1) — every one of a team's rows, not any. `agent_expertise`
+/// says what an agent holds; this says what a team's queue needs, so routing
+/// and draining can ask the same question of every team (ADR-08a §2.2) and the
+/// Responsible Gambling team admits only trained agents (§2.6). Rows go with
+/// the team or the area (cascade); a set is replaced, never edited. The second
+/// index serves the cascade from `expertise` and "which teams need this area".
+model GroupExpertise {
+  licenseId   BigInt @map("license_id")
+  groupId     BigInt @map("group_id")
+  expertiseId BigInt @map("expertise_id")
+
+  group     Group     @relation(fields: [licenseId, groupId], references: [licenseId, id], onDelete: Cascade)
+  expertise Expertise @relation(fields: [licenseId, expertiseId], references: [licenseId, id], onDelete: Cascade)
+
+  @@id([licenseId, groupId, expertiseId])
+  @@index([licenseId, expertiseId])
+  @@map("group_expertise")
 }
 
 // ===========================================================================
@@ -1021,6 +1052,19 @@ model Thread {
   /// `threads_ai_mode_check`. Null until the AI or a person takes part — the
   /// AI may still answer. Written only by `services/chat/ai-mode.ts`.
   aiMode           String?   @map("ai_mode")
+  /// The team whose queue the connection waits in (ADR-08a §2.1 · tm 305.1):
+  /// a connection is in one team's queue at a time, and positions, renumbering
+  /// and draining go team by team. Read only while `queuePosition` is set.
+  /// Not `groupId`: that one records who handled the connection. No relation,
+  /// the `groupId` rule — a deleted team must not erase or block the row. Null
+  /// on a connection queued before tm 305 that the backfill
+  /// (20261020120100_threads_queue_group_backfill) found no team for.
+  queueGroupId     BigInt?   @map("queue_group_id")
+  /// How pressing the connection is, as its rank: `THREAD_PRIORITY_RANK`
+  /// (`@siyahtus/types`) — 0 normal, 1 high, 2 urgent — enforced by the CHECK
+  /// `threads_priority_check`. A rank rather than the word, so a queue orders
+  /// by `priority DESC` (ADR-08a §2.3).
+  priority         Int       @default(0) @db.SmallInt
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]

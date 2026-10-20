@@ -57,6 +57,13 @@ export const ERROR_TYPES = [
   'group_in_use',
   'group_not_found',
   'group_offline',
+  // SiyahTuş addition — team queues (AU-01 · K14 · tm 305.1). A topic role
+  // (`QUEUE_TOPIC_ROLES`) names one team per workspace, because the AI's
+  // hand-over and the pre-chat topic resolve the role to a team; giving it to a
+  // second team is a conflict with the workspace's state, not a malformed body.
+  // `details.group_id` names the team that holds it. Kept narrow like
+  // `fallback_rule_exists`, the other one-per-workspace refusal.
+  'group_topic_role_taken',
   'group_unavailable',
   'groups_offline',
   'internal',
@@ -141,6 +148,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   group_in_use: 409,
   group_not_found: 404,
   group_offline: 409,
+  group_topic_role_taken: 409,
   group_unavailable: 409,
   groups_offline: 409,
   internal: 500,

@@ -24,11 +24,14 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
+  AFTER_HOURS_MODES,
   AGENT_ROLES,
   DEFAULT_WORK_SCHEDULE,
   GROUP_PRIORITIES,
+  MAX_GROUP_REQUIRED_EXPERTISE,
   NOTIFICATION_CHANNELS,
   PANEL_FONT_PRESETS,
+  QUEUE_TOPIC_ROLES,
   ROUTING_STATUSES,
   UI_PREFERENCE_KEYS,
   hasAnyScope,
@@ -46,6 +49,7 @@ import { RoutingService } from '../services/routing/routing-service.js';
 import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principal.js';
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
 import {
+  GROUP_INCLUDE,
   createGroup,
   deleteGroup,
   loadGroup,
@@ -54,6 +58,8 @@ import {
   removeGroupMember,
   setGroupMember,
   updateGroup,
+  type GroupQueueSettings,
+  type GroupWithAgents,
 } from '../services/team/group-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
@@ -77,16 +83,24 @@ const groupLanguageCode = z
 
 /** A team name is what an agent picks from a transfer menu, so it is trimmed and
  *  bounded rather than free text. `language_code` drives language-based routing
- *  and defaults to the column's `en`. */
+ *  and defaults to the column's `en`. The queue settings (AU-01 · tm 305.1) are
+ *  enumerated here so a typo is a 400 rather than a row a CHECK refuses
+ *  mid-transaction; an expertise id is bounded to what `bigint` holds. */
 const groupBody = z.object({
   name: z.string().trim().min(1).max(120),
   language_code: groupLanguageCode.optional(),
+  topic_role: z.enum(QUEUE_TOPIC_ROLES).nullable().optional(),
+  after_hours_mode: z.enum(AFTER_HOURS_MODES).optional(),
+  required_expertise_ids: z
+    .array(z.coerce.bigint().positive().lte(9223372036854775807n))
+    .max(MAX_GROUP_REQUIRED_EXPERTISE)
+    .optional(),
 });
 
-/** Both fields optional, at least one required — the edit page sends the field
- *  that moved, not the pair it read a moment ago. */
+/** Every field optional, at least one required — the edit page sends the field
+ *  that moved, not the set it read a moment ago. */
 const groupPatchBody = groupBody.partial().refine((b) => Object.keys(b).length > 0, {
-  message: 'send at least one of name, language_code',
+  message: 'send at least one field',
 });
 
 /** `priority` is the routing preference ADR-08 step 2 reads, and the PRD's
@@ -95,7 +109,9 @@ const groupPatchBody = groupBody.partial().refine((b) => Object.keys(b).length >
 const membershipBody = z.object({ priority: z.enum(GROUP_PRIORITIES).default('normal') });
 
 const GROUP_BODY_MESSAGE =
-  'name is required (1–120 characters); language_code is a two-letter code, optionally with a region (e.g. en, en-GB).';
+  'name is required (1–120 characters); language_code is a two-letter code, optionally with a region (e.g. en, en-GB); ' +
+  `topic_role is one of ${QUEUE_TOPIC_ROLES.join(', ')} or null; after_hours_mode is one of ${AFTER_HOURS_MODES.join(', ')}; ` +
+  `required_expertise_ids is at most ${MAX_GROUP_REQUIRED_EXPERTISE} expertise-area ids.`;
 
 function parseGroupBody(raw: unknown): z.infer<typeof groupBody> {
   const parsed = groupBody.safeParse(raw);
@@ -108,7 +124,7 @@ function parseGroupBody(raw: unknown): z.infer<typeof groupBody> {
 function parseGroupPatchBody(raw: unknown): z.infer<typeof groupPatchBody> {
   const parsed = groupPatchBody.safeParse(raw);
   if (!parsed.success) {
-    throw ApiError.validation(`Send at least one of name, language_code. ${GROUP_BODY_MESSAGE}`);
+    throw ApiError.validation(`Send at least one field. ${GROUP_BODY_MESSAGE}`);
   }
   return parsed.data;
 }
@@ -138,17 +154,26 @@ function agentIdParam(raw: string): string {
   return parsed.data;
 }
 
-function serialiseGroup(group: {
-  id: bigint;
-  name: string;
-  languageCode: string;
-  agents: Array<{ agentId: string; priority: string }>;
-}) {
+function serialiseGroup(group: GroupWithAgents) {
   return {
     id: Number(group.id),
     name: group.name,
     language_code: group.languageCode,
+    topic_role: group.topicRole,
+    after_hours_mode: group.afterHoursMode,
+    required_expertise_ids: group.requiredExpertise.map((row) => Number(row.expertiseId)),
     agents: group.agents.map((a) => ({ agent_id: a.agentId, priority: a.priority })),
+  };
+}
+
+/** The queue settings a parsed body names, in the service's spelling. */
+function groupQueueSettings(body: Partial<z.infer<typeof groupBody>>): GroupQueueSettings {
+  return {
+    ...(body.topic_role !== undefined ? { topicRole: body.topic_role } : {}),
+    ...(body.after_hours_mode !== undefined ? { afterHoursMode: body.after_hours_mode } : {}),
+    ...(body.required_expertise_ids !== undefined
+      ? { requiredExpertiseIds: body.required_expertise_ids }
+      : {}),
   };
 }
 
@@ -963,10 +988,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
     { config: { scopes: ['groups--all:ro', 'groups--my:ro'] } },
     async (request, reply) => {
       const groups = await request.withTenant((tx) =>
-        tx.group.findMany({
-          include: { agents: { select: { agentId: true, priority: true } } },
-          orderBy: { id: 'asc' },
-        }),
+        tx.group.findMany({ include: GROUP_INCLUDE, orderBy: { id: 'asc' } }),
       );
 
       return reply.send({ items: groups.map(serialiseGroup) });
@@ -996,6 +1018,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       createGroup(tx, request.auditContext(), tenant.licenseId, {
         name: body.name,
         ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
+        ...groupQueueSettings(body),
       }),
     );
 
@@ -1014,6 +1037,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         return updateGroup(tx, request.auditContext(), request.tenant().licenseId, groupId, {
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
+          ...groupQueueSettings(body),
         });
       });
 

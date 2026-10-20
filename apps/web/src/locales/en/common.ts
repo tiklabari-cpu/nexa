@@ -36,6 +36,8 @@ export const common: Messages = {
     'This team is still in use — a routing rule points at it, or conversations are open with it.',
   'common.errors.group_not_found': 'We could not find that team.',
   'common.errors.group_offline': 'That team is offline right now.',
+  'common.errors.group_topic_role_taken':
+    'Another team already handles this topic — clear it there first.',
   'common.errors.group_unavailable': 'That team cannot take this conversation right now.',
   'common.errors.groups_offline': 'Every team is offline right now.',
   'common.errors.internal': 'Something went wrong on our side — try again.',

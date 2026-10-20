@@ -20,6 +20,7 @@
  */
 import {
   AI_UNRESOLVED_HANDOFF_REASONS,
+  THREAD_PRIORITY_RANK,
   foldGuardrailText,
   type GuardrailPriority,
   type HandoffReason,
@@ -187,13 +188,7 @@ export function ruleTarget(rule: HandoffRuleConfig): { groupId?: number; topic?:
   return {};
 }
 
-const PRIORITY_RANK: Readonly<Record<GuardrailPriority, number>> = Object.freeze({
-  normal: 0,
-  high: 1,
-  urgent: 2,
-});
-
-/** The more urgent of two priorities. */
+/** The more urgent of two priorities — by the rank `threads.priority` stores. */
 export function morePressing(a: GuardrailPriority, b: GuardrailPriority): GuardrailPriority {
-  return PRIORITY_RANK[b] > PRIORITY_RANK[a] ? b : a;
+  return THREAD_PRIORITY_RANK[b] > THREAD_PRIORITY_RANK[a] ? b : a;
 }

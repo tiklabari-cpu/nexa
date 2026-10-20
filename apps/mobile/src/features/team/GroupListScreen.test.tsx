@@ -11,6 +11,9 @@ function group(overrides: Partial<Group> & { id: number }): Group {
   return {
     name: 'Support',
     language_code: 'en',
+    topic_role: null,
+    after_hours_mode: 'queue',
+    required_expertise_ids: [],
     agents: [],
     ...overrides,
   };

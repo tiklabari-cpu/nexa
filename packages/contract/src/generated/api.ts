@@ -3128,6 +3128,9 @@ export interface paths {
      * @description Routing resolves an agent through team membership (ADR-08 step 2), so a
      *     workspace with no team cannot route a conversation to anyone. Signup seeds
      *     a `General` team with the owner in it; this is how the rest are made.
+     *     The queue settings (AU-01) may be given at once: a topic role another
+     *     team holds is a 409 `group_topic_role_taken`, an expertise id that names
+     *     no area on this licence a 404.
      */
     post: operations['createGroup'];
     delete?: never;
@@ -3161,9 +3164,12 @@ export interface paths {
     options?: never;
     head?: never;
     /**
-     * Rename a team or change its language
+     * Rename a team, change its language or its queue settings
      * @description Send the field that changed; at least one is required. An empty body is a
      *     400 rather than a no-op, so a client cannot believe it saved something.
+     *     A topic role another team holds is a 409 `group_topic_role_taken`
+     *     (`details.group_id` names it); `required_expertise_ids` replaces the set,
+     *     and an id that names no area on this licence is a 404.
      */
     patch: operations['updateGroup'];
     trace?: never;
@@ -14201,12 +14207,65 @@ export interface components {
        * @default en
        */
       language_code: string;
+      /**
+       * @description The topic this team's queue is for (AU-01 · K14). At most one team
+       *     per workspace holds a role — naming one another team holds is a 409
+       *     `group_topic_role_taken` with `details.group_id`. `null` clears it.
+       *     Omitted on create: no role.
+       */
+      topic_role?: components['schemas']['QueueTopicRole'] | null;
+      /** @default queue */
+      after_hours_mode: components['schemas']['AfterHoursMode'];
+      /**
+       * @description The complete set of expertise areas (`Expertise.id`) an agent must
+       *     hold — every one of them — to be given this team's conversations
+       *     (AU-01). Replaces the current set; `[]` clears it. An id that names
+       *     no area on this licence is a 404. Omitted on create: none.
+       */
+      required_expertise_ids?: number[];
     };
+    /**
+     * @description A team queue's topic (AU-01 · K14 · `@siyahtus/types`
+     *     `QUEUE_TOPIC_ROLES`). The AI's hand-over, the pre-chat topic and a
+     *     hand-over rule's `{ topic }` target resolve the role, not the team's
+     *     name, so a renamed team still receives its topic.
+     *     `responsible_gambling` has rules of its own (ADR-08a): no fallback
+     *     team, only trained agents, and the team cannot be deleted.
+     * @enum {string}
+     */
+    QueueTopicRole:
+      'finance' | 'kyc_risk' | 'bonus' | 'responsible_gambling' | 'technical' | 'complaint';
+    /**
+     * @description What a team's queue does when nobody is on shift (AU-01;
+     *     `@siyahtus/types` `AFTER_HOURS_MODES`): `queue` — the conversation
+     *     waits for the next agent; `ticket` — it becomes a ticket the player
+     *     is answered on by email (HD-01 / WG-08).
+     * @enum {string}
+     */
+    AfterHoursMode: 'queue' | 'ticket';
+    /**
+     * @description How pressing a connection is (ADR-08a · AI-12; `@siyahtus/types`
+     *     `THREAD_PRIORITIES`): `urgent` — self-harm, a suspected minor, a
+     *     self-exclusion request; `high` — a repeat contact the same day, an
+     *     angry player; `normal` — the rest. A team's queue serves the most
+     *     pressing first, then the longest waiting. Stored as a rank
+     *     (`threads.priority`), so it never sorts by spelling.
+     * @enum {string}
+     */
+    ThreadPriority: 'urgent' | 'high' | 'normal';
     Group: {
       /** Format: int64 */
       id: number;
       name: string;
       language_code: string;
+      /** @description The topic this team's queue is for; null for an ordinary team. */
+      topic_role: components['schemas']['QueueTopicRole'] | null;
+      after_hours_mode: components['schemas']['AfterHoursMode'];
+      /**
+       * @description Expertise areas an agent must hold — all of them — to be given this
+       *     team's conversations, in ascending id order. Empty: none.
+       */
+      required_expertise_ids: number[];
       agents: {
         /** Format: uuid */
         agent_id: string;
@@ -15910,6 +15969,7 @@ export interface components {
       | 'greeting_not_found'
       | 'group_not_found'
       | 'group_offline'
+      | 'group_topic_role_taken'
       | 'group_unavailable'
       | 'groups_offline'
       | 'internal'
@@ -20857,6 +20917,8 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -20915,6 +20977,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
     };
   };

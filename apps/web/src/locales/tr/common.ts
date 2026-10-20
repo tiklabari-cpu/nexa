@@ -22,6 +22,8 @@ export const common: Messages = {
     'Bu ekip hâlâ kullanımda — bir yönlendirme kuralı onu hedefliyor ya da açık sohbetleri var.',
   'common.errors.group_not_found': 'Bu ekibi bulamadık.',
   'common.errors.group_offline': 'Bu ekip şu anda çevrimdışı.',
+  'common.errors.group_topic_role_taken':
+    'Bu konuya zaten başka bir ekip bakıyor — önce oradan kaldırın.',
   'common.errors.group_unavailable': 'Bu ekip şu anda bu sohbeti alamıyor.',
   'common.errors.groups_offline': 'Şu anda tüm ekipler çevrimdışı.',
   'common.errors.internal': 'Bizim tarafımızda bir şeyler ters gitti — yeniden deneyin.',

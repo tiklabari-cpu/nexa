@@ -88,7 +88,7 @@ pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_
 # okuyup uyarıyor (aşağıda `marked_from`). Dürüst `false` beklenen davranıştır — uydurma.
 result_schema='{"type":"object","properties":{"status":{"type":"string","enum":["done","blocked"]},"task_id":{"type":"string"},"summary":{"type":"string"},"marked_in_progress":{"type":"boolean"}},"required":["status","marked_in_progress"]}'
 
-log(){ echo "[$(date -u +%H:%M:%S)] $*"; }
+log(){ echo "[$(date +%H:%M:%S)] $*"; }
 
 # --- Görev deneme sayacı (tur bazlı, koşular arasında kalıcı) -----------------
 # Biçim: "<task_id>\t<tur_sayısı>" — awk/grep dışında bağımlılık yok, jq gerekmez.

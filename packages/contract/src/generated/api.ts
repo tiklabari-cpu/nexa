@@ -11778,6 +11778,414 @@ export interface components {
       /** @description One entry per data row, in file order. */
       results: components['schemas']['KnowledgeBulkRowResult'][];
     };
+    /**
+     * @description Which structured table (AI-13-S1: four fixed tables), as its URL
+     *     segment (`KNOWLEDGE_TABLE_PATH_SEGMENTS`): payment methods, bonuses,
+     *     KYC documents, limits and rules.
+     * @enum {string}
+     */
+    KnowledgeTableSegment: 'payment-methods' | 'bonuses' | 'kyc-documents' | 'rules';
+    /**
+     * @description Who filled the row: a person, or an integration (F2) — whose rows are
+     *     not edited by hand.
+     * @enum {string}
+     */
+    KnowledgeTableRowSource: 'manual' | 'integration';
+    /**
+     * @description One refused field of a row (`validateKnowledgeTableRow`). `field` is a
+     *     path (`aliases[2]`, `working_hours.windows[0].end`); `taken` — another
+     *     row of an overlapping brand scope (and, for a payment method, the same
+     *     direction) already answers to the name.
+     */
+    KnowledgeTableProblem: {
+      field: string;
+      /** @enum {string} */
+      code:
+        | 'required'
+        | 'invalid'
+        | 'too_long'
+        | 'too_many'
+        | 'out_of_range'
+        | 'repeated'
+        | 'min_above_max'
+        | 'delay_below_expected'
+        | 'window_overlap'
+        | 'wagering_base_required'
+        | 'promo_code_required'
+        | 'active_to_before_from'
+        | 'value_required'
+        | 'taken';
+    };
+    /**
+     * @description What every structured-table row carries besides its fields. A row is
+     *     due a review `review_interval_days` after `reviewed_at` (payment
+     *     methods 14, bonuses 30 and at `active_to`, KYC and rules 90 —
+     *     AI-13-S2); a stale row is warned about and still used. These are meta
+     *     fields: changing them does not change what the AI says (ADR-14b §2.2).
+     */
+    KnowledgeTableRowMeta: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description The brands the row is for; empty for every brand. A brand's own
+       *     row beats the every-brand row with the same name (AI-13 §5); a
+       *     conversation whose brand is not known reads every-brand rows only.
+       */
+      brand_ids: string[];
+      /** Format: uuid */
+      owner_id: string | null;
+      /** Format: date-time */
+      reviewed_at: string;
+      review_interval_days: number;
+      /**
+       * Format: date-time
+       * @description When the row falls due — for a bonus, its campaign end if that is sooner.
+       */
+      review_due_at: string;
+      /** @description Past `review_due_at`. */
+      stale: boolean;
+      source: components['schemas']['KnowledgeTableRowSource'];
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: uuid */
+      updated_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /** @description The meta fields a row is written with; the rest are the server's. */
+    KnowledgeTableRowMetaWrite: {
+      brand_ids?: string[];
+      /** Format: uuid */
+      owner_id?: string | null;
+      /** @description Defaults to the table's (14 · 30 · 90 · 90). */
+      review_interval_days?: number;
+    };
+    PaymentWorkingWindow: {
+      /** @enum {string} */
+      day: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+      start: string;
+      /** @description After `start`; `24:00` is the end of the day. */
+      end: string;
+    };
+    /**
+     * @description When a method processes transactions: weekly windows in an IANA time
+     *     zone — several a day, never overlapping — and whether it stops on bank
+     *     holidays. Null on the row: around the clock.
+     */
+    PaymentWorkingHours: {
+      /** @example Europe/Istanbul */
+      timezone: string;
+      windows: components['schemas']['PaymentWorkingWindow'][];
+      closed_on_bank_holidays: boolean;
+    };
+    PaymentCommonError: {
+      code: string;
+      title: string;
+      customer_text: string;
+      /** @description For agents only — never part of the row's text the AI answers from. */
+      agent_hint: string | null;
+    };
+    /**
+     * @description A payment method's fields (AI-13): what "my deposit has not arrived"
+     *     is judged against. `min_amount ≤ max_amount`, `delay_threshold_minutes
+     *     ≥ expected_minutes` (AI-13 §6); the reference format is chosen from a
+     *     fixed list, never a pattern the workspace types (ReDoS).
+     */
+    KbPaymentMethodFields: {
+      name?: string;
+      /** @description Other names players use ("PPR"). */
+      aliases?: string[];
+      /** @enum {string} */
+      direction?: 'deposit' | 'withdrawal';
+      /** @default TRY */
+      currency: string;
+      min_amount?: number | null;
+      max_amount?: number | null;
+      expected_minutes?: number | null;
+      /** @description Past this many minutes a transaction counts as delayed. */
+      delay_threshold_minutes?: number | null;
+      working_hours?: components['schemas']['PaymentWorkingHours'] | null;
+      /** @default false */
+      requires_site_request: boolean;
+      reference_instructions?: string | null;
+      /**
+       * @default none
+       * @enum {string}
+       */
+      reference_format:
+        | 'none'
+        | 'username'
+        | 'digits'
+        | 'alphanumeric'
+        | 'txid_trc20'
+        | 'txid_evm'
+        | 'phone'
+        | 'email';
+      /** @default false */
+      receipt_required: boolean;
+      /** @default false */
+      third_party_allowed: boolean;
+      networks?: string[];
+      common_errors?: components['schemas']['PaymentCommonError'][];
+      customer_notes?: string | null;
+      /** @default true */
+      active: boolean;
+    };
+    KbPaymentMethod: components['schemas']['KnowledgeTableRowMeta'] &
+      WithRequired<
+        components['schemas']['KbPaymentMethodFields'],
+        | 'name'
+        | 'aliases'
+        | 'direction'
+        | 'currency'
+        | 'min_amount'
+        | 'max_amount'
+        | 'expected_minutes'
+        | 'delay_threshold_minutes'
+        | 'working_hours'
+        | 'requires_site_request'
+        | 'reference_instructions'
+        | 'reference_format'
+        | 'receipt_required'
+        | 'third_party_allowed'
+        | 'networks'
+        | 'common_errors'
+        | 'customer_notes'
+        | 'active'
+      >;
+    KbPaymentMethodCreate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      WithRequired<components['schemas']['KbPaymentMethodFields'], 'name' | 'direction'>;
+    KbPaymentMethodUpdate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      components['schemas']['KbPaymentMethodFields'];
+    BonusContribution: {
+      category: string;
+      percent: number;
+    };
+    /**
+     * @description A bonus's terms (AI-13). A wagering base comes with a multiplier and
+     *     only then; `claim_method: code` names its `promo_code`. The AI explains
+     *     wagering with a general worked example only, never "your remaining
+     *     wagering".
+     */
+    KbBonusFields: {
+      name?: string;
+      aliases?: string[];
+      /**
+       * @default other
+       * @enum {string}
+       */
+      type:
+        | 'welcome'
+        | 'deposit'
+        | 'reload'
+        | 'cashback'
+        | 'free_spins'
+        | 'free_bet'
+        | 'loss_bonus'
+        | 'loyalty'
+        | 'other';
+      min_deposit?: number | null;
+      /** @description Null — no wagering. */
+      wagering_multiplier?: number | null;
+      /** @enum {string|null} */
+      wagering_base?: 'bonus' | 'bonus_plus_deposit' | null;
+      contributing?: components['schemas']['BonusContribution'][];
+      min_odds?: number | null;
+      max_bet?: number | null;
+      max_cashout?: number | null;
+      validity_days?: number | null;
+      /**
+       * @default auto
+       * @enum {string}
+       */
+      claim_method: 'auto' | 'live_support' | 'code';
+      promo_code?: string | null;
+      /** @description Payment methods whose deposits do not qualify. */
+      excluded_method_ids?: string[];
+      /** Format: date-time */
+      active_from?: string | null;
+      /**
+       * Format: date-time
+       * @description The campaign's end; the row falls due for review then too.
+       */
+      active_to?: string | null;
+      terms_text?: string | null;
+    };
+    KbBonus: components['schemas']['KnowledgeTableRowMeta'] &
+      WithRequired<
+        components['schemas']['KbBonusFields'],
+        | 'name'
+        | 'aliases'
+        | 'type'
+        | 'min_deposit'
+        | 'wagering_multiplier'
+        | 'wagering_base'
+        | 'contributing'
+        | 'min_odds'
+        | 'max_bet'
+        | 'max_cashout'
+        | 'validity_days'
+        | 'claim_method'
+        | 'promo_code'
+        | 'excluded_method_ids'
+        | 'active_from'
+        | 'active_to'
+        | 'terms_text'
+      >;
+    KbBonusCreate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      WithRequired<components['schemas']['KbBonusFields'], 'name'>;
+    KbBonusUpdate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      components['schemas']['KbBonusFields'];
+    /** @description A KYC document the workspace asks for (AI-13). */
+    KbKycDocumentFields: {
+      /** @description The document's name ("Kimlik kartı"). */
+      doc_type?: string;
+      acceptance_criteria?: string[];
+      when_required?: string | null;
+      review_hours?: number | null;
+      upload_path_text?: string | null;
+      /** @default false */
+      chat_upload_allowed: boolean;
+    };
+    KbKycDocument: components['schemas']['KnowledgeTableRowMeta'] &
+      WithRequired<
+        components['schemas']['KbKycDocumentFields'],
+        | 'doc_type'
+        | 'acceptance_criteria'
+        | 'when_required'
+        | 'review_hours'
+        | 'upload_path_text'
+        | 'chat_upload_allowed'
+      >;
+    KbKycDocumentCreate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      WithRequired<components['schemas']['KbKycDocumentFields'], 'doc_type'>;
+    KbKycDocumentUpdate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      components['schemas']['KbKycDocumentFields'];
+    /**
+     * @description One keyed limit or rule (AI-13). It says something: `value_text`,
+     *     `numeric_value`, or both.
+     */
+    KbRuleFields: {
+      key?: string;
+      /**
+       * @default other
+       * @enum {string}
+       */
+      category: 'limits' | 'account' | 'betting' | 'withdrawal' | 'other';
+      title?: string;
+      value_text?: string | null;
+      numeric_value?: number | null;
+      unit?: string | null;
+      description?: string | null;
+    };
+    KbRule: components['schemas']['KnowledgeTableRowMeta'] &
+      WithRequired<
+        components['schemas']['KbRuleFields'],
+        'key' | 'category' | 'title' | 'value_text' | 'numeric_value' | 'unit' | 'description'
+      >;
+    KbRuleCreate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      WithRequired<components['schemas']['KbRuleFields'], 'key' | 'title'>;
+    KbRuleUpdate: components['schemas']['KnowledgeTableRowMetaWrite'] &
+      components['schemas']['KbRuleFields'];
+    /** @description A row of whichever table the path names. */
+    KnowledgeTableRow:
+      | components['schemas']['KbPaymentMethod']
+      | components['schemas']['KbBonus']
+      | components['schemas']['KbKycDocument']
+      | components['schemas']['KbRule'];
+    /**
+     * @description One CSV data row's verdict (the `KnowledgeBulkRowResult` pattern):
+     *     `line` is the 1-based position among data rows.
+     */
+    KnowledgeTableImportRowResult: {
+      line: number;
+      /**
+       * @description In a dry run `imported` means "would be imported".
+       * @enum {string}
+       */
+      status: 'imported' | 'skipped';
+      /**
+       * Format: uuid
+       * @description The created row; null when skipped and in a dry run.
+       */
+      id: string | null;
+      /** @description The row's name, document or key as the file gave it, to find it in the spreadsheet. */
+      label: string | null;
+      /** @description Why the row was skipped; empty for an imported row. */
+      problems: components['schemas']['KnowledgeTableProblem'][];
+    };
+    /**
+     * @description A CSV import's report (AI-13 §8): valid rows are taken, invalid ones
+     *     skipped with their problems, row by row.
+     */
+    KnowledgeTableImportResult: {
+      imported: number;
+      failed: number;
+      dry_run: boolean;
+      results: components['schemas']['KnowledgeTableImportRowResult'][];
+    };
+    /**
+     * @description Where the access answer comes from (K13): `kb_row` — a knowledge
+     *     source (a table row's included); `dynamic_url` — a URL fetched when
+     *     asked, cached briefly, its last value used when a fetch fails and a
+     *     hand-over when there is none; `fixed_link` — one link, said as it is.
+     * @enum {string}
+     */
+    AiAccessInfoSourceType: 'kb_row' | 'dynamic_url' | 'fixed_link';
+    /**
+     * @description What the AI says when a player cannot reach the site or asks for its
+     *     current address (K13 · AI-08 G14) — only what the workspace entered;
+     *     the workspace is responsible for it. One setting for every brand
+     *     (`brand_id` null) and at most one per brand; a brand's own beats the
+     *     every-brand one. Changes are kept in the AI change history (AI-21).
+     */
+    AiAccessInfo: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      brand_id: string | null;
+      source_type: components['schemas']['AiAccessInfoSourceType'];
+      /**
+       * Format: uuid
+       * @description The knowledge source a `kb_row` answer comes from.
+       */
+      kb_source_id: string | null;
+      /** @description The URL a `dynamic_url` fetches, or the `fixed_link` itself (http or https). */
+      url: string | null;
+      cache_seconds: number;
+      /** @description What the AI says with a fixed link. */
+      fixed_text: string | null;
+      /** @description The last value a `dynamic_url` fetch returned. */
+      last_value: string | null;
+      /** Format: date-time */
+      last_fetched_at: string | null;
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: uuid */
+      updated_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description The setting for one brand, or for every brand (`brand_id` null or
+     *     omitted), replaced whole. `kb_row` needs `kb_source_id`; `dynamic_url`
+     *     and `fixed_link` need `url`.
+     */
+    AiAccessInfoUpdate: {
+      /** Format: uuid */
+      brand_id?: string | null;
+      source_type: components['schemas']['AiAccessInfoSourceType'];
+      /** Format: uuid */
+      kb_source_id?: string | null;
+      url?: string | null;
+      /** @default 300 */
+      cache_seconds: number;
+      fixed_text?: string | null;
+    };
     TrustedDomain: {
       /** Format: uuid */
       id: string;
@@ -30830,3 +31238,6 @@ export interface operations {
     };
   };
 }
+type WithRequired<T, K extends keyof T> = T & {
+  [P in K]-?: T[P];
+};

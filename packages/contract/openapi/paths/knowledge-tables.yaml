@@ -1,0 +1,287 @@
+# Structured knowledge tables and the access information setting (tm 310 ·
+# SiyahTuş analysis AI-13, owner decision K13; ADR-14b §2.12).
+#
+# ===========================================================================
+# NOT MOUNTED YET — every path item below waits for the subtask that serves
+# it (PLAN §D308, the tm 287.1 precedent §D240). `contract-parity.test.ts`
+# fails a documented operation no route serves, so `openapi.yaml` `paths:`
+# references these only together with their routes:
+#
+#   /knowledge-tables/{table}                  → tm 310.2 (list, create)
+#   /knowledge-tables/{table}/{rowId}          → tm 310.2 (edit, delete)
+#   /knowledge-tables/{table}/{rowId}/review   → tm 310.2
+#   /knowledge-tables/{table}/import           → tm 310.2 (CSV)
+#   /knowledge-tables/{table}/export           → tm 310.2 (CSV)
+#   /ai-access-info                            → tm 310.4 (read, replace)
+#
+# The component schemas (`KbPaymentMethod`, …, `AiAccessInfo`) are in
+# `openapi.yaml` already. The mounting subtask also bumps the mobile parity
+# count and adds `endpoint-ui.cjs` TRACKED entries for operations no client
+# calls yet.
+# ===========================================================================
+
+knowledgeTableRows:
+  parameters:
+    - name: table
+      in: path
+      required: true
+      schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableSegment" }
+
+  get:
+    tags: [Playbook]
+    operationId: listKnowledgeTableRows
+    summary: A structured table's rows
+    description: |
+      Every row of the table (AI-13), oldest first. `brand_id` narrows to
+      the rows that serve that brand — its own and the every-brand rows, the
+      reader's filter (`knowledgeTableRowServesBrand`); `stale=true` to the
+      rows due a review.
+    parameters:
+      - name: brand_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+      - name: stale
+        in: query
+        required: false
+        schema: { type: boolean }
+    responses:
+      "200":
+        description: Rows
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableRow" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createKnowledgeTableRow
+    summary: Add a row
+    description: |
+      The body is the table's create schema. Refusals are 400 `validation`
+      with `details.problems` (`KnowledgeTableProblem[]`): every refused
+      field, including `taken` when another row of an overlapping brand
+      scope answers to the name. A change to these tables always waits for
+      the AI configuration's approval — never the fast path (ADR-14b §2.10).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "../openapi.yaml#/components/schemas/KbPaymentMethodCreate"
+              - $ref: "../openapi.yaml#/components/schemas/KbBonusCreate"
+              - $ref: "../openapi.yaml#/components/schemas/KbKycDocumentCreate"
+              - $ref: "../openapi.yaml#/components/schemas/KbRuleCreate"
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableRow" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeTableRow:
+  parameters:
+    - name: table
+      in: path
+      required: true
+      schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableSegment" }
+    - name: rowId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateKnowledgeTableRow
+    summary: Edit a row
+    description: |
+      Any field alone; the others keep their value, and the merged row is
+      validated whole. An integration's row (`source: integration`) is not
+      edited by hand — 409 `knowledge_table_row_from_integration`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "../openapi.yaml#/components/schemas/KbPaymentMethodUpdate"
+              - $ref: "../openapi.yaml#/components/schemas/KbBonusUpdate"
+              - $ref: "../openapi.yaml#/components/schemas/KbKycDocumentUpdate"
+              - $ref: "../openapi.yaml#/components/schemas/KbRuleUpdate"
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableRow" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteKnowledgeTableRow
+    summary: Delete a row
+    description: Its knowledge source goes with it.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeTableRowReview:
+  parameters:
+    - name: table
+      in: path
+      required: true
+      schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableSegment" }
+    - name: rowId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: reviewKnowledgeTableRow
+    summary: Mark a row reviewed
+    description: |
+      "Gözden geçirdim": `reviewed_at` becomes now, so the row is due again
+      `review_interval_days` later. A meta field — it does not change what
+      the AI says.
+    responses:
+      "200":
+        description: Reviewed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableRow" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeTableImport:
+  parameters:
+    - name: table
+      in: path
+      required: true
+      schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableSegment" }
+
+  post:
+    tags: [Playbook]
+    operationId: importKnowledgeTableRows
+    summary: Import rows from one CSV
+    description: |
+      The bulk import pattern (`POST /knowledge-sources/bulk`): one row per
+      CSV data row, columns named as the table's fields (lists separated by
+      `|`). **Partial success is a 200** — valid rows are taken, invalid ones
+      skipped with their problems (AI-13 §8). The error envelope is reserved
+      for a file refused whole (malformed CSV, a missing required column, a
+      budget overrun). `dry_run: true` validates and writes nothing — the
+      preview.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [csv]
+            properties:
+              csv: { type: string, minLength: 1 }
+              dry_run: { type: boolean, default: false }
+    responses:
+      "200":
+        description: The per-row report
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableImportResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeTableExport:
+  parameters:
+    - name: table
+      in: path
+      required: true
+      schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeTableSegment" }
+
+  get:
+    tags: [Playbook]
+    operationId: exportKnowledgeTableRows
+    summary: Export a table as CSV
+    description: The same columns the import reads, so an exported file imports back.
+    responses:
+      "200":
+        description: The table as CSV
+        content:
+          text/csv:
+            schema: { type: string }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiAccessInfo:
+  get:
+    tags: [Playbook]
+    operationId: listAiAccessInfo
+    summary: The access information settings
+    description: |
+      The every-brand setting and each brand's (K13). No setting: the AI has
+      nothing it may say about reaching the site, and hands over.
+    responses:
+      "200":
+        description: Settings
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiAccessInfo" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Playbook]
+    operationId: putAiAccessInfo
+    summary: Set the access information for a brand or for every brand
+    description: |
+      Replaces the setting whole. Refusals are 400 `validation` with
+      `details.problems`. The change is kept in the AI change history (AI-21).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiAccessInfoUpdate" }
+    responses:
+      "200":
+        description: Saved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiAccessInfo" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

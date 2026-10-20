@@ -43,6 +43,8 @@
  * settings, acts, and records the hit (`ai_guardrail_hits`).
  */
 
+import { THREAD_PRIORITIES, type ThreadPriority } from './team-queues.js';
+
 /** Bump with any change to the catalogue below — a rule, a line, a pattern. */
 export const PLATFORM_GUARDRAILS_VERSION = '2026-10-19.1';
 
@@ -112,10 +114,11 @@ export type GuardrailLang = (typeof GUARDRAIL_LANGS)[number];
 /**
  * The hand-over's priority (AI-12 §3, `threads.priority`): `urgent` for self-
  * harm, a suspected minor and a self-exclusion request; `normal` otherwise —
- * `high` is AI-12's for a repeat contact or an angry player, no rule's.
+ * `high` is AI-12's for a repeat contact or an angry player, no rule's. The
+ * connection's own list (`THREAD_PRIORITIES`, tm 305), not a second copy of it.
  */
-export const GUARDRAIL_PRIORITIES = ['urgent', 'high', 'normal'] as const;
-export type GuardrailPriority = (typeof GUARDRAIL_PRIORITIES)[number];
+export const GUARDRAIL_PRIORITIES = THREAD_PRIORITIES;
+export type GuardrailPriority = ThreadPriority;
 
 /**
  * Where a rule's hand-over goes (AI-12's reason routes, `handoff_routes.

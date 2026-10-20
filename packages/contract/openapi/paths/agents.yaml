@@ -534,6 +534,9 @@ groups:
       Routing resolves an agent through team membership (ADR-08 step 2), so a
       workspace with no team cannot route a conversation to anyone. Signup seeds
       a `General` team with the owner in it; this is how the rest are made.
+      The queue settings (AU-01) may be given at once: a topic role another
+      team holds is a 409 `group_topic_role_taken`, an expertise id that names
+      no area on this licence a 404.
     requestBody:
       required: true
       content:
@@ -548,6 +551,8 @@ groups:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 group:
@@ -556,10 +561,13 @@ group:
   patch:
     tags: [Configuration]
     operationId: updateGroup
-    summary: Rename a team or change its language
+    summary: Rename a team, change its language or its queue settings
     description: |
       Send the field that changed; at least one is required. An empty body is a
       400 rather than a no-op, so a client cannot believe it saved something.
+      A topic role another team holds is a 409 `group_topic_role_taken`
+      (`details.group_id` names it); `required_expertise_ids` replaces the set,
+      and an id that names no area on this licence is a 404.
     requestBody:
       required: true
       content:
@@ -579,6 +587,7 @@ group:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
   delete:
     tags: [Configuration]

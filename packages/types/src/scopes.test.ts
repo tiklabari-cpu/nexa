@@ -155,6 +155,9 @@ describe('error taxonomy', () => {
     // Compliance guardrails (AI-08 · tm 301.2): switching a customer-facing AI
     // agent on before the Founder approved its crisis text.
     'ai_guardrail_setup_incomplete',
+    // Team queues (AU-01 · tm 305.1): the 409 for giving a topic role to a
+    // second team — the role must resolve to exactly one.
+    'group_topic_role_taken',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

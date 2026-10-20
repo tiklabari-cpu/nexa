@@ -7281,14 +7281,80 @@ components:
             Drives language-based routing. ISO 639-1, optionally with a region
             (`en`, `en-GB`) — the shape the column's CHECK constraint enforces,
             so anything else is a 400 rather than a failed write.
+        topic_role:
+          description: |
+            The topic this team's queue is for (AU-01 · K14). At most one team
+            per workspace holds a role — naming one another team holds is a 409
+            `group_topic_role_taken` with `details.group_id`. `null` clears it.
+            Omitted on create: no role.
+          allOf:
+            - $ref: "#/components/schemas/QueueTopicRole"
+          nullable: true
+        after_hours_mode:
+          allOf:
+            - $ref: "#/components/schemas/AfterHoursMode"
+          default: queue
+        required_expertise_ids:
+          type: array
+          maxItems: 20
+          items: { type: integer, format: int64 }
+          description: |
+            The complete set of expertise areas (`Expertise.id`) an agent must
+            hold — every one of them — to be given this team's conversations
+            (AU-01). Replaces the current set; `[]` clears it. An id that names
+            no area on this licence is a 404. Omitted on create: none.
+
+    QueueTopicRole:
+      type: string
+      description: |
+        A team queue's topic (AU-01 · K14 · `@siyahtus/types`
+        `QUEUE_TOPIC_ROLES`). The AI's hand-over, the pre-chat topic and a
+        hand-over rule's `{ topic }` target resolve the role, not the team's
+        name, so a renamed team still receives its topic.
+        `responsible_gambling` has rules of its own (ADR-08a): no fallback
+        team, only trained agents, and the team cannot be deleted.
+      enum: [finance, kyc_risk, bonus, responsible_gambling, technical, complaint]
+
+    AfterHoursMode:
+      type: string
+      description: |
+        What a team's queue does when nobody is on shift (AU-01;
+        `@siyahtus/types` `AFTER_HOURS_MODES`): `queue` — the conversation
+        waits for the next agent; `ticket` — it becomes a ticket the player
+        is answered on by email (HD-01 / WG-08).
+      enum: [queue, ticket]
+
+    ThreadPriority:
+      type: string
+      description: |
+        How pressing a connection is (ADR-08a · AI-12; `@siyahtus/types`
+        `THREAD_PRIORITIES`): `urgent` — self-harm, a suspected minor, a
+        self-exclusion request; `high` — a repeat contact the same day, an
+        angry player; `normal` — the rest. A team's queue serves the most
+        pressing first, then the longest waiting. Stored as a rank
+        (`threads.priority`), so it never sorts by spelling.
+      enum: [urgent, high, normal]
 
     Group:
       type: object
-      required: [id, name, language_code, agents]
+      required:
+        [id, name, language_code, topic_role, after_hours_mode, required_expertise_ids, agents]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
         language_code: { type: string }
+        topic_role:
+          description: The topic this team's queue is for; null for an ordinary team.
+          allOf:
+            - $ref: "#/components/schemas/QueueTopicRole"
+          nullable: true
+        after_hours_mode: { $ref: "#/components/schemas/AfterHoursMode" }
+        required_expertise_ids:
+          type: array
+          items: { type: integer, format: int64 }
+          description: |
+            Expertise areas an agent must hold — all of them — to be given this
+            team's conversations, in ascending id order. Empty: none.
         agents:
           type: array
           items:
@@ -9436,6 +9502,7 @@ components:
         - greeting_not_found
         - group_not_found
         - group_offline
+        - group_topic_role_taken
         - group_unavailable
         - groups_offline
         - internal

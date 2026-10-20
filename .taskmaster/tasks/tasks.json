@@ -13148,7 +13148,7 @@
           "291"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T02:47:28.884Z",
+        "updatedAt": "2026-10-20T04:07:16.444Z",
         "subtasks": [
           {
             "id": 1,
@@ -13156,11 +13156,11 @@
             "description": "topic_role, after_hours_mode, gerekli yetenekler, threads.queue_group_id/priority + geri doldurma + kontrat",
             "details": "Üst görev 305 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "db:check-drift; contract:generate.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "305",
             "priority": "high",
-            "updatedAt": "2026-10-20T02:47:28.884Z"
+            "updatedAt": "2026-10-20T04:07:16.444Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T02:47:28.885Z",
+      "lastModified": "2026-10-20T04:07:16.444Z",
       "taskCount": 390,
       "completedCount": 303,
       "tags": [

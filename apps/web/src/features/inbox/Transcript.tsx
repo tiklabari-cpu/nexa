@@ -8,6 +8,8 @@ import {
 import type { ChatEvent } from './types.js';
 import { connectionBreaks, type ConnectionLabel } from './dayConnections.js';
 import type { FailedSend } from './failedSends.js';
+import { AiHandoffCardLine } from './AiHandoffCard.js';
+import { handoffCardIdOf } from './handoffCard.js';
 import { AttachmentView } from './Attachment.js';
 import { renderRichText } from './richText.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
@@ -373,6 +375,8 @@ function Bubble({
 }): ReactElement {
   const isNote = event.recipients === 'agents';
   const isSystem = event.type === 'system_message' || event.author_type === 'system';
+  // The AI's hand-over card has a line of its own (AI-10 · tm 304.2).
+  const handoffCardId = isSystem ? handoffCardIdOf(event) : null;
   const pending = event.properties?.['pending'] === true;
   const editedAt = readEditedAt(event.properties);
   // What the server masked out of this message (tm 300.2 · AI-26) — the reader
@@ -429,7 +433,9 @@ function Bubble({
         </div>
       )}
 
-      {isSystem ? (
+      {handoffCardId !== null ? (
+        <AiHandoffCardLine event={event} cardId={handoffCardId} />
+      ) : isSystem ? (
         <p className="self-center text-2xs text-content-tertiary">{event.text}</p>
       ) : (
         <div

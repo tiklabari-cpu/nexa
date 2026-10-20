@@ -1,0 +1,22 @@
+-- The order a team's queue is read in (tm 305.2 · SiyahTuş analysis AU-01,
+-- ADR-08a §2.1–§2.3 · `routing-service.ts`).
+--
+-- Routing reads a team's queue at every drain, renumber and enqueue: the
+-- waiting connections of one team (`queue_group_id`), most pressing first
+-- (`priority DESC`), then the longest waiting (`queued_at`). Partial — only a
+-- connection waiting in a queue (active, nobody assigned, a position) — so the
+-- index holds the queue and nothing else: a few rows per workspace, however
+-- many connections it has ever had.
+--
+-- Alone in this file on purpose: `CREATE INDEX CONCURRENTLY` cannot run inside
+-- a transaction block (CONVENTIONS §6.3), and `threads` is the busiest table
+-- there is — a plain build would hold writes on it for the length of the scan.
+-- Prisma has no syntax for a partial index, so it is not in `schema.prisma`
+-- and `prisma migrate diff` does not report it; `team-queue-routing.test.ts`
+-- checks it exists and is valid.
+--
+-- NO `IF NOT EXISTS`, for 20261018180100's reason: a failed concurrent build
+-- leaves an INVALID index of this name behind, which the retry must not keep.
+-- Recover by `DROP INDEX CONCURRENTLY threads_team_queue_idx`, then
+-- `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE INDEX CONCURRENTLY "threads_team_queue_idx" ON "threads" ("license_id", "queue_group_id", "priority" DESC, "queued_at") WHERE active AND assignee_id IS NULL AND queue_position IS NOT NULL;

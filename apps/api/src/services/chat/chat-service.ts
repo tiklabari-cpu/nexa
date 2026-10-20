@@ -47,6 +47,7 @@ import {
   type EventType,
   type QueueEntryOutcome,
   type SensitiveType,
+  type ThreadPriority,
   type TransferReason,
   type AiHandoffCardView,
 } from '@siyahtus/types';
@@ -282,6 +283,12 @@ interface ConnectionRoute {
   groupIds: bigint[];
   assigneeId: string | null;
   queuePosition: number | null;
+  /**
+   * The team whose queue it waits in — `threads.queue_group_id` (ADR-08a
+   * §2.1), routing's `RoutingDecision.queueGroupId`; written with
+   * `queuePosition`, absent when not queued.
+   */
+  queueGroupId?: bigint | null;
   /** The one team the connection went to — `threads.group_id` (`connectionGroup`). */
   groupId: bigint | null;
   /**
@@ -388,6 +395,12 @@ export interface HandOverOptions {
    * search. Never the event's own keys: those are written after.
    */
   properties?: Record<string, unknown>;
+  /**
+   * How pressing the hand-over is (AI-09 §6 · ADR-08a §2.3): raises
+   * `threads.priority`, never lowers it, so an urgent hand-over waits at the
+   * front of its own team's queue (`RoutingService.raisePriority`).
+   */
+  priority?: ThreadPriority;
 }
 
 export class ChatService {
@@ -989,6 +1002,7 @@ export class ChatService {
       groupIds,
       assigneeId: input.assignToMe ? input.actorId : (decision?.assigneeId ?? null),
       queuePosition: input.assignToMe ? null : (decision?.queuePosition ?? null),
+      queueGroupId: input.assignToMe ? null : (decision?.queueGroupId ?? null),
       groupId: connectionGroup(groupIds),
     };
   }
@@ -1012,7 +1026,12 @@ export class ChatService {
     const previous = dayChat.threads.find((t) => t.assigneeId !== null) ?? null;
     if (
       previous?.assigneeId &&
-      (await this.routing.assignIfAvailable(tx, tenant.licenseId, previous.assigneeId))
+      (await this.routing.assignIfAvailable(
+        tx,
+        tenant.licenseId,
+        previous.assigneeId,
+        routing ?? {},
+      ))
     ) {
       // The day's chat already carries the team that agent took it in, and the
       // connection goes to that same team.
@@ -1028,6 +1047,7 @@ export class ChatService {
       groupIds: decision.groupIds,
       assigneeId: decision.assigneeId,
       queuePosition: decision.queuePosition,
+      queueGroupId: decision.queueGroupId,
       groupId: connectionGroup(decision.groupIds),
     };
   }
@@ -1439,7 +1459,9 @@ export class ChatService {
         assigneeId: route.assigneeId,
         groupId: route.groupId,
         openedVia: opening.openedVia,
-        ...(route.queuePosition != null ? { queuePosition: route.queuePosition, queuedAt } : {}),
+        ...(route.queuePosition != null
+          ? { queuePosition: route.queuePosition, queuedAt, queueGroupId: route.queueGroupId }
+          : {}),
         ...(route.aiFirst ? { aiMode: 'ai' } : {}),
       },
     });
@@ -1716,8 +1738,9 @@ export class ChatService {
    *
    * `route()` stands in for AI-12's hand-over target (tm 307). A queued
    * connection's wait starts here, so in AI-first the queue reports count from
-   * the hand-over (RP-02/04). The team request carries no expertise
-   * requirement — the drain has the same limit (`routing-service.ts`).
+   * the hand-over (RP-02/04), and it waits in that team's queue (ADR-08a
+   * §2.1). The team request carries no rule's expertise requirement; the
+   * team's own (`group_expertise`) holds, as in the drain (`routing-service.ts`).
    *
    * Returns the assignment to announce after commit; null when nobody was
    * assigned (it waits in the queue, or the workspace has no team).
@@ -1756,6 +1779,7 @@ export class ChatService {
         groupIds: decision.groupIds,
         assigneeId: decision.assigneeId,
         queuePosition: decision.queuePosition,
+        queueGroupId: decision.queueGroupId,
         groupId: connectionGroup(decision.groupIds) ?? thread.groupId,
       };
     } else {
@@ -1792,7 +1816,12 @@ export class ChatService {
       const queuedAt = new Date();
       await tx.thread.update({
         where: { id: threadId },
-        data: { queuePosition: route.queuePosition, queuedAt, groupId: route.groupId },
+        data: {
+          queuePosition: route.queuePosition,
+          queuedAt,
+          queueGroupId: route.queueGroupId,
+          groupId: route.groupId,
+        },
       });
       await enterQueue(tx, {
         licenseId: tenant.licenseId,
@@ -1800,6 +1829,11 @@ export class ChatService {
         groupId: queueGroup(route),
         enteredAt: queuedAt,
       });
+      // The hand-over may have raised its priority (`HandOverOptions.priority`):
+      // it takes its place in the team's order, not just the next number.
+      if (route.queueGroupId != null) {
+        await this.routing.renumberQueue(tx, tenant.licenseId, route.queueGroupId);
+      }
     }
     return null;
   }
@@ -2442,6 +2476,15 @@ export class ChatService {
     },
   ): Promise<CloseResult> {
     const closedAt = new Date();
+    // Who it frees and which queue it leaves, read under the row the close
+    // writes — the copy the caller loaded may predate a drain's assignment.
+    const [before] = await tx.$queryRaw<
+      Array<{
+        assignee_id: string | null;
+        queue_position: number | null;
+        queue_group_id: bigint | null;
+      }>
+    >`SELECT assignee_id, queue_position, queue_group_id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
     await tx.thread.update({
       where: { id: thread.id },
       data: { active: false, closedAt, queuePosition: null, queuedAt: null },
@@ -2523,7 +2566,12 @@ export class ChatService {
       await recordAiResolution(tx, tenant, this.billing.aiOverageCents, this.billing.aiIncluded);
     }
 
-    const drained = await this.routing.drainQueue(tx, tenant.licenseId);
+    // The agent's freed slot goes to their teams' queues; a close of a waiting
+    // connection renumbers the queue it left (ADR-08a §2.2).
+    const drained = await this.routing.drainQueue(tx, tenant.licenseId, {
+      freed: before?.assignee_id ? [before.assignee_id] : [],
+      left: before?.queue_position != null ? [before.queue_group_id] : [],
+    });
     return {
       detail: serialiseChat(reloaded),
       threadId: thread.id,
@@ -3048,6 +3096,8 @@ export class ChatService {
             groupId: group.id,
             enteredAt: now,
           });
+          // …in that team's queue, at the back of its priority (ADR-08a §2.1).
+          await this.routing.moveQueued(tx, tenant.licenseId, thread.id, group.id, now);
         }
       } else {
         const membership = await tx.agentMembership.findUnique({
@@ -3116,6 +3166,11 @@ export class ChatService {
         },
         options.properties ? { properties: options.properties } : {},
       );
+      // After the routing above, so the only queue it can move up is the one
+      // the transfer left it in.
+      if (options.priority) {
+        await this.routing.raisePriority(tx, tenant.licenseId, thread.id, options.priority);
+      }
 
       // In the transfer's transaction: a transfer refused rolls it back too.
       await options.alongside?.(tx);
@@ -3489,8 +3544,13 @@ export class ChatService {
       const ref = { chatId: chat.id, threadId: thread.id };
 
       const [locked] = await tx.$queryRaw<
-        Array<{ assignee_id: string | null; queue_position: number | null; ai_mode: string | null }>
-      >`SELECT assignee_id, queue_position, ai_mode FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+        Array<{
+          assignee_id: string | null;
+          queue_position: number | null;
+          queue_group_id: bigint | null;
+          ai_mode: string | null;
+        }>
+      >`SELECT assignee_id, queue_position, queue_group_id, ai_mode FROM threads WHERE id = ${thread.id} FOR UPDATE`;
       if (!locked) throw ApiError.notFound('Chat not found.');
 
       if (!roleAtLeast(principal.role, 'admin') && locked.assignee_id !== actorId) {
@@ -3555,13 +3615,20 @@ export class ChatService {
           });
           await leaveQueue(tx, thread.id, 'transferred');
         }
+        // A waiting connection leaves its team's queue (ADR-08a §2.1).
+        const left = locked.queue_position !== null ? [locked.queue_group_id] : [];
         if (locked.assignee_id !== null) {
           released = locked.assignee_id;
           await tx.chatUser.updateMany({
             where: { chatId: chat.id, userId: released, userType: 'agent' },
             data: { present: false },
           });
-          drained = await this.routing.drainQueue(tx, tenant.licenseId);
+          drained = await this.routing.drainQueue(tx, tenant.licenseId, {
+            freed: [released],
+            left,
+          });
+        } else if (locked.queue_position !== null && locked.queue_group_id !== null) {
+          await this.routing.renumberQueue(tx, tenant.licenseId, locked.queue_group_id);
         }
         await this.#supervisions.register(tx, tenant.licenseId, principal, chat.id);
       }
@@ -3718,6 +3785,10 @@ export class ChatService {
         { to: 'human', reason },
         options.properties ? { properties: options.properties } : {},
       );
+      // After the routing above, as in `transfer`.
+      if (options.priority) {
+        await this.routing.raisePriority(tx, tenant.licenseId, thread.id, options.priority);
+      }
       if (!mode?.note) return mode;
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: chat.id },
@@ -4114,7 +4185,9 @@ export class ChatService {
         assigneeId: input.assigneeId,
         groupId: input.groupId,
         openedVia: input.openedVia,
-        ...(input.queuePosition != null ? { queuePosition: input.queuePosition, queuedAt } : {}),
+        ...(input.queuePosition != null
+          ? { queuePosition: input.queuePosition, queuedAt, queueGroupId: input.queueGroupId }
+          : {}),
         ...(input.aiFirst ? { aiMode: 'ai' } : {}),
       },
     });
@@ -4145,11 +4218,16 @@ export class ChatService {
 
 /**
  * The team a queued connection waits for, on the queue record (RP-04): the
- * connection's own team, else the chat's first access group. Team queues
- * (AU-01 · #305) will name it outright.
+ * team whose queue it is in (`queue_group_id`, ADR-08a §2.1) — routing names
+ * it outright — else the connection's own team, else the chat's first access
+ * group.
  */
-function queueGroup(route: { groupId: bigint | null; groupIds: readonly bigint[] }): bigint | null {
-  return route.groupId ?? route.groupIds[0] ?? null;
+function queueGroup(route: {
+  queueGroupId?: bigint | null;
+  groupId: bigint | null;
+  groupIds: readonly bigint[];
+}): bigint | null {
+  return route.queueGroupId ?? route.groupId ?? route.groupIds[0] ?? null;
 }
 
 /**

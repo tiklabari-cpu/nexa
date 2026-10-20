@@ -411,7 +411,9 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         }
 
         // Only becoming available can free capacity; going away cannot.
-        return status === 'accepting_chats' ? routing.drainQueue(tx, tenant.licenseId) : [];
+        return status === 'accepting_chats'
+          ? routing.drainQueue(tx, tenant.licenseId, { freed: [principal.accountId] })
+          : [];
       });
 
       await publisher.publish(

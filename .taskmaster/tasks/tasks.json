@@ -13306,7 +13306,7 @@
           "274"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T18:50:19.129Z",
+        "updatedAt": "2026-10-20T20:53:54.136Z",
         "subtasks": [
           {
             "id": 1,
@@ -13326,13 +13326,13 @@
             "description": "Veri taşıma + arama/Copilot süzgeçleri + KB yayın kancası + retrieval ölçümü",
             "details": "Üst görev 309 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Kitle/marka entegrasyon; brand-isolation.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "309.1"
             ],
             "parentId": "309",
             "priority": "high",
-            "updatedAt": "2026-10-20T18:50:19.129Z"
+            "updatedAt": "2026-10-20T20:53:54.136Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T18:50:19.130Z",
+      "lastModified": "2026-10-20T20:53:54.136Z",
       "taskCount": 390,
       "completedCount": 306,
       "tags": [

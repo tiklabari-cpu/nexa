@@ -2737,14 +2737,14 @@ model Workflow {
 /// A document, page or FAQ the AI may draw on — one store for the AI agent and
 /// Copilot (tm 309 · AI-14, K11; `docs/adr/single-knowledge-store.md`).
 ///
-/// The scope columns (`audiences`, `aiAgentIds`, `brandIds`, `validUntil`)
-/// come in ahead of their readers (tm 309.1, expand): until tm 309.2 moves
-/// retrieval onto them, a source still answers for the agent record it is
-/// filed under (`aiAgentId`), and every create writes `audiences` and
-/// `aiAgentIds` from that filing (`config-draft.ts`
-/// `createKnowledgeSourceDraft`) so a row is already what tm 309.2's backfill
-/// makes of the older ones. Their CHECKs, the `reviewedAt` backfill and the
-/// GIN indexes on `audiences` and `brandIds` are in 20261020220000–0400.
+/// Retrieval reads who a source is for — `audiences`, `aiAgentIds`,
+/// `brandIds`, `validUntil` (tm 309.2: `KnowledgeService.search`'s `reader`,
+/// `@siyahtus/types` `knowledgeSourceServes`); 20261021000000 wrote them for
+/// the rows older than tm 309.1. `aiAgentId` is the filing, which follows the
+/// scope (`config-draft.ts` `knowledgeFilingOf`) so a release that still reads
+/// it keeps the same separation, until the contract step makes it nullable.
+/// Their CHECKs, the `reviewedAt` backfill and the GIN indexes on `audiences`
+/// and `brandIds` are in 20261020220000–0400.
 model KnowledgeSource {
   id                 String    @id @default(uuid()) @db.Uuid
   aiAgentId          String    @map("ai_agent_id") @db.Uuid

@@ -43,6 +43,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import { resolveEmbeddingInferenceProvider } from '../ai/inference.js';
+import { KbArticleKnowledgeSweeper } from '../ai/kb-article-knowledge.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
@@ -280,12 +281,20 @@ export function buildSchedulerJobs({
       },
     },
     {
+      // The store's freshness: the `website` sources past their window, then
+      // the published KB articles whose knowledge source is not what they say
+      // (tm 309.2 · AI-14-S2 — `kb-article-knowledge.ts`).
       name: 'knowledge_refresh',
       intervalMs: intervals.knowledge_refresh,
       async run() {
+        const embeddingInference = resolveEmbeddingInferenceProvider(env);
         const report = await new KnowledgeRefreshSweeper(db, {
           knowledge,
-          embeddingInference: resolveEmbeddingInferenceProvider(env),
+          embeddingInference,
+        }).run();
+        const articles = await new KbArticleKnowledgeSweeper(db, {
+          knowledge,
+          embeddingInference,
         }).run();
         return {
           counts: {
@@ -293,6 +302,9 @@ export function buildSchedulerJobs({
             checked: report.totals.checked,
             refreshed: report.totals.refreshed,
             failed: report.totals.failed,
+            kb_checked: articles.totals.checked,
+            kb_synced: articles.totals.synced,
+            kb_deferred: articles.totals.deferred,
           },
         };
       },

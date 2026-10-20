@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { chunk, toVectorLiteral } from '@siyahtus/ai-mock';
 import { describe, expect, it } from 'vitest';
+import type { KnowledgeReader } from '@siyahtus/types';
 import {
   FAKE_EMBEDDING_SPACE,
   FakeEmbeddingProvider,
@@ -42,6 +43,9 @@ const question = (text: string): Promise<QueryEmbedding> => service().embedQuery
  */
 
 const TENANT: TenantContext = { licenseId: 7n, organizationId: 'org-7' };
+
+/** The AI agent's search with no agent or brand of its own — every test here but the scope's. */
+const PLAYER: KnowledgeReader = { audience: 'ai_agent', aiAgentId: null, brandId: null };
 
 interface Row {
   id: string;
@@ -113,6 +117,7 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
       tx,
       TENANT,
       await question('where is my parcel'),
+      { reader: PLAYER },
     );
 
     expect(kinds()).toEqual(['count', 'exact']);
@@ -122,7 +127,9 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
 
   it('counts no further than one past the ceiling', async () => {
     const { tx, log } = scriptedTx({ chunksInScope: 3 });
-    await service({ exactSearchCeiling: CEILING }).search(tx, TENANT, await question('refund'));
+    await service({ exactSearchCeiling: CEILING }).search(tx, TENANT, await question('refund'), {
+      reader: PLAYER,
+    });
 
     const count = log.find((entry) => entry.kind === 'count')!;
     expect(count.values.at(-1)).toBe(CEILING + 1);
@@ -138,7 +145,7 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
       tx,
       TENANT,
       await question('refund'),
-      { limit: 3 },
+      { reader: PLAYER, limit: 3 },
     );
 
     expect(kinds()).toEqual([
@@ -163,9 +170,12 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
     const knowledge = service({ exactSearchCeiling: CEILING });
     const refund = await question('refund');
     const few = scriptedTx({ chunksInScope: CEILING + 1, approximate: [row('a', 0.1)] });
-    await knowledge.search(few.tx, TENANT, refund, { limit: 2 });
+    await knowledge.search(few.tx, TENANT, refund, { reader: PLAYER, limit: 2 });
     const many = scriptedTx({ chunksInScope: CEILING + 1, approximate: [row('a', 0.1)] });
-    await knowledge.search(many.tx, TENANT, refund, { limit: APPROXIMATE_SEARCH.candidates + 5 });
+    await knowledge.search(many.tx, TENANT, refund, {
+      reader: PLAYER,
+      limit: APPROXIMATE_SEARCH.candidates + 5,
+    });
 
     const limitOf = (log: typeof few.log) =>
       log.find((entry) => entry.kind === 'approximate')!.values.at(-1);
@@ -184,6 +194,7 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
       tx,
       TENANT,
       await question('refund'),
+      { reader: PLAYER },
     );
 
     // After the savepoint is gone — exact search must not run under the pin.
@@ -208,7 +219,7 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
 
     const refund = await question('refund');
     await expect(
-      service({ exactSearchCeiling: CEILING }).search(tx, TENANT, refund),
+      service({ exactSearchCeiling: CEILING }).search(tx, TENANT, refund, { reader: PLAYER }),
     ).rejects.toThrow('statement timeout');
     expect(kinds()).toEqual([
       'count',
@@ -222,7 +233,9 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
 
   it('keeps retrieve() the chunks of search()', async () => {
     const { tx } = scriptedTx({ chunksInScope: 1, exact: [row('a', 0.2), row('b', 0.9)] });
-    const chunks = await service().retrieve(tx, TENANT, await question('refund'));
+    const chunks = await service().retrieve(tx, TENANT, await question('refund'), {
+      reader: PLAYER,
+    });
 
     // `b` sits below the threshold, exactly as before tm 254.
     expect(chunks.map((chunk) => chunk.id)).toEqual(['a']);
@@ -269,6 +282,7 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
       const approximate = scriptedTx({ chunksInScope: CEILING + 1, approximate: rows });
       for (const { tx } of [exact, approximate]) {
         const { chunks } = await knowledge.search(tx, TENANT, await question('refund'), {
+          reader: PLAYER,
           limit: 3,
         });
         expect(chunks.map((chunk) => chunk.id)).toEqual(kept);
@@ -376,7 +390,7 @@ describe('KnowledgeService — embedding before the transaction (FR-MOD-06.3.2)'
     const blank = await knowledge.embedQuery('  \t ');
     const { tx, kinds } = scriptedTx({ chunksInScope: 5, exact: [row('a', 0.1)] });
 
-    const result = await knowledge.search(tx, TENANT, blank);
+    const result = await knowledge.search(tx, TENANT, blank, { reader: PLAYER });
 
     expect(fake.calls).toHaveLength(0);
     expect(kinds()).toEqual([]);
@@ -389,7 +403,7 @@ describe('KnowledgeService — embedding before the transaction (FR-MOD-06.3.2)'
     const asked = await knowledge.embedQuery('how long does delivery take');
     const { tx, log } = scriptedTx({ chunksInScope: 1, exact: [row('a', 0.2)] });
 
-    await knowledge.search(tx, TENANT, asked);
+    await knowledge.search(tx, TENANT, asked, { reader: PLAYER });
 
     expect(asked.space).toBe(FAKE_EMBEDDING_SPACE);
     expect(fake.calls).toEqual([['how long does delivery take']]);

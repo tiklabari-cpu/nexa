@@ -1,6 +1,7 @@
 /**
  * `knowledge-refresh:run` — the manual trigger for the freshness sweep
- * (FR-MOD-06.3.3, tm 198.4).
+ * (FR-MOD-06.3.3, tm 198.4) and, after it, the KB article sync (tm 309.2 ·
+ * `kb-article-knowledge.ts`), the two halves of the `knowledge_refresh` job.
  *
  * Mirrors `sla-run.ts`: there is no external scheduler in this environment (a
  * project boundary), so this script is how an operator (or CI) drives the
@@ -24,6 +25,7 @@ loadEnvFile();
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
 import { resolveEmbeddingInferenceProvider } from './inference.js';
+import { KbArticleKnowledgeSweeper } from './kb-article-knowledge.js';
 import { KnowledgeRefreshSweeper } from './knowledge-refresh-sweep.js';
 import { KnowledgeService } from './knowledge-service.js';
 import { createMeteredEmbeddings } from './metered-embeddings.js';
@@ -39,14 +41,20 @@ async function main(): Promise<void> {
     retrievalThreshold: env.RETRIEVAL_THRESHOLD,
   });
   try {
-    const report = await new KnowledgeRefreshSweeper(db, {
+    const embeddingInference = resolveEmbeddingInferenceProvider(env);
+    const report = await new KnowledgeRefreshSweeper(db, { knowledge, embeddingInference }).run();
+    // The published KB articles whose knowledge source is behind (tm 309.2),
+    // as the scheduled job runs them after the refresh.
+    const articles = await new KbArticleKnowledgeSweeper(db, {
       knowledge,
-      embeddingInference: resolveEmbeddingInferenceProvider(env),
+      embeddingInference,
     }).run();
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ ...report, kbArticles: articles }, null, 2)}\n`);
     process.stderr.write(
       `knowledge-refresh: refreshed ${report.totals.refreshed}, failed ${report.totals.failed} ` +
-        `of ${report.totals.checked} due source(s) across ${report.totals.tenants} tenant(s)\n`,
+        `of ${report.totals.checked} due source(s) across ${report.totals.tenants} tenant(s); ` +
+        `KB articles synced ${articles.totals.synced}, deferred ${articles.totals.deferred} ` +
+        `of ${articles.totals.checked}\n`,
     );
   } finally {
     await db.$disconnect();

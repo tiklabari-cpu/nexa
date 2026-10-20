@@ -313,7 +313,10 @@ describe('knowledge retrieval — a ready source is found on any plan (FR-MOD-06
     const asked = await knowledge.embedQuery(question);
     return withTenant(pin ? pinned : app, tenant, async (tx) => {
       if (pin) await pinIndexPlan(tx);
-      return knowledge.retrieve(tx, tenant, asked, { aiAgentId: agentId, limit: LIMIT });
+      return knowledge.retrieve(tx, tenant, asked, {
+        reader: { audience: 'ai_agent', aiAgentId: agentId, brandId: null },
+        limit: LIMIT,
+      });
     });
   }
 

@@ -30,6 +30,11 @@
  * topics in the same words, so the index walks through rows the tenant filter
  * throws away — the shape of a shared table. The ceiling is lowered for the
  * test (the real one is 20,000) so 2,000 chunks sit above it.
+ *
+ * tm 309.2 put the store's reader on every search — audience, AI agent, brand
+ * and end date (`readerScope`) — and re-ran this with rows of every kind the
+ * reader drops written on the searched agent's own topics (see `LAYOUT`), so
+ * the approximate walk is measured passing them as well as the other tenant.
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 import { chunk, embed, toVectorLiteral } from '@siyahtus/ai-mock';
@@ -56,12 +61,71 @@ const PARAGRAPHS_PER_SOURCE = 50;
  * about `Big` is a row the tenant filter discards. The two scopes that are
  * searched are written by `KnowledgeService.index`; the rest, only ever walked
  * past, by the same INSERT in one statement per source.
+ *
+ * The store's own filters (tm 309.2 · AI-14) add the rest of the walk's
+ * casualties inside tenant A: `Big`'s topics written again for another brand,
+ * for agents only, and with an end already passed — `Big`'s own agent each
+ * time, so only the reader's scope (`readerScope`) tells them from the rows it
+ * answers from. `Big`'s answering sources are half for every brand, half for
+ * the brand the questions are asked in.
  */
 const LAYOUT = [
-  { tenant: 'a', agent: 'Big', sources: 40, topic: (s: number) => s, writer: 'service' },
-  { tenant: 'a', agent: 'Small', sources: 10, topic: (s: number) => 40 + s, writer: 'service' },
-  { tenant: 'a', agent: 'Other', sources: 30, topic: (s: number) => 50 + s, writer: 'batch' },
-  { tenant: 'b', agent: 'Mirror', sources: 160, topic: (s: number) => s % 40, writer: 'batch' },
+  {
+    tenant: 'a',
+    agent: 'Big',
+    sources: 40,
+    topic: (s: number) => s,
+    writer: 'service',
+    scope: 'in',
+  },
+  {
+    tenant: 'a',
+    agent: 'Small',
+    sources: 10,
+    topic: (s: number) => 40 + s,
+    writer: 'service',
+    scope: 'in',
+  },
+  {
+    tenant: 'a',
+    agent: 'Other',
+    sources: 30,
+    topic: (s: number) => 50 + s,
+    writer: 'batch',
+    scope: 'in',
+  },
+  {
+    tenant: 'a',
+    agent: 'Big',
+    sources: 20,
+    topic: (s: number) => s * 2,
+    writer: 'batch',
+    scope: 'other-brand',
+  },
+  {
+    tenant: 'a',
+    agent: 'Big',
+    sources: 20,
+    topic: (s: number) => s * 2 + 1,
+    writer: 'batch',
+    scope: 'agents-only',
+  },
+  {
+    tenant: 'a',
+    agent: 'Big',
+    sources: 10,
+    topic: (s: number) => s * 4,
+    writer: 'batch',
+    scope: 'ended',
+  },
+  {
+    tenant: 'b',
+    agent: 'Mirror',
+    sources: 160,
+    topic: (s: number) => s % 40,
+    writer: 'batch',
+    scope: 'in',
+  },
 ] as const;
 const TOTAL_SOURCES = LAYOUT.reduce((sum, part) => sum + part.sources, 0);
 
@@ -266,8 +330,11 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
   let tenant: TenantContext;
   const agents = new Map<string, string>();
   const questions: string[] = [];
-  /** Every source of the agent the questions are asked of. */
+  /** Every source the questions may be answered from: `Big`'s, in scope. */
   const bigSources = new Set<string>();
+  /** The brand the questions are asked in, and the sibling brand they are not. */
+  let askedBrand: string;
+  let otherBrand: string;
 
   /** The lexical stub the fixture's rows are written with. */
   const embeddings = new MockEmbeddingProvider();
@@ -283,9 +350,13 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
   ): Promise<KnowledgeSearch> {
     const asked = await service.embedQuery(question);
     return withTenant(app, tenant, (tx) =>
-      service.search(tx, tenant, asked, { aiAgentId: agents.get(agent)!, limit: LIMIT }),
+      service.search(tx, tenant, asked, { reader: readerOf(agent), limit: LIMIT }),
     );
   }
+
+  /** A player's question to `agent`, in a conversation of the asked brand. */
+  const readerOf = (agent: string) =>
+    ({ audience: 'ai_agent', aiAgentId: agents.get(agent)!, brandId: askedBrand }) as const;
 
   beforeAll(async () => {
     if (!APP_URL) throw new Error('DATABASE_APP_URL must be set');
@@ -294,29 +365,53 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
     fx = await seedFixtures(owner);
     tenant = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
 
+    [askedBrand, otherBrand] = (await Promise.all(
+      ['Asked', 'Sibling'].map(async (name) => {
+        const brand = await owner.brand.create({
+          data: { licenseId: fx.a.licenseId, name, slug: name.toLowerCase() },
+          select: { id: true },
+        });
+        return brand.id;
+      }),
+    )) as [string, string];
+
     const corpus = helpCentre(254);
     const indexer = new KnowledgeService({ embeddings });
-    for (const { tenant: key, agent, sources, topic, writer } of LAYOUT) {
+    for (const { tenant: key, agent, sources, topic, writer, scope } of LAYOUT) {
       const context = { licenseId: fx[key].licenseId, organizationId: fx[key].organizationId };
-      const created = await owner.aiAgent.create({
-        data: { licenseId: context.licenseId, kind: 'ai_agent', name: agent },
-        select: { id: true },
-      });
-      agents.set(agent, created.id);
+      if (!agents.has(agent)) {
+        const created = await owner.aiAgent.create({
+          data: { licenseId: context.licenseId, kind: 'ai_agent', name: agent },
+          select: { id: true },
+        });
+        agents.set(agent, created.id);
+      }
+      const agentId = agents.get(agent)!;
       for (let s = 0; s < sources; s++) {
         const paragraphs = corpus.article(topic(s));
         const content = paragraphs.join('\n\n');
         const source = await owner.knowledgeSource.create({
           data: {
-            aiAgentId: created.id,
+            aiAgentId: agentId,
             licenseId: context.licenseId,
             type: 'article',
-            name: `${agent} ${s}`,
+            name: `${agent} ${scope} ${s}`,
             content,
+            // What the product writes for an AI agent's source, then the
+            // three ways inside the tenant to be out of the reader's scope.
+            audiences: scope === 'agents-only' ? ['copilot'] : ['ai_agent', 'copilot'],
+            aiAgentIds: scope === 'agents-only' ? [] : [agentId],
+            brandIds:
+              scope === 'other-brand'
+                ? [otherBrand]
+                : key === 'a' && agent === 'Big' && s % 2 === 1
+                  ? [askedBrand]
+                  : [],
+            validUntil: scope === 'ended' ? new Date('2026-01-01T00:00:00Z') : null,
           },
           select: { id: true },
         });
-        if (agent === 'Big') bigSources.add(source.id);
+        if (agent === 'Big' && scope === 'in') bigSources.add(source.id);
         if (writer === 'service') {
           await indexer.index(
             owner as TenantClient,
@@ -340,7 +435,7 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
               ),
             )}`;
         }
-        if (agent === 'Big' && questions.length < QUESTIONS && s % 2 === 0) {
+        if (agent === 'Big' && scope === 'in' && questions.length < QUESTIONS && s % 2 === 0) {
           questions.push(corpus.question(paragraphs[(s * 7) % PARAGRAPHS_PER_SOURCE]!));
           questions.push(corpus.question(paragraphs[(s * 13 + 5) % PARAGRAPHS_PER_SOURCE]!));
           questions.push(corpus.question(paragraphs[(s * 29 + 11) % PARAGRAPHS_PER_SOURCE]!));
@@ -355,14 +450,19 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
     await Promise.all([owner.$disconnect(), app.$disconnect()]);
   });
 
-  it('holds one scope above the ceiling and one below it', async () => {
+  it('holds one scope above the ceiling and one below it — counted by the reader, not the agent', async () => {
     const count = (agent: string) =>
       owner.knowledgeChunk.count({ where: { source: { aiAgentId: agents.get(agent)! } } });
-    expect(await count('Big')).toBe(40 * PARAGRAPHS_PER_SOURCE);
+    // Filed under `Big`: its 40 answering sources and the 50 the reader drops.
+    expect(await count('Big')).toBe((40 + 20 + 20 + 10) * PARAGRAPHS_PER_SOURCE);
     expect(await count('Small')).toBe(10 * PARAGRAPHS_PER_SOURCE);
     expect(await owner.knowledgeChunk.count()).toBe(TOTAL_SOURCES * PARAGRAPHS_PER_SOURCE);
     expect(questions).toHaveLength(QUESTIONS);
 
+    // The reader's scope, counted in full: `Big`'s 40 sources, none of the 50.
+    expect((await search(exact, 'Big', questions[0]!)).chunksInScope).toBe(
+      40 * PARAGRAPHS_PER_SOURCE,
+    );
     expect((await search(scaled, 'Big', questions[0]!)).strategy).not.toBe('exact');
     const small = await search(scaled, 'Small', questions[0]!);
     expect(small.strategy).toBe('exact');
@@ -374,7 +474,7 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
     const client = observingClient(app, (entry) => observed.push(entry));
     const asked = await scaled.embedQuery(questions[1]!);
     const result = await withTenant(client, tenant, (tx) =>
-      scaled.search(tx, tenant, asked, { aiAgentId: agents.get('Big')!, limit: LIMIT }),
+      scaled.search(tx, tenant, asked, { reader: readerOf('Big'), limit: LIMIT }),
     );
 
     expect(result.strategy).not.toBe('exact');
@@ -406,7 +506,7 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
       await tx.$executeRawUnsafe('SET LOCAL jit = on');
       const settingsBefore = await read(tx);
       const result = await scaled.search(tx, tenant, asked, {
-        aiAgentId: agents.get('Big')!,
+        reader: readerOf('Big'),
         limit: LIMIT,
       });
       expect(result.strategy).not.toBe('exact');
@@ -432,7 +532,7 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
     expect(plan).toMatch(/Sort/);
   });
 
-  it('finds what exact search finds, within the documented floor (FR-MOD-06.3.3)', async () => {
+  it('finds what exact search finds, within the documented floor, and nothing the reader may not use (FR-MOD-06.3.3)', async () => {
     let wanted = 0;
     let found = 0;
     let sameBest = 0;
@@ -464,6 +564,8 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
     // The fixture asks real questions: nearly all have an answer above the threshold.
     expect(answerable).toBeGreaterThanOrEqual(QUESTIONS * 0.9);
     expect(strategies.has('exact')).toBe(false);
+    // Nothing of another tenant, agent or brand, for agents only or past its
+    // end (tm 309.2): the walk passes all of them, and the scope drops them.
     expect(outOfScope).toEqual([]);
     // No answerable question is handed to a human for the index's sake.
     expect(unanswered).toEqual([]);
@@ -532,11 +634,14 @@ describe('knowledge retrieval on a warm connection', () => {
     const shipped = new KnowledgeService({ embeddings });
     const asked = await shipped.embedQuery('how long does delivery take');
     await withTenant(single, tenant, (tx) =>
-      service.search(tx, tenant, asked, { aiAgentId: agentId, limit: 2 }),
+      service.search(tx, tenant, asked, {
+        reader: { audience: 'ai_agent', aiAgentId: agentId, brandId: null },
+        limit: 2,
+      }),
     );
     await withTenant(single, tenant, (tx) =>
       shipped.search(tx, tenant, asked, {
-        aiAgentId: agentId,
+        reader: { audience: 'ai_agent', aiAgentId: agentId, brandId: null },
       }),
     );
 

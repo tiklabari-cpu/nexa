@@ -27,9 +27,19 @@
  * the sources already moved, and a question the rest could have answered goes
  * to a human rather than to a passage that happened to be near in the wrong
  * space.
+ *
+ * **Every search names its reader** (tm 309.2 · AI-14, `docs/adr/single-knowledge-store.md`).
+ * The AI agent's and Copilot's knowledge are one store, told apart by who a
+ * source is for — its audiences, AI agents, brands and end date — and a search
+ * reads only what its reader may use (`@siyahtus/types` `knowledgeSourceServes`,
+ * held in SQL by {@link readerScope}). The reader is required, not defaulted:
+ * the AI agent's search has to say which brand the conversation is in, because
+ * the default that would let one brand's source reach another brand's player
+ * is no brand at all.
  */
 import { Prisma } from '@prisma/client';
 import { chunk, toVectorLiteral } from '@siyahtus/ai-mock';
+import type { KnowledgeReader } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { AiAttribution } from './ai-daily-budget.js';
@@ -168,6 +178,47 @@ export interface KnowledgeSearch {
   /** Ready chunks the question was scoped to, counted no further than one past the ceiling. */
   chunksInScope: number;
   chunks: RetrievedChunk[];
+}
+
+export interface KnowledgeSearchOptions {
+  /** Who draws on the store — what the search may return (`@siyahtus/types` `KnowledgeReader`). */
+  reader: KnowledgeReader;
+  /** How many passages; 3 unless said. */
+  limit?: number;
+}
+
+/**
+ * `knowledgeSourceServes`, in SQL: the condition on `knowledge_sources s` that
+ * keeps what `reader` may use. One condition for the count, the exact search
+ * and the approximate one, so the three cannot disagree on what is in scope.
+ *
+ * The ids are scalar subqueries, like the question's vector (see
+ * {@link KnowledgeService.search}): Prisma binds them as text, and under a
+ * cached generic plan a bare `$n::uuid` is cast again for every row read.
+ * `now()` is the transaction's start — the same instant for all three
+ * statements.
+ */
+export function readerScope(reader: KnowledgeReader): Prisma.Sql {
+  const audience =
+    reader.audience === 'ai_agent'
+      ? Prisma.sql`AND s.audiences @> ARRAY['ai_agent']::text[]`
+      : Prisma.sql`AND s.audiences && ARRAY['ai_agent', 'copilot']::text[]`;
+  const agent =
+    reader.audience === 'ai_agent' && reader.aiAgentId !== null
+      ? Prisma.sql`AND (cardinality(s.ai_agent_ids) = 0
+                        OR (SELECT ${reader.aiAgentId}::uuid) = ANY (s.ai_agent_ids))`
+      : Prisma.empty;
+  const brand =
+    reader.brandId === undefined
+      ? Prisma.empty
+      : reader.brandId === null
+        ? Prisma.sql`AND cardinality(s.brand_ids) = 0`
+        : Prisma.sql`AND (cardinality(s.brand_ids) = 0
+                          OR (SELECT ${reader.brandId}::uuid) = ANY (s.brand_ids))`;
+  return Prisma.sql`${audience}
+        ${agent}
+        ${brand}
+        AND (s.valid_until IS NULL OR s.valid_until > now())`;
 }
 
 interface ChunkRow {
@@ -322,6 +373,23 @@ export class KnowledgeService {
   }
 
   /**
+   * Take a source's chunks away until its text is indexed again, inside the
+   * caller's transaction: the source is `indexing` and answers nothing. For a
+   * text that changed and could not be embedded now — a KB article saved while
+   * the provider was away (tm 309.2, `kb-article-knowledge.ts`) — so retrieval
+   * never answers from what the source no longer says. With {@link index} the
+   * only writer of chunks: tm 316 turns the delete in both into a new
+   * generation (ADR-14b §2.8).
+   */
+  async unindex(tx: TenantClient, sourceId: string): Promise<void> {
+    await tx.knowledgeChunk.deleteMany({ where: { sourceId } });
+    await tx.knowledgeSource.update({
+      where: { id: sourceId },
+      data: { status: 'indexing', updatedAt: new Date() },
+    });
+  }
+
+  /**
    * Embed a question — the provider call; never inside a transaction.
    *
    * A question with nothing but whitespace in it has nothing to search for:
@@ -372,7 +440,7 @@ export class KnowledgeService {
     tx: TenantClient,
     tenant: TenantContext,
     query: QueryEmbedding,
-    options: { aiAgentId?: string; limit?: number } = {},
+    options: KnowledgeSearchOptions,
   ): Promise<RetrievedChunk[]> {
     return (await this.search(tx, tenant, query, options)).chunks;
   }
@@ -397,13 +465,16 @@ export class KnowledgeService {
    *
    * The scope is the question's own embedding space — see the file header. A
    * chunk in any other space is not in scope: not counted, not ranked, never
-   * returned, however close its vector happens to be.
+   * returned, however close its vector happens to be. And it is what the
+   * reader may use ({@link readerScope}): counted, ranked and returned the same
+   * way, so a source another audience or brand is for never takes a place in
+   * the ranking, nor tips the scope over the ceiling.
    */
   async search(
     tx: TenantClient,
     tenant: TenantContext,
     query: QueryEmbedding,
-    options: { aiAgentId?: string; limit?: number } = {},
+    options: KnowledgeSearchOptions,
   ): Promise<KnowledgeSearch> {
     if (query.vector === null) return { strategy: 'exact', chunksInScope: 0, chunks: [] };
     const vector = query.vector;
@@ -411,7 +482,7 @@ export class KnowledgeService {
     const scope = Prisma.sql`c.license_id = ${tenant.licenseId}
         AND c.embedding_space = ${query.space}
         AND s.status = 'ready'
-        ${options.aiAgentId ? Prisma.sql`AND s.ai_agent_id = ${options.aiAgentId}::uuid` : Prisma.empty}`;
+        ${readerScope(options.reader)}`;
 
     const chunksInScope = await this.#countInScope(tx, scope);
     if (chunksInScope <= this.#exactSearchCeiling) {

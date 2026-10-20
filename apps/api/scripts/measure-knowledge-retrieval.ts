@@ -11,6 +11,17 @@
  * 50,000 chunks, the second holding 20,000 more, and every question asked of one
  * agent — the scope the skill engine searches.
  *
+ * Since tm 309.2 every search names its reader (`KnowledgeService.search`'s
+ * `reader`, AI-14): here the AI agent answering a player of one brand. Each
+ * rung's agent has, besides the sources that answer (half for every brand,
+ * half for the asked one), sources the reader drops — another brand's, for
+ * agents only, past their end — written on the rung's own topics at 40 % of
+ * its size, so the approximate walk passes them where they are nearest: the
+ * filtered-HNSW risk the `KnowledgeChunk` note in `schema.prisma` names.
+ * Above the ceiling the approximate and the shipped answers are also held
+ * against exact search — recall@3, top-1, questions left unanswered and rows
+ * outside the reader's scope (tm 254's floor, PLAN §D173).
+ *
  * Five ways of searching, each on a warm connection:
  *
  *  - **before** — the statement tm 252 shipped: exact, with the question's
@@ -50,7 +61,11 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { withTenant, type TenantClient, type TenantContext } from '../src/lib/tenant.js';
-import { KnowledgeService } from '../src/services/ai/knowledge-service.js';
+import {
+  EXACT_SEARCH_CEILING,
+  KnowledgeService,
+  type RetrievedChunk,
+} from '../src/services/ai/knowledge-service.js';
 import { MockEmbeddingProvider } from '../src/services/ai/provider/mock-embedding-provider.js';
 import {
   adminUrl,
@@ -75,6 +90,11 @@ const WARM_UP = 10;
 /** The first tenant's agents, smallest first, then the second tenant's bulk. */
 const RUNGS = [1_000, 5_000, 20_000, 50_000] as const;
 const NOISE = 20_000;
+const LIMIT = 3;
+
+/** The rows each rung's reader drops, as a share of the rung, in turn (tm 309.2). */
+const DROPPED_SHARE = 0.4;
+const DROPPED = ['other-brand', 'agents-only', 'ended'] as const;
 
 type Strategy = 'before' | 'exact' | 'approximate' | 'shipped' | 'unanswerable';
 
@@ -150,6 +170,29 @@ function migrate(databaseUrl: string): Promise<number> {
   });
 }
 
+/** recall@k and top-1 against exact search, by score — two chunks tied at one similarity are not a miss. */
+function heldAgainst(reference: RetrievedChunk[][], got: RetrievedChunk[][]) {
+  let wanted = 0;
+  let found = 0;
+  let sameBest = 0;
+  let answerable = 0;
+  let unanswered = 0;
+  for (const [index, expected] of reference.entries()) {
+    if (expected.length === 0) continue;
+    const answer = got[index] ?? [];
+    answerable += 1;
+    if (answer.length === 0) unanswered += 1;
+    const worst = expected.at(-1)!.score;
+    wanted += expected.length;
+    found += Math.min(
+      answer.filter((chunk) => chunk.score >= worst - 1e-4).length,
+      expected.length,
+    );
+    if (answer[0] && answer[0].score >= expected[0]!.score - 1e-4) sameBest += 1;
+  }
+  return { recall: found / wanted, top1: sameBest / answerable, answerable, unanswered };
+}
+
 function percentile(sorted: number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] ?? NaN;
 }
@@ -209,13 +252,64 @@ async function main(): Promise<number> {
       tenants.push({ licenseId: license.id, organizationId: organization.id });
     }
     const [tenantA, tenantB] = tenants as [TenantContext, TenantContext];
+    // The brand the questions are asked in, and the sibling whose sources they
+    // must not get.
+    const [askedBrand, siblingBrand] = (await Promise.all(
+      ['Asked', 'Sibling'].map(async (name) => {
+        const brand = await owner.brand.create({
+          data: { licenseId: tenantA.licenseId, name, slug: name.toLowerCase() },
+          select: { id: true },
+        });
+        return brand.id;
+      }),
+    )) as [string, string];
 
     // Loaded without the vector index, then indexed once: building the graph
     // row by row costs minutes and measures nothing this script is about.
     await owner.$executeRawUnsafe('DROP INDEX IF EXISTS idx_chunks_embedding_hnsw');
     const loadStarted = Date.now();
-    const agents = new Map<number, { id: string; questions: string[] }>();
+    const agents = new Map<
+      number,
+      { id: string; questions: string[]; answering: Set<string>; dropped: number }
+    >();
     let sourceNumber = 0;
+    let droppedChunks = 0;
+
+    /** One source of fifty paragraphs on `topic`, with `scope`, its chunks as `index()` writes them. */
+    async function write(
+      tenant: TenantContext,
+      agentId: string,
+      topic: number,
+      scope: {
+        audiences: string[];
+        aiAgentIds: string[];
+        brandIds: string[];
+        validUntil: Date | null;
+      },
+    ): Promise<{ id: string; paragraphs: string[] }> {
+      const source = await owner.knowledgeSource.create({
+        data: {
+          aiAgentId: agentId,
+          licenseId: tenant.licenseId,
+          type: 'article',
+          name: `Source ${topic}`,
+          ...scope,
+        },
+        select: { id: true },
+      });
+      const paragraphs = Array.from({ length: CHUNKS_PER_SOURCE }, () => corpus.paragraph(topic));
+      await owner.$executeRaw`
+          INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, token_count, position)
+          VALUES ${Prisma.join(
+            paragraphs.map(
+              (text, position) =>
+                Prisma.sql`(gen_random_uuid(), ${source.id}::uuid, ${tenant.licenseId}, ${text},
+                            ${toVectorLiteral(embed(text))}::vector, ${text.split(/\s+/).length}, ${position})`,
+            ),
+          )}`;
+      return { id: source.id, paragraphs };
+    }
+
     for (const [tenant, chunks, rung] of [
       ...RUNGS.map((size) => [tenantA, size, size] as const),
       [tenantB, NOISE, 0] as const,
@@ -225,38 +319,42 @@ async function main(): Promise<number> {
         select: { id: true },
       });
       const questions: string[] = [];
+      const answering = new Set<string>();
       const questionsPerSource = Math.ceil(
         (questionsPerRung + WARM_UP) / (chunks / CHUNKS_PER_SOURCE),
       );
+      const first = sourceNumber;
       for (let written = 0; written < chunks; written += CHUNKS_PER_SOURCE) {
-        const source = await owner.knowledgeSource.create({
-          data: {
-            aiAgentId: agent.id,
-            licenseId: tenant.licenseId,
-            type: 'article',
-            name: `Source ${sourceNumber}`,
-          },
-          select: { id: true },
-        });
-        const paragraphs = Array.from({ length: CHUNKS_PER_SOURCE }, () =>
-          corpus.paragraph(sourceNumber),
-        );
+        const topic = sourceNumber;
         sourceNumber += 1;
-        await owner.$executeRaw`
-          INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, token_count, position)
-          VALUES ${Prisma.join(
-            paragraphs.map(
-              (text, position) =>
-                Prisma.sql`(gen_random_uuid(), ${source.id}::uuid, ${tenant.licenseId}, ${text},
-                            ${toVectorLiteral(embed(text))}::vector, ${text.split(/\s+/).length}, ${position})`,
-            ),
-          )}`;
+        // What the product writes for an AI agent's source; half of a rung's
+        // for the asked brand alone.
+        const { id, paragraphs } = await write(tenant, agent.id, topic, {
+          audiences: ['ai_agent', 'copilot'],
+          aiAgentIds: [agent.id],
+          brandIds: rung > 0 && topic % 2 === 1 ? [askedBrand] : [],
+          validUntil: null,
+        });
+        answering.add(id);
         for (let asked = 0; rung > 0 && asked < questionsPerSource; asked += 1) {
           if (questions.length >= questionsPerRung + WARM_UP) break;
           questions.push(corpus.question(paragraphs[(asked * 17) % CHUNKS_PER_SOURCE]!));
         }
       }
-      if (rung > 0) agents.set(rung, { id: agent.id, questions });
+      // The rows the reader drops, on the rung's own topics.
+      const sources = chunks / CHUNKS_PER_SOURCE;
+      const dropped = rung > 0 ? Math.round((chunks * DROPPED_SHARE) / CHUNKS_PER_SOURCE) : 0;
+      for (let d = 0; d < dropped; d += 1) {
+        const kind = DROPPED[d % DROPPED.length]!;
+        await write(tenant, agent.id, first + (d % sources), {
+          audiences: kind === 'agents-only' ? ['copilot'] : ['ai_agent', 'copilot'],
+          aiAgentIds: kind === 'agents-only' ? [] : [agent.id],
+          brandIds: kind === 'other-brand' ? [siblingBrand] : [],
+          validUntil: kind === 'ended' ? new Date('2026-01-01T00:00:00Z') : null,
+        });
+      }
+      droppedChunks += dropped * CHUNKS_PER_SOURCE;
+      if (rung > 0) agents.set(rung, { id: agent.id, questions, answering, dropped });
     }
     const indexStarted = Date.now();
     // The migration's own statement, without CONCURRENTLY: nothing else is
@@ -279,9 +377,9 @@ async function main(): Promise<number> {
     );
     await owner.$executeRawUnsafe('VACUUM ANALYZE knowledge_chunks');
     await owner.$executeRawUnsafe('VACUUM ANALYZE knowledge_sources');
-    const total = RUNGS.reduce<number>((sum, size) => sum + size, NOISE);
+    const total = RUNGS.reduce<number>((sum, size) => sum + size, NOISE) + droppedChunks;
     console.log(
-      `loaded ${total} chunks in ${((indexStarted - loadStarted) / 1000).toFixed(0)} s · ` +
+      `loaded ${total} chunks (${droppedChunks} the reader drops) in ${((indexStarted - loadStarted) / 1000).toFixed(0)} s · ` +
         `index built in ${((Date.now() - indexStarted) / 1000).toFixed(0)} s`,
     );
 
@@ -301,6 +399,9 @@ async function main(): Promise<number> {
     // stub hashes words into shared buckets, and invented words still collide
     // with the heaviest ones in some paragraph (measured: "xylophone quartz
     // kazoo" cleared the threshold against 50,000 chunks).
+    /** A player's question to `agentId`, in a conversation of the asked brand. */
+    const readerOf = (agentId: string) =>
+      ({ audience: 'ai_agent', aiAgentId: agentId, brandId: askedBrand }) as const;
     async function unanswerableFor(agentId: string): Promise<string[]> {
       const found: string[] = [];
       const url = new URL(scratchAppUrl);
@@ -314,7 +415,7 @@ async function main(): Promise<number> {
         const question = `qx${n} vz${n * 7} jq${n * 13}`;
         const embedded = await services.exact.embedQuery(question);
         const { chunks } = await withTenant(probe, tenantA, (tx) =>
-          services.exact.search(tx, tenantA, embedded, { aiAgentId: agentId }),
+          services.exact.search(tx, tenantA, embedded, { reader: readerOf(agentId) }),
         );
         if (chunks.length === 0) found.push(question);
       }
@@ -325,9 +426,12 @@ async function main(): Promise<number> {
     console.log(
       '\nchunks in scope · strategy    ·    p50 ·    p95 ·    p99 ·    max (ms) · searched as',
     );
+    const recallLines: string[] = [];
     for (const rung of RUNGS) {
-      const { id: agentId, questions } = agents.get(rung)!;
+      const { id: agentId, questions, answering } = agents.get(rung)!;
       const noAnswer = await unanswerableFor(agentId);
+      /** What each strategy answered the timed questions with, for the recall lines. */
+      const answers = new Map<Strategy, RetrievedChunk[][]>();
       for (const strategy of strategies) {
         const url = new URL(scratchAppUrl);
         url.searchParams.set('connection_limit', '1');
@@ -345,9 +449,15 @@ async function main(): Promise<number> {
             // and outside the transaction, as the product does.
             const embedded = await services[strategy].embedQuery(asked);
             const result = await withTenant(app, tenantA, (tx) =>
-              services[strategy].search(tx, tenantA, embedded, { aiAgentId: agentId }),
+              services[strategy].search(tx, tenantA, embedded, {
+                reader: readerOf(agentId),
+                limit: LIMIT,
+              }),
             );
             seen.add(result.strategy);
+            if (index >= WARM_UP && strategy !== 'unanswerable') {
+              answers.set(strategy, [...(answers.get(strategy) ?? []), result.chunks]);
+            }
           }
           const elapsed = Number(process.hrtime.bigint() - started) / 1e6;
           if (index >= WARM_UP) timings.push(elapsed);
@@ -362,7 +472,22 @@ async function main(): Promise<number> {
               .padStart(6)}      · ${[...seen].join(', ')}`,
         );
       }
+      if (rung > EXACT_SEARCH_CEILING) {
+        const reference = answers.get('exact') ?? [];
+        for (const strategy of ['approximate', 'shipped'] as const) {
+          const got = answers.get(strategy) ?? [];
+          const held = heldAgainst(reference, got);
+          const outside = got.flat().filter((chunk) => !answering.has(chunk.sourceId)).length;
+          recallLines.push(
+            `${String(rung).padStart(15)} · ${strategy.padEnd(11)} · recall@${LIMIT} ` +
+              `${held.recall.toFixed(3)} · top-1 ${held.top1.toFixed(3)} · unanswered ` +
+              `${held.unanswered}/${held.answerable} · outside the reader's scope ${outside}`,
+          );
+        }
+      }
     }
+    console.log('\nagainst exact search, above the ceiling:');
+    for (const line of recallLines) console.log(line);
     return 0;
   } finally {
     await owner.$disconnect().catch(() => undefined);

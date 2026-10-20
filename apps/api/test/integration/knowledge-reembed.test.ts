@@ -149,7 +149,10 @@ describe('knowledge:reembed — moving a knowledge base into another embedding s
   async function ask(service: KnowledgeService, question: string) {
     const asked = await service.embedQuery(question);
     return withTenant(app, contextA, (tx) =>
-      service.search(tx, contextA, asked, { aiAgentId: agentA, limit: 3 }),
+      service.search(tx, contextA, asked, {
+        reader: { audience: 'ai_agent', aiAgentId: agentA, brandId: null },
+        limit: 3,
+      }),
     );
   }
 

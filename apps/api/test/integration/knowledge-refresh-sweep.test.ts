@@ -127,7 +127,7 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
       owner as TenantClient,
       context,
       await knowledge.embedQuery(question),
-      { limit: 10 },
+      { reader: { audience: 'ai_agent', aiAgentId: null, brandId: null }, limit: 10 },
     );
     return hits.map((hit) => hit.text);
   }

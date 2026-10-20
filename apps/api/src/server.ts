@@ -654,7 +654,7 @@ export async function buildServer({
       await api.register(aiGuardrailRoutes);
       await api.register(riskFlagRoutes);
       await api.register(aiHandoffRoutes);
-      await api.register(kbRoutes);
+      await api.register(kbRoutes, { knowledge });
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,

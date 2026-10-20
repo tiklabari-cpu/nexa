@@ -3982,11 +3982,13 @@ export interface paths {
     };
     /**
      * Knowledge the AI answers from
-     * @description The sources of the knowledge store the AI agent answers players from,
-     *     newest edit first. The agents-only sources are listed by
-     *     `GET /copilot/knowledge` (see its `deprecated` note); both are one store
-     *     (tm 309 · AI-14, `docs/adr/single-knowledge-store.md`). Unpaged: a
-     *     workspace's sources are a reference set an admin curates, not a stream.
+     * @description The workspace's one knowledge store (tm 309 · AI-14,
+     *     `docs/adr/single-knowledge-store.md`), newest edit first. Without
+     *     `audience` it lists the sources the AI agent answers players from —
+     *     what this list has always meant to the apps already installed;
+     *     `audience=all` is the whole store, the sources for agents only and the
+     *     published KB articles' included. Unpaged: a workspace's sources are a
+     *     reference set an admin curates, not a stream.
      */
     get: operations['listKnowledgeSources'];
     put?: never;
@@ -4010,6 +4012,14 @@ export interface paths {
      *
      *     A new source counts as reviewed when it is added (`reviewed_at`).
      *     `owner_id` must name a member of this workspace; anyone else is a 400.
+     *
+     *     **Who the source is for (tm 309.2).** Without `audiences` and
+     *     `ai_agent_ids` it is for whoever the agent record `ai_agent_id` names
+     *     answers: an AI agent's source is for the AI's answers and Copilot, that
+     *     agent alone; Copilot's is for agents only. `ai_agent_ids` must name AI
+     *     agents of this workspace and `brand_ids` its brands — anything else is a
+     *     400 with `details.reason` `knowledge_source_unknown_ai_agent` or
+     *     `knowledge_source_unknown_brand`.
      */
     post: operations['createKnowledgeSource'];
     delete?: never;
@@ -4160,7 +4170,14 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Remove a source and everything indexed from it */
+    /**
+     * Remove a source and everything indexed from it
+     * @description Any source of the store. A published KB article's source is refused
+     *     with a 400 (`details.reason` `knowledge_source_from_kb_article`, with
+     *     the article's id): it goes when the article is unpublished or its AI
+     *     audiences are switched off, and deleted here it would come back with
+     *     the article's next save.
+     */
     delete: operations['deleteKnowledgeSource'];
     options?: never;
     head?: never;
@@ -4203,6 +4220,15 @@ export interface paths {
      *     An edit is not a review: `reviewed_at` moves only through
      *     `POST /knowledge-sources/{sourceId}/review`, and a new interval counts
      *     from the last review rather than from now.
+     *
+     *     **Who the source is for — `audiences`, `ai_agent_ids`, `brand_ids`,
+     *     `valid_until` (tm 309.2) — belongs to every type too**, and is what
+     *     retrieval reads from the next question on; nothing is re-indexed for
+     *     it. Any source of the store is edited here, the ones for agents only
+     *     included. A published KB article's source (`kb_article_id`) takes its
+     *     title, text, audiences and reach from the article: changing one of
+     *     those here is a 400 with `details.reason` `knowledge_source_from_kb_article`
+     *     and the article's id — only its meta fields are edited here.
      */
     patch: operations['updateKnowledgeSource'];
     trace?: never;
@@ -4220,8 +4246,9 @@ export interface paths {
     put?: never;
     /**
      * Refresh a source from where its text came from
-     * @description Re-fetches and re-indexes an existing source (FR-MOD-06.3.3, "reindex").
-     *     No body: what is refreshed is the source as stored.
+     * @description Re-fetches and re-indexes an existing source (FR-MOD-06.3.3, "reindex"),
+     *     any of the store's (tm 309.2). No body: what is refreshed is the source
+     *     as stored.
      *
      *     **A separate endpoint from `PATCH`, not a flag on it, because the two ask
      *     different questions.** A PATCH says *this source is now something else*;
@@ -4279,7 +4306,9 @@ export interface paths {
      * @description Records that a person looked at the source and it still holds
      *     (tm 309.1 · AI-14-S3): `reviewed_at` becomes now, so the source is next
      *     due `review_interval_days` from now. No body — a review confirms the
-     *     source as it stands; changing it is `PATCH`.
+     *     source as it stands; changing it is `PATCH`. Any source of the store
+     *     (tm 309.2); a KB article's source is reviewed by its article's every
+     *     save as well.
      *
      *     Nothing is fetched or re-indexed, and nothing the AI says changes: a
      *     review is the only thing that clears "review needed", and it is never
@@ -4310,10 +4339,13 @@ export interface paths {
      *     from every source the AI agent answers from.
      *
      *     **Deprecated:** kept as a filtered view of the one store, listing the
-     *     same sources before and after the store became one; the store's single
-     *     list on `/knowledge-sources` (tm 309.2) takes its place. Reachable only by an
-     *     agent/bot token. A customer token gets a 404, not a 403, so the widget
-     *     surface cannot be used to probe for it.
+     *     same sources before and after the store became one —
+     *     `audiences = [copilot]` exactly, the ones added for agents; a published
+     *     KB article's source is its article's to manage and is not listed here.
+     *     The store's single list, `GET /knowledge-sources?audience=all`
+     *     (tm 309.2), takes its place. Reachable only by an agent/bot token. A
+     *     customer token gets a 404, not a 403, so the widget surface cannot be
+     *     used to probe for it.
      */
     get: operations['listCopilotKnowledge'];
     put?: never;
@@ -4410,10 +4442,14 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Draft a reply from the copilot knowledge base
-     * @description Retrieves from the copilot knowledge base using the customer's latest
-     *     message and returns a suggested reply for the agent to edit and send
-     *     (FR-MOD-12.3). Returns an empty draft when nothing relevant is found rather
+     * Draft a reply from the knowledge store
+     * @description Retrieves from the workspace's knowledge store using the customer's
+     *     latest message and returns a suggested reply for the agent to edit and
+     *     send (FR-MOD-12.3). Copilot draws on every source it may use (tm 309.2 ·
+     *     AI-14): what the AI agent answers players from and what is for agents
+     *     only, for this chat's brand or every brand — a chat whose brand is not
+     *     known draws on the every-brand sources only, so a draft for one brand's
+     *     player never quotes another brand's rule. Returns an empty draft when nothing relevant is found rather
      *     than inventing an answer — and equally when the search could not run
      *     because the embedding provider did not answer: the agent writes the reply
      *     themselves, and no draft is better than one from a search that failed.
@@ -9087,7 +9123,11 @@ export interface paths {
     get: operations['getKbArticle'];
     put?: never;
     post?: never;
-    /** Delete a knowledge base article */
+    /**
+     * Delete a knowledge base article
+     * @description The article's knowledge source, if it had one, goes with it, and every
+     *     chunk indexed from it (tm 309.2).
+     */
     delete: operations['deleteKbArticle'];
     options?: never;
     head?: never;
@@ -9097,6 +9137,18 @@ export interface paths {
      *     control: moving `draft` → `published` stamps `published_at` and records an
      *     audit entry; moving back to `draft` clears it and records the reverse. A
      *     slug or category is re-validated exactly as on create.
+     *
+     *     **The AI's knowledge follows the article (tm 309.2 · AI-14-S2).** Once
+     *     the article is saved, a published article whose `ai_audiences` is not
+     *     empty is indexed as a knowledge source — its title and body, for those
+     *     audiences, every AI agent and every brand — and the AI and Copilot find
+     *     it at once; unpublished or switched off, its source goes and it is no
+     *     longer found. Publishing or editing it counts as the source's review.
+     *     The article is never refused for this: when its text cannot be embedded
+     *     now (the embedding provider, today's AI allowance, or a workspace whose
+     *     content may not leave its region), its source answers nothing until the
+     *     hourly knowledge sweep indexes it, and the source's `last_refresh_error`
+     *     says why.
      */
     patch: operations['updateKbArticle'];
     trace?: never;
@@ -11524,11 +11576,27 @@ export interface components {
      *     (tm 309 · AI-14, owner decision K11; `docs/adr/single-knowledge-store.md`).
      *     "Copilot's own knowledge" (FR-MOD-12.2) is the store's sources that are
      *     for agents only; none of them ever reaches a player.
+     *
+     *     Who a source is for is its `audiences`, `ai_agent_ids`, `brand_ids`
+     *     and `valid_until` (tm 309.2): the AI agent answers a player only from
+     *     a source whose audiences name `ai_agent`, that is for its agent (or
+     *     every agent) and for the conversation's brand (or every brand) — a
+     *     conversation whose brand is not known reads the every-brand sources
+     *     only — and that has not ended. Copilot drafts from every audience,
+     *     narrowed by the conversation's brand the same way.
      */
     KnowledgeSource: {
       /** Format: uuid */
       id: string;
-      /** Format: uuid */
+      /**
+       * Format: uuid
+       * @description The agent record the source is filed under — kept for the apps
+       *     that read it. Since tm 309.2 it follows the source's scope rather
+       *     than deciding it: a source for agents only is filed under the
+       *     Copilot record, any other under its first AI agent (or the
+       *     workspace's oldest). Who uses the source is `audiences` and
+       *     `ai_agent_ids`.
+       */
       ai_agent_id?: string;
       name: string;
       /** @enum {string} */
@@ -11607,9 +11675,49 @@ export interface components {
        *     freshness sweep, cleared on its next success. A failed refresh
        *     never changes `content` or `chunk_count`: the stale answer is kept
        *     rather than replaced with none, so this field is a status to read,
-       *     not a sign that anything was lost.
+       *     not a sign that anything was lost. A KB article's source
+       *     (`kb_article_id`) is the exception, for the article has already
+       *     changed: its new text that could not be indexed yet leaves it
+       *     `indexing` with no chunks, and this says why, until the hourly
+       *     sweep indexes it (tm 309.2).
        */
       last_refresh_error?: string | null;
+      /**
+       * @description Who may use the source (tm 309 · AI-14): `ai_agent` — the AI
+       *     agent's answers to players — and/or `copilot`. `[copilot]` alone
+       *     is for agents only and never reaches a player. Kept in
+       *     `[ai_agent, copilot]` order without repeats; never empty.
+       */
+      audiences?: components['schemas']['KnowledgeAudience'][];
+      /**
+       * @description The AI agents the source is for; empty — every one. Read only by
+       *     the AI agent's search; Copilot is never narrowed by it.
+       */
+      ai_agent_ids?: string[];
+      /**
+       * @description The brands whose conversations may use the source; empty — every
+       *     brand. A conversation whose brand is not known uses the
+       *     every-brand sources only, so a brand's own rule never reaches
+       *     another brand's player.
+       */
+      brand_ids?: string[];
+      /**
+       * Format: date-time
+       * @description Past this moment the source answers nothing — the one date that
+       *     takes a source out of retrieval (a due review only warns). Null —
+       *     no end.
+       */
+      valid_until?: string | null;
+      /**
+       * Format: uuid
+       * @description The published KB article this source mirrors (AI-14-S2): its title,
+       *     text and audiences are the article's, for every AI agent and brand
+       *     with no end, and it goes when the article is unpublished, its AI
+       *     audiences are switched off or it is deleted. Edit those through
+       *     the article; only the meta fields are edited here. Null for every
+       *     other source.
+       */
+      kb_article_id?: string | null;
     };
     /**
      * @description One CSV data row's verdict. `line` is the row's 1-based position among
@@ -13937,9 +14045,11 @@ export interface components {
        *     (tm 309 · AI-14-S2): `ai_agent` — the AI's answers to players —
        *     and `copilot`, the agents' assistant. Both unless switched off; an
        *     empty list keeps the article out of the AI's knowledge altogether.
-       *     Kept in `[ai_agent, copilot]` order without repeats. The published
-       *     article enters the AI's knowledge with tm 309.2; until then this is
-       *     the stored switch only.
+       *     Kept in `[ai_agent, copilot]` order without repeats. A published
+       *     article with audiences is a knowledge source of the store
+       *     (`KnowledgeSource.kb_article_id`), brought to what the article
+       *     says by every save (tm 309.2); unpublished or switched off it is
+       *     no longer found.
        */
       ai_audiences: components['schemas']['KnowledgeAudience'][];
       /** Format: date-time */
@@ -22975,6 +23085,16 @@ export interface operations {
   listKnowledgeSources: {
     parameters: {
       query?: {
+        /**
+         * @description `ai_agent` (the default) — sources whose audiences name the AI
+         *     agent; `copilot` — those that name Copilot; `all` — every source.
+         */
+        audience?: 'all' | 'ai_agent' | 'copilot';
+        /**
+         * @description What this brand's conversations draw on: the sources for this brand
+         *     and those for every brand (`brand_ids` empty).
+         */
+        brand_id?: string;
         /** @description Only the sources this member owns (`KnowledgeSource.owner_id`). */
         owner_id?: string;
         /**
@@ -23016,7 +23136,11 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** Format: uuid */
+          /**
+           * Format: uuid
+           * @description The agent record whose scope a source takes when the body
+           *     names none (`audiences`, `ai_agent_ids`).
+           */
           ai_agent_id: string;
           name: string;
           content?: string;
@@ -23042,6 +23166,26 @@ export interface operations {
            * @default 90
            */
           review_interval_days?: number;
+          /**
+           * @description Who may use the source (`KnowledgeSource.audiences`);
+           *     never empty, repeats folded. Omitted — as the agent record `ai_agent_id` names.
+           */
+          audiences?: components['schemas']['KnowledgeAudience'][];
+          /**
+           * @description AI agents of this workspace the source is for; empty — every
+           *     one. Omitted — as the agent record names.
+           */
+          ai_agent_ids?: string[];
+          /**
+           * @description Brands of this workspace whose conversations may use the
+           *     source; empty — every brand. Omitted — every brand.
+           */
+          brand_ids?: string[];
+          /**
+           * Format: date-time
+           * @description Past this moment the source answers nothing; null — no end.
+           */
+          valid_until?: string | null;
         };
       };
     };
@@ -23161,6 +23305,26 @@ export interface operations {
            * @default 90
            */
           review_interval_days?: number;
+          /**
+           * @description Who may use the source (`KnowledgeSource.audiences`);
+           *     never empty, repeats folded. As on `POST /knowledge-sources`.
+           */
+          audiences?: components['schemas']['KnowledgeAudience'][];
+          /**
+           * @description AI agents of this workspace the source is for; empty — every
+           *     one. As on `POST /knowledge-sources`.
+           */
+          ai_agent_ids?: string[];
+          /**
+           * @description Brands of this workspace whose conversations may use the
+           *     source; empty — every brand. As on `POST /knowledge-sources`.
+           */
+          brand_ids?: string[];
+          /**
+           * Format: date-time
+           * @description Past this moment the source answers nothing; null — no end.
+           */
+          valid_until?: string | null;
         };
       };
     };
@@ -23199,6 +23363,7 @@ export interface operations {
         };
         content?: never;
       };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
@@ -23236,6 +23401,26 @@ export interface operations {
           language?: string | null;
           /** @description How many days a review holds (AI-14-S3). */
           review_interval_days?: number;
+          /**
+           * @description Who may use the source (`KnowledgeSource.audiences`);
+           *     never empty, repeats folded. Not for a KB article's source.
+           */
+          audiences?: components['schemas']['KnowledgeAudience'][];
+          /**
+           * @description AI agents of this workspace the source is for; empty — every
+           *     one. Not for a KB article's source.
+           */
+          ai_agent_ids?: string[];
+          /**
+           * @description Brands of this workspace whose conversations may use the
+           *     source; empty — every brand. Not for a KB article's source.
+           */
+          brand_ids?: string[];
+          /**
+           * Format: date-time
+           * @description Past this moment the source answers nothing; null — no end.
+           */
+          valid_until?: string | null;
         };
       };
     };

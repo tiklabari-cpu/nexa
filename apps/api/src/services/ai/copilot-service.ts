@@ -1,18 +1,15 @@
 /**
  * Copilot — agent-assist (FR-MOD-12).
  *
- * Copilot is a second AI surface, and the point of it is separation. Its
- * knowledge base is the agent's own — kept apart from the customer-facing AI
- * agent's sources (12.2) and never reachable by a customer token — so it is
- * modelled as an `AiAgent` of `kind: 'copilot'` with knowledge sources of its
- * own. Retrieval and indexing are always scoped to that agent, so the two
- * knowledge bases can never answer from each other.
- *
- * Since K11 (tm 309, `docs/adr/single-knowledge-store.md`) the two are one
- * store told apart by `audiences`: what is filed under this record is
- * `{copilot}`, for agents only. Retrieval still reads the record until tm 309.2
- * moves it onto `audiences` — from then Copilot drafts from the AI agent's
- * sources too, and only `{copilot}` stays away from players.
+ * Copilot is a second AI surface, for agents and never reachable by a customer
+ * token. Since K11 (tm 309, `docs/adr/single-knowledge-store.md`) its knowledge
+ * is not a base of its own: the AI agent's and Copilot's sources are one store
+ * told apart by who each is for (`audiences`). Copilot drafts from all of it —
+ * what the AI agent answers players from and what is for agents only
+ * (`{copilot}`, FR-MOD-12.2's "Copilot's own") — narrowed by the
+ * conversation's brand (tm 309.2); only the AI agent's search is held away
+ * from `{copilot}`. The `kind: 'copilot'` record stays, as the anchor of the
+ * assist runs below and the filing of the sources for agents only.
  *
  * Everything here is find-or-create against the license: the seed makes a
  * Copilot agent, but a freshly provisioned workspace (or a test fixture) may not
@@ -31,8 +28,13 @@ import {
 import { maskForWrite } from '../../lib/sensitive-mask.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
+import type { Prisma } from '@prisma/client';
 import { AiDailyCapError } from './ai-daily-budget.js';
-import { createKnowledgeSourceDraft, deleteKnowledgeSourceDraft } from './config-draft.js';
+import {
+  createKnowledgeSourceDraft,
+  deleteKnowledgeSourceDraft,
+  ensureCopilotAgentId,
+} from './config-draft.js';
 import { buildOverviewReport, resolveRange } from '../../routes/reports.js';
 import {
   lastInstantBefore,
@@ -56,6 +58,15 @@ const COPILOT_KIND = 'copilot';
  * kind the Reports "assisted" split already treats as a non-AI-agent run.
  */
 const COPILOT_SKILL_KIND = 'workspace';
+
+/**
+ * The `/copilot/knowledge` view (ADR §2.7, deprecated): the sources for agents
+ * only, by exact audience, and none a KB article manages.
+ */
+const AGENTS_ONLY = {
+  audiences: { equals: ['copilot'] },
+  kbArticleId: null,
+} satisfies Prisma.KnowledgeSourceWhereInput;
 
 export interface CopilotSourceView {
   id: string;
@@ -102,25 +113,9 @@ export async function readConversationTurns(
 export class CopilotService {
   constructor(private readonly knowledge: KnowledgeService) {}
 
-  /** The copilot agent's id, if the license has one — no side effects. */
-  async findAgentId(tx: TenantClient): Promise<string | null> {
-    const agent = await tx.aiAgent.findFirst({
-      where: { kind: COPILOT_KIND },
-      select: { id: true },
-      orderBy: { createdAt: 'asc' },
-    });
-    return agent?.id ?? null;
-  }
-
   /** The copilot agent, creating it on first use so an assist never 500s on setup order. */
   async ensureAgentId(tx: TenantClient, tenant: TenantContext): Promise<string> {
-    const existing = await this.findAgentId(tx);
-    if (existing) return existing;
-    const created = await tx.aiAgent.create({
-      data: { licenseId: tenant.licenseId, kind: COPILOT_KIND, name: 'Copilot', active: true },
-      select: { id: true },
-    });
-    return created.id;
+    return ensureCopilotAgentId(tx, tenant.licenseId);
   }
 
   /**
@@ -192,11 +187,16 @@ export class CopilotService {
 
   // --- Knowledge (12.2) ------------------------------------------------------
 
+  /**
+   * The sources for agents only (`audiences = {copilot}`, exactly — ADR §3
+   * detail 1), the ones added for them: the same rows this view listed while
+   * they were filed under the Copilot record, before and after the store
+   * became one. A KB article's source is the article's to manage, not this
+   * view's (AI-14-S2), so it is not listed here.
+   */
   async listSources(tx: TenantClient): Promise<CopilotSourceView[]> {
-    const agentId = await this.findAgentId(tx);
-    if (!agentId) return [];
     const sources = await tx.knowledgeSource.findMany({
-      where: { aiAgentId: agentId },
+      where: AGENTS_ONLY,
       orderBy: { updatedAt: 'desc' },
       include: { _count: { select: { chunks: true } } },
     });
@@ -219,13 +219,11 @@ export class CopilotService {
       prepared: PreparedChunks;
     },
   ): Promise<CopilotSourceView> {
-    const agentId = await this.ensureAgentId(tx, tenant);
-    // Filed under the Copilot record, so for agents only (`audiences =
-    // {copilot}`, tm 309.1): the store's view of what this route has always
-    // kept away from players.
+    // For agents only (`audiences = {copilot}`), filed under the Copilot
+    // record: what this route has always kept away from players.
     const source = await createKnowledgeSourceDraft(
       tx,
-      { id: agentId, kind: COPILOT_KIND },
+      { audiences: ['copilot'], aiAgentIds: [] },
       {
         licenseId: tenant.licenseId,
         type: input.type,
@@ -247,13 +245,12 @@ export class CopilotService {
   }
 
   /**
-   * Delete a copilot source. Scoped to the copilot agent, so this route can
-   * never remove an AI-agent (customer-facing) source — even given its id.
+   * Delete a source for agents only. Any other source of the store is not
+   * this view's — an AI-agent (customer-facing) source, a KB article's — so
+   * this route can never remove one, even given its id (ADR §2.7).
    */
   async deleteSource(tx: TenantClient, sourceId: string): Promise<number> {
-    const agentId = await this.findAgentId(tx);
-    if (!agentId) return 0;
-    return deleteKnowledgeSourceDraft(tx, sourceId, agentId);
+    return deleteKnowledgeSourceDraft(tx, sourceId, AGENTS_ONLY);
   }
 
   // --- Assist (12.3) ---------------------------------------------------------
@@ -264,10 +261,14 @@ export class CopilotService {
   }
 
   /**
-   * A suggested reply, retrieved from the copilot knowledge base using the
-   * customer's latest message as the query. Returns an empty draft when there is
-   * nothing to answer from, rather than inventing one — the same honesty the
-   * customer-facing responder applies (RETRIEVAL_THRESHOLD).
+   * A suggested reply, retrieved from the knowledge store using the customer's
+   * latest message as the query — every source Copilot may use (tm 309.2):
+   * the AI agent's and those for agents only, for the conversation's brand or
+   * every brand; a chat whose brand is not known reads the every-brand ones
+   * only, so a draft for one brand's player never quotes another brand's rule
+   * (ADR §2.4). Returns an empty draft when there is nothing to answer from,
+   * rather than inventing one — the same honesty the customer-facing responder
+   * applies (RETRIEVAL_THRESHOLD).
    *
    * Three short steps through `db` rather than one transaction, because the
    * question is embedded in between and the provider is never called with a
@@ -283,13 +284,15 @@ export class CopilotService {
     tenant: TenantContext,
     chatId: string,
   ): Promise<CopilotDraft & { failure?: EmbeddingFailureKind; capped?: AiDailyCapError }> {
-    const { agentId, turns } = await db(async (tx) => ({
-      agentId: await this.findAgentId(tx),
+    const { brandId, turns } = await db(async (tx) => ({
+      brandId:
+        (await tx.chat.findUnique({ where: { id: chatId }, select: { brandId: true } }))?.brandId ??
+        null,
       turns: await this.conversationTurns(tx, chatId),
     }));
     const lastCustomer = [...turns].reverse().find((turn) => turn.role === 'customer');
 
-    if (!agentId || !lastCustomer) {
+    if (!lastCustomer) {
       return { draft: '', sources: [] };
     }
 
@@ -307,7 +310,7 @@ export class CopilotService {
 
     const chunks = await db((tx) =>
       this.knowledge.retrieve(tx, tenant, question, {
-        aiAgentId: agentId,
+        reader: { audience: 'copilot', brandId },
         limit: ANSWER_RETRIEVAL_LIMIT,
       }),
     );

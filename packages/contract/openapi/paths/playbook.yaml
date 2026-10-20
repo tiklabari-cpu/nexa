@@ -919,12 +919,26 @@ knowledgeSources:
     operationId: listKnowledgeSources
     summary: Knowledge the AI answers from
     description: |
-      The sources of the knowledge store the AI agent answers players from,
-      newest edit first. The agents-only sources are listed by
-      `GET /copilot/knowledge` (see its `deprecated` note); both are one store
-      (tm 309 · AI-14, `docs/adr/single-knowledge-store.md`). Unpaged: a
-      workspace's sources are a reference set an admin curates, not a stream.
+      The workspace's one knowledge store (tm 309 · AI-14,
+      `docs/adr/single-knowledge-store.md`), newest edit first. Without
+      `audience` it lists the sources the AI agent answers players from —
+      what this list has always meant to the apps already installed;
+      `audience=all` is the whole store, the sources for agents only and the
+      published KB articles' included. Unpaged: a workspace's sources are a
+      reference set an admin curates, not a stream.
     parameters:
+      - name: audience
+        in: query
+        description: |
+          `ai_agent` (the default) — sources whose audiences name the AI
+          agent; `copilot` — those that name Copilot; `all` — every source.
+        schema: { type: string, enum: [all, ai_agent, copilot], default: ai_agent }
+      - name: brand_id
+        in: query
+        description: |
+          What this brand's conversations draw on: the sources for this brand
+          and those for every brand (`brand_ids` empty).
+        schema: { type: string, format: uuid }
       - name: owner_id
         in: query
         description: Only the sources this member owns (`KnowledgeSource.owner_id`).
@@ -975,6 +989,14 @@ knowledgeSources:
 
       A new source counts as reviewed when it is added (`reviewed_at`).
       `owner_id` must name a member of this workspace; anyone else is a 400.
+
+      **Who the source is for (tm 309.2).** Without `audiences` and
+      `ai_agent_ids` it is for whoever the agent record `ai_agent_id` names
+      answers: an AI agent's source is for the AI's answers and Copilot, that
+      agent alone; Copilot's is for agents only. `ai_agent_ids` must name AI
+      agents of this workspace and `brand_ids` its brands — anything else is a
+      400 with `details.reason` `knowledge_source_unknown_ai_agent` or
+      `knowledge_source_unknown_brand`.
     requestBody:
       required: true
       content:
@@ -983,7 +1005,12 @@ knowledgeSources:
             type: object
             required: [name, ai_agent_id]
             properties:
-              ai_agent_id: { type: string, format: uuid }
+              ai_agent_id:
+                type: string
+                format: uuid
+                description: |
+                  The agent record whose scope a source takes when the body
+                  names none (`audiences`, `ai_agent_ids`).
               name: { type: string, minLength: 1, maxLength: 200 }
               content: { type: string, minLength: 1, maxLength: 100000 }
               source_url:
@@ -1012,6 +1039,34 @@ knowledgeSources:
                 maximum: 365
                 default: 90
                 description: How many days a review holds (AI-14-S3).
+              audiences:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeAudience" }
+                description: |
+                  Who may use the source (`KnowledgeSource.audiences`);
+                  never empty, repeats folded. Omitted — as the agent record `ai_agent_id` names.
+              ai_agent_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: |
+                  AI agents of this workspace the source is for; empty — every
+                  one. Omitted — as the agent record names.
+              brand_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: |
+                  Brands of this workspace whose conversations may use the
+                  source; empty — every brand. Omitted — every brand.
+              valid_until:
+                type: string
+                format: date-time
+                nullable: true
+                description: |
+                  Past this moment the source answers nothing; null — no end.
     responses:
       "201":
         description: Indexed
@@ -1224,6 +1279,34 @@ knowledgeSourcesFile:
                 maximum: 365
                 default: 90
                 description: As on `POST /knowledge-sources`.
+              audiences:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeAudience" }
+                description: |
+                  Who may use the source (`KnowledgeSource.audiences`);
+                  never empty, repeats folded. As on `POST /knowledge-sources`.
+              ai_agent_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: |
+                  AI agents of this workspace the source is for; empty — every
+                  one. As on `POST /knowledge-sources`.
+              brand_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: |
+                  Brands of this workspace whose conversations may use the
+                  source; empty — every brand. As on `POST /knowledge-sources`.
+              valid_until:
+                type: string
+                format: date-time
+                nullable: true
+                description: |
+                  Past this moment the source answers nothing; null — no end.
     responses:
       "201":
         description: Uploaded, parsed and indexed
@@ -1285,6 +1368,15 @@ knowledgeSource:
       An edit is not a review: `reviewed_at` moves only through
       `POST /knowledge-sources/{sourceId}/review`, and a new interval counts
       from the last review rather than from now.
+
+      **Who the source is for — `audiences`, `ai_agent_ids`, `brand_ids`,
+      `valid_until` (tm 309.2) — belongs to every type too**, and is what
+      retrieval reads from the next question on; nothing is re-indexed for
+      it. Any source of the store is edited here, the ones for agents only
+      included. A published KB article's source (`kb_article_id`) takes its
+      title, text, audiences and reach from the article: changing one of
+      those here is a 400 with `details.reason` `knowledge_source_from_kb_article`
+      and the article's id — only its meta fields are edited here.
     requestBody:
       required: true
       content:
@@ -1327,6 +1419,34 @@ knowledgeSource:
                 minimum: 1
                 maximum: 365
                 description: How many days a review holds (AI-14-S3).
+              audiences:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeAudience" }
+                description: |
+                  Who may use the source (`KnowledgeSource.audiences`);
+                  never empty, repeats folded. Not for a KB article's source.
+              ai_agent_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: |
+                  AI agents of this workspace the source is for; empty — every
+                  one. Not for a KB article's source.
+              brand_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: |
+                  Brands of this workspace whose conversations may use the
+                  source; empty — every brand. Not for a KB article's source.
+              valid_until:
+                type: string
+                format: date-time
+                nullable: true
+                description: |
+                  Past this moment the source answers nothing; null — no end.
     responses:
       "200":
         description: Updated, and re-indexed if the text changed
@@ -1344,8 +1464,15 @@ knowledgeSource:
     tags: [Playbook]
     operationId: deleteKnowledgeSource
     summary: Remove a source and everything indexed from it
+    description: |
+      Any source of the store. A published KB article's source is refused
+      with a 400 (`details.reason` `knowledge_source_from_kb_article`, with
+      the article's id): it goes when the article is unpublished or its AI
+      audiences are switched off, and deleted here it would come back with
+      the article's next save.
     responses:
       "204": { description: Deleted }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
@@ -1363,8 +1490,9 @@ knowledgeSourceReindex:
     operationId: reindexKnowledgeSource
     summary: Refresh a source from where its text came from
     description: |
-      Re-fetches and re-indexes an existing source (FR-MOD-06.3.3, "reindex").
-      No body: what is refreshed is the source as stored.
+      Re-fetches and re-indexes an existing source (FR-MOD-06.3.3, "reindex"),
+      any of the store's (tm 309.2). No body: what is refreshed is the source
+      as stored.
 
       **A separate endpoint from `PATCH`, not a flag on it, because the two ask
       different questions.** A PATCH says *this source is now something else*;
@@ -1426,7 +1554,9 @@ knowledgeSourceReview:
       Records that a person looked at the source and it still holds
       (tm 309.1 · AI-14-S3): `reviewed_at` becomes now, so the source is next
       due `review_interval_days` from now. No body — a review confirms the
-      source as it stands; changing it is `PATCH`.
+      source as it stands; changing it is `PATCH`. Any source of the store
+      (tm 309.2); a KB article's source is reviewed by its article's every
+      save as well.
 
       Nothing is fetched or re-indexed, and nothing the AI says changes: a
       review is the only thing that clears "review needed", and it is never

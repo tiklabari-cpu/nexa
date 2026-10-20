@@ -29,11 +29,19 @@
  * tm 309.1 adds the second kind of `brand_id`: a label, which RLS deliberately
  * does not narrow (`chats.brand_id`, AI-14). Labels are declared beside the
  * matrix and proven licence-wide by it, so the alarm still knows every column.
+ *
+ * tm 309.2 adds the third: a brand *list* (`knowledge_sources.brand_ids`), a
+ * row's brands with none meaning every one, narrowed by the query that reads
+ * it. A second alarm holds the `brand_ids` columns to BRAND_LIST_TABLES, and
+ * each is proven through its reader.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
+import { KnowledgeService } from '../../src/services/ai/knowledge-service.js';
+import { MockEmbeddingProvider } from '../../src/services/ai/provider/mock-embedding-provider.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -148,6 +156,81 @@ const BRAND_LABEL_TABLES: ReadonlyArray<{
     },
   },
 ];
+
+// === Brand lists (tm 309.2) =================================================
+// Tables whose `brand_ids` array names the brands a row is for — empty is
+// every brand — and the query that reads the row narrows by it, never RLS: a
+// knowledge source can be several brands' at once (ADR single-knowledge-store
+// §2.4). Declared so the alarm below knows every such column too, and proven
+// through the reader that does the narrowing: a brand's row reaches that
+// brand's conversations only — not a sibling brand's, not one whose brand is
+// not known — and never another licence.
+const LIST_TEXT = 'Marka listesi süzgeci deneme metni.';
+const BRAND_LIST_TABLES: ReadonlyArray<{
+  table: string;
+  /** The query that narrows by the list. */
+  reader: string;
+  /** One row for `brandIds` (empty: every brand); its id. */
+  plant: (db: PrismaClient, at: { licenseId: bigint; brandIds: string[] }) => Promise<string>;
+  /** The rows `brandId`'s conversation is served, as the reader filters them. */
+  served: (
+    app: PrismaClient,
+    at: { licenseId: bigint; organizationId: string },
+    brandId: string | null,
+  ) => Promise<string[]>;
+}> = [
+  {
+    table: 'knowledge_sources',
+    reader: 'KnowledgeService.search — the AI agent answering a player (readerScope)',
+    plant: async (db, at) => {
+      const agent = await db.aiAgent.create({
+        data: { licenseId: at.licenseId, kind: 'ai_agent', name: 'Ada' },
+        select: { id: true },
+      });
+      const source = await db.knowledgeSource.create({
+        data: {
+          aiAgentId: agent.id,
+          licenseId: at.licenseId,
+          type: 'faq',
+          name: 'Brand list probe',
+          status: 'ready',
+          brandIds: at.brandIds,
+        },
+        select: { id: true },
+      });
+      await db.$executeRawUnsafe(
+        `INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, token_count, position)
+         VALUES (gen_random_uuid(), $1::uuid, $2::bigint, $3, $4::vector, 5, 0)`,
+        source.id,
+        at.licenseId.toString(),
+        LIST_TEXT,
+        toVectorLiteral(embed(LIST_TEXT)),
+      );
+      return source.id;
+    },
+    served: async (app, at, brandId) => {
+      const knowledge = new KnowledgeService({ embeddings: new MockEmbeddingProvider() });
+      const asked = await knowledge.embedQuery(LIST_TEXT);
+      const { chunks } = await withTenant(app, at, (tx) =>
+        knowledge.search(tx, at, asked, {
+          reader: { audience: 'ai_agent', aiAgentId: null, brandId },
+          limit: 10,
+        }),
+      );
+      return chunks.map((chunk) => chunk.sourceId);
+    },
+  },
+];
+
+/** Every public table with a `brand_ids` column — what BRAND_LIST_TABLES must match. */
+async function brandListTablesInSchema(db: Pick<PrismaClient, '$queryRaw'>): Promise<Set<string>> {
+  const rows = await db.$queryRaw<Array<{ table_name: string }>>`
+    SELECT table_name FROM information_schema.columns
+    WHERE table_schema = 'public' AND column_name = 'brand_ids'
+    ORDER BY table_name
+  `;
+  return new Set(rows.map((r) => r.table_name));
+}
 
 /** Every public table carrying a `brand_id` column, read straight from the
  *  catalogue — the authoritative set the matrix must match. */
@@ -468,6 +551,19 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
       const gaps = scopeCoverageGaps(new Set([...declared, 'accounts']), declared);
       expect(gaps.phantom).toContain('accounts');
     });
+
+    it('covers exactly the brand_ids tables the schema has — every brand list has its reader (tm 309.2)', async () => {
+      const lists = new Set(BRAND_LIST_TABLES.map((t) => t.table));
+      const inSchema = await brandListTablesInSchema(owner);
+      expect(inSchema.size).toBeGreaterThanOrEqual(1);
+      const gaps = scopeCoverageGaps(lists, inSchema);
+      expect(
+        gaps.undeclared,
+        'brand_ids tables missing from BRAND_LIST_TABLES — a brand list nothing proves is filtered.',
+      ).toEqual([]);
+      expect(gaps.phantom).toEqual([]);
+      for (const entry of BRAND_LIST_TABLES) expect(entry.reader).not.toBe('');
+    });
   });
 
   // === The matrix — cross-brand invisibility, one test per table (78.8) =======
@@ -551,6 +647,30 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
             brandA2,
           ),
         ).toBe(0);
+      },
+    );
+
+    // The brand lists (tm 309.2): what the reader serves a conversation of
+    // each brand. RLS shows both rows to every brand of A — the narrowing is
+    // the reader's, and this is where it is held to.
+    it.each(BRAND_LIST_TABLES.map((t) => t.table))(
+      "%s: a brand-A2 row reaches A2's conversations only — not A1's, not one whose brand is not known, never license B's (AI-14)",
+      async (table) => {
+        const entry = BRAND_LIST_TABLES.find((t) => t.table === table)!;
+        const a = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
+        const forA2 = await entry.plant(owner, { licenseId: fx.a.licenseId, brandIds: [brandA2] });
+        const forEvery = await entry.plant(owner, { licenseId: fx.a.licenseId, brandIds: [] });
+
+        expect((await entry.served(app, a, brandA2)).sort()).toEqual([forA2, forEvery].sort());
+        expect(await entry.served(app, a, brandA1)).toEqual([forEvery]);
+        expect(await entry.served(app, a, null)).toEqual([forEvery]);
+        expect(
+          await entry.served(
+            app,
+            { licenseId: fx.b.licenseId, organizationId: fx.b.organizationId },
+            brandB,
+          ),
+        ).toEqual([]);
       },
     );
   });

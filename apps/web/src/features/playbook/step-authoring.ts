@@ -53,7 +53,7 @@ const STEP_FIELDS: Record<StepType, readonly string[]> = {
   tag: ['tag'],
   summarize: [],
   send_message: ['source', 'text'],
-  transfer_to_team: ['group'],
+  transfer_to_team: ['group', 'group_id'],
 };
 
 /**

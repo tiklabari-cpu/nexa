@@ -103,6 +103,8 @@ export const inbox: Messages = {
   'inbox.list.sort.ariaLabel': 'Sort conversations',
   'inbox.list.sort.newest': 'Newest',
   'inbox.list.sort.oldest': 'Oldest',
+  'inbox.list.priorityFilter.ariaLabel': 'Filter conversations by priority',
+  'inbox.list.priorityFilter.all': 'All priorities',
 
   // Transcript header + empty state (InboxPage's own chrome around Transcript.tsx)
   'inbox.thread.visitorFallback': 'Visitor',

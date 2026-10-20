@@ -73,6 +73,11 @@ const CANDIDATES: SkillStep[] = [
 
   { type: 'transfer_to_team', group: 'Support' },
   { type: 'transfer_to_team', group: '' },
+  // By id (AI-12 · tm 307.3), the way the team picker writes it.
+  { type: 'transfer_to_team', group: 'Support', group_id: 7 },
+  { type: 'transfer_to_team', group_id: 7 },
+  { type: 'transfer_to_team', group: '', group_id: 7 },
+  { type: 'transfer_to_team', group: 'Support', group_id: 0 },
 ];
 
 describe('step gate parity with the server (FR-MOD-06.2.4)', () => {

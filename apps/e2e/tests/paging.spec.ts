@@ -15,7 +15,7 @@
  * in both: the inbox list forwards through `page_id`, the transcript *backwards*
  * through `before_event_id`.
  */
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, PAGING_OWNER, signInAs, test } from './fixtures.js';
 
 /** `useInbox.ts` — the console asks for this many conversations per request. */
@@ -56,6 +56,17 @@ async function openPagingInbox(page: Page): Promise<void> {
   await page.goto('/app/inbox');
 }
 
+/**
+ * Presses "Load more". Scrolling the button into view is itself what asks for
+ * the next page (the list's `onScroll`, NFR-P5), so a real click races its own
+ * scroll: the page can land — and the button go — between Playwright's scroll
+ * and its press ("element was detached from the DOM"). Dispatching the click
+ * does not scroll, so what is exercised is the button, deterministically.
+ */
+async function loadMore(conversations: Locator): Promise<void> {
+  await conversations.getByRole('button', { name: 'Load more' }).dispatchEvent('click');
+}
+
 test.describe('list paging', () => {
   test('the inbox list reaches the sixtieth conversation, ten rows past the first page', async ({
     page,
@@ -75,7 +86,7 @@ test.describe('list paging', () => {
     // Asking for the next page is the same request with the cursor the first
     // response carried. The rows that come back are the ten the first page did
     // not have — appended, not replacing it, so the count is the sum.
-    await conversations.getByRole('button', { name: 'Load more' }).click();
+    await loadMore(conversations);
     await expect(rows).toHaveCount(SEEDED_CHATS);
     await expect(conversations.getByText('Paging Visitor 60', { exact: true })).toBeVisible();
 
@@ -117,7 +128,7 @@ test.describe('list paging', () => {
     // And it is a count of the view rather than of the cache: loading the
     // second page adds rows without moving the number, which is the other half
     // of "the counter and the list agree".
-    await conversations.getByRole('button', { name: 'Load more' }).click();
+    await loadMore(conversations);
     await expect(conversations.getByRole('listitem')).toHaveCount(SEEDED_CHATS);
     await expect(rail.getByRole('button', { name: `All ${SEEDED_CHATS}` })).toBeVisible();
   });

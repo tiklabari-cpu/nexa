@@ -362,18 +362,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  ...[
-    'GET /handoff-routes',
-    'POST /handoff-routes',
-    'PATCH /handoff-routes/{routeId}',
-    'DELETE /handoff-routes/{routeId}',
-  ].map((op) => ({
-    op,
-    owner: 'tm 307.3',
-    reason:
-      'the topic and reason routes of AI-12 (tm 307.1) — "AI Agent › Devir ve Yönlendirme", ' +
-      '`HandoffRoutes.tsx`, which TGT-WEB (tm 307.3) draws.',
-  })),
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

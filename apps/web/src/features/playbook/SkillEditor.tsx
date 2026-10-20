@@ -78,7 +78,7 @@ import {
   procedureProblemText,
   type TeamOption,
 } from './ProcedureSections.js';
-import { moveStep, stepIssues } from './step-reorder.js';
+import { moveStep, namesTeam, stepIssues } from './step-reorder.js';
 import {
   STEP_TYPES,
   addStep,
@@ -102,7 +102,11 @@ import { useSkillActiveToggle } from './useSkillActiveToggle.js';
  * carries its own small, translated copy of the same switch instead of
  * threading a translate function into shared, tested logic.
  */
-function describeStepText(step: SkillStep, t: TFunction): string {
+function describeStepText(
+  step: SkillStep,
+  t: TFunction,
+  teams: readonly TeamOption[] = [],
+): string {
   switch (step.type) {
     case 'detect_intent':
       return t('playbook.step.detectIntent', { intent: step.intent ?? '?' });
@@ -120,7 +124,7 @@ function describeStepText(step: SkillStep, t: TFunction): string {
         ? t('playbook.step.sendKnowledge')
         : t('playbook.step.sendText', { text: step.text ?? '' });
     case 'transfer_to_team':
-      return t('playbook.step.transfer', { group: step.group ?? '?' });
+      return t('playbook.step.transfer', { group: stepTeamName(step, teams) ?? '?' });
     default:
       return step.type;
   }
@@ -131,10 +135,11 @@ function describeMoveText(
   from: number,
   to: number,
   t: TFunction,
+  teams: readonly TeamOption[],
 ): string {
   const clampedTo = Math.max(0, Math.min(to, steps.length - 1));
   const step = steps[from];
-  const label = step ? describeStepText(step, t) : t('playbook.step.genericLabel');
+  const label = step ? describeStepText(step, t, teams) : t('playbook.step.genericLabel');
   return t('playbook.step.moveAnnouncement', {
     label,
     position: clampedTo + 1,
@@ -150,7 +155,7 @@ function isBlank(value: string | undefined): boolean {
 function issueMessageText(step: SkillStep, t: TFunction): string | null {
   switch (step.type) {
     case 'transfer_to_team':
-      return isBlank(step.group) ? t('playbook.step.issueTransferTeam') : null;
+      return namesTeam(step) ? null : t('playbook.step.issueTransferTeam');
     case 'detect_intent':
       return isBlank(step.intent) ? t('playbook.step.issueDetectIntent') : null;
     case 'request_info':
@@ -464,7 +469,7 @@ export function SkillEditor({
     if (!canEdit) return;
     const clampedTo = Math.max(0, Math.min(to, entries.length - 1));
     if (clampedTo === from || from < 0 || from >= entries.length) return;
-    setAnnouncement(describeMoveText(steps, from, clampedTo, t));
+    setAnnouncement(describeMoveText(steps, from, clampedTo, t, teamItems));
     setEntries((current) => moveStep(current, from, clampedTo));
   }
 
@@ -812,7 +817,9 @@ export function SkillEditor({
                           onClick={() => toggleStepOpen(entry.id)}
                           className="w-full text-left"
                         >
-                          <span className="block text-sm">{describeStepText(entry.step, t)}</span>
+                          <span className="block text-sm">
+                            {describeStepText(entry.step, t, teamItems)}
+                          </span>
                           <span className="text-2xs text-content-tertiary">
                             {t(STEP_TYPE_LABEL_KEYS[entry.step.type])}{' '}
                             <span aria-hidden="true">{open ? '▴' : '▾'}</span>
@@ -1241,23 +1248,110 @@ function StepParameters({
 
     case 'transfer_to_team':
       return (
-        <label htmlFor={`transfer-${id}`} className="flex flex-col gap-1">
-          <span className="text-2xs text-content-tertiary">{t('playbook.editor.team')}</span>
-          <input
-            id={`transfer-${id}`}
-            value={step.group ?? ''}
-            disabled={!canEdit}
-            onChange={(event) => onEdit({ group: event.target.value })}
-            aria-invalid={invalid ? true : undefined}
-            placeholder={t('playbook.editor.teamPlaceholder')}
-            className={`w-48 ${inputClass}`}
-          />
-        </label>
+        <TeamPicker
+          id={`transfer-${id}`}
+          step={step}
+          disabled={!canEdit}
+          invalid={invalid}
+          onEdit={onEdit}
+        />
       );
 
     default:
       return <p className="text-2xs text-content-tertiary">{t('playbook.editor.noParameters')}</p>;
   }
+}
+
+/**
+ * The team a hand-over step names, as the list knows it (AI-12 · tm 307.3).
+ * The id wins: a team renamed since the step was saved shows its new name. A
+ * step with only a name (saved before ids) is matched by name; one whose team
+ * the list does not hold keeps the name it was saved with.
+ */
+function stepTeam(step: SkillStep, teams: readonly TeamOption[]): TeamOption | undefined {
+  if (step.group_id !== undefined) return teams.find((team) => team.id === step.group_id);
+  const name = step.group?.trim().toLowerCase();
+  return name ? teams.find((team) => team.name.trim().toLowerCase() === name) : undefined;
+}
+
+function stepTeamName(step: SkillStep, teams: readonly TeamOption[]): string | undefined {
+  const name = stepTeam(step, teams)?.name ?? step.group;
+  return name !== undefined && name.trim().length > 0 ? name : undefined;
+}
+
+/**
+ * The team a `transfer_to_team` step hands over to, chosen from the workspace's
+ * teams (AI-12 · tm 307.3). It writes the id and, beside it, the name — the
+ * id is what the hand-over looks the team up by, so renaming the team keeps
+ * the skill working; the name is for a release that still reads it. A team the
+ * list no longer holds stays visible and marked, never silently swapped.
+ */
+function TeamPicker({
+  id,
+  step,
+  disabled,
+  invalid,
+  onEdit,
+}: {
+  id: string;
+  step: SkillStep;
+  disabled: boolean;
+  invalid: boolean;
+  onEdit: (patch: Partial<SkillStep>) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  // The list is read when a hand-over step is opened, not with the editor:
+  // an editor that pulls things nobody asked for on every skill click is a
+  // request storm. The procedure editor shares the key.
+  const list = useQuery({
+    queryKey: ['playbook', 'teams'],
+    queryFn: () => api.get<{ items: TeamOption[] }>('/groups'),
+    staleTime: 60_000,
+  });
+  const teams = useMemo(() => list.data?.items ?? [], [list.data]);
+  const current = stepTeam(step, teams);
+  const savedName = stepTeamName(step, teams);
+  const named = namesTeam(step);
+  // The list may not have arrived yet: only then is a missing team "unknown
+  // for now" rather than gone, and the saved name is all there is to show.
+  const value = current ? String(current.id) : named ? 'saved' : '';
+  return (
+    <div className="flex flex-col gap-1">
+      {/* Sibling label, not a wrapper: wrapping a <select> folds its options into its name. */}
+      <label htmlFor={id} className="text-2xs text-content-tertiary">
+        {t('playbook.editor.team')}
+      </label>
+      <select
+        id={id}
+        value={value}
+        disabled={disabled}
+        aria-invalid={invalid ? true : undefined}
+        onChange={(event) => {
+          const next = teams.find((team) => String(team.id) === event.target.value);
+          if (next) onEdit({ group: next.name, group_id: next.id });
+          else if (event.target.value === '') onEdit({ group: '', group_id: undefined });
+        }}
+        className="w-48 rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none disabled:opacity-60"
+      >
+        <option value="">{t('playbook.editor.teamChoose')}</option>
+        {teams.map((team) => (
+          <option key={team.id} value={String(team.id)}>
+            {team.name}
+          </option>
+        ))}
+        {value === 'saved' && (
+          <option value="saved" disabled>
+            {savedName === undefined
+              ? t('playbook.procedure.targetUnknownTeam')
+              : teams.length > 0
+                ? t('playbook.editor.teamMissing', { name: savedName })
+                : savedName}
+          </option>
+        )}
+      </select>
+    </div>
+  );
 }
 
 /**

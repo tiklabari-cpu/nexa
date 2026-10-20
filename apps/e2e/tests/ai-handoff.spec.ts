@@ -201,3 +201,106 @@ test.describe('AI hand-over rules (AI-09)', () => {
     await save('Save criteria');
   });
 });
+
+/**
+ * Hand-over routes (tm 307.3 · AI-12): a route written in Playbook › Profile ›
+ * Hand-over is held by the real API — its team by id, its priority, its switch
+ * — and an edit reaches it as the one field it changes.
+ */
+test.describe('AI hand-over routes (AI-12)', () => {
+  test('a route is written, switched off, edited, kept after a reload and deleted', async ({
+    agentPage,
+  }) => {
+    test.setTimeout(120_000);
+    agentPage.on('dialog', (dialog) => void dialog.accept());
+    await openHandoff(agentPage);
+    await expect(
+      agentPage.getByRole('heading', { name: 'Routes by topic and reason' }),
+    ).toBeVisible();
+
+    // A reason no other test routes: the route is the only one of its key.
+    const title = 'Reason: Too many turns';
+    await agentPage.getByRole('button', { name: 'New route' }).click();
+    const form = agentPage.getByRole('form', { name: 'New route' });
+    await form.getByLabel('Matches').selectOption('reason');
+    await form.getByLabel('Key').selectOption('max_turns');
+    // Whatever team the workspace lists first.
+    const team = form.getByLabel('Team');
+    await expect(team.locator('option')).not.toHaveCount(1);
+    await team.selectOption({ index: 1 });
+    await form.getByLabel('Starts with priority').selectOption('high');
+    await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith('/handoff-routes') &&
+          response.ok(),
+        { timeout: 30_000 },
+      ),
+      form.getByRole('button', { name: 'Save route' }).click(),
+    ]);
+    await expect(form).toHaveCount(0);
+
+    const routes = agentPage.getByRole('list', { name: 'Hand-over routes' });
+    const item = routes.getByRole('listitem').filter({ hasText: title });
+    await expect(item).toContainText('high');
+
+    // Switched off.
+    await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' &&
+          response.url().includes('/handoff-routes/') &&
+          response.ok(),
+      ),
+      agentPage.getByRole('checkbox', { name: `Turn the route ${title} on or off` }).click(),
+    ]);
+
+    // Edited: the priority, and only the priority, is sent.
+    await agentPage.getByRole('button', { name: `Edit the route ${title}` }).click();
+    const edit = agentPage.getByRole('form', { name: 'Edit route' });
+    await expect(edit.getByLabel('Key')).toBeDisabled();
+    await edit.getByLabel('Starts with priority').selectOption('urgent');
+    const [patch] = await Promise.all([
+      agentPage.waitForRequest(
+        (request) => request.method() === 'PATCH' && request.url().includes('/handoff-routes/'),
+      ),
+      edit.getByRole('button', { name: 'Save route' }).click(),
+    ]);
+    expect(patch.postDataJSON()).toStrictEqual({ default_priority: 'urgent' });
+    await expect(edit).toHaveCount(0);
+
+    // It is the server that holds the switch and the priority.
+    await agentPage.reload();
+    await agentPage
+      .getByRole('tablist', { name: 'AI Agent' })
+      .getByRole('tab', { name: 'Profile' })
+      .click();
+    const kept = agentPage
+      .getByRole('list', { name: 'Hand-over routes' })
+      .getByRole('listitem')
+      .filter({ hasText: title });
+    await expect(kept).toContainText('urgent');
+    await expect(
+      agentPage.getByRole('checkbox', { name: `Turn the route ${title} on or off` }),
+    ).not.toBeChecked();
+
+    // The module scrolls inside the page: bring the part to show into view first.
+    await agentPage
+      .getByRole('heading', { name: 'Routes by topic and reason' })
+      .scrollIntoViewIfNeeded();
+    await agentPage.screenshot({ path: 'kanit/ai-12-handoff-routes.png' });
+
+    // Leave the workspace as found.
+    await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'DELETE' &&
+          response.url().includes('/handoff-routes/') &&
+          response.ok(),
+      ),
+      agentPage.getByRole('button', { name: `Delete the route ${title}` }).click(),
+    ]);
+    await expect(kept).toHaveCount(0);
+  });
+});

@@ -425,6 +425,7 @@ export class AiResponder {
             now: new Date(),
             mode: 'live',
             chatId,
+            brandId: loaded.brandId,
             configVersionId: read?.configVersionId ?? loaded.config.versionId,
             config: loaded.config.pkg,
             toolStubs: {},
@@ -1002,6 +1003,10 @@ export class AiResponder {
     ];
     // Whether anyone could take a hand-over now (AI-12 §4): if not, it says so.
     const handoffAvailable = await anyoneAccepting(tx, licenseId);
+    // The brand the member came in through (tm 309.1), live: the knowledge
+    // search answers from that brand's sources and the every-brand ones.
+    const chat = await tx.chat.findUnique({ where: { id: ref.chatId }, select: { brandId: true } });
+    const brandId = chat?.brandId ?? null;
     if (trigger === null) {
       return {
         conversation,
@@ -1016,6 +1021,7 @@ export class AiResponder {
         risk,
         riskFlags,
         handoffAvailable,
+        brandId,
       };
     }
     const newest = await newestVisitorEvent(tx, ref);
@@ -1043,6 +1049,7 @@ export class AiResponder {
       risk,
       riskFlags,
       handoffAvailable,
+      brandId,
     };
   }
 }
@@ -1069,6 +1076,8 @@ interface TurnRead {
   riskFlags: RiskFlagType[];
   /** Whether anyone in the workspace is accepting chats now (tm 303.2 · AI-12 §4). */
   handoffAvailable: boolean;
+  /** The conversation's brand (`chats.brand_id`, tm 309.1); null when not known. */
+  brandId: string | null;
 }
 
 /**

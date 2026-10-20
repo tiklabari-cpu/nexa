@@ -34,12 +34,17 @@ import {
   HANDOFF_MESSAGE_REASONS,
   HANDOFF_TRIGGER_BOUNDS,
   HANDOFF_TRIGGER_LOCKED_REASON,
+  DEFAULT_KNOWLEDGE_LIST_AUDIENCE,
+  KNOWLEDGE_AUDIENCES,
+  KNOWLEDGE_LIST_AUDIENCES,
   KNOWLEDGE_REVIEW_INTERVAL_DAYS,
+  KNOWLEDGE_SCOPE_IDS_MAX,
   LOCKED_HANDOFF_REASONS,
   isKnowledgeReviewDue,
   isLockedHandoffReason,
   knowledgeReviewDueAt,
   normaliseLanguage,
+  normalizeKnowledgeAudiences,
   mergeHandoffMessages,
   mergeHandoffTriggers,
   readHandoffAfterHours,
@@ -64,6 +69,7 @@ import {
   type HandoffAfterHours,
   type HandoffMessages,
   type HandoffTriggers,
+  type KnowledgeAudience,
   type Procedure,
   type ProcedureProblem,
   type SkillMode,
@@ -78,10 +84,12 @@ import {
   createSkillDraft,
   deleteKnowledgeSourceDraft,
   deleteSkillDraft,
+  knowledgeScopeOfFiling,
   reviewKnowledgeSourceDraft,
   updateKnowledgeSourceDraft,
   updateSkillDraft,
   upsertHandoffSettingsDraft,
+  type KnowledgeAudienceScope,
   type KnowledgeFiling,
 } from '../services/ai/config-draft.js';
 import { withStepTeamIds } from '../services/ai/step-teams.js';
@@ -237,6 +245,33 @@ const sourceMetaFields = {
     .optional(),
 };
 
+/** Ids as one set: lower case, each once, in the order given. */
+const idSet = z
+  .array(uuid)
+  .max(KNOWLEDGE_SCOPE_IDS_MAX)
+  .transform((ids) => [...new Set(ids.map((id) => id.toLowerCase()))]);
+
+/**
+ * Who a source is for (tm 309.2 · AI-14, ADR §2.2–§2.4) — what retrieval
+ * filters on, on every write of a source. `audiences` is never empty and is
+ * kept in the store's one spelling (a repeat is folded); `ai_agent_ids` names
+ * AI agents of this workspace and `brand_ids` its brands
+ * ({@link requireSourceScope}), empty being every one; past `valid_until` the
+ * source answers nothing. Omitted on a create: the scope of the agent record
+ * named ({@link createScope}), every brand, no end.
+ */
+const sourceScopeFields = {
+  audiences: z
+    .array(z.enum(KNOWLEDGE_AUDIENCES))
+    .min(1)
+    .max(KNOWLEDGE_AUDIENCES.length)
+    .transform((values) => normalizeKnowledgeAudiences(values))
+    .optional(),
+  ai_agent_ids: idSet.optional(),
+  brand_ids: idSet.optional(),
+  valid_until: z.string().datetime({ offset: true }).nullable().optional(),
+};
+
 /**
  * A website source is crawled from a URL; an `article` or a `faq` indexes the
  * text the admin pasted. So exactly one of `source_url` (website) or `content`
@@ -259,6 +294,7 @@ const createSourceBody = z
     source_url: z.string().trim().min(1).max(2048).optional(),
     type: z.enum(['website', 'file', 'article', 'faq']).default('article'),
     ...sourceMetaFields,
+    ...sourceScopeFields,
   })
   .superRefine((body, ctx) => {
     if (body.type === 'file') {
@@ -314,6 +350,7 @@ const uploadSourceBody = z.object({
   // size, and a second one here would give one rule two different messages.
   data: z.string().min(1),
   ...sourceMetaFields,
+  ...sourceScopeFields,
 });
 
 /**
@@ -340,7 +377,9 @@ const uploadSourceBody = z.object({
  * merely optional.
  *
  * The meta fields (tm 309.1) belong to every type. None of them is a review:
- * `reviewed_at` moves only through `POST …/review`.
+ * `reviewed_at` moves only through `POST …/review`. So do the scope fields
+ * (tm 309.2) — but a KB article's source takes its title, text and audiences
+ * from the article (`KB_ARTICLE_OWNED`).
  */
 const updateSourceBody = z
   .object({
@@ -349,16 +388,42 @@ const updateSourceBody = z
     source_url: z.string().trim().min(1).max(2048).optional(),
     refresh_after_days: z.number().int().min(1).max(365).nullable().optional(),
     ...sourceMetaFields,
+    ...sourceScopeFields,
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
-/** `?owner_id=&stale=` on the source list (tm 309.1). */
+/**
+ * What a KB article's source takes from the article (AI-14-S2): its title,
+ * text and audiences, and — since the KB is the whole workspace's — every AI
+ * agent, every brand and no end. An edit of one of these here would be undone
+ * by the article's next save, or would outlive it, so it is refused and the
+ * article named instead. Its meta fields (owner, language, review interval)
+ * are the store's to edit.
+ */
+const KB_ARTICLE_OWNED = [
+  'name',
+  'content',
+  'source_url',
+  'refresh_after_days',
+  'audiences',
+  'ai_agent_ids',
+  'brand_ids',
+  'valid_until',
+] as const;
+
+/**
+ * `?owner_id=&stale=` on the source list (tm 309.1), `?audience=&brand_id=`
+ * (tm 309.2). `brand_id` lists what that brand's conversations draw on: its
+ * own sources and the every-brand ones.
+ */
 const listSourcesQuery = z.object({
   owner_id: uuid.optional(),
   stale: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .optional(),
+  audience: z.enum(KNOWLEDGE_LIST_AUDIENCES).default(DEFAULT_KNOWLEDGE_LIST_AUDIENCE),
+  brand_id: uuid.optional(),
 });
 
 /**
@@ -1459,11 +1524,14 @@ export default async function playbookRoutes(
     const now = new Date();
     const items = await request.withTenant(async (tx) => {
       const sources = await tx.knowledgeSource.findMany({
-        // The sources the AI agent answers players from. The agents-only ones
-        // are filed under the `kind: 'copilot'` record and listed by
-        // `/copilot/knowledge` until tm 309.2 lists the one store by audience.
+        // The one store, by audience (ADR §2.7). Without `?audience=` it is the
+        // sources the AI agent answers players from — what this list has
+        // always meant to the apps already installed; `all` is the whole store.
         where: {
-          aiAgent: { kind: 'ai_agent' },
+          ...(query.audience === 'all' ? {} : { audiences: { has: query.audience } }),
+          ...(query.brand_id === undefined
+            ? {}
+            : { OR: [{ brandIds: { isEmpty: true } }, { brandIds: { has: query.brand_id } }] }),
           ...(query.owner_id === undefined ? {} : { ownerId: query.owner_id }),
         },
         orderBy: { updatedAt: 'desc' },
@@ -1497,13 +1565,15 @@ export default async function playbookRoutes(
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
       const meta = sourceMetaData(body);
+      const scoped = sourceScopeData(body);
 
-      // The agent and the owner first (tm 257.20): a request that will write
-      // nothing must not crawl a website or spend the day's AI allowance on its
-      // way to a 400.
+      // The agent, the owner and the scope first (tm 257.20): a request that
+      // will write nothing must not crawl a website or spend the day's AI
+      // allowance on its way to a 400.
       await request.withTenant(async (tx) => {
         await requireAiAgent(tx, body.ai_agent_id);
         await requireMember(tx, body.owner_id);
+        await requireSourceScope(tx, body);
       });
 
       // A website is crawled *before* the transaction: the SSRF guard rejects a
@@ -1529,9 +1599,10 @@ export default async function playbookRoutes(
         // and the owner may have left.
         const agent = await requireAiAgent(tx, body.ai_agent_id);
         await requireMember(tx, body.owner_id);
+        await requireSourceScope(tx, body);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-        const source = await createKnowledgeSourceDraft(tx, agent, {
+        const source = await createKnowledgeSourceDraft(tx, createScope(agent, body), {
           licenseId: tenant.licenseId,
           type: body.type,
           name: body.name,
@@ -1540,6 +1611,7 @@ export default async function playbookRoutes(
           status: 'indexing',
           addedBy,
           ...meta,
+          ...scoped,
         });
 
         // Indexed in the same transaction: a source that exists but is not
@@ -1606,12 +1678,14 @@ export default async function playbookRoutes(
       const title = body.name ?? titleFromFilename(body.filename);
       if (title === '') throw ApiError.validation('filename: a file needs a usable name.');
       const meta = sourceMetaData(body);
+      const scoped = sourceScopeData(body);
 
-      // The agent and the owner before the embedding (tm 257.20), as on the
-      // endpoint above.
+      // The agent, the owner and the scope before the embedding (tm 257.20),
+      // as on the endpoint above.
       await request.withTenant(async (tx) => {
         await requireAiAgent(tx, body.ai_agent_id);
         await requireMember(tx, body.owner_id);
+        await requireSourceScope(tx, body);
       });
 
       const prepared = await knowledge.prepare(parsed.text, tenant).catch(refuseUnembeddable);
@@ -1619,9 +1693,10 @@ export default async function playbookRoutes(
       const created = await request.withTenant(async (tx) => {
         const agent = await requireAiAgent(tx, body.ai_agent_id);
         await requireMember(tx, body.owner_id);
+        await requireSourceScope(tx, body);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-        const source = await createKnowledgeSourceDraft(tx, agent, {
+        const source = await createKnowledgeSourceDraft(tx, createScope(agent, body), {
           licenseId: tenant.licenseId,
           type: 'file',
           name: title,
@@ -1632,6 +1707,7 @@ export default async function playbookRoutes(
           status: 'indexing',
           addedBy,
           ...meta,
+          ...scoped,
         });
 
         const chunks = await knowledge.index(tx, tenant, source.id, prepared);
@@ -1924,7 +2000,7 @@ export default async function playbookRoutes(
 
           try {
             const created = await request.withTenant(async (tx) => {
-              const source = await createKnowledgeSourceDraft(tx, filing, {
+              const source = await createKnowledgeSourceDraft(tx, knowledgeScopeOfFiling(filing), {
                 licenseId: tenant.licenseId,
                 type,
                 name,
@@ -2001,14 +2077,29 @@ export default async function playbookRoutes(
       const body = parse(updateSourceBody, request.body);
       const tenant = request.tenant();
       const meta = sourceMetaData(body);
+      const scoped = sourceScopeData(body);
 
       const existing = await request.withTenant(async (tx) => {
+        // Anywhere in the one store (tm 309.2): the list shows every audience.
         const found = await tx.knowledgeSource.findFirst({
-          where: { id, aiAgent: { kind: 'ai_agent' } },
-          select: { id: true, type: true, addedBy: true, refreshAfterDays: true },
+          where: { id },
+          select: {
+            id: true,
+            type: true,
+            addedBy: true,
+            refreshAfterDays: true,
+            kbArticleId: true,
+            audiences: true,
+            aiAgentIds: true,
+          },
         });
-        // The owner before the crawl and the embedding, like the agent on create.
-        if (found) await requireMember(tx, body.owner_id);
+        if (found?.kbArticleId) refuseKbArticleOwned(found.kbArticleId, body);
+        // The owner and the scope before the crawl and the embedding, like the
+        // agent on create.
+        if (found) {
+          await requireMember(tx, body.owner_id);
+          await requireSourceScope(tx, body);
+        }
         return found;
       });
       // Under RLS a foreign source is simply not visible, so "does not exist"
@@ -2053,9 +2144,22 @@ export default async function playbookRoutes(
       const effectiveRefreshAfterDays: number | null =
         body.refresh_after_days !== undefined ? body.refresh_after_days : existing.refreshAfterDays;
       const recomputeSchedule = refreshAfterDaysChanged || sourceUrl !== null;
+      // Who the source is for by audience and AI agent moves its filing too
+      // (ADR §2.8.2); a field left out keeps what the source has.
+      const rescope =
+        body.audiences === undefined && body.ai_agent_ids === undefined
+          ? undefined
+          : {
+              licenseId: tenant.licenseId,
+              scope: {
+                audiences: body.audiences ?? normalizeKnowledgeAudiences(existing.audiences),
+                aiAgentIds: body.ai_agent_ids ?? existing.aiAgentIds,
+              },
+            };
 
       const updated = await request.withTenant(async (tx) => {
         await requireMember(tx, body.owner_id);
+        await requireSourceScope(tx, body);
         const count = await updateKnowledgeSourceDraft(
           tx,
           id,
@@ -2068,8 +2172,10 @@ export default async function playbookRoutes(
               ? { nextRefreshAt: computeNextRefreshAt(effectiveRefreshAfterDays, now) }
               : {}),
             ...meta,
+            ...scoped,
           },
           now,
+          rescope,
         );
         // The row was there a moment ago; if it is gone now it was deleted
         // between the two statements, which is the same answer as never having
@@ -2132,7 +2238,9 @@ export default async function playbookRoutes(
 
       const existing = await request.withTenant(async (tx) =>
         tx.knowledgeSource.findFirst({
-          where: { id, aiAgent: { kind: 'ai_agent' } },
+          // Anywhere in the one store (tm 309.2), a KB article's source too:
+          // its text is the article's as last mirrored, embedded again.
+          where: { id },
           select: {
             id: true,
             type: true,
@@ -2193,8 +2301,8 @@ export default async function playbookRoutes(
    * `reviewed_at` moves — an edit, a reindex and the freshness sweep's
    * re-crawl all leave it where it was, because none of them is a person
    * saying "this is still right". The source is found the way its edit and
-   * reindex find it (the AI agent's, until tm 309.2 lists the store by
-   * audience); a foreign or unknown id is a 404.
+   * reindex find it — anywhere in the one store (tm 309.2); a foreign or
+   * unknown id is a 404.
    */
   app.post<{ Params: { sourceId: string } }>(
     '/knowledge-sources/:sourceId/review',
@@ -2203,7 +2311,7 @@ export default async function playbookRoutes(
       const id = parse(uuid, request.params.sourceId);
       const reviewed = await request.withTenant(async (tx) => {
         const existing = await tx.knowledgeSource.findFirst({
-          where: { id, aiAgent: { kind: 'ai_agent' } },
+          where: { id },
           select: { id: true },
         });
         if (!existing || (await reviewKnowledgeSourceDraft(tx, id)) === 0) {
@@ -2226,9 +2334,17 @@ export default async function playbookRoutes(
     async (request, reply) => {
       const id = parse(uuid, request.params.sourceId);
       const deleted = await request.withTenant(async (tx) => {
+        // A KB article's source goes when the article is unpublished or its
+        // AI is switched off (AI-14-S2); deleted here it would come back with
+        // the article's next save.
+        const mirror = await tx.knowledgeSource.findFirst({
+          where: { id, kbArticleId: { not: null } },
+          select: { kbArticleId: true },
+        });
+        if (mirror?.kbArticleId) refuseKbArticleOwned(mirror.kbArticleId);
         // Chunks cascade with the source; leaving them would keep answering
         // from text the admin believes they deleted.
-        const count = await deleteKnowledgeSourceDraft(tx, id);
+        const count = await deleteKnowledgeSourceDraft(tx, id, { kbArticleId: null });
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
         if (count > 0) {
@@ -2291,6 +2407,11 @@ interface SourceRow {
   ownerId: string | null;
   reviewedAt: Date;
   reviewIntervalDays: number;
+  audiences: string[];
+  aiAgentIds: string[];
+  brandIds: string[];
+  validUntil: Date | null;
+  kbArticleId: string | null;
 }
 
 function serialiseSource(
@@ -2319,7 +2440,99 @@ function serialiseSource(
     reviewed_at: source.reviewedAt.toISOString(),
     review_interval_days: source.reviewIntervalDays,
     review_due_at: knowledgeReviewDueAt(source.reviewedAt, source.reviewIntervalDays).toISOString(),
+    audiences: source.audiences,
+    ai_agent_ids: source.aiAgentIds,
+    brand_ids: source.brandIds,
+    valid_until: source.validUntil ? source.validUntil.toISOString() : null,
+    kb_article_id: source.kbArticleId,
   };
+}
+
+/**
+ * A create's scope by audience and AI agent: what the body names, and where it
+ * names nothing, the scope of the agent record it names — the AI agent's
+ * source for the AI and Copilot, that agent alone; Copilot's for agents only.
+ */
+function createScope(
+  agent: KnowledgeFiling,
+  body: { audiences?: KnowledgeAudience[]; ai_agent_ids?: string[] },
+): KnowledgeAudienceScope {
+  const filed = knowledgeScopeOfFiling(agent);
+  return {
+    audiences: body.audiences ?? filed.audiences,
+    aiAgentIds: body.ai_agent_ids ?? filed.aiAgentIds,
+  };
+}
+
+/** The brand and end-date fields a body names, as columns; an omitted one is left alone. */
+function sourceScopeData(body: { brand_ids?: string[]; valid_until?: string | null }): {
+  brandIds?: string[];
+  validUntil?: Date | null;
+} {
+  return {
+    ...(body.brand_ids === undefined ? {} : { brandIds: body.brand_ids }),
+    ...(body.valid_until === undefined
+      ? {}
+      : { validUntil: body.valid_until === null ? null : new Date(body.valid_until) }),
+  };
+}
+
+/**
+ * Refuse an `ai_agent_ids` entry that is not one of this workspace's AI agents
+ * — the Copilot record included, which no AI agent search reads (ADR §2.3) —
+ * and a `brand_ids` entry that is not one of its brands. Under RLS another
+ * workspace's record is simply not there, so a stranger and an unknown id are
+ * one answer: 400 with the id and `details.reason`.
+ */
+async function requireSourceScope(
+  tx: TenantClient,
+  body: { ai_agent_ids?: string[]; brand_ids?: string[] },
+): Promise<void> {
+  if (body.ai_agent_ids !== undefined && body.ai_agent_ids.length > 0) {
+    const found = await tx.aiAgent.findMany({
+      where: { id: { in: body.ai_agent_ids }, kind: 'ai_agent' },
+      select: { id: true },
+    });
+    const known = new Set(found.map((agent) => agent.id));
+    const unknown = body.ai_agent_ids.find((agentId) => !known.has(agentId));
+    if (unknown !== undefined) {
+      throw ApiError.validation(`ai_agent_ids: ${unknown} is not an AI agent of this workspace.`, {
+        reason: 'knowledge_source_unknown_ai_agent',
+        ai_agent_id: unknown,
+      });
+    }
+  }
+  if (body.brand_ids !== undefined && body.brand_ids.length > 0) {
+    const found = await tx.brand.findMany({
+      where: { id: { in: body.brand_ids } },
+      select: { id: true },
+    });
+    const known = new Set(found.map((brand) => brand.id));
+    const unknown = body.brand_ids.find((brandId) => !known.has(brandId));
+    if (unknown !== undefined) {
+      throw ApiError.validation(`brand_ids: ${unknown} is not a brand of this workspace.`, {
+        reason: 'knowledge_source_unknown_brand',
+        brand_id: unknown,
+      });
+    }
+  }
+}
+
+/**
+ * A KB article's source takes its title, text and audiences from the article
+ * (AI-14-S2) and goes with it: changing one of those here, or deleting the
+ * source, is refused with the article to go to instead. `body` absent: the
+ * delete.
+ */
+function refuseKbArticleOwned(kbArticleId: string, body?: Record<string, unknown>): void {
+  const field = body ? KB_ARTICLE_OWNED.find((key) => body[key] !== undefined) : undefined;
+  if (body && field === undefined) return;
+  throw ApiError.validation(
+    field
+      ? `${field}: this source is a published KB article's — edit the article instead.`
+      : "This source is a published KB article's: unpublish the article, or switch its AI audiences off.",
+    { reason: 'knowledge_source_from_kb_article', kb_article_id: kbArticleId },
+  );
 }
 
 /**

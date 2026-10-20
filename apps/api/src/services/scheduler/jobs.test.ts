@@ -207,7 +207,15 @@ describe('buildSchedulerJobs', () => {
         (j) => j.name === 'knowledge_refresh',
       );
       const outcome = await job?.run(context());
-      expect(outcome?.counts).toEqual({ tenants: 0, checked: 0, refreshed: 0, failed: 0 });
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        checked: 0,
+        refreshed: 0,
+        failed: 0,
+        kb_checked: 0,
+        kb_synced: 0,
+        kb_deferred: 0,
+      });
     });
 
     it('invoice_close finds no closed period and reports zero tenants', async () => {

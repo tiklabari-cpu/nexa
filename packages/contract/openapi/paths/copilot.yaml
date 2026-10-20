@@ -12,10 +12,13 @@ knowledge:
       from every source the AI agent answers from.
 
       **Deprecated:** kept as a filtered view of the one store, listing the
-      same sources before and after the store became one; the store's single
-      list on `/knowledge-sources` (tm 309.2) takes its place. Reachable only by an
-      agent/bot token. A customer token gets a 404, not a 403, so the widget
-      surface cannot be used to probe for it.
+      same sources before and after the store became one —
+      `audiences = [copilot]` exactly, the ones added for agents; a published
+      KB article's source is its article's to manage and is not listed here.
+      The store's single list, `GET /knowledge-sources?audience=all`
+      (tm 309.2), takes its place. Reachable only by an agent/bot token. A
+      customer token gets a 404, not a 403, so the widget surface cannot be
+      used to probe for it.
     responses:
       "200":
         description: Sources
@@ -171,11 +174,15 @@ reply:
   post:
     tags: [Copilot]
     operationId: copilotReply
-    summary: Draft a reply from the copilot knowledge base
+    summary: Draft a reply from the knowledge store
     description: |
-      Retrieves from the copilot knowledge base using the customer's latest
-      message and returns a suggested reply for the agent to edit and send
-      (FR-MOD-12.3). Returns an empty draft when nothing relevant is found rather
+      Retrieves from the workspace's knowledge store using the customer's
+      latest message and returns a suggested reply for the agent to edit and
+      send (FR-MOD-12.3). Copilot draws on every source it may use (tm 309.2 ·
+      AI-14): what the AI agent answers players from and what is for agents
+      only, for this chat's brand or every brand — a chat whose brand is not
+      known draws on the every-brand sources only, so a draft for one brand's
+      player never quotes another brand's rule. Returns an empty draft when nothing relevant is found rather
       than inventing an answer — and equally when the search could not run
       because the embedding provider did not answer: the agent writes the reply
       themselves, and no draft is better than one from a search that failed.

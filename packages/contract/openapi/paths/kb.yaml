@@ -119,6 +119,18 @@ kbArticle:
       control: moving `draft` → `published` stamps `published_at` and records an
       audit entry; moving back to `draft` clears it and records the reverse. A
       slug or category is re-validated exactly as on create.
+
+      **The AI's knowledge follows the article (tm 309.2 · AI-14-S2).** Once
+      the article is saved, a published article whose `ai_audiences` is not
+      empty is indexed as a knowledge source — its title and body, for those
+      audiences, every AI agent and every brand — and the AI and Copilot find
+      it at once; unpublished or switched off, its source goes and it is no
+      longer found. Publishing or editing it counts as the source's review.
+      The article is never refused for this: when its text cannot be embedded
+      now (the embedding provider, today's AI allowance, or a workspace whose
+      content may not leave its region), its source answers nothing until the
+      hourly knowledge sweep indexes it, and the source's `last_refresh_error`
+      says why.
     requestBody:
       required: true
       content:
@@ -162,6 +174,9 @@ kbArticle:
     tags: [Knowledge Base]
     operationId: deleteKbArticle
     summary: Delete a knowledge base article
+    description: |
+      The article's knowledge source, if it had one, goes with it, and every
+      chunk indexed from it (tm 309.2).
     responses:
       "204": { description: Deleted }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }

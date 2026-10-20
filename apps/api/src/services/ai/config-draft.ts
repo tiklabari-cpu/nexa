@@ -13,7 +13,7 @@
  * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
  * settings, rules and forbidden phrases (tm 301.2), the hand-over rules
  * (tm 303.3), the hand-over routes (tm 307.1) and the knowledge sources
- * (tm 309.1). A route that writes `updated_at` itself, or opens a
+ * (tm 309.1; a KB article's from tm 309.2). A route that writes `updated_at` itself, or opens a
  * `status`/`version` column, breaks the rule.
  */
 import type { Prisma } from '@prisma/client';
@@ -209,24 +209,27 @@ export async function deleteHandoffRouteDraft(tx: TenantClient, id: string): Pro
   return count;
 }
 
-// Knowledge sources (tm 309.1 · AI-14, `docs/adr/single-knowledge-store.md`):
-// one store for the AI agent and Copilot. Until tm 309.2 moves retrieval onto
-// its scope columns, a source still answers for the agent record it is filed
-// under, so a create writes `audiences` and `ai_agent_ids` from that filing —
-// every row is already what tm 309.2's backfill makes of the older ones, and a
-// release reading the columns never meets one this release left at the
-// defaults. Two writers stay outside: `KnowledgeService.index`, the one writer
-// of chunks, which marks the indexing `status` as it goes (ADR-14b §2.8), and
-// the freshness sweep's re-crawl (`knowledge-refresh-sweep.ts`), a system
-// refresh rather than an edit — tm 316 settles how either is versioned.
+// Knowledge sources (tm 309.1–309.2 · AI-14, `docs/adr/single-knowledge-store.md`):
+// one store for the AI agent and Copilot, told apart by who a source is for —
+// `audiences`, `ai_agent_ids`, `brand_ids`, `valid_until` — which retrieval
+// reads since tm 309.2. A source is still filed under an agent record
+// (`ai_agent_id`, required until the contract step) and the filing follows the
+// scope (ADR §2.8.2, {@link knowledgeFilingOf}), so the release before this one,
+// rolled back to, still keeps a source for agents only away from players. Two
+// writers stay outside: `KnowledgeService.index`, the one writer of chunks,
+// which marks the indexing `status` as it goes (ADR-14b §2.8), and the
+// freshness sweep's re-crawl (`knowledge-refresh-sweep.ts`), a system refresh
+// rather than an edit — tm 316 settles how either is versioned. A KB article's
+// source (AI-14-S2) is written through its own two helpers below, by the
+// article's sync (`kb-article-knowledge.ts`) alone.
 
 type KnowledgeSourceCreate = Omit<
   Prisma.KnowledgeSourceUncheckedCreateInput,
-  'updatedAt' | 'aiAgentId' | 'audiences' | 'aiAgentIds' | 'reviewedAt'
+  'updatedAt' | 'aiAgentId' | 'audiences' | 'aiAgentIds' | 'reviewedAt' | 'kbArticleId'
 >;
 type KnowledgeSourceUpdate = Omit<
   Prisma.KnowledgeSourceUncheckedUpdateManyInput,
-  'updatedAt' | 'aiAgentId' | 'audiences' | 'aiAgentIds' | 'reviewedAt'
+  'updatedAt' | 'aiAgentId' | 'audiences' | 'aiAgentIds' | 'reviewedAt' | 'kbArticleId'
 >;
 
 /** The agent record a source is filed under. */
@@ -235,34 +238,83 @@ export interface KnowledgeFiling {
   kind: string;
 }
 
+/** Who a source is for by audience and AI agent — what its filing follows. */
+export interface KnowledgeAudienceScope {
+  audiences: KnowledgeAudience[];
+  /** `kind = 'ai_agent'` records only, checked by the writer; empty: every one. */
+  aiAgentIds: string[];
+}
+
 /**
  * Who a source filed under `agent` is for, in the store's terms — ADR §2.8's
- * mapping, the one tm 309.2's backfill applies to the older rows. An AI agent's
- * source is for the AI's answers and Copilot, that agent alone; any other
- * record's (Copilot's) is for agents only, so a kind this does not know can
- * never put a source in front of a player.
+ * mapping, the one 20261021000000's backfill applies to the older rows, and a
+ * write's scope when its request names none. An AI agent's source is for the
+ * AI's answers and Copilot, that agent alone; any other record's (Copilot's)
+ * is for agents only, so a kind this does not know can never put a source in
+ * front of a player.
  */
-export function knowledgeScopeOfFiling(agent: KnowledgeFiling): {
-  audiences: KnowledgeAudience[];
-  aiAgentIds: string[];
-} {
+export function knowledgeScopeOfFiling(agent: KnowledgeFiling): KnowledgeAudienceScope {
   return agent.kind === 'ai_agent'
     ? { audiences: ['ai_agent', 'copilot'], aiAgentIds: [agent.id] }
     : { audiences: ['copilot'], aiAgentIds: [] };
 }
 
+/**
+ * The workspace's Copilot record — the oldest, made on first use (FR-MOD-12),
+ * so filing a source for agents only never fails on setup order.
+ */
+export async function ensureCopilotAgentId(tx: TenantClient, licenseId: bigint): Promise<string> {
+  const existing = await tx.aiAgent.findFirst({
+    where: { kind: 'copilot' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const created = await tx.aiAgent.create({
+    data: { licenseId, kind: 'copilot', name: 'Copilot', active: true },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/**
+ * The record a source of `scope` is filed under (ADR §2.8.2) — what a release
+ * reading `ai_agent_id` instead of the scope sees. For agents only: the
+ * Copilot record. Anything the AI agent may use: its first AI agent, else the
+ * workspace's oldest. A workspace with no AI agent files it under Copilot —
+ * the safe direction for that older release, which then shows it to agents
+ * and never to a player, and there is no AI agent to answer one anyway.
+ */
+export async function knowledgeFilingOf(
+  tx: TenantClient,
+  licenseId: bigint,
+  scope: KnowledgeAudienceScope,
+): Promise<string> {
+  if (scope.audiences.includes('ai_agent')) {
+    const named = scope.aiAgentIds[0];
+    if (named !== undefined) return named;
+    const oldest = await tx.aiAgent.findFirst({
+      where: { kind: 'ai_agent' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    if (oldest) return oldest.id;
+  }
+  return ensureCopilotAgentId(tx, licenseId);
+}
+
 /** A new source counts as reviewed the moment it is added (AI-14-S3). */
 export async function createKnowledgeSourceDraft(
   tx: TenantClient,
-  filedUnder: KnowledgeFiling,
+  scope: KnowledgeAudienceScope,
   data: KnowledgeSourceCreate,
 ) {
   const at = new Date();
   return tx.knowledgeSource.create({
     data: {
       ...data,
-      aiAgentId: filedUnder.id,
-      ...knowledgeScopeOfFiling(filedUnder),
+      ...scope,
+      aiAgentId: await knowledgeFilingOf(tx, BigInt(data.licenseId), scope),
       reviewedAt: at,
       updatedAt: at,
     },
@@ -272,17 +324,25 @@ export async function createKnowledgeSourceDraft(
 /**
  * How many rows changed — 0 when the source is not this workspace's or has
  * gone. `at` is the moment the caller counts from (a refresh schedule), so the
- * row's `updated_at` and what was computed from it agree.
+ * row's `updated_at` and what was computed from it agree. `rescope` moves who
+ * the source is for by audience and AI agent, and its filing with it.
  */
 export async function updateKnowledgeSourceDraft(
   tx: TenantClient,
   id: string,
   data: KnowledgeSourceUpdate,
   at: Date = new Date(),
+  rescope?: { licenseId: bigint; scope: KnowledgeAudienceScope },
 ): Promise<number> {
+  const filed = rescope
+    ? {
+        ...rescope.scope,
+        aiAgentId: await knowledgeFilingOf(tx, rescope.licenseId, rescope.scope),
+      }
+    : {};
   const { count } = await tx.knowledgeSource.updateMany({
     where: { id },
-    data: { ...data, updatedAt: at },
+    data: { ...data, ...filed, updatedAt: at },
   });
   return count;
 }
@@ -290,7 +350,8 @@ export async function updateKnowledgeSourceDraft(
 /**
  * A person confirmed the source still holds (AI-14-S3): its review moves to
  * `at`. A meta write (ADR-14b §2.2) — nothing the AI says changes — yet a
- * write, so `updated_at` moves with it. The only writer of `reviewed_at`.
+ * write, so `updated_at` moves with it. With the KB article sync's, the only
+ * writers of `reviewed_at`.
  */
 export async function reviewKnowledgeSourceDraft(
   tx: TenantClient,
@@ -305,17 +366,88 @@ export async function reviewKnowledgeSourceDraft(
 }
 
 /**
- * How many rows went — 0 when the source is not this workspace's, or not filed
- * under `filedUnder` when that is named (the Copilot view removes only its
- * own). The chunks go with it.
+ * How many rows went — 0 when the source is not this workspace's, or not
+ * `within` when that is given (the Copilot view removes only the sources for
+ * agents only). The chunks go with it.
  */
 export async function deleteKnowledgeSourceDraft(
   tx: TenantClient,
   id: string,
-  filedUnder?: string,
+  within: Prisma.KnowledgeSourceWhereInput = {},
 ): Promise<number> {
-  const { count } = await tx.knowledgeSource.deleteMany({
-    where: { id, ...(filedUnder === undefined ? {} : { aiAgentId: filedUnder }) },
+  const { count } = await tx.knowledgeSource.deleteMany({ where: { ...within, id } });
+  return count;
+}
+
+/**
+ * What a published KB article puts in the store (AI-14-S2): the article's own
+ * title, text and audiences. The article's publish or edit is the source's
+ * review (ADR §2.6), so `reviewedAt` is the article's `updated_at`.
+ */
+export interface KbArticleSourceFields {
+  name: string;
+  content: string;
+  audiences: KnowledgeAudience[];
+  reviewedAt: Date;
+}
+
+/**
+ * The source a published article becomes — for every AI agent and every
+ * brand, as the article is (the KB has no brand), and indexed by the caller in
+ * the same transaction (`KnowledgeService.index`). `pending` says why its text
+ * is not being indexed now (the sweep indexes it later); it stays `indexing`.
+ */
+export async function createKbArticleSourceDraft(
+  tx: TenantClient,
+  article: { licenseId: bigint; id: string; createdBy: string | null },
+  fields: KbArticleSourceFields,
+  pending: string | null = null,
+) {
+  const scope: KnowledgeAudienceScope = { audiences: fields.audiences, aiAgentIds: [] };
+  return tx.knowledgeSource.create({
+    data: {
+      licenseId: article.licenseId,
+      kbArticleId: article.id,
+      type: 'article',
+      status: 'indexing',
+      lastRefreshError: pending,
+      addedBy: article.createdBy,
+      name: fields.name,
+      content: fields.content,
+      ...scope,
+      aiAgentId: await knowledgeFilingOf(tx, article.licenseId, scope),
+      reviewedAt: fields.reviewedAt,
+      updatedAt: new Date(),
+    },
+  });
+}
+
+/**
+ * The article changed: its source takes the article's title, text and
+ * audiences; its meta fields (owner, language, review interval) are the
+ * store's and stay. `pending` as on create — the caller has taken the
+ * source's chunks away first (`KnowledgeService.unindex`), so it answers
+ * nothing the article no longer says.
+ */
+export async function updateKbArticleSourceDraft(
+  tx: TenantClient,
+  source: { id: string; licenseId: bigint },
+  fields: KbArticleSourceFields,
+  pending: string | null = null,
+): Promise<number> {
+  const scope: KnowledgeAudienceScope = { audiences: fields.audiences, aiAgentIds: [] };
+  const { count } = await tx.knowledgeSource.updateMany({
+    where: { id: source.id },
+    data: {
+      name: fields.name,
+      content: fields.content,
+      ...scope,
+      aiAgentId: await knowledgeFilingOf(tx, source.licenseId, scope),
+      reviewedAt: fields.reviewedAt,
+      lastRefreshError: pending,
+      ...(pending === null ? {} : { status: 'indexing' }),
+      updatedAt: new Date(),
+    },
   });
   return count;
 }

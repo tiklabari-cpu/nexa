@@ -17,13 +17,22 @@
  * `agents-bot--all` pair, the same `playbook.ts` guards its sources with. The
  * anonymous read path is PUBKB-c; nothing here is public. The body is stored
  * raw — its safe rendering is PUBKB-d — so no route here ever serves it.
+ *
+ * A published article whose `ai_audiences` is not empty is also in the AI's
+ * knowledge (tm 309.2 · AI-14-S2): every save brings the article's knowledge
+ * source to what the article says, after the article is written
+ * (`services/ai/kb-article-knowledge.ts`). The article is never refused for
+ * it — a text the embedding provider cannot take now waits for the hourly
+ * sweep, answering nothing meanwhile.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { KNOWLEDGE_AUDIENCES, normalizeKnowledgeAudiences } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { normalizeKbSlug } from '../lib/kb-slug.js';
+import { KbArticleKnowledge } from '../services/ai/kb-article-knowledge.js';
+import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
@@ -206,7 +215,52 @@ function serialiseSettings(
   };
 }
 
-export default async function kbRoutes(app: FastifyInstance): Promise<void> {
+export default async function kbRoutes(
+  app: FastifyInstance,
+  {
+    knowledge,
+  }: {
+    /**
+     * The server's one knowledge service (tm 255.7): a published article is
+     * indexed into the space questions are asked in.
+     */
+    knowledge: KnowledgeService;
+  },
+): Promise<void> {
+  const articleKnowledge = new KbArticleKnowledge(knowledge);
+
+  /**
+   * Bring the article's knowledge source to what it says now (AI-14-S2), once
+   * the article's own write has committed. Nothing here refuses the article:
+   * a workspace whose content may not reach the embedding provider (NFR-C4),
+   * the day's AI cap or an absent provider leave its source waiting for the
+   * sweep, and a failure of the sync itself is logged — the sweep finds the
+   * article again by what its source says.
+   */
+  async function syncArticleKnowledge(request: FastifyRequest, articleId: string): Promise<void> {
+    try {
+      await articleKnowledge.sync(
+        (fn) => request.withTenant(fn),
+        request.tenant(),
+        articleId,
+        async () => {
+          try {
+            await request.requireAiInference();
+            return true;
+          } catch (error) {
+            if (error instanceof ApiError && error.type === 'not_allowed') return false;
+            throw error;
+          }
+        },
+      );
+    } catch (error) {
+      request.log.error(
+        { err: error, kb_article_id: articleId },
+        'kb article knowledge sync failed; the knowledge sweep takes it up',
+      );
+    }
+  }
+
   // --- Articles --------------------------------------------------------------
 
   app.get('/kb-articles', { config: { scopes: READ } }, async (request, reply) => {
@@ -340,6 +394,9 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
 
         return updated;
       });
+
+      // After the commit: the article stands whatever the embedding does.
+      await syncArticleKnowledge(request, id);
 
       return reply.send(serialiseArticle(article));
     },

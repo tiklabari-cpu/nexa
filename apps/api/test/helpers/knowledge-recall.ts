@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { withTenant, type TenantClient, type TenantContext } from '../../src/lib/tenant.js';
+import { knowledgeScopeOfFiling } from '../../src/services/ai/config-draft.js';
 import {
   ANSWER_RETRIEVAL_LIMIT,
   type KnowledgeService,
@@ -169,6 +170,9 @@ export async function seedGoldenKnowledgeBase(
         type: 'article',
         name: source.name,
         content,
+        // Who it is for, as the product files it (tm 309.2): Ada's for the AI
+        // and Copilot, Copilot's for agents only.
+        ...knowledgeScopeOfFiling({ id: agents[source.agent], kind: source.agent }),
       },
       select: { id: true },
     });
@@ -216,7 +220,15 @@ export async function askGoldenSet(options: {
     const query = embedded.get(id);
     if (!query) throw new Error(`question ${id} was not embedded`);
     const { chunks } = await withTenant(app, tenant, (tx) =>
-      knowledge.search(tx, tenant, query, { aiAgentId: agents[agent], limit }),
+      knowledge.search(tx, tenant, query, {
+        // The reader the product asks as: Ada's questions are a player's,
+        // Copilot's an agent's draft, which reads Ada's sources too (K11).
+        reader:
+          agent === 'copilot'
+            ? { audience: 'copilot', brandId: null }
+            : { audience: 'ai_agent', aiAgentId: agents[agent], brandId: null },
+        limit,
+      }),
     );
     answers.set(id, chunks);
   }

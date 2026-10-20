@@ -2792,7 +2792,14 @@ export class ConversationEngine {
     const passages = passageBudget(input.persona);
     const { chunks: hits, chunksInScope } = await ctx.db((tx) =>
       this.#knowledge.search(tx, ctx.tenant, question, {
-        ...(input.skill.aiAgentId ? { aiAgentId: input.skill.aiAgentId } : {}),
+        // A player's answer (tm 309.2 · AI-14): only what is for the AI agent —
+        // never a source for agents only — and for this agent and this
+        // conversation's brand, or for every one.
+        reader: {
+          audience: 'ai_agent',
+          aiAgentId: input.skill.aiAgentId,
+          brandId: ctx.brandId !== undefined ? ctx.brandId : (ctx.tenant.brandId ?? null),
+        },
         // Never below the two this always fetched, so an unset persona issues the
         // identical query; a `long` answer is the only thing that widens it.
         limit: Math.max(ANSWER_RETRIEVAL_LIMIT, passages),

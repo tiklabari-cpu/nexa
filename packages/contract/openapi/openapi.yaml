@@ -3550,10 +3550,27 @@ components:
         (tm 309 · AI-14, owner decision K11; `docs/adr/single-knowledge-store.md`).
         "Copilot's own knowledge" (FR-MOD-12.2) is the store's sources that are
         for agents only; none of them ever reaches a player.
+
+        Who a source is for is its `audiences`, `ai_agent_ids`, `brand_ids`
+        and `valid_until` (tm 309.2): the AI agent answers a player only from
+        a source whose audiences name `ai_agent`, that is for its agent (or
+        every agent) and for the conversation's brand (or every brand) — a
+        conversation whose brand is not known reads the every-brand sources
+        only — and that has not ended. Copilot drafts from every audience,
+        narrowed by the conversation's brand the same way.
       required: [id, name, type, status, chunk_count]
       properties:
         id: { type: string, format: uuid }
-        ai_agent_id: { type: string, format: uuid }
+        ai_agent_id:
+          type: string
+          format: uuid
+          description: |
+            The agent record the source is filed under — kept for the apps
+            that read it. Since tm 309.2 it follows the source's scope rather
+            than deciding it: a source for agents only is filed under the
+            Copilot record, any other under its first AI agent (or the
+            workspace's oldest). Who uses the source is `audiences` and
+            `ai_agent_ids`.
         name: { type: string }
         type: { type: string, enum: [website, file, article, faq] }
         status: { type: string }
@@ -3642,7 +3659,54 @@ components:
             freshness sweep, cleared on its next success. A failed refresh
             never changes `content` or `chunk_count`: the stale answer is kept
             rather than replaced with none, so this field is a status to read,
-            not a sign that anything was lost.
+            not a sign that anything was lost. A KB article's source
+            (`kb_article_id`) is the exception, for the article has already
+            changed: its new text that could not be indexed yet leaves it
+            `indexing` with no chunks, and this says why, until the hourly
+            sweep indexes it (tm 309.2).
+        audiences:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items: { $ref: "#/components/schemas/KnowledgeAudience" }
+          description: |
+            Who may use the source (tm 309 · AI-14): `ai_agent` — the AI
+            agent's answers to players — and/or `copilot`. `[copilot]` alone
+            is for agents only and never reaches a player. Kept in
+            `[ai_agent, copilot]` order without repeats; never empty.
+        ai_agent_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: |
+            The AI agents the source is for; empty — every one. Read only by
+            the AI agent's search; Copilot is never narrowed by it.
+        brand_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: |
+            The brands whose conversations may use the source; empty — every
+            brand. A conversation whose brand is not known uses the
+            every-brand sources only, so a brand's own rule never reaches
+            another brand's player.
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Past this moment the source answers nothing — the one date that
+            takes a source out of retrieval (a due review only warns). Null —
+            no end.
+        kb_article_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            The published KB article this source mirrors (AI-14-S2): its title,
+            text and audiences are the article's, for every AI agent and brand
+            with no end, and it goes when the article is unpublished, its AI
+            audiences are switched off or it is deleted. Edit those through
+            the article; only the meta fields are edited here. Null for every
+            other source.
 
     KnowledgeBulkRowResult:
       type: object
@@ -6720,9 +6784,11 @@ components:
             (tm 309 · AI-14-S2): `ai_agent` — the AI's answers to players —
             and `copilot`, the agents' assistant. Both unless switched off; an
             empty list keeps the article out of the AI's knowledge altogether.
-            Kept in `[ai_agent, copilot]` order without repeats. The published
-            article enters the AI's knowledge with tm 309.2; until then this is
-            the stored switch only.
+            Kept in `[ai_agent, copilot]` order without repeats. A published
+            article with audiences is a knowledge source of the store
+            (`KnowledgeSource.kb_article_id`), brought to what the article
+            says by every save (tm 309.2); unpublished or switched off it is
+            no longer found.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

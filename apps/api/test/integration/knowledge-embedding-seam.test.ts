@@ -264,7 +264,7 @@ describe('the embedding seam (FR-MOD-06.3.2)', () => {
         owner as TenantClient,
         context,
         await sameSpace.embedQuery(QUESTION),
-        { aiAgentId: ws.aiAgentId },
+        { reader: { audience: 'ai_agent', aiAgentId: ws.aiAgentId, brandId: null } },
       );
       expect(hits[0]?.text).toBe(DELIVERY);
 
@@ -276,7 +276,7 @@ describe('the embedding seam (FR-MOD-06.3.2)', () => {
         owner as TenantClient,
         context,
         await lexical.embedQuery(QUESTION),
-        { aiAgentId: ws.aiAgentId },
+        { reader: { audience: 'ai_agent', aiAgentId: ws.aiAgentId, brandId: null } },
       );
       expect(search).toMatchObject({ chunksInScope: 0, chunks: [] });
     });

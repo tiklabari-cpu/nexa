@@ -1,11 +1,13 @@
 /**
  * Copilot — agent-assist (FR-MOD-12).
  *
- * The properties that matter and are easy to break silently: the copilot
- * knowledge base is the agent's own (never a customer's, never the AI agent's),
- * a summary lands as an internal note the customer never sees, and using Copilot
- * on a chat moves it into the Reports "assisted" column (07.3.2) — through the
- * very same query Reports runs, not a parallel one.
+ * The properties that matter and are easy to break silently: the sources for
+ * agents only are never a customer's, and the Copilot views list and remove
+ * only those (since K11 Copilot also drafts from the AI agent's sources — one
+ * store, `knowledge-scope.test.ts`); a summary lands as an internal note the
+ * customer never sees, and using Copilot on a chat moves it into the Reports
+ * "assisted" column (07.3.2) — through the very same query Reports runs, not a
+ * parallel one.
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';

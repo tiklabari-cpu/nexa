@@ -297,6 +297,14 @@ export interface TurnContext {
   readonly mode: TurnMode;
   /** The conversation the spend is for (the usage ledger's `chat_id`); null outside a live one. */
   readonly chatId: string | null;
+  /**
+   * The conversation's brand (`chats.brand_id`, tm 309.1) as the turn read it:
+   * the knowledge search answers from that brand's sources and the every-brand
+   * ones (tm 309.2 · AI-14). Null: not known — the every-brand sources only.
+   * Absent — a preview, which answers no conversation: the brand the console
+   * works under (`tenant.brandId`), else not known.
+   */
+  readonly brandId?: string | null;
   /** The configuration version the turn runs on — null before versioning (tm 316). */
   readonly configVersionId: string | null;
   readonly config: TurnConfig;

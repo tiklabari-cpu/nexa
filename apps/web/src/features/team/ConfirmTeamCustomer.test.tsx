@@ -498,7 +498,7 @@ describe('deleting a rule bot, a rule, or a Copilot source', () => {
 
   it('a Copilot source: asks, then deletes', async () => {
     stubApi((path) =>
-      path.startsWith('/copilot/knowledge')
+      path.startsWith('/knowledge-sources')
         ? {
             items: [
               {
@@ -509,6 +509,7 @@ describe('deleting a rule bot, a rule, or a Copilot source', () => {
                 source_url: null,
                 chunk_count: 4,
                 updated_at: '2026-07-20T00:00:00.000Z',
+                audiences: ['copilot'],
               },
             ],
           }
@@ -562,7 +563,7 @@ describe('deleting a rule bot, a rule, or a Copilot source', () => {
   it('a refused Copilot source delete stays in the dialog with the reason (tm 259.9)', async () => {
     refused = { 'DELETE /copilot/knowledge/s1': SERVER_ERROR };
     stubApi((path) =>
-      path.startsWith('/copilot/knowledge')
+      path.startsWith('/knowledge-sources')
         ? {
             items: [
               {
@@ -573,6 +574,7 @@ describe('deleting a rule bot, a rule, or a Copilot source', () => {
                 source_url: null,
                 chunk_count: 4,
                 updated_at: '2026-07-20T00:00:00.000Z',
+                audiences: ['copilot'],
               },
             ],
           }

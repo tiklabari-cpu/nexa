@@ -406,7 +406,7 @@ export const team: Messages = {
   // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
   'team.copilot.title': 'Copilot bilgisi',
   'team.copilot.description':
-    'Copilot bir temsilciye yardım ederken neleri aktarabileceği. Müşteriye bakan AI temsilcinin bilgisinden ayrı tutulur ve hiçbir zaman bir müşteriye gösterilmez.',
+    'Copilot bir temsilciye yardım ederken neleri aktarabileceği. AI temsilcinin cevap verdiği her şey ve yalnız temsilciler için eklenen kaynaklar; bunlar hiçbir zaman bir müşteriye gitmez.',
   'team.copilot.shortDescription': 'Copilot bir temsilciye yardım ederken neleri aktarabileceği.',
   'team.copilot.noAccess.title': 'Copilot bilgisine erişim yok',
   'team.copilot.noAccess.description':
@@ -430,6 +430,14 @@ export const team: Messages = {
   'team.copilot.status.empty': 'İçerik yok',
   'team.copilot.deleteButton': 'Sil',
   'team.copilot.deleteAriaLabel': '{name} kaynağını sil',
+
+  'team.copilot.view.label': 'Göster',
+  'team.copilot.view.all': 'Copilot’un okuduğu her şey',
+  'team.copilot.view.agentsOnly': 'Yalnız ajanlar',
+  'team.copilot.view.noneTitle': 'Yalnız ajanlara ait kaynak yok',
+  'team.copilot.view.noneDescription':
+    'Copilot’un okuduğu her kaynağı AI ajanı da kullanıyor. Onları görmek için görünümü geri çevirin.',
+  'team.copilot.managedInPlaybook': 'Senaryolar › Bilgi’de yönetilir',
   'team.copilot.add.title': 'Kaynak ekle',
   'team.copilot.add.error': 'Bu kaynak eklenemedi. Adı ve içeriği kontrol edip tekrar deneyin.',
   'team.copilot.add.nameRequiredError': 'Bir ad girin.',

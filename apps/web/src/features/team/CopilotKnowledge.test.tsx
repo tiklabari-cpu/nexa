@@ -1,8 +1,11 @@
 /**
- * Copilot knowledge management (FR-MOD-04.2 · FR-MOD-12.2): the base is listed
- * from `/copilot/knowledge`, an admin with write scope may add and remove a
- * source, a read-only caller sees the list without controls, and a caller with
- * no bot scope is told plainly and nothing is fetched.
+ * Copilot knowledge management (FR-MOD-04.2 · FR-MOD-12.2 · AI-14): the page is
+ * a filtered view of the single knowledge store — everything Copilot reads —
+ * listed from `/knowledge-sources?audience=copilot`; an admin with write scope
+ * may add and remove an agents-only source (the part curated here), a source the
+ * AI agent also uses is managed in the Playbook, a read-only caller sees the
+ * list without controls, and a caller with no bot scope is told plainly and
+ * nothing is fetched.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -38,6 +41,7 @@ const SOURCES = {
       source_url: null,
       chunk_count: 4,
       updated_at: '2026-07-20T00:00:00.000Z',
+      audiences: ['copilot'],
     },
   ],
 };
@@ -52,7 +56,10 @@ beforeEach(() => {
   api.post.mockReset();
   api.delete.mockReset();
   auth.scopes = [];
-  api.get.mockResolvedValue(SOURCES);
+  // The page also reads brands and members for its row labels; they are empty here.
+  api.get.mockImplementation((path: string) =>
+    Promise.resolve(path.startsWith('/knowledge-sources') ? SOURCES : { items: [] }),
+  );
   api.post.mockResolvedValue(SOURCES.items[0]);
   api.delete.mockResolvedValue(undefined);
   resetLocale();
@@ -177,5 +184,87 @@ describe('CopilotKnowledge', () => {
     expect(screen.getByRole('heading', { name: 'Kaynak ekle' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refund policy kaynağını sil' })).toBeInTheDocument();
     expect(screen.getByLabelText('İçerik')).toBeInTheDocument();
+  });
+
+  describe('as a filtered view of the single store (tm 309.3 · AI-14)', () => {
+    const SHARED = {
+      ...SOURCES.items[0],
+      id: 's2',
+      name: 'Shipping times',
+      audiences: ['ai_agent', 'copilot'],
+      brand_ids: ['b1'],
+      owner_name: 'Dana Okonkwo',
+      reviewed_at: '2026-01-01T00:00:00.000Z',
+      review_interval_days: 30,
+      review_due_at: '2026-01-31T00:00:00.000Z',
+    };
+
+    beforeEach(() => {
+      api.get.mockImplementation((path: string) =>
+        Promise.resolve(
+          path.startsWith('/knowledge-sources')
+            ? { items: [...SOURCES.items, SHARED] }
+            : path === '/brands'
+              ? { items: [{ id: 'b1', name: 'Acme Casino' }] }
+              : { items: [] },
+        ),
+      );
+    });
+
+    it('lists everything Copilot reads, the AI agent’s sources included', async () => {
+      auth.scopes = ['agents-bot--all:rw'];
+      renderKnowledge(<CopilotKnowledge />);
+
+      expect(await screen.findByText('Shipping times')).toBeInTheDocument();
+      expect(screen.getByText('Refund policy')).toBeInTheDocument();
+      expect(api.get).toHaveBeenCalledWith('/knowledge-sources?audience=copilot');
+      // Who uses each, its brand, and that its review is late.
+      const table = within(screen.getByRole('table'));
+      expect(table.getByText('AI agent + Copilot')).toBeInTheDocument();
+      expect(table.getByText('Agents only')).toBeInTheDocument();
+      expect(await screen.findByText('Acme Casino')).toBeInTheDocument();
+      expect(screen.getByText('Review needed')).toBeInTheDocument();
+    });
+
+    it('curates only the agents-only source here; the shared one is the Playbook’s', async () => {
+      auth.scopes = ['agents-bot--all:rw'];
+      renderKnowledge(<CopilotKnowledge />);
+      await screen.findByText('Shipping times');
+
+      expect(screen.getByRole('button', { name: 'Delete Refund policy' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Delete Shipping times' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('Managed in Scenarios › Knowledge')).toBeInTheDocument();
+    });
+
+    it('narrows to the agents-only sources on request', async () => {
+      auth.scopes = ['agents-bot--all:ro'];
+      renderKnowledge(<CopilotKnowledge />);
+      await screen.findByText('Shipping times');
+
+      fireEvent.change(screen.getByLabelText('Show'), { target: { value: 'agents_only' } });
+      expect(screen.getByText('Refund policy')).toBeInTheDocument();
+      expect(screen.queryByText('Shipping times')).not.toBeInTheDocument();
+    });
+
+    it('never offers to delete a Knowledge Base article’s source from here', async () => {
+      auth.scopes = ['agents-bot--all:rw'];
+      api.get.mockImplementation((path: string) =>
+        Promise.resolve(
+          path.startsWith('/knowledge-sources')
+            ? {
+                items: [
+                  { ...SOURCES.items[0], id: 's3', name: 'Help article', kb_article_id: 'kb-1' },
+                ],
+              }
+            : { items: [] },
+        ),
+      );
+      renderKnowledge(<CopilotKnowledge />);
+
+      expect(await screen.findByText('Help article')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Delete Help article' })).not.toBeInTheDocument();
+    });
   });
 });

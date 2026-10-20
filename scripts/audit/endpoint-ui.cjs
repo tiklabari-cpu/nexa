@@ -362,13 +362,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  {
-    op: 'POST /knowledge-sources/{sourceId}/review',
-    owner: 'tm 309.3',
-    reason:
-      'a person confirms a knowledge source still holds (tm 309.1 · AI-14-S3) — the "review ' +
-      'needed" badge and its action on the single knowledge list, which KBS-WEB (tm 309.3) draws.',
-  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

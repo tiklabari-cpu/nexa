@@ -46,7 +46,7 @@ function mockPlaybook(skills: Skill[]): void {
   api.get.mockImplementation((path: string) => {
     if (path === '/skills') return Promise.resolve({ items: skills });
     if (path === '/ai-agents') return Promise.resolve({ items: [] });
-    if (path === '/knowledge-sources') return Promise.resolve({ items: [] });
+    if (path.startsWith('/knowledge-sources')) return Promise.resolve({ items: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -135,7 +135,7 @@ describe('Playbook knowledge — File source (FR-MOD-06.3.2)', () => {
         return Promise.resolve({
           items: [{ id: AI_AGENT_ID, kind: 'ai_agent', name: 'Ada', active: true }],
         });
-      if (path === '/knowledge-sources') return Promise.resolve({ items: [] });
+      if (path.startsWith('/knowledge-sources')) return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     useAuth.setState((state) => ({
@@ -238,7 +238,7 @@ describe('Playbook knowledge — Added by (FR-MOD-06.3.3)', () => {
     api.get.mockImplementation((path: string) => {
       if (path === '/skills') return Promise.resolve({ items: [] });
       if (path === '/ai-agents') return Promise.resolve({ items: [] });
-      if (path === '/knowledge-sources') return Promise.resolve({ items });
+      if (path.startsWith('/knowledge-sources')) return Promise.resolve({ items });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
   }
@@ -278,7 +278,7 @@ describe('Playbook knowledge — load error (tm 259.6)', () => {
     api.get.mockImplementation((path: string) => {
       if (path === '/skills') return Promise.resolve({ items: [] });
       if (path === '/ai-agents') return Promise.resolve({ items: [] });
-      if (path === '/knowledge-sources') {
+      if (path.startsWith('/knowledge-sources')) {
         return healed
           ? Promise.resolve({ items: [] })
           : Promise.reject(

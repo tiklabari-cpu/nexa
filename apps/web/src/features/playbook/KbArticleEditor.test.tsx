@@ -357,4 +357,111 @@ describe('KbArticleEditor localisation (NFR-I18N2)', () => {
     );
     expect(screen.getByRole('button', { name: 'Makale oluştur' })).toBeInTheDocument();
   });
+
+  it('saves an article it has just created as that article, never posting it a second time', async () => {
+    const user = userEvent.setup();
+    const created = article({ id: 'fresh', title: 'Fresh', slug: 'fresh' });
+    api.post.mockResolvedValue(created);
+    api.patch.mockImplementation((_path: string, body: Record<string, unknown>) =>
+      Promise.resolve({ ...created, ...body }),
+    );
+    renderEditor({ article: null });
+
+    await user.type(screen.getByLabelText('Title'), 'Fresh');
+    await user.type(screen.getByLabelText('Body'), 'Some text.');
+    await user.click(screen.getByRole('button', { name: 'Create article' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+
+    // The same dialog, now holding a real article: the button says so and edits it.
+    await user.type(screen.getByLabelText('Excerpt'), 'A summary');
+    await user.click(await screen.findByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        '/kb-articles/fresh',
+        expect.objectContaining({ excerpt: 'A summary' }),
+      ),
+    );
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  describe('the AI knowledge switch (AI-14-S2 · tm 309.3)', () => {
+    it('is on for both by default and sends nothing about it while it is left alone', async () => {
+      const user = userEvent.setup();
+      renderEditor({ article: null });
+
+      expect(screen.getByRole('checkbox', { name: 'AI agent' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Copilot' })).toBeChecked();
+
+      api.post.mockResolvedValue(article());
+      await user.type(screen.getByLabelText('Title'), 'Delivery times');
+      await user.type(screen.getByLabelText('Body'), 'How long delivery takes.');
+      await user.click(screen.getByRole('button', { name: 'Create article' }));
+
+      await waitFor(() => expect(api.post).toHaveBeenCalled());
+      expect(api.post.mock.calls[0]?.[1]).not.toHaveProperty('ai_audiences');
+    });
+
+    it('switches the AI off for one article: an empty list is what the API reads as "no AI"', async () => {
+      const user = userEvent.setup();
+      const existing = article({ status: 'published', ai_audiences: ['ai_agent', 'copilot'] });
+      api.patch.mockImplementation((_path: string, body: Record<string, unknown>) =>
+        Promise.resolve({ ...existing, ...body }),
+      );
+      renderEditor({ article: existing });
+
+      await user.click(screen.getByRole('checkbox', { name: 'AI agent' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Copilot' }));
+      expect(screen.getByText(/does not use this article/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() =>
+        expect(api.patch).toHaveBeenCalledWith(
+          `/kb-articles/${existing.id}`,
+          expect.objectContaining({ ai_audiences: [] }),
+        ),
+      );
+    });
+
+    it('narrows to Copilot alone, in the order the store keeps', async () => {
+      const user = userEvent.setup();
+      const existing = article({ ai_audiences: ['ai_agent', 'copilot'] });
+      api.patch.mockImplementation((_path: string, body: Record<string, unknown>) =>
+        Promise.resolve({ ...existing, ...body }),
+      );
+      renderEditor({ article: existing });
+
+      await user.click(screen.getByRole('checkbox', { name: 'AI agent' }));
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() =>
+        expect(api.patch).toHaveBeenCalledWith(
+          `/kb-articles/${existing.id}`,
+          expect.objectContaining({ ai_audiences: ['copilot'] }),
+        ),
+      );
+    });
+
+    it('reads the saved audiences back and is locked without edit permission', () => {
+      renderEditor({ article: article({ ai_audiences: ['copilot'] }), canEdit: false });
+
+      expect(screen.getByRole('checkbox', { name: 'AI agent' })).not.toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Copilot' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Copilot' })).toBeDisabled();
+    });
+
+    it('counts a toggled switch as unsaved work', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderEditor({ article: article(), onClose });
+
+      await user.click(screen.getByRole('checkbox', { name: 'Copilot' }));
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+  });
 });

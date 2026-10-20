@@ -84,7 +84,7 @@ async function openKnowledge(
   api.get.mockImplementation((path: string) => {
     if (path === '/skills') return Promise.resolve({ items: [] });
     if (path === '/ai-agents') return Promise.resolve({ items: [] });
-    if (path === '/knowledge-sources') return Promise.resolve({ items });
+    if (path.startsWith('/knowledge-sources')) return Promise.resolve({ items });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

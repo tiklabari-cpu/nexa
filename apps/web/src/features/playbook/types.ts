@@ -12,6 +12,7 @@ import type {
   GuardrailRuleAction,
   GuidanceCategory,
   GuidanceScope,
+  KnowledgeAudience,
   ProcedureProblemDetails,
   SkillMode,
   SkillProcedureBody,
@@ -310,6 +311,24 @@ export interface KnowledgeSource {
   next_refresh_at: string | null;
   /** Why the last refresh attempt failed, if it did. Cleared on the next success. */
   last_refresh_error: string | null;
+  /**
+   * Who is the store's scope for (tm 309 · AI-14). Optional because a list from
+   * a release that predates the single store omits them; they read as the
+   * defaults — both audiences, every agent, every brand, no end, unowned.
+   */
+  audiences?: KnowledgeAudience[];
+  ai_agent_ids?: string[];
+  brand_ids?: string[];
+  valid_until?: string | null;
+  /** The published KB article this source mirrors; its text and scope are the article's. */
+  kb_article_id?: string | null;
+  language?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  /** When a person last confirmed the source still holds (AI-14-S3). */
+  reviewed_at?: string;
+  review_interval_days?: number;
+  review_due_at?: string;
 }
 
 /** One CSV data row's verdict from a bulk import (FR-MOD-06.3.2). */
@@ -362,6 +381,8 @@ export interface KbArticle {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Who besides the reader may use the article once published; empty — the AI does not (AI-14-S2). */
+  ai_audiences?: KnowledgeAudience[];
 }
 
 /** Human-readable one-liner for a step, used in the editor list. */

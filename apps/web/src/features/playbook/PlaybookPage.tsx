@@ -36,6 +36,21 @@ import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
 import { KnowledgeSourceActions } from './KnowledgeSourceActions.js';
+import { KnowledgeRowMeta } from './KnowledgeRowMeta.js';
+import {
+  KnowledgeScopeFields,
+  scopeIsValid,
+  useKnowledgeScopeOptions,
+} from './KnowledgeScopeFields.js';
+import {
+  DEFAULT_SCOPE_CONTROLS,
+  applyScopeControls,
+  countNeedingReview,
+  hasActiveScopeControls,
+  scopeCreateBody,
+  scopeValueOf,
+  type KnowledgeScopeControls,
+} from './knowledge-scope.js';
 import {
   KNOWLEDGE_FILE_ACCEPT,
   readKnowledgeFile,
@@ -906,10 +921,20 @@ function KnowledgePanel({
   const [subtab, setSubtab] = useState<KnowledgeTab>('all');
   const [upload, setUpload] = useState<KnowledgeFileAccepted | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Who the next source is for and who keeps it (tm 309.3 · AI-14). Defaults to
+  // what the server picks anyway, so a form left alone sends the body it always sent.
+  const [scope, setScope] = useState(() => scopeValueOf());
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const [controls, setControls] = useState<KnowledgeScopeControls>(DEFAULT_SCOPE_CONTROLS);
+  const { brands, members } = useKnowledgeScopeOptions();
 
+  // The whole store, not the AI agent's slice of it: one list for what the AI
+  // answers from and what only agents' Copilot reads (`audience=all`). The
+  // readiness query above keeps the default list on purpose — a skill is ready
+  // from what the AI can say to a player, not from agents-only notes.
   const sources = useQuery({
-    queryKey: ['playbook', 'knowledge'],
-    queryFn: () => api.get<{ items: KnowledgeSource[] }>('/knowledge-sources'),
+    queryKey: ['playbook', 'knowledge-store'],
+    queryFn: () => api.get<{ items: KnowledgeSource[] }>('/knowledge-sources?audience=all'),
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['playbook'] });
@@ -927,6 +952,7 @@ function KnowledgePanel({
         name: body.name,
         type: body.type,
         ...(body.type === 'website' ? { source_url: body.sourceUrl } : { content: body.content }),
+        ...scopeCreateBody(scope),
       }),
     onSuccess: invalidate,
   });
@@ -941,6 +967,7 @@ function KnowledgePanel({
         filename: body.file.filename,
         content_type: body.file.contentType,
         data: body.file.data,
+        ...scopeCreateBody(scope),
       }),
     onSuccess: invalidate,
   });
@@ -975,6 +1002,7 @@ function KnowledgePanel({
           });
         }
         reset();
+        setScope(scopeValueOf());
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
@@ -1009,8 +1037,13 @@ function KnowledgePanel({
   const contentError = form.errorFor('content');
 
   const allItems = sources.data?.items ?? [];
+  const now = new Date();
   const counts = countSourcesByTab(allItems);
-  const visible = filterSourcesByTab(allItems, subtab);
+  // The kind tab cuts first, the scope controls second: the tab counts stay the
+  // whole store's, so a narrowed view never makes the tabs look emptier than it is.
+  const visible = applyScopeControls(filterSourcesByTab(allItems, subtab), controls, now);
+  const dueCount = countNeedingReview(allItems, now);
+  const brandNames = new Map(brands.map((brand) => [brand.id, brand.name ?? brand.id]));
 
   return (
     <Section
@@ -1146,10 +1179,29 @@ function KnowledgePanel({
               </label>
             )}
 
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                aria-expanded={scopeOpen}
+                aria-controls="source-scope"
+                onClick={() => setScopeOpen((open) => !open)}
+                className="self-start text-2xs font-medium text-content-secondary underline"
+              >
+                {scopeOpen
+                  ? t('playbook.knowledge.scope.hide')
+                  : t('playbook.knowledge.scope.show')}
+              </button>
+              {scopeOpen && (
+                <div id="source-scope">
+                  <KnowledgeScopeFields idPrefix="source" value={scope} onChange={setScope} />
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={!form.canSubmit || (isFile && !upload)}
+                disabled={!form.canSubmit || (isFile && !upload) || !scopeIsValid(scope, true)}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
                 {form.isSubmitting
@@ -1198,6 +1250,16 @@ function KnowledgePanel({
           </div>
         )}
 
+        {allItems.length > 0 && (
+          <KnowledgeScopeFilters
+            controls={controls}
+            onChange={setControls}
+            brands={brands}
+            members={members}
+            dueCount={dueCount}
+          />
+        )}
+
         {sources.isPending ? (
           <p className="p-4 text-sm text-content-secondary">{t('playbook.knowledge.loading')}</p>
         ) : sources.isError && !sources.data ? (
@@ -1214,9 +1276,13 @@ function KnowledgePanel({
         ) : visible.length === 0 ? (
           <EmptyState
             title={t('playbook.skills.nothingHereTitle')}
-            description={t('playbook.knowledge.noneInTab', {
-              type: t(KNOWLEDGE_TAB_LABEL_KEYS[subtab]),
-            })}
+            description={
+              hasActiveScopeControls(controls)
+                ? t('playbook.knowledge.scope.noneMatching')
+                : t('playbook.knowledge.noneInTab', {
+                    type: t(KNOWLEDGE_TAB_LABEL_KEYS[subtab]),
+                  })
+            }
           />
         ) : (
           <ul className="divide-y divide-border">
@@ -1232,6 +1298,7 @@ function KnowledgePanel({
                     {formatDate(source.updated_at)} · {source.added_by_name ?? '—'}
                     {source.source_url ? ` · ${source.source_url}` : ''}
                   </p>
+                  <KnowledgeRowMeta source={source} brandNames={brandNames} now={now} />
                   {source.last_refresh_error && (
                     <p className="truncate text-2xs text-danger">
                       {t('playbook.knowledge.refreshFailedRow')}
@@ -1253,6 +1320,76 @@ function KnowledgePanel({
         )}
       </Card>
     </Section>
+  );
+}
+
+/**
+ * The controls over the single knowledge list (tm 309.3 · AI-14): who uses a
+ * source, which brand, who owns it, and the sources due a review. The brand
+ * select is drawn only when there is a brand to choose.
+ */
+function KnowledgeScopeFilters({
+  controls,
+  onChange,
+  brands,
+  members,
+  dueCount,
+}: {
+  controls: KnowledgeScopeControls;
+  onChange: (next: KnowledgeScopeControls) => void;
+  brands: { id: string; name: string | null }[];
+  members: { id: string; name: string | null }[];
+  dueCount: number;
+}): ReactElement {
+  const t = useTranslate();
+  return (
+    <div
+      role="group"
+      aria-label={t('playbook.knowledge.scope.filtersLabel')}
+      className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2"
+    >
+      <FilterSelect
+        label={t('playbook.knowledge.scope.filterAudience')}
+        value={controls.audience}
+        onChange={(audience) => onChange({ ...controls, audience })}
+        options={[
+          ['all', t('playbook.knowledge.scope.filterAll')],
+          ['both', t('playbook.knowledge.scope.chip.both')],
+          ['ai_agent', t('playbook.knowledge.scope.chip.aiAgent')],
+          ['agents_only', t('playbook.knowledge.scope.chip.agentsOnly')],
+        ]}
+      />
+      {brands.length > 0 && (
+        <FilterSelect
+          label={t('playbook.knowledge.scope.filterBrand')}
+          value={controls.brand}
+          onChange={(brand) => onChange({ ...controls, brand })}
+          options={[
+            ['all', t('playbook.knowledge.scope.filterAll')],
+            ['every', t('playbook.knowledge.scope.filterEveryBrand')],
+            ...brands.map((brand) => [brand.id, brand.name ?? brand.id] as const),
+          ]}
+        />
+      )}
+      <FilterSelect
+        label={t('playbook.knowledge.scope.filterOwner')}
+        value={controls.owner}
+        onChange={(owner) => onChange({ ...controls, owner })}
+        options={[
+          ['all', t('playbook.knowledge.scope.filterAll')],
+          ['none', t('playbook.knowledge.scope.ownerNone')],
+          ...members.map((member) => [member.id, member.name ?? member.id] as const),
+        ]}
+      />
+      <label className="inline-flex items-center gap-1.5 text-2xs text-content-tertiary">
+        <input
+          type="checkbox"
+          checked={controls.needsReview}
+          onChange={(event) => onChange({ ...controls, needsReview: event.target.checked })}
+        />
+        {t('playbook.knowledge.scope.filterNeedsReview', { count: dueCount })}
+      </label>
+    </div>
   );
 }
 

@@ -270,6 +270,62 @@ export const playbook: Messages = {
     'Bu kaynaktan dizinlenen her şey onunla birlikte silinir ve yapay zekâ artık buradan cevap veremez. Geri alınamaz.',
   'playbook.knowledge.deleteConfirm': 'Kaynağı sil',
 
+  // Tek bilgi listesi — kapsam, bakım ve süzgeçler (tm 309.3 · AI-14;
+  // KnowledgeScopeFields.tsx, KnowledgeRowMeta.tsx, PlaybookPage.tsx süzgeçleri).
+  'playbook.knowledge.scope.show': 'Kim kullanır, kim sahiplenir',
+  'playbook.knowledge.scope.hide': 'Kim kullanır, kim sahiplenir bölümünü gizle',
+  'playbook.knowledge.scope.audiencesLabel': 'Kim kullanır',
+  'playbook.knowledge.scope.audience.ai_agent': 'AI ajanı',
+  'playbook.knowledge.scope.audience.copilot': 'Copilot',
+  'playbook.knowledge.scope.audiencesHelp':
+    'AI ajanı oyunculara bundan cevap verir; Copilot ajanlar için bundan taslak hazırlar.',
+  'playbook.knowledge.scope.audiencesAgentsOnlyHelp':
+    'Yalnız ajanlar için: Copilot bundan alıntı yapabilir, oyuncuya hiçbir yoldan gitmez.',
+  'playbook.knowledge.scope.audiencesNoneError': 'En az birini seçin: AI ajanı ya da Copilot.',
+  'playbook.knowledge.scope.brandsLabel': 'Markalar',
+  'playbook.knowledge.scope.brandsEveryHelp':
+    'Hiçbiri seçilmedi: bütün markaların sohbetleri bunu kullanabilir.',
+  'playbook.knowledge.scope.brandsPickedHelp':
+    'Yalnız seçilen markaların sohbetleri bunu kullanır. Markası bilinmeyen bir sohbet yalnız bütün markalara ait kaynakları kullanır.',
+  'playbook.knowledge.scope.validUntilLabel': 'Geçerlilik bitişi',
+  'playbook.knowledge.scope.validUntilHelp':
+    'Bu günden sonra hiçbir şeye cevap vermez. Bitiş olmasın diye boş bırakın.',
+  'playbook.knowledge.scope.ownerLabel': 'Sahip',
+  'playbook.knowledge.scope.ownerNone': 'Sahipsiz',
+  'playbook.knowledge.scope.intervalLabel': 'Gözden geçirme aralığı (gün)',
+  'playbook.knowledge.scope.intervalHelp':
+    'Bir kişi bunun hâlâ doğru olduğunu bu sıklıkla onaylar, {min} ile {max} gün arası. Geciken gözden geçirme yalnız uyarır; kaynağın cevap vermesini durdurmaz.',
+  'playbook.knowledge.scope.languageLabel': 'Dil',
+  'playbook.knowledge.scope.languagePlaceholder': 'tr',
+  'playbook.knowledge.scope.chip.both': 'AI ajanı + Copilot',
+  'playbook.knowledge.scope.chip.both.title':
+    'AI ajanı oyunculara bundan cevap verir, Copilot da bundan taslak hazırlar.',
+  'playbook.knowledge.scope.chip.aiAgent': 'AI ajanı',
+  'playbook.knowledge.scope.chip.aiAgent.title': 'Yalnız AI ajanı bundan cevap verir.',
+  'playbook.knowledge.scope.chip.agentsOnly': 'Yalnız ajanlar',
+  'playbook.knowledge.scope.chip.agentsOnly.title':
+    'Copilot bundan alıntı yapabilir; oyuncuya hiçbir yoldan gitmez.',
+  'playbook.knowledge.scope.chip.unknownBrand': 'Marka',
+  'playbook.knowledge.scope.chip.article': 'Bilgi Bankası makalesi',
+  'playbook.knowledge.scope.chip.until': '{date} tarihine kadar',
+  'playbook.knowledge.scope.chip.ended': '{date} tarihinde bitti',
+  'playbook.knowledge.scope.chip.reviewNeeded': 'Gözden geçirme gerekli',
+  'playbook.knowledge.scope.ownerLine': 'Sahip: {name}',
+  'playbook.knowledge.scope.noOwnerLine': 'Sahipsiz',
+  'playbook.knowledge.scope.reviewedLine': '{date} tarihinde gözden geçirildi',
+  'playbook.knowledge.scope.markReviewed': 'Gözden geçirildi olarak işaretle',
+  'playbook.knowledge.scope.editArticleNote':
+    'Bu kaynak bir Bilgi Bankası makalesi. Başlığı, metni ve erimi makaleden gelir — onları orada düzenleyin. Sahip, dil ve gözden geçirme aralığı buradan değişir.',
+  'playbook.knowledge.scope.filtersLabel': 'Bilgi listesini daralt',
+  'playbook.knowledge.scope.filterAudience': 'Kitle',
+  'playbook.knowledge.scope.filterAll': 'Tümü',
+  'playbook.knowledge.scope.filterBrand': 'Marka',
+  'playbook.knowledge.scope.filterEveryBrand': 'Bütün markalar',
+  'playbook.knowledge.scope.filterOwner': 'Sahip',
+  'playbook.knowledge.scope.filterNeedsReview.one': 'Gözden geçirme gerekli ({count})',
+  'playbook.knowledge.scope.filterNeedsReview.other': 'Gözden geçirme gerekli ({count})',
+  'playbook.knowledge.scope.noneMatching': 'Bu süzgeçlere uyan kaynak yok.',
+
   // Skill editor (SkillEditor.tsx)
   'playbook.editor.name': 'Ad',
   'playbook.editor.instruction': 'Talimat',
@@ -632,6 +688,14 @@ export const playbook: Messages = {
   'playbook.kbEditor.unpublish': 'Yayından kaldır',
   'playbook.kbEditor.saving': 'Kaydediliyor…',
   'playbook.kbEditor.publishError': 'Yayın durumu değiştirilemedi.',
+
+  'playbook.kbEditor.aiLegend': 'AI bilgisi',
+  'playbook.kbEditor.aiAudience.ai_agent': 'AI ajanı',
+  'playbook.kbEditor.aiAudience.copilot': 'Copilot',
+  'playbook.kbEditor.aiHelp':
+    'Yayımlandığında AI bu makaleyi kullanır. Yayından kaldırmak ya da ikisini de kapatmak makaleyi AI’ın cevaplarından çıkarır.',
+  'playbook.kbEditor.aiOffHelp':
+    'AI bu makaleyi kullanmaz — yalnız yardım merkezi sayfası olarak kalır.',
   'playbook.kbEditor.copy': 'Kopyala',
   'playbook.kbEditor.copied': 'Kopyalandı',
   'playbook.kbEditor.cancel': 'İptal',

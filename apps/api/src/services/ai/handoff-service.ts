@@ -188,7 +188,13 @@ export class HandoffService {
         context: input.card ?? { result: null, trust: null, turnText: null },
       });
     };
-    const options = { alongside, properties: handoffEventProperties(plan) };
+    // The hand-over's priority is the connection's from here on (ADR-08a
+    // §2.3): urgent waits at the front of its team's queue.
+    const options = {
+      alongside,
+      properties: handoffEventProperties(plan),
+      priority: plan.priority,
+    };
     const handedOver = await this.#execute(turn, ref, effect, input, options);
     // Once committed: the card reaches the agents who see the conversation.
     const done = written as WrittenHandoffCard | null;
@@ -208,6 +214,7 @@ export class HandoffService {
     options: {
       alongside: (tx: TenantClient) => Promise<void>;
       properties: Record<string, unknown>;
+      priority: GuardrailPriority;
     },
   ): Promise<boolean> {
     const { plan } = input;
@@ -258,6 +265,7 @@ export class HandoffService {
     options: {
       alongside: (tx: TenantClient) => Promise<void>;
       properties: Record<string, unknown>;
+      priority: GuardrailPriority;
     },
   ): Promise<boolean> {
     const { tenant, chatId } = turn;

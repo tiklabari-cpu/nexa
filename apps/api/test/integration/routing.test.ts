@@ -543,34 +543,40 @@ describe('routing', () => {
       );
     });
 
-    it('does not reorder the queue when one entry cannot be assigned', async () => {
-      // Taking a later chat because an earlier one has no available team would
-      // quietly jump the queue.
+    it('lets another team’s queue drain past a team nobody can serve (ADR-08a §2.2)', async () => {
+      // Under one workspace-wide line the Sales chat, queued first, stopped the
+      // drain before the Support chat behind it. Each team is its own line now:
+      // the stop at the first miss holds inside a team, never across teams.
       const salesAgent = await addAgent({ groupId: salesId, name: 'sales' });
       await loadAgent(salesAgent, 6); // at the default limit
 
       const supportAgent = await addAgent({ groupId: supportId, name: 'support' });
       await loadAgent(supportAgent, 6);
 
-      const firstCustomer = await owner.customer.create({
-        data: { organizationId: fx.a.organizationId, name: 'First' },
-        select: { id: true },
+      await addRule({
+        targetGroupId: salesId,
+        conditions: { url_contains: ['/pricing'] },
+        priority: 1,
       });
-      await server.post(
-        '/chats',
-        { customer_id: firstCustomer.id, assign_to_me: false, group_ids: [Number(salesId)] },
-        { authorization: `Bearer ${adminToken}` },
-      );
+      await addRule({ targetGroupId: supportId, isFallback: true });
 
-      const secondCustomer = await owner.customer.create({
-        data: { organizationId: fx.a.organizationId, name: 'Second' },
-        select: { id: true },
-      });
-      const second = await server.post(
-        '/chats',
-        { customer_id: secondCustomer.id, assign_to_me: false, group_ids: [Number(supportId)] },
-        { authorization: `Bearer ${adminToken}` },
-      );
+      const open = async (name: string, url: string) => {
+        const customer = await owner.customer.create({
+          data: { organizationId: fx.a.organizationId, name },
+          select: { id: true },
+        });
+        const chat = await server.post(
+          '/chats',
+          { customer_id: customer.id, assign_to_me: false, routing: { url } },
+          { authorization: `Bearer ${adminToken}` },
+        );
+        return chat.json() as { id: string; thread: { queue_position: number | null } };
+      };
+      const first = await open('First', 'https://shop.test/pricing');
+      const second = await open('Second', 'https://shop.test/help');
+      // Each is first in its own team's queue.
+      expect(first.thread.queue_position).toBe(1);
+      expect(second.thread.queue_position).toBe(1);
 
       // Free capacity in Support only.
       await owner.thread.updateMany({
@@ -584,9 +590,7 @@ describe('routing', () => {
         (tx) => routing.drainQueue(tx, fx.a.licenseId),
       );
 
-      // The Sales chat is first and cannot be served, so the drain stops there
-      // rather than skipping to the Support one.
-      expect(assigned.map((a) => a.chatId)).not.toContain(second.json().id);
+      expect(assigned.map((a) => a.chatId)).toEqual([second.id]);
     });
   });
 

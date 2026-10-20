@@ -1,4 +1,4 @@
-import type { CustomFieldValue } from '@siyahtus/types';
+import type { AiHandoffCardView, CustomFieldValue } from '@siyahtus/types';
 
 export interface ChatEvent {
   id: string;
@@ -121,6 +121,11 @@ export interface ChatDetail {
   connections?: ChatConnection[];
   /** Present only on the agent's fetch of a single chat; null when unrecorded. */
   visitor?: ChatVisitor | null;
+  /**
+   * The newest card the AI wrote when it handed this chat to a person (AI-10),
+   * on the single-chat read only; null when it handed nothing over.
+   */
+  latest_ai_handoff?: AiHandoffCardView | null;
 }
 
 export type InboxView =

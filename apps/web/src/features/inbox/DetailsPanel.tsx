@@ -15,6 +15,7 @@ import {
   type PossibleMatchList,
 } from '../customers/MemberIdentity.js';
 import { RiskSection } from '../risk/RiskSection.js';
+import { AiHandoffSection, JUDGE_SCOPES } from './AiHandoffCard.js';
 import { SUPERVISOR_ROLES } from './roles.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
@@ -181,6 +182,15 @@ export function DetailsPanel({
         onCollapse={onCollapse}
         collapseLabel={t('inbox.details.collapseLabel')}
       >
+        {/* What the AI left the person taking over, first (AI-10 · tm 304.2). */}
+        {chat.latest_ai_handoff && (
+          <AiHandoffSection
+            card={chat.latest_ai_handoff}
+            chatId={chatId}
+            canJudge={hasAnyScope(scopes, JUDGE_SCOPES)}
+          />
+        )}
+
         <PanelSection title={t('inbox.details.section.conversation')}>
           <Row label={t('inbox.details.row.status')}>
             <StatusDot

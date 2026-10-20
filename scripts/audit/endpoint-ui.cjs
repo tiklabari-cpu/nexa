@@ -348,21 +348,6 @@ const INDIRECT = [
  */
 const TRACKED = [
   {
-    op: 'GET /chats/{chatId}/ai-handoffs',
-    owner: 'tm 304.2',
-    reason:
-      "the AI's hand-over cards of a conversation (tm 304.1 · AI-10) — the archive's list; " +
-      'the inbox reads the newest with the chat (`latest_ai_handoff`). `AiHandoffCard.tsx` ' +
-      '(CARD-WEB, tm 304.2) draws them.',
-  },
-  {
-    op: 'POST /ai-handoffs/{handoffId}/feedback',
-    owner: 'tm 304.2',
-    reason:
-      'the card\'s "Yeterli / Yetersiz" button (tm 304.1 · AI-10-S2) — drawn with the card ' +
-      'by CARD-WEB (tm 304.2).',
-  },
-  {
     op: 'GET /chats/{chatId}/ai-digests',
     owner: 'tm 331',
     reason:

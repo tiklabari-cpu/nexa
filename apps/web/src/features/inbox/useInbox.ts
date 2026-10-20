@@ -28,6 +28,7 @@ import { useConflictStore, type ConflictAgent } from './conflict.js';
 import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
 import { RISK_FLAGS_KEY } from '../risk/riskFlags.js';
+import { chatAiHandoffsKey } from './handoffCard.js';
 import { withAiModeChange, type AiReturnInput, type ChatAiModeResult } from './aiMode.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
 import {
@@ -1091,6 +1092,9 @@ export function useRealtime(onPush?: PushHandler): void {
         // Details panel's Risk section, whoever moved it — the AI included.
         'risk_flag_raised',
         'risk_flag_cleared',
+        // The AI handed a conversation over and left its card (AI-10): the
+        // Details panel's top and the transcript's card line, within a second.
+        'ai_handoff_created',
         'routing_status_set',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
@@ -1414,6 +1418,17 @@ export function applyPush(
       // note is the server's to show or hide for this caller.
       void queryClient.invalidateQueries({ queryKey: RISK_FLAGS_KEY });
       return;
+
+    case 'ai_handoff_created': {
+      // The push names the card, not its contents: the chat re-reads with its
+      // newest card, and the day's cards for the transcript's line.
+      const chatId = payload['chat_id'];
+      if (typeof chatId === 'string') {
+        void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+        void queryClient.invalidateQueries({ queryKey: chatAiHandoffsKey(chatId) });
+      }
+      return;
+    }
 
     case 'chat_ai_mode_changed': {
       // The badge moves at once (AI-11); the re-read that follows settles

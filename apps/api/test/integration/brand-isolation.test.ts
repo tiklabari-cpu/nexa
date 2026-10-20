@@ -34,6 +34,9 @@
  * row's brands with none meaning every one, narrowed by the query that reads
  * it. A second alarm holds the `brand_ids` columns to BRAND_LIST_TABLES, and
  * each is proven through its reader.
+ *
+ * tm 310.1 adds four brand lists (the structured knowledge tables, read through
+ * `readKnowledgeTableRows`) and one brand scope (`ai_access_info`, K13).
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -41,6 +44,7 @@ import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { KnowledgeService } from '../../src/services/ai/knowledge-service.js';
+import { readKnowledgeTableRows } from '../../src/services/knowledge-tables/rows.js';
 import { MockEmbeddingProvider } from '../../src/services/ai/provider/mock-embedding-provider.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -111,6 +115,20 @@ const BRAND_SCOPED_TABLES: ReadonlyArray<{
           matchType: 'topic',
           matchKey: 'finance',
           groupId: 1n,
+        },
+      }),
+  },
+  {
+    // A brand's access information (tm 310.1 · K13); the every-brand row
+    // (`brand_id` NULL) is every brand's and is not counted here.
+    table: 'ai_access_info',
+    plant: (db, at) =>
+      db.aiAccessInfo.create({
+        data: {
+          licenseId: at.licenseId,
+          brandId: at.brandId,
+          sourceType: 'fixed_link',
+          url: 'https://giris.example.test',
         },
       }),
   },
@@ -220,6 +238,38 @@ const BRAND_LIST_TABLES: ReadonlyArray<{
       return chunks.map((chunk) => chunk.sourceId);
     },
   },
+  // The structured knowledge tables (tm 310.1 · AI-13): every reader narrows
+  // through `readKnowledgeTableRows`.
+  ...(['payment_methods', 'bonuses', 'kyc_documents', 'rules'] as const).map((table) => ({
+    table: `kb_${table}`,
+    reader: `readKnowledgeTableRows('${table}') — knowledgeTableBrandWhere`,
+    plant: async (db: PrismaClient, at: { licenseId: bigint; brandIds: string[] }) => {
+      const base = { licenseId: at.licenseId, brandIds: at.brandIds };
+      const row =
+        table === 'payment_methods'
+          ? await db.kbPaymentMethod.create({
+              data: { ...base, name: 'Brand list probe', direction: 'deposit' },
+            })
+          : table === 'bonuses'
+            ? await db.kbBonus.create({ data: { ...base, name: 'Brand list probe' } })
+            : table === 'kyc_documents'
+              ? await db.kbKycDocument.create({ data: { ...base, docType: 'Brand list probe' } })
+              : await db.kbRule.create({
+                  data: { ...base, key: 'brand_list_probe', title: 'Probe', valueText: 'x' },
+                });
+      return row.id;
+    },
+    served: async (
+      app: PrismaClient,
+      at: { licenseId: bigint; organizationId: string },
+      brandId: string | null,
+    ) => {
+      const rows = await withTenant(app, at, (tx) =>
+        readKnowledgeTableRows(tx, table, { brandId }),
+      );
+      return rows.map((row) => row.id);
+    },
+  })),
 ];
 
 /** Every public table with a `brand_ids` column — what BRAND_LIST_TABLES must match. */

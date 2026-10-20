@@ -29,6 +29,8 @@ import { FieldError, required, useForm } from '../../lib/form.js';
 import { formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Dropdown } from '../../components/ui/Dropdown.js';
+import { KnowledgeScopeFields, scopeIsValid } from './KnowledgeScopeFields.js';
+import { isArticleSource, scopePatchOf, scopeValueOf } from './knowledge-scope.js';
 import type { KnowledgeSource } from './types.js';
 
 /**
@@ -74,6 +76,14 @@ export function KnowledgeSourceActions({
     onSuccess: onChanged,
   });
 
+  // A review is a person's confirmation that the source still holds (AI-14-S3):
+  // nothing is fetched or re-indexed, and nothing the AI says changes, so it
+  // runs straight from the menu rather than behind a dialog.
+  const review = useMutation({
+    mutationFn: () => api.post<KnowledgeSource>(`/knowledge-sources/${source.id}/review`, {}),
+    onSuccess: onChanged,
+  });
+
   return (
     <>
       <Dropdown
@@ -110,6 +120,17 @@ export function KnowledgeSourceActions({
             </button>
             <button
               type="button"
+              className={MENU_ITEM}
+              disabled={review.isPending}
+              onClick={() => {
+                close(true);
+                review.mutate();
+              }}
+            >
+              {t('playbook.knowledge.scope.markReviewed')}
+            </button>
+            <button
+              type="button"
               className={`${MENU_ITEM} text-danger`}
               onClick={() => {
                 close(true);
@@ -130,6 +151,11 @@ export function KnowledgeSourceActions({
       {reindex.isError && (
         <span role="alert" className="text-2xs text-danger">
           {t(errorMessageKey(reindex.error))}
+        </span>
+      )}
+      {review.isError && (
+        <span role="alert" className="text-2xs text-danger">
+          {t(errorMessageKey(review.error))}
         </span>
       )}
 
@@ -168,10 +194,15 @@ function EditSourceModal({
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
-  const body = editableBodyFor(source.type);
+  // A published KB article's source is the article's: its title, text and reach
+  // are edited through the article, and the server refuses them here. What stays
+  // editable is the upkeep — owner, language, review interval.
+  const fromArticle = isArticleSource(source);
+  const body = fromArticle ? 'none' : editableBodyFor(source.type);
+  const [scope, setScope] = useState(() => scopeValueOf(source));
 
   const save = useMutation({
-    mutationFn: (patch: Record<string, string | number | null>) =>
+    mutationFn: (patch: Record<string, unknown>) =>
       api.patch<KnowledgeSource>(`/knowledge-sources/${source.id}`, patch),
     onSuccess: onSaved,
   });
@@ -192,7 +223,7 @@ function EditSourceModal({
       refreshAfterDays: initialRefreshAfterDays,
     },
     validators: {
-      name: required(t('playbook.knowledge.formTitleRequiredError')),
+      name: fromArticle ? undefined : required(t('playbook.knowledge.formTitleRequiredError')),
       sourceUrl:
         body === 'source_url' ? required(t('playbook.knowledge.formUrlRequiredError')) : undefined,
     },
@@ -201,9 +232,9 @@ function EditSourceModal({
       // re-index — a model call spent to rebuild identical vectors — and an
       // empty patch is a 400, so a Save that changed nothing closes quietly
       // rather than reporting an error the admin cannot act on.
-      const patch: Record<string, string | number | null> = {};
+      const patch: Record<string, unknown> = {};
       const name = values.name.trim();
-      if (name !== source.name) patch['name'] = name;
+      if (!fromArticle && name !== source.name) patch['name'] = name;
       if (body === 'source_url') {
         const url = values.sourceUrl.trim();
         if (url !== (source.source_url ?? '')) patch['source_url'] = url;
@@ -216,6 +247,7 @@ function EditSourceModal({
         const content = values.content.trim();
         if (content !== '') patch['content'] = content;
       }
+      Object.assign(patch, scopePatchOf(source, scope, { scope: !fromArticle }));
       if (Object.keys(patch).length === 0) {
         onClose();
         return;
@@ -238,22 +270,24 @@ function EditSourceModal({
       description={t('playbook.knowledge.editDescription')}
     >
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
-        <label htmlFor="edit-source-name" className="flex flex-col gap-1">
-          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            {t('playbook.knowledge.formTitle')}
-          </span>
-          <input
-            id="edit-source-name"
-            autoFocus
-            value={form.values.name}
-            onChange={(event) => form.setValue('name', event.target.value)}
-            onBlur={() => form.blur('name')}
-            aria-invalid={nameError ? true : undefined}
-            aria-describedby={nameError ? 'edit-source-name-error' : undefined}
-            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
-          />
-          <FieldError id="edit-source-name-error" message={nameError} />
-        </label>
+        {!fromArticle && (
+          <label htmlFor="edit-source-name" className="flex flex-col gap-1">
+            <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('playbook.knowledge.formTitle')}
+            </span>
+            <input
+              id="edit-source-name"
+              autoFocus
+              value={form.values.name}
+              onChange={(event) => form.setValue('name', event.target.value)}
+              onBlur={() => form.blur('name')}
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? 'edit-source-name-error' : undefined}
+              className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+            />
+            <FieldError id="edit-source-name-error" message={nameError} />
+          </label>
+        )}
 
         {/* Sibling labels below, not wrappers: the help line under each field
             sits inside the label element when it wraps, and folds into the
@@ -351,8 +385,19 @@ function EditSourceModal({
         )}
 
         {body === 'none' && (
-          <p className="text-2xs text-content-tertiary">{t('playbook.knowledge.editFileNote')}</p>
+          <p className="text-2xs text-content-tertiary">
+            {fromArticle
+              ? t('playbook.knowledge.scope.editArticleNote')
+              : t('playbook.knowledge.editFileNote')}
+          </p>
         )}
+
+        <KnowledgeScopeFields
+          idPrefix="edit-source"
+          value={scope}
+          onChange={setScope}
+          reach={!fromArticle}
+        />
 
         {form.submitError && (
           <span role="alert" className="text-2xs text-danger">
@@ -370,7 +415,7 @@ function EditSourceModal({
           </button>
           <button
             type="submit"
-            disabled={!form.canSubmit}
+            disabled={!form.canSubmit || !scopeIsValid(scope, !fromArticle)}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
           >
             {form.isSubmitting

@@ -273,6 +273,62 @@ export const playbook: Messages = {
     'Everything indexed from this source is removed with it, and the AI stops answering from it. This cannot be undone.',
   'playbook.knowledge.deleteConfirm': 'Delete source',
 
+  // The single knowledge list — scope, upkeep and filters (tm 309.3 · AI-14;
+  // KnowledgeScopeFields.tsx, KnowledgeRowMeta.tsx, the filters in PlaybookPage.tsx).
+  'playbook.knowledge.scope.show': 'Who uses it and who keeps it',
+  'playbook.knowledge.scope.hide': 'Hide who uses it and who keeps it',
+  'playbook.knowledge.scope.audiencesLabel': 'Who uses it',
+  'playbook.knowledge.scope.audience.ai_agent': 'AI agent',
+  'playbook.knowledge.scope.audience.copilot': 'Copilot',
+  'playbook.knowledge.scope.audiencesHelp':
+    'The AI agent answers players from it; Copilot drafts replies for agents from it.',
+  'playbook.knowledge.scope.audiencesAgentsOnlyHelp':
+    'For agents only: Copilot may quote it, and it never reaches a player.',
+  'playbook.knowledge.scope.audiencesNoneError': 'Pick at least one: the AI agent or Copilot.',
+  'playbook.knowledge.scope.brandsLabel': 'Brands',
+  'playbook.knowledge.scope.brandsEveryHelp':
+    'None picked: every brand’s conversations may use it.',
+  'playbook.knowledge.scope.brandsPickedHelp':
+    'Only conversations of the picked brands use it. A conversation whose brand is not known uses only the sources for every brand.',
+  'playbook.knowledge.scope.validUntilLabel': 'Valid until',
+  'playbook.knowledge.scope.validUntilHelp':
+    'After this day it answers nothing. Leave empty for no end.',
+  'playbook.knowledge.scope.ownerLabel': 'Owner',
+  'playbook.knowledge.scope.ownerNone': 'No owner',
+  'playbook.knowledge.scope.intervalLabel': 'Review every (days)',
+  'playbook.knowledge.scope.intervalHelp':
+    'A person confirms it still holds this often, {min} to {max} days. A late review only warns; it does not stop the source answering.',
+  'playbook.knowledge.scope.languageLabel': 'Language',
+  'playbook.knowledge.scope.languagePlaceholder': 'tr',
+  'playbook.knowledge.scope.chip.both': 'AI agent + Copilot',
+  'playbook.knowledge.scope.chip.both.title':
+    'The AI agent answers players from it, and Copilot drafts from it.',
+  'playbook.knowledge.scope.chip.aiAgent': 'AI agent',
+  'playbook.knowledge.scope.chip.aiAgent.title': 'Only the AI agent answers from it.',
+  'playbook.knowledge.scope.chip.agentsOnly': 'Agents only',
+  'playbook.knowledge.scope.chip.agentsOnly.title':
+    'Copilot may quote it; it never reaches a player.',
+  'playbook.knowledge.scope.chip.unknownBrand': 'Brand',
+  'playbook.knowledge.scope.chip.article': 'Knowledge Base article',
+  'playbook.knowledge.scope.chip.until': 'Until {date}',
+  'playbook.knowledge.scope.chip.ended': 'Ended {date}',
+  'playbook.knowledge.scope.chip.reviewNeeded': 'Review needed',
+  'playbook.knowledge.scope.ownerLine': 'Owner: {name}',
+  'playbook.knowledge.scope.noOwnerLine': 'No owner',
+  'playbook.knowledge.scope.reviewedLine': 'Reviewed {date}',
+  'playbook.knowledge.scope.markReviewed': 'Mark as reviewed',
+  'playbook.knowledge.scope.editArticleNote':
+    'This source is a Knowledge Base article. Its title, text and reach come from the article — edit them there. The owner, language and review interval can be changed here.',
+  'playbook.knowledge.scope.filtersLabel': 'Narrow the knowledge list',
+  'playbook.knowledge.scope.filterAudience': 'Audience',
+  'playbook.knowledge.scope.filterAll': 'All',
+  'playbook.knowledge.scope.filterBrand': 'Brand',
+  'playbook.knowledge.scope.filterEveryBrand': 'Every brand',
+  'playbook.knowledge.scope.filterOwner': 'Owner',
+  'playbook.knowledge.scope.filterNeedsReview.one': 'Review needed ({count})',
+  'playbook.knowledge.scope.filterNeedsReview.other': 'Review needed ({count})',
+  'playbook.knowledge.scope.noneMatching': 'No source matches these filters.',
+
   // Skill editor (SkillEditor.tsx)
   'playbook.editor.name': 'Name',
   'playbook.editor.instruction': 'Instruction',
@@ -635,6 +691,14 @@ export const playbook: Messages = {
   'playbook.kbEditor.unpublish': 'Unpublish',
   'playbook.kbEditor.saving': 'Saving…',
   'playbook.kbEditor.publishError': 'Could not change the publish status.',
+
+  'playbook.kbEditor.aiLegend': 'AI knowledge',
+  'playbook.kbEditor.aiAudience.ai_agent': 'AI agent',
+  'playbook.kbEditor.aiAudience.copilot': 'Copilot',
+  'playbook.kbEditor.aiHelp':
+    'Once published, the AI uses this article. Unpublishing it, or switching both off, takes it out of the AI’s answers.',
+  'playbook.kbEditor.aiOffHelp':
+    'The AI does not use this article — it stays a help-center page only.',
   'playbook.kbEditor.copy': 'Copy',
   'playbook.kbEditor.copied': 'Copied',
   'playbook.kbEditor.cancel': 'Cancel',

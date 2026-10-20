@@ -414,7 +414,7 @@ export const team: Messages = {
   // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
   'team.copilot.title': 'Copilot knowledge',
   'team.copilot.description':
-    "What Copilot may quote when it assists an agent. Kept apart from the customer-facing AI agent's knowledge, and never shown to a customer.",
+    'What Copilot may quote when it assists an agent: everything the AI agent answers from, plus the sources added for agents only. Those never reach a customer.',
   'team.copilot.shortDescription': 'What Copilot may quote when it assists an agent.',
   'team.copilot.noAccess.title': 'No access to Copilot knowledge',
   'team.copilot.noAccess.description':
@@ -438,6 +438,14 @@ export const team: Messages = {
   'team.copilot.status.empty': 'No content',
   'team.copilot.deleteButton': 'Delete',
   'team.copilot.deleteAriaLabel': 'Delete {name}',
+
+  'team.copilot.view.label': 'Show',
+  'team.copilot.view.all': 'Everything Copilot reads',
+  'team.copilot.view.agentsOnly': 'Agents only',
+  'team.copilot.view.noneTitle': 'No agents-only sources',
+  'team.copilot.view.noneDescription':
+    'Every source Copilot reads is also used by the AI agent. Switch the view back to see them.',
+  'team.copilot.managedInPlaybook': 'Managed in Scenarios › Knowledge',
   'team.copilot.add.title': 'Add a source',
   'team.copilot.add.error': 'Could not add that source. Check the name and content and try again.',
   'team.copilot.add.nameRequiredError': 'Enter a name.',

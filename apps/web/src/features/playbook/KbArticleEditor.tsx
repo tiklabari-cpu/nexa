@@ -24,6 +24,11 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
+import {
+  DEFAULT_KNOWLEDGE_AUDIENCES,
+  KNOWLEDGE_AUDIENCES,
+  type KnowledgeAudience,
+} from '@siyahtus/types';
 import { Banner, Modal } from '../../components/ui/index.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
@@ -129,6 +134,18 @@ export function KbArticleEditor({
   const [linkCopied, setLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // Who besides the reader may use the article once it is published (AI-14-S2):
+  // on for both unless switched off. The baseline is what was last persisted, so
+  // the request carries the field only when the author changed it.
+  const persistedAudiences = current?.ai_audiences ?? DEFAULT_KNOWLEDGE_AUDIENCES;
+  const [aiAudiences, setAiAudiences] = useState<KnowledgeAudience[]>(() => [
+    ...(article?.ai_audiences ?? DEFAULT_KNOWLEDGE_AUDIENCES),
+  ]);
+  const audiencesChanged = !(
+    aiAudiences.length === persistedAudiences.length &&
+    aiAudiences.every((audience) => persistedAudiences.includes(audience))
+  );
+
   const settings = useQuery({
     queryKey: ['playbook', 'kb-settings'],
     queryFn: () => api.get<KbSettings>('/kb-settings'),
@@ -181,14 +198,20 @@ export function KbArticleEditor({
         excerpt: values.excerpt.trim() || null,
         seo_title: values.seo_title.trim() || null,
         seo_description: values.seo_description.trim() || null,
+        ...(audiencesChanged ? { ai_audiences: aiAudiences } : {}),
       };
 
       try {
-        const saved = isNew
-          ? // i18n-ignore: TS generic call signature, not prose (mirrors PublicPages.tsx's trustDomain() waiver).
-            await api.post<KbArticle>('/kb-articles', payload)
-          : await api.patch<KbArticle>(`/kb-articles/${current!.id}`, payload);
+        // `current`, not `isNew`: once a new article has been created in this
+        // dialog, saving again edits that article. Posting again would collide
+        // with its own slug (and, with the AI switch below, make the switch
+        // unusable between "Create" and closing the dialog).
+        const saved = current
+          ? await api.patch<KbArticle>(`/kb-articles/${current.id}`, payload)
+          : // i18n-ignore: TS generic call signature, not prose (mirrors PublicPages.tsx's trustDomain() waiver).
+            await api.post<KbArticle>('/kb-articles', payload);
         setCurrent(saved);
+        setAiAudiences([...(saved.ai_audiences ?? aiAudiences)]);
         setSlugEdited(true);
         setNewCategoryName(null);
         onSaved();
@@ -238,7 +261,7 @@ export function KbArticleEditor({
   // Half-written content is work; a stray Escape or backdrop click should not
   // silently throw it away (FR-EK-A.2 / T5-a).
   const close = useCloseGuard({
-    isDirty: form.isDirty,
+    isDirty: form.isDirty || audiencesChanged,
     message: t('playbook.kbEditor.discardConfirm'),
     onClose,
   });
@@ -465,6 +488,39 @@ export function KbArticleEditor({
           />
         </div>
 
+        <fieldset
+          className="flex flex-col gap-1 border-t border-border pt-3"
+          disabled={!canEdit}
+          data-testid="kb-ai-audiences"
+        >
+          <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('playbook.kbEditor.aiLegend')}
+          </legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {KNOWLEDGE_AUDIENCES.map((audience) => (
+              <label key={audience} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={aiAudiences.includes(audience)}
+                  onChange={(event) =>
+                    setAiAudiences(
+                      KNOWLEDGE_AUDIENCES.filter((a) =>
+                        a === audience ? event.target.checked : aiAudiences.includes(a),
+                      ),
+                    )
+                  }
+                />
+                {t(`playbook.kbEditor.aiAudience.${audience}`)}
+              </label>
+            ))}
+          </div>
+          <p className="text-2xs text-content-tertiary">
+            {aiAudiences.length === 0
+              ? t('playbook.kbEditor.aiOffHelp')
+              : t('playbook.kbEditor.aiHelp')}
+          </p>
+        </fieldset>
+
         {current && (
           <div className="flex items-center gap-3 border-t border-border pt-3">
             <StatusDot
@@ -583,9 +639,9 @@ export function KbArticleEditor({
                 >
                   {form.isSubmitting
                     ? t('playbook.kbEditor.saving')
-                    : isNew
-                      ? t('playbook.kbEditor.createArticle')
-                      : t('playbook.kbEditor.saveChanges')}
+                    : current
+                      ? t('playbook.kbEditor.saveChanges')
+                      : t('playbook.kbEditor.createArticle')}
                 </button>
               )}
             </div>

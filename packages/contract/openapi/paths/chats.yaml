@@ -422,6 +422,20 @@ transfer:
       records it as the open connection's `group_id`; a hand-off to an agent
       changes neither. (A customer returning the same day adds a team instead
       — ID-02-S7 — because a return is not a hand-off.)
+
+      A hand-off to a team gives the conversation to one of its members by
+      the usual routing order (`outcome: assigned`) — not the caller, nor the
+      agent who held it — and with nobody free it waits in that team's queue
+      (`outcome: queued`) for the next member who is (IN-04 · IN-04-S1); it is
+      never refused for being unstaffed, and never overflows to the fallback
+      team. A team with no members at all is a 409 `group_unavailable`. A
+      `note` is written into the conversation as a line only agents see; a
+      person handing to the Responsible Gambling or the Complaints team must
+      give one (IN-04-S2, 400 `validation`). A queued hand-off to the
+      Responsible Gambling team is also announced to the workspace's
+      supervisors. `visible_to_caller` says whether the caller can still open
+      the conversation: a team hand-off narrows its access to the receiving
+      team.
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"
     requestBody:
@@ -434,6 +448,12 @@ transfer:
             properties:
               group_id: { type: integer, format: int64 }
               agent_id: { type: string, format: uuid }
+              note:
+                type: string
+                maxLength: 500
+                description: |
+                  What the receiving side should know, written as an internal
+                  note (`recipients: agents`) — never shown to the customer.
               reason:
                 type: string
                 enum: [manual, routing, agent_disconnected, ai_handoff, bot_handoff]
@@ -448,11 +468,13 @@ transfer:
         description: Transferred
         content:
           application/json:
-            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+            schema: { $ref: "../openapi.yaml#/components/schemas/ChatTransferResult" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "409":
-        description: The target team is offline or the chat is closed
+        description: |
+          The chat is closed (`chat_inactive`), the target agent is offline or
+          the target team has no members (`group_unavailable`)
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }

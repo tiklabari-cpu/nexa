@@ -93,6 +93,31 @@ export interface GroupWithAgents {
   agents: Array<{ agentId: string; priority: string }>;
 }
 
+/**
+ * How many members of each team are accepting chats right now — not
+ * suspended, not awaiting approval — whatever their load (`Group.
+ * accepting_count`, IN-04: "Finance · 2 online"). A team with nobody reads 0.
+ */
+export async function acceptingCounts(
+  tx: TenantClient,
+  licenseId: bigint,
+  groupIds: readonly bigint[],
+): Promise<Map<bigint, number>> {
+  if (groupIds.length === 0) return new Map();
+  const rows = await tx.$queryRaw<Array<{ group_id: bigint; accepting: number }>>`
+    SELECT ga.group_id, COUNT(*)::int AS accepting
+    FROM group_agents ga
+    JOIN agent_memberships m ON m.license_id = ga.license_id AND m.agent_id = ga.agent_id
+    WHERE ga.license_id = ${licenseId}
+      AND ga.group_id IN (${Prisma.join([...groupIds])})
+      AND m.routing_status = 'accepting_chats'
+      AND NOT m.suspended
+      AND NOT m.awaiting_approval
+    GROUP BY ga.group_id
+  `;
+  return new Map(rows.map((row) => [row.group_id, row.accepting]));
+}
+
 /** What a read of a team includes, so every reader serialises the same shape. */
 export const GROUP_INCLUDE = {
   agents: { select: { agentId: true, priority: true } },

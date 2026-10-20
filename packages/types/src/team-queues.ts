@@ -45,6 +45,21 @@ export function isQueueTopicRole(value: unknown): value is QueueTopicRole {
 export const RESPONSIBLE_GAMBLING_ROLE: QueueTopicRole = 'responsible_gambling';
 
 /**
+ * The teams a person hands a conversation to only with a note (IN-04-S2):
+ * whoever picks up a Responsible Gambling or a complaint conversation must
+ * not have to ask the player again why they are there.
+ */
+export const TRANSFER_NOTE_REQUIRED_ROLES: readonly QueueTopicRole[] = [
+  'responsible_gambling',
+  'complaint',
+];
+
+/** Whether handing a conversation to a team of this topic needs a note (IN-04-S2). */
+export function transferNoteRequired(topicRole: string | null | undefined): boolean {
+  return (TRANSFER_NOTE_REQUIRED_ROLES as readonly string[]).includes(topicRole ?? '');
+}
+
+/**
  * What a team's queue does when nobody is on shift (AU-01 "mesai dışı
  * davranışı"; AI-12-S2 and AI-29-S2 defaults):
  *

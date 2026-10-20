@@ -135,6 +135,17 @@ export interface ChatDetail {
   latest_ai_handoff?: AiHandoffCardView | null;
 }
 
+/** `POST /chats/{id}/transfer`'s answer (IN-04): the chat, and what became of it. */
+export interface ChatTransferResult extends ChatDetail {
+  /** Someone has it, or it waits in the receiving team's queue. */
+  outcome: 'assigned' | 'queued';
+  /** False once a team hand-off took it out of the caller's sight. */
+  visible_to_caller: boolean;
+}
+
+/** Where a hand-off goes: one teammate, or a team, and what the receiver should know. */
+export type TransferTarget = ({ agent_id: string } | { group_id: number }) & { note?: string };
+
 export type InboxView =
   'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
 

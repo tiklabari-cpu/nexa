@@ -96,6 +96,7 @@ const startChatSchema = z.object({
 const transferSchema = z.object({
   group_id: z.coerce.bigint().optional(),
   agent_id: z.string().uuid().optional(),
+  note: z.string().trim().max(500).optional(),
   reason: z.enum(TRANSFER_REASONS).default('manual'),
 });
 
@@ -545,23 +546,27 @@ export default async function chatRoutes(
         reason: body.reason,
         ...(body.group_id !== undefined ? { groupId: body.group_id } : {}),
         ...(body.agent_id !== undefined ? { agentId: body.agent_id } : {}),
+        ...(body.note ? { note: body.note } : {}),
       });
 
       // The assignment notification (FR-MOD-13.7 · 13.7-d): a chat handed to a
       // named colleague lands on their handset, because the whole point of
       // transferring to a person rather than a team is that *that* person picks
-      // it up. A transfer to a team is deliberately silent — it unassigns, so
-      // there is nobody to address until routing chooses someone.
+      // it up. A transfer to a team reaches the member it was given to (IN-04);
+      // one that waits in the team's queue has nobody to address until the
+      // drain chooses someone.
       //
       // Not when you hand a chat to yourself: a phone that buzzes about
       // something you just did in the next window is noise, and the one thing
       // an agent certainly knows is what they themselves just clicked.
       const actorId = principal.kind === 'agent' ? principal.accountId : null;
-      if (body.agent_id !== undefined && body.agent_id !== actorId) {
+      const assigneeId =
+        body.agent_id ?? (chat.outcome === 'assigned' ? (chat.thread?.assignee_id ?? null) : null);
+      if (assigneeId !== null && assigneeId !== actorId) {
         await pushToAgentDevices(
           { db: app.db, provider: push, log: request.log },
           request.tenant(),
-          { accountId: body.agent_id, event: { kind: 'assignment', chatId } },
+          { accountId: assigneeId, event: { kind: 'assignment', chatId } },
         );
       }
 

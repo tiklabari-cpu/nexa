@@ -50,6 +50,7 @@ import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principa
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
 import {
   GROUP_INCLUDE,
+  acceptingCounts,
   assertKeepsTeamTraining,
   createGroup,
   deleteGroup,
@@ -156,7 +157,7 @@ function agentIdParam(raw: string): string {
   return parsed.data;
 }
 
-function serialiseGroup(group: GroupWithAgents) {
+function serialiseGroup(group: GroupWithAgents, accepting: ReadonlyMap<bigint, number>) {
   return {
     id: Number(group.id),
     name: group.name,
@@ -164,6 +165,7 @@ function serialiseGroup(group: GroupWithAgents) {
     topic_role: group.topicRole,
     after_hours_mode: group.afterHoursMode,
     required_expertise_ids: group.requiredExpertise.map((row) => Number(row.expertiseId)),
+    accepting_count: accepting.get(group.id) ?? 0,
     agents: group.agents.map((a) => ({ agent_id: a.agentId, priority: a.priority })),
   };
 }
@@ -996,11 +998,20 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
     '/groups',
     { config: { scopes: ['groups--all:ro', 'groups--my:ro'] } },
     async (request, reply) => {
-      const groups = await request.withTenant((tx) =>
-        tx.group.findMany({ include: GROUP_INCLUDE, orderBy: { id: 'asc' } }),
-      );
+      const licenseId = request.tenant().licenseId;
+      const { groups, accepting } = await request.withTenant(async (tx) => {
+        const groups = await tx.group.findMany({ include: GROUP_INCLUDE, orderBy: { id: 'asc' } });
+        return {
+          groups,
+          accepting: await acceptingCounts(
+            tx,
+            licenseId,
+            groups.map((g) => g.id),
+          ),
+        };
+      });
 
-      return reply.send({ items: groups.map(serialiseGroup) });
+      return reply.send({ items: groups.map((group) => serialiseGroup(group, accepting)) });
     },
   );
 
@@ -1054,7 +1065,8 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       }),
     );
 
-    return reply.code(201).send(serialiseGroup(group));
+    // A team just made has nobody in it yet.
+    return reply.code(201).send(serialiseGroup(group, new Map()));
   });
 
   app.patch<{ Params: { groupId: string } }>(
@@ -1064,16 +1076,18 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       const groupId = groupIdParam(request.params.groupId);
       const body = parseGroupPatchBody(request.body);
 
-      const group = await request.withTenant(async (tx) => {
+      const licenseId = request.tenant().licenseId;
+      const { group, accepting } = await request.withTenant(async (tx) => {
         await loadGroup(tx, groupId);
-        return updateGroup(tx, request.auditContext(), request.tenant().licenseId, groupId, {
+        const group = await updateGroup(tx, request.auditContext(), licenseId, groupId, {
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
           ...groupQueueSettings(body),
         });
+        return { group, accepting: await acceptingCounts(tx, licenseId, [groupId]) };
       });
 
-      return reply.send(serialiseGroup(group));
+      return reply.send(serialiseGroup(group, accepting));
     },
   );
 
@@ -1107,14 +1121,17 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       // (SCIM has no such field and deliberately passes none; see the service.)
       const { priority } = parseMembershipBody(request.body);
 
-      const group = await request.withTenant(async (tx) => {
+      const { group, accepting } = await request.withTenant(async (tx) => {
         const licenseId = request.tenant().licenseId;
         await loadGroup(tx, groupId);
         await setGroupMember(tx, request.auditContext(), licenseId, { groupId, agentId, priority });
-        return readGroup(tx, licenseId, groupId);
+        return {
+          group: await readGroup(tx, licenseId, groupId),
+          accepting: await acceptingCounts(tx, licenseId, [groupId]),
+        };
       });
 
-      return reply.send(serialiseGroup(group));
+      return reply.send(serialiseGroup(group, accepting));
     },
   );
 

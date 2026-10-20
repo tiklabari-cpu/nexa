@@ -17,6 +17,8 @@ import {
 import { RiskSection } from '../risk/RiskSection.js';
 import { AiHandoffSection, JUDGE_SCOPES } from './AiHandoffCard.js';
 import { SUPERVISOR_ROLES } from './roles.js';
+import { TransferDialog } from './TransferDialog.js';
+import { TEAMS_KEY, transferTeams, type TransferNotice, type TransferTeam } from './transfer.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
 import type { ChatDetail } from './types.js';
@@ -53,6 +55,7 @@ export function DetailsPanel({
   chatId,
   onCollapse,
   onOpenChat,
+  onTransferred,
 }: {
   chat: ChatDetail;
   chatId: string;
@@ -63,9 +66,13 @@ export function DetailsPanel({
    * this one (an earlier day's conversation continues under today's, ID-02-S6).
    */
   onOpenChat?: (chatId: string) => void;
+  /** After a hand-off (IN-04): the notice to show, and whether the chat left the caller's sight. */
+  onTransferred?: (outcome: { notice: TransferNotice; left: boolean }) => void;
 }): ReactElement {
   const [newTag, setNewTag] = useState('');
   const [takeoverOpen, setTakeoverOpen] = useState(false);
+  // The team the hand-off dialog opens with, picked in the assignee menu (IN-04).
+  const [transferTeamId, setTransferTeamId] = useState<number | null>(null);
   const api = useApiClient();
   const actions = useChatAction(chatId);
   const role = useAuth((s) => s.agent?.role ?? null);
@@ -123,8 +130,8 @@ export function DetailsPanel({
   // read failed) reads "Team #id". Sorted by name, not by the order or
   // priority the ids arrive in.
   const teamsQuery = useQuery({
-    queryKey: ['team', 'groups'],
-    queryFn: () => api.get<{ items: Array<{ id: number; name: string }> }>('/groups'),
+    queryKey: TEAMS_KEY,
+    queryFn: () => api.get<{ items: TransferTeam[] }>('/groups'),
     staleTime: 60_000,
   });
   const knownTeams = new Map((teamsQuery.data?.items ?? []).map((team) => [team.id, team.name]));
@@ -209,10 +216,12 @@ export function DetailsPanel({
               {canAssign ? (
                 <AssigneePicker
                   agents={rosterItems}
+                  teams={transferTeams(teamsQuery.data?.items ?? [])}
                   assigneeId={assigneeId}
                   assigneeName={assigneeName}
                   unavailable={roster.isError}
                   onPick={(agentId) => actions.assign.mutate(agentId)}
+                  onPickTeam={setTransferTeamId}
                 />
               ) : (
                 // Seeing who holds the conversation is part of reading it, so a
@@ -510,6 +519,16 @@ export function DetailsPanel({
         </div>
       </Panel>
 
+      {transferTeamId !== null && (
+        <TransferDialog
+          chatId={chatId}
+          assigneeId={assigneeId}
+          initialTeamId={transferTeamId}
+          onClose={() => setTransferTeamId(null)}
+          onTransferred={onTransferred}
+        />
+      )}
+
       {takeoverOpen && (
         <TakeoverModal
           chatId={chatId}
@@ -540,20 +559,30 @@ export function DetailsPanel({
  * hide somebody who is in fact back, and the server has the current answer
  * anyway (it refuses with `group_unavailable`, which the panel words). The dot
  * says who is likely to answer; the refusal is authoritative.
+ *
+ * Two sections (IN-04): **Teammate** hands it to one person at once; **Team**
+ * opens the hand-off dialog with that team picked — a team hand-off takes a
+ * note, and may need one. Each team says how many of its members are online,
+ * which is what decides whether someone has it in a moment or it waits in the
+ * team's queue. A team with no members is listed but cannot be picked.
  */
 function AssigneePicker({
   agents,
+  teams,
   assigneeId,
   assigneeName,
   unavailable,
   onPick,
+  onPickTeam,
 }: {
   agents: RosterAgent[];
+  teams: Array<TransferTeam & { selectable: boolean }>;
   assigneeId: string | null;
   assigneeName: string;
   /** The roster call failed — offer no list rather than an empty one. */
   unavailable: boolean;
   onPick: (agentId: string) => void;
+  onPickTeam: (groupId: number) => void;
 }): ReactElement {
   const t = useTranslate();
 
@@ -569,61 +598,107 @@ function AssigneePicker({
           </span>
         </span>
       }
-      panelClassName="right-0 mt-1 max-h-64 w-56 overflow-y-auto p-1"
+      panelClassName="right-0 mt-1 max-h-80 w-60 overflow-y-auto p-1"
     >
-      {({ close }) => {
-        if (unavailable) {
-          return (
+      {({ close }) => (
+        <>
+          <p className="px-2 pb-0.5 pt-1 text-2xs font-medium uppercase text-content-tertiary">
+            {t('inbox.transfer.section.teammates')}
+          </p>
+          {unavailable ? (
             <p className="px-2 py-1.5 text-2xs text-content-tertiary">
               {t('inbox.details.assign.unavailable')}
             </p>
-          );
-        }
-        if (agents.length === 0) {
-          return (
+          ) : agents.length === 0 ? (
             <p className="px-2 py-1.5 text-2xs text-content-tertiary">
               {t('inbox.details.assign.empty')}
             </p>
-          );
-        }
-        return (
-          <ul>
-            {agents.map((agent) => {
-              const current = agent.id === assigneeId;
-              return (
-                <li key={agent.id}>
-                  <button
-                    type="button"
-                    // The one already holding it is not a choice — picking them
-                    // would write a hand-off event that moved nothing.
-                    disabled={current}
-                    aria-current={current ? 'true' : undefined}
-                    onClick={() => {
-                      close(true);
-                      onPick(agent.id);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-surface-2 disabled:cursor-default disabled:opacity-60"
-                  >
-                    <span aria-hidden="true" className="w-3 shrink-0 text-content-tertiary">
-                      {current ? '✓' : ''}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">
-                      {agent.name ?? t('inbox.details.takeover.fallbackName')}
-                    </span>
-                    {/* Glyph *and* word, never colour alone (NFR-A11Y2): who is
-                        likely to pick this up is the whole reason to read the list. */}
-                    <StatusDot
-                      tone={ROUTING_TONE[agent.routing_status]}
-                      label={t(ROUTING_KEY[agent.routing_status])}
-                    />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        );
-      }}
+          ) : (
+            <TeammateList agents={agents} assigneeId={assigneeId} onPick={onPick} close={close} />
+          )}
+          {teams.length > 0 && (
+            <>
+              <p className="mt-1 border-t border-border px-2 pb-0.5 pt-1.5 text-2xs font-medium uppercase text-content-tertiary">
+                {t('inbox.transfer.section.teams')}
+              </p>
+              <ul>
+                {teams.map((team) => (
+                  <li key={team.id}>
+                    <button
+                      type="button"
+                      disabled={!team.selectable}
+                      onClick={() => {
+                        close(true);
+                        onPickTeam(team.id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-surface-2 disabled:cursor-default disabled:opacity-60"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{team.name}</span>
+                      <span className="shrink-0 tabular text-2xs text-content-tertiary">
+                        {team.selectable
+                          ? t('inbox.transfer.online', { count: team.accepting_count ?? 0 })
+                          : t('inbox.transfer.noMembers')}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
     </Dropdown>
+  );
+}
+
+/** The menu's teammates: picking one hands the chat over at once. */
+function TeammateList({
+  agents,
+  assigneeId,
+  onPick,
+  close,
+}: {
+  agents: RosterAgent[];
+  assigneeId: string | null;
+  onPick: (agentId: string) => void;
+  close: (restoreFocus?: boolean) => void;
+}): ReactElement {
+  const t = useTranslate();
+  return (
+    <ul>
+      {agents.map((agent) => {
+        const current = agent.id === assigneeId;
+        return (
+          <li key={agent.id}>
+            <button
+              type="button"
+              // The one already holding it is not a choice — picking them
+              // would write a hand-off event that moved nothing.
+              disabled={current}
+              aria-current={current ? 'true' : undefined}
+              onClick={() => {
+                close(true);
+                onPick(agent.id);
+              }}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-surface-2 disabled:cursor-default disabled:opacity-60"
+            >
+              <span aria-hidden="true" className="w-3 shrink-0 text-content-tertiary">
+                {current ? '✓' : ''}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {agent.name ?? t('inbox.details.takeover.fallbackName')}
+              </span>
+              {/* Glyph *and* word, never colour alone (NFR-A11Y2): who is
+                        likely to pick this up is the whole reason to read the list. */}
+              <StatusDot
+                tone={ROUTING_TONE[agent.routing_status]}
+                label={t(ROUTING_KEY[agent.routing_status])}
+              />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

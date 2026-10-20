@@ -19,6 +19,7 @@ import { isMailLocale, type MailLocale } from '../mail/templates/layout.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import {
   AGENT_COMPOSING_TTL_SECONDS,
+  AGENT_ROLES,
   buildEventId,
   composerStateKey,
   CONTINUED_FROM_CHAT_PROPERTY,
@@ -29,6 +30,7 @@ import {
   isWithinEditWindow,
   MESSAGE_EDIT_WINDOW_SECONDS,
   readSensitiveTypes,
+  RESPONSIBLE_GAMBLING_ROLE,
   SENSITIVE_TYPES,
   SENSITIVE_TYPES_PROPERTY,
   SENSITIVE_WARNING_SYSTEM_EVENT,
@@ -37,12 +39,15 @@ import {
   SNEAK_PEEK_MAX_LENGTH,
   stripEditMarkers,
   threadPriorityFromRank,
+  transferNoteRequired,
   type AdapterChannelType,
   type AgentConflictWarningPush,
   type AiConversationMode,
   type AiReturnResume,
   type ChatAiModeChangedPush,
   type ChatTakenOverPush,
+  type ChatTransferOutcome,
+  type ChatTransferredPush,
   type ConnectionOpenedVia,
   type EventRecipients,
   type EventType,
@@ -77,6 +82,7 @@ import {
   RoutingService,
   type DrainedAssignment,
   type RoutingContext,
+  type TeamHandOff,
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import { loadDailyDigests, settleDailyDigest, type DailyDigest } from './ai-digest.js';
@@ -3062,12 +3068,14 @@ export class ChatService {
     tenant: TenantContext,
     principal: Principal,
     chatId: string,
-    target: { groupId?: bigint; agentId?: string; reason: TransferReason },
+    target: { groupId?: bigint; agentId?: string; reason: TransferReason; note?: string },
     options: HandOverOptions = {},
-  ): Promise<ChatDetail> {
+  ): Promise<ChatTransferResult> {
     if ((target.groupId === undefined) === (target.agentId === undefined)) {
       throw ApiError.validation('Provide exactly one of group_id or agent_id.');
     }
+    const actorId = actorOf(principal);
+    const note = target.note?.trim() || null;
 
     const result = await withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
@@ -3076,56 +3084,42 @@ export class ChatService {
       const thread = chat.threads.find((t) => t.active);
       if (!chat.active || !thread) throw ApiError.chatInactive('Cannot transfer a closed chat.');
 
+      let handOff: TeamHandOff = { outcome: 'assigned', assigneeId: target.agentId ?? '' };
+      let unstaffed = false;
       if (target.groupId !== undefined) {
         const group = await tx.group.findUnique({
           where: { licenseId_id: { licenseId: tenant.licenseId, id: target.groupId } },
-          select: { id: true, name: true },
+          select: { id: true, topicRole: true, _count: { select: { agents: true } } },
         });
         if (!group) throw new ApiError('group_not_found', 'Team not found.');
-
-        // Handing a chat to a team with nobody accepting strands the customer.
-        const available = await tx.groupAgent.count({
-          where: {
-            groupId: group.id,
-            agent: {
-              memberships: {
-                some: {
-                  licenseId: tenant.licenseId,
-                  routingStatus: 'accepting_chats',
-                  suspended: false,
-                },
-              },
-            },
-          },
-        });
-        if (available === 0) {
-          throw new ApiError('group_offline', 'No agent in that team is accepting chats.');
+        // A team nobody belongs to would hold the conversation for nobody, ever
+        // (IN-04: a team without members is not a choice).
+        if (group._count.agents === 0) {
+          throw new ApiError('group_unavailable', 'That team has no members.');
+        }
+        // The person picking it up must not have to ask the player again
+        // (IN-04-S2). A person's hand-off only: the AI's carries its card.
+        if (principal.kind === 'agent' && !note && transferNoteRequired(group.topicRole)) {
+          throw ApiError.validation('A note is required when handing a conversation to this team.');
         }
 
         await tx.chatAccess.deleteMany({ where: { chatId: chat.id } });
         await tx.chatAccess.create({ data: { chatId: chat.id, groupId: group.id } });
-        // Unassign: the receiving team routes it (slice 8). The open connection
-        // now belongs to that team (`threads.group_id`, ID-02 · tm 286.3); an
-        // agent hand-off below leaves the team as it was.
-        await tx.thread.update({
-          where: { id: thread.id },
-          data: { assigneeId: null, groupId: group.id },
+        // Someone in the receiving team has it now, or it waits in that team's
+        // queue (IN-04 · IN-04-S1) — never unassigned and unqueued, which no
+        // drain would ever pick up. The open connection belongs to that team
+        // (`threads.group_id`, ID-02 · tm 286.3); an agent hand-off below
+        // leaves the team as it was. A person handing it off means "someone
+        // else": neither them nor whoever held it. The AI's hand-off goes to
+        // the team as routing would — the agent it was opened to included.
+        const exclude =
+          principal.kind === 'agent'
+            ? [actorId, thread.assigneeId].filter((id): id is string => id !== null)
+            : [];
+        handOff = await this.routing.assignWithinGroup(tx, tenant.licenseId, group.id, thread.id, {
+          exclude,
         });
-        // A stay ends with the team it waited for. Still positioned and now
-        // unassigned, the connection waits on in the receiving team's queue —
-        // the drain reads exactly that — so that wait is a stay of its own.
-        const now = new Date();
-        await leaveQueue(tx, thread.id, 'transferred', now);
-        if (thread.queuePosition != null) {
-          await enterQueue(tx, {
-            licenseId: tenant.licenseId,
-            threadId: thread.id,
-            groupId: group.id,
-            enteredAt: now,
-          });
-          // …in that team's queue, at the back of its priority (ADR-08a §2.1).
-          await this.routing.moveQueued(tx, tenant.licenseId, thread.id, group.id, now);
-        }
+        unstaffed = handOff.outcome === 'queued' && group.topicRole === RESPONSIBLE_GAMBLING_ROLE;
       } else {
         const membership = await tx.agentMembership.findUnique({
           where: {
@@ -3159,7 +3153,7 @@ export class ChatService {
         licenseId: tenant.licenseId,
         chatId: chat.id,
         threadId: thread.id,
-        authorId: actorOf(principal),
+        authorId: actorId,
         authorType: 'system',
         input: {
           type: 'system_message',
@@ -3169,12 +3163,30 @@ export class ChatService {
             ...options.properties,
             system_event: 'chat_transferred',
             reason: target.reason,
+            outcome: handOff.outcome,
             ...(target.groupId !== undefined
               ? { group_id: Number(target.groupId) }
               : { agent_id: target.agentId }),
           },
         },
       });
+      // What the receiving side should know, for the agents only (IN-04): an
+      // internal note in the transcript, as the composer writes one.
+      const noteEvent = note
+        ? await this.#appendEvent(tx, {
+            licenseId: tenant.licenseId,
+            chatId: chat.id,
+            threadId: thread.id,
+            authorId: actorId,
+            authorType: principal.kind === 'agent' ? 'agent' : 'system',
+            input: {
+              type: principal.kind === 'agent' ? 'message' : 'system_message',
+              text: note,
+              recipients: 'agents',
+              properties: { transfer_note: true },
+            },
+          })
+        : null;
 
       // A transferred chat is a person's: the AI stays silent on it (AI-11),
       // the AI's own hand-over included.
@@ -3183,7 +3195,7 @@ export class ChatService {
         tenant,
         chat,
         thread.id,
-        actorOf(principal),
+        actorId,
         {
           to: 'human',
           reason:
@@ -3202,39 +3214,84 @@ export class ChatService {
       // In the transfer's transaction: a transfer refused rolls it back too.
       await options.alongside?.(tx);
 
+      // The supervisors hear of a Responsible Gambling conversation nobody
+      // could take (IN-04-S1), in the transfer's own push.
+      const supervisors = unstaffed
+        ? await tx.agentMembership.findMany({
+            where: {
+              licenseId: tenant.licenseId,
+              suspended: false,
+              role: { in: AGENT_ROLES.filter((role) => roleAtLeast(role, 'admin')) },
+            },
+            select: { agentId: true },
+          })
+        : [];
+
       const reloaded = await tx.chat.findUniqueOrThrow({
         where: { id: chat.id },
         include: chatInclude,
       });
+      const before = this.#audienceFor(chat);
+      const after = this.#audienceFor(reloaded);
+      const teamAssigned: DrainedAssignment | null =
+        target.groupId !== undefined && handOff.outcome === 'assigned'
+          ? {
+              chatId: chat.id,
+              threadId: thread.id,
+              assigneeId: handOff.assigneeId,
+              customerId: chat.customerId,
+            }
+          : null;
+      const detail: ChatTransferResult = {
+        ...serialiseChat(reloaded),
+        outcome: handOff.outcome,
+        visible_to_caller: canSeeChat(visibility, reloaded),
+      };
       return {
-        detail: serialiseChat(reloaded),
+        detail,
         // Union of before and after: the losing team needs to be told the chat
         // left as much as the winning team needs to be told it arrived.
         audience: {
-          groupIds: [...this.#audienceFor(chat).groupIds, ...this.#audienceFor(reloaded).groupIds],
-          agentIds: [...this.#audienceFor(chat).agentIds, ...this.#audienceFor(reloaded).agentIds],
+          groupIds: [...before.groupIds, ...after.groupIds],
+          agentIds: [...before.agentIds, ...after.agentIds, ...supervisors.map((s) => s.agentId)],
           customerId: chat.customerId,
         },
         threadId: thread.id,
         // Who was responsible before the hand-off and who is now — the conflict
         // warning below only fires when this actually changed to a new agent.
         oldAssigneeId: thread.assigneeId ?? null,
-        newAssigneeId: target.agentId ?? null,
+        newAssigneeId: target.agentId ?? teamAssigned?.assigneeId ?? null,
         modeNote: mode?.note ?? null,
-        handover: mode?.assigned ?? null,
+        // Whoever the team hand-off gave it to is told as the AI's hand-over
+        // tells one (`#announceHandover`): their inbox, and the board.
+        handover: mode?.assigned ?? teamAssigned,
+        noteEvent,
+        noteAudience: after,
+        unstaffed,
       };
     });
 
-    await this.publisher?.publish(tenant, 'chat_transferred', result.audience, {
+    const push: ChatTransferredPush = {
       chat_id: chatId,
       thread_id: result.threadId,
-      requester_id: actorOf(principal),
+      requester_id: actorId,
       reason: target.reason,
       transferred_to: {
         group_ids: target.groupId !== undefined ? [Number(target.groupId)] : [],
         agent_ids: target.agentId !== undefined ? [target.agentId] : [],
       },
-    });
+      outcome: result.detail.outcome,
+      assignee_id: result.newAssigneeId,
+      ...(result.unstaffed ? { unstaffed: true } : {}),
+    };
+    await this.publisher?.publish(tenant, 'chat_transferred', result.audience, push);
+    if (result.noteEvent) {
+      await this.#announceEvent(tenant, {
+        event: result.noteEvent,
+        recipients: 'agents',
+        audience: result.noteAudience,
+      });
+    }
     // To both teams, as the transfer itself is: the losing team's open view
     // should hear the AI stopped as much as the winning team's.
     if (result.modeNote) {
@@ -5011,6 +5068,13 @@ export interface ChatDetail {
    * agent's or bot's `get`; null when the AI handed nothing over.
    */
   latest_ai_handoff?: AiHandoffCardView | null;
+}
+
+/** The chat after a hand-off, and what became of it (`ChatTransferResult`, IN-04). */
+export interface ChatTransferResult extends ChatDetail {
+  outcome: ChatTransferOutcome;
+  /** Whether the caller can still open it — a team hand-off narrows its access. */
+  visible_to_caller: boolean;
 }
 
 interface ThreadRow {

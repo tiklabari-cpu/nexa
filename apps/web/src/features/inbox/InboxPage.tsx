@@ -16,6 +16,7 @@ import { useRealtimeStatus } from '../../lib/realtime-status.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { Banner } from '../../components/ui/index.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
@@ -59,6 +60,7 @@ import {
   toggleTicketSelection,
 } from './ticket-selection.js';
 import { ThreadHeader } from './ThreadHeader.js';
+import type { TransferNotice } from './transfer.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import { QueueTeamTabs } from './QueueTeamTabs.js';
 import {
@@ -159,6 +161,8 @@ export function InboxPage(): ReactElement {
 
   const [selection, setSelection] = useState<Selection>({ kind: 'chat', view: 'all' });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // What the last hand-off came to (IN-04), until dismissed or the next one.
+  const [transferNotice, setTransferNotice] = useState<TransferNotice | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [trafficTab, setTrafficTab] = useState<TrafficTab>('all');
   /**
@@ -383,6 +387,15 @@ export function InboxPage(): ReactElement {
       setSelectedId(chats[0]?.id ?? null);
     }
   }, [chats, selectedId, onTickets, chatsLoaded, list.hasNext]);
+
+  // A hand-off (IN-04) says what it came to. One that took the chat out of the
+  // agent's sight moves the console on — the list is already re-read without
+  // it (`useChatAction.transfer`), so the next chat is picked from that list
+  // and the one handed off is never read again, which would be a 404.
+  const onTransferred = ({ notice, left }: { notice: TransferNotice; left: boolean }): void => {
+    setTransferNotice(notice);
+    if (left) setSelectedId(null);
+  };
 
   const ticketItems = tickets.items;
   const ticketsLoaded = tickets.pages.length > 0;
@@ -862,6 +875,18 @@ export function InboxPage(): ReactElement {
 
             {/* Transcript */}
             <div className="flex min-w-0 flex-1 flex-col bg-canvas">
+              {transferNotice && (
+                <Banner
+                  tone={transferNotice.tone}
+                  role="status"
+                  dismissible
+                  dismissLabel={t('inbox.transfer.dismiss')}
+                  onDismiss={() => setTransferNotice(null)}
+                  className="m-2"
+                >
+                  {t(transferNotice.key, transferNotice.params)}
+                </Banner>
+              )}
               {selectedId && chat.data ? (
                 <>
                   <ThreadHeader
@@ -889,6 +914,7 @@ export function InboxPage(): ReactElement {
                     // (the transcript header is tight at this width); when it is
                     // hidden, this is the way back to it.
                     onShowDetails={rightPanel.expanded ? () => rightPanel.setExpanded(false) : null}
+                    onTransferred={onTransferred}
                   />
 
                   {/* An empty thread with a live reply box is how a failed read used
@@ -980,6 +1006,7 @@ export function InboxPage(): ReactElement {
                     setSelection({ kind: 'chat', view: 'all' });
                     setSelectedId(id);
                   }}
+                  onTransferred={onTransferred}
                 />
               ))}
           </>

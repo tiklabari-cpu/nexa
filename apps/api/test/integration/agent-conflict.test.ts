@@ -154,19 +154,45 @@ describe('agent conflict warning — transfer surface', () => {
     expect(warnings(envelopes)).toHaveLength(0);
   });
 
-  it('does not warn on a team hand-off — there is no new assignee to conflict', async () => {
+  it('warns on a team hand-off that seats a member — that member is the new assignee', async () => {
     const chatId = await chatHeldByComposer();
     await markComposing(fx.a.licenseId, chatId, composerAgent);
 
     const envelopes = await captureBus(async () => {
-      // Handing to a team unassigns the chat; the "new assignee" branch cannot
-      // fire, so a composer alone in a queued chat is no conflict.
+      // The team gives it to its free member (IN-04), so it lands on a new
+      // agent while the composer is still typing — the same conflict.
       const transferred = await server.post(
         `/chats/${chatId}/transfer`,
         { group_id: Number(supportGroupId) },
         auth(adminToken),
       );
       expect(transferred.statusCode).toBe(200);
+      expect(transferred.json().outcome).toBe('assigned');
+    });
+
+    const [warning] = warnings(envelopes);
+    expect(warning).toBeDefined();
+    expect(audienceOf(warning!)).toContain(incomingAgent);
+  });
+
+  it('does not warn on a team hand-off that queues — there is no new assignee to conflict', async () => {
+    const chatId = await chatHeldByComposer();
+    await markComposing(fx.a.licenseId, chatId, composerAgent);
+    await owner.agentMembership.update({
+      where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: incomingAgent } },
+      data: { routingStatus: 'not_accepting_chats' },
+    });
+
+    const envelopes = await captureBus(async () => {
+      // Nobody in the team is free: it waits in the team's queue, and a
+      // composer alone in a queued chat is no conflict.
+      const transferred = await server.post(
+        `/chats/${chatId}/transfer`,
+        { group_id: Number(supportGroupId) },
+        auth(adminToken),
+      );
+      expect(transferred.statusCode).toBe(200);
+      expect(transferred.json().outcome).toBe('queued');
     });
 
     expect(warnings(envelopes)).toHaveLength(0);

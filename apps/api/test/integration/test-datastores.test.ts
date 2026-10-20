@@ -202,10 +202,13 @@ describe('isolated test datastores', () => {
       const leased = isolatedDatabaseName();
 
       try {
+        // Only one of them has a live owner. Claim the name before the database
+        // exists — the order the harness itself uses — so a sweep from another
+        // run cannot see `leased` without its lease. The lease outlives a sweep
+        // that is slow under load; the `finally` below deletes it either way.
+        await bookkeeping.set(`siyahtus:test:database:${leased}`, 'still-running', 'PX', 120_000);
         await admin.$executeRawUnsafe(`CREATE DATABASE "${abandoned}"`);
         await admin.$executeRawUnsafe(`CREATE DATABASE "${leased}"`);
-        // Only one of them has a live owner.
-        await bookkeeping.set(`siyahtus:test:database:${leased}`, 'still-running', 'PX', 60_000);
 
         const dropped = await sweepAbandonedDatabases(admin, bookkeeping);
 

@@ -13213,12 +13213,12 @@
         "description": "Sunucu ekibe aktarmayı destekliyor ama arayüz yalnız kişi gönderiyor (useInbox.ts:821-824); ekibe aktarılan sohbet atanmamış yapılıyor ama kuyruğa da alınmıyor (chat-service.ts:1388-1417) ve kimse yoksa group_offline ile reddediliyor. AI devri aynı yolu kullandığı için AI-12'den önce yapılmalı (bağımlılık nedeniyle Dalga 5'ten öne alındı). Kaynak: IN-04.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: IN-04. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 3a — AI çekirdeği (çok turlu motor, devir, uyum).\n\nKONTRAT: transfer gövdesine note (≤500), yanıta outcome assigned|queued; 409 group_offline dokümandan kalkar; GET /groups yanıtına accepting_count.\nAPI: RoutingService.assignWithinGroup(tx, licenseId, groupId) — mevcut ajan seçimiyle ata, yoksa ekip kuyruğu (queue_group_id, #305) + queue_entries (#291); chat-service.transfer ekip dalı bunu çağırır; not varsa recipients='agents' iç not; kritik (Sorumlu Oyun) ekipte kuyruğa düşerse Yöneticiye bildirim (IN-04-S1); Sorumlu Oyun ve Şikâyet ekiplerine aktarırken not zorunlu (S2). AI devri aynı metodu kullanır.\nRTM: chat_transferred; atanan ajana \"bana aktarıldı\" (IN-10 ile).\nWEB: AssigneePicker iki bölüm (\"Ekip arkadaşı\" / \"Ekip\", \"Finans · 2 çevrimiçi\"); başlık menüsü \"Aktar…\"; transferToGroup(groupId, note?); görünürlük kaybında seçim temizlenir + bilgi mesajı; hata cümleleri.\nNOT: AI aktarılan sohbette susar (AI-11).\n\nKABUL KRİTERLERİ:\n- Ajan sohbeti Finans'a aktarabilir; çevrimiçi biri varsa ona atanır ve bildirim gider.\n- Finans'ta kimse yoksa Finans kuyruğuna girer, ilk müsait Finans ajanına atanır.\n- Not iç not olarak görünür, oyuncu görmez.\n- Sohbet aktaran ajanın listesinden düşer, hata görülmez.\n- AI devrinden sonra sohbet atanmamış kalmaz.\n\nKULLANILAN VARSAYIMLAR:\n- IN-04-S1: reddetme yerine kuyruk + uyarı.\n- IN-04-S2: not isteğe bağlı; RG ve Şikâyet'te zorunlu.",
         "testStrategy": "Entegrasyon (atama, kuyruk, AI devri), DetailsPanel.transfer.test.tsx, e2e inbox-transfer-team.spec.ts; group_offline bekleyen testler güncellenir; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "305"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T08:44:48.920Z",
+        "updatedAt": "2026-10-20T10:16:50.094Z",
         "subtasks": []
       },
       {
@@ -16132,9 +16132,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T08:44:48.921Z",
+      "lastModified": "2026-10-20T10:16:50.094Z",
       "taskCount": 390,
-      "completedCount": 304,
+      "completedCount": 305,
       "tags": [
         "master"
       ]

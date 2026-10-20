@@ -333,6 +333,8 @@ paths:
     $ref: "./paths/agents.yaml#/group"
   /groups/{groupId}/agents/{agentId}:
     $ref: "./paths/agents.yaml#/groupMember"
+  /routing/queues:
+    $ref: "./paths/agents.yaml#/routingQueues"
 
   /ai-agents:
     $ref: "./paths/playbook.yaml#/aiAgents"
@@ -7286,7 +7288,11 @@ components:
             The topic this team's queue is for (AU-01 · K14). At most one team
             per workspace holds a role — naming one another team holds is a 409
             `group_topic_role_taken` with `details.group_id`. `null` clears it.
-            Omitted on create: no role.
+            Omitted on create: no role. The `responsible_gambling` team keeps
+            its role (clearing or changing it is a 409 `group_protected`), must
+            require at least one area of expertise — its training — and every
+            member must hold all of it (409 `group_expertise_missing` naming
+            `details.agent_ids`).
           allOf:
             - $ref: "#/components/schemas/QueueTopicRole"
           nullable: true
@@ -7301,8 +7307,10 @@ components:
           description: |
             The complete set of expertise areas (`Expertise.id`) an agent must
             hold — every one of them — to be given this team's conversations
-            (AU-01). Replaces the current set; `[]` clears it. An id that names
-            no area on this licence is a 404. Omitted on create: none.
+            and to join it (AU-01). Replaces the current set; `[]` clears it. An
+            id that names no area on this licence is a 404. Omitted on create:
+            none. The `responsible_gambling` team's set cannot be empty (409
+            `group_protected`, `details.reason: required_expertise`).
 
     QueueTopicRole:
       type: string
@@ -7368,6 +7376,30 @@ components:
                 description: |
                   Assignment preference within the team (ADR-08). A full tier is
                   skipped rather than queued behind.
+
+    RoutingQueue:
+      type: object
+      description: |
+        One topic role and the team whose queue serves it (AU-01 · K14 ·
+        ADR-08a). The AI's hand-over, a hand-over rule's `{ topic }` target and
+        the pre-chat topic resolve the role, never the team's name, so renaming
+        a team does not move its topic. `group_id` is null — and so are the
+        team's fields — while no team holds the role.
+      required: [topic_role, group_id, group_name, after_hours_mode]
+      properties:
+        topic_role: { $ref: "#/components/schemas/QueueTopicRole" }
+        group_id:
+          type: integer
+          format: int64
+          nullable: true
+        group_name:
+          type: string
+          nullable: true
+        after_hours_mode:
+          description: What the team's queue does when nobody is on shift; null with no team.
+          allOf:
+            - $ref: "#/components/schemas/AfterHoursMode"
+          nullable: true
 
     WorkSchedule:
       type: object
@@ -9500,8 +9532,10 @@ components:
         - chat_inactive
         - customer_banned
         - greeting_not_found
+        - group_expertise_missing
         - group_not_found
         - group_offline
+        - group_protected
         - group_topic_role_taken
         - group_unavailable
         - groups_offline

@@ -42,9 +42,39 @@
  * would be unfindable among them. So each writer below reports whether it
  * changed anything and only then appends — the rule `setMembershipSuspension`
  * already holds to, for the same reason and against the same caller.
+ *
+ * ## Who may be on a team (AU-01 · K14 · ADR-08a §2.6 · tm 305.3)
+ *
+ * A team that requires areas of expertise (`group_expertise`) takes only a
+ * member who holds every one of them. Routing gives nobody else its
+ * conversations (`routing-service.ts`, the defence at selection), so admitting
+ * them would be the silent grant `workspaceMemberIds` refuses — a person on the
+ * team's screen who never gets its work. The check is at joining; a team that
+ * grows its requirement later, or an agent who loses an area, narrows routing
+ * and nothing else.
+ *
+ * The Responsible Gambling team (`topic_role = 'responsible_gambling'`) is the
+ * exception, because there membership itself is the rule: only trained agents
+ * are on it (K14), and the conversations it can see are the ones a player
+ * asked for help with. So for that team the rule holds at all times — every
+ * write that would leave a member short of its requirement is refused
+ * ({@link assertKeepsTeamTraining} for an agent's own areas) — and the team
+ * itself is fixed: never deleted, never without its role, never without a
+ * requirement ({@link assertExpertiseRemovable} for the catalogue). Its name
+ * is the one thing that changes.
+ *
+ * Those writes are spread over five endpoints and two tables, and a check that
+ * reads one table while another transaction writes the other passes for both.
+ * So each of them first takes {@link lockTeamStaffing} — one advisory lock per
+ * workspace — and reads after it. Admin writes, rare, and short.
  */
 import { Prisma } from '@prisma/client';
-import type { AfterHoursMode, GroupPriority, QueueTopicRole } from '@siyahtus/types';
+import {
+  RESPONSIBLE_GAMBLING_ROLE,
+  type AfterHoursMode,
+  type GroupPriority,
+  type QueueTopicRole,
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
@@ -175,6 +205,158 @@ async function replaceRequiredExpertise(
   }
 }
 
+/**
+ * Serialise, within one workspace, the writes that decide who may be on a team
+ * (see the header): a membership added, a team's role or requirement changed,
+ * an agent's areas replaced, an area or a team deleted. Held to the end of the
+ * caller's transaction; taken before the write's own reads, so what it checks
+ * is what the last of them committed. Re-entrant, so a SCIM replacement that
+ * adds several members takes it once in effect.
+ */
+export async function lockTeamStaffing(tx: TenantClient, licenseId: bigint): Promise<void> {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext('siyahtus.team-staffing'), hashtext(${String(licenseId)}))`;
+}
+
+type ProtectedReason = 'delete' | 'topic_role' | 'required_expertise';
+
+const PROTECTED_MESSAGES: Readonly<Record<ProtectedReason, string>> = {
+  delete: 'The responsible gambling team cannot be deleted. Rename it instead.',
+  topic_role: 'The responsible gambling team keeps its topic. Rename it instead.',
+  required_expertise:
+    'The responsible gambling team must require its training: at least one area of expertise.',
+};
+
+/** The Responsible Gambling team's refusal (K14 · ADR-08a §2.6). */
+function protectedTeam(reason: ProtectedReason, groupId?: bigint): ApiError {
+  return new ApiError('group_protected', PROTECTED_MESSAGES[reason], {
+    details: {
+      reason,
+      topic_role: RESPONSIBLE_GAMBLING_ROLE,
+      ...(groupId !== undefined ? { group_id: Number(groupId) } : {}),
+    },
+  });
+}
+
+/**
+ * Of `agentIds`, each one short of `expertiseIds`, with the areas they lack in
+ * the order given. RLS scopes the read, so an area held in another workspace
+ * is not held here.
+ */
+async function shortOfExpertise(
+  tx: TenantClient,
+  agentIds: readonly string[],
+  expertiseIds: readonly bigint[],
+): Promise<Map<string, bigint[]>> {
+  const short = new Map<string, bigint[]>();
+  if (agentIds.length === 0 || expertiseIds.length === 0) return short;
+  const held = await tx.agentExpertise.findMany({
+    where: { agentId: { in: [...agentIds] }, expertiseId: { in: [...expertiseIds] } },
+    select: { agentId: true, expertiseId: true },
+  });
+  const has = new Set(held.map((row) => `${row.agentId}:${row.expertiseId}`));
+  for (const agentId of agentIds) {
+    const missing = expertiseIds.filter((id) => !has.has(`${agentId}:${id}`));
+    if (missing.length > 0) short.set(agentId, missing);
+  }
+  return short;
+}
+
+/**
+ * The Responsible Gambling team's members all hold `required` — asked when the
+ * team gets the role or its requirement changes. Names every member short of
+ * it, so the admin sees the whole list at once rather than one per attempt.
+ */
+async function assertMembersHold(
+  tx: TenantClient,
+  groupId: bigint,
+  agentIds: readonly string[],
+  required: readonly bigint[],
+): Promise<void> {
+  const short = await shortOfExpertise(tx, agentIds, required);
+  if (short.size === 0) return;
+  throw new ApiError(
+    'group_expertise_missing',
+    'Some members of the responsible gambling team do not hold the expertise it requires. Add it to them, or take them off the team first.',
+    {
+      details: {
+        group_id: Number(groupId),
+        agent_ids: [...short.keys()].sort(),
+        expertise_ids: [...new Set([...short.values()].flat().map(String))]
+          .map(BigInt)
+          .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+          .map(Number),
+      },
+    },
+  );
+}
+
+/**
+ * An agent's areas are about to become `nextExpertiseIds` (`PUT
+ * /agents/{id}/expertise`, a complete set): refuse it when it drops an area the
+ * Responsible Gambling team requires while they are on that team. Only what
+ * this write removes is refused — an area they never held is the requirement
+ * check's business, not this one's. Takes {@link lockTeamStaffing}.
+ */
+export async function assertKeepsTeamTraining(
+  tx: TenantClient,
+  licenseId: bigint,
+  agentId: string,
+  nextExpertiseIds: readonly bigint[],
+): Promise<void> {
+  await lockTeamStaffing(tx, licenseId);
+  const team = await tx.group.findFirst({
+    where: { licenseId, topicRole: RESPONSIBLE_GAMBLING_ROLE, agents: { some: { agentId } } },
+    select: { id: true, requiredExpertise: { select: { expertiseId: true } } },
+  });
+  if (!team) return;
+
+  const next = new Set(nextExpertiseIds.map(String));
+  const required = team.requiredExpertise.map((row) => row.expertiseId);
+  const held = await tx.agentExpertise.findMany({
+    where: { agentId, expertiseId: { in: required } },
+    select: { expertiseId: true },
+  });
+  const dropped = held
+    .map((row) => row.expertiseId)
+    .filter((id) => !next.has(String(id)))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  if (dropped.length === 0) return;
+
+  throw new ApiError(
+    'group_expertise_missing',
+    'This agent is on the responsible gambling team, which requires this expertise. Take them off the team first.',
+    {
+      details: { group_id: Number(team.id), agent_id: agentId, expertise_ids: dropped.map(Number) },
+    },
+  );
+}
+
+/**
+ * An area of expertise is about to be deleted (`DELETE
+ * /settings/expertise/{id}`), which cascades it out of every requirement: refuse
+ * it when it is the last one the Responsible Gambling team requires. Another
+ * team, or the Responsible Gambling team with a second area left, loses it the
+ * way the agents do — its members still hold what remains. Takes
+ * {@link lockTeamStaffing}.
+ */
+export async function assertExpertiseRemovable(
+  tx: TenantClient,
+  licenseId: bigint,
+  expertiseId: bigint,
+): Promise<void> {
+  await lockTeamStaffing(tx, licenseId);
+  const team = await tx.group.findFirst({
+    where: { licenseId, topicRole: RESPONSIBLE_GAMBLING_ROLE },
+    select: { id: true, requiredExpertise: { select: { expertiseId: true } } },
+  });
+  if (!team) return;
+  const remaining = team.requiredExpertise.filter((row) => row.expertiseId !== expertiseId);
+  if (remaining.length === 0 && team.requiredExpertise.length > 0) {
+    throw protectedTeam('required_expertise', team.id);
+  }
+}
+
 /** The fields every `group.created` / `group.updated` entry records. */
 function groupAuditFields(group: GroupWithAgents): Record<string, unknown> {
   return {
@@ -297,6 +479,12 @@ export async function createGroup(
   options: AuditOptions = {},
 ): Promise<GroupWithAgents> {
   const expertiseIds = distinctIds(input.requiredExpertiseIds ?? []);
+  // The Responsible Gambling team is made with its training (K14): a team
+  // whose requirement is empty would count everyone as trained.
+  if (input.topicRole === RESPONSIBLE_GAMBLING_ROLE) {
+    await lockTeamStaffing(tx, licenseId);
+    if (expertiseIds.length === 0) throw protectedTeam('required_expertise');
+  }
   if (input.topicRole) await assertTopicRoleFree(tx, input.topicRole);
   await assertExpertiseExists(tx, expertiseIds);
 
@@ -330,6 +518,11 @@ export async function createGroup(
  * /scim/v2/Groups/{id}` restates the name it read an hour ago; recording that as
  * a change would bury the rename somebody actually made. The same holds for a
  * requirement restated in another order: the set is compared, not the list.
+ *
+ * The Responsible Gambling team is renamed only (K14 · ADR-08a §2.6): its role
+ * stays, its requirement never empties, and it never requires more than every
+ * member holds — nor does a team take the role while a member lacks its
+ * requirement.
  */
 export async function updateGroup(
   tx: TenantClient,
@@ -339,6 +532,9 @@ export async function updateGroup(
   input: { name?: string; languageCode?: string } & GroupQueueSettings,
   options: AuditOptions = {},
 ): Promise<GroupWithAgents> {
+  if (input.topicRole !== undefined || input.requiredExpertiseIds !== undefined) {
+    await lockTeamStaffing(tx, licenseId);
+  }
   const before = await readGroup(tx, licenseId, groupId);
   const roleMoved = input.topicRole !== undefined && input.topicRole !== before.topicRole;
   const fieldsMoved =
@@ -356,9 +552,30 @@ export async function updateGroup(
     );
   if (!fieldsMoved && !expertiseMoved) return before;
 
+  const required =
+    wantedExpertise !== null && expertiseMoved
+      ? wantedExpertise
+      : before.requiredExpertise.map((row) => row.expertiseId);
+  const responsibleGambling =
+    (roleMoved ? input.topicRole : before.topicRole) === RESPONSIBLE_GAMBLING_ROLE;
+  if (roleMoved && before.topicRole === RESPONSIBLE_GAMBLING_ROLE) {
+    throw protectedTeam('topic_role', groupId);
+  }
+  if (responsibleGambling && required.length === 0) {
+    throw protectedTeam('required_expertise', groupId);
+  }
+
   if (roleMoved && input.topicRole) await assertTopicRoleFree(tx, input.topicRole, groupId);
   if (wantedExpertise !== null && expertiseMoved) {
     await assertExpertiseExists(tx, wantedExpertise);
+  }
+  if (responsibleGambling && (roleMoved || expertiseMoved)) {
+    await assertMembersHold(
+      tx,
+      groupId,
+      before.agents.map((member) => member.agentId),
+      required,
+    );
   }
 
   if (fieldsMoved) {
@@ -400,6 +617,11 @@ export async function updateGroup(
  * refusals rather than cascades: which team should inherit the work is an
  * operator's decision, not a default — and least of all a default taken
  * unattended by a directory sync at three in the morning.
+ *
+ * The Responsible Gambling team is never deleted (K14), whatever depends on it:
+ * its conversations have no other team to go to (ADR-08a §2.6). Read under
+ * {@link lockTeamStaffing}, so a team given the role meanwhile is not deleted
+ * on a stale read.
  */
 export async function deleteGroup(
   tx: TenantClient,
@@ -408,6 +630,13 @@ export async function deleteGroup(
   groupId: bigint,
   options: AuditOptions = {},
 ): Promise<void> {
+  await lockTeamStaffing(tx, licenseId);
+  const team = await tx.group.findUnique({
+    where: { licenseId_id: { licenseId, id: groupId } },
+    select: { topicRole: true },
+  });
+  if (team?.topicRole === RESPONSIBLE_GAMBLING_ROLE) throw protectedTeam('delete', groupId);
+
   const rule = await tx.routingRule.findFirst({
     where: { targetGroupId: groupId },
     select: { id: true, kind: true, isFallback: true },
@@ -472,6 +701,13 @@ export async function deleteGroup(
  * first. The console always names a tier, because its dropdown always has one
  * selected.
  *
+ * A new member must hold every area the team requires (AU-01 · K14 — the
+ * Responsible Gambling team's training): a 409 naming what they lack. Checked
+ * where a membership is created, by the console and a directory alike; moving
+ * the tier of somebody already on the team is not a new grant and is not
+ * re-checked, so a nightly SCIM restatement never trips over a member who was
+ * on the team before the requirement was.
+ *
  * Returns whether anything changed, which is also what decides whether an entry
  * is written.
  */
@@ -497,6 +733,35 @@ export async function setGroupMember(
   const wanted = input.priority ?? (existing?.priority as GroupPriority | undefined);
 
   if (existing && (wanted === undefined || wanted === existing.priority)) return false;
+
+  if (!existing) {
+    await lockTeamStaffing(tx, licenseId);
+    const required = await tx.groupExpertise.findMany({
+      where: { groupId },
+      select: { expertiseId: true },
+      orderBy: { expertiseId: 'asc' },
+    });
+    const missing = (
+      await shortOfExpertise(
+        tx,
+        [agentId],
+        required.map((row) => row.expertiseId),
+      )
+    ).get(agentId);
+    if (missing) {
+      throw new ApiError(
+        'group_expertise_missing',
+        'This agent does not hold every area of expertise the team requires. Add it to them first.',
+        {
+          details: {
+            group_id: Number(groupId),
+            agent_id: agentId,
+            expertise_ids: missing.map(Number),
+          },
+        },
+      );
+    }
+  }
 
   const priority = wanted ?? DEFAULT_GROUP_PRIORITY;
   await tx.groupAgent.upsert({

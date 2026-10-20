@@ -958,7 +958,11 @@ describe('module parity matrix — what is still owed', () => {
       // `/ai-handoffs/{handoffId}/feedback` (tm 304.1) — AI-10's hand-over card,
       // drawn and judged in the web inbox (tm 304.2). The app's chat screen
       // shows no card yet; nothing here re-scopes.
-      contractEndpoints: 260,
+      // 260 -> 261 with `/routing/queues` (tm 305.3) — which team serves each
+      // topic queue (AU-01), read by the web panel's team editor (tm 305.4)
+      // and hand-over routes (tm 307). The app configures no team; nothing
+      // here re-scopes.
+      contractEndpoints: 261,
       scopeBoundaries: 1,
     });
   });

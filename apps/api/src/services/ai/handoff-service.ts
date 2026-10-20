@@ -11,8 +11,12 @@
  *      agents-only line; announced once the hand-over committed;
  *   2. **the connection to `human`** (AI-11): the AI stays silent from here on;
  *   3. **the target** (AI-12): the team a single-message skill names, the team
- *      a procedure names by id, or — a routing topic (#307 resolves those), no
- *      target, a team that cannot take it now — whoever routing gives it;
+ *      a procedure names by id, the team holding the queue role a `{ topic }`
+ *      target names (AU-01 · `resolveQueue`, by role, so a renamed team still
+ *      receives it), or — another topic (#307 maps those), no target, a team
+ *      that cannot take it now — whoever routing gives it; except that a
+ *      hand-over named for the Responsible Gambling team waits in that team's
+ *      queue rather than reach another (ADR-08a §2.6);
  *   4. **the pushes**: the transfer and the AI mode, to the teams that watch.
  *
  * Every system event the hand-over writes — the transfer line, the AI-mode
@@ -29,6 +33,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   AI_BOT_ID,
+  RESPONSIBLE_GAMBLING_ROLE,
+  isQueueTopicRole,
   primaryHandoffReason,
   type GuardrailPriority,
   type HandoffReason,
@@ -41,6 +47,7 @@ import { aiMayAnswer, readAiMode } from '../chat/ai-mode.js';
 import type { ChatService, SerialisedEvent } from '../chat/chat-service.js';
 import type { VisitorTurn } from '../chat/visitor-turn.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
+import { resolveQueue } from '../routing/queues.js';
 import { catalogueReason, orderHandoffReasons } from './conversation/handoff/triggers.js';
 import type { ConnectionRef } from './conversation/state-store.js';
 import type { handoffOf, TurnResult } from './conversation/turn.js';
@@ -232,30 +239,57 @@ export class HandoffService {
 
     if (effect.team) return this.#toTeamNamed(turn, effect.team, options);
     const { tenant, chatId } = turn;
-    if (effect.groupId !== undefined && !input.failed) {
+    const groupId =
+      effect.groupId !== undefined
+        ? BigInt(effect.groupId)
+        : await this.#topicTeam(turn, effect.topic);
+    if (groupId !== null && !input.failed) {
       try {
         await this.chats.transfer(
           tenant,
           botPrincipal(tenant),
           chatId,
-          { groupId: BigInt(effect.groupId), reason: 'ai_handoff' },
+          { groupId, reason: 'ai_handoff' },
           options,
         );
         return true;
       } catch (error) {
         if (!(error instanceof ApiError)) throw error;
         turn.log.warn(
-          { group_id: effect.groupId, err_type: error.type },
+          { group_id: Number(groupId), err_type: error.type },
           'procedure hand-over team cannot take the conversation; routing it instead',
         );
       }
     }
+    // The Responsible Gambling team has no other team to give its
+    // conversations to (ADR-08a §2.6): one it cannot take now waits in its
+    // queue — not in the team the rules opened it in.
+    const waitIn =
+      groupId !== null && (await this.#isResponsibleGambling(turn, groupId)) ? groupId : null;
     return this.chats.handOverFromAi(
       tenant,
       ref,
       input.failed ? 'ai_failure' : 'ai_handoff',
-      options,
+      waitIn !== null ? { ...options, groupId: waitIn } : options,
     );
+  }
+
+  /**
+   * The team holding the queue role a `{ topic }` target names (AU-01 ·
+   * `resolveQueue`), or null — no topic, a topic that is no queue role (#307
+   * maps the guardrails' spellings), or no team holding it.
+   */
+  async #topicTeam(turn: VisitorTurn, topic: string | undefined): Promise<bigint | null> {
+    if (!isQueueTopicRole(topic)) return null;
+    const queue = await turn.withTenant((tx) => resolveQueue(tx, turn.tenant.licenseId, topic));
+    return queue?.groupId ?? null;
+  }
+
+  async #isResponsibleGambling(turn: VisitorTurn, groupId: bigint): Promise<boolean> {
+    const team = await turn.withTenant((tx) =>
+      tx.group.findFirst({ where: { id: groupId }, select: { topicRole: true } }),
+    );
+    return team?.topicRole === RESPONSIBLE_GAMBLING_ROLE;
   }
 
   /** A single-message skill's `transfer_to_team`: the team by its name. */

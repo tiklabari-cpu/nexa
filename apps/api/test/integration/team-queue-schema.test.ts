@@ -341,14 +341,16 @@ describe('team queues — schema and queue settings (AU-01 · K14 · tm 305.1)',
       const rg = await expertise(fx.a, 'rg-training');
       const tr = await expertise(fx.a, 'turkish');
 
+      // KYC rather than Responsible Gambling: that team's requirement never
+      // empties (tm 305.3, `team-queue-membership.test.ts`).
       const team = await createGroup({
-        name: 'Sorumlu Oyun',
-        topic_role: 'responsible_gambling',
+        name: 'KYC',
+        topic_role: 'kyc_risk',
         after_hours_mode: 'ticket',
         required_expertise_ids: [tr, rg, tr],
       });
       expect(team).toMatchObject({
-        topic_role: 'responsible_gambling',
+        topic_role: 'kyc_risk',
         after_hours_mode: 'ticket',
         required_expertise_ids: [rg, tr].sort((a, b) => a - b),
       });

@@ -158,6 +158,11 @@ describe('error taxonomy', () => {
     // Team queues (AU-01 · tm 305.1): the 409 for giving a topic role to a
     // second team — the role must resolve to exactly one.
     'group_topic_role_taken',
+    // Team queues (AU-01 · K14 · tm 305.3): a member short of the expertise a
+    // team requires, and the Responsible Gambling team's delete, role removal
+    // or empty training requirement.
+    'group_expertise_missing',
+    'group_protected',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

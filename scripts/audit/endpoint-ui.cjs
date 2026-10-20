@@ -362,6 +362,14 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  {
+    op: 'GET /routing/queues',
+    owner: 'tm 305.4',
+    reason:
+      "which team serves each topic queue (tm 305.3 · AU-01) — the team editor's queue " +
+      'settings and the "iGaming kuyruk şablonunu kur" action (tm 305.4) read which roles are ' +
+      'held; the hand-over routes (tm 307) and the pre-chat topic (WG-04) read it too.',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

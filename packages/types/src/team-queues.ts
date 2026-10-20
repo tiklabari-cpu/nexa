@@ -32,6 +32,15 @@ export const QUEUE_TOPIC_ROLES = [
 ] as const;
 export type QueueTopicRole = (typeof QUEUE_TOPIC_ROLES)[number];
 
+/**
+ * Whether a routing topic is one of the six queue roles. A hand-over's `topic`
+ * is any well-formed key (a procedure may name `general`); only these resolve
+ * to a team (`resolveQueue`).
+ */
+export function isQueueTopicRole(value: unknown): value is QueueTopicRole {
+  return typeof value === 'string' && (QUEUE_TOPIC_ROLES as readonly string[]).includes(value);
+}
+
 /** The role whose queue never overflows to another team (ADR-08a §2.6). */
 export const RESPONSIBLE_GAMBLING_ROLE: QueueTopicRole = 'responsible_gambling';
 

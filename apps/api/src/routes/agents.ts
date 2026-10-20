@@ -50,6 +50,7 @@ import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principa
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
 import {
   GROUP_INCLUDE,
+  assertKeepsTeamTraining,
   createGroup,
   deleteGroup,
   loadGroup,
@@ -61,6 +62,7 @@ import {
   type GroupQueueSettings,
   type GroupWithAgents,
 } from '../services/team/group-service.js';
+import { listQueues } from '../services/routing/queues.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
   readNotificationPreferences,
@@ -849,6 +851,11 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
           }
         }
 
+        // The Responsible Gambling team's members hold its training at all
+        // times (K14): dropping it while on that team is a 409, not a member
+        // the team's screen shows and routing never picks.
+        await assertKeepsTeamTraining(tx, tenant.licenseId, agentId, expertiseIds);
+
         // Full replacement: clear the current set, then lay down the new one. Two
         // identical calls leave the same rows (idempotent), and an empty list is
         // a valid way to clear every area.
@@ -994,6 +1001,29 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       );
 
       return reply.send({ items: groups.map(serialiseGroup) });
+    },
+  );
+
+  /**
+   * Which team serves each topic queue (AU-01 · K14 · tm 305.3): the six
+   * roles in `QUEUE_TOPIC_ROLES` order, each resolved the way a hand-over
+   * resolves it (`resolveQueue`) — by role, so a renamed team keeps its topic.
+   * The same teams `GET /groups` shows, so the same scopes read it; RLS scopes
+   * the read, and another workspace's teams are not there.
+   */
+  app.get(
+    '/routing/queues',
+    { config: { scopes: ['groups--all:ro', 'groups--my:ro'] } },
+    async (request, reply) => {
+      const queues = await request.withTenant((tx) => listQueues(tx, request.tenant().licenseId));
+      return reply.send({
+        items: queues.map(({ topicRole, queue }) => ({
+          topic_role: topicRole,
+          group_id: queue ? Number(queue.groupId) : null,
+          group_name: queue?.name ?? null,
+          after_hours_mode: queue?.afterHoursMode ?? null,
+        })),
+      });
     },
   );
 

@@ -8,6 +8,12 @@
  * own. Retrieval and indexing are always scoped to that agent, so the two
  * knowledge bases can never answer from each other.
  *
+ * Since K11 (tm 309, `docs/adr/single-knowledge-store.md`) the two are one
+ * store told apart by `audiences`: what is filed under this record is
+ * `{copilot}`, for agents only. Retrieval still reads the record until tm 309.2
+ * moves it onto `audiences` — from then Copilot drafts from the AI agent's
+ * sources too, and only `{copilot}` stays away from players.
+ *
  * Everything here is find-or-create against the license: the seed makes a
  * Copilot agent, but a freshly provisioned workspace (or a test fixture) may not
  * have one yet, and an assist must not fail because setup ran in a different
@@ -26,6 +32,7 @@ import { maskForWrite } from '../../lib/sensitive-mask.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
+import { createKnowledgeSourceDraft, deleteKnowledgeSourceDraft } from './config-draft.js';
 import { buildOverviewReport, resolveRange } from '../../routes/reports.js';
 import {
   lastInstantBefore,
@@ -213,9 +220,13 @@ export class CopilotService {
     },
   ): Promise<CopilotSourceView> {
     const agentId = await this.ensureAgentId(tx, tenant);
-    const source = await tx.knowledgeSource.create({
-      data: {
-        aiAgentId: agentId,
+    // Filed under the Copilot record, so for agents only (`audiences =
+    // {copilot}`, tm 309.1): the store's view of what this route has always
+    // kept away from players.
+    const source = await createKnowledgeSourceDraft(
+      tx,
+      { id: agentId, kind: COPILOT_KIND },
+      {
         licenseId: tenant.licenseId,
         type: input.type,
         name: input.name,
@@ -223,18 +234,15 @@ export class CopilotService {
         sourceUrl: input.sourceUrl,
         status: 'indexing',
         addedBy: principal.kind === 'agent' ? principal.accountId : null,
-        updatedAt: new Date(),
       },
-      include: { _count: { select: { chunks: true } } },
-    });
+    );
 
     // Indexed in the same transaction: a source that exists but is not
     // searchable looks ready and answers nothing.
     const chunks = await this.knowledge.index(tx, tenant, source.id, input.prepared);
     return {
-      ...serialiseSource(source),
+      ...serialiseSource({ ...source, _count: { chunks } }),
       status: chunks > 0 ? 'ready' : 'empty',
-      chunk_count: chunks,
     };
   }
 
@@ -245,10 +253,7 @@ export class CopilotService {
   async deleteSource(tx: TenantClient, sourceId: string): Promise<number> {
     const agentId = await this.findAgentId(tx);
     if (!agentId) return 0;
-    const { count } = await tx.knowledgeSource.deleteMany({
-      where: { id: sourceId, aiAgentId: agentId },
-    });
-    return count;
+    return deleteKnowledgeSourceDraft(tx, sourceId, agentId);
   }
 
   // --- Assist (12.3) ---------------------------------------------------------

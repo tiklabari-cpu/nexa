@@ -1,0 +1,14 @@
+-- One knowledge source per KB article (tm 309.1 · AI-14-S2 ·
+-- `docs/adr/single-knowledge-store.md` §2.6): a published article is mirrored
+-- by exactly one source, which its publish hook (tm 309.2) finds and refreshes
+-- by this key. NULLs are distinct, so the sources that mirror no article are
+-- untouched. It also serves the foreign key's cascade when an article goes.
+-- `schema.prisma` models it (`kbArticleId @unique`).
+--
+-- Alone in this file on purpose, for 20261020220200's reason: CONCURRENTLY
+-- cannot run inside a transaction block (CONVENTIONS §6.3).
+--
+-- NO `IF NOT EXISTS`: a failed concurrent build leaves an INVALID index behind.
+-- Recover by `DROP INDEX CONCURRENTLY knowledge_sources_kb_article_id_key`, then
+-- `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE UNIQUE INDEX CONCURRENTLY "knowledge_sources_kb_article_id_key" ON "knowledge_sources"("kb_article_id");

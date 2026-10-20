@@ -23,6 +23,7 @@ import {
 import { parseEnv } from '../src/config/env.js';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
+import { knowledgeScopeOfFiling } from '../src/services/ai/config-draft.js';
 import { type AuditContext } from '../src/services/audit/audit-log.js';
 import { ADMIN_SCOPES, type AgentPrincipal } from '../src/services/auth/principal.js';
 import { InvoiceCloseSweeper } from '../src/services/billing/invoice-close-sweep.js';
@@ -711,6 +712,8 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   const copilotSource = await prisma.knowledgeSource.create({
     data: {
       aiAgentId: copilotAgent.id,
+      // For agents only, as everything filed under Copilot (tm 309.1).
+      ...knowledgeScopeOfFiling({ id: copilotAgent.id, kind: 'copilot' }),
       licenseId,
       type: 'article',
       name: 'Agent playbook',
@@ -771,6 +774,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   const knowledgeSource = await prisma.knowledgeSource.create({
     data: {
       aiAgentId: aiAgent.id,
+      ...knowledgeScopeOfFiling({ id: aiAgent.id, kind: 'ai_agent' }),
       licenseId,
       type: 'article',
       name: 'Delivery and returns',

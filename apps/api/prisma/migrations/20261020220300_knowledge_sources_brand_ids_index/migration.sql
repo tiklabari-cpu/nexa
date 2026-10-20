@@ -1,0 +1,12 @@
+-- Which brands a source is for, indexed for the knowledge filter (tm 309.1 ·
+-- AI-14 · `docs/adr/single-knowledge-store.md` §2.4): a brand's sources are
+-- `brand_ids @> ARRAY[:brand]`, beside the every-brand ones (empty). tm 309.2
+-- reads it. `schema.prisma` models it (`@@index(..., type: Gin)`).
+--
+-- Alone in this file on purpose, for 20261020220200's reason: CONCURRENTLY
+-- cannot run inside a transaction block (CONVENTIONS §6.3).
+--
+-- NO `IF NOT EXISTS`: a failed concurrent build leaves an INVALID index behind.
+-- Recover by `DROP INDEX CONCURRENTLY knowledge_sources_brand_ids_idx`, then
+-- `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE INDEX CONCURRENTLY "knowledge_sources_brand_ids_idx" ON "knowledge_sources" USING GIN ("brand_ids" array_ops);

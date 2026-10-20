@@ -3980,7 +3980,14 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Knowledge the AI answers from */
+    /**
+     * Knowledge the AI answers from
+     * @description The sources of the knowledge store the AI agent answers players from,
+     *     newest edit first. The agents-only sources are listed by
+     *     `GET /copilot/knowledge` (see its `deprecated` note); both are one store
+     *     (tm 309 · AI-14, `docs/adr/single-knowledge-store.md`). Unpaged: a
+     *     workspace's sources are a reference set an admin curates, not a stream.
+     */
     get: operations['listKnowledgeSources'];
     put?: never;
     /**
@@ -4000,6 +4007,9 @@ export interface paths {
      *     check, a type to check them against and a budget to measure them by, none
      *     of which a pasted string has — so it is created through
      *     `POST /knowledge-sources/file` and nowhere else.
+     *
+     *     A new source counts as reviewed when it is added (`reviewed_at`).
+     *     `owner_id` must name a member of this workspace; anyone else is a 400.
      */
     post: operations['createKnowledgeSource'];
     delete?: never;
@@ -4187,6 +4197,12 @@ export interface paths {
      *     changing it) restarts the countdown from now; setting it to `null` turns
      *     automatic refresh back off. It never touches `content` or `chunk_count`
      *     by itself — only the freshness sweep or a real crawl does that.
+     *
+     *     **`owner_id`, `language` and `review_interval_days` (tm 309.1) belong to
+     *     every type.** None of them is re-indexed or changes what the AI says.
+     *     An edit is not a review: `reviewed_at` moves only through
+     *     `POST /knowledge-sources/{sourceId}/review`, and a new interval counts
+     *     from the last review rather than from now.
      */
     patch: operations['updateKnowledgeSource'];
     trace?: never;
@@ -4247,6 +4263,36 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/knowledge-sources/{sourceId}/review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm a source is still right
+     * @description Records that a person looked at the source and it still holds
+     *     (tm 309.1 · AI-14-S3): `reviewed_at` becomes now, so the source is next
+     *     due `review_interval_days` from now. No body — a review confirms the
+     *     source as it stands; changing it is `PATCH`.
+     *
+     *     Nothing is fetched or re-indexed, and nothing the AI says changes: a
+     *     review is the only thing that clears "review needed", and it is never
+     *     done for anybody — an edit, a reindex or the freshness sweep's re-crawl
+     *     leaves `reviewed_at` where it was.
+     */
+    post: operations['reviewKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/copilot/knowledge': {
     parameters: {
       query?: never;
@@ -4256,20 +4302,31 @@ export interface paths {
     };
     /**
      * Copilot's own knowledge sources
-     * @description The agent-assist knowledge base (FR-MOD-12.2) — separate from the
-     *     customer-facing AI agent's sources, and reachable only by an agent/bot
-     *     token. A customer token gets a 404, not a 403, so the widget surface cannot
-     *     be used to probe for it.
+     * @deprecated
+     * @description The knowledge sources for agents only (FR-MOD-12.2): the part of the
+     *     workspace's single knowledge store whose audience is Copilot alone
+     *     (tm 309 · AI-14, owner decision K11; `docs/adr/single-knowledge-store.md`).
+     *     None of them ever reaches a player. Copilot itself drafts from these and
+     *     from every source the AI agent answers from.
+     *
+     *     **Deprecated:** kept as a filtered view of the one store, listing the
+     *     same sources before and after the store became one; the store's single
+     *     list on `/knowledge-sources` (tm 309.2) takes its place. Reachable only by an
+     *     agent/bot token. A customer token gets a 404, not a 403, so the widget
+     *     surface cannot be used to probe for it.
      */
     get: operations['listCopilotKnowledge'];
     put?: never;
     /**
      * Add a source to the copilot knowledge base and index it
-     * @description Chunked and embedded on save, answerable immediately. A `website` source is
-     *     crawled from `source_url` (guarded against private/internal targets, SSRF —
-     *     NFR-S7); every other type indexes `content`. Exactly one is required. When
-     *     the embedding provider cannot index the text the answer is a 503 and
-     *     nothing is created.
+     * @deprecated
+     * @description Adds a source for agents only — Copilot uses it, the AI agent's answers
+     *     to players never do (tm 309 · AI-14). Chunked and embedded on save,
+     *     answerable immediately. A `website` source is crawled from `source_url`
+     *     (guarded against private/internal targets, SSRF — NFR-S7); every other
+     *     type indexes `content`. Exactly one is required. When the embedding
+     *     provider cannot index the text the answer is a 503 and nothing is
+     *     created. **Deprecated** with `GET /copilot/knowledge`.
      */
     post: operations['createCopilotKnowledge'];
     delete?: never;
@@ -4290,7 +4347,12 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Remove a copilot source and everything indexed from it */
+    /**
+     * Remove a copilot source and everything indexed from it
+     * @deprecated
+     * @description Removes a source for agents only; any other source of the store is a
+     *     404 here, even given its id. **Deprecated** with `GET /copilot/knowledge`.
+     */
     delete: operations['deleteCopilotKnowledge'];
     options?: never;
     head?: never;
@@ -11447,6 +11509,22 @@ export interface components {
       ran_at: string;
       log: components['schemas']['SkillLogEntry'][];
     };
+    /**
+     * @description Who may use a piece of knowledge (tm 309 · AI-14, `@siyahtus/types`
+     *     `KNOWLEDGE_AUDIENCES`): `ai_agent` — every answer the AI agent gives a
+     *     player, previews included — and `copilot`, the agents' assistant.
+     *     Copilot uses whatever either audience names; knowledge for `copilot`
+     *     alone is for agents only and never reaches a player.
+     * @enum {string}
+     */
+    KnowledgeAudience: 'ai_agent' | 'copilot';
+    /**
+     * @description A source in the workspace's knowledge store — one store for what the
+     *     AI agent answers players from and what Copilot drafts replies from
+     *     (tm 309 · AI-14, owner decision K11; `docs/adr/single-knowledge-store.md`).
+     *     "Copilot's own knowledge" (FR-MOD-12.2) is the store's sources that are
+     *     for agents only; none of them ever reaches a player.
+     */
     KnowledgeSource: {
       /** Format: uuid */
       id: string;
@@ -11466,10 +11544,47 @@ export interface components {
        *     from the soft `added_by` reference — never a raw account id. Null
        *     for a source with no known author (bot/seed-created, or the
        *     authoring account was later deleted). Not present on
-       *     `/copilot/knowledge`, which predates this field and keeps its own
-       *     knowledge base separate (FR-MOD-12.2).
+       *     `/copilot/knowledge`, the older, narrower view of the agents-only
+       *     sources (see its `deprecated` note).
        */
       added_by_name?: string | null;
+      /**
+       * @description The language the source is written in, as a primary language
+       *     subtag (`tr`, `en`); null when nobody said (tm 309.1). A label for
+       *     now — retrieval does not filter on it. Not present on
+       *     `/copilot/knowledge`, like every field below.
+       */
+      language?: string | null;
+      /**
+       * Format: uuid
+       * @description The member who keeps this source true — the person a due review
+       *     falls to (AI-14). Null for an unowned source, which the panel shows
+       *     as such. A meta field: it changes nothing the AI says.
+       */
+      owner_id?: string | null;
+      /**
+       * @description `owner_id`'s account name, resolved like `added_by_name`. Null when
+       *     there is no owner or the account is no longer a member.
+       */
+      owner_name?: string | null;
+      /**
+       * Format: date-time
+       * @description When a person last confirmed the source is still right (AI-14-S3;
+       *     `POST /knowledge-sources/{sourceId}/review`). A new source is
+       *     reviewed when it is added; a source older than the review step
+       *     counts its last edit. An automatic re-crawl is not a review.
+       */
+      reviewed_at?: string;
+      /** @description How many days a review holds before the source is due another (default 90). */
+      review_interval_days?: number;
+      /**
+       * Format: date-time
+       * @description `reviewed_at` plus `review_interval_days` whole days. Past it the
+       *     source needs a review — the panel warns, and `?stale=true` lists it.
+       *     A source due a review still answers; it is not taken out of
+       *     retrieval for it.
+       */
+      review_due_at?: string;
       /**
        * @description How often, in days, this source should be automatically re-crawled
        *     (FR-MOD-06.3.3). Only meaningful for a `website` source — always
@@ -13817,6 +13932,16 @@ export interface components {
       status: 'draft' | 'published';
       /** Format: date-time */
       published_at: string | null;
+      /**
+       * @description Who besides the reader may use this article once it is published
+       *     (tm 309 · AI-14-S2): `ai_agent` — the AI's answers to players —
+       *     and `copilot`, the agents' assistant. Both unless switched off; an
+       *     empty list keeps the article out of the AI's knowledge altogether.
+       *     Kept in `[ai_agent, copilot]` order without repeats. The published
+       *     article enters the AI's knowledge with tm 309.2; until then this is
+       *     the stored switch only.
+       */
+      ai_audiences: components['schemas']['KnowledgeAudience'][];
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
@@ -22849,7 +22974,16 @@ export interface operations {
   };
   listKnowledgeSources: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Only the sources this member owns (`KnowledgeSource.owner_id`). */
+        owner_id?: string;
+        /**
+         * @description `true` lists only the sources due a review (`review_due_at` has
+         *     passed, AI-14-S3), `false` only the rest. Composes with `owner_id` —
+         *     "my sources that need a look" is both.
+         */
+        stale?: boolean;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -22893,6 +23027,21 @@ export interface operations {
            * @enum {string}
            */
           type?: 'website' | 'file' | 'article' | 'faq';
+          /**
+           * Format: uuid
+           * @description The member who keeps the source true. Omitted or null — unowned.
+           */
+          owner_id?: string | null;
+          /**
+           * @description A language tag (`tr`, `en-GB`); its primary subtag is kept.
+           *     Omitted or null — not said.
+           */
+          language?: string | null;
+          /**
+           * @description How many days a review holds (AI-14-S3).
+           * @default 90
+           */
+          review_interval_days?: number;
         };
       };
     };
@@ -23000,6 +23149,18 @@ export interface operations {
            *     content.
            */
           data: string;
+          /**
+           * Format: uuid
+           * @description As on `POST /knowledge-sources` — a member of this workspace, or unowned.
+           */
+          owner_id?: string | null;
+          /** @description As on `POST /knowledge-sources`. */
+          language?: string | null;
+          /**
+           * @description As on `POST /knowledge-sources`.
+           * @default 90
+           */
+          review_interval_days?: number;
         };
       };
     };
@@ -23066,6 +23227,15 @@ export interface operations {
            *     automatic refresh off.
            */
           refresh_after_days?: number | null;
+          /**
+           * Format: uuid
+           * @description A member of this workspace; null makes the source unowned.
+           */
+          owner_id?: string | null;
+          /** @description A language tag, kept as its primary subtag; null clears it. */
+          language?: string | null;
+          /** @description How many days a review holds (AI-14-S3). */
+          review_interval_days?: number;
         };
       };
     };
@@ -23113,6 +23283,32 @@ export interface operations {
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
+    };
+  };
+  reviewKnowledgeSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reviewed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   listCopilotKnowledge: {
@@ -29940,6 +30136,12 @@ export interface operations {
           excerpt?: string | null;
           seo_title?: string | null;
           seo_description?: string | null;
+          /**
+           * @description Who besides the reader may use the article once it is
+           *     published (`KbArticle.ai_audiences`). Omitted — both
+           *     (AI-14-S2); empty — neither. Repeats are folded.
+           */
+          ai_audiences?: components['schemas']['KnowledgeAudience'][];
         };
       };
     };
@@ -30034,6 +30236,12 @@ export interface operations {
            * @enum {string}
            */
           status?: 'draft' | 'published';
+          /**
+           * @description Who besides the reader may use the article once it is
+           *     published (`KbArticle.ai_audiences`); empty switches the AI
+           *     off for this article. Repeats are folded.
+           */
+          ai_audiences?: components['schemas']['KnowledgeAudience'][];
         };
       };
     };

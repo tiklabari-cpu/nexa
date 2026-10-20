@@ -48,6 +48,7 @@ export * from './notifications.js';
 export * from './push.js';
 export * from './company.js';
 export * from './knowledge-file.js';
+export * from './knowledge-store.js';
 export * from './persona.js';
 export * from './rich-text.js';
 export * from './message-edit.js';

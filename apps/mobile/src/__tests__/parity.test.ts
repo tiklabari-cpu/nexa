@@ -966,7 +966,11 @@ describe('module parity matrix — what is still owed', () => {
       // (tm 307.1) — AI-12's topic and reason routes, kept in the web panel's
       // hand-over screen (tm 307.3). The app configures no routing; nothing
       // here re-scopes.
-      contractEndpoints: 263,
+      // 263 -> 264 with `/knowledge-sources/{sourceId}/review` (tm 309.1) —
+      // AI-14's "this source still holds", pressed on the web panel's single
+      // knowledge list (tm 309.3). The app lists Copilot's sources read-only
+      // and reviews none; nothing here re-scopes.
+      contractEndpoints: 264,
       scopeBoundaries: 1,
     });
   });

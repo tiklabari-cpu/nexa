@@ -34,8 +34,12 @@ import {
   HANDOFF_MESSAGE_REASONS,
   HANDOFF_TRIGGER_BOUNDS,
   HANDOFF_TRIGGER_LOCKED_REASON,
+  KNOWLEDGE_REVIEW_INTERVAL_DAYS,
   LOCKED_HANDOFF_REASONS,
+  isKnowledgeReviewDue,
   isLockedHandoffReason,
+  knowledgeReviewDueAt,
+  normaliseLanguage,
   mergeHandoffMessages,
   mergeHandoffTriggers,
   readHandoffAfterHours,
@@ -70,10 +74,15 @@ import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
+  createKnowledgeSourceDraft,
   createSkillDraft,
+  deleteKnowledgeSourceDraft,
   deleteSkillDraft,
+  reviewKnowledgeSourceDraft,
+  updateKnowledgeSourceDraft,
   updateSkillDraft,
   upsertHandoffSettingsDraft,
+  type KnowledgeFiling,
 } from '../services/ai/config-draft.js';
 import { withStepTeamIds } from '../services/ai/step-teams.js';
 import {
@@ -210,6 +219,25 @@ const previewBody = z
   });
 
 /**
+ * Who keeps a source true, what language it is in and how often a person
+ * looks at it again (tm 309.1 · AI-14-S3) — on every write of a source. Meta
+ * to retrieval (ADR-14b §2.2): none of them is indexed or changes what the AI
+ * says, so all four types take them alike. `language` keeps the primary
+ * subtag ({@link sourceMetaData}); `owner_id` must be a member
+ * ({@link requireMember}).
+ */
+const sourceMetaFields = {
+  owner_id: uuid.nullable().optional(),
+  language: z.string().trim().max(35).nullable().optional(),
+  review_interval_days: z
+    .number()
+    .int()
+    .min(KNOWLEDGE_REVIEW_INTERVAL_DAYS.min)
+    .max(KNOWLEDGE_REVIEW_INTERVAL_DAYS.max)
+    .optional(),
+};
+
+/**
  * A website source is crawled from a URL; an `article` or a `faq` indexes the
  * text the admin pasted. So exactly one of `source_url` (website) or `content`
  * (the rest) is required — enforced here rather than left for the handler to
@@ -230,6 +258,7 @@ const createSourceBody = z
     content: z.string().trim().min(1).max(100_000).optional(),
     source_url: z.string().trim().min(1).max(2048).optional(),
     type: z.enum(['website', 'file', 'article', 'faq']).default('article'),
+    ...sourceMetaFields,
   })
   .superRefine((body, ctx) => {
     if (body.type === 'file') {
@@ -284,6 +313,7 @@ const uploadSourceBody = z.object({
   // No length cap: `KNOWLEDGE_FILE_LIMITS.maxBytes` is the single authority on
   // size, and a second one here would give one rule two different messages.
   data: z.string().min(1),
+  ...sourceMetaFields,
 });
 
 /**
@@ -308,6 +338,9 @@ const uploadSourceBody = z.object({
  * refused rather than ignored for the other three types. `null` is a legal
  * value — it turns automatic refresh back off — so the field is nullable, not
  * merely optional.
+ *
+ * The meta fields (tm 309.1) belong to every type. None of them is a review:
+ * `reviewed_at` moves only through `POST …/review`.
  */
 const updateSourceBody = z
   .object({
@@ -315,8 +348,18 @@ const updateSourceBody = z
     content: z.string().trim().min(1).max(100_000).optional(),
     source_url: z.string().trim().min(1).max(2048).optional(),
     refresh_after_days: z.number().int().min(1).max(365).nullable().optional(),
+    ...sourceMetaFields,
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/** `?owner_id=&stale=` on the source list (tm 309.1). */
+const listSourcesQuery = z.object({
+  owner_id: uuid.optional(),
+  stale: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+});
 
 /**
  * The transport ceiling for the upload route only, so the 1 MiB `bodyLimit`
@@ -1412,33 +1455,34 @@ export default async function playbookRoutes(
   // --- Knowledge -------------------------------------------------------------
 
   app.get('/knowledge-sources', { config: { scopes: READ } }, async (request, reply) => {
+    const query = parse(listSourcesQuery, request.query ?? {});
+    const now = new Date();
     const items = await request.withTenant(async (tx) => {
       const sources = await tx.knowledgeSource.findMany({
-        // The customer-facing AI agent's sources only. Copilot keeps its own base
-        // (FR-MOD-12.2) on a `kind: 'copilot'` agent, reachable through
-        // `/copilot/knowledge` — the two must never show each other's sources.
-        where: { aiAgent: { kind: 'ai_agent' } },
+        // The sources the AI agent answers players from. The agents-only ones
+        // are filed under the `kind: 'copilot'` record and listed by
+        // `/copilot/knowledge` until tm 309.2 lists the one store by audience.
+        where: {
+          aiAgent: { kind: 'ai_agent' },
+          ...(query.owner_id === undefined ? {} : { ownerId: query.owner_id }),
+        },
         orderBy: { updatedAt: 'desc' },
         include: { _count: { select: { chunks: true } } },
       });
-      const nameByAddedBy = await creatorNamesByIds(
+      // Due a review is arithmetic on two columns, and the list is unpaged, so
+      // it is decided here, with the same function the reply's
+      // `review_due_at` comes from — the filter and the badge cannot disagree.
+      const listed =
+        query.stale === undefined
+          ? sources
+          : sources.filter(
+              (s) => isKnowledgeReviewDue(s.reviewedAt, s.reviewIntervalDays, now) === query.stale,
+            );
+      const names = await creatorNamesByIds(
         tx,
-        sources.map((s) => s.addedBy),
+        listed.flatMap((s) => [s.addedBy, s.ownerId]),
       );
-      return sources.map((s) => ({
-        id: s.id,
-        ai_agent_id: s.aiAgentId,
-        name: s.name,
-        type: s.type,
-        status: s.status,
-        source_url: s.sourceUrl,
-        chunk_count: s._count.chunks,
-        updated_at: s.updatedAt.toISOString(),
-        added_by_name: s.addedBy ? (nameByAddedBy.get(s.addedBy) ?? null) : null,
-        refresh_after_days: s.refreshAfterDays,
-        next_refresh_at: s.nextRefreshAt ? s.nextRefreshAt.toISOString() : null,
-        last_refresh_error: s.lastRefreshError,
-      }));
+      return listed.map((s) => serialiseStoredSource(s, names));
     });
 
     return reply.send({ items });
@@ -1452,10 +1496,15 @@ export default async function playbookRoutes(
       const body = parse(createSourceBody, request.body);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
+      const meta = sourceMetaData(body);
 
-      // The agent first (tm 257.20): a request that will write nothing must
-      // not crawl a website or spend the day's AI allowance on its way to a 400.
-      await request.withTenant((tx) => requireAiAgent(tx, body.ai_agent_id));
+      // The agent and the owner first (tm 257.20): a request that will write
+      // nothing must not crawl a website or spend the day's AI allowance on its
+      // way to a 400.
+      await request.withTenant(async (tx) => {
+        await requireAiAgent(tx, body.ai_agent_id);
+        await requireMember(tx, body.owner_id);
+      });
 
       // A website is crawled *before* the transaction: the SSRF guard rejects a
       // private/internal target with a 400 (`source_url` never reaches a fetcher),
@@ -1476,34 +1525,33 @@ export default async function playbookRoutes(
       const prepared = await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
 
       const created = await request.withTenant(async (tx) => {
-        // Again inside the write: the agent may have been deleted meanwhile.
-        await requireAiAgent(tx, body.ai_agent_id);
+        // Again inside the write: the agent may have been deleted meanwhile,
+        // and the owner may have left.
+        const agent = await requireAiAgent(tx, body.ai_agent_id);
+        await requireMember(tx, body.owner_id);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-        const source = await tx.knowledgeSource.create({
-          data: {
-            aiAgentId: body.ai_agent_id,
-            licenseId: tenant.licenseId,
-            type: body.type,
-            name: body.name,
-            content,
-            sourceUrl,
-            status: 'indexing',
-            addedBy,
-            updatedAt: new Date(),
-          },
+        const source = await createKnowledgeSourceDraft(tx, agent, {
+          licenseId: tenant.licenseId,
+          type: body.type,
+          name: body.name,
+          content,
+          sourceUrl,
+          status: 'indexing',
+          addedBy,
+          ...meta,
         });
 
         // Indexed in the same transaction: a source that exists but is not
         // searchable looks ready and answers nothing.
         const chunks = await knowledge.index(tx, tenant, source.id, prepared);
 
-        return { source, chunks, addedByName: await creatorName(tx, addedBy) };
+        return { source, chunks, names: await creatorNamesByIds(tx, [addedBy, source.ownerId]) };
       });
 
       return reply
         .status(201)
-        .send(serialiseIndexedSource(created.source, created.chunks, created.addedByName));
+        .send(serialiseIndexedSource(created.source, created.chunks, created.names));
     },
   );
 
@@ -1557,40 +1605,43 @@ export default async function playbookRoutes(
 
       const title = body.name ?? titleFromFilename(body.filename);
       if (title === '') throw ApiError.validation('filename: a file needs a usable name.');
+      const meta = sourceMetaData(body);
 
-      // The agent before the embedding (tm 257.20), as on the endpoint above.
-      await request.withTenant((tx) => requireAiAgent(tx, body.ai_agent_id));
+      // The agent and the owner before the embedding (tm 257.20), as on the
+      // endpoint above.
+      await request.withTenant(async (tx) => {
+        await requireAiAgent(tx, body.ai_agent_id);
+        await requireMember(tx, body.owner_id);
+      });
 
       const prepared = await knowledge.prepare(parsed.text, tenant).catch(refuseUnembeddable);
 
       const created = await request.withTenant(async (tx) => {
-        await requireAiAgent(tx, body.ai_agent_id);
+        const agent = await requireAiAgent(tx, body.ai_agent_id);
+        await requireMember(tx, body.owner_id);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-        const source = await tx.knowledgeSource.create({
-          data: {
-            aiAgentId: body.ai_agent_id,
-            licenseId: tenant.licenseId,
-            type: 'file',
-            name: title,
-            content: parsed.text,
-            // A file has no URL. Storing the filename here would put a name
-            // into a column every reader treats as a fetchable address.
-            sourceUrl: null,
-            status: 'indexing',
-            addedBy,
-            updatedAt: new Date(),
-          },
+        const source = await createKnowledgeSourceDraft(tx, agent, {
+          licenseId: tenant.licenseId,
+          type: 'file',
+          name: title,
+          content: parsed.text,
+          // A file has no URL. Storing the filename here would put a name
+          // into a column every reader treats as a fetchable address.
+          sourceUrl: null,
+          status: 'indexing',
+          addedBy,
+          ...meta,
         });
 
         const chunks = await knowledge.index(tx, tenant, source.id, prepared);
 
-        return { source, chunks, addedByName: await creatorName(tx, addedBy) };
+        return { source, chunks, names: await creatorNamesByIds(tx, [addedBy, source.ownerId]) };
       });
 
       return reply
         .status(201)
-        .send(serialiseIndexedSource(created.source, created.chunks, created.addedByName));
+        .send(serialiseIndexedSource(created.source, created.chunks, created.names));
     },
   );
 
@@ -1672,17 +1723,17 @@ export default async function playbookRoutes(
       // The whole file is one request from one principal, so the name every
       // created row will carry is resolved once here, not per row.
       const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-      const addedByName = await request.withTenant(async (tx) => {
+      const { filing, addedByName } = await request.withTenant(async (tx) => {
         const agent = await tx.aiAgent.findFirst({
           where: { id: body.ai_agent_id },
-          select: { id: true },
+          select: { id: true, kind: true },
         });
         if (!agent) {
           throw ApiError.validation('That AI agent does not exist.', {
             reason: 'ai_agent_not_found',
           });
         }
-        return creatorName(tx, addedBy);
+        return { filing: agent, addedByName: await creatorName(tx, addedBy) };
       });
 
       // Every row is validated before any row is acted on. How many of them ask
@@ -1873,18 +1924,14 @@ export default async function playbookRoutes(
 
           try {
             const created = await request.withTenant(async (tx) => {
-              const source = await tx.knowledgeSource.create({
-                data: {
-                  aiAgentId: body.ai_agent_id,
-                  licenseId: tenant.licenseId,
-                  type,
-                  name,
-                  content,
-                  sourceUrl,
-                  status: 'indexing',
-                  addedBy,
-                  updatedAt: new Date(),
-                },
+              const source = await createKnowledgeSourceDraft(tx, filing, {
+                licenseId: tenant.licenseId,
+                type,
+                name,
+                content,
+                sourceUrl,
+                status: 'indexing',
+                addedBy,
               });
 
               // Same transaction as the create, exactly as the single-source path:
@@ -1953,13 +2000,17 @@ export default async function playbookRoutes(
       const id = parse(uuid, request.params.sourceId);
       const body = parse(updateSourceBody, request.body);
       const tenant = request.tenant();
+      const meta = sourceMetaData(body);
 
-      const existing = await request.withTenant(async (tx) =>
-        tx.knowledgeSource.findFirst({
+      const existing = await request.withTenant(async (tx) => {
+        const found = await tx.knowledgeSource.findFirst({
           where: { id, aiAgent: { kind: 'ai_agent' } },
           select: { id: true, type: true, addedBy: true, refreshAfterDays: true },
-        }),
-      );
+        });
+        // The owner before the crawl and the embedding, like the agent on create.
+        if (found) await requireMember(tx, body.owner_id);
+        return found;
+      });
       // Under RLS a foreign source is simply not visible, so "does not exist"
       // and "belongs to another workspace" resolve to the same answer — 404,
       // never 403, which would confirm the id exists somewhere.
@@ -2004,9 +2055,11 @@ export default async function playbookRoutes(
       const recomputeSchedule = refreshAfterDaysChanged || sourceUrl !== null;
 
       const updated = await request.withTenant(async (tx) => {
-        const { count } = await tx.knowledgeSource.updateMany({
-          where: { id },
-          data: {
+        await requireMember(tx, body.owner_id);
+        const count = await updateKnowledgeSourceDraft(
+          tx,
+          id,
+          {
             ...(body.name === undefined ? {} : { name: body.name }),
             ...(text === null ? {} : { content: text }),
             ...(sourceUrl === null ? {} : { sourceUrl }),
@@ -2014,9 +2067,10 @@ export default async function playbookRoutes(
             ...(recomputeSchedule
               ? { nextRefreshAt: computeNextRefreshAt(effectiveRefreshAfterDays, now) }
               : {}),
-            updatedAt: now,
+            ...meta,
           },
-        });
+          now,
+        );
         // The row was there a moment ago; if it is gone now it was deleted
         // between the two statements, which is the same answer as never having
         // existed.
@@ -2032,12 +2086,14 @@ export default async function playbookRoutes(
             : await knowledge.index(tx, tenant, id, prepared);
 
         const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
-        return { source, chunks, addedByName: await creatorName(tx, existing.addedBy) };
+        return {
+          source,
+          chunks,
+          names: await creatorNamesByIds(tx, [existing.addedBy, source.ownerId]),
+        };
       });
 
-      return reply.send(
-        serialiseIndexedSource(updated.source, updated.chunks, updated.addedByName),
-      );
+      return reply.send(serialiseIndexedSource(updated.source, updated.chunks, updated.names));
     },
   );
 
@@ -2100,25 +2156,67 @@ export default async function playbookRoutes(
       const now = new Date();
 
       const refreshed = await request.withTenant(async (tx) => {
-        const { count } = await tx.knowledgeSource.updateMany({
-          where: { id },
-          data: {
+        // Not a review (AI-14-S3): fetching the text again says nothing about
+        // whether it is still right, so `reviewed_at` stays where it was.
+        const count = await updateKnowledgeSourceDraft(
+          tx,
+          id,
+          {
             content: text,
-            updatedAt: now,
             lastRefreshError: null,
             nextRefreshAt: computeNextRefreshAt(existing.refreshAfterDays, now),
           },
-        });
+          now,
+        );
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
         const chunks = await knowledge.index(tx, tenant, id, prepared);
         const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
-        return { source, chunks, addedByName: await creatorName(tx, existing.addedBy) };
+        return {
+          source,
+          chunks,
+          names: await creatorNamesByIds(tx, [existing.addedBy, source.ownerId]),
+        };
       });
 
       return reply.send(
-        serialiseIndexedSource(refreshed.source, refreshed.chunks, refreshed.addedByName),
+        serialiseIndexedSource(refreshed.source, refreshed.chunks, refreshed.names),
       );
+    },
+  );
+
+  /**
+   * Review a source (tm 309.1 · AI-14-S3) — a person confirms it still holds.
+   *
+   * No body and no fetch: what is confirmed is the source as it stands, so
+   * nothing is re-indexed and nothing the AI says changes. It is the one way
+   * `reviewed_at` moves — an edit, a reindex and the freshness sweep's
+   * re-crawl all leave it where it was, because none of them is a person
+   * saying "this is still right". The source is found the way its edit and
+   * reindex find it (the AI agent's, until tm 309.2 lists the store by
+   * audience); a foreign or unknown id is a 404.
+   */
+  app.post<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId/review',
+    { config: { scopes: WRITE } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const reviewed = await request.withTenant(async (tx) => {
+        const existing = await tx.knowledgeSource.findFirst({
+          where: { id, aiAgent: { kind: 'ai_agent' } },
+          select: { id: true },
+        });
+        if (!existing || (await reviewKnowledgeSourceDraft(tx, id)) === 0) {
+          throw ApiError.notFound('Knowledge source not found.');
+        }
+        const source = await tx.knowledgeSource.findFirstOrThrow({
+          where: { id },
+          include: { _count: { select: { chunks: true } } },
+        });
+        return { source, names: await creatorNamesByIds(tx, [source.addedBy, source.ownerId]) };
+      });
+
+      return reply.send(serialiseStoredSource(reviewed.source, reviewed.names));
     },
   );
 
@@ -2130,7 +2228,7 @@ export default async function playbookRoutes(
       const deleted = await request.withTenant(async (tx) => {
         // Chunks cascade with the source; leaving them would keep answering
         // from text the admin believes they deleted.
-        const { count } = await tx.knowledgeSource.deleteMany({ where: { id } });
+        const count = await deleteKnowledgeSourceDraft(tx, id);
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
         if (count > 0) {
@@ -2159,36 +2257,108 @@ export default async function playbookRoutes(
  *
  * `status` is recomputed from the chunk count rather than read off the row,
  * because the row was loaded before `index()` ran and still says `indexing`.
+ * `names` resolves `added_by` and `owner_id` ({@link creatorNamesByIds}).
  */
 function serialiseIndexedSource(
-  source: {
-    id: string;
-    aiAgentId: string;
-    name: string;
-    type: string;
-    sourceUrl: string | null;
-    updatedAt: Date;
-    refreshAfterDays: number | null;
-    nextRefreshAt: Date | null;
-    lastRefreshError: string | null;
-  },
+  source: SourceRow,
   chunks: number,
-  addedByName: string | null,
+  names: ReadonlyMap<string, string>,
 ): Record<string, unknown> {
+  return serialiseSource(source, { status: chunks > 0 ? 'ready' : 'empty', chunks }, names);
+}
+
+/** A source as it is stored — the list and a review — with its own status and chunk count. */
+function serialiseStoredSource(
+  source: SourceRow & { status: string; _count: { chunks: number } },
+  names: ReadonlyMap<string, string>,
+): Record<string, unknown> {
+  return serialiseSource(source, { status: source.status, chunks: source._count.chunks }, names);
+}
+
+/** The columns every source reply reads. */
+interface SourceRow {
+  id: string;
+  aiAgentId: string;
+  name: string;
+  type: string;
+  sourceUrl: string | null;
+  updatedAt: Date;
+  addedBy: string | null;
+  refreshAfterDays: number | null;
+  nextRefreshAt: Date | null;
+  lastRefreshError: string | null;
+  language: string | null;
+  ownerId: string | null;
+  reviewedAt: Date;
+  reviewIntervalDays: number;
+}
+
+function serialiseSource(
+  source: SourceRow,
+  indexed: { status: string; chunks: number },
+  names: ReadonlyMap<string, string>,
+): Record<string, unknown> {
+  const nameOf = (accountId: string | null) =>
+    accountId === null ? null : (names.get(accountId) ?? null);
   return {
     id: source.id,
     ai_agent_id: source.aiAgentId,
     name: source.name,
     type: source.type,
-    status: chunks > 0 ? 'ready' : 'empty',
+    status: indexed.status,
     source_url: source.sourceUrl,
-    chunk_count: chunks,
+    chunk_count: indexed.chunks,
     updated_at: source.updatedAt.toISOString(),
-    added_by_name: addedByName,
+    added_by_name: nameOf(source.addedBy),
     refresh_after_days: source.refreshAfterDays,
     next_refresh_at: source.nextRefreshAt ? source.nextRefreshAt.toISOString() : null,
     last_refresh_error: source.lastRefreshError,
+    language: source.language,
+    owner_id: source.ownerId,
+    owner_name: nameOf(source.ownerId),
+    reviewed_at: source.reviewedAt.toISOString(),
+    review_interval_days: source.reviewIntervalDays,
+    review_due_at: knowledgeReviewDueAt(source.reviewedAt, source.reviewIntervalDays).toISOString(),
   };
+}
+
+/**
+ * The meta fields a body names, as columns — an omitted one is left alone
+ * (the column default on a create). `language` keeps its primary subtag; a
+ * value that is not a language tag is a 400 before anything is fetched.
+ */
+function sourceMetaData(body: {
+  owner_id?: string | null;
+  language?: string | null;
+  review_interval_days?: number;
+}): { ownerId?: string | null; language?: string | null; reviewIntervalDays?: number } {
+  let language: string | null | undefined = body.language;
+  if (typeof language === 'string') {
+    language = normaliseLanguage(language);
+    if (language === null) {
+      throw ApiError.validation('language: expected a language tag such as "tr" or "en-GB".');
+    }
+  }
+  return {
+    ...(body.owner_id === undefined ? {} : { ownerId: body.owner_id }),
+    ...(language === undefined ? {} : { language }),
+    ...(body.review_interval_days === undefined
+      ? {}
+      : { reviewIntervalDays: body.review_interval_days }),
+  };
+}
+
+/**
+ * Refuse an `owner_id` that is not a member of this workspace. Under RLS an
+ * account is visible only to a licence it works for, so a stranger and an
+ * unknown id are one answer. No owner — omitted or null — needs no check.
+ */
+async function requireMember(tx: TenantClient, accountId: string | null | undefined) {
+  if (accountId === null || accountId === undefined) return;
+  const account = await tx.account.findFirst({ where: { id: accountId }, select: { id: true } });
+  if (!account) {
+    throw ApiError.validation('owner_id: that person is not a member of this workspace.');
+  }
 }
 
 /** One shape for an AI agent, so a read and the reply after a PATCH never drift. */
@@ -2311,11 +2481,15 @@ function serialiseAgent(agent: {
 /**
  * Refuse an `ai_agent_id` this workspace cannot see. Under RLS a foreign agent
  * is simply not visible, so "does not exist" and "belongs to someone else" are
- * one answer.
+ * one answer. The record found is what a source is filed under.
  */
-async function requireAiAgent(tx: TenantClient, aiAgentId: string): Promise<void> {
-  const agent = await tx.aiAgent.findFirst({ where: { id: aiAgentId }, select: { id: true } });
+async function requireAiAgent(tx: TenantClient, aiAgentId: string): Promise<KnowledgeFiling> {
+  const agent = await tx.aiAgent.findFirst({
+    where: { id: aiAgentId },
+    select: { id: true, kind: true },
+  });
   if (!agent) throw ApiError.validation('That AI agent does not exist.');
+  return agent;
 }
 
 async function creatorName(tx: TenantClient, createdBy: string | null): Promise<string | null> {

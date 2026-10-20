@@ -3,11 +3,19 @@ knowledge:
     tags: [Copilot]
     operationId: listCopilotKnowledge
     summary: Copilot's own knowledge sources
+    deprecated: true
     description: |
-      The agent-assist knowledge base (FR-MOD-12.2) — separate from the
-      customer-facing AI agent's sources, and reachable only by an agent/bot
-      token. A customer token gets a 404, not a 403, so the widget surface cannot
-      be used to probe for it.
+      The knowledge sources for agents only (FR-MOD-12.2): the part of the
+      workspace's single knowledge store whose audience is Copilot alone
+      (tm 309 · AI-14, owner decision K11; `docs/adr/single-knowledge-store.md`).
+      None of them ever reaches a player. Copilot itself drafts from these and
+      from every source the AI agent answers from.
+
+      **Deprecated:** kept as a filtered view of the one store, listing the
+      same sources before and after the store became one; the store's single
+      list on `/knowledge-sources` (tm 309.2) takes its place. Reachable only by an
+      agent/bot token. A customer token gets a 404, not a 403, so the widget
+      surface cannot be used to probe for it.
     responses:
       "200":
         description: Sources
@@ -28,12 +36,15 @@ knowledge:
     tags: [Copilot]
     operationId: createCopilotKnowledge
     summary: Add a source to the copilot knowledge base and index it
+    deprecated: true
     description: |
-      Chunked and embedded on save, answerable immediately. A `website` source is
-      crawled from `source_url` (guarded against private/internal targets, SSRF —
-      NFR-S7); every other type indexes `content`. Exactly one is required. When
-      the embedding provider cannot index the text the answer is a 503 and
-      nothing is created.
+      Adds a source for agents only — Copilot uses it, the AI agent's answers
+      to players never do (tm 309 · AI-14). Chunked and embedded on save,
+      answerable immediately. A `website` source is crawled from `source_url`
+      (guarded against private/internal targets, SSRF — NFR-S7); every other
+      type indexes `content`. Exactly one is required. When the embedding
+      provider cannot index the text the answer is a 503 and nothing is
+      created. **Deprecated** with `GET /copilot/knowledge`.
     requestBody:
       required: true
       content:
@@ -75,6 +86,10 @@ knowledgeSource:
     tags: [Copilot]
     operationId: deleteCopilotKnowledge
     summary: Remove a copilot source and everything indexed from it
+    deprecated: true
+    description: |
+      Removes a source for agents only; any other source of the store is a
+      404 here, even given its id. **Deprecated** with `GET /copilot/knowledge`.
     responses:
       "204": { description: Deleted }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }

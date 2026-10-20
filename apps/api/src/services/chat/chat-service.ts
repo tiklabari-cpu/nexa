@@ -206,6 +206,14 @@ export interface ConnectionInput {
   /** Where the visitor wrote from, for the routing rules of a connection it opens. */
   routing?: RoutingContext;
   /**
+   * The brand of the site the visitor wrote from — the one their widget token
+   * was minted for (WG-01 `resolveWidgetBrandId`). A chat this message opens
+   * is filed under it (`chats.brand_id`, tm 309.1); a chat it joins that
+   * names another brand is left with none (`#keepChatBrand`). Absent: the
+   * brand is not known (a channel, a token that named none).
+   */
+  brandId?: string;
+  /**
    * The AI is asked to answer the message — the widget's path, whose `outbox`
    * writes its job. Only then may a connection it opens open AI-first (tm
    * 293.2): a channel message no AI turn follows is routed on open, or nobody
@@ -1316,6 +1324,7 @@ export class ChatService {
         if (await openChatTakesMessage(tx, open, openThread, now, day)) {
           const replay = await this.#replayedEvent(tx, tenant, [open.id], message.idempotencyKey);
           if (replay) return { kind: 'replayed', chat: open, event: replay };
+          await this.#keepChatBrand(tx, open, input.brandId);
           const { event, warning } = await append(tx, open.id, openThread.id, null);
           return {
             kind: 'continued',
@@ -1353,6 +1362,7 @@ export class ChatService {
       });
 
       if (dayChat) {
+        await this.#keepChatBrand(tx, dayChat, input.brandId);
         const { threadId } = await this.#openFurtherConnection(tx, tenant, dayChat, {
           openedVia,
           route: () =>
@@ -1404,6 +1414,7 @@ export class ChatService {
         )),
         day,
         openedVia,
+        brandId: input.brandId ?? null,
       });
       const threadId = created.threads[0]!.id;
       const { event, warning } = await append(tx, created.id, threadId, openedVia);
@@ -3028,6 +3039,8 @@ export class ChatService {
       let threadId: string;
       if (dayChat) {
         todayId = dayChat.id;
+        // The reopened conversation brings its day's brand into today's chat.
+        await this.#keepChatBrand(tx, dayChat, chat.brandId ?? undefined);
         ({ threadId } = await this.#openFurtherConnection(tx, tenant, dayChat, {
           openedVia: 'agent_reopen',
           route: async () => route,
@@ -3041,6 +3054,8 @@ export class ChatService {
           ...route,
           day,
           openedVia: 'agent_reopen',
+          // It continues the reopened conversation, so it is that day's brand.
+          brandId: chat.brandId,
         });
         todayId = created.id;
         threadId = created.threads[0]!.id;
@@ -4264,6 +4279,26 @@ export class ChatService {
   }
 
   /**
+   * Keep a chat's brand true when another connection comes into it (tm 309.1
+   * · AI-14). `chats.brand_id` is the one brand the member came in through —
+   * the knowledge filter answers a chat from that brand's sources and the
+   * every-brand ones (tm 309.2). A connection through another brand's site, or
+   * one whose brand is not known, leaves the day's chat with no single brand,
+   * so it is cleared for good: one brand's rules must never answer another
+   * brand's member, and "unknown" falls back to the every-brand sources. A
+   * chat with no brand keeps none — unknown is already the safe state. An
+   * agent's own start is not a way in and changes nothing.
+   */
+  async #keepChatBrand(
+    tx: TenantClient,
+    chat: { id: string; brandId: string | null },
+    brandId: string | undefined,
+  ): Promise<void> {
+    if (chat.brandId === null || chat.brandId === brandId) return;
+    await tx.chat.updateMany({ where: { id: chat.id }, data: { brandId: null } });
+  }
+
+  /**
    * Open the member's chat for a day, with its first connection (ID-02).
    *
    * Every chat opens filed under a day since tm 286.3 — the visitor's message,
@@ -4280,6 +4315,8 @@ export class ChatService {
       day: ConversationDay;
       /** How the chat's first connection opened (`threads.opened_via`). */
       openedVia: ConnectionOpenedVia;
+      /** The brand the member came in through (`chats.brand_id`); null when unknown. */
+      brandId?: string | null;
     },
   ) {
     const chatId = await this.#allocateChatId(tx);
@@ -4295,6 +4332,7 @@ export class ChatService {
         // (`chats_local_day_tz_pair`).
         localDay: input.day.date,
         dayTz: input.day.timezone,
+        brandId: input.brandId ?? null,
       },
     });
 

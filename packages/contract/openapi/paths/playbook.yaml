@@ -918,6 +918,24 @@ knowledgeSources:
     tags: [Playbook]
     operationId: listKnowledgeSources
     summary: Knowledge the AI answers from
+    description: |
+      The sources of the knowledge store the AI agent answers players from,
+      newest edit first. The agents-only sources are listed by
+      `GET /copilot/knowledge` (see its `deprecated` note); both are one store
+      (tm 309 · AI-14, `docs/adr/single-knowledge-store.md`). Unpaged: a
+      workspace's sources are a reference set an admin curates, not a stream.
+    parameters:
+      - name: owner_id
+        in: query
+        description: Only the sources this member owns (`KnowledgeSource.owner_id`).
+        schema: { type: string, format: uuid }
+      - name: stale
+        in: query
+        description: |
+          `true` lists only the sources due a review (`review_due_at` has
+          passed, AI-14-S3), `false` only the rest. Composes with `owner_id` —
+          "my sources that need a look" is both.
+        schema: { type: boolean }
     responses:
       "200":
         description: Sources
@@ -954,6 +972,9 @@ knowledgeSources:
       check, a type to check them against and a budget to measure them by, none
       of which a pasted string has — so it is created through
       `POST /knowledge-sources/file` and nowhere else.
+
+      A new source counts as reviewed when it is added (`reviewed_at`).
+      `owner_id` must name a member of this workspace; anyone else is a 400.
     requestBody:
       required: true
       content:
@@ -973,6 +994,24 @@ knowledgeSources:
                   description: "Required when type is website.",
                 }
               type: { type: string, enum: [website, file, article, faq], default: article }
+              owner_id:
+                type: string
+                format: uuid
+                nullable: true
+                description: The member who keeps the source true. Omitted or null — unowned.
+              language:
+                type: string
+                nullable: true
+                maxLength: 35
+                description: |
+                  A language tag (`tr`, `en-GB`); its primary subtag is kept.
+                  Omitted or null — not said.
+              review_interval_days:
+                type: integer
+                minimum: 1
+                maximum: 365
+                default: 90
+                description: How many days a review holds (AI-14-S3).
     responses:
       "201":
         description: Indexed
@@ -1169,6 +1208,22 @@ knowledgeSourcesFile:
                   the parsed text is separately capped at 100000 characters,
                   the same ceiling `POST /knowledge-sources` puts on pasted
                   content.
+              owner_id:
+                type: string
+                format: uuid
+                nullable: true
+                description: As on `POST /knowledge-sources` — a member of this workspace, or unowned.
+              language:
+                type: string
+                nullable: true
+                maxLength: 35
+                description: As on `POST /knowledge-sources`.
+              review_interval_days:
+                type: integer
+                minimum: 1
+                maximum: 365
+                default: 90
+                description: As on `POST /knowledge-sources`.
     responses:
       "201":
         description: Uploaded, parsed and indexed
@@ -1224,6 +1279,12 @@ knowledgeSource:
       changing it) restarts the countdown from now; setting it to `null` turns
       automatic refresh back off. It never touches `content` or `chunk_count`
       by itself — only the freshness sweep or a real crawl does that.
+
+      **`owner_id`, `language` and `review_interval_days` (tm 309.1) belong to
+      every type.** None of them is re-indexed or changes what the AI says.
+      An edit is not a review: `reviewed_at` moves only through
+      `POST /knowledge-sources/{sourceId}/review`, and a new interval counts
+      from the last review rather than from now.
     requestBody:
       required: true
       content:
@@ -1251,6 +1312,21 @@ knowledgeSource:
                 description: |
                   Only for website sources; refused for the rest. Null turns
                   automatic refresh off.
+              owner_id:
+                type: string
+                format: uuid
+                nullable: true
+                description: A member of this workspace; null makes the source unowned.
+              language:
+                type: string
+                nullable: true
+                maxLength: 35
+                description: A language tag, kept as its primary subtag; null clears it.
+              review_interval_days:
+                type: integer
+                minimum: 1
+                maximum: 365
+                description: How many days a review holds (AI-14-S3).
     responses:
       "200":
         description: Updated, and re-indexed if the text changed
@@ -1334,3 +1410,35 @@ knowledgeSourceReindex:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
+
+knowledgeSourceReview:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: reviewKnowledgeSource
+    summary: Confirm a source is still right
+    description: |
+      Records that a person looked at the source and it still holds
+      (tm 309.1 · AI-14-S3): `reviewed_at` becomes now, so the source is next
+      due `review_interval_days` from now. No body — a review confirms the
+      source as it stands; changing it is `PATCH`.
+
+      Nothing is fetched or re-indexed, and nothing the AI says changes: a
+      review is the only thing that clears "review needed", and it is never
+      done for anybody — an edit, a reindex or the freshness sweep's re-crawl
+      leaves `reviewed_at` where it was.
+    responses:
+      "200":
+        description: Reviewed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

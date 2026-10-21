@@ -2,9 +2,12 @@
 # SiyahTuş API — multi-stage build (tm 140.1, M-CONTAINER-a). Local/dev images only:
 # no production deploy, no real secrets baked in (CLAUDE.md / MASTER-PROMPT limits).
 #
-# @siyahtus/api imports two workspace packages at runtime, @siyahtus/types and
-# @siyahtus/ai-mock (@siyahtus/contract is test-only — grep confirms no apps/api/src
-# file outside test/ touches it). Their package.json "main" points at
+# @siyahtus/api imports three workspace packages at runtime, @siyahtus/types,
+# @siyahtus/ai-mock and @siyahtus/ai-templates (@siyahtus/contract is test-only —
+# grep confirms no apps/api/src file outside test/ touches it). @siyahtus/ai-templates'
+# entry point imports only types from @siyahtus/types (tm 311.1), so it needs no
+# node_modules of its own here; packages/ai-templates/src/package.test.ts holds
+# that. Their package.json "main" points at
 # src/index.ts for local dev, where `tsx`/vitest rewrite `./foo.js` internal
 # specifiers to the sibling `.ts` file; plain Node does not do that rewrite —
 # it only strips types, so running their *.ts source directly under `node`
@@ -65,12 +68,12 @@ RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
 # while every build outside Docker still passed. Build stage only — the
 # running server keeps Node's default.
 RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter @siyahtus/api... run build
-# Point the two runtime-consumed workspace packages at their compiled output.
+# Point the three runtime-consumed workspace packages at their compiled output.
 # Only this build stage's checked-out copy is touched — the real repo files
 # (which tsx/vitest need pointed at src) are untouched.
 RUN node -e " \
     const fs = require('node:fs'); \
-    for (const p of ['packages/types', 'packages/ai-mock']) { \
+    for (const p of ['packages/types', 'packages/ai-mock', 'packages/ai-templates']) { \
       const file = p + '/package.json'; \
       const pkg = JSON.parse(fs.readFileSync(file, 'utf8')); \
       pkg.main = './dist/index.js'; \
@@ -107,7 +110,7 @@ WORKDIR /repo
 COPY --from=prod-deps --chown=siyahtus:siyahtus /repo/node_modules ./node_modules
 COPY --from=prod-deps --chown=siyahtus:siyahtus /repo/apps/api/node_modules ./apps/api/node_modules
 # Workspace deps (workspace:* protocol — always symlinked to real source, never
-# through the store): @siyahtus/types + @siyahtus/ai-mock, compiled (see the patch step
+# through the store): @siyahtus/types + @siyahtus/ai-mock + @siyahtus/ai-templates, compiled (see the patch step
 # in `build` above), not raw source — @siyahtus/contract is intentionally absent,
 # it is test-only for @siyahtus/api. `apps/api/node_modules/@siyahtus/contract` above
 # is left as a dangling symlink; harmless, since it's never imported.
@@ -115,6 +118,8 @@ COPY --from=build --chown=siyahtus:siyahtus /repo/packages/types/dist ./packages
 COPY --from=build --chown=siyahtus:siyahtus /repo/packages/types/package.json ./packages/types/package.json
 COPY --from=build --chown=siyahtus:siyahtus /repo/packages/ai-mock/dist ./packages/ai-mock/dist
 COPY --from=build --chown=siyahtus:siyahtus /repo/packages/ai-mock/package.json ./packages/ai-mock/package.json
+COPY --from=build --chown=siyahtus:siyahtus /repo/packages/ai-templates/dist ./packages/ai-templates/dist
+COPY --from=build --chown=siyahtus:siyahtus /repo/packages/ai-templates/package.json ./packages/ai-templates/package.json
 # Compiled output + migrations (source of the query engine's schema) + manifest
 # (Node needs a nearest package.json with "type": "module" to load dist/**/*.js as ESM).
 COPY --from=build --chown=siyahtus:siyahtus /repo/apps/api/dist ./apps/api/dist

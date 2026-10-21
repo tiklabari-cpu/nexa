@@ -13648,7 +13648,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T21:34:41.855Z",
+        "updatedAt": "2026-10-21T21:35:54.805Z",
         "subtasks": [
           {
             "id": 1,
@@ -13711,14 +13711,14 @@
             "description": "TestLab, ScenarioEditor, RunResults, SandboxChat (karar izi)",
             "details": "Üst görev 314 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "314.3",
               "314.4"
             ],
             "parentId": "314",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-21T21:35:54.805Z"
           },
           {
             "id": 6,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T21:34:41.856Z",
+      "lastModified": "2026-10-21T21:35:54.805Z",
       "taskCount": 390,
       "completedCount": 309,
       "tags": [

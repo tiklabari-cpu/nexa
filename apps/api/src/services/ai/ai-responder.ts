@@ -165,6 +165,7 @@ import { recordGuardrailHits } from './guardrail-hits.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
+import { writeUnresolvedItem } from '../chat/ai-unresolved.js';
 import { maskDeep } from '../../lib/sensitive-mask.js';
 import type { RiskFlagAnnouncer } from '../risk/risk-announce.js';
 import { chatRiskPolicy, raiseRiskFlag } from '../risk/risk-flags.js';
@@ -681,6 +682,32 @@ export class AiResponder {
             { chatId, threadId: turn.threadId, turnId, record: guardrails },
             log,
           );
+        }
+        // The message the AI could not resolve (tm 317.1 · AI-22), for the
+        // report — written after the reply, so it never holds one back, and
+        // only for a turn that was applied. A row that cannot be written is
+        // one log line.
+        const unresolved = result?.unresolved;
+        if (unresolved && !applyFailed) {
+          const { text, reason, embedding, ...rest } = unresolved;
+          try {
+            await turn.withTenant((tx) =>
+              writeUnresolvedItem(tx, tenant.licenseId, {
+                ...rest,
+                chatId,
+                threadId: turn.threadId,
+                eventId: turn.triggerEventId,
+                text,
+                reason,
+                embedding,
+              }),
+            );
+          } catch (error) {
+            log.error(
+              { err: error, reason },
+              'unresolved question could not be recorded; the reply is not held back',
+            );
+          }
         }
       }
     }

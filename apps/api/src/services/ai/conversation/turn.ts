@@ -37,6 +37,7 @@ import type {
   RiskPolicy,
   SkillMode,
   SkillProcedureFields,
+  UnresolvedReason,
 } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../../lib/tenant.js';
 import type { AiDailyCapError } from '../ai-daily-budget.js';
@@ -562,6 +563,29 @@ export interface TurnResult {
   /** Where the conversation stands after the turn; the input state when no turn was taken. */
   nextState: TurnState;
   sideEffects: TurnSideEffect[];
+  /**
+   * The message the AI could not resolve, for AI-22's report (tm 317.1 ·
+   * `unresolved.ts`) — absent when it resolved it, on a turn a compliance rule
+   * touched, and outside a live turn. The live adapter writes it after the
+   * reply; nothing else does.
+   */
+  unresolved?: UnresolvedCapture;
+}
+
+/** What AI-22 keeps of a message the AI could not resolve (`ai_unresolved_items`). */
+export interface UnresolvedCapture {
+  reason: UnresolvedReason;
+  /** The player's words the turn answered — as they came; the writer masks them (AI-26). */
+  text: string;
+  aiAgentId: string;
+  /** The conversation's brand and the configuration the turn ran on (`TurnContext`). */
+  brandId: string | null;
+  configVersionId: string | null;
+  language: string | null;
+  /** The procedure the understanding call leaned to, if it named one. */
+  intentGuess: string | null;
+  /** The turn's own embedding of the message, when its search made one (AI-22 §3). */
+  embedding: { space: string; vector: string } | null;
 }
 
 /**

@@ -190,6 +190,7 @@ describe('buildSchedulerJobs', () => {
         threads: 0,
         visits: 0,
         aiDecisions: 0,
+        unresolvedItems: 0,
         mailFiles: 0,
         auditEntries: 0,
       });

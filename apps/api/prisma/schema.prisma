@@ -210,6 +210,8 @@ model License {
   aiTestRuns             AiTestRun[]
   aiTestRunResults       AiTestRunResult[]
   aiSandboxSessions      AiSandboxSession[]
+  aiUnresolvedItems      AiUnresolvedItem[]
+  aiUnresolvedClusters   AiUnresolvedCluster[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -1029,6 +1031,7 @@ model Chat {
   riskFlags        RiskFlag[]
   aiHandoffs       AiHandoff[]
   aiJobs           AiJob[]
+  aiUnresolved     AiUnresolvedItem[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   /// The inbox list's ordering index. Kept beside the `created_at` one rather
@@ -1107,6 +1110,7 @@ model Thread {
   riskFlags       RiskFlag[]
   aiHandoffs      AiHandoff[]
   aiJobs          AiJob[]
+  aiUnresolved    AiUnresolvedItem[]
   queueEntries    QueueEntry[]
   aiConversations AiConversation[]
 
@@ -1887,6 +1891,8 @@ model AiAgent {
   testScenarios     AiTestScenario[]
   testRuns          AiTestRun[]
   sandboxSessions   AiSandboxSession[]
+  unresolvedItems   AiUnresolvedItem[]
+  unresolvedGroups  AiUnresolvedCluster[]
 
   @@index([licenseId, kind])
   @@map("ai_agents")
@@ -3238,6 +3244,7 @@ model Brand {
   handoffRoutes    HandoffRoute[]
   aiAccessInfo     AiAccessInfo[]
   aiTestScenarios  AiTestScenario[]
+  aiUnresolved     AiUnresolvedItem[]
 
   @@unique([licenseId, slug])
   @@map("brands")
@@ -4541,4 +4548,85 @@ model AiSandboxSession {
   @@index([licenseId, createdBy])
   @@index([expiresAt])
   @@map("ai_sandbox_sessions")
+}
+
+/// One message the AI could not resolve (tm 317.1 · SiyahTuş analysis AI-22):
+/// why (`UNRESOLVED_REASONS`), the player's words and the player's message
+/// before them, masked (AI-26), the language, and the embedding the turn's
+/// search already made. Written by the live turn after its reply and by the
+/// close of a conversation the player left on the AI's question; never by a
+/// simulation or a preview. Goes with its chat and its thread (erasure,
+/// retention) and at the latest after `UNRESOLVED_TEXT_RETENTION_DAYS`.
+/// `event_id` names the message (events are partitioned: no foreign key).
+model AiUnresolvedItem {
+  id              String                      @id @default(uuid()) @db.Uuid
+  licenseId       BigInt                      @map("license_id")
+  aiAgentId       String                      @map("ai_agent_id") @db.Uuid
+  brandId         String?                     @map("brand_id") @db.Uuid
+  /// The day container (panel "Thread ID").
+  chatId          String                      @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID").
+  threadId        String                      @map("thread_id") @db.VarChar(12)
+  eventId         String?                     @map("event_id") @db.VarChar(40)
+  textMasked      String                      @map("text_masked")
+  contextMasked   String?                     @map("context_masked")
+  language        String?
+  reason          String
+  /// The procedure the understanding call leaned to, when it named one.
+  intentGuess     String?                     @map("intent_guess")
+  /// The AI configuration the turn ran on (ADR-14b §2.7) — no relation until tm 316.
+  configVersionId String?                     @map("config_version_id") @db.Uuid
+  embedding       Unsupported("vector(1536)")?
+  /// `EmbeddingProvider.space` of `embedding`; null exactly when there is none.
+  embeddingSpace  String?                     @map("embedding_space")
+  clusterId       String?                     @map("cluster_id") @db.Uuid
+  createdAt       DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent AiAgent              @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  brand   Brand?               @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  chat    Chat                 @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  thread  Thread               @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  cluster AiUnresolvedCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+
+  @@index([licenseId, createdAt])
+  @@index([clusterId])
+  @@index([chatId])
+  @@index([threadId])
+  @@map("ai_unresolved_items")
+}
+
+/// A group of unresolved messages that ask the same thing, per AI agent and
+/// embedding space (AI-22 §4): its title, its counts and whether the workspace
+/// ignored it or fixed it. Built by the clustering job (tm 317.2); the title
+/// and the counts outlive the items' words (AI-22-S1).
+model AiUnresolvedCluster {
+  id             String                      @id @default(uuid()) @db.Uuid
+  licenseId      BigInt                      @map("license_id")
+  aiAgentId      String                      @map("ai_agent_id") @db.Uuid
+  label          String
+  labelSource    String                      @default("lexical") @map("label_source")
+  centroid       Unsupported("vector(1536)")?
+  embeddingSpace String                      @map("embedding_space")
+  itemCount      Int                         @default(0) @map("item_count")
+  count7d        Int                         @default(0) @map("count_7d")
+  handoffCount   Int                         @default(0) @map("handoff_count")
+  abandonCount   Int                         @default(0) @map("abandon_count")
+  firstSeen      DateTime                    @map("first_seen") @db.Timestamptz(6)
+  lastSeen       DateTime                    @map("last_seen") @db.Timestamptz(6)
+  status         String                      @default("open")
+  ignoreReason   String?                     @map("ignore_reason")
+  /// The AI-21 change or version that fixed it — no relation until tm 316.
+  linkedChangeId String?                     @map("linked_change_id") @db.Uuid
+  resolvedAt     DateTime?                   @map("resolved_at") @db.Timestamptz(6)
+  postFixCount   Int                         @default(0) @map("post_fix_count")
+  createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent AiAgent            @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  items   AiUnresolvedItem[]
+
+  @@index([licenseId, aiAgentId, embeddingSpace], map: "ai_unresolved_clusters_agent_space_idx")
+  @@map("ai_unresolved_clusters")
 }

@@ -196,6 +196,46 @@ const BRAND_LABEL_TABLES: ReadonlyArray<{
       });
     },
   },
+  {
+    // The brand an unresolved question came in through (tm 317.1 · AI-22):
+    // the report filters by it, while a cluster gathers every brand's.
+    table: 'ai_unresolved_items',
+    reason: 'the report filters by it; a cluster spans the brands',
+    plant: async (db, at) => {
+      const agent = await db.aiAgent.create({
+        data: { licenseId: at.licenseId, name: 'Brand probe AI' },
+        select: { id: true },
+      });
+      const customer = await db.customer.create({
+        data: { organizationId: at.organizationId, name: 'Brand probe' },
+        select: { id: true },
+      });
+      const chat = await db.chat.create({
+        data: {
+          id: generateShortId(),
+          licenseId: at.licenseId,
+          customerId: customer.id,
+          brandId: at.brandId,
+        },
+        select: { id: true },
+      });
+      const thread = await db.thread.create({
+        data: { id: generateShortId(), chatId: chat.id, licenseId: at.licenseId },
+        select: { id: true },
+      });
+      return db.aiUnresolvedItem.create({
+        data: {
+          licenseId: at.licenseId,
+          aiAgentId: agent.id,
+          brandId: at.brandId,
+          chatId: chat.id,
+          threadId: thread.id,
+          textMasked: 'Marka deneme sorusu nedir',
+          reason: 'no_knowledge',
+        },
+      });
+    },
+  },
 ];
 
 // === Brand lists (tm 309.2) =================================================

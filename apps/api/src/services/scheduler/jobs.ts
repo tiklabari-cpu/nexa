@@ -255,6 +255,7 @@ export function buildSchedulerJobs({
             threads: report.totals.threads,
             visits: report.totals.visits,
             aiDecisions: report.totals.aiDecisions,
+            unresolvedItems: report.totals.unresolvedItems,
             mailFiles: report.totals.mailFiles,
             auditEntries: report.totals.auditEntries,
           },

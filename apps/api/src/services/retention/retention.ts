@@ -52,6 +52,7 @@
 import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type PrismaClient } from '@prisma/client';
+import { UNRESOLVED_TEXT_RETENTION_DAYS } from '@siyahtus/types';
 import { inHipaaScope } from '../../lib/hipaa.js';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
@@ -83,6 +84,12 @@ export interface TenantPruneResult {
    * here: it cascades with its thread, inside `threads`.
    */
   aiDecisions: number;
+  /**
+   * Unresolved questions (tm 317.1 · AI-22-S1) older than
+   * `UNRESOLVED_TEXT_RETENTION_DAYS`, whatever the conversation's window. One on a
+   * thread swept above went with it (`thread_id` cascades), inside `threads`.
+   */
+  unresolvedItems: number;
   /** Audit-log entries pruned for this tenant (NFR-S12 30-day window). */
   auditEntries: number;
   /** Whether this workspace is covered by a signed BAA (NFR-C4 · C4-e). */
@@ -117,6 +124,7 @@ export interface RetentionReport {
     threads: number;
     visits: number;
     aiDecisions: number;
+    unresolvedItems: number;
     mailFiles: number;
     auditEntries: number;
   };
@@ -190,6 +198,7 @@ export class RetentionRunner {
         threads: results.reduce((sum, r) => sum + r.threads, 0),
         visits: results.reduce((sum, r) => sum + r.visits, 0),
         aiDecisions: results.reduce((sum, r) => sum + r.aiDecisions, 0),
+        unresolvedItems: results.reduce((sum, r) => sum + r.unresolvedItems, 0),
         mailFiles,
         auditEntries,
       },
@@ -278,6 +287,17 @@ export class RetentionRunner {
               this.#deleteThreadlessDecisionBatch(tx, cutoffs.threads!),
             );
 
+    // The player's words on the unresolved-questions list (AI-22-S1): at most
+    // 90 days, and never longer than the conversation — a thread the step
+    // above swept took its rows with it. Not skipped with an unlimited
+    // thread window: this ceiling is the list's own, not the conversation's.
+    const unresolvedCutoff = cutoffFor(UNRESOLVED_TEXT_RETENTION_DAYS, now);
+    const unresolvedItems = dryRun
+      ? await withTenant(this.#db, context, (tx) => this.#countUnresolved(tx, unresolvedCutoff))
+      : await this.#deleteInBatches(context, (tx) =>
+          this.#deleteUnresolvedBatch(tx, unresolvedCutoff),
+        );
+
     // The audit log is append-only to `siyahtus_app` (no DELETE grant), so its
     // window cannot be applied through `withTenant` like the tables above. A
     // real run goes through the one SECURITY DEFINER hole, `audit_prune_expired`,
@@ -293,7 +313,7 @@ export class RetentionRunner {
     // of the audit trail (a no-op delete is not an event). The audit prune runs
     // before this entry, so the row that records the sweep is itself fresh and
     // never inside the window it just applied.
-    if (!dryRun && threads + visits + aiDecisions + auditEntries > 0) {
+    if (!dryRun && threads + visits + aiDecisions + unresolvedItems + auditEntries > 0) {
       await withTenant(this.#db, context, (tx) =>
         writeAuditEntry(
           tx,
@@ -309,6 +329,7 @@ export class RetentionRunner {
               threads,
               visits,
               ai_decisions: aiDecisions,
+              ai_unresolved: unresolvedItems,
               audit_entries: auditEntries,
               dry_run: false,
               // The windows that were actually applied, and why they were those
@@ -338,6 +359,7 @@ export class RetentionRunner {
       threads,
       visits,
       aiDecisions,
+      unresolvedItems,
       auditEntries,
       hipaaScope,
       policy,
@@ -399,6 +421,23 @@ export class RetentionRunner {
           ORDER BY created_at
           LIMIT ${RETENTION_BATCH}
        )`;
+  }
+
+  #deleteUnresolvedBatch(tx: TenantClient, cutoff: Date): Promise<number> {
+    return tx.$executeRaw`
+      DELETE FROM ai_unresolved_items
+       WHERE id IN (
+         SELECT id FROM ai_unresolved_items
+          WHERE created_at < ${cutoff}
+          ORDER BY created_at
+          LIMIT ${RETENTION_BATCH}
+       )`;
+  }
+
+  async #countUnresolved(tx: TenantClient, cutoff: Date): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM ai_unresolved_items WHERE created_at < ${cutoff}`;
+    return Number(rows[0]?.n ?? 0n);
   }
 
   async #countThreadlessDecisions(tx: TenantClient, cutoff: Date): Promise<number> {

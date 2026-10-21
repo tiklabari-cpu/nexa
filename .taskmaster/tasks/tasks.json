@@ -13362,7 +13362,7 @@
           "309"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-20T23:32:00.036Z",
+        "updatedAt": "2026-10-21T01:10:24.658Z",
         "subtasks": [
           {
             "id": 1,
@@ -13382,13 +13382,13 @@
             "description": "CRUD/import/export/review servisleri + renderRowText + table_row kaynak indeksleme",
             "details": "Üst görev 310 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "CSV ve yeniden indeksleme entegrasyon.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "310.1"
             ],
             "parentId": "310",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-21T01:10:24.658Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-20T22:02:34.087Z",
+      "lastModified": "2026-10-21T01:10:24.658Z",
       "taskCount": 390,
       "completedCount": 307,
       "tags": [

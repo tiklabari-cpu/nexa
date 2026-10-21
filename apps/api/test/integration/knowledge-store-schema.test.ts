@@ -263,8 +263,15 @@ describe('the single knowledge store — expand (AI-14 · K11 · tm 309.1)', () 
       expect(await update(`brand_ids = ARRAY[gen_random_uuid(), NULL]`)).toMatch(/scope_ids_check/);
       expect(await update(`source_table = 'bonuses'`)).toMatch(/source_row_check/);
       expect(await update(`source_row_id = gen_random_uuid()`)).toMatch(/source_row_check/);
+      // A row's address makes a `table_row` source, and only that (tm 310.2).
       expect(
-        await update(`source_table = 'bonuses', source_row_id = gen_random_uuid()`),
+        await update(`source_table = 'kb_bonuses', source_row_id = gen_random_uuid()`),
+      ).toMatch(/table_row_check/);
+      expect(await update(`type = 'table_row'`)).toMatch(/table_row_check/);
+      expect(
+        await update(
+          `type = 'table_row', source_table = 'kb_bonuses', source_row_id = gen_random_uuid()`,
+        ),
       ).toBeNull();
       expect(await update(`language = 'Turkish'`)).toMatch(/language_check/);
       expect(await update(`review_interval_days = 0`)).toMatch(/review_interval_days_check/);

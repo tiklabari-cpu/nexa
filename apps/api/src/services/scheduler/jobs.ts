@@ -47,6 +47,7 @@ import { KbArticleKnowledgeSweeper } from '../ai/kb-article-knowledge.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
+import { KnowledgeTableRowKnowledgeSweeper } from '../knowledge-tables/row-knowledge.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
 import {
@@ -283,7 +284,8 @@ export function buildSchedulerJobs({
     {
       // The store's freshness: the `website` sources past their window, then
       // the published KB articles whose knowledge source is not what they say
-      // (tm 309.2 · AI-14-S2 — `kb-article-knowledge.ts`).
+      // (tm 309.2 · AI-14-S2 — `kb-article-knowledge.ts`), then the structured
+      // table rows whose source is not (tm 310.2 · AI-13 — `row-knowledge.ts`).
       name: 'knowledge_refresh',
       intervalMs: intervals.knowledge_refresh,
       async run() {
@@ -296,6 +298,10 @@ export function buildSchedulerJobs({
           knowledge,
           embeddingInference,
         }).run();
+        const rows = await new KnowledgeTableRowKnowledgeSweeper(db, {
+          knowledge,
+          embeddingInference,
+        }).run();
         return {
           counts: {
             tenants: report.totals.tenants,
@@ -305,6 +311,9 @@ export function buildSchedulerJobs({
             kb_checked: articles.totals.checked,
             kb_synced: articles.totals.synced,
             kb_deferred: articles.totals.deferred,
+            table_rows_checked: rows.totals.checked,
+            table_rows_synced: rows.totals.synced,
+            table_rows_deferred: rows.totals.deferred,
           },
         };
       },

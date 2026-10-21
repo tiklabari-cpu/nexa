@@ -1,7 +1,9 @@
 /**
  * `knowledge-refresh:run` — the manual trigger for the freshness sweep
  * (FR-MOD-06.3.3, tm 198.4) and, after it, the KB article sync (tm 309.2 ·
- * `kb-article-knowledge.ts`), the two halves of the `knowledge_refresh` job.
+ * `kb-article-knowledge.ts`) and the structured table rows' (tm 310.2 ·
+ * `knowledge-tables/row-knowledge.ts`), the three parts of the
+ * `knowledge_refresh` job.
  *
  * Mirrors `sla-run.ts`: there is no external scheduler in this environment (a
  * project boundary), so this script is how an operator (or CI) drives the
@@ -29,6 +31,7 @@ import { KbArticleKnowledgeSweeper } from './kb-article-knowledge.js';
 import { KnowledgeRefreshSweeper } from './knowledge-refresh-sweep.js';
 import { KnowledgeService } from './knowledge-service.js';
 import { createMeteredEmbeddings } from './metered-embeddings.js';
+import { KnowledgeTableRowKnowledgeSweeper } from '../knowledge-tables/row-knowledge.js';
 
 async function main(): Promise<void> {
   const env = parseEnv();
@@ -49,12 +52,20 @@ async function main(): Promise<void> {
       knowledge,
       embeddingInference,
     }).run();
-    process.stdout.write(`${JSON.stringify({ ...report, kbArticles: articles }, null, 2)}\n`);
+    // Then the structured table rows whose source is behind (tm 310.2), as the job does.
+    const rows = await new KnowledgeTableRowKnowledgeSweeper(db, {
+      knowledge,
+      embeddingInference,
+    }).run();
+    process.stdout.write(
+      `${JSON.stringify({ ...report, kbArticles: articles, tableRows: rows }, null, 2)}\n`,
+    );
     process.stderr.write(
       `knowledge-refresh: refreshed ${report.totals.refreshed}, failed ${report.totals.failed} ` +
         `of ${report.totals.checked} due source(s) across ${report.totals.tenants} tenant(s); ` +
         `KB articles synced ${articles.totals.synced}, deferred ${articles.totals.deferred} ` +
-        `of ${articles.totals.checked}\n`,
+        `of ${articles.totals.checked}; table rows synced ${rows.totals.synced}, ` +
+        `deferred ${rows.totals.deferred} of ${rows.totals.checked}\n`,
     );
   } finally {
     await db.$disconnect();

@@ -970,7 +970,11 @@ describe('module parity matrix — what is still owed', () => {
       // AI-14's "this source still holds", pressed on the web panel's single
       // knowledge list (tm 309.3). The app lists Copilot's sources read-only
       // and reviews none; nothing here re-scopes.
-      contractEndpoints: 264,
+      // 264 -> 269 with `/knowledge-tables/{table}` and its `/import`,
+      // `/export`, `/{rowId}` and `/{rowId}/review` (tm 310.2) — AI-13's
+      // structured tables, kept in the web panel's "Tablolar" screen
+      // (tm 310.5). The app keeps no AI knowledge; nothing here re-scopes.
+      contractEndpoints: 269,
       scopeBoundaries: 1,
     });
   });

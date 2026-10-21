@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   AI_ACCESS_INFO_CACHE_SECONDS,
   KNOWLEDGE_TABLES,
+  KNOWLEDGE_TABLE_COLUMNS,
+  KNOWLEDGE_TABLE_REQUIRED_FIELDS,
   KNOWLEDGE_TABLE_PATH_SEGMENTS,
   KNOWLEDGE_TABLE_REVIEW_INTERVAL_DAYS,
   KNOWLEDGE_TABLE_SQL_NAMES,
@@ -13,6 +15,7 @@ import {
   isKnowledgeTable,
   isKnowledgeTableRowStale,
   knowledgeTableBrandScopesClash,
+  knowledgeTableRowLabel,
   knowledgeTableRowReviewDueAt,
   knowledgeTableRowServesBrand,
   matchesPaymentReferenceFormat,
@@ -586,6 +589,31 @@ describe('knowledge tables — review (AI-13-S2)', () => {
     expect(isKnowledgeTableRowStale('payment_methods', row, new Date('2026-10-15T00:00:01Z'))).toBe(
       true,
     );
+  });
+});
+
+describe('knowledge tables — columns and labels (tm 310.2)', () => {
+  it('lists each writable field once, a required one among them', () => {
+    for (const table of KNOWLEDGE_TABLES) {
+      const fields = KNOWLEDGE_TABLE_COLUMNS[table].map(([field]) => field);
+      expect(new Set(fields).size).toBe(fields.length);
+      for (const required of KNOWLEDGE_TABLE_REQUIRED_FIELDS[table]) {
+        expect(fields).toContain(required);
+      }
+    }
+  });
+
+  it("calls a row by its name, its document or its rule's title — null when blank", () => {
+    expect(knowledgeTableRowLabel('payment_methods', { name: ' Papara ' })).toBe('Papara');
+    expect(knowledgeTableRowLabel('bonuses', { name: 'Hoş geldin' })).toBe('Hoş geldin');
+    expect(knowledgeTableRowLabel('kyc_documents', { doc_type: 'Pasaport', name: 'x' })).toBe(
+      'Pasaport',
+    );
+    expect(knowledgeTableRowLabel('rules', { key: 'min_age', title: 'Yaş sınırı' })).toBe(
+      'Yaş sınırı',
+    );
+    expect(knowledgeTableRowLabel('rules', { title: '  ' })).toBeNull();
+    expect(knowledgeTableRowLabel('payment_methods', { name: 7 })).toBeNull();
   });
 });
 

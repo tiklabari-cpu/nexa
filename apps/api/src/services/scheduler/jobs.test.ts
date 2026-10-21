@@ -215,6 +215,9 @@ describe('buildSchedulerJobs', () => {
         kb_checked: 0,
         kb_synced: 0,
         kb_deferred: 0,
+        table_rows_checked: 0,
+        table_rows_synced: 0,
+        table_rows_deferred: 0,
       });
     });
 

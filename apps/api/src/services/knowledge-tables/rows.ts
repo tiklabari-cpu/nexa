@@ -13,7 +13,7 @@
  *
  * Brand priority — a brand's own row over the every-brand row of the same
  * name — is the caller's, over what this returns (`preferBrandRows`). The
- * writer (tm 310.2) and the fact resolver (tm 310.3) build on these; until
+ * writer (tm 310.2, `writer.ts`) and the fact resolver (tm 310.3) build on these; until
  * tm 316 versions the configuration, the AI reads the tables live through
  * here, afterwards from its published package.
  */
@@ -56,6 +56,61 @@ export function knowledgeTableBrandWhere(brandId: string | null): {
 const ORDER = [{ createdAt: 'asc' }, { id: 'asc' }] satisfies Array<
   Record<string, Prisma.SortOrder>
 >;
+
+/**
+ * The four Prisma delegates as one shape, for code that is the same for every
+ * table — the panel's list, the writer (`config-draft.ts`), the row's knowledge
+ * source. What a row holds is still each table's (`KnowledgeTableRecords`).
+ */
+export interface KnowledgeTableDelegate {
+  findMany(args?: object): Promise<unknown[]>;
+  findFirst(args: object): Promise<unknown>;
+  count(args?: object): Promise<number>;
+  create(args: { data: object }): Promise<unknown>;
+  updateMany(args: { where: object; data: object }): Promise<{ count: number }>;
+  deleteMany(args: { where: object }): Promise<{ count: number }>;
+}
+
+export function knowledgeTableDelegate(
+  tx: TenantClient,
+  table: KnowledgeTable,
+): KnowledgeTableDelegate {
+  switch (table) {
+    case 'payment_methods':
+      return tx.kbPaymentMethod as unknown as KnowledgeTableDelegate;
+    case 'bonuses':
+      return tx.kbBonus as unknown as KnowledgeTableDelegate;
+    case 'kyc_documents':
+      return tx.kbKycDocument as unknown as KnowledgeTableDelegate;
+    default:
+      return tx.kbRule as unknown as KnowledgeTableDelegate;
+  }
+}
+
+/**
+ * Every row of `table`, every brand's, oldest first — the workspace's own view
+ * (the panel, the writer's uniqueness check, the knowledge sweep). Never a
+ * conversation's: a conversation reads {@link readKnowledgeTableRows}.
+ */
+export async function listKnowledgeTableRecords<T extends KnowledgeTable>(
+  tx: TenantClient,
+  table: T,
+): Promise<Array<KnowledgeTableRecords[T]>> {
+  return (await knowledgeTableDelegate(tx, table).findMany({ orderBy: ORDER })) as Array<
+    KnowledgeTableRecords[T]
+  >;
+}
+
+/** One row of `table` by id; null when it is not this workspace's. */
+export async function findKnowledgeTableRecord<T extends KnowledgeTable>(
+  tx: TenantClient,
+  table: T,
+  id: string,
+): Promise<KnowledgeTableRecords[T] | null> {
+  return (await knowledgeTableDelegate(tx, table).findFirst({
+    where: { id },
+  })) as KnowledgeTableRecords[T] | null;
+}
 
 /** Every row of `table` that serves the reader's brand, oldest first. */
 export async function readKnowledgeTableRows<T extends KnowledgeTable>(

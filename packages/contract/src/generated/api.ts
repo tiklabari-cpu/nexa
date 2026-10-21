@@ -4322,6 +4322,145 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/knowledge-tables/{table}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+      };
+      cookie?: never;
+    };
+    /**
+     * A structured table's rows
+     * @description Every row of the table (AI-13), oldest first. An unknown `table` is a
+     *     404, like any path that is not there. `brand_id` narrows to
+     *     the rows that serve that brand — its own and the every-brand rows, the
+     *     reader's filter (`knowledgeTableRowServesBrand`); `stale=true` to the
+     *     rows due a review.
+     */
+    get: operations['listKnowledgeTableRows'];
+    put?: never;
+    /**
+     * Add a row
+     * @description The body is the table's create schema. Refusals are 400 `validation`
+     *     with `details.problems` (`KnowledgeTableProblem[]`): every refused
+     *     field, including `taken` when another row of an overlapping brand
+     *     scope answers to the name. A change to these tables always waits for
+     *     the AI configuration's approval — never the fast path (ADR-14b §2.10).
+     */
+    post: operations['createKnowledgeTableRow'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-tables/{table}/import': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import rows from one CSV
+     * @description The bulk import pattern (`POST /knowledge-sources/bulk`): one row per
+     *     CSV data row, columns named as the table's fields (lists separated by
+     *     `|`). **Partial success is a 200** — valid rows are taken, invalid ones
+     *     skipped with their problems (AI-13 §8). The error envelope is reserved
+     *     for a file refused whole (malformed CSV, a missing required column, a
+     *     budget overrun). `dry_run: true` validates and writes nothing — the
+     *     preview.
+     */
+    post: operations['importKnowledgeTableRows'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-tables/{table}/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+      };
+      cookie?: never;
+    };
+    /**
+     * Export a table as CSV
+     * @description The same columns the import reads, so an exported file imports back.
+     */
+    get: operations['exportKnowledgeTableRows'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-tables/{table}/{rowId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+        rowId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a row
+     * @description Its knowledge source goes with it, in the same transaction.
+     */
+    delete: operations['deleteKnowledgeTableRow'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a row
+     * @description Any field alone; the others keep their value, and the merged row is
+     *     validated whole. An integration's row (`source: integration`) is not
+     *     edited by hand — 400 `validation` with `details.reason`
+     *     `knowledge_table_row_from_integration`.
+     */
+    patch: operations['updateKnowledgeTableRow'];
+    trace?: never;
+  };
+  '/knowledge-tables/{table}/{rowId}/review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+        rowId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark a row reviewed
+     * @description "Gözden geçirdim": `reviewed_at` becomes now, so the row is due again
+     *     `review_interval_days` later. A meta field — it does not change what
+     *     the AI says.
+     */
+    post: operations['reviewKnowledgeTableRow'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/copilot/knowledge': {
     parameters: {
       query?: never;
@@ -23896,6 +24035,221 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listKnowledgeTableRows: {
+    parameters: {
+      query?: {
+        brand_id?: string;
+        stale?: boolean;
+      };
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Rows */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['KnowledgeTableRow'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createKnowledgeTableRow: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json':
+          | components['schemas']['KbPaymentMethodCreate']
+          | components['schemas']['KbBonusCreate']
+          | components['schemas']['KbKycDocumentCreate']
+          | components['schemas']['KbRuleCreate'];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeTableRow'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  importKnowledgeTableRows: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          csv: string;
+          /** @default false */
+          dry_run?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description The per-row report */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeTableImportResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  exportKnowledgeTableRows: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The table as CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteKnowledgeTableRow: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+        rowId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateKnowledgeTableRow: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+        rowId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json':
+          | components['schemas']['KbPaymentMethodUpdate']
+          | components['schemas']['KbBonusUpdate']
+          | components['schemas']['KbKycDocumentUpdate']
+          | components['schemas']['KbRuleUpdate'];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeTableRow'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  reviewKnowledgeTableRow: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        table: components['schemas']['KnowledgeTableSegment'];
+        rowId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reviewed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeTableRow'];
         };
       };
       401: components['responses']['Unauthorized'];

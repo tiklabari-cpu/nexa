@@ -13648,7 +13648,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T13:19:03.001Z",
+        "updatedAt": "2026-10-21T13:20:26.628Z",
         "subtasks": [
           {
             "id": 1,
@@ -13726,13 +13726,13 @@
             "description": "checks.ts (KESİN KONTROLLER: sonuç/hedef ekip, prosedür, zorunlu bilgiler, yasaklı ifade, hassas veri isteme, bayraklar, tur sayısı) + simulated-player.ts (SCENARIO_PERSONAS)",
             "details": "Üst görev KESİN KONTROLLER ve TİPLER (persona listesi); runner (314.2) bunları çağırır. Ayrıntı ve kabul maddeleri: üst görev #314 details (tek kaynak).",
             "testStrategy": "Birim (her kontrol geç/kal, persona çıktısı deterministik mock); `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "314.1"
             ],
             "parentId": "314",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-21T13:20:26.628Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T13:19:03.001Z",
+      "lastModified": "2026-10-21T13:20:26.628Z",
       "taskCount": 390,
       "completedCount": 309,
       "tags": [

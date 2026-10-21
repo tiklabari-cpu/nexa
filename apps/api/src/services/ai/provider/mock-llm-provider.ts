@@ -27,6 +27,9 @@
  * citing the passages it used. And so is the guardrails' judge (tm 301.3):
  * `mockJudge` reads the context `buildJudgePrompt` wrote and finds nothing —
  * the deterministic output check is the stub's whole judgement.
+ * And so is the simulated player (tm 314.6 · AI-19): `mockPlayer` reads the
+ * persona, facts and goal `buildPlayerPrompt` wrote and the conversation the
+ * request carries, and writes the player's next line by fixed rules.
  * The invalid, refused and cut-off replies a real model can give are not
  * produced here; tests inject a provider that gives them (§6a.6).
  *
@@ -50,6 +53,11 @@ import {
   readJudgeGrounding,
 } from '../conversation/guardrails/judge.js';
 import { mockUnderstanding } from '../conversation/understand-mock.js';
+import {
+  mockPlayer,
+  readPlayerGrounding,
+  SIMULATED_PLAYER_RESPONSE_NAME,
+} from '../simulation/player-prompt.js';
 import { readUnderstandGrounding, UNDERSTAND_RESPONSE_NAME } from '../conversation/understand.js';
 import { exampleForSchema } from './json-schema.js';
 import type { LlmCompletion, LlmCompletionRequest, LlmProvider } from './llm-provider.js';
@@ -76,6 +84,16 @@ export class MockLlmProvider implements LlmProvider {
         throw new Error('A judge request without the context buildJudgePrompt writes.');
       return {
         text: JSON.stringify(mockJudge(grounding)),
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
+    if (request.responseFormat?.name === SIMULATED_PLAYER_RESPONSE_NAME) {
+      const grounding = readPlayerGrounding(request.system);
+      if (!grounding) {
+        throw new Error('A simulated player request without the context buildPlayerPrompt writes.');
+      }
+      return {
+        text: JSON.stringify(mockPlayer(grounding, request.messages)),
         usage: { inputTokens: 0, outputTokens: 0 },
       };
     }

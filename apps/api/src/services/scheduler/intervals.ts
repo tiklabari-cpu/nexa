@@ -23,7 +23,8 @@ import type { Env } from '../../config/env.js';
  * billing period into a statement so it stops being re-priced from today's
  * subscription (FR-MOD-10.3, tm 230); the ninth deletes a sign-up nobody
  * verified, once it has expired with its workspace still empty (tm 257.19);
- * the tenth sends a person to a visitor the AI left unanswered (tm 293.6).
+ * the tenth sends a person to a visitor the AI left unanswered (tm 293.6);
+ * the eleventh deletes the AI test bench's expired sandbox sessions (tm 314.2).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -36,6 +37,7 @@ export const SCHEDULER_JOB_NAMES = [
   'invoice_close',
   'unverified_signups',
   'ai_stall',
+  'ai_sandbox_sessions',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -58,6 +60,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_INVOICE_CLOSE_MS'
   | 'SCHEDULE_UNVERIFIED_SIGNUPS_MS'
   | 'SCHEDULE_AI_STALL_MS'
+  | 'SCHEDULE_AI_SANDBOX_SESSIONS_MS'
 >;
 
 /**
@@ -79,6 +82,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     invoice_close: env.SCHEDULE_INVOICE_CLOSE_MS,
     unverified_signups: env.SCHEDULE_UNVERIFIED_SIGNUPS_MS,
     ai_stall: env.SCHEDULE_AI_STALL_MS,
+    ai_sandbox_sessions: env.SCHEDULE_AI_SANDBOX_SESSIONS_MS,
   };
 }
 

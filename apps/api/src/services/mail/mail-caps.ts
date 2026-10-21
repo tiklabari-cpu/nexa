@@ -51,6 +51,7 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
+import { refuseInSimulation } from '../../lib/simulation-context.js';
 import { utcDayKey } from '../ai/ai-daily-budget.js';
 import { createMailer, type Mailer, type Message } from './mailer.js';
 import { MailCapError, isMailDeliveryError, type MailCapScope } from './mail-error.js';
@@ -177,6 +178,8 @@ export class CappedMailer implements Mailer {
   }
 
   async send(message: Message): Promise<void> {
+    // Every mail passes here, so here is where a simulation is refused (tm 314.2).
+    refuseInSimulation('mail');
     const charge = chargeFor(message, this.#now());
     const caps = this.#caps;
     const rows = await this.#db.$queryRaw<Array<{ scope: MailCapScope | null }>>`

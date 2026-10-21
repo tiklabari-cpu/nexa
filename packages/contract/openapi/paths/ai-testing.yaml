@@ -12,19 +12,14 @@
 # the same turn, with each reply's decision trace.
 #
 # ---------------------------------------------------------------------------
-# NOT MOUNTED YET (tm 314.1 wrote the contract and the tables; the route that
-# serves a path adds its `openapi.yaml` entry in the same commit — the parity
-# test fails a documented operation nothing serves, PLAN §D240):
-#
-#   /ai/test-scenarios, /ai/test-scenarios/{scenarioId}       → tm 314.2
-#   /ai/test-runs, /ai/test-runs/{runId}                      → tm 314.2
-#   /ai/test-runs/{runId}/results                             → tm 314.2 (`regression`: 314.3)
-#   /ai/sandbox-sessions, /ai/sandbox-sessions/{sessionId},
-#   …/{sessionId}/turns, …/{sessionId}/save-as-scenario       → tm 314.2
-#
-# The component schemas (`AiTestScenario`, `AiTestRun`, …) are in
-# `openapi.yaml` already; `@siyahtus/types` `ai-testing.ts` holds the same
-# lists and bounds.
+# Served by `apps/api/src/routes/ai-testing.ts` (tm 314.2). Still to come:
+# the regression against the previous published version's last run
+# (`regression`, `compared_run_id` — null until tm 314.3) and the judge's
+# advice (`judge`, tm 314.3); the compliance pack on a pre-publish run
+# (`compliance`, tm 314.4); named versions (`target: version`, tm 316 — until
+# then no version is found, 404). The component schemas (`AiTestScenario`,
+# `AiTestRun`, …) are in `openapi.yaml`; `@siyahtus/types` `ai-testing.ts`
+# holds the same lists and bounds.
 # ---------------------------------------------------------------------------
 
 testScenarios:
@@ -291,7 +286,9 @@ sandboxSessionTurns:
       One turn of the live engine on the session's configuration. The reply
       comes with its decision trace — the procedure and why, what was
       collected, the knowledge used, guardrails, hand-over, flags, tokens —
-      and pushes `expires_at` 24 hours on. Counted on the test meter.
+      and pushes `expires_at` 24 hours on. Counted on the test meter. A
+      session takes at most 100 messages; the next is `validation`
+      (`details.problems`: `message` `too_many`) — start another session.
     requestBody:
       required: true
       content:

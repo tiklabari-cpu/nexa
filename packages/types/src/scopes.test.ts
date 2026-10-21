@@ -166,6 +166,8 @@ describe('error taxonomy', () => {
     // Ready-made templates (AI-15 · tm 311.3): switching off or deleting a
     // locked template copy.
     'template_locked',
+    // The AI test bench (AI-19 · tm 314.2): a second run while one is under way.
+    'ai_test_run_in_progress',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

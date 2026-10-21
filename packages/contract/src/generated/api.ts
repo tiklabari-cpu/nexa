@@ -4629,6 +4629,220 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai/test-scenarios': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * An AI agent's test scenarios
+     * @description Every brand's, newest first. The platform's compliance pack is not listed — it is code.
+     */
+    get: operations['listAiTestScenarios'];
+    put?: never;
+    /**
+     * Write a test scenario
+     * @description `origin` is `manual`. A refused field answers `validation` with
+     *     `details.problems` (`{ field, code }`, `validateAiTestScenario`).
+     */
+    post: operations['createAiTestScenario'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/test-scenarios/{scenarioId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scenarioId: string;
+      };
+      cookie?: never;
+    };
+    /** One test scenario */
+    get: operations['getAiTestScenario'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a test scenario
+     * @description Earlier results keep its key and name; the regression still pairs them.
+     */
+    delete: operations['deleteAiTestScenario'];
+    options?: never;
+    head?: never;
+    /**
+     * Change a test scenario
+     * @description The change is merged over the scenario and the result validated whole.
+     */
+    patch: operations['updateAiTestScenario'];
+    trace?: never;
+  };
+  '/ai/test-runs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * An AI agent's run history
+     * @description Newest first.
+     */
+    get: operations['listAiTestRuns'];
+    put?: never;
+    /**
+     * Play scenarios against a configuration
+     * @description Queues the run and answers at once (`status: queued`); it is played in
+     *     the background, two scenarios of the workspace at a time, each within
+     *     60 s, at most 200 per run. A run with no scenario to play is
+     *     `validation`. The test allowance spent answers 429 `ai_daily_cap` with
+     *     `details.meter: llm_test`; the live allowance is never touched.
+     */
+    post: operations['createAiTestRun'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/test-runs/{runId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: string;
+      };
+      cookie?: never;
+    };
+    /** One run and its counts */
+    get: operations['getAiTestRun'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/test-runs/{runId}/results': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * A run's results, regressions first
+     * @description Each scenario's verdict, transcript with the decision trace of every AI
+     *     turn, hard checks and the judge's advice, compared with the same
+     *     scenario in the previous published version's last run.
+     */
+    get: operations['listAiTestRunResults'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/sandbox-sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start talking to the AI like a player */
+    post: operations['createAiSandboxSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/sandbox-sessions/{sessionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * A sandbox session, to pick it up again
+     * @description Its starter's only; an expired session is 404.
+     */
+    get: operations['getAiSandboxSession'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/sandbox-sessions/{sessionId}/turns': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Say something as the player
+     * @description One turn of the live engine on the session's configuration. The reply
+     *     comes with its decision trace — the procedure and why, what was
+     *     collected, the knowledge used, guardrails, hand-over, flags, tokens —
+     *     and pushes `expires_at` 24 hours on. Counted on the test meter. A
+     *     session takes at most 100 messages; the next is `validation`
+     *     (`details.problems`: `message` `too_many`) — start another session.
+     */
+    post: operations['createAiSandboxTurn'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/sandbox-sessions/{sessionId}/save-as-scenario': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Keep the session as a scripted scenario
+     * @description The player's messages become the script (`origin: from_chat`,
+     *     `origin_ref`: the session); the expectations are suggested from the
+     *     session's last state unless the body gives them. A session with no
+     *     player message is `validation`.
+     */
+    post: operations['saveAiSandboxSessionAsScenario'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/copilot/knowledge': {
     parameters: {
       query?: never;
@@ -17755,6 +17969,7 @@ export interface components {
       | 'ai_guardrail_setup_incomplete'
       | 'ai_mode_transition_refused'
       | 'ai_return_blocked'
+      | 'ai_test_run_in_progress'
       | 'authentication'
       | 'authorization'
       | 'brand_exists'
@@ -25191,6 +25406,370 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AiTemplatePackInstallResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiTestScenarios: {
+    parameters: {
+      query: {
+        ai_agent_id: string;
+        active?: boolean;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The scenarios */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestScenarioList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiTestScenario: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiTestScenarioInput'];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestScenario'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiTestScenario: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scenarioId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The scenario */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestScenario'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteAiTestScenario: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scenarioId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiTestScenario: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scenarioId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiTestScenarioPatch'];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestScenario'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiTestRuns: {
+    parameters: {
+      query: {
+        ai_agent_id: string;
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The runs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestRunList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiTestRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiTestRunCreate'];
+      };
+    };
+    responses: {
+      /** @description Queued */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestRun'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
+    };
+  };
+  getAiTestRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The run */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestRun'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiTestRunResults: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The results */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestRunResultList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiSandboxSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiSandboxSessionCreate'];
+      };
+    };
+    responses: {
+      /** @description Started */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiSandboxSession'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiSandboxSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiSandboxSession'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiSandboxTurn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiSandboxTurnRequest'];
+      };
+    };
+    responses: {
+      /** @description The AI's turn */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiSandboxTurnResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
+      503: components['responses']['LlmUnavailable'];
+    };
+  };
+  saveAiSandboxSessionAsScenario: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiSandboxSaveAsScenario'];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestScenario'];
         };
       };
       400: components['responses']['BadRequest'];

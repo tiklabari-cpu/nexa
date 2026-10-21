@@ -11,6 +11,10 @@
  * **Publishing happens after the transaction commits.** Announcing an event
  * inside the transaction would let a subscriber fetch the chat before the write
  * is visible — and see it missing.
+ *
+ * **A simulation never publishes (tm 314.2 · AI-19 §6).** A test scenario or
+ * a sandbox turn has no conversation to announce; a publish inside one throws
+ * (`lib/simulation-context.ts`) — the one failure this does not swallow.
  */
 import type { Redis } from 'ioredis';
 import type { FastifyBaseLogger } from 'fastify';
@@ -20,6 +24,7 @@ import {
   type PushAudience,
   type RtmPushAction,
 } from '@siyahtus/types';
+import { refuseInSimulation } from '../../lib/simulation-context.js';
 import type { TenantContext } from '../../lib/tenant.js';
 
 export class RealtimePublisher {
@@ -35,6 +40,7 @@ export class RealtimePublisher {
     payload: P,
     options: { originConnectionId?: string } = {},
   ): Promise<void> {
+    refuseInSimulation('realtime');
     // An empty audience would either reach nobody (wasted work) or, in a
     // careless gateway, everybody. Refuse to emit it at all.
     if (!hasAudience(audience)) {

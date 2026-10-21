@@ -262,3 +262,60 @@ export function heard(...items: Array<[string, string]>): ProcedureUnderstanding
     ai_conditions: {},
   };
 }
+
+/**
+ * The AI-19 acceptance's procedure (tm 314.2): research §3.1's deposit
+ * procedure cut to what the acceptance names — method and time, the elapsed
+ * time against the method's expected time (the wait), the site request and the
+ * receipt's reference — then finance. On a Papara row of 30 minutes, ten
+ * minutes on is the wait and ninety-five is finance.
+ */
+export function paparaAcceptanceProcedure(): Procedure {
+  const raw = depositDefinition();
+  raw['steps'] = [
+    { id: 'karsilama', type: 'say', template_key: 'giris' },
+    { id: 'yontem_zaman', type: 'collect', slots: ['yontem', 'islem_zamani'] },
+    {
+      id: 'sure_icinde',
+      type: 'check',
+      when: {
+        fn: {
+          name: 'elapsed_minutes',
+          args: ['islem_zamani'],
+          op: 'lt',
+          value: { fact: 'method.expected_minutes' },
+        },
+      },
+      then: { goto: 'bekleme' },
+    },
+    { id: 'talep', type: 'collect', slots: ['talep_olusturuldu'] },
+    {
+      id: 'talep_yok',
+      type: 'check',
+      when: { slot: { name: 'talep_olusturuldu', op: 'eq', value: false } },
+      then: { goto: 'talep_kalibi' },
+    },
+    { id: 'kanit', type: 'collect', slots: ['referans', 'dekont'] },
+    { id: 'finansa_devir', type: 'handoff', reason_code: 'expected_time_exceeded' },
+    { id: 'talep_kalibi', type: 'say', template_key: 'talep_yok' },
+    { id: 'talep_devir', type: 'handoff', reason_code: 'no_site_request' },
+    {
+      id: 'bekleme',
+      type: 'say',
+      template_key: 'normal_sure',
+      instruction: 'Yatırımın hâlâ normal süre içinde olduğunu söyle, biraz beklemesini rica et.',
+    },
+    {
+      id: 'bekleme_bitti',
+      type: 'resolve',
+      outcome: 'resolved_waiting',
+      followup_template: 'takip',
+    },
+  ];
+  const result = validateProcedure(raw);
+  if (!result.ok) throw new Error(JSON.stringify(result.problems, null, 2));
+  return result.procedure;
+}
+
+/** The acceptance's script: the problem, the method and time, the request, the receipt's reference. */
+export const PAPARA_LINES = ['param yatmadı', 'Papara 13:40', 'evet', 'PPR12345'];

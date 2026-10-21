@@ -22,6 +22,7 @@
  * (channels) narrow to that one brand on top of the license match.
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { refuseInSimulation } from './simulation-context.js';
 
 export interface TenantContext {
   licenseId: bigint;
@@ -68,14 +69,23 @@ function assertValidContext(context: TenantContext): void {
  *
  * Anything `fn` does through the provided client is subject to RLS, so a
  * missing WHERE clause returns nothing instead of another tenant's rows.
+ *
+ * Inside a simulation (tm 314.2 · AI-19 §6, `simulation-context.ts`) only a
+ * read-only transaction opens: a test scenario or a sandbox turn writes no
+ * tenant row. `simulationWrite: 'test_meter'` is the one exception — the AI
+ * budget counting a simulation's tokens on the test meter (AI-19-S2) — and
+ * only the budget passes it.
  */
 export async function withTenant<T>(
   db: PrismaClient,
   context: TenantContext,
   fn: (tx: TenantClient) => Promise<T>,
-  options: { timeoutMs?: number; readOnly?: boolean } = {},
+  options: { timeoutMs?: number; readOnly?: boolean; simulationWrite?: 'test_meter' } = {},
 ): Promise<T> {
   assertValidContext(context);
+  if (!options.readOnly && options.simulationWrite !== 'test_meter') {
+    refuseInSimulation('database');
+  }
 
   return db.$transaction(
     async (tx) => {

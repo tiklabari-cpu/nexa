@@ -416,6 +416,24 @@ paths:
     $ref: "./paths/ai-templates.yaml#/aiTemplateInstall"
   /ai-templates/packs/{packKey}/install:
     $ref: "./paths/ai-templates.yaml#/aiTemplatePackInstall"
+  /ai/test-scenarios:
+    $ref: "./paths/ai-testing.yaml#/testScenarios"
+  /ai/test-scenarios/{scenarioId}:
+    $ref: "./paths/ai-testing.yaml#/testScenario"
+  /ai/test-runs:
+    $ref: "./paths/ai-testing.yaml#/testRuns"
+  /ai/test-runs/{runId}:
+    $ref: "./paths/ai-testing.yaml#/testRun"
+  /ai/test-runs/{runId}/results:
+    $ref: "./paths/ai-testing.yaml#/testRunResults"
+  /ai/sandbox-sessions:
+    $ref: "./paths/ai-testing.yaml#/sandboxSessions"
+  /ai/sandbox-sessions/{sessionId}:
+    $ref: "./paths/ai-testing.yaml#/sandboxSession"
+  /ai/sandbox-sessions/{sessionId}/turns:
+    $ref: "./paths/ai-testing.yaml#/sandboxSessionTurns"
+  /ai/sandbox-sessions/{sessionId}/save-as-scenario:
+    $ref: "./paths/ai-testing.yaml#/sandboxSessionSaveAsScenario"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"
@@ -11270,6 +11288,7 @@ components:
         - ai_guardrail_setup_incomplete
         - ai_mode_transition_refused
         - ai_return_blocked
+        - ai_test_run_in_progress
         - authentication
         - authorization
         - brand_exists

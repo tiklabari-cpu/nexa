@@ -24,6 +24,11 @@ export const ERROR_TYPES = [
   // refused it, and the screen answers it with "approve the crisis text
   // first" (`details.reason`), which a generic `not_allowed` cannot say.
   'ai_guardrail_setup_incomplete',
+  // SiyahTuş addition — the AI test bench (AI-19 · tm 314.2): a second run of
+  // an AI agent against a configuration while one is still queued or playing.
+  // The request was fine and allowed; the run under way refused it, and the
+  // Test tab answers "wait for it" — kept narrow like `sandbox_exists`.
+  'ai_test_run_in_progress',
   // SiyahTuş addition. Signup is not in the source catalogue at all — that API
   // assumes a workspace already exists — and "this email is taken" is a
   // conflict, not a malformed request.
@@ -154,6 +159,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   ai_guardrail_setup_incomplete: 409,
   ai_mode_transition_refused: 409,
   ai_return_blocked: 409,
+  ai_test_run_in_progress: 409,
   authentication: 401,
   authorization: 403,
   brand_exists: 409,

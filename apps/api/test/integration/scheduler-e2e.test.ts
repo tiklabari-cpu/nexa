@@ -113,6 +113,7 @@ const UNCONDITIONAL = [
   'knowledge_refresh',
   'invoice_close',
   'ai_stall',
+  'ai_sandbox_sessions',
 ];
 
 /**
@@ -245,6 +246,9 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
   let unansweredThreadId: string;
   let retentionCanaryId: string;
   let unverifiedCanary: SignupFixture;
+  /** The AI test bench's sandbox sessions (tm 314.2): one past its `expires_at`, one not. */
+  let expiredSessionId: string;
+  let liveSessionId: string;
   let health: HealthBody;
   /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
   let adminAuth: { authorization: string };
@@ -373,6 +377,27 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     unverifiedCanary = await seedUnverifiedSignup(owner, 'canary@unverified.test');
     await ageSignup(owner, unverifiedCanary, 7 * 24);
 
+    // A — two "talk like a player" sessions (tm 314.2): one past its
+    // `expires_at` for the `ai_sandbox_sessions` sweep, one still live.
+    const aiAgent = await owner.aiAgent.create({
+      data: { licenseId: fx.a.licenseId, name: 'Ada', kind: 'ai_agent' },
+      select: { id: true },
+    });
+    const session = (createdAt: number, expiresAt: number) =>
+      owner.aiSandboxSession.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          aiAgentId: aiAgent.id,
+          createdBy: fx.a.ownerAccountId,
+          createdAt: new Date(createdAt),
+          updatedAt: new Date(createdAt),
+          expiresAt: new Date(expiresAt),
+        },
+        select: { id: true },
+      });
+    expiredSessionId = (await session(now - 2 * DAY, now - HOUR)).id;
+    liveSessionId = (await session(now - HOUR, now + DAY)).id;
+
     server = await startTestServer(
       {
         SCHEDULER_ENABLED: 'true',
@@ -387,6 +412,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_INVOICE_CLOSE_MS: TICK_MS,
         SCHEDULE_UNVERIFIED_SIGNUPS_MS: TICK_MS,
         SCHEDULE_AI_STALL_MS: TICK_MS,
+        SCHEDULE_AI_SANDBOX_SESSIONS_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -404,6 +430,8 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         (await owner.slaBreach.count({ where: { licenseId: fx.b.licenseId } })) > 0,
       'wrote a SIEM file': async () => (await ndjsonFiles(fx.a)).length > 0,
       'delivered the scheduled report': async () => (await scheduledReportMail()).length > 0,
+      'deleted the expired sandbox session': async () =>
+        (await owner.aiSandboxSession.count({ where: { id: expiredSessionId } })) === 0,
       // Waited for separately, and last in spirit: a sweep's effect lands when
       // its transaction commits, while the pass is recorded only once `run`
       // returns. Reading `/health` on the strength of the four effects alone
@@ -425,6 +453,11 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       rm(mailDir, { recursive: true, force: true }),
       rm(siemDir, { recursive: true, force: true }),
     ]);
+  });
+
+  it('deletes a sandbox session past its expires_at and keeps a live one (tm 314.2)', async () => {
+    expect(await owner.aiSandboxSession.count({ where: { id: expiredSessionId } })).toBe(0);
+    expect(await owner.aiSandboxSession.count({ where: { id: liveSessionId } })).toBe(1);
   });
 
   it('closes a chat that has gone idle past its window (FR-MOD-08.7.3)', async () => {
@@ -508,7 +541,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     expect(sweep?.last_run_at).toBeNull();
   });
 
-  it("says so on /health — enabled, ten jobs, and what each one's last pass did", () => {
+  it("says so on /health — enabled, eleven jobs, and what each one's last pass did", () => {
     expect(health.scheduler.enabled).toBe(true);
     expect(health.scheduler.jobs.map((job) => job.name)).toEqual([
       'chat_timeout',
@@ -521,6 +554,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'invoice_close',
       'unverified_signups',
       'ai_stall',
+      'ai_sandbox_sessions',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -575,6 +609,7 @@ describe('two API instances sharing one Redis', () => {
       SCHEDULE_WEBHOOK_REDELIVERY_MS: '1500',
       SCHEDULE_KNOWLEDGE_REFRESH_MS: '1500',
       SCHEDULE_INVOICE_CLOSE_MS: '1500',
+      SCHEDULE_AI_SANDBOX_SESSIONS_MS: '1500',
     };
     // Booted together so the gap between the two `scheduler.start()` calls is
     // as small as two concurrent boots allow — it has to be under the lock's
@@ -683,6 +718,7 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
       SCHEDULE_UNVERIFIED_SIGNUPS_MS: NEVER_MS,
       SCHEDULE_AI_STALL_MS: NEVER_MS,
+      SCHEDULE_AI_SANDBOX_SESSIONS_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 
@@ -764,6 +800,7 @@ describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICA
       SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
       SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
       SCHEDULE_AI_STALL_MS: NEVER_MS,
+      SCHEDULE_AI_SANDBOX_SESSIONS_MS: NEVER_MS,
     });
 
     await waitForAll({

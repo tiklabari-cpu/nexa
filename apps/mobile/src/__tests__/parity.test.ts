@@ -982,7 +982,13 @@ describe('module parity matrix — what is still owed', () => {
       // AI-15's ready-made iGaming procedures, browsed and installed in the
       // web panel's gallery and onboarding (tm 311.4). The app installs no
       // template; nothing here re-scopes.
-      contractEndpoints: 274,
+      // 274 -> 283 with `/ai/test-scenarios`, `/ai/test-scenarios/{scenarioId}`,
+      // `/ai/test-runs`, `/ai/test-runs/{runId}`, its `/results`,
+      // `/ai/sandbox-sessions`, `/ai/sandbox-sessions/{sessionId}`, its `/turns`
+      // and `/save-as-scenario` (tm 314.2) — AI-19's test bench, drawn in the
+      // web panel's Test tab (tm 314.5). The app tests no AI; nothing here
+      // re-scopes.
+      contractEndpoints: 283,
       scopeBoundaries: 1,
     });
   });

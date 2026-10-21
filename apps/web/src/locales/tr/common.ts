@@ -8,6 +8,8 @@ export const common: Messages = {
   'common.errors.ai_mode_transition_refused': 'Bu sohbeti AI yanıtlamıyor.',
   'common.errors.ai_return_blocked':
     "Bu sohbet işaretli ve bir kişide kalmalı; AI'a geri verilemez.",
+  'common.errors.ai_test_run_in_progress':
+    'Bu AI ajanının bir test koşusu hâlâ sürüyor — bitmesini bekleyin.',
   'common.errors.authentication': 'Oturumunuzun süresi doldu — yeniden giriş yapın.',
   'common.errors.authorization': 'Bunu yapma yetkiniz yok.',
   'common.errors.brand_exists': 'Bu adda bir marka zaten var.',

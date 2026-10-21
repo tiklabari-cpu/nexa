@@ -14,6 +14,7 @@ import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
 import aiBudget from './plugins/ai-budget.js';
 import aiJobs, { type AiJobDiscovery } from './plugins/ai-jobs.js';
+import aiTesting from './plugins/ai-testing.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
@@ -77,6 +78,7 @@ import partnerAppRoutes from './routes/partner-apps.js';
 import mcpRoutes from './routes/mcp.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
+import aiTestingRoutes from './routes/ai-testing.js';
 import aiGuidanceRoutes from './routes/ai-guidance.js';
 import aiHandoffRulesRoutes from './routes/ai-handoff-rules.js';
 import handoffRoutesRoutes from './routes/handoff-routes.js';
@@ -542,6 +544,16 @@ export async function buildServer({
     env,
     ...(aiJobDiscovery ? { discovery: aiJobDiscovery } : {}),
   });
+  // The AI test bench (tm 314.2 · AI-19): the scenario runner on the live
+  // engine and the worker that plays the queued runs with it, found the way
+  // the AI job worker finds its jobs. After `database`, for its drain on close.
+  await app.register(aiTesting, {
+    env,
+    llm: meteredLlm,
+    knowledge,
+    ...(accessInfoHttp ? { accessInfoHttp } : {}),
+    ...(aiJobDiscovery ? { discovery: aiJobDiscovery } : {}),
+  });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
   // phase in registration order — so this is what puts the rate limiter's
@@ -672,6 +684,7 @@ export async function buildServer({
       await api.register(aiHandoffRulesRoutes);
       await api.register(handoffRoutesRoutes);
       await api.register(aiTemplateRoutes);
+      await api.register(aiTestingRoutes);
       await api.register(aiGuardrailRoutes);
       await api.register(riskFlagRoutes);
       await api.register(aiHandoffRoutes);

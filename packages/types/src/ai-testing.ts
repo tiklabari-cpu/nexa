@@ -178,6 +178,12 @@ export const AI_TEST_SCENARIO_TIMEOUT_MS = 60_000;
 export const AI_TEST_TURN_SPACING_SECONDS = 30;
 /** A sandbox session's life from its last turn (`expires_at`). */
 export const AI_SANDBOX_SESSION_TTL_HOURS = 24;
+/**
+ * A sandbox session's player messages (tm 314.2). Each turn rewrites the
+ * session's transcript and moves `expires_at` on, so a session has an end;
+ * past it, the person starts another.
+ */
+export const AI_SANDBOX_MESSAGES_MAX = 100;
 
 /**
  * A compliance-pack scenario's `scenario_key` (tm 314.4): the prefix, the

@@ -9,10 +9,16 @@
  * still be `running` under this claim's attempt — so a worker whose lease ran
  * out, or that was stopped, writes nothing more, and the claim that took the
  * run over plays only the scenarios that have no result yet.
+ *
+ * A run that carries the compliance pack (`compliance_pack_version`, a
+ * pre-publish run — tm 314.4) plays the pack first, then `scenario_ids`; each
+ * pack result moves the pack's share of the counts (`compliance_passed`,
+ * `compliance_failed` — failed or errored) in the same transaction.
  */
 import { Prisma, type AiTestScenario, type PrismaClient } from '@prisma/client';
 import {
   AI_COMPLIANCE_SCENARIO_KEY_PREFIX,
+  AI_COMPLIANCE_SCENARIOS,
   AI_TEST_RUN_ERROR_MAX,
   AI_TEST_SCENARIO_NAME_MAX,
   type AiTestExpectations,
@@ -47,6 +53,8 @@ export interface ClaimedTestRun {
   readonly target: AiTestRunTarget;
   readonly configVersionId: string | null;
   readonly scenarioIds: readonly string[];
+  /** The compliance pack version it plays (tm 314.4); null — it plays no pack. */
+  readonly compliancePackVersion: string | null;
   /** When it first started — a scenario without a moment of its own starts here. */
   readonly startedAt: Date;
 }
@@ -88,6 +96,7 @@ export async function readClaimedRun(
       configTarget: true,
       configVersionId: true,
       scenarioIds: true,
+      compliancePackVersion: true,
       startedAt: true,
     },
   });
@@ -98,6 +107,7 @@ export async function readClaimedRun(
     target: row.configTarget as AiTestRunTarget,
     configVersionId: row.configVersionId,
     scenarioIds: row.scenarioIds,
+    compliancePackVersion: row.compliancePackVersion,
     startedAt: row.startedAt ?? new Date(),
   };
 }
@@ -135,7 +145,32 @@ export function simulatedScenarioOf(row: AiTestScenario): SimulatedScenario {
   };
 }
 
-/** The run's scenarios that have no result yet, in the run's order. One deleted meanwhile is not played. */
+/**
+ * The compliance pack's scenarios as the runner plays them, in the pack's
+ * order: each an empty scripted conversation at the run's start, of no brand.
+ */
+export function complianceScenarios(): SimulatedScenario[] {
+  return AI_COMPLIANCE_SCENARIOS.map((scenario) => ({
+    key: scenario.key,
+    name: scenario.name,
+    mode: 'scripted',
+    persona: scenario.persona,
+    language: scenario.language,
+    turns: scenario.turns,
+    goal: null,
+    facts: {},
+    expectations: scenario.expectations,
+    simulatedNow: null,
+    toolOutputs: {},
+    brandId: null,
+  }));
+}
+
+/**
+ * The run's scenarios that have no result yet, in the run's order: the
+ * compliance pack first when it carries one, then its own. One of the
+ * workspace's deleted meanwhile is not played.
+ */
 export async function scenariosToPlay(
   tx: TenantClient,
   run: ClaimedTestRun,
@@ -149,10 +184,17 @@ export async function scenariosToPlay(
   });
   const done = new Set(played.map((row) => row.scenarioKey));
   const byId = new Map(rows.map((row) => [row.id, row]));
-  return run.scenarioIds.flatMap((id) => {
-    const row = byId.get(id);
-    return row && !done.has(id) ? [simulatedScenarioOf(row)] : [];
-  });
+  const pack =
+    run.compliancePackVersion === null
+      ? []
+      : complianceScenarios().filter((scenario) => !done.has(scenario.key));
+  return [
+    ...pack,
+    ...run.scenarioIds.flatMap((id) => {
+      const row = byId.get(id);
+      return row && !done.has(id) ? [simulatedScenarioOf(row)] : [];
+    }),
+  ];
 }
 
 /** The claim no longer holds the run: what it was writing rolls back. */
@@ -217,11 +259,15 @@ export async function recordScenarioResult(
       });
       // Counted already, with the result an earlier claim wrote.
       if (count === 0) return true;
+      // The pack's share moves with the totals, so its CHECK holds at every step.
+      const pack = !own && AI_COMPLIANCE_SCENARIOS.some((one) => one.key === scenario.key);
       const moved = await tx.$executeRaw`
         UPDATE ai_test_runs
            SET passed = passed + ${play.status === 'passed' ? 1 : 0},
                failed = failed + ${play.status === 'failed' ? 1 : 0},
                errored = errored + ${play.status === 'errored' ? 1 : 0},
+               compliance_passed = compliance_passed + ${pack && play.status === 'passed' ? 1 : 0},
+               compliance_failed = compliance_failed + ${pack && play.status !== 'passed' ? 1 : 0},
                tokens = tokens + ${BigInt(play.tokens)},
                lease_until = now() + ${leaseInterval(leaseMs)}
          WHERE ${fence(claim)}`;

@@ -14,10 +14,10 @@
 # ---------------------------------------------------------------------------
 # Served by `apps/api/src/routes/ai-testing.ts` (tm 314.2); the judge's advice
 # (`judge`) and the regression against the previous published version's last
-# run (`regression`, `compared_run_id`) since tm 314.3. Still to come: the
-# compliance pack on a pre-publish run
-# (`compliance`, tm 314.4); named versions (`target: version`, tm 316 — until
-# then no version is found, 404). The component schemas (`AiTestScenario`,
+# run (`regression`, `compared_run_id`) since tm 314.3; the compliance pack on
+# a pre-publish run (`trigger: pre_publish`, `compliance`) and its gate
+# (`/ai/compliance-pack`) since tm 314.4. Still to come: named versions
+# (`target: version`, tm 316 — until then no version is found, 404). The component schemas (`AiTestScenario`,
 # `AiTestRun`, …) are in `openapi.yaml`; `@siyahtus/types` `ai-testing.ts`
 # holds the same lists and bounds.
 # ---------------------------------------------------------------------------
@@ -157,9 +157,13 @@ testRuns:
     description: |
       Queues the run and answers at once (`status: queued`); it is played in
       the background, two scenarios of the workspace at a time, each within
-      60 s, at most 200 per run. A run with no scenario to play is
-      `validation`. The test allowance spent answers 429 `ai_daily_cap` with
-      `details.meter: llm_test`; the live allowance is never touched.
+      60 s, at most 200 per run. A manual run with no scenario to play is
+      `validation`. A pre-publish run (`trigger: pre_publish`) plays the
+      draft: the platform's locked compliance pack first — its version and
+      share of the counts on the run (`compliance`) — then every active
+      scenario; it takes no `scenario_ids` and no other target. The test
+      allowance spent answers 429 `ai_daily_cap` with `details.meter:
+      llm_test`; the live allowance is never touched.
     requestBody:
       required: true
       content:
@@ -221,6 +225,35 @@ testRunResults:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/AiTestRunResultList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+compliancePack:
+  get:
+    tags: [Playbook]
+    operationId: getAiCompliancePack
+    summary: The locked compliance pack and the publish gate it sets
+    description: |
+      The platform's compliance pack (AI-19-S1: G1, G2, G3, G5, G7, G11 and
+      G16, in Turkish and English) — code, so no scenario route edits or
+      deletes it — and what the agent's latest pre-publish run of the draft
+      says of publishing: open only when that run completed under the
+      current pack version with every pack scenario passed. The workspace's
+      own failures are counted beside it.
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: The pack and the gate
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiCompliancePack" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

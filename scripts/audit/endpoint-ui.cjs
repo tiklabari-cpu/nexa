@@ -410,6 +410,12 @@ const TRACKED = [
     reason: "a run's results in RunResults, regressions first (tm 314.5).",
   },
   {
+    op: 'GET /ai/compliance-pack',
+    owner: 'tm 314.5',
+    reason:
+      "the locked compliance scenarios in the Test tab's list and the publish gate they set (tm 314.4).",
+  },
+  {
     op: 'POST /ai/sandbox-sessions',
     owner: 'tm 314.5',
     reason: '"Oyuncu gibi konuş" — SandboxChat opening a session (tm 314.5).',

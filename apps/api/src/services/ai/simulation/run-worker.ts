@@ -26,12 +26,17 @@
  *   5. **The test allowance.** A scenario or a judgement the test meter
  *      refused stops the run: nothing more can be played today, and the run
  *      fails saying so.
- *   6. **Shutdown.** {@link AiTestRunWorker.stop}: no new claims or scenarios;
+ *   6. **The compliance pack.** A pre-publish run plays the platform's pack
+ *      first (`test-runs.ts`, tm 314.4) — under the version it was queued
+ *      with: a run queued under another version of the pack than this
+ *      process's fails, saying so, rather than play one version and report
+ *      the other.
+ *   7. **Shutdown.** {@link AiTestRunWorker.stop}: no new claims or scenarios;
  *      the scenarios in flight get {@link AI_TEST_RUN_DRAIN_MS}; then the runs
  *      are handed back `queued`, for the next process to go on with at once.
  */
 import type { PrismaClient } from '@prisma/client';
-import { AI_TEST_CONCURRENT_SCENARIOS } from '@siyahtus/types';
+import { AI_COMPLIANCE_PACK_VERSION, AI_TEST_CONCURRENT_SCENARIOS } from '@siyahtus/types';
 import { withTenant } from '../../../lib/tenant.js';
 import type { ScenarioJudge } from './judge.js';
 import {
@@ -65,6 +70,7 @@ export const AI_TEST_RUN_DRAIN_MS = 10_000;
 export const AI_TEST_RUN_ERRORS = {
   capped: "Today's test allowance (llm_test) is spent; the scenarios left were not played.",
   version: 'Configuration versions arrive with tm 316; this run names one that cannot be read.',
+  pack: 'The compliance pack changed after this run was queued; queue the run again.',
   internal: 'The run stopped on a server error; the server log has it.',
 } as const;
 
@@ -314,6 +320,13 @@ export class AiTestRunWorker {
           status: 'failed',
           error: AI_TEST_RUN_ERRORS.version,
         });
+        return;
+      }
+      if (
+        run.compliancePackVersion !== null &&
+        run.compliancePackVersion !== AI_COMPLIANCE_PACK_VERSION
+      ) {
+        await finishTestRun(this.#db, claim, { status: 'failed', error: AI_TEST_RUN_ERRORS.pack });
         return;
       }
       const target = run.target;

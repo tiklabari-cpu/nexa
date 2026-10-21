@@ -426,6 +426,8 @@ paths:
     $ref: "./paths/ai-testing.yaml#/testRun"
   /ai/test-runs/{runId}/results:
     $ref: "./paths/ai-testing.yaml#/testRunResults"
+  /ai/compliance-pack:
+    $ref: "./paths/ai-testing.yaml#/compliancePack"
   /ai/sandbox-sessions:
     $ref: "./paths/ai-testing.yaml#/sandboxSessions"
   /ai/sandbox-sessions/{sessionId}:
@@ -4222,6 +4224,15 @@ components:
           type: string
           format: uuid
           description: Required exactly when `target` is `version`.
+        trigger:
+          type: string
+          enum: [manual, pre_publish]
+          default: manual
+          description: |
+            `pre_publish` — the run before a publish (AI-19-S1): the draft
+            only, no `scenario_ids` — the platform's compliance pack first,
+            then every active scenario of the agent's, at most 186 of them.
+            The nightly run is the scheduler's.
         scenario_ids:
           type: array
           minItems: 1
@@ -4284,6 +4295,93 @@ components:
         created_at: { type: string, format: date-time }
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
+
+    AiComplianceGateState:
+      type: string
+      enum: [passed, failed, pending, stale, missing]
+      description: |
+        What the agent's latest pre-publish run of the draft says of
+        publishing: the whole compliance pack passed under its current
+        version; a pack scenario failed or errored, or the run stopped short;
+        the run is still queued or playing; it played another version of the
+        pack; there is no such run. Only `passed` opens publishing.
+
+    AiComplianceExpectations:
+      type: object
+      additionalProperties: false
+      required: [outcome, max_turns]
+      description: |
+        As a scenario's expectations (`AiTestExpectations`), except that
+        `outcome` may be null — any ending: the output rules (G7, G11) hold
+        whatever the conversation came to.
+      properties:
+        outcome:
+          allOf: [{ $ref: "#/components/schemas/ScenarioOutcome" }]
+          nullable: true
+        topic: { $ref: "#/components/schemas/QueueTopicRole" }
+        reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        forbidden_phrases:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 500 }
+        must_flags:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/RiskFlagType" }
+        max_turns: { type: integer, minimum: 1, maximum: 30 }
+
+    AiComplianceScenario:
+      type: object
+      required: [key, guardrail, language, name, persona, turns, expectations]
+      description: One locked scenario of the platform's compliance pack — code, not a row.
+      properties:
+        key:
+          type: string
+          pattern: "^compliance:G([1-9]|1[0-9]):[a-z]{2}$"
+          description: The results' `scenario_key`.
+        guardrail: { type: string, enum: [G1, G2, G3, G5, G7, G11, G16] }
+        language: { type: string, enum: [tr, en] }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        persona: { $ref: "#/components/schemas/ScenarioPersona" }
+        turns:
+          type: array
+          minItems: 1
+          description: The player's messages, in order — every pack scenario is scripted.
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        expectations: { $ref: "#/components/schemas/AiComplianceExpectations" }
+
+    AiComplianceGate:
+      type: object
+      required: [state, open, run_id, run_pack_version, passed, failed, failing, workspace_failed]
+      properties:
+        state: { $ref: "#/components/schemas/AiComplianceGateState" }
+        open: { type: boolean, description: True only when `state` is `passed`. }
+        run_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The pre-publish run it read; null — there is none.
+        run_pack_version: { type: string, nullable: true }
+        passed: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0, description: Failed or errored. }
+        failing:
+          type: array
+          description: The pack scenarios that did not pass, in the pack's order.
+          items: { type: string, pattern: "^compliance:G([1-9]|1[0-9]):[a-z]{2}$" }
+        workspace_failed:
+          type: integer
+          minimum: 0
+          description: The workspace's own scenarios that failed or errored in that run — never the pack's.
+
+    AiCompliancePack:
+      type: object
+      required: [pack_version, scenarios, gate]
+      properties:
+        pack_version: { type: string, minLength: 1, maxLength: 40 }
+        scenarios:
+          type: array
+          items: { $ref: "#/components/schemas/AiComplianceScenario" }
+        gate: { $ref: "#/components/schemas/AiComplianceGate" }
 
     AiTestRunList:
       type: object

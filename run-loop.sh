@@ -33,7 +33,12 @@ EFFORT_XHIGH="xhigh"
 EFFORT_HIGH="high"
 EFFORT_MEDIUM="medium"      # [OPUS-MEDIUM]/[SONNET-MEDIUM] (2026-10-16; #385, #386)
 PERM="auto"   # tam otonom, prompt YOK, sınıflandırıcılı (2026-10-03). Eski: "bypassPermissions"
-MAX_TURNS=250
+MAX_TURNS=250               # high / xhigh pencereleri
+# max efor pencereleri daha uzun: 309.1 ve 309.2 (OPUS-MAX) 250 turda error_max_turns'e
+# çarptı; Claude Code oturumu kendiliğinden sürdürdü (309.2'de asıl işin 44 dk'sı sınırdan
+# SONRA yapıldı) ama bu davranışa güvenilmez — sınır aşılırsa görev blocked kalır ve 30 $'lık
+# pencere baştan koşar (2026-10-21 log taraması).
+MAX_TURNS_MAX=400
 RUNNER_PROMPT_FILE="TASK-RUNNER-PROMPT.md"
 LOG_DIR=".loop-logs"; mkdir -p "$LOG_DIR"
 MAX_CONSEC_ERRORS=5
@@ -237,11 +242,13 @@ stream_task(){
   # Fast mode YALNIZ Opus'ta çalışır (Sonnet'te etkisiz). Varsayılan KAPALI; açmak: FAST_MODE=1 ./run-loop.sh
   local FAST_ARGS=()
   if [[ "${FAST_MODE:-0}" == "1" && "$mdl" == *opus* ]]; then FAST_ARGS=(--settings '{"fastMode": true}'); fi
+  local turns="$MAX_TURNS"
+  [ "$eff" = "$EFFORT_MAX" ] && turns="$MAX_TURNS_MAX"
   claude -p "$(cat "$RUNNER_PROMPT_FILE")
 
 # HEDEF TASK: ${id}
 Yalnız bu task'ı baştan sona tamamla, protokolü uygula, en son JSON sonucu döndür." \
-    --model "$mdl" --effort "$eff" --permission-mode "$PERM" --max-turns "$MAX_TURNS" $ALLOW "${MCP_ARGS[@]}" "${FAST_ARGS[@]}" \
+    --model "$mdl" --effort "$eff" --permission-mode "$PERM" --max-turns "$turns" $ALLOW "${MCP_ARGS[@]}" "${FAST_ARGS[@]}" \
     --output-format stream-json --verbose --json-schema "$result_schema" \
     2>>"$LOG_DIR/task-$id.err" | tee -a "$logf" | pretty
 }

@@ -360,13 +360,14 @@ describe("a fan-out sample is only ever taken from this suite's own message", ()
     //
     // The detector's own pattern is re-read here rather than restated, so
     // widening it (a new separator, a shorter minimum) fails this test instead
-    // of quietly costing the next capacity run its samples.
+    // of quietly costing the next capacity run its samples. Since tm 300.1 the
+    // detector lives in `sensitive-mask.ts`; `cc-mask.ts` is its cards-only view.
     const maskSource = readFileSync(
-      join(repoRoot, 'apps', 'api', 'src', 'lib', 'cc-mask.ts'),
+      join(repoRoot, 'apps', 'api', 'src', 'lib', 'sensitive-mask.ts'),
       'utf8',
     );
     const pattern = /const CARD_CANDIDATE = \/(.+)\/g;/.exec(maskSource);
-    expect(pattern, 'no CARD_CANDIDATE regex in apps/api/src/lib/cc-mask.ts').not.toBeNull();
+    expect(pattern, 'no CARD_CANDIDATE regex in apps/api/src/lib/sensitive-mask.ts').not.toBeNull();
     const candidate = new RegExp(pattern![1]!, 'g');
 
     // A spread rather than one sample: the failure was data-dependent, and one

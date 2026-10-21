@@ -12486,12 +12486,32 @@ export interface components {
       turn_index?: number;
       detail?: string;
     };
-    /** @description The judge's advice (AI-19-S3) — it never changes a result's status. */
+    /**
+     * @description The judge's advice (AI-19-S3, tm 314.3): the fast model's score on the
+     *     platform's QA rubric (AI-24 a–g) — it never changes a result's status.
+     *     Counted on the test meter (`llm_test`). Null on a result that was not
+     *     judged: errored, the AI never answered, or the judge could not answer.
+     */
     AiTestJudgeVerdict: {
+      /** @description The conversation overall. */
       score: number;
+      /** @description Masked (AI-26). */
       comment: string;
+      /**
+       * @description The criteria it scored (`AI_TEST_JUDGE_CRITERIA`): the right path for
+       *     what the player wanted, the information the matter needs, nothing the
+       *     knowledge or the procedure did not support, within responsible gaming
+       *     and the site rules, the hand-over's moment and its summary (only after
+       *     a hand-over), the tone.
+       */
       criteria?: {
-        [key: string]: number;
+        topic?: number;
+        required_info?: number;
+        faithfulness?: number;
+        guardrails?: number;
+        handoff_timing?: number;
+        handoff_summary?: number;
+        tone?: number;
       };
     };
     AiTestRunCreate: {
@@ -12568,9 +12588,12 @@ export interface components {
       tokens: number;
       duration_ms: number;
       /**
-       * @description Against the same scenario in the previous published version's last
-       *     run: `newly_failing` (passed → fails, listed first), `outcome_changed`,
-       *     `team_changed`, `newly_passing`; null — nothing changed, or no earlier run.
+       * @description Against the same scenario (by `scenario_key`) in the previous published
+       *     version's last run — until versions exist (tm 316), the agent's last
+       *     completed run against the published configuration queued before this
+       *     one: `newly_failing` (passed → fails or errors, listed first),
+       *     `outcome_changed`, `team_changed`, `newly_passing`; null — nothing
+       *     changed, or no earlier result.
        * @enum {string|null}
        */
       regression: 'newly_failing' | 'outcome_changed' | 'team_changed' | 'newly_passing' | null;

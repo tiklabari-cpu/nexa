@@ -12,10 +12,10 @@
 # the same turn, with each reply's decision trace.
 #
 # ---------------------------------------------------------------------------
-# Served by `apps/api/src/routes/ai-testing.ts` (tm 314.2). Still to come:
-# the regression against the previous published version's last run
-# (`regression`, `compared_run_id` — null until tm 314.3) and the judge's
-# advice (`judge`, tm 314.3); the compliance pack on a pre-publish run
+# Served by `apps/api/src/routes/ai-testing.ts` (tm 314.2); the judge's advice
+# (`judge`) and the regression against the previous published version's last
+# run (`regression`, `compared_run_id`) since tm 314.3. Still to come: the
+# compliance pack on a pre-publish run
 # (`compliance`, tm 314.4); named versions (`target: version`, tm 316 — until
 # then no version is found, 404). The component schemas (`AiTestScenario`,
 # `AiTestRun`, …) are in `openapi.yaml`; `@siyahtus/types` `ai-testing.ts`

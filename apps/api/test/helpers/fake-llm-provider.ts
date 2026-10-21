@@ -25,6 +25,11 @@
  * in full, citing the first passage it was given — unless the reply already is
  * such an object, which is how a test sends a partial answer, a citation of
  * nothing, or an invented figure. Counted in `calls` like any other.
+ *
+ * **The scenario judge (tm 314.3) is answered apart too**, as the mock
+ * answers it (`mockScenarioJudge`), and recorded in `scenarioJudgeCalls` — a
+ * test bench test counts the turns it played. A test about the judge passes
+ * `scenarioJudge`.
  */
 import {
   JUDGE_RESPONSE_NAME,
@@ -32,6 +37,11 @@ import {
   readJudgeGrounding,
 } from '../../src/services/ai/conversation/guardrails/judge.js';
 import { mockUnderstanding } from '../../src/services/ai/conversation/understand-mock.js';
+import {
+  mockScenarioJudge,
+  readScenarioJudgeGrounding,
+  SCENARIO_JUDGE_RESPONSE_NAME,
+} from '../../src/services/ai/simulation/judge-prompt.js';
 import {
   readUnderstandGrounding,
   UNDERSTAND_RESPONSE_NAME,
@@ -72,6 +82,13 @@ export interface FakeLlmProviderOptions {
    * thrown. Recorded in `judgeCalls`, not in `calls`.
    */
   judge?: ((request: LlmCompletionRequest) => string) | Error;
+  /**
+   * How the test bench's scenario judge (tm 314.3) is answered: the mock's
+   * advice by default, the reply this function writes, or this error thrown.
+   */
+  scenarioJudge?: ((request: LlmCompletionRequest) => string) | Error;
+  /** What a scenario judgement costs; nothing by default. */
+  scenarioJudgeUsage?: LlmUsage;
 }
 
 export class FakeLlmProvider implements LlmProvider {
@@ -82,6 +99,8 @@ export class FakeLlmProvider implements LlmProvider {
   readonly understandCalls: LlmCompletionRequest[] = [];
   /** The judge calls, in order. */
   readonly judgeCalls: LlmCompletionRequest[] = [];
+  /** The scenario judge's calls, in order. */
+  readonly scenarioJudgeCalls: LlmCompletionRequest[] = [];
   /** Calls started and not yet answered, and the most there ever were at once. */
   inFlight = 0;
   maxInFlight = 0;
@@ -95,6 +114,9 @@ export class FakeLlmProvider implements LlmProvider {
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
     if (request.responseFormat?.name === UNDERSTAND_RESPONSE_NAME) return this.#understand(request);
     if (request.responseFormat?.name === JUDGE_RESPONSE_NAME) return this.#judge(request);
+    if (request.responseFormat?.name === SCENARIO_JUDGE_RESPONSE_NAME) {
+      return this.#scenarioJudge(request);
+    }
     const call = this.calls.push(request) - 1;
     this.inFlight += 1;
     this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
@@ -134,10 +156,22 @@ export class FakeLlmProvider implements LlmProvider {
     return { text: JSON.stringify(mockJudge(grounding)), usage };
   }
 
+  #scenarioJudge(request: LlmCompletionRequest): LlmCompletion {
+    this.scenarioJudgeCalls.push(request);
+    const answer = this.#options.scenarioJudge;
+    if (answer instanceof Error) throw answer;
+    const usage = this.#options.scenarioJudgeUsage ?? { inputTokens: 0, outputTokens: 0 };
+    if (answer) return { text: answer(request), usage };
+    const grounding = readScenarioJudgeGrounding(request.system);
+    if (!grounding) throw new Error('A scenario judge request without its context line.');
+    return { text: JSON.stringify(mockScenarioJudge(grounding)), usage };
+  }
+
   reset(): void {
     this.calls.length = 0;
     this.understandCalls.length = 0;
     this.judgeCalls.length = 0;
+    this.scenarioJudgeCalls.length = 0;
     this.inFlight = 0;
     this.maxInFlight = 0;
   }

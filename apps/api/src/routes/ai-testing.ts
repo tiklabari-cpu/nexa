@@ -14,8 +14,10 @@
  *     (409 `ai_test_run_in_progress`), at most 200 scenarios, and today's test
  *     allowance spent is 429 on the test meter (`aiBudget: 'simulation'`) —
  *     never on the live one. `GET /ai/test-runs`, `…/{id}` and `…/{id}/results`
- *     read them back; the regression against the previous published version
- *     (`regression`, `compared_run_id`) is tm 314.3's and null here.
+ *     read them back — the results with the judge's advice (tm 314.3, written
+ *     by the worker) and against the previous published version's last run
+ *     (`regression`, `compared_run_id`; `services/ai/simulation/regression.ts`),
+ *     newly failing first.
  *   - `POST /ai/sandbox-sessions`, `GET …/{id}`, `POST …/{id}/turns`,
  *     `POST …/{id}/save-as-scenario` — one person's conversation with the AI on
  *     the live engine; each reply comes with its decision trace, and the
@@ -50,6 +52,7 @@ import {
   validateAiTestScenario,
   type AiTestExpectations,
   type AiTestProblem,
+  type AiTestRegression,
   type AiTestTranscriptEntry,
   type RiskFlagType,
 } from '@siyahtus/types';
@@ -62,6 +65,7 @@ import {
   tookTurn,
   type TurnState,
 } from '../services/ai/conversation/turn.js';
+import { comparedRunOf, orderResults, regressions } from '../services/ai/simulation/regression.js';
 import { readSimulationSetting } from '../services/ai/simulation/runner.js';
 import { isOpenRunConflict, testRunInProgress } from '../services/ai/simulation/test-runs.js';
 import { turnTokens } from '../services/ai/simulation/trace.js';
@@ -273,7 +277,7 @@ function serialiseRun(row: AiTestRun) {
   };
 }
 
-function serialiseResult(row: AiTestRunResult) {
+function serialiseResult(row: AiTestRunResult, regression: AiTestRegression | null) {
   return {
     id: row.id,
     run_id: row.runId,
@@ -289,8 +293,7 @@ function serialiseResult(row: AiTestRunResult) {
     judge: row.judge,
     tokens: row.tokens,
     duration_ms: row.durationMs,
-    // Against the previous published version's last run: tm 314.3.
-    regression: null,
+    regression,
   };
 }
 
@@ -306,9 +309,6 @@ function serialiseSession(row: AiSandboxSession) {
     expires_at: row.expiresAt.toISOString(),
   };
 }
-
-/** Failed and errored first — what a person opens the results for — then in play order. */
-const RESULT_ORDER: Readonly<Record<string, number>> = { failed: 0, errored: 1, passed: 2 };
 
 /** The customer-facing AI agent named, or 404 — a Copilot record is no scenario's. */
 async function requireAgent(tx: TenantClient, aiAgentId: string): Promise<void> {
@@ -628,19 +628,32 @@ export default async function aiTestingRoutes(app: FastifyInstance): Promise<voi
     { config: { scopes: READ } },
     async (request, reply) => {
       const runId = parse(uuid, request.params.runId);
-      const { run, results } = await request.withTenant(async (tx) => ({
-        run: await tx.aiTestRun.findFirst({ where: { id: runId }, select: { scenarioIds: true } }),
-        results: await tx.aiTestRunResult.findMany({ where: { runId } }),
-      }));
-      if (!run) throw ApiError.notFound('Test run not found.');
-      const order = new Map(run.scenarioIds.map((id, index) => [id, index]));
-      const sorted = [...results].sort(
-        (a, b) =>
-          (RESULT_ORDER[a.status] ?? 3) - (RESULT_ORDER[b.status] ?? 3) ||
-          (order.get(a.scenarioKey) ?? order.size) - (order.get(b.scenarioKey) ?? order.size) ||
-          a.scenarioKey.localeCompare(b.scenarioKey),
-      );
-      return reply.send({ results: sorted.map(serialiseResult), compared_run_id: null });
+      const read = await request.withTenant(async (tx) => {
+        const run = await tx.aiTestRun.findFirst({
+          where: { id: runId },
+          select: { id: true, aiAgentId: true, createdAt: true, scenarioIds: true },
+        });
+        if (!run) return null;
+        const comparedRunId = await comparedRunOf(tx, run);
+        return {
+          run,
+          comparedRunId,
+          results: await tx.aiTestRunResult.findMany({ where: { runId } }),
+          earlier: comparedRunId
+            ? await tx.aiTestRunResult.findMany({
+                where: { runId: comparedRunId },
+                select: { scenarioKey: true, status: true, outcome: true, handoffTeamId: true },
+              })
+            : [],
+        };
+      });
+      if (!read) throw ApiError.notFound('Test run not found.');
+      const regression = regressions(read.results, read.earlier);
+      const sorted = orderResults(read.results, regression, read.run.scenarioIds);
+      return reply.send({
+        results: sorted.map((row) => serialiseResult(row, regression.get(row) ?? null)),
+        compared_run_id: read.comparedRunId,
+      });
     },
   );
 

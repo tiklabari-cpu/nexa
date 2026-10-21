@@ -29,7 +29,10 @@
  * the deterministic output check is the stub's whole judgement.
  * And so is the simulated player (tm 314.6 · AI-19): `mockPlayer` reads the
  * persona, facts and goal `buildPlayerPrompt` wrote and the conversation the
- * request carries, and writes the player's next line by fixed rules.
+ * request carries, and writes the player's next line by fixed rules. And so
+ * is the scenario judge (tm 314.3): `mockScenarioJudge` reads the context
+ * `buildScenarioJudgePrompt` wrote and scores from the hard checks that
+ * failed — advice that never says more than they did.
  * The invalid, refused and cut-off replies a real model can give are not
  * produced here; tests inject a provider that gives them (§6a.6).
  *
@@ -53,6 +56,11 @@ import {
   readJudgeGrounding,
 } from '../conversation/guardrails/judge.js';
 import { mockUnderstanding } from '../conversation/understand-mock.js';
+import {
+  mockScenarioJudge,
+  readScenarioJudgeGrounding,
+  SCENARIO_JUDGE_RESPONSE_NAME,
+} from '../simulation/judge-prompt.js';
 import {
   mockPlayer,
   readPlayerGrounding,
@@ -94,6 +102,18 @@ export class MockLlmProvider implements LlmProvider {
       }
       return {
         text: JSON.stringify(mockPlayer(grounding, request.messages)),
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
+    if (request.responseFormat?.name === SCENARIO_JUDGE_RESPONSE_NAME) {
+      const grounding = readScenarioJudgeGrounding(request.system);
+      if (!grounding) {
+        throw new Error(
+          'A scenario judge request without the context buildScenarioJudgePrompt writes.',
+        );
+      }
+      return {
+        text: JSON.stringify(mockScenarioJudge(grounding)),
         usage: { inputTokens: 0, outputTokens: 0 },
       };
     }

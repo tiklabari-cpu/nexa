@@ -45,6 +45,7 @@ import {
   riskPolicy,
   type AiNoAnswerSettings,
   type AiTestCheck,
+  type AiTestJudgeVerdict,
   type AiTestResultStatus,
   type AiTestStopReason,
   type AiTestTranscriptEntry,
@@ -154,6 +155,11 @@ export interface ScenarioPlay {
   readonly durationMs: number;
   /** Today's test allowance refused a call: nothing more can be played today. */
   readonly capped: boolean;
+  /**
+   * The judge's advice (tm 314.3), asked once the play is over — never part
+   * of the verdict. Absent or null: not judged.
+   */
+  readonly judge?: AiTestJudgeVerdict | null;
 }
 
 /** One simulated turn's input — a run's, or a sandbox session's. */

@@ -19,16 +19,28 @@
  *      process — plays the scenarios that have no result; a run that every
  *      claim died on fails (`AI_TEST_RUN_MAX_ATTEMPTS`). A claim that lost its
  *      run writes nothing more (`test-runs.ts`'s fence).
- *   4. **The test allowance.** A scenario the test meter refused stops the
- *      run: nothing more can be played today, and the run fails saying so.
- *   5. **Shutdown.** {@link AiTestRunWorker.stop}: no new claims or scenarios;
+ *   4. **The judge.** Once a scenario is played, the judge (`judge.ts`) adds
+ *      its advice and the result is written with it — the verdict is the
+ *      hard checks', decided before the judge is asked. Its tokens are the
+ *      scenario's, on the test meter.
+ *   5. **The test allowance.** A scenario or a judgement the test meter
+ *      refused stops the run: nothing more can be played today, and the run
+ *      fails saying so.
+ *   6. **Shutdown.** {@link AiTestRunWorker.stop}: no new claims or scenarios;
  *      the scenarios in flight get {@link AI_TEST_RUN_DRAIN_MS}; then the runs
  *      are handed back `queued`, for the next process to go on with at once.
  */
 import type { PrismaClient } from '@prisma/client';
 import { AI_TEST_CONCURRENT_SCENARIOS } from '@siyahtus/types';
 import { withTenant } from '../../../lib/tenant.js';
-import { readSimulationSetting, type ScenarioRunner, type SimulatedScenario } from './runner.js';
+import type { ScenarioJudge } from './judge.js';
+import {
+  readSimulationSetting,
+  type ScenarioPlay,
+  type ScenarioRunner,
+  type SimulatedScenario,
+  type SimulationSetting,
+} from './runner.js';
 import {
   AI_TEST_RUN_LEASE_MS,
   AI_TEST_RUN_MAX_ATTEMPTS,
@@ -68,6 +80,8 @@ export interface AiTestRunWorkerOptions {
   db: PrismaClient;
   logger: AiTestRunLogger;
   runner: ScenarioRunner;
+  /** Advises on each played scenario (tm 314.3); absent — results go unjudged. */
+  judge?: ScenarioJudge;
   /** How often to look unasked; null — only when woken (a test server's). */
   pollMs?: number | null;
   leaseMs?: number;
@@ -105,6 +119,7 @@ export class AiTestRunWorker {
   readonly #db: PrismaClient;
   readonly #log: AiTestRunLogger;
   readonly #runner: ScenarioRunner;
+  readonly #judge: ScenarioJudge | null;
   readonly #pollMs: number | null;
   readonly #leaseMs: number;
   readonly #maxAttempts: number;
@@ -124,6 +139,7 @@ export class AiTestRunWorker {
     this.#db = options.db;
     this.#log = options.logger;
     this.#runner = options.runner;
+    this.#judge = options.judge ?? null;
     this.#pollMs = options.pollMs === undefined ? AI_TEST_RUN_POLL_MS : options.pollMs;
     this.#leaseMs = options.leaseMs ?? AI_TEST_RUN_LEASE_MS;
     this.#maxAttempts = options.maxAttempts ?? AI_TEST_RUN_MAX_ATTEMPTS;
@@ -250,6 +266,25 @@ export class AiTestRunWorker {
     this.#inFlight.set(key, { claim, stopping, done });
   }
 
+  /** The play with the judge's advice and its cost; the verdict as it was. */
+  async #judged(
+    setting: SimulationSetting,
+    scenario: SimulatedScenario,
+    play: ScenarioPlay,
+  ): Promise<ScenarioPlay> {
+    if (!this.#judge || play.capped) return play;
+    const judged = await this.#judge.judge(
+      { tenant: setting.tenant, configVersionId: setting.config.versionId, scenario },
+      play,
+    );
+    return {
+      ...play,
+      judge: judged.verdict,
+      tokens: play.tokens + judged.tokens,
+      capped: judged.capped,
+    };
+  }
+
   async #play(claim: AiTestRunClaim, stopping: { value: boolean }): Promise<void> {
     const log = this.#log.child({
       license_id: String(claim.context.licenseId),
@@ -298,7 +333,11 @@ export class AiTestRunWorker {
       let capped = false;
       await inParallel(todo, this.#scenarioConcurrency, async (scenario: SimulatedScenario) => {
         if (lost || capped || stopping.value) return;
-        const play = await this.#runner.play(setting, scenario, { startedAt: run.startedAt });
+        const play = await this.#judged(
+          setting,
+          scenario,
+          await this.#runner.play(setting, scenario, { startedAt: run.startedAt }),
+        );
         if (!(await recordScenarioResult(this.#db, claim, scenario, play, this.#leaseMs))) {
           lost = true;
           return;

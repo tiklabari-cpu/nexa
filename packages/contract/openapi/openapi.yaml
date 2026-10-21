@@ -4185,13 +4185,31 @@ components:
     AiTestJudgeVerdict:
       type: object
       required: [score, comment]
-      description: The judge's advice (AI-19-S3) — it never changes a result's status.
+      description: |
+        The judge's advice (AI-19-S3, tm 314.3): the fast model's score on the
+        platform's QA rubric (AI-24 a–g) — it never changes a result's status.
+        Counted on the test meter (`llm_test`). Null on a result that was not
+        judged: errored, the AI never answered, or the judge could not answer.
       properties:
-        score: { type: integer, minimum: 1, maximum: 5 }
-        comment: { type: string }
+        score: { type: integer, minimum: 1, maximum: 5, description: The conversation overall. }
+        comment: { type: string, maxLength: 500, description: Masked (AI-26). }
         criteria:
           type: object
-          additionalProperties: { type: integer, minimum: 1, maximum: 5 }
+          additionalProperties: false
+          description: |
+            The criteria it scored (`AI_TEST_JUDGE_CRITERIA`): the right path for
+            what the player wanted, the information the matter needs, nothing the
+            knowledge or the procedure did not support, within responsible gaming
+            and the site rules, the hand-over's moment and its summary (only after
+            a hand-over), the tone.
+          properties:
+            topic: { type: integer, minimum: 1, maximum: 5 }
+            required_info: { type: integer, minimum: 1, maximum: 5 }
+            faithfulness: { type: integer, minimum: 1, maximum: 5 }
+            guardrails: { type: integer, minimum: 1, maximum: 5 }
+            handoff_timing: { type: integer, minimum: 1, maximum: 5 }
+            handoff_summary: { type: integer, minimum: 1, maximum: 5 }
+            tone: { type: integer, minimum: 1, maximum: 5 }
 
     AiTestRunCreate:
       type: object
@@ -4320,9 +4338,12 @@ components:
           type: string
           nullable: true
           description: |
-            Against the same scenario in the previous published version's last
-            run: `newly_failing` (passed → fails, listed first), `outcome_changed`,
-            `team_changed`, `newly_passing`; null — nothing changed, or no earlier run.
+            Against the same scenario (by `scenario_key`) in the previous published
+            version's last run — until versions exist (tm 316), the agent's last
+            completed run against the published configuration queued before this
+            one: `newly_failing` (passed → fails or errors, listed first),
+            `outcome_changed`, `team_changed`, `newly_passing`; null — nothing
+            changed, or no earlier result.
           enum: [newly_failing, outcome_changed, team_changed, newly_passing, null]
 
     AiTestRunResultList:

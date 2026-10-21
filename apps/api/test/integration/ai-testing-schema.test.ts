@@ -33,8 +33,12 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadOpenApiDocument } from '@siyahtus/contract';
 import {
+  AI_TEST_JUDGE_COMMENT_MAX,
+  AI_TEST_JUDGE_CRITERIA,
+  AI_TEST_JUDGE_SCORE_MAX,
   AI_TEST_MAX_TURNS_DEFAULT,
   AI_TEST_MAX_TURNS_LIMIT,
+  AI_TEST_REGRESSIONS,
   AI_TEST_RESULT_STATUSES,
   AI_TEST_RUN_SCENARIOS_MAX,
   AI_TEST_RUN_STATUSES,
@@ -449,6 +453,14 @@ describe('AI test bench tables (AI-19 · tm 314.1)', () => {
       expect(schemas['AiTestRunCreate']!.properties!['scenario_ids']!.maxItems).toBe(
         AI_TEST_RUN_SCENARIOS_MAX,
       );
+      // The judge's rubric and the regression report (tm 314.3).
+      const judge = schemas['AiTestJudgeVerdict']!.properties!;
+      expect(Object.keys(judge['criteria']!.properties!)).toEqual([...AI_TEST_JUDGE_CRITERIA]);
+      expect(judge['score']!.maximum).toBe(AI_TEST_JUDGE_SCORE_MAX);
+      expect(judge['comment']!.maxLength).toBe(AI_TEST_JUDGE_COMMENT_MAX);
+      expect(
+        schemas['AiTestRunResult']!.properties!['regression']!.enum!.filter((v) => v !== null),
+      ).toEqual([...AI_TEST_REGRESSIONS]);
     });
 
     it.each([

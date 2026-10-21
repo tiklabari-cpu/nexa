@@ -271,13 +271,52 @@ export interface AiTestCheck {
   detail?: string;
 }
 
+/**
+ * What the judge scores (tm 314.3): the platform's QA rubric (05 § AI-24
+ * "Tipler", a–g) — the right topic, the required information, faithful to the
+ * knowledge, within the guardrails, handed over at the right moment, a
+ * complete hand-over summary, the tone. Each 1–5; the two hand-over ones only
+ * when the conversation was handed over.
+ */
+export const AI_TEST_JUDGE_CRITERIA = [
+  'topic',
+  'required_info',
+  'faithfulness',
+  'guardrails',
+  'handoff_timing',
+  'handoff_summary',
+  'tone',
+] as const;
+export type AiTestJudgeCriterion = (typeof AI_TEST_JUDGE_CRITERIA)[number];
+
+/** The judge's scores, 1 (poor) to 5 (right). */
+export const AI_TEST_JUDGE_SCORE_MIN = 1;
+export const AI_TEST_JUDGE_SCORE_MAX = 5;
+/** The judge's comment, masked (AI-26) and cut to this. */
+export const AI_TEST_JUDGE_COMMENT_MAX = 500;
+
 /** The judge's advice (AI-19-S3, tm 314.3): a score and a comment, never a verdict. */
 export interface AiTestJudgeVerdict {
   /** 1–5. */
   score: number;
   comment: string;
-  criteria?: Record<string, number>;
+  criteria?: Partial<Record<AiTestJudgeCriterion, number>>;
 }
+
+/**
+ * How a result compares with the same scenario in the previous published
+ * version's last run (tm 314.3 · AI-19 §5), most urgent first — the order the
+ * results are listed in: it passed and no longer does; it ended another way;
+ * it handed over to another team; it failed and passes now. A result with
+ * none of these (`null`) is unchanged, or has nothing to compare with.
+ */
+export const AI_TEST_REGRESSIONS = [
+  'newly_failing',
+  'outcome_changed',
+  'team_changed',
+  'newly_passing',
+] as const;
+export type AiTestRegression = (typeof AI_TEST_REGRESSIONS)[number];
 
 // ---------------------------------------------------------------------------
 // The validator — the API's request check and the editor's form check.

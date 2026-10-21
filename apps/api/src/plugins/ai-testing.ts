@@ -3,7 +3,8 @@
  * server: `app.aiSimulation`, the scenario runner — the live engine with the
  * server's model, knowledge search and access information, inside the
  * simulation context — and `app.aiTestRuns`, the worker that plays the queued
- * runs with it (`services/ai/simulation/run-worker.ts`).
+ * runs with it (`services/ai/simulation/run-worker.ts`) and has the judge
+ * advise on each result (`judge.ts`, tm 314.3).
  *
  * {@link AiJobDiscovery} decides how the worker finds runs, as it does for the
  * AI job worker: `shared` polls, so any process plays any workspace's run —
@@ -19,6 +20,7 @@ import type { Env } from '../config/env.js';
 import type { SafeHttp } from '../lib/safe-fetch.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
+import { ScenarioJudge } from '../services/ai/simulation/judge.js';
 import { AI_TEST_RUN_POLL_MS, AiTestRunWorker } from '../services/ai/simulation/run-worker.js';
 import { ScenarioRunner } from '../services/ai/simulation/runner.js';
 import {
@@ -68,6 +70,13 @@ async function aiTestingPlugin(
     db: app.db,
     logger: log,
     runner,
+    judge: new ScenarioJudge({
+      llm: options.llm,
+      maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+      timeoutMs: env.LLM_TIMEOUT_MS,
+      maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+      logger: log,
+    }),
     pollMs: (options.discovery ?? 'shared') === 'shared' ? AI_TEST_RUN_POLL_MS : null,
   });
   app.decorate('aiSimulation', runner);

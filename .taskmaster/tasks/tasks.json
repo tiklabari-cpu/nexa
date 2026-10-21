@@ -13451,7 +13451,7 @@
           "310"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T05:22:41.059Z",
+        "updatedAt": "2026-10-21T06:30:55.024Z",
         "subtasks": [
           {
             "id": 1,
@@ -13459,11 +13459,11 @@
             "description": "Paket iskeleti + doğrulayıcı testleri + deposit_not_credited tam şablonu (§3.1)",
             "details": "Üst görev 311 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Doğrulayıcı.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "311",
             "priority": "high",
-            "updatedAt": "2026-10-21T05:22:41.059Z"
+            "updatedAt": "2026-10-21T06:30:55.024Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T05:22:41.060Z",
+      "lastModified": "2026-10-21T06:30:55.034Z",
       "taskCount": 390,
       "completedCount": 308,
       "tags": [

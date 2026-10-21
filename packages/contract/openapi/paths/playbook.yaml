@@ -664,7 +664,14 @@ skill:
       A procedure is judged whole — the fields sent over the ones stored — so
       changing one slot re-checks every step that names it. `procedure`
       replaces the stored one; it is not merged. A locked template copy
-      (`locked`) may change only its texts and its team, never its mode.
+      (`locked`) may change only its texts and its team, never its mode, and
+      is never switched off: `active: false` is a 409 `template_locked`.
+
+      An installed template copy (`template_key`) is switched on only once its
+      placeholders are replaced (400 `template_unfilled`, `details.placeholders`)
+      and every topic it hands over to reaches a team — a hand-over route or a
+      team's topic role (400 `template_unmapped`, `details.topics`). The same
+      holds for an edit to a copy that is on.
     requestBody:
       required: true
       content:
@@ -720,17 +727,30 @@ skill:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: "`template_locked`: switching off a locked template copy."
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
   delete:
     tags: [Playbook]
     operationId: deleteSkill
     summary: Delete a skill
+    description: |
+      A locked template copy (`self_exclusion`, `responsible_gambling_signal`)
+      is never deleted, switched on or not: 409 `template_locked`.
     responses:
       "204": { description: Deleted }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: "`template_locked`: a locked template copy."
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 compile:

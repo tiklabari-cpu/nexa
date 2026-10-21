@@ -43,6 +43,7 @@
  * from the published package (ADR-14b §2.4) — only `readFactTables` changes.
  */
 import {
+  KNOWLEDGE_TABLE_SAMPLE_SOURCE,
   KNOWLEDGE_TABLES,
   PROCEDURE_FACT_ENTITIES,
   formatMinutesTr,
@@ -152,11 +153,14 @@ export async function readFactTables(
   const served = {} as RowsByTable;
   for (const table of KNOWLEDGE_TABLES) {
     const records = await readKnowledgeTableRows(tx, table, reader);
-    (served as Record<KnowledgeTable, unknown[]>)[table] = records.map((record) => ({
-      id: record.id,
-      brandIds: record.brandIds,
-      fields: knowledgeTableFieldsOf(table, record),
-    }));
+    // An "örnek — doğrulayın" row is not a fact until a person confirms it (AI-15-S1).
+    (served as Record<KnowledgeTable, unknown[]>)[table] = records
+      .filter((record) => record.source !== KNOWLEDGE_TABLE_SAMPLE_SOURCE)
+      .map((record) => ({
+        id: record.id,
+        brandIds: record.brandIds,
+        fields: knowledgeTableFieldsOf(table, record),
+      }));
   }
   return factTablesOf(served, reader.now);
 }

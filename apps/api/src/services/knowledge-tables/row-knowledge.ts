@@ -34,6 +34,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import {
   KNOWLEDGE_TABLES,
+  KNOWLEDGE_TABLE_SAMPLE_SOURCE,
   KNOWLEDGE_TABLE_SOURCE_TYPE,
   KNOWLEDGE_TABLE_SQL_NAMES,
   knowledgeTableRowLabel,
@@ -220,7 +221,8 @@ async function readWanted(
   rowId: string,
 ): Promise<TableRowSourceFields | null> {
   const record = await findKnowledgeTableRecord(tx, table, rowId);
-  if (record === null) return null;
+  // An "örnek — doğrulayın" row has no passage until a person confirms it (AI-15-S1).
+  if (record === null || record.source === KNOWLEDGE_TABLE_SAMPLE_SOURCE) return null;
   return tableRowSourceFields(table, record, await methodNamesFor(tx, table, [record]));
 }
 
@@ -526,6 +528,10 @@ async function dueRows(tx: TenantClient): Promise<DueRow[]> {
     for (const record of records) {
       present.add(record.id);
       const source = bySql.get(`${sql}:${record.id}`) ?? null;
+      if (record.source === KNOWLEDGE_TABLE_SAMPLE_SOURCE) {
+        if (source !== null) due.push({ table, rowId: record.id, at: record.updatedAt.getTime() });
+        continue;
+      }
       if (!current(source, tableRowSourceFields(table, record, names))) {
         due.push({ table, rowId: record.id, at: record.updatedAt.getTime() });
       }

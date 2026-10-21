@@ -45,6 +45,8 @@ export const common: Messages = {
   'common.errors.sandbox_exists': 'Bu çalışma alanında zaten bir kum havuzu var.',
   'common.errors.service_unavailable': 'Servis geçici olarak kullanılamıyor — birazdan deneyin.',
   'common.errors.takeover_conflict': 'Bu sohbeti önce bir başkası aldı.',
+  'common.errors.template_locked':
+    'Bu prosedür kilitli bir şablondan kuruldu — kapatılamaz ve silinemez; yalnızca metinlerini ve ekibini değiştirebilirsiniz.',
   'common.errors.ticket_exists': 'Bu sohbet için zaten bir talep var.',
   'common.errors.too_many_requests': 'Çok fazla deneme — biraz bekleyip yeniden deneyin.',
   'common.errors.two_factor_already_enabled':

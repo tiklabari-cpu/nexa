@@ -36,6 +36,7 @@ import {
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import {
+  confirmKnowledgeTableSampleRowDraft,
   createKnowledgeTableRowDraft,
   deleteKnowledgeTableRowDraft,
   reviewKnowledgeTableRowDraft,
@@ -389,10 +390,12 @@ export async function updateKnowledgeTableRow<T extends KnowledgeTable>(
     knowledgeTableDataOf(table, change),
     writer.accountId,
   );
+  // An example row a person corrected is theirs now (AI-15-S1).
+  await confirmKnowledgeTableSampleRowDraft(tx, table, id);
   return findKnowledgeTableRecord(tx, table, id);
 }
 
-/** Mark a row reviewed; null when it is not this workspace's. */
+/** Mark a row reviewed — an example row becomes the workspace's own; null when it is not this workspace's. */
 export async function reviewKnowledgeTableRow<T extends KnowledgeTable>(
   tx: TenantClient,
   writer: KnowledgeTableWriter,
@@ -400,6 +403,8 @@ export async function reviewKnowledgeTableRow<T extends KnowledgeTable>(
   id: string,
 ): Promise<KnowledgeTableRecords[T] | null> {
   if ((await reviewKnowledgeTableRowDraft(tx, table, id, writer.accountId)) === 0) return null;
+  // "Gözden geçirdim" on an example row confirms it (AI-15-S1).
+  await confirmKnowledgeTableSampleRowDraft(tx, table, id);
   return findKnowledgeTableRecord(tx, table, id);
 }
 

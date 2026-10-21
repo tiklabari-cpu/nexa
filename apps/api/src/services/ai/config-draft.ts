@@ -20,6 +20,7 @@
  */
 import type { Prisma } from '@prisma/client';
 import {
+  KNOWLEDGE_TABLE_SAMPLE_SOURCE,
   KNOWLEDGE_TABLE_SOURCE_TYPE,
   KNOWLEDGE_TABLE_SQL_NAMES,
   type KnowledgeAudience,
@@ -528,6 +529,39 @@ export async function reviewKnowledgeTableRowDraft(
   const { count } = await knowledgeTableDelegate(tx, table).updateMany({
     where: { id },
     data: { reviewedAt: at, updatedBy: by, updatedAt: at },
+  });
+  return count;
+}
+
+/**
+ * A template pack's rows become "örnek — doğrulayın" (`source = 'sample'`,
+ * AI-15-S1): written by the tables' writer, then marked, in one transaction.
+ */
+export async function markKnowledgeTableRowsSampleDraft(
+  tx: TenantClient,
+  table: KnowledgeTable,
+  ids: readonly string[],
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { count } = await knowledgeTableDelegate(tx, table).updateMany({
+    where: { id: { in: [...ids] } },
+    data: { source: KNOWLEDGE_TABLE_SAMPLE_SOURCE, updatedAt: new Date() },
+  });
+  return count;
+}
+
+/**
+ * A person edited or reviewed an example row: it is the workspace's own now
+ * (`manual`) and the AI reads it. A row that is no example is left alone.
+ */
+export async function confirmKnowledgeTableSampleRowDraft(
+  tx: TenantClient,
+  table: KnowledgeTable,
+  id: string,
+): Promise<number> {
+  const { count } = await knowledgeTableDelegate(tx, table).updateMany({
+    where: { id, source: KNOWLEDGE_TABLE_SAMPLE_SOURCE },
+    data: { source: 'manual' },
   });
   return count;
 }

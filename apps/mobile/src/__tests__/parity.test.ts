@@ -977,7 +977,12 @@ describe('module parity matrix — what is still owed', () => {
       // 269 -> 270 with `/ai-access-info` (tm 310.4) — K13's access
       // information, set on the web panel's "Erişim bilgisi" card (tm 310.5).
       // The app configures no AI; nothing here re-scopes.
-      contractEndpoints: 270,
+      // 270 -> 274 with `/ai-templates`, `/ai-templates/{templateKey}`, its
+      // `/install` and `/ai-templates/packs/{packKey}/install` (tm 311.3) —
+      // AI-15's ready-made iGaming procedures, browsed and installed in the
+      // web panel's gallery and onboarding (tm 311.4). The app installs no
+      // template; nothing here re-scopes.
+      contractEndpoints: 274,
       scopeBoundaries: 1,
     });
   });

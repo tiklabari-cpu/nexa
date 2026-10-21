@@ -13865,7 +13865,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T23:03:13.332Z",
+        "updatedAt": "2026-10-21T23:59:37.674Z",
         "subtasks": [
           {
             "id": 1,
@@ -13873,11 +13873,11 @@
             "description": "Tablolar + runTurn unresolved kararı + terk kancası + maskeli saklama + erasure",
             "details": "Üst görev 317 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Yakalama ve silme entegrasyonu.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "317",
             "priority": "high",
-            "updatedAt": "2026-10-21T23:03:13.332Z"
+            "updatedAt": "2026-10-21T23:59:37.674Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T23:03:13.333Z",
+      "lastModified": "2026-10-21T23:59:37.674Z",
       "taskCount": 390,
       "completedCount": 310,
       "tags": [

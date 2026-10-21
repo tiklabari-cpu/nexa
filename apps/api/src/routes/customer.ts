@@ -27,6 +27,7 @@ import {
   type Region,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
+import type { SafeHttp } from '../lib/safe-fetch.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskForWrite } from '../lib/sensitive-mask.js';
 import { isIpBanned } from '../lib/banned-ip.js';
@@ -54,6 +55,10 @@ import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
 import { KnowledgeTableFacts } from '../services/ai/conversation/facts.js';
+import {
+  AccessInfoResolver,
+  createAccessInfoFetcher,
+} from '../services/knowledge-tables/access-info.js';
 import type { TenantRunner } from '../services/ai/conversation/turn.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
@@ -288,6 +293,7 @@ export default async function customerRoutes(
     automations,
     llm,
     knowledge,
+    accessInfoHttp,
   }: {
     env: Env;
     push: PushProvider;
@@ -304,6 +310,12 @@ export default async function customerRoutes(
     knowledge: KnowledgeService;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
+    /**
+     * How the access information's `dynamic_url` is fetched (tm 310.4 · K13).
+     * Omitted, the real safe client (`lib/safe-fetch.ts`); a test passes one
+     * pinned to a local HTTPS fake.
+     */
+    accessInfoHttp?: SafeHttp;
   },
 ): Promise<void> {
   const publisher = new RealtimePublisher(app.redis, app.log);
@@ -342,6 +354,8 @@ export default async function customerRoutes(
       // The AI-13 tables: a procedure's facts and the exact answer (tm 310.3).
       facts: tableFacts,
       tables: tableFacts,
+      // K13: an access question answered from the access information (tm 310.4).
+      access: new AccessInfoResolver({ fetcher: createAccessInfoFetcher(accessInfoHttp) }),
     }),
     {
       // Messages written this close together get one answer (tm 292.4 · AI-01

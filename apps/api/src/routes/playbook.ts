@@ -78,6 +78,7 @@ import {
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
+import type { SafeHttp } from '../lib/safe-fetch.js';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
@@ -125,6 +126,10 @@ import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
 import { KnowledgeTableFacts } from '../services/ai/conversation/facts.js';
+import {
+  AccessInfoResolver,
+  createAccessInfoFetcher,
+} from '../services/knowledge-tables/access-info.js';
 import { exchangeHistory } from '../services/ai/conversation/context-loader.js';
 import { conversationView } from '../services/ai/conversation/conversation-view.js';
 import {
@@ -844,6 +849,7 @@ export default async function playbookRoutes(
     env,
     llm,
     knowledge,
+    accessInfoHttp,
   }: {
     env: Env;
     /**
@@ -857,6 +863,12 @@ export default async function playbookRoutes(
      * so a source indexed here is in the space a question is asked in.
      */
     knowledge: KnowledgeService;
+    /**
+     * How the access information's `dynamic_url` is fetched (tm 310.4 · K13).
+     * Omitted, the real safe client (`lib/safe-fetch.ts`); a test passes one
+     * pinned to a local HTTPS fake.
+     */
+    accessInfoHttp?: SafeHttp;
   },
 ): Promise<void> {
   // The same provider and limits as the live path, for the reason the preview
@@ -871,6 +883,7 @@ export default async function playbookRoutes(
     maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
     facts: tableFacts,
     tables: tableFacts,
+    access: new AccessInfoResolver({ fetcher: createAccessInfoFetcher(accessInfoHttp) }),
   });
   const procedureExamples = new ProcedureExamples();
 

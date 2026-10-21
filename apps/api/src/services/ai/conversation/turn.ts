@@ -287,7 +287,11 @@ export interface TurnConfig {
 
 export interface TurnContext {
   readonly tenant: TenantContext;
-  /** For reads (the knowledge search). A turn never writes through it. */
+  /**
+   * For reads (the knowledge search). A turn writes nothing through it but one
+   * cache: the access information's last fetched value (tm 310.4,
+   * `knowledge-tables/access-info.ts`) — not a decision of the turn.
+   */
   readonly db: TenantRunner;
   /**
    * The turn's clock. Time conditions (AI-03 `elapsed_minutes`) read this,

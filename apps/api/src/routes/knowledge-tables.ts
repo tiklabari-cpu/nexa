@@ -15,6 +15,11 @@
  *
  * Scopes are the knowledge sources' (`agents-bot--all`): the same people keep
  * the AI's knowledge, in one place.
+ *
+ * `/ai-access-info` (tm 310.4 · K13) is the access information beside them —
+ * what the AI says about reaching the site, read and replaced whole
+ * (`services/knowledge-tables/access-info-writer.ts`); the turn answers from
+ * it through `access-info.ts`.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -34,6 +39,11 @@ import {
   mapKnowledgeTableCsvRow,
   resolveKnowledgeTableColumns,
 } from '../services/knowledge-tables/csv.js';
+import {
+  listAiAccessInfo,
+  putAiAccessInfo,
+  serialiseAiAccessInfo,
+} from '../services/knowledge-tables/access-info-writer.js';
 import { serialiseKnowledgeTableRow } from '../services/knowledge-tables/records.js';
 import { KnowledgeTableRowKnowledge } from '../services/knowledge-tables/row-knowledge.js';
 import {
@@ -348,6 +358,20 @@ export default async function knowledgeTableRoutes(
       });
     },
   );
+
+  /** The access information settings (K13): the every-brand one first, then each brand's. */
+  app.get('/ai-access-info', { config: { scopes: READ } }, async (request, reply) => {
+    const rows = await request.withTenant((tx) => listAiAccessInfo(tx));
+    return reply.send({ items: rows.map((row) => serialiseAiAccessInfo(row)) });
+  });
+
+  /** One brand's setting, or the every-brand one, replaced whole (K13). */
+  app.put('/ai-access-info', { config: { scopes: WRITE } }, async (request, reply) => {
+    const body = parse(rowBody, request.body);
+    const writer = writerOf(request);
+    const saved = await request.withTenant((tx) => putAiAccessInfo(tx, writer, body));
+    return reply.send(serialiseAiAccessInfo(saved));
+  });
 
   /** The table as CSV — the columns the import reads, so an exported file imports back. */
   app.get<TableParams>(

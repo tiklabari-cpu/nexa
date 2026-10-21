@@ -182,6 +182,11 @@ export interface BuildServerOptions {
   /** Provider hosts for `appsHttp` (tm 263). Omitted, the real ones. */
   appsEndpoints?: ProviderEndpoints;
   /**
+   * How the access information's `dynamic_url` is fetched (tm 310.4 · K13).
+   * Omitted, the real safe client; a test pins one to a local HTTPS fake.
+   */
+  accessInfoHttp?: SafeHttp;
+  /**
    * How the AI job worker finds jobs it was not woken for (tm 289.5,
    * `plugins/ai-jobs.ts`). Omitted, `shared`: the poll and the doorbell, so
    * any process answers any visitor message. The test fixture passes
@@ -205,6 +210,7 @@ export async function buildServer({
   pilotRefusedPaths = PILOT_REFUSED_PATHS,
   appsHttp,
   appsEndpoints,
+  accessInfoHttp,
   aiJobDiscovery,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
@@ -617,7 +623,14 @@ export async function buildServer({
       });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
-      await api.register(customerRoutes, { env, push, automations, llm: meteredLlm, knowledge });
+      await api.register(customerRoutes, {
+        env,
+        push,
+        automations,
+        llm: meteredLlm,
+        knowledge,
+        ...(accessInfoHttp ? { accessInfoHttp } : {}),
+      });
       await api.register(customerDirectoryRoutes);
       await api.register(memberRecognitionRoutes);
       await api.register(trafficRoutes);
@@ -648,7 +661,12 @@ export async function buildServer({
         version: VERSION,
       });
       await api.register(uploadRoutes, { env });
-      await api.register(playbookRoutes, { env, llm: meteredLlm, knowledge });
+      await api.register(playbookRoutes, {
+        env,
+        llm: meteredLlm,
+        knowledge,
+        ...(accessInfoHttp ? { accessInfoHttp } : {}),
+      });
       await api.register(aiGuidanceRoutes, { env, llm: meteredLlm });
       await api.register(aiHandoffRulesRoutes);
       await api.register(handoffRoutesRoutes);

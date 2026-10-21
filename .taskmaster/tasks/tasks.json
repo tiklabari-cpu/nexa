@@ -13451,7 +13451,7 @@
           "310"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T06:31:42.488Z",
+        "updatedAt": "2026-10-21T07:36:28.838Z",
         "subtasks": [
           {
             "id": 1,
@@ -13471,13 +13471,13 @@
             "description": "Kalan 19 şablonun içeriği (TR) + senaryo tohumları + varsayılan kurallar + yasak ifadeler",
             "details": "Mekanik ama geniş yüzey; self_exclusion ve responsible_gaming_signal metinleri uyum açısından gözden geçirilir.",
             "testStrategy": "Her şablon doğrulayıcıdan geçer.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "311.1"
             ],
             "parentId": "311",
             "priority": "high",
-            "updatedAt": "2026-10-21T06:31:42.488Z"
+            "updatedAt": "2026-10-21T07:36:28.838Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T06:31:42.489Z",
+      "lastModified": "2026-10-21T07:36:28.839Z",
       "taskCount": 390,
       "completedCount": 308,
       "tags": [

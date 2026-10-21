@@ -124,6 +124,7 @@ import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowled
 import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
+import { KnowledgeTableFacts } from '../services/ai/conversation/facts.js';
 import { exchangeHistory } from '../services/ai/conversation/context-loader.js';
 import { conversationView } from '../services/ai/conversation/conversation-view.js';
 import {
@@ -861,12 +862,15 @@ export default async function playbookRoutes(
   // The same provider and limits as the live path, for the reason the preview
   // shares the engine at all: a preview that answers differently is worse than
   // none (FR-MOD-06.2.5).
+  const tableFacts = new KnowledgeTableFacts();
   const engine = new ConversationEngine({
     knowledge,
     llm,
     maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
     timeoutMs: env.LLM_TIMEOUT_MS,
     maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+    facts: tableFacts,
+    tables: tableFacts,
   });
   const procedureExamples = new ProcedureExamples();
 

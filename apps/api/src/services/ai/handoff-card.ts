@@ -30,13 +30,16 @@ import {
   type AiHandoffAttachment,
   type AiHandoffCreatedPush,
   type GuardrailHitAction,
+  type SlotDef,
   type ThreadSummarySetPush,
 } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { ChatService } from '../chat/chat-service.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
+import { procedureFactsOf, readFactTables, readsTables } from './conversation/facts.js';
 import { buildHandoffCard } from './conversation/handoff/card-builder.js';
+import { readSnapshot } from './conversation/procedure/executor.js';
 import { describeSideEffects } from './conversation/turn.js';
 import type { HandoffCardWriter, WrittenHandoffCard } from './handoff-service.js';
 
@@ -60,9 +63,18 @@ export class HandoffCardService implements HandoffCardWriter {
       where: { id: chatId },
       select: {
         customerId: true,
+        brandId: true,
         customer: { select: { name: true, email: true, username: true } },
       },
     });
+    // The card's facts (`method.expected_minutes`) from the AI-13 rows of the
+    // conversation's brand, as the turn read them (tm 310.3).
+    const now = new Date();
+    const snapshot = result ? readSnapshot(result.nextState.procedureSnapshot) : null;
+    const defs = (snapshot?.procedure.slots ?? []) as SlotDef[];
+    const facts = readsTables(defs)
+      ? procedureFactsOf(await readFactTables(tx, { brandId: chat?.brandId ?? null, now }), defs)
+      : undefined;
     const [boundary, statements, opening, files, hits, flags, conversation] = await Promise.all([
       readDayBoundary(tx),
       tx.event.findMany({
@@ -138,8 +150,9 @@ export class HandoffCardService implements HandoffCardWriter {
         ),
       storedRiskFlags: flags.map((flag) => flag.type),
       attachments: files.map((file) => attachmentOf(file)),
-      now: new Date(),
+      now,
       timeZone: boundary.timezone,
+      ...(facts ? { facts } : {}),
     });
 
     await tx.aiHandoff.create({

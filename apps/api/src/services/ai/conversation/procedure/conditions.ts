@@ -12,7 +12,7 @@
  *
  * **Three values, not two.** A condition can ask about something the
  * conversation does not know yet: a slot the player has not given, a fact no
- * table row answers (AI-13 lands with #310), an `ai` question the
+ * table row answers (AI-13, `conversation/facts.ts`), an `ai` question the
  * understanding call answered `unknown`. Each of those is *unknown*, and
  * unknown travels through the tree the way it should (Kleene logic): `not`
  * keeps it unknown, `all` is false as soon as one part is false, `any` is true
@@ -54,21 +54,22 @@ import type { SkillRunLogEntry } from '../turn.js';
 /**
  * What the structured tables (AI-13) know about the rows this conversation's
  * slots name — the payment method in `method`, the bonus, the KYC document.
- * The executor builds it once the slots are read; #310 (`conversation/facts.ts`)
- * gives the real one. Every answer may be null: no row resolved, or the column
- * is empty — a condition reading it is unknown, a template needing it is not
- * sent.
+ * Each answer is asked with the slots as they stand at that moment, so a
+ * method the player names in this very turn is the row the next step reads;
+ * `conversation/facts.ts` (tm 310.3) gives the real one. Every answer may be
+ * null: no row resolved, or the column is empty — a condition reading it is
+ * unknown, a template needing it is not sent.
  */
 export interface ProcedureFacts {
   /** A column's value: a number, a yes/no or text, per {@link PROCEDURE_FACTS}. */
-  get(path: ProcedureFactPath): CondScalar | null;
+  get(path: ProcedureFactPath, slots: AiStateObject): CondScalar | null;
   /** Whether the method processes at that moment (its working hours, in its own zone). */
-  withinWorkingHours(at: Date): boolean | null;
+  withinWorkingHours(at: Date, slots: AiStateObject): boolean | null;
   /** The next moment after `after` the method processes. */
-  nextWindow(after: Date): Date | null;
+  nextWindow(after: Date, slots: AiStateObject): Date | null;
 }
 
-/** The stub until #310: the tables know nothing, so every fact is unknown. */
+/** No tables: every fact is unknown. */
 export const NO_FACTS: ProcedureFacts = {
   get: () => null,
   withinWorkingHours: () => null,
@@ -163,13 +164,13 @@ export function slotValue(slots: AiStateObject, name: string): ProcLookup {
   return notKnown(`slot ${name}`, `slot ${name} holds no usable value`);
 }
 
-/** A fact's value, held to the kind {@link PROCEDURE_FACTS} gives its column. */
-export function factValue(facts: ProcedureFacts, path: string): ProcLookup {
+/** A fact's value for the slots in hand, held to the kind {@link PROCEDURE_FACTS} gives its column. */
+export function factValue(facts: ProcedureFacts, path: string, slots: AiStateObject): ProcLookup {
   if (!Object.hasOwn(PROCEDURE_FACTS, path)) {
     return notKnown(`fact ${path}`, `${path} is not a known fact`);
   }
   const kind = PROCEDURE_FACTS[path as ProcedureFactPath];
-  const value = facts.get(path as ProcedureFactPath);
+  const value = facts.get(path as ProcedureFactPath, slots);
   if (value === null || value === undefined) return notKnown(`fact ${path}`);
   if (kind === 'number' && typeof value === 'number' && Number.isFinite(value)) {
     return known('number', value);
@@ -211,11 +212,11 @@ export function functionValue(
     case 'within_working_hours': {
       const at = slotInstant(ctx.slots, args[1]);
       if (!at.known) return at;
-      const within = ctx.facts.withinWorkingHours(at.at);
+      const within = ctx.facts.withinWorkingHours(at.at, ctx.slots);
       return within === null ? notKnown(`fn ${name}`) : known('boolean', within);
     }
     case 'next_window': {
-      const next = ctx.facts.nextWindow(ctx.now);
+      const next = ctx.facts.nextWindow(ctx.now, ctx.slots);
       return next === null || Number.isNaN(next.getTime())
         ? notKnown(`fn ${name}`)
         : { known: true, value: { kind: 'moment', value: next } };
@@ -439,7 +440,7 @@ function evaluate(cond: unknown, walk: Walk, depth: number): CondResult {
       if (!isObject(body) || typeof body['path'] !== 'string') {
         return fault(walk, 'malformed condition');
       }
-      const lookup = factValue(walk.ctx.facts, body['path']);
+      const lookup = factValue(walk.ctx.facts, body['path'], walk.ctx.slots);
       return compare(
         walk,
         `fact ${body['path']}`,
@@ -540,7 +541,7 @@ function operandValue(walk: Walk, operand: unknown): ProcValue | null {
       typeof operand['slot'] === 'string'
         ? slotValue(walk.ctx.slots, operand['slot'])
         : typeof operand['fact'] === 'string'
-          ? factValue(walk.ctx.facts, operand['fact'])
+          ? factValue(walk.ctx.facts, operand['fact'], walk.ctx.slots)
           : notKnown('value', 'a value is a literal, { slot } or { fact }');
     if (!lookup.known) {
       unknownOf(walk, lookup);

@@ -53,6 +53,7 @@ import { withTenant } from '../lib/tenant.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
+import { KnowledgeTableFacts } from '../services/ai/conversation/facts.js';
 import type { TenantRunner } from '../services/ai/conversation/turn.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
@@ -328,6 +329,7 @@ export default async function customerRoutes(
   // that makes them a lead, a reported sale — goes through the one recorder
   // (FR-MOD-13.3). The chat core holds its own for the close path.
   const goals = createGoalConversionRecorder(app.db, { logger: app.log });
+  const tableFacts = new KnowledgeTableFacts();
   const ai = new AiResponder(
     chats,
     publisher,
@@ -337,6 +339,9 @@ export default async function customerRoutes(
       maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
       timeoutMs: env.LLM_TIMEOUT_MS,
       maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+      // The AI-13 tables: a procedure's facts and the exact answer (tm 310.3).
+      facts: tableFacts,
+      tables: tableFacts,
     }),
     {
       // Messages written this close together get one answer (tm 292.4 · AI-01

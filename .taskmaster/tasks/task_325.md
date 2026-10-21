@@ -49,19 +49,19 @@ effectiveScopes birim (alt sınır, kilit, düzeyler), entegrasyon (anlık etki,
 
 ## Subtasks
 
-### 325.1. PM-CATALOG [OPUS-MAX] capabilities.ts kataloğu + effectiveScopes + alt sınırlar/kilitler
+### 325.1. PM-CATALOG [OPUS-XHIGH] capabilities.ts kataloğu + effectiveScopes + alt sınırlar/kilitler
 
 **Status:** pending  
 **Dependencies:** None  
 
-Üst görev 325 ayrıntılarındaki ilgili bölüm.
+Üst görev 325 ayrıntılarındaki ilgili bölüm. XHIGH GEREKÇESİ: (4) pencere içinde verilecek karar — yetenek kataloğunun alt sınır/kilit kuralları ve effectiveScopes birleşim sırası KK'da yoruma açık. (MAX→XHIGH, sahip kararı 2026-10-21: katalog verisi mekanik; güvenlik sınırı 325.3'te MAX kalır.)
 
-### 325.2. PM-STORE-CACHE [OPUS-MAX] role_capability_overrides + permissions_version + önbellek/pub-sub + GET/PUT uçları + audit/bildirim
+### 325.2. PM-STORE-CACHE [OPUS-XHIGH] role_capability_overrides + permissions_version + önbellek/pub-sub + GET/PUT uçları + audit/bildirim
 
 **Status:** pending  
 **Dependencies:** 325.1  
 
-Üst görev 325 ayrıntılarındaki ilgili bölüm.
+Üst görev 325 ayrıntılarındaki ilgili bölüm. XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — rol override'larını yazan yeni yetkili PUT ucu; (4) pencere içinde verilecek karar — permissions_version semantiği ve önbellek geçersizleştirme/pub-sub sırası. (MAX→XHIGH, sahip kararı 2026-10-21: oturum anındaki yetki hesabı 325.3'te MAX kalır.)
 
 ### 325.3. PM-SESSION [OPUS-MAX] token-service/oauth/RTM anlık hesap + requireCapability + own görünürlük
 

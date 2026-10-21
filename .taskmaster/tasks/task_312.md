@@ -67,12 +67,12 @@ Birim (normalleştirme, kapsam, robots, sitemap index, tablo çıkarımı, deği
 
 XHIGH GEREKÇESİ: (1) SSRF + güvenilmeyen girdi.
 
-### 312.3. CRAWL-JOB-RUNNER [OPUS-MAX] knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması
+### 312.3. CRAWL-JOB-RUNNER [OPUS-XHIGH] knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması
 
 **Status:** pending  
 **Dependencies:** 312.2  
 
-Eşzamanlılık/kilit.
+XHIGH GEREKÇESİ: (3) teslim güvencesi — SKIP LOCKED kuyruğu, kiracı başına tek iş, kota bekleme; bir hata çift taramaya ya da kaybolan yenilemeye yol açar. NOT (sahip kararı 2026-10-21 · §D-efor): PLAN §5.1.1 "eşzamanlılık/kilit = OPUS-MAX" kuralından bilinçli sapma — SKIP LOCKED deseni depoda var (team-drain, knowledge-job), MAX pencerelerinin ölçülen maliyeti/tur sayısı xhigh'un ~2 katı ve kalite farkı ölçülemedi; Anthropic efor belgesi max'ı ajan/araç döngüsü için önermiyor.
 
 ### 312.4. CRAWL-WEB [SONNET-HIGH] Ekleme modalı + detay çekmecesi + Türkçe hata çipleri
 

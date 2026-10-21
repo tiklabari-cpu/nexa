@@ -46,12 +46,12 @@ Entegrasyon (bulma, görünürlük, iç not, kiracılar arası negatif, tarih s�
 
 ## Subtasks
 
-### 333.1. FTS-EXT-INDEX [OPUS-MAX] pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL
+### 333.1. FTS-EXT-INDEX [OPUS-XHIGH] pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL
 
 **Status:** pending  
 **Dependencies:** None  
 
-Her CONCURRENTLY kendi migration dosyasında tek ifade.
+Her CONCURRENTLY kendi migration dosyasında tek ifade. XHIGH GEREKÇESİ: (4) pencere içinde verilecek karar — bölümlenmiş tabloda CONCURRENTLY + ATTACH sırası ve kısmi indeks doğrulaması (Prisma diff kısmi indeksleri görmez; pg_index.indisvalid + test pencerede tasarlanır). (MAX→XHIGH, sahip kararı 2026-10-21: indeks işi mekanik; SECURITY DEFINER fonksiyonu 333.2'de MAX kalır.)
 
 ### 333.2. FTS-FUNCTION [OPUS-MAX] search_events SECURITY DEFINER (kiracı + görünürlük içeride) + güvenlik testleri
 

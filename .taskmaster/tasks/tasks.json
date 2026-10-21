@@ -13551,9 +13551,9 @@
           },
           {
             "id": 3,
-            "title": "CRAWL-JOB-RUNNER [OPUS-MAX] (Opus 5.5) knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması",
+            "title": "CRAWL-JOB-RUNNER [OPUS-XHIGH] (Opus 5.5) knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması",
             "description": "knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması",
-            "details": "Eşzamanlılık/kilit.",
+            "details": "XHIGH GEREKÇESİ: (3) teslim güvencesi — SKIP LOCKED kuyruğu, kiracı başına tek iş, kota bekleme; bir hata çift taramaya ya da kaybolan yenilemeye yol açar. NOT (sahip kararı 2026-10-21 · §D-efor): PLAN §5.1.1 \"eşzamanlılık/kilit = OPUS-MAX\" kuralından bilinçli sapma — SKIP LOCKED deseni depoda var (team-drain, knowledge-job), MAX pencerelerinin ölçülen maliyeti/tur sayısı xhigh'un ~2 katı ve kalite farkı ölçülemedi; Anthropic efor belgesi max'ı ajan/araç döngüsü için önermiyor.",
             "testStrategy": "Entegrasyon.",
             "status": "pending",
             "dependencies": [
@@ -14226,9 +14226,9 @@
         "subtasks": [
           {
             "id": 1,
-            "title": "PM-CATALOG [OPUS-MAX] (Opus 5.5) capabilities.ts kataloğu + effectiveScopes + alt sınırlar/kilitler",
+            "title": "PM-CATALOG [OPUS-XHIGH] (Opus 5.5) capabilities.ts kataloğu + effectiveScopes + alt sınırlar/kilitler",
             "description": "capabilities.ts kataloğu + effectiveScopes + alt sınırlar/kilitler",
-            "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm.",
+            "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm. XHIGH GEREKÇESİ: (4) pencere içinde verilecek karar — yetenek kataloğunun alt sınır/kilit kuralları ve effectiveScopes birleşim sırası KK'da yoruma açık. (MAX→XHIGH, sahip kararı 2026-10-21: katalog verisi mekanik; güvenlik sınırı 325.3'te MAX kalır.)",
             "testStrategy": "Birim.",
             "status": "pending",
             "dependencies": [],
@@ -14238,9 +14238,9 @@
           },
           {
             "id": 2,
-            "title": "PM-STORE-CACHE [OPUS-MAX] (Opus 5.5) role_capability_overrides + permissions_version + önbellek/pub-sub + GET/PUT uçları + audit/bildirim",
+            "title": "PM-STORE-CACHE [OPUS-XHIGH] (Opus 5.5) role_capability_overrides + permissions_version + önbellek/pub-sub + GET/PUT uçları + audit/bildirim",
             "description": "role_capability_overrides + permissions_version + önbellek/pub-sub + GET/PUT uçları + audit/bildirim",
-            "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm.",
+            "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm. XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — rol override'larını yazan yeni yetkili PUT ucu; (4) pencere içinde verilecek karar — permissions_version semantiği ve önbellek geçersizleştirme/pub-sub sırası. (MAX→XHIGH, sahip kararı 2026-10-21: oturum anındaki yetki hesabı 325.3'te MAX kalır.)",
             "testStrategy": "Entegrasyon; RLS.",
             "status": "pending",
             "dependencies": [
@@ -14465,9 +14465,9 @@
         "subtasks": [
           {
             "id": 1,
-            "title": "FTS-EXT-INDEX [OPUS-MAX] (Opus 5.5) pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL",
+            "title": "FTS-EXT-INDEX [OPUS-XHIGH] (Opus 5.5) pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL",
             "description": "pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL",
-            "details": "Her CONCURRENTLY kendi migration dosyasında tek ifade.",
+            "details": "Her CONCURRENTLY kendi migration dosyasında tek ifade. XHIGH GEREKÇESİ: (4) pencere içinde verilecek karar — bölümlenmiş tabloda CONCURRENTLY + ATTACH sırası ve kısmi indeks doğrulaması (Prisma diff kısmi indeksleri görmez; pg_index.indisvalid + test pencerede tasarlanır). (MAX→XHIGH, sahip kararı 2026-10-21: indeks işi mekanik; SECURITY DEFINER fonksiyonu 333.2'de MAX kalır.)",
             "testStrategy": "db:check-drift; plan testi.",
             "status": "pending",
             "dependencies": [],

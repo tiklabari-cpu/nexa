@@ -87,6 +87,7 @@ import {
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import { loadDailyDigests, settleDailyDigest, type DailyDigest } from './ai-digest.js';
+import { recordAbandonment } from './ai-unresolved.js';
 import { serialiseAiHandoff } from './ai-handoff-view.js';
 import {
   AI_MODE_SYSTEM_ACTOR,
@@ -2434,6 +2435,7 @@ export class ChatService {
     await this.#publishDeactivation(tenant, chatId, result, actorOf(principal));
     await this.#emitDeactivation(tenant, chatId, result);
     await this.#recordConversions(tenant, result);
+    await this.#recordAbandonment(tenant, result.threadId);
     await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
   }
@@ -2496,8 +2498,25 @@ export class ChatService {
     // resolution goal fires either way — otherwise the funnel would report only
     // the conversations somebody happened to close by hand.
     await this.#recordConversions(tenant, result);
+    await this.#recordAbandonment(tenant, result.threadId);
     await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
+  }
+
+  /**
+   * The player left the AI's question unanswered (tm 317.1 · AI-22): one
+   * `player_abandoned` item for the unresolved-questions report, when the
+   * closed connection is one (`recordAbandonment` decides). After the
+   * close commits, never inside it — the report is a courtesy to the
+   * workspace and must not be able to roll a close back — so a failure is
+   * swallowed, like the transcript mail's.
+   */
+  async #recordAbandonment(tenant: TenantContext, threadId: string): Promise<void> {
+    try {
+      await withTenant(this.db, tenant, (tx) => recordAbandonment(tx, tenant.licenseId, threadId));
+    } catch {
+      // The conversation is closed and stays closed; the report misses one row.
+    }
   }
 
   /**

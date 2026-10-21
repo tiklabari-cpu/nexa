@@ -321,6 +321,7 @@ import {
   type TurnState,
   type UnderstoodRecord,
 } from './turn.js';
+import { unresolvedOf } from './unresolved.js';
 
 export interface ConversationEngineOptions {
   /**
@@ -679,6 +680,10 @@ export class ConversationEngine {
    * (`#settleHandoff`): a loop or the count of turns not understood turns
    * the turn into a hand-over, and every hand-over gets its reasons, its
    * priority and the reason's message.
+   *
+   * A live turn that leaves the message unresolved says so last
+   * (`unresolved`, tm 317.1 · AI-22): why, the words, and the embedding the
+   * turn's search made, for the report the live adapter writes.
    */
   async runTurn(state: TurnState, message: TurnMessage, ctx: TurnContext): Promise<TurnResult> {
     const guard = this.#openGuard(state, message, ctx);
@@ -695,7 +700,15 @@ export class ConversationEngine {
       guard.deferred.length > 0 ? this.#settleDeferred(state, message, ctx, guard, result) : result;
     const closed = this.#closeGuard(state, message, ctx, guard, settled);
     this.#watches.delete(message);
-    return this.#settleHandoff(state, message, ctx, watch, closed);
+    const turn = this.#settleHandoff(state, message, ctx, watch, closed);
+    const unresolved = unresolvedOf({
+      state,
+      message,
+      ctx,
+      result: turn,
+      embedded: this.#turnEmbeddings.get(message),
+    });
+    return unresolved ? { ...turn, unresolved } : turn;
   }
 
   /** The turn's hand-over watch — a fresh one outside `runTurn`. */

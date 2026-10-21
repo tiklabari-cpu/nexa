@@ -23,7 +23,10 @@
  * hits (`ai_guardrail_hits`, tm 301.2), whose evidence quotes the subject's
  * words, through `chat_id`, and the risk flags (`risk_flags`, tm 302.1), whose
  * note can be about their health, through `customer_id` — a flag outlives its
- * chat (`chat_id` is SET NULL), not its subject.
+ * chat (`chat_id` is SET NULL), not its subject — and the unresolved
+ * questions (`ai_unresolved_items`, tm 317.1), whose text is the subject's
+ * own words, through `chat_id`; the clusters they were counted into keep
+ * only a title and numbers (AI-22-S1).
  *
  * Two relations are `ON DELETE SET NULL`, and they are the interesting ones:
  *

@@ -173,6 +173,29 @@ const BRAND_LABEL_TABLES: ReadonlyArray<{
       });
     },
   },
+  {
+    // The brand a test scenario's conversation comes in through (tm 314.1 ·
+    // AI-19): the simulation answers from that brand's knowledge, while the
+    // Test tab lists — and a run plays — every brand's scenarios of the agent.
+    table: 'ai_test_scenarios',
+    reason: 'the simulated conversation reads it; the Test tab is licence-wide',
+    plant: async (db, at) => {
+      const agent = await db.aiAgent.create({
+        data: { licenseId: at.licenseId, name: 'Brand probe AI' },
+        select: { id: true },
+      });
+      return db.aiTestScenario.create({
+        data: {
+          licenseId: at.licenseId,
+          aiAgentId: agent.id,
+          brandId: at.brandId,
+          name: 'Brand probe',
+          turns: ['Merhaba'],
+          expectations: { outcome: 'resolved', max_turns: 4 },
+        },
+      });
+    },
+  },
 ];
 
 // === Brand lists (tm 309.2) =================================================

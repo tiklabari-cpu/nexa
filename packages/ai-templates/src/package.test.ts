@@ -2,7 +2,16 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { AI_TEMPLATES_PACKAGE_VERSION, IGAMING_CORE_PACK } from './index.js';
+import {
+  SCENARIO_OUTCOMES as TYPES_SCENARIO_OUTCOMES,
+  SCENARIO_PERSONAS as TYPES_SCENARIO_PERSONAS,
+} from '@siyahtus/types';
+import {
+  AI_TEMPLATES_PACKAGE_VERSION,
+  IGAMING_CORE_PACK,
+  SCENARIO_OUTCOMES,
+  SCENARIO_PERSONAS,
+} from './index.js';
 
 const SRC = dirname(fileURLToPath(import.meta.url));
 
@@ -46,5 +55,15 @@ describe('the package', () => {
       ['catalogue.ts', 'index.ts', ...igaming].sort(),
     );
     expect(values).toEqual([]);
+  });
+
+  /**
+   * The scenario lists are the test bench's (`@siyahtus/types` `ai-testing.ts`,
+   * tm 314.1); this package keeps a copy only because its entry point may not
+   * import a value from another package (above).
+   */
+  it('keeps the test bench’s persona and outcome lists (AI-19)', () => {
+    expect(SCENARIO_PERSONAS).toEqual(TYPES_SCENARIO_PERSONAS);
+    expect(SCENARIO_OUTCOMES).toEqual(TYPES_SCENARIO_OUTCOMES);
   });
 });

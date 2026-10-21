@@ -1,0 +1,344 @@
+# The AI test bench (tm 314 · SiyahTuş analysis AI-19).
+#
+# A workspace writes scenarios — scripted player messages, or a persona a
+# model plays — with what must come out of them, and plays them against the
+# draft, the published configuration or a named version. The engine is the
+# live one (`runTurn`, side-effect free): a run writes no chat, thread,
+# event, customer, rating, usage counter or webhook, only its own results,
+# and its tokens are counted on the test meter (`llm_test`, AI-19-S2), never
+# the live allowance. Hard checks decide each scenario's verdict; the judge
+# only advises (AI-19-S3). The platform's locked compliance pack joins every
+# pre-publish run (AI-19-S1). "Talk like a player" is a sandbox session on
+# the same turn, with each reply's decision trace.
+#
+# ---------------------------------------------------------------------------
+# NOT MOUNTED YET (tm 314.1 wrote the contract and the tables; the route that
+# serves a path adds its `openapi.yaml` entry in the same commit — the parity
+# test fails a documented operation nothing serves, PLAN §D240):
+#
+#   /ai/test-scenarios, /ai/test-scenarios/{scenarioId}       → tm 314.2
+#   /ai/test-runs, /ai/test-runs/{runId}                      → tm 314.2
+#   /ai/test-runs/{runId}/results                             → tm 314.2 (`regression`: 314.3)
+#   /ai/sandbox-sessions, /ai/sandbox-sessions/{sessionId},
+#   …/{sessionId}/turns, …/{sessionId}/save-as-scenario       → tm 314.2
+#
+# The component schemas (`AiTestScenario`, `AiTestRun`, …) are in
+# `openapi.yaml` already; `@siyahtus/types` `ai-testing.ts` holds the same
+# lists and bounds.
+# ---------------------------------------------------------------------------
+
+testScenarios:
+  get:
+    tags: [Playbook]
+    operationId: listAiTestScenarios
+    summary: An AI agent's test scenarios
+    description: Every brand's, newest first. The platform's compliance pack is not listed — it is code.
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - name: active
+        in: query
+        schema: { type: boolean }
+    responses:
+      "200":
+        description: The scenarios
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenarioList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiTestScenario
+    summary: Write a test scenario
+    description: |
+      `origin` is `manual`. A refused field answers `validation` with
+      `details.problems` (`{ field, code }`, `validateAiTestScenario`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenarioInput" }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenario" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+testScenario:
+  parameters:
+    - name: scenarioId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiTestScenario
+    summary: One test scenario
+    responses:
+      "200":
+        description: The scenario
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenario" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateAiTestScenario
+    summary: Change a test scenario
+    description: The change is merged over the scenario and the result validated whole.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenarioPatch" }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenario" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteAiTestScenario
+    summary: Delete a test scenario
+    description: Earlier results keep its key and name; the regression still pairs them.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+testRuns:
+  get:
+    tags: [Playbook]
+    operationId: listAiTestRuns
+    summary: An AI agent's run history
+    description: Newest first.
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: The runs
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestRunList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiTestRun
+    summary: Play scenarios against a configuration
+    description: |
+      Queues the run and answers at once (`status: queued`); it is played in
+      the background, two scenarios of the workspace at a time, each within
+      60 s, at most 200 per run. A run with no scenario to play is
+      `validation`. The test allowance spent answers 429 `ai_daily_cap` with
+      `details.meter: llm_test`; the live allowance is never touched.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiTestRunCreate" }
+    responses:
+      "202":
+        description: Queued
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestRun" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
+
+testRun:
+  parameters:
+    - name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiTestRun
+    summary: One run and its counts
+    responses:
+      "200":
+        description: The run
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+testRunResults:
+  parameters:
+    - name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: listAiTestRunResults
+    summary: A run's results, regressions first
+    description: |
+      Each scenario's verdict, transcript with the decision trace of every AI
+      turn, hard checks and the judge's advice, compared with the same
+      scenario in the previous published version's last run.
+    responses:
+      "200":
+        description: The results
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestRunResultList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+sandboxSessions:
+  post:
+    tags: [Playbook]
+    operationId: createAiSandboxSession
+    summary: Start talking to the AI like a player
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSandboxSessionCreate" }
+    responses:
+      "201":
+        description: Started
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSandboxSession" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+sandboxSession:
+  parameters:
+    - name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiSandboxSession
+    summary: A sandbox session, to pick it up again
+    description: Its starter's only; an expired session is 404.
+    responses:
+      "200":
+        description: The session
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSandboxSession" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+sandboxSessionTurns:
+  parameters:
+    - name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiSandboxTurn
+    summary: Say something as the player
+    description: |
+      One turn of the live engine on the session's configuration. The reply
+      comes with its decision trace — the procedure and why, what was
+      collected, the knowledge used, guardrails, hand-over, flags, tokens —
+      and pushes `expires_at` 24 hours on. Counted on the test meter.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSandboxTurnRequest" }
+    responses:
+      "200":
+        description: The AI's turn
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSandboxTurnResponse" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
+      "503": { $ref: "../openapi.yaml#/components/responses/LlmUnavailable" }
+
+sandboxSessionSaveAsScenario:
+  parameters:
+    - name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: saveAiSandboxSessionAsScenario
+    summary: Keep the session as a scripted scenario
+    description: |
+      The player's messages become the script (`origin: from_chat`,
+      `origin_ref`: the session); the expectations are suggested from the
+      session's last state unless the body gives them. A session with no
+      player message is `validation`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSandboxSaveAsScenario" }
+    responses:
+      "201":
+        description: Saved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenario" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

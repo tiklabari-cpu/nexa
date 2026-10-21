@@ -60,3 +60,4 @@ export * from './ui-preferences.js';
 export * from './panel-font.js';
 export * from './deployment.js';
 export * from './log-keys.js';
+export * from './ai-testing.js';

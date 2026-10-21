@@ -3834,6 +3834,551 @@ components:
           type: array
           items: { type: string }
 
+    # --- The AI test bench (tm 314.1 · AI-19) ------------------------------
+    # `@siyahtus/types` `ai-testing.ts` holds the same lists and bounds
+    # (`ai-testing-schema.test.ts` compares them).
+
+    ScenarioPersona:
+      type: string
+      description: The player a scenario plays (`SCENARIO_PERSONAS`).
+      enum:
+        - normal
+        - sabirsiz
+        - kizgin
+        - eksik_bilgi
+        - sorumlu_oyun_sinyali
+        - resit_olmayan
+        - insan_istiyor
+        - yabanci_dil
+
+    ScenarioOutcome:
+      type: string
+      description: How a conversation ended, or must end (`SCENARIO_OUTCOMES`).
+      enum: [resolved, resolved_waiting, handoff]
+
+    AiTestScenarioOrigin:
+      type: string
+      enum: [template, manual, generated, from_chat, from_qa]
+
+    AiTestScenarioMode:
+      type: string
+      description: |
+        `scripted` — the player's messages, in order; `simulated` — a model
+        plays the persona, knowing `facts` and wanting `goal`.
+      enum: [scripted, simulated]
+
+    AiTestRunTarget:
+      type: string
+      description: The draft, the published configuration, or a named version (tm 316).
+      enum: [draft, published, version]
+
+    AiTestRunTrigger:
+      type: string
+      enum: [manual, pre_publish, nightly]
+
+    AiTestRunStatus:
+      type: string
+      enum: [queued, running, completed, failed, cancelled]
+
+    AiTestResultStatus:
+      type: string
+      description: |
+        `passed` — every hard check held; `failed` — one did not; `errored` —
+        the scenario could not be played (`stop_reason` `timeout` or `error`).
+      enum: [passed, failed, errored]
+
+    AiTestStopReason:
+      type: string
+      enum: [resolved, handoff, max_turns, script_end, timeout, error]
+
+    AiTestCheckKind:
+      type: string
+      enum:
+        - outcome
+        - team
+        - topic
+        - procedure
+        - reason_code
+        - required_slots
+        - values
+        - forbidden_phrase
+        - sensitive_request
+        - must_flags
+        - must_not_flags
+        - turn_count
+        - language
+
+    AiTestExpectations:
+      type: object
+      additionalProperties: false
+      required: [outcome, max_turns]
+      description: |
+        What must come out of a scenario. `outcome` and `max_turns` are always
+        checked, every other key only when given; `team_id`, `topic` and
+        `reason_code` belong to a hand-over.
+      properties:
+        outcome: { $ref: "#/components/schemas/ScenarioOutcome" }
+        team_id: { type: integer, format: int64, minimum: 1 }
+        topic: { $ref: "#/components/schemas/QueueTopicRole" }
+        procedure_id:
+          { type: string, format: uuid, description: The procedure (skill) the AI must pick. }
+        reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        required_slots:
+          type: array
+          maxItems: 30
+          items: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        values:
+          type: object
+          maxProperties: 30
+          description: What some slots hold, as the hand-over card shows it.
+          additionalProperties: { type: string, minLength: 1, maxLength: 500 }
+        forbidden_phrases:
+          type: array
+          maxItems: 30
+          description: Phrases no AI message may carry, beyond the workspace's own (AI-08).
+          items: { type: string, minLength: 1, maxLength: 500 }
+        must_flags:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/RiskFlagType" }
+        must_not_flags:
+          type: array
+          maxItems: 30
+          items: { $ref: "#/components/schemas/RiskFlagType" }
+        max_turns: { type: integer, minimum: 1, maximum: 30, default: 12 }
+        language: { type: string, pattern: "^[a-z]{2}$" }
+
+    AiTestScenarioInput:
+      type: object
+      additionalProperties: false
+      required: [ai_agent_id, name, expectations]
+      description: |
+        A scenario as the workspace writes it. Scenario text is synthetic by
+        rule: the API masks personal data in it (AI-26) before it is stored.
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        brand_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The brand the conversation comes in through; null — not known.
+        name: { type: string, minLength: 1, maxLength: 120 }
+        mode: { allOf: [{ $ref: "#/components/schemas/AiTestScenarioMode" }], default: scripted }
+        persona: { allOf: [{ $ref: "#/components/schemas/ScenarioPersona" }], default: normal }
+        language: { type: string, pattern: "^[a-z]{2}$", default: tr }
+        simulated_now:
+          type: string
+          format: date-time
+          nullable: true
+          description: The frozen clock's start, with its offset; it moves 30 s per turn. Null — when the run starts.
+        goal:
+          type: string
+          minLength: 1
+          maxLength: 500
+          nullable: true
+          description: What the simulated player wants; required for `simulated`.
+        turns:
+          type: array
+          maxItems: 30
+          description: The player's messages; at least one for `scripted`.
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        facts:
+          type: object
+          maxProperties: 40
+          description: "What the player knows: `{ yontem: Papara, tutar: 2500 }`."
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 500 }
+              - { type: number }
+              - { type: boolean }
+        tool_outputs:
+          type: object
+          maxProperties: 20
+          description: What a tool step would have returned, by tool key (AI-28).
+          additionalProperties: { type: object, additionalProperties: true }
+        expectations: { $ref: "#/components/schemas/AiTestExpectations" }
+        active: { type: boolean, default: true }
+
+    AiTestScenarioPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Any field of the input but the agent; the merged scenario is validated whole.
+      properties:
+        brand_id: { type: string, format: uuid, nullable: true }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        mode: { $ref: "#/components/schemas/AiTestScenarioMode" }
+        persona: { $ref: "#/components/schemas/ScenarioPersona" }
+        language: { type: string, pattern: "^[a-z]{2}$" }
+        simulated_now: { type: string, format: date-time, nullable: true }
+        goal: { type: string, minLength: 1, maxLength: 500, nullable: true }
+        turns:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        facts:
+          type: object
+          maxProperties: 40
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 500 }
+              - { type: number }
+              - { type: boolean }
+        tool_outputs:
+          type: object
+          maxProperties: 20
+          additionalProperties: { type: object, additionalProperties: true }
+        expectations: { $ref: "#/components/schemas/AiTestExpectations" }
+        active: { type: boolean }
+
+    AiTestScenario:
+      type: object
+      required:
+        [
+          id,
+          ai_agent_id,
+          brand_id,
+          name,
+          origin,
+          origin_ref,
+          mode,
+          persona,
+          language,
+          simulated_now,
+          goal,
+          turns,
+          facts,
+          tool_outputs,
+          expectations,
+          active,
+          created_by,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        brand_id: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        origin: { $ref: "#/components/schemas/AiTestScenarioOrigin" }
+        origin_ref:
+          type: string
+          nullable: true
+          description: What `origin` came from — a template key, a chat id, a QA finding id.
+        mode: { $ref: "#/components/schemas/AiTestScenarioMode" }
+        persona: { $ref: "#/components/schemas/ScenarioPersona" }
+        language: { type: string }
+        simulated_now: { type: string, format: date-time, nullable: true }
+        goal: { type: string, nullable: true }
+        turns: { type: array, items: { type: string } }
+        facts:
+          type: object
+          additionalProperties:
+            oneOf: [{ type: string }, { type: number }, { type: boolean }]
+        tool_outputs:
+          type: object
+          additionalProperties: { type: object, additionalProperties: true }
+        expectations: { $ref: "#/components/schemas/AiTestExpectations" }
+        active: { type: boolean }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AiTestScenarioList:
+      type: object
+      required: [scenarios]
+      properties:
+        scenarios:
+          type: array
+          items: { $ref: "#/components/schemas/AiTestScenario" }
+
+    AiTestTurnTrace:
+      type: object
+      required: [decision, procedure, slots, sources, guardrails, handoff, flags, tokens]
+      description: |
+        Why the AI said what it said on one turn: the procedure and why, what
+        it collected, the knowledge it used, the guardrails that fired, the
+        hand-over, the flags it raised, and what the turn cost.
+      properties:
+        decision:
+          type: string
+          enum: [answered, asked, handoff, silent, blocked, expired, cap_reached]
+        procedure:
+          type: object
+          nullable: true
+          required: [skill_id, name, reason]
+          properties:
+            skill_id: { type: string, format: uuid }
+            name: { type: string }
+            reason: { type: string }
+        slots:
+          type: object
+          additionalProperties: { type: string }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [source_id, title, page]
+            properties:
+              source_id: { type: string }
+              title: { type: string }
+              page: { type: integer, nullable: true }
+        guardrails:
+          type: array
+          items:
+            type: object
+            required: [rule_key, action]
+            properties:
+              rule_key: { type: string }
+              action: { type: string }
+        handoff:
+          type: object
+          nullable: true
+          required: [reason, topic, team_id]
+          properties:
+            reason: { type: string }
+            topic: { allOf: [{ $ref: "#/components/schemas/QueueTopicRole" }], nullable: true }
+            team_id: { type: integer, format: int64, nullable: true }
+        flags:
+          type: array
+          items: { $ref: "#/components/schemas/RiskFlagType" }
+        tokens: { type: integer, minimum: 0 }
+
+    AiTestTranscriptEntry:
+      type: object
+      required: [role, text, at]
+      properties:
+        role: { type: string, enum: [player, ai, system] }
+        text: { type: string }
+        at: { type: string, format: date-time, description: The frozen clock's moment. }
+        trace: { $ref: "#/components/schemas/AiTestTurnTrace" }
+
+    AiTestCheck:
+      type: object
+      required: [kind, passed]
+      properties:
+        kind: { $ref: "#/components/schemas/AiTestCheckKind" }
+        passed: { type: boolean }
+        expected: {}
+        actual: {}
+        turn_index: { type: integer, minimum: 0 }
+        detail: { type: string }
+
+    AiTestJudgeVerdict:
+      type: object
+      required: [score, comment]
+      description: The judge's advice (AI-19-S3) — it never changes a result's status.
+      properties:
+        score: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string }
+        criteria:
+          type: object
+          additionalProperties: { type: integer, minimum: 1, maximum: 5 }
+
+    AiTestRunCreate:
+      type: object
+      additionalProperties: false
+      required: [ai_agent_id, target]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        target: { $ref: "#/components/schemas/AiTestRunTarget" }
+        config_version_id:
+          type: string
+          format: uuid
+          description: Required exactly when `target` is `version`.
+        scenario_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          description: The scenarios to play; omitted — every active one of the agent.
+          items: { type: string, format: uuid }
+
+    AiTestRun:
+      type: object
+      required:
+        [
+          id,
+          ai_agent_id,
+          target,
+          config_version_id,
+          draft_revision,
+          trigger,
+          status,
+          scenario_count,
+          passed,
+          failed,
+          errored,
+          tokens,
+          compliance,
+          error,
+          started_by,
+          created_at,
+          started_at,
+          finished_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        target: { $ref: "#/components/schemas/AiTestRunTarget" }
+        config_version_id: { type: string, format: uuid, nullable: true }
+        draft_revision: { type: integer, minimum: 0, nullable: true }
+        trigger: { $ref: "#/components/schemas/AiTestRunTrigger" }
+        status: { $ref: "#/components/schemas/AiTestRunStatus" }
+        scenario_count: { type: integer, minimum: 0, maximum: 200 }
+        passed: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        errored: { type: integer, minimum: 0 }
+        tokens:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Counted on the test meter (`llm_test`), never the live one.
+        compliance:
+          type: object
+          nullable: true
+          description: The platform's locked compliance pack's share of the run (AI-19-S1); null — the run did not play it.
+          required: [pack_version, passed, failed]
+          properties:
+            pack_version: { type: string }
+            passed: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0, description: Failed or errored. }
+        error: { type: string, nullable: true, description: What stopped a `failed` run. }
+        started_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+
+    AiTestRunList:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: { $ref: "#/components/schemas/AiTestRun" }
+
+    AiTestRunResult:
+      type: object
+      required:
+        [
+          id,
+          run_id,
+          scenario_id,
+          scenario_key,
+          scenario_name,
+          status,
+          stop_reason,
+          outcome,
+          handoff_team_id,
+          transcript,
+          checks,
+          judge,
+          tokens,
+          duration_ms,
+          regression,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        scenario_id: { type: string, format: uuid, nullable: true }
+        scenario_key:
+          type: string
+          description: The scenario's id, or `compliance:G<n>:<lang>` for the platform's pack.
+        scenario_name: { type: string }
+        status: { $ref: "#/components/schemas/AiTestResultStatus" }
+        stop_reason: { $ref: "#/components/schemas/AiTestStopReason" }
+        outcome: { allOf: [{ $ref: "#/components/schemas/ScenarioOutcome" }], nullable: true }
+        handoff_team_id: { type: integer, format: int64, nullable: true }
+        transcript:
+          type: array
+          items: { $ref: "#/components/schemas/AiTestTranscriptEntry" }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/AiTestCheck" }
+        judge: { allOf: [{ $ref: "#/components/schemas/AiTestJudgeVerdict" }], nullable: true }
+        tokens: { type: integer, minimum: 0 }
+        duration_ms: { type: integer, minimum: 0 }
+        regression:
+          type: string
+          nullable: true
+          description: |
+            Against the same scenario in the previous published version's last
+            run: `newly_failing` (passed → fails, listed first), `outcome_changed`,
+            `team_changed`, `newly_passing`; null — nothing changed, or no earlier run.
+          enum: [newly_failing, outcome_changed, team_changed, newly_passing, null]
+
+    AiTestRunResultList:
+      type: object
+      required: [results, compared_run_id]
+      properties:
+        compared_run_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The earlier run `regression` compares against; null — none.
+        results:
+          type: array
+          description: Newly failing first, then changed outcome or team, then the rest.
+          items: { $ref: "#/components/schemas/AiTestRunResult" }
+
+    AiSandboxSessionCreate:
+      type: object
+      additionalProperties: false
+      required: [ai_agent_id]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        target: { allOf: [{ $ref: "#/components/schemas/AiTestRunTarget" }], default: draft }
+        config_version_id: { type: string, format: uuid }
+
+    AiSandboxSession:
+      type: object
+      required:
+        [id, ai_agent_id, target, config_version_id, transcript, tokens, created_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        target: { $ref: "#/components/schemas/AiTestRunTarget" }
+        config_version_id: { type: string, format: uuid, nullable: true }
+        transcript:
+          type: array
+          items: { $ref: "#/components/schemas/AiTestTranscriptEntry" }
+        tokens: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        expires_at:
+          type: string
+          format: date-time
+          description: 24 hours after the last turn.
+
+    AiSandboxTurnRequest:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 2000 }
+
+    AiSandboxTurnResponse:
+      type: object
+      required: [session, reply, trace]
+      properties:
+        session: { $ref: "#/components/schemas/AiSandboxSession" }
+        reply:
+          type: string
+          nullable: true
+          description: What the AI said; null — it said nothing (a hand-over without a message).
+        trace: { $ref: "#/components/schemas/AiTestTurnTrace" }
+
+    AiSandboxSaveAsScenario:
+      type: object
+      additionalProperties: false
+      required: [name]
+      description: |
+        The session's player messages become a scripted scenario; the
+        expectations are suggested from the session's last state and may be
+        overridden here.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        expectations: { $ref: "#/components/schemas/AiTestExpectations" }
+
     SkillLogEntry:
       type: object
       required: [step, detail, ok]

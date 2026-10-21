@@ -311,7 +311,7 @@ export type ProcedureFactEntity = keyof typeof PROCEDURE_FACT_ENTITIES;
 /**
  * The fact paths and the kind of value each holds — the AI-13 table columns a
  * condition or a template reads (`method.expected_minutes` → "30 dakika").
- * Until #310 resolves them the API's facts are a stub.
+ * The API resolves them from the rows (`conversation/facts.ts`, tm 310.3).
  */
 export const PROCEDURE_FACTS = {
   'method.name': 'text',

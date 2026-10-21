@@ -13362,7 +13362,7 @@
           "309"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T02:14:44.840Z",
+        "updatedAt": "2026-10-21T02:15:46.161Z",
         "subtasks": [
           {
             "id": 1,
@@ -13396,13 +13396,13 @@
             "description": "facts.ts + AI-03 fact koşulları + AI-06 kesin cevap yolu",
             "details": "Üst görev 310 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "95/20 dk dalları; min yatırım cevabı.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "310.2"
             ],
             "parentId": "310",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-21T02:15:46.161Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T02:14:44.841Z",
+      "lastModified": "2026-10-21T02:15:46.162Z",
       "taskCount": 390,
       "completedCount": 307,
       "tags": [

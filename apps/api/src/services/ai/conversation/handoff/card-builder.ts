@@ -76,7 +76,7 @@ export interface HandoffCardSource {
   readonly attachments: readonly AiHandoffAttachment[];
   readonly now: Date;
   readonly timeZone: string;
-  /** The AI-13 tables (#310); none until then. */
+  /** The AI-13 tables' facts for the conversation's brand (tm 310.3); none: every fact unknown. */
   readonly facts?: ProcedureFacts;
 }
 

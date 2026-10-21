@@ -5,7 +5,8 @@
  * the method's working hours (B: next window), the site request (C: finance),
  * the sender, the amount against the method's range, the username and the
  * reference, the passive lookup, and finance (D) — with the payment-method
- * table it reads as fixture facts (AI-13 lands with #310).
+ * table it reads as fixture facts; `depositThresholdProcedure` adds research
+ * §3.1's delay threshold, which the AI-13 acceptance runs on real rows (tm 310.3).
  */
 import { validateProcedure, type Procedure } from '@siyahtus/types';
 import {
@@ -187,6 +188,41 @@ export function depositProcedure(edit?: (raw: Record<string, unknown>) => void):
   const result = validateProcedure(raw);
   if (!result.ok) throw new Error(JSON.stringify(result.problems, null, 2));
   return result.procedure;
+}
+
+/**
+ * The deposit procedure with the delay threshold (research §3.1, AI-13
+ * acceptance): past the method's `delay_threshold_minutes`, the threshold is
+ * said and finance takes it at once.
+ */
+export const THRESHOLD_TEMPLATE =
+  '{yontem} için {method.delay_threshold_minutes} gecikme sınırı aşıldı ({elapsed_minutes(islem_zamani)}). Sizi finans ekibimize aktarıyorum.';
+
+export function depositThresholdProcedure(): Procedure {
+  return depositProcedure((raw) => {
+    const steps = raw['steps'] as Array<Record<string, unknown>>;
+    steps.splice(steps.findIndex((step) => step['id'] === 'sure_icinde') + 1, 0, {
+      id: 'esik_asildi',
+      type: 'check',
+      when: {
+        fn: {
+          name: 'elapsed_minutes',
+          args: ['islem_zamani'],
+          op: 'gt',
+          value: { fact: 'method.delay_threshold_minutes' },
+        },
+      },
+      then: { goto: 'esik' },
+    });
+    steps.push(
+      { id: 'esik', type: 'say', template_key: 'esik' },
+      { id: 'esik_devir', type: 'handoff', reason_code: 'expected_time_exceeded' },
+    );
+    (raw['templates'] as Array<{ key: string; text: string }>).push({
+      key: 'esik',
+      text: THRESHOLD_TEMPLATE,
+    });
+  });
 }
 
 /** The payment-method table's Papara row, as facts (AI-13). */

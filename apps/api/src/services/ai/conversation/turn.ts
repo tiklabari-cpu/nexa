@@ -364,9 +364,12 @@ export interface ProcedureTurnData {
    * understanding call (`understand.ts`, tm 297.1).
    */
   readonly understanding?: ProcedureUnderstanding;
-  /** What the AI-13 tables know (#310). Absent: nothing (`NO_FACTS`). */
+  /**
+   * What the AI-13 tables know — a test's or a simulation's own. Absent: the
+   * engine reads the tables (`conversation/facts.ts`, tm 310.3).
+   */
   readonly facts?: ProcedureFacts;
-  /** Table-sourced enum options by slot name (#310). Absent: none. */
+  /** Table-sourced enum options by slot name. Absent: the tables' rows (tm 310.3). */
   readonly options?: Readonly<Record<string, readonly SlotEnumOption[]>>;
   /** The workspace's currency (ISO 4217). Absent: TRY. */
   readonly currency?: string;

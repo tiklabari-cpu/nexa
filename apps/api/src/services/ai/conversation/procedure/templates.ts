@@ -94,7 +94,7 @@ export function variableText(
         : miss('unknown');
     }
     case 'fact':
-      return lookupText(factValue(ctx.facts, reference.path), ctx, reference.path);
+      return lookupText(factValue(ctx.facts, reference.path, ctx.slots), ctx, reference.path);
     case 'fn':
       return lookupText(functionValue(reference.name, reference.args, ctx), ctx, reference.name);
   }

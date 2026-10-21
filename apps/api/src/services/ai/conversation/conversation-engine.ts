@@ -107,6 +107,7 @@ import {
   type PersonaStyle,
   type Procedure,
   type SkillProcedureFields,
+  type SlotDef,
   type HandoffReason,
 } from '@siyahtus/types';
 import type { TenantContext } from '../../../lib/tenant.js';
@@ -198,6 +199,7 @@ import {
   readNoAnswerMark,
   readOfferAnswer,
   rewriteNote,
+  type FactAnswer,
   type KnowledgeAnswerReply,
   type KnowledgeFacts,
   type KnowledgeRecord,
@@ -236,7 +238,16 @@ import {
   type ProcedureStep,
   type SingleTurnProcedure,
 } from './legacy-skill.js';
-import { NO_FACTS, slotSettled } from './procedure/conditions.js';
+import { NO_FACTS, slotSettled, type ProcedureFacts } from './procedure/conditions.js';
+import type { SlotEnumOption } from './slots/validators.js';
+import {
+  NO_FACT_TABLE_READER,
+  procedureFactsOf,
+  readsTables,
+  tableSlotOptions,
+  type FactTableReader,
+  type FactTables,
+} from './facts.js';
 import {
   decideResolution,
   knowledgeResolution,
@@ -334,10 +345,16 @@ export interface ConversationEngineOptions {
    */
   procedureExamples?: ProcedureExamples;
   /**
-   * The AI-13 tables' answers (#310), asked before the knowledge base on the
-   * knowledge path (tm 298 · AI-06 §3). Default: none (`NO_FACT_TABLES`).
+   * The AI-13 tables' answers, asked before the knowledge base on the
+   * knowledge path (tm 298 · AI-06 §3). Default: none (`NO_FACT_TABLES`);
+   * the server's is `KnowledgeTableFacts` (tm 310.3).
    */
   facts?: KnowledgeFacts;
+  /**
+   * Where a procedure turn reads the AI-13 tables — its facts and its
+   * table-sourced slot options (tm 310.3). Default: none (`NO_FACT_TABLE_READER`).
+   */
+  tables?: FactTableReader;
 }
 
 /** The meter each mode's spend is counted on (`TurnMode`). */
@@ -588,6 +605,9 @@ export class ConversationEngine {
   readonly #knowledge: KnowledgeService;
   readonly #examples: ProcedureExamples;
   readonly #facts: KnowledgeFacts;
+  readonly #tables: FactTableReader;
+  /** The turn's tables, read once however many procedures it touches (`#tablesOf`). */
+  readonly #turnTables = new WeakMap<TurnContext, Promise<FactTables>>();
   readonly #llm: MeteredLlm;
   readonly #limits: { maxOutputTokens: number; timeoutMs: number };
   readonly #maxPromptChars: number;
@@ -607,6 +627,7 @@ export class ConversationEngine {
     this.#knowledge = options.knowledge;
     this.#examples = options.procedureExamples ?? new ProcedureExamples();
     this.#facts = options.facts ?? NO_FACT_TABLES;
+    this.#tables = options.tables ?? NO_FACT_TABLE_READER;
     this.#llm = MeteredLlm.wrap(options.llm);
     this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
     this.#maxPromptChars = options.maxPromptChars;
@@ -1533,6 +1554,14 @@ export class ConversationEngine {
           break;
 
         case 'answer_from_knowledge': {
+          // A row of the AI-13 tables before any passage (AI-06 §3).
+          const fact = await this.#tableAnswer(input.message.text, null, input.answerIn, input.ctx);
+          if (fact) {
+            reply = fact.text;
+            replyKind = 'answer';
+            log.push({ step: name, detail: tableAnswerDetail(fact), ok: true });
+            break;
+          }
           const answer = await this.#answerFromKnowledge({
             turn: input.message,
             message: input.message.text,
@@ -1638,6 +1667,10 @@ export class ConversationEngine {
     const data = ctx.procedure ?? {};
     const timeZone = ctx.timeZone ?? DEFAULT_DAY_BOUNDARY.timezone;
     const currency = data.currency ?? DEFAULT_CURRENCY;
+    // The active procedure's table slots are answered from the rows (AI-13).
+    const activeTables = active
+      ? await this.#procedureTables(ctx, active.snapshot.procedure)
+      : null;
     const entries = selectable.map((item) => item.entry);
     const understood: Understood = data.understanding
       ? { understanding: data.understanding, spent: NOTHING_SPENT, log: [] }
@@ -1660,7 +1693,7 @@ export class ConversationEngine {
               }
             : null,
           pending: active ? pendingQuestion(active, state.slots) : null,
-          ...(data.options ? { options: data.options } : {}),
+          ...(activeTables?.options ? { options: activeTables.options } : {}),
           now: ctx.now,
           timeZone,
           currency,
@@ -1711,7 +1744,9 @@ export class ConversationEngine {
     // the procedure is let go, and the message takes the decision order as if
     // none were in progress (a topic set aside stays set aside).
     const released: SkillRunLogEntry[] = [];
-    const unconfirmed = active ? unconfirmedResolution(state, active, understanding, ctx) : null;
+    const unconfirmed = active
+      ? unconfirmedResolution(state, active, understanding, ctx, activeTables?.facts ?? NO_FACTS)
+      : null;
     if (active && unconfirmed) {
       released.push({
         step: active.stepId ?? 'procedure',
@@ -2160,6 +2195,65 @@ export class ConversationEngine {
     }
   }
 
+  /**
+   * What a procedure reads from the AI-13 tables (tm 310.3): its facts and its
+   * table-sourced slot options. A caller's own (`ctx.procedure` — a test's, a
+   * simulation's) come first; the tables are read only for a procedure with a
+   * table slot, and once per turn.
+   */
+  async #procedureTables(
+    ctx: TurnContext,
+    procedure: Procedure,
+  ): Promise<{ facts: ProcedureFacts; options?: Record<string, SlotEnumOption[]> }> {
+    const data = ctx.procedure ?? {};
+    const defs = procedure.slots as SlotDef[];
+    const given = data.options ? { options: data.options as Record<string, SlotEnumOption[]> } : {};
+    if ((data.facts && data.options) || !readsTables(defs)) {
+      return { facts: data.facts ?? NO_FACTS, ...given };
+    }
+    const tables = await this.#tablesOf(ctx);
+    const options = data.options ?? tableSlotOptions(tables, defs);
+    return {
+      facts: data.facts ?? procedureFactsOf(tables, defs),
+      ...(Object.keys(options).length > 0
+        ? { options: options as Record<string, SlotEnumOption[]> }
+        : {}),
+    };
+  }
+
+  /**
+   * The AI-13 tables' exact answer to `text` (AI-06 §3), asked wherever the
+   * knowledge base would be — the knowledge path, a procedure's
+   * `answer_from_knowledge`, a one-message skill's knowledge reply. Null: no
+   * row answers it, and the passages are searched.
+   */
+  #tableAnswer(
+    text: string,
+    understanding: ProcedureUnderstanding | null,
+    answerIn: PersonaLanguage | null,
+    ctx: TurnContext,
+  ): Promise<FactAnswer | null> {
+    return this.#facts.answer({
+      message: text,
+      understanding,
+      language: answerIn,
+      db: ctx.db,
+      brandId: turnBrandId(ctx),
+      now: ctx.now,
+      currency: ctx.procedure?.currency ?? DEFAULT_CURRENCY,
+    });
+  }
+
+  /** The turn's view of the tables — its brand's rows — read on first use. */
+  #tablesOf(ctx: TurnContext): Promise<FactTables> {
+    let read = this.#turnTables.get(ctx);
+    if (read === undefined) {
+      read = this.#tables.read({ db: ctx.db, brandId: turnBrandId(ctx), now: ctx.now });
+      this.#turnTables.set(ctx, read);
+    }
+    return read;
+  }
+
   /** One turn of the chosen procedure, with its message written and its next state. */
   async #runProcedure(
     state: TurnState,
@@ -2167,7 +2261,6 @@ export class ConversationEngine {
     ctx: TurnContext,
     run: ProcedureRun,
   ): Promise<TurnResult> {
-    const data = ctx.procedure ?? {};
     const turn = turnsTaken(state) + 1;
     const log: SkillRunLogEntry[] = [...run.log];
     const longGap =
@@ -2188,6 +2281,7 @@ export class ConversationEngine {
     // K9 (tm 303.4): "is it solved?" asked at the step the procedure stands
     // on, the turn before — the counter names the procedure and the step.
     const askedKey = run.at?.stepId ? resolutionAskedKey(run.skill.id, run.at.stepId) : null;
+    const tables = await this.#procedureTables(ctx, own);
     const result = runProcedureTurn({
       procedure: limit === own.limits.max_turns ? own : { ...own, limits: { max_turns: limit } },
       at: run.at,
@@ -2200,8 +2294,8 @@ export class ConversationEngine {
       now: ctx.now,
       timeZone: run.timeZone,
       currency: run.currency,
-      facts: data.facts ?? NO_FACTS,
-      ...(data.options ? { options: data.options } : {}),
+      facts: tables.facts,
+      ...(tables.options ? { options: tables.options } : {}),
       language: run.answerIn,
       // AI-07 `max_questions_per_message`: the executor's, not the model's.
       maxQuestions: maxQuestionsOf(styleOf(ctx.config.skills, run.skill.aiAgentId)),
@@ -2267,6 +2361,18 @@ export class ConversationEngine {
           instructions.push({ at: part.at, text: part.text });
           break;
         case 'knowledge': {
+          // A row of the AI-13 tables before any passage (AI-06 §1, §3).
+          const fact = await this.#tableAnswer(
+            part.queryHint ? `${part.queryHint}\n${message.text}` : message.text,
+            run.understanding,
+            run.answerIn,
+            ctx,
+          );
+          if (fact) {
+            segments.push({ kind: 'text', text: fact.text });
+            log.push({ step: part.at, detail: tableAnswerDetail(fact), ok: true });
+            break;
+          }
           const answer = await this.#answerFromKnowledge({
             turn: message,
             message: message.text,
@@ -2798,7 +2904,7 @@ export class ConversationEngine {
         reader: {
           audience: 'ai_agent',
           aiAgentId: input.skill.aiAgentId,
-          brandId: ctx.brandId !== undefined ? ctx.brandId : (ctx.tenant.brandId ?? null),
+          brandId: turnBrandId(ctx),
         },
         // Never below the two this always fetched, so an unset persona issues the
         // identical query; a `long` answer is the only thing that widens it.
@@ -3105,11 +3211,7 @@ export class ConversationEngine {
     });
 
     // A row of the AI-13 tables before any passage (AI-06 §3): its value, exact.
-    const fact = await this.#facts.answer({
-      message: message.text,
-      understanding: input.understanding,
-      language: answerIn,
-    });
+    const fact = await this.#tableAnswer(message.text, input.understanding, answerIn, ctx);
     if (fact) {
       return taken({
         reply: fact.text,
@@ -3124,7 +3226,7 @@ export class ConversationEngine {
             ...input.log,
             {
               step: 'knowledge',
-              detail: `answered from ${fact.factIds.length} table row(s)`,
+              detail: tableAnswerDetail(fact),
               ok: true,
             },
           ],
@@ -3929,11 +4031,25 @@ function joinSegments(segments: readonly Segment[]): string | null {
  * the step would judge them, so a criterion the message does meet (an `ai`
  * answer) or a "no" is left to the procedure. Null otherwise.
  */
+/**
+ * The conversation's brand as the turn reads it (tm 309.2): the one it was
+ * told, else — a preview — the console's, else not known.
+ */
+function turnBrandId(ctx: TurnContext): string | null {
+  return ctx.brandId !== undefined ? ctx.brandId : (ctx.tenant.brandId ?? null);
+}
+
+/** The run log's line for an answer from the tables: how many rows, never their values. */
+function tableAnswerDetail(fact: FactAnswer): string {
+  return `answered from ${fact.factIds.length} table row(s)`;
+}
+
 function unconfirmedResolution(
   state: TurnState,
   active: ActiveProcedure,
   understanding: ProcedureUnderstanding,
   ctx: TurnContext,
+  facts: ProcedureFacts,
 ): TurnState | null {
   if (active.stepStatus !== 'awaiting_answer' || active.stepId === null) return null;
   if (state.counters[RESOLUTION_ASKED] !== resolutionAskedKey(active.skillId, active.stepId)) {
@@ -3943,7 +4059,7 @@ function unconfirmedResolution(
     resolution: resolutionCriteriaFor(active.snapshot.procedure, handoffConfigOf(ctx).resolution),
     ctx: {
       slots: state.slots,
-      facts: ctx.procedure?.facts ?? NO_FACTS,
+      facts,
       now: ctx.now,
       timeZone: ctx.timeZone ?? DEFAULT_DAY_BOUNDARY.timezone,
       aiAnswers: understanding.ai_conditions ?? {},

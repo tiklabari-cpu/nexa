@@ -31,10 +31,10 @@
  *     and why there was no answer — no words; the decision record links the
  *     message (`UnansweredRecord`).
  *
- * AI-13's tables (#310) answer a question about a table row before anything is
+ * AI-13's tables answer a question about a table row before anything is
  * searched — "Papara ile en az ne kadar yatırabilirim?" is the row's value,
- * not a passage's paraphrase. The seam is {@link KnowledgeFacts}; until the
- * tables exist it knows nothing.
+ * not a passage's paraphrase. The seam is {@link KnowledgeFacts}; the tables
+ * behind it are `facts.ts` (tm 310.3).
  */
 import {
   ANSWER_BUDGETS,
@@ -52,6 +52,7 @@ import type { LlmResponseFormat } from '../provider/llm-provider.js';
 import type { ProcedureUnderstanding } from './procedure/understanding.js';
 import { foldTr, parseBooleanTr } from './slots/normalize-tr.js';
 import type { AiStateObject } from './state-store.js';
+import type { TenantRunner } from './turn.js';
 
 export const KNOWLEDGE_ANSWER_RESPONSE_NAME = 'knowledge_answer';
 
@@ -559,10 +560,17 @@ export interface KnowledgeFacts {
     message: string;
     understanding: ProcedureUnderstanding | null;
     language: PersonaLanguage | null;
+    /** The turn's reader, for the tables (read only). */
+    db: TenantRunner;
+    /** The conversation's brand: its rows and the every-brand ones (AI-13 §9). */
+    brandId: string | null;
+    now: Date;
+    /** The workspace's currency — what an amount the player names is in. */
+    currency: string;
   }): Promise<FactAnswer | null>;
 }
 
-/** No tables yet (#310): nothing is answered from a row. */
+/** No tables: nothing is answered from a row (`conversation/facts.ts` gives the real one). */
 export const NO_FACT_TABLES: KnowledgeFacts = Object.freeze({
   answer: async () => null,
 });

@@ -13648,7 +13648,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T11:54:20.021Z",
+        "updatedAt": "2026-10-21T13:19:03.001Z",
         "subtasks": [
           {
             "id": 1,
@@ -13656,11 +13656,11 @@
             "description": "Senaryo/koşu/sonuç/sandbox tabloları + tipler + kontrat (paths/ai-testing.yaml)",
             "details": "Üst görev 314 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "db:check-drift; RLS.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "314",
             "priority": "high",
-            "updatedAt": "2026-10-21T11:54:20.021Z"
+            "updatedAt": "2026-10-21T13:19:03.001Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T11:54:20.022Z",
+      "lastModified": "2026-10-21T13:19:03.001Z",
       "taskCount": 390,
       "completedCount": 309,
       "tags": [

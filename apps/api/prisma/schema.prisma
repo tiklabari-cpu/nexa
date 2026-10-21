@@ -206,6 +206,10 @@ model License {
   aiHandoffs             AiHandoff[]
   riskFlagSettings       RiskFlagSettings?
   aiProcedureExamples    AiProcedureExample[]
+  aiTestScenarios        AiTestScenario[]
+  aiTestRuns             AiTestRun[]
+  aiTestRunResults       AiTestRunResult[]
+  aiSandboxSessions      AiSandboxSession[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -1880,6 +1884,9 @@ model AiAgent {
   guardrailSettings AiGuardrailSettings?
   guardrailRules    AiGuardrailRule[]
   forbiddenPhrases  AiForbiddenPhrase[]
+  testScenarios     AiTestScenario[]
+  testRuns          AiTestRun[]
+  sandboxSessions   AiSandboxSession[]
 
   @@index([licenseId, kind])
   @@map("ai_agents")
@@ -3230,6 +3237,7 @@ model Brand {
   widgetSettings   WidgetSettings[]
   handoffRoutes    HandoffRoute[]
   aiAccessInfo     AiAccessInfo[]
+  aiTestScenarios  AiTestScenario[]
 
   @@unique([licenseId, slug])
   @@map("brands")
@@ -4377,4 +4385,151 @@ model ReportShareLink {
   /// The management list's only question: this licence's links, newest first.
   @@index([licenseId, createdAt])
   @@map("report_share_links")
+}
+
+// ===========================================================================
+// The AI test bench (tm 314.1 · SiyahTuş analysis AI-19)
+// ===========================================================================
+
+/// A conversation the workspace wants its AI to get right (AI-19): scripted
+/// (`turns` are the player's messages) or simulated (a model plays `persona`,
+/// knowing `facts`, wanting `goal`), at a frozen moment, with what a tool step
+/// would have returned (`tool_outputs`, AI-28) and what must come out
+/// (`expectations`, `AiTestExpectations`). `brand_id` is the brand the
+/// simulated conversation comes in through — a label, not a scope: the Test
+/// tab lists every brand's scenarios. The vocabulary is `@siyahtus/types`
+/// `ai-testing.ts`; the CHECKs and the trigger holding agent and brand to the
+/// row's licence live in the migration (20261021200000_ai_testing).
+model AiTestScenario {
+  id           String    @id @default(uuid()) @db.Uuid
+  licenseId    BigInt    @map("license_id")
+  aiAgentId    String    @map("ai_agent_id") @db.Uuid
+  brandId      String?   @map("brand_id") @db.Uuid
+  name         String
+  origin       String    @default("manual")
+  /// What `origin` came from: a template key, a chat id, a QA finding id.
+  originRef    String?   @map("origin_ref")
+  mode         String    @default("scripted")
+  persona      String    @default("normal")
+  language     String    @default("tr")
+  simulatedNow DateTime? @map("simulated_now") @db.Timestamptz(6)
+  goal         String?
+  turns        Json      @default("[]")
+  facts        Json      @default("{}")
+  toolOutputs  Json      @default("{}") @map("tool_outputs")
+  expectations Json
+  active       Boolean   @default(true)
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent AiAgent          @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  brand   Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  results AiTestRunResult[]
+
+  @@index([licenseId, aiAgentId])
+  @@index([brandId])
+  @@map("ai_test_scenarios")
+}
+
+/// One play of a set of scenarios against one configuration (AI-19): the
+/// draft (at `draft_revision`), the published one, or a named version
+/// (`config_version_id`, tm 316 — no foreign key until that table exists).
+/// The counts are the results'; `compliance_*` are the platform pack's part
+/// of them (AI-19-S1), on the row so the root panel (tm 389.19) reads a
+/// workspace's last pack result without opening the results. Never deleted
+/// by the workspace: the regression compares against an earlier run.
+model AiTestRun {
+  id                    String    @id @default(uuid()) @db.Uuid
+  licenseId             BigInt    @map("license_id")
+  aiAgentId             String    @map("ai_agent_id") @db.Uuid
+  configTarget          String    @map("config_target")
+  configVersionId       String?   @map("config_version_id") @db.Uuid
+  draftRevision         Int?      @map("draft_revision")
+  trigger               String
+  status                String    @default("queued")
+  scenarioCount         Int       @default(0) @map("scenario_count")
+  passed                Int       @default(0)
+  failed                Int       @default(0)
+  errored               Int       @default(0)
+  tokens                BigInt    @default(0)
+  compliancePackVersion String?   @map("compliance_pack_version")
+  compliancePassed      Int?      @map("compliance_passed")
+  complianceFailed      Int?      @map("compliance_failed")
+  error                 String?
+  startedBy             String?   @map("started_by") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  startedAt             DateTime? @map("started_at") @db.Timestamptz(6)
+  finishedAt            DateTime? @map("finished_at") @db.Timestamptz(6)
+
+  license License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent AiAgent           @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  results AiTestRunResult[]
+
+  /// The run history of an agent, newest first; the regression's "previous run".
+  @@index([licenseId, aiAgentId, createdAt])
+  @@map("ai_test_runs")
+}
+
+/// One scenario of one run: why its conversation stopped, how it ended, its
+/// transcript with every AI turn's decision trace, the hard checks that
+/// decide `status`, and the judge's advice, which never does (AI-19-S3).
+/// `scenario_key` is the scenario's id or a compliance key (`compliance:G3:tr`);
+/// it outlives the scenario (`scenario_id` goes null) so the regression still
+/// pairs it. The only edit a row takes is the judge's (column grant).
+model AiTestRunResult {
+  id            String   @id @default(uuid()) @db.Uuid
+  licenseId     BigInt   @map("license_id")
+  runId         String   @map("run_id") @db.Uuid
+  scenarioId    String?  @map("scenario_id") @db.Uuid
+  scenarioKey   String   @map("scenario_key")
+  scenarioName  String   @map("scenario_name")
+  status        String
+  stopReason    String   @map("stop_reason")
+  outcome       String?
+  /// The team a hand-over went to (`groups.id`); no foreign key — a team
+  /// deleted later must not rewrite what the run saw.
+  handoffTeamId BigInt?  @map("handoff_team_id")
+  transcript    Json     @default("[]")
+  checks        Json     @default("[]")
+  judge         Json?
+  tokens        Int      @default(0)
+  durationMs    Int      @default(0) @map("duration_ms")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license  License         @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  run      AiTestRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  scenario AiTestScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, scenarioKey])
+  @@index([licenseId])
+  @@index([scenarioId])
+  @@map("ai_test_run_results")
+}
+
+/// "Talk like a player" (AI-19 §8): one person's conversation with the AI on
+/// a configuration, the same turn as a run, kept until `expires_at` (24 hours
+/// after the last turn, `AI_SANDBOX_SESSION_TTL_HOURS`, set by the API).
+model AiSandboxSession {
+  id              String   @id @default(uuid()) @db.Uuid
+  licenseId       BigInt   @map("license_id")
+  aiAgentId       String   @map("ai_agent_id") @db.Uuid
+  configTarget    String   @default("draft") @map("config_target")
+  configVersionId String?  @map("config_version_id") @db.Uuid
+  state           Json     @default("{}")
+  transcript      Json     @default("[]")
+  tokens          Int      @default(0)
+  createdBy       String   @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent AiAgent @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdBy])
+  @@index([expiresAt])
+  @@map("ai_sandbox_sessions")
 }

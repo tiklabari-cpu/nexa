@@ -167,8 +167,10 @@ export interface TemplateForbiddenPhrase {
 }
 
 /**
- * The player personas a scenario plays (AI-19 `SCENARIO_PERSONAS`, 05 § AI-19);
- * #314 moves the list to `@siyahtus/types` when the test bench arrives.
+ * The player personas a scenario plays (AI-19, 05 § AI-19). The list is the
+ * test bench's (`@siyahtus/types` `ai-testing.ts`, tm 314.1); this copy exists
+ * because the entry point imports no value from another package, and
+ * `package.test.ts` holds the two equal — `SCENARIO_OUTCOMES` too.
  */
 export const SCENARIO_PERSONAS = [
   'normal',

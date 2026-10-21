@@ -12028,6 +12028,392 @@ export interface components {
       };
       unmapped_topics: string[];
     };
+    /**
+     * @description The player a scenario plays (`SCENARIO_PERSONAS`).
+     * @enum {string}
+     */
+    ScenarioPersona:
+      | 'normal'
+      | 'sabirsiz'
+      | 'kizgin'
+      | 'eksik_bilgi'
+      | 'sorumlu_oyun_sinyali'
+      | 'resit_olmayan'
+      | 'insan_istiyor'
+      | 'yabanci_dil';
+    /**
+     * @description How a conversation ended, or must end (`SCENARIO_OUTCOMES`).
+     * @enum {string}
+     */
+    ScenarioOutcome: 'resolved' | 'resolved_waiting' | 'handoff';
+    /** @enum {string} */
+    AiTestScenarioOrigin: 'template' | 'manual' | 'generated' | 'from_chat' | 'from_qa';
+    /**
+     * @description `scripted` — the player's messages, in order; `simulated` — a model
+     *     plays the persona, knowing `facts` and wanting `goal`.
+     * @enum {string}
+     */
+    AiTestScenarioMode: 'scripted' | 'simulated';
+    /**
+     * @description The draft, the published configuration, or a named version (tm 316).
+     * @enum {string}
+     */
+    AiTestRunTarget: 'draft' | 'published' | 'version';
+    /** @enum {string} */
+    AiTestRunTrigger: 'manual' | 'pre_publish' | 'nightly';
+    /** @enum {string} */
+    AiTestRunStatus: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+    /**
+     * @description `passed` — every hard check held; `failed` — one did not; `errored` —
+     *     the scenario could not be played (`stop_reason` `timeout` or `error`).
+     * @enum {string}
+     */
+    AiTestResultStatus: 'passed' | 'failed' | 'errored';
+    /** @enum {string} */
+    AiTestStopReason: 'resolved' | 'handoff' | 'max_turns' | 'script_end' | 'timeout' | 'error';
+    /** @enum {string} */
+    AiTestCheckKind:
+      | 'outcome'
+      | 'team'
+      | 'topic'
+      | 'procedure'
+      | 'reason_code'
+      | 'required_slots'
+      | 'values'
+      | 'forbidden_phrase'
+      | 'sensitive_request'
+      | 'must_flags'
+      | 'must_not_flags'
+      | 'turn_count'
+      | 'language';
+    /**
+     * @description What must come out of a scenario. `outcome` and `max_turns` are always
+     *     checked, every other key only when given; `team_id`, `topic` and
+     *     `reason_code` belong to a hand-over.
+     */
+    AiTestExpectations: {
+      outcome: components['schemas']['ScenarioOutcome'];
+      /** Format: int64 */
+      team_id?: number;
+      topic?: components['schemas']['QueueTopicRole'];
+      /**
+       * Format: uuid
+       * @description The procedure (skill) the AI must pick.
+       */
+      procedure_id?: string;
+      reason_code?: string;
+      required_slots?: string[];
+      /** @description What some slots hold, as the hand-over card shows it. */
+      values?: {
+        [key: string]: string;
+      };
+      /** @description Phrases no AI message may carry, beyond the workspace's own (AI-08). */
+      forbidden_phrases?: string[];
+      must_flags?: components['schemas']['RiskFlagType'][];
+      must_not_flags?: components['schemas']['RiskFlagType'][];
+      /** @default 12 */
+      max_turns: number;
+      language?: string;
+    };
+    /**
+     * @description A scenario as the workspace writes it. Scenario text is synthetic by
+     *     rule: the API masks personal data in it (AI-26) before it is stored.
+     */
+    AiTestScenarioInput: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      /**
+       * Format: uuid
+       * @description The brand the conversation comes in through; null — not known.
+       */
+      brand_id?: string | null;
+      name: string;
+      /** @default scripted */
+      mode: components['schemas']['AiTestScenarioMode'];
+      /** @default normal */
+      persona: components['schemas']['ScenarioPersona'];
+      /** @default tr */
+      language: string;
+      /**
+       * Format: date-time
+       * @description The frozen clock's start, with its offset; it moves 30 s per turn. Null — when the run starts.
+       */
+      simulated_now?: string | null;
+      /** @description What the simulated player wants; required for `simulated`. */
+      goal?: string | null;
+      /** @description The player's messages; at least one for `scripted`. */
+      turns?: string[];
+      /** @description What the player knows: `{ yontem: Papara, tutar: 2500 }`. */
+      facts?: {
+        [key: string]: string | number | boolean;
+      };
+      /** @description What a tool step would have returned, by tool key (AI-28). */
+      tool_outputs?: {
+        [key: string]: {
+          [key: string]: unknown;
+        };
+      };
+      expectations: components['schemas']['AiTestExpectations'];
+      /** @default true */
+      active: boolean;
+    };
+    /** @description Any field of the input but the agent; the merged scenario is validated whole. */
+    AiTestScenarioPatch: {
+      /** Format: uuid */
+      brand_id?: string | null;
+      name?: string;
+      mode?: components['schemas']['AiTestScenarioMode'];
+      persona?: components['schemas']['ScenarioPersona'];
+      language?: string;
+      /** Format: date-time */
+      simulated_now?: string | null;
+      goal?: string | null;
+      turns?: string[];
+      facts?: {
+        [key: string]: string | number | boolean;
+      };
+      tool_outputs?: {
+        [key: string]: {
+          [key: string]: unknown;
+        };
+      };
+      expectations?: components['schemas']['AiTestExpectations'];
+      active?: boolean;
+    };
+    AiTestScenario: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** Format: uuid */
+      brand_id: string | null;
+      name: string;
+      origin: components['schemas']['AiTestScenarioOrigin'];
+      /** @description What `origin` came from — a template key, a chat id, a QA finding id. */
+      origin_ref: string | null;
+      mode: components['schemas']['AiTestScenarioMode'];
+      persona: components['schemas']['ScenarioPersona'];
+      language: string;
+      /** Format: date-time */
+      simulated_now: string | null;
+      goal: string | null;
+      turns: string[];
+      facts: {
+        [key: string]: string | number | boolean;
+      };
+      tool_outputs: {
+        [key: string]: {
+          [key: string]: unknown;
+        };
+      };
+      expectations: components['schemas']['AiTestExpectations'];
+      active: boolean;
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    AiTestScenarioList: {
+      scenarios: components['schemas']['AiTestScenario'][];
+    };
+    /**
+     * @description Why the AI said what it said on one turn: the procedure and why, what
+     *     it collected, the knowledge it used, the guardrails that fired, the
+     *     hand-over, the flags it raised, and what the turn cost.
+     */
+    AiTestTurnTrace: {
+      /** @enum {string} */
+      decision: 'answered' | 'asked' | 'handoff' | 'silent' | 'blocked' | 'expired' | 'cap_reached';
+      procedure: {
+        /** Format: uuid */
+        skill_id: string;
+        name: string;
+        reason: string;
+      } | null;
+      slots: {
+        [key: string]: string;
+      };
+      sources: {
+        source_id: string;
+        title: string;
+        page: number | null;
+      }[];
+      guardrails: {
+        rule_key: string;
+        action: string;
+      }[];
+      handoff: {
+        reason: string;
+        topic: components['schemas']['QueueTopicRole'] | null;
+        /** Format: int64 */
+        team_id: number | null;
+      } | null;
+      flags: components['schemas']['RiskFlagType'][];
+      tokens: number;
+    };
+    AiTestTranscriptEntry: {
+      /** @enum {string} */
+      role: 'player' | 'ai' | 'system';
+      text: string;
+      /**
+       * Format: date-time
+       * @description The frozen clock's moment.
+       */
+      at: string;
+      trace?: components['schemas']['AiTestTurnTrace'];
+    };
+    AiTestCheck: {
+      kind: components['schemas']['AiTestCheckKind'];
+      passed: boolean;
+      expected?: unknown;
+      actual?: unknown;
+      turn_index?: number;
+      detail?: string;
+    };
+    /** @description The judge's advice (AI-19-S3) — it never changes a result's status. */
+    AiTestJudgeVerdict: {
+      score: number;
+      comment: string;
+      criteria?: {
+        [key: string]: number;
+      };
+    };
+    AiTestRunCreate: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      target: components['schemas']['AiTestRunTarget'];
+      /**
+       * Format: uuid
+       * @description Required exactly when `target` is `version`.
+       */
+      config_version_id?: string;
+      /** @description The scenarios to play; omitted — every active one of the agent. */
+      scenario_ids?: string[];
+    };
+    AiTestRun: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      target: components['schemas']['AiTestRunTarget'];
+      /** Format: uuid */
+      config_version_id: string | null;
+      draft_revision: number | null;
+      trigger: components['schemas']['AiTestRunTrigger'];
+      status: components['schemas']['AiTestRunStatus'];
+      scenario_count: number;
+      passed: number;
+      failed: number;
+      errored: number;
+      /**
+       * Format: int64
+       * @description Counted on the test meter (`llm_test`), never the live one.
+       */
+      tokens: number;
+      /** @description The platform's locked compliance pack's share of the run (AI-19-S1); null — the run did not play it. */
+      compliance: {
+        pack_version: string;
+        passed: number;
+        /** @description Failed or errored. */
+        failed: number;
+      } | null;
+      /** @description What stopped a `failed` run. */
+      error: string | null;
+      /** Format: uuid */
+      started_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      started_at: string | null;
+      /** Format: date-time */
+      finished_at: string | null;
+    };
+    AiTestRunList: {
+      runs: components['schemas']['AiTestRun'][];
+    };
+    AiTestRunResult: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      run_id: string;
+      /** Format: uuid */
+      scenario_id: string | null;
+      /** @description The scenario's id, or `compliance:G<n>:<lang>` for the platform's pack. */
+      scenario_key: string;
+      scenario_name: string;
+      status: components['schemas']['AiTestResultStatus'];
+      stop_reason: components['schemas']['AiTestStopReason'];
+      outcome: components['schemas']['ScenarioOutcome'] | null;
+      /** Format: int64 */
+      handoff_team_id: number | null;
+      transcript: components['schemas']['AiTestTranscriptEntry'][];
+      checks: components['schemas']['AiTestCheck'][];
+      judge: components['schemas']['AiTestJudgeVerdict'] | null;
+      tokens: number;
+      duration_ms: number;
+      /**
+       * @description Against the same scenario in the previous published version's last
+       *     run: `newly_failing` (passed → fails, listed first), `outcome_changed`,
+       *     `team_changed`, `newly_passing`; null — nothing changed, or no earlier run.
+       * @enum {string|null}
+       */
+      regression: 'newly_failing' | 'outcome_changed' | 'team_changed' | 'newly_passing' | null;
+    };
+    AiTestRunResultList: {
+      /**
+       * Format: uuid
+       * @description The earlier run `regression` compares against; null — none.
+       */
+      compared_run_id: string | null;
+      /** @description Newly failing first, then changed outcome or team, then the rest. */
+      results: components['schemas']['AiTestRunResult'][];
+    };
+    AiSandboxSessionCreate: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** @default draft */
+      target: components['schemas']['AiTestRunTarget'];
+      /** Format: uuid */
+      config_version_id?: string;
+    };
+    AiSandboxSession: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      target: components['schemas']['AiTestRunTarget'];
+      /** Format: uuid */
+      config_version_id: string | null;
+      transcript: components['schemas']['AiTestTranscriptEntry'][];
+      tokens: number;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description 24 hours after the last turn.
+       */
+      expires_at: string;
+    };
+    AiSandboxTurnRequest: {
+      message: string;
+    };
+    AiSandboxTurnResponse: {
+      session: components['schemas']['AiSandboxSession'];
+      /** @description What the AI said; null — it said nothing (a hand-over without a message). */
+      reply: string | null;
+      trace: components['schemas']['AiTestTurnTrace'];
+    };
+    /**
+     * @description The session's player messages become a scripted scenario; the
+     *     expectations are suggested from the session's last state and may be
+     *     overridden here.
+     */
+    AiSandboxSaveAsScenario: {
+      name: string;
+      expectations?: components['schemas']['AiTestExpectations'];
+    };
     SkillLogEntry: {
       step: string;
       detail: string;

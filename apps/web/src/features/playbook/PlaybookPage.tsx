@@ -59,6 +59,7 @@ import {
 } from './knowledge-file-upload.js';
 import { RecommendedSkills } from './RecommendedSkills.js';
 import { KbArticleList } from './KbArticleList.js';
+import { TablesPanel } from './tables/TablesPanel.js';
 import { KbSettings } from './KbSettings.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
 import { countSkillsByTab, filterSkillsByTab, type SkillTab } from './skill-tabs.js';
@@ -88,13 +89,15 @@ import {
  * the Public KB surface (PUBKB-g) — the self-service article list, distinct
  * from the AI's own `knowledge` (what it answers a customer from).
  */
-type PlaybookView = 'performance' | 'profile' | 'guardrails' | 'skills' | 'knowledge' | 'kb';
+type PlaybookView =
+  'performance' | 'profile' | 'guardrails' | 'skills' | 'knowledge' | 'tables' | 'kb';
 const VIEW_TABS: readonly PlaybookView[] = [
   'performance',
   'profile',
   'guardrails',
   'skills',
   'knowledge',
+  'tables',
   'kb',
 ];
 const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
@@ -103,6 +106,7 @@ const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
   guardrails: 'playbook.tabs.guardrails',
   skills: 'playbook.tabs.skills',
   knowledge: 'playbook.tabs.knowledge',
+  tables: 'playbook.tabs.tables',
   kb: 'playbook.tabs.kb',
 };
 
@@ -855,6 +859,8 @@ export function PlaybookPage(): ReactElement {
             {view === 'knowledge' && (
               <KnowledgePanel canEdit={canEdit} aiAgentId={aiAgent?.id ?? null} />
             )}
+
+            {view === 'tables' && <TablesPanel />}
 
             {view === 'kb' && (
               <div className="flex flex-col gap-4">

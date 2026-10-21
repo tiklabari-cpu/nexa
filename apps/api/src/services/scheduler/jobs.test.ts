@@ -202,7 +202,7 @@ describe('buildSchedulerJobs', () => {
       });
     });
 
-    it('knowledge_refresh finds nothing due and reports zero tenants', async () => {
+    it('knowledge_refresh finds nothing due or stale and reports zero tenants', async () => {
       const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
         (j) => j.name === 'knowledge_refresh',
       );
@@ -218,6 +218,9 @@ describe('buildSchedulerJobs', () => {
         table_rows_checked: 0,
         table_rows_synced: 0,
         table_rows_deferred: 0,
+        table_rows_stale: 0,
+        table_rows_stale_announced: 0,
+        table_rows_stale_mailed: 0,
       });
     });
 

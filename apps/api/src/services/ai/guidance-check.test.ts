@@ -3,6 +3,7 @@
  * refusal and the model-free conflict reading.
  */
 import { describe, expect, it } from 'vitest';
+import { IGAMING_DEFAULT_RULES } from '@siyahtus/ai-templates';
 import {
   CHECK_GROUP_SIZE,
   checkGroups,
@@ -48,6 +49,26 @@ describe('the refusal (AI-07 §5)', () => {
     expect(isNegated(foldTr('Dekontu sormayın.'))).toBe(true);
     expect(isNegated(foldTr('Dekontu sor.'))).toBe(false);
     expect(isNegated(foldTr('Yöntemi öğren.'))).toBe(false);
+  });
+});
+
+describe('the igaming_core pack’s default rules (AI-07 §7 · tm 311.2)', () => {
+  it.each(IGAMING_DEFAULT_RULES.map((rule) => [rule.key, rule.body] as const))(
+    '%s passes the refusal every write runs',
+    (_key, body) => {
+      expect(lockedRuleViolation(body)).toBeNull();
+    },
+  );
+
+  it('the five neither contradict nor repeat one another (no install-time warning)', () => {
+    for (const rule of IGAMING_DEFAULT_RULES) {
+      const others = IGAMING_DEFAULT_RULES.filter((other) => other.key !== rule.key).map(
+        (other) => ({ id: other.key, body: other.body, category: other.category }),
+      );
+      const result = heuristicCheck({ body: rule.body, category: rule.category }, others);
+      expect(result.conflicts, rule.key).toEqual([]);
+      expect(result.duplicates, rule.key).toEqual([]);
+    }
   });
 });
 

@@ -20,10 +20,17 @@
  * run time (`package.test.ts`). The judgement is `validate.ts`'s.
  */
 import type {
+  AddressForm,
+  BonusFields,
   Cond,
+  EmojiUse,
   ForbiddenPhraseMatch,
   GuardrailTenantText,
+  GuidanceCategory,
   HandoffTarget,
+  KbRuleFields,
+  KycDocumentFields,
+  PaymentMethodFields,
   ProcHandoff,
   ProcLimits,
   ProcStep,
@@ -209,6 +216,12 @@ export interface TemplateScenario {
   within_working_hours?: boolean;
   /** The method's next processing window, ISO 8601; omitted: none. */
   next_window?: string;
+  /**
+   * The workspace's access information as the AI says it (K13 · `site_access`):
+   * what an access question is answered from. Omitted: none is set, and an
+   * access question hands over.
+   */
+  access_info?: string;
   expect: {
     outcome: ScenarioOutcome;
     /** A hand-over's `reason_code` — one of the procedure's. */
@@ -256,9 +269,53 @@ export const AI_TEMPLATE_NAME_MAX = 80;
 export const AI_TEMPLATE_SUMMARY_MAX = 300;
 
 /**
- * A pack: templates installed together. v1's `igaming_core` is the twenty; its
- * default behaviour rules (AI-07) and "örnek — doğrulayın" table rows (AI-13)
- * come with #311.2. `version` is the package's own (`package.json`).
+ * A default behaviour rule (AI-07 §7) a pack installs into the agent's
+ * guidance: one plain sentence with its category and priority, held to the
+ * same limits and the same locked-rule refusal as a rule a tenant writes.
+ * `template_keys` scopes it to the procedures those templates install (`{
+ * skill_ids }` once installed); absent, it applies to every conversation.
+ */
+export interface AiTemplateGuidanceRule {
+  /** Lower snake_case and unique in the pack: what a re-install matches on. */
+  key: string;
+  title: string;
+  body: string;
+  category: GuidanceCategory;
+  priority: number;
+  template_keys?: IgamingTemplateKey[];
+}
+
+/**
+ * The persona style a pack suggests (AI-07 — the agent persona's
+ * `addressForm`, `emoji`, `maxQuestionsPerMessage`): the AI says "siz",
+ * uses no emoji and asks at most two questions in one message. A suggestion
+ * the installer shows; the agent's own settings are the tenant's.
+ */
+export interface AiTemplatePersonaStyle {
+  address_form: AddressForm;
+  emoji: EmojiUse;
+  max_questions_per_message: number;
+}
+
+/**
+ * "Örnek — doğrulayın" rows for the AI-13 tables (AI-15-S1): what the
+ * templates read, so a fresh workspace sees the shape of a filled table. They
+ * are examples, never facts — the installer writes them for the tenant to
+ * verify and correct before publishing, as `validateKnowledgeTableRow`
+ * accepts them.
+ */
+export interface AiTemplateSampleRows {
+  payment_methods: PaymentMethodFields[];
+  bonuses: BonusFields[];
+  kyc_documents: KycDocumentFields[];
+  rules: KbRuleFields[];
+}
+
+/**
+ * A pack: templates installed together, with the default behaviour rules
+ * (AI-07), the persona style and the sample table rows (AI-13) that come with
+ * them. v1's `igaming_core` is the twenty. `version` is the package's own
+ * (`package.json`).
  */
 export interface AiTemplatePack {
   key: AiTemplatePackKey;
@@ -266,6 +323,9 @@ export interface AiTemplatePack {
   industry: AiTemplateIndustry;
   lang: AiTemplateLang;
   template_keys: IgamingTemplateKey[];
+  default_rules: AiTemplateGuidanceRule[];
+  persona_style: AiTemplatePersonaStyle;
+  sample_rows: AiTemplateSampleRows;
 }
 
 // ---------------------------------------------------------------------------

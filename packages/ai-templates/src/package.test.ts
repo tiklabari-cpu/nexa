@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -38,12 +38,13 @@ describe('the package', () => {
       }
     };
     visit(join(SRC, 'index.ts'));
-    expect([...seen].map((file) => file.slice(SRC.length + 1).replace(/\\/g, '/')).sort()).toEqual([
-      'catalogue.ts',
-      'igaming/deposit-not-credited.ts',
-      'igaming/index.ts',
-      'index.ts',
-    ]);
+    // Every source file but the validator and the tests: the catalogue and each template.
+    const igaming = readdirSync(join(SRC, 'igaming'))
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => `igaming/${file}`);
+    expect([...seen].map((file) => file.slice(SRC.length + 1).replace(/\\/g, '/')).sort()).toEqual(
+      ['catalogue.ts', 'index.ts', ...igaming].sort(),
+    );
     expect(values).toEqual([]);
   });
 });

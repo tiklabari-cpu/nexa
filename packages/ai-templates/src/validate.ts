@@ -13,7 +13,8 @@
  *   - its checklist (`tenant_must_fill`) is exact: every placeholder used and
  *     every fact read is declared, nothing declared is unused;
  *   - what the player reads — reply templates, slot questions — trips no
- *     platform output guardrail (AI-08), carries none of the template's own
+ *     platform output guardrail the engine would hold it to (AI-08; G4 only
+ *     for a locked template, {@link templateOutputRules}), carries none of the template's own
  *     forbidden phrases, and addresses the player as "siz";
  *   - at least {@link TEMPLATE_SCENARIOS_MIN} scenarios, each one that the
  *     procedure can end as it expects.
@@ -22,6 +23,19 @@
  * entry point (`index.ts`): the API image loads the catalogue without it.
  */
 import {
+  ADDRESS_FORMS,
+  EMOJI_USES,
+  FORBIDDEN_PHRASES_PER_AGENT_MAX,
+  FORBIDDEN_PHRASE_REGEXES_PER_AGENT_MAX,
+  GUIDANCE_BODY_MAX,
+  GUIDANCE_CATEGORIES,
+  GUIDANCE_PRIORITY_MAX,
+  GUIDANCE_PRIORITY_MIN,
+  GUIDANCE_TITLE_MAX,
+  KNOWLEDGE_TABLES,
+  MAX_QUESTIONS_PER_MESSAGE_MAX,
+  MAX_QUESTIONS_PER_MESSAGE_MIN,
+  PLATFORM_GUARDRAILS,
   PROCEDURE_FACTS,
   PROCEDURE_FACT_ENTITIES,
   PROCEDURE_KEY_PATTERN,
@@ -31,10 +45,12 @@ import {
   parseProcedureReference,
   scanGuardrails,
   templateReferences,
+  validateKnowledgeTableRow,
   validateProcedure,
   type CompiledForbiddenPhrase,
   type Cond,
   type CondOperand,
+  type GuardrailId,
   type ProcStep,
   type ProcedureFactEntity,
 } from '@siyahtus/types';
@@ -77,7 +93,9 @@ import {
  *   - `template_familiar_address`         — player-facing text says "sen".
  *   - `template_too_few_scenarios`        — fewer than {@link TEMPLATE_SCENARIOS_MIN}.
  *   - `template_bad_scenario`             — a scenario the procedure cannot end as written.
- *   - `template_bad_pack`                 — a pack naming a template twice or one not in the catalogue.
+ *   - `template_bad_pack`                 — a pack naming a template twice or one not in the catalogue,
+ *                                           or a default rule, its persona style, a sample row or
+ *                                           its templates' forbidden phrases past what a tenant may write.
  */
 export const AI_TEMPLATE_PROBLEM_CODES = [
   'template_unknown_key',
@@ -220,8 +238,99 @@ export function validateAiCatalogue(
       }
       named.add(key);
     }
+    packProblems(pack, templates, (message, at) =>
+      problems.push({
+        code: 'template_bad_pack',
+        template: pack.key,
+        ...(at !== undefined ? { at } : {}),
+        message,
+      }),
+    );
   }
   return problems;
+}
+
+/**
+ * What a pack installs beside its templates, held to the limits a tenant's
+ * own writes are (#311.3 writes them through the same paths): each default
+ * rule as `POST /ai-guidance` would take it, the persona style's closed sets,
+ * every sample row as `validateKnowledgeTableRow` accepts it — and the
+ * forbidden phrases of all its templates, which land on one agent, within
+ * that agent's limits.
+ */
+function packProblems(
+  pack: AiTemplatePack,
+  templates: readonly AiTemplate[],
+  bad: (message: string, at?: string) => void,
+): void {
+  const keys = new Set<string>();
+  pack.default_rules.forEach((rule, i) => {
+    const at = `default_rules.${rule.key || i}`;
+    if (!PROCEDURE_KEY_PATTERN.test(rule.key)) bad('a rule key must be lower snake_case', at);
+    if (keys.has(rule.key)) bad(`rule key ${rule.key} is used twice`, at);
+    keys.add(rule.key);
+    if (!filled(rule.title, GUIDANCE_TITLE_MAX)) {
+      bad(`a rule title must be 1–${GUIDANCE_TITLE_MAX} characters`, at);
+    }
+    if (!filled(rule.body, GUIDANCE_BODY_MAX)) {
+      bad(`a rule body must be 1–${GUIDANCE_BODY_MAX} characters`, at);
+    }
+    if (!(GUIDANCE_CATEGORIES as readonly string[]).includes(rule.category)) {
+      bad(`unknown rule category ${rule.category}`, at);
+    }
+    if (
+      !Number.isInteger(rule.priority) ||
+      rule.priority < GUIDANCE_PRIORITY_MIN ||
+      rule.priority > GUIDANCE_PRIORITY_MAX
+    ) {
+      bad(
+        `a rule priority is a whole number ${GUIDANCE_PRIORITY_MIN}–${GUIDANCE_PRIORITY_MAX}`,
+        at,
+      );
+    }
+    if (rule.template_keys !== undefined) {
+      if (rule.template_keys.length === 0) bad('a scoped rule names at least one template', at);
+      for (const key of rule.template_keys) {
+        if (!pack.template_keys.includes(key)) bad(`a rule scoped to ${key}, not in the pack`, at);
+      }
+    }
+  });
+
+  const style = pack.persona_style;
+  if (!(ADDRESS_FORMS as readonly string[]).includes(style.address_form)) {
+    bad(`unknown address form ${style.address_form}`, 'persona_style.address_form');
+  }
+  if (!(EMOJI_USES as readonly string[]).includes(style.emoji)) {
+    bad(`unknown emoji use ${style.emoji}`, 'persona_style.emoji');
+  }
+  if (
+    !Number.isInteger(style.max_questions_per_message) ||
+    style.max_questions_per_message < MAX_QUESTIONS_PER_MESSAGE_MIN ||
+    style.max_questions_per_message > MAX_QUESTIONS_PER_MESSAGE_MAX
+  ) {
+    bad(
+      `max_questions_per_message is ${MAX_QUESTIONS_PER_MESSAGE_MIN}–${MAX_QUESTIONS_PER_MESSAGE_MAX}`,
+      'persona_style.max_questions_per_message',
+    );
+  }
+
+  for (const table of KNOWLEDGE_TABLES) {
+    pack.sample_rows[table].forEach((row, i) => {
+      for (const problem of validateKnowledgeTableRow(table, row)) {
+        bad(`${problem.field}: ${problem.code}`, `sample_rows.${table}.${i}`);
+      }
+    });
+  }
+
+  const installed = templates.filter((template) => pack.template_keys.includes(template.key));
+  const phrases = installed.flatMap((template) => template.forbidden_phrases);
+  if (phrases.length > FORBIDDEN_PHRASES_PER_AGENT_MAX) {
+    bad(`${phrases.length} forbidden phrases; one agent holds ${FORBIDDEN_PHRASES_PER_AGENT_MAX}`);
+  }
+  const regexes = phrases.filter((phrase) => phrase.match === 'regex').length;
+  if (regexes > FORBIDDEN_PHRASE_REGEXES_PER_AGENT_MAX) {
+    bad(`${regexes} regex phrases; one agent holds ${FORBIDDEN_PHRASE_REGEXES_PER_AGENT_MAX}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -434,7 +543,21 @@ function playerTexts(template: AiTemplate): Array<[string, string]> {
   return out;
 }
 
+/**
+ * The output rules a template's text is held to — the engine's own choice
+ * (`output-check.ts` `outputRules`): every rule that applies always, and G4
+ * (no promotion to a player at risk) only on a risk-flagged conversation. A
+ * bonus template names a bonus; a locked template runs on exactly such a
+ * conversation (G1/G2 raise the flag), so it is held to G4 as well.
+ */
+export function templateOutputRules(template: Pick<AiTemplate, 'locked'>): GuardrailId[] {
+  return PLATFORM_GUARDRAILS.filter(
+    (rule) => rule.output !== null && (rule.appliesWhen === 'always' || template.locked),
+  ).map((rule) => rule.id);
+}
+
 function textProblems(template: AiTemplate, push: Push): void {
+  const rules = templateOutputRules(template);
   const compiled: CompiledForbiddenPhrase[] = [];
   template.forbidden_phrases.forEach((phrase, i) => {
     const at = `forbidden_phrases.${i}`;
@@ -448,7 +571,7 @@ function textProblems(template: AiTemplate, push: Push): void {
   });
 
   for (const [at, text] of playerTexts(template)) {
-    for (const match of scanGuardrails(text, 'output')) {
+    for (const match of scanGuardrails(text, 'output', { rules })) {
       push(
         'template_guardrail_hit',
         `"${match.quote}" trips ${match.rule} (${match.lang} pattern ${match.pattern})`,
@@ -503,6 +626,9 @@ function scenarioProblems(template: AiTemplate, push: Push): void {
     if (!isMoment(scenario.simulated_now)) bad('simulated_now must be ISO 8601 with an offset');
     if (scenario.next_window !== undefined && !isMoment(scenario.next_window)) {
       bad('next_window must be ISO 8601 with an offset');
+    }
+    if (scenario.access_info !== undefined && !filled(scenario.access_info, 1000)) {
+      bad('access_info must be 1–1000 characters');
     }
     if (
       scenario.turns.length === 0 ||

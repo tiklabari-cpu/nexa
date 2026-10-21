@@ -7,7 +7,8 @@
  * fields, its placeholders filled with their "örnek — doğrulayın" values — and
  * the conversation must end as the seed expects, with the slots it names
  * filled and no reply that carries a forbidden phrase or trips an output
- * guardrail. The AI-19 test bench (#314) runs the same seeds on a tenant's
+ * guardrail the engine holds it to. A scenario's access information (K13)
+ * answers its access questions. The AI-19 test bench (#314) runs the same seeds on a tenant's
  * own configuration.
  */
 import { describe, expect, it } from 'vitest';
@@ -19,12 +20,15 @@ import {
   type TemplateScenario,
 } from '@siyahtus/ai-templates';
 import {
+  PLATFORM_GUARDRAILS,
   compileForbiddenPhrase,
   matchForbiddenPhrases,
   readPersona,
   scanGuardrails,
   type CompiledForbiddenPhrase,
+  type GuardrailId,
 } from '@siyahtus/types';
+import type { AccessInfoSource } from '../../knowledge-tables/access-info.js';
 import type { TenantClient } from '../../../lib/tenant.js';
 import { RETRIEVAL_THRESHOLD, type KnowledgeService } from '../knowledge-service.js';
 import { MockLlmProvider } from '../provider/mock-llm-provider.js';
@@ -57,14 +61,36 @@ const knowledge = {
   search: async () => ({ strategy: 'exact', chunksInScope: 0, chunks: [] }),
 } as unknown as KnowledgeService;
 
-function engine(): ConversationEngine {
+/** The scenario's access information (K13), as the workspace's setting would serve it. */
+function access(scenario: TemplateScenario): AccessInfoSource {
+  return {
+    resolve: async () =>
+      scenario.access_info !== undefined
+        ? { kind: 'answer', text: scenario.access_info, sourceType: 'fixed_link', served: 'fixed' }
+        : { kind: 'none', sourceType: null, reason: 'no_setting' },
+  };
+}
+
+function engine(scenario: TemplateScenario): ConversationEngine {
   return new ConversationEngine({
     llm: new MockLlmProvider(),
     maxOutputTokens: 400,
     timeoutMs: 20_000,
     maxPromptChars: 16_000,
     knowledge,
+    access: access(scenario),
   });
+}
+
+/**
+ * The output rules a reply is held to, as the engine holds them
+ * (`output-check.ts`): G4 only on a risk-flagged conversation — the one a
+ * locked template runs on.
+ */
+function outputRules(template: AiTemplate): GuardrailId[] {
+  return PLATFORM_GUARDRAILS.filter(
+    (rule) => rule.output !== null && (rule.appliesWhen === 'always' || template.locked),
+  ).map((rule) => rule.id);
 }
 
 /** `{key}` → the checklist's example value, in every text that can hold one. */
@@ -85,7 +111,10 @@ function installed(template: AiTemplate): TurnSkill {
   if (hint !== undefined)
     fields.procedure.handoff.next_step_hint = fillPlaceholders(template, hint);
   return {
-    id: template.key,
+    // A skill's id is a UUID. The template's key is not one: "login_password"
+    // in the understanding prompt reads as a password and its next token to
+    // the sensitive-data mask (AI-26), and the catalogue key no longer matches.
+    id: `00000000-0000-4000-8000-${String(IGAMING_TEMPLATES_TR.indexOf(template) + 1).padStart(12, '0')}`,
     name: template.name,
     aiAgentId: 'agent-1',
     steps: [],
@@ -108,7 +137,7 @@ async function play(
   template: AiTemplate,
   scenario: TemplateScenario,
 ): Promise<{ results: TurnResult[]; state: TurnState }> {
-  const ai = engine();
+  const ai = engine(scenario);
   const skill = installed(template);
   const facts = fixtureFacts({
     facts: scenario.facts,
@@ -173,8 +202,20 @@ describe.each(IGAMING_TEMPLATES_TR.map((template) => [template.key, template] as
         const banned = phrases(template, scenario);
         for (const [i, reply] of replies.entries()) {
           expect(reply, `turn ${i + 1}: ${scenario.turns[i]}`).toEqual(expect.any(String));
-          expect(scanGuardrails(reply!, 'output'), `turn ${i + 1}: ${reply}`).toEqual([]);
+          expect(
+            scanGuardrails(reply!, 'output', { rules: outputRules(template) }),
+            `turn ${i + 1}: ${reply}`,
+          ).toEqual([]);
           expect(matchForbiddenPhrases(reply!, banned), `turn ${i + 1}: ${reply}`).toEqual([]);
+        }
+
+        // The procedure answers every turn. A step that ends it with nothing to
+        // say lets the turn fall through to "kesin bilgi veremiyorum" — the
+        // decision still says resolved, but the turn is `unanswered`.
+        const skillId = installed(template).id;
+        for (const [i, result] of results.entries()) {
+          expect(result.decisions.skillId, `turn ${i + 1}: ${replies[i]}`).toBe(skillId);
+          expect(result.decisions.unanswered, `turn ${i + 1}: ${replies[i]}`).toBeUndefined();
         }
 
         // It ends on its last turn, not before.

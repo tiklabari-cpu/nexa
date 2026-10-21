@@ -25,6 +25,11 @@
  *
  * **Free when nothing is counted.** With the `mock` provider (every suite, dev
  * and e2e) there is nothing to cap and no query is made.
+ *
+ * **A simulation asks the test meter (tm 314.2 · AI-19-S2).** The test bench's
+ * routes — queueing a run, a sandbox turn — declare `aiBudget: 'simulation'`:
+ * they are refused when today's test allowance (`llm_test`) could not fit the
+ * smallest call, whatever the live one has left, and never for the live one.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
@@ -49,8 +54,11 @@ declare module 'fastify' {
   }
 
   interface FastifyContextConfig {
-    /** This route asks a model to write — refuse it while today's AI cap is reached. */
-    aiBudget?: boolean;
+    /**
+     * This route asks a model to write — refuse it while today's AI cap is
+     * reached. `simulation`: the test meter's cap (`llm_test`), not the live one.
+     */
+    aiBudget?: boolean | 'simulation';
   }
 }
 
@@ -78,10 +86,15 @@ async function aiBudgetPlugin(app: FastifyInstance, options: AiBudgetPluginOptio
   });
 
   app.addHook('preHandler', async (request: FastifyRequest) => {
-    if (!request.routeOptions.config.aiBudget) return;
+    const flag = request.routeOptions.config.aiBudget;
+    if (!flag) return;
     // None of the flagged routes is public; authentication has already refused
     // a caller without a principal, and there is no workspace to count.
     if (!request.principal) return;
+    if (flag === 'simulation') {
+      if (metered) await budget.check(request.tenant(), 'llm_test', minimum);
+      return;
+    }
     await request.requireAiBudget();
   });
 }

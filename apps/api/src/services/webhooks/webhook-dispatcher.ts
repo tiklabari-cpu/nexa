@@ -38,6 +38,9 @@
  * module and not a second sender: there is exactly one way a webhook leaves
  * this process, SSRF re-check and signature included, and a retry has to go
  * through it rather than around it.
+ *
+ * A simulation (tm 314.2 · AI-19 §6) calls no webhook: `dispatch` and every
+ * outbound `attempt` throw inside one (`lib/simulation-context.ts`).
  */
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
@@ -50,6 +53,7 @@ import {
   type PublicHttpTarget,
 } from '../../lib/ssrf.js';
 import { isApiError } from '../../lib/api-error.js';
+import { refuseInSimulation } from '../../lib/simulation-context.js';
 import { signWebhook } from './signature.js';
 
 /**
@@ -213,6 +217,7 @@ export class WebhookDispatcher {
     tenant: TenantContext,
     event: { action: string; payload: unknown },
   ): Promise<DeliveryOutcome[]> {
+    refuseInSimulation('webhook');
     const webhooks = await tx.webhook.findMany({
       where: { action: event.action, enabled: true },
       select: { id: true, url: true, action: true, secretKey: true },
@@ -271,13 +276,15 @@ export class WebhookDispatcher {
   }
 
   /**
-   * One signed, SSRF-guarded POST. Never throws — a failure is a result.
+   * One signed, SSRF-guarded POST. Never throws — a failure is a result —
+   * except inside a simulation, which sends nothing.
    *
    * Public so a scheduled redelivery re-uses this exact path rather than
    * opening a second one: the DNS re-check, the pin and the signature are
    * guards, and a guard that only the first attempt goes through is not a guard.
    */
   async attempt(webhook: DeliverableWebhook, body: string): Promise<WebhookSendResult> {
+    refuseInSimulation('webhook');
     let target: PublicHttpTarget;
     try {
       // Re-checked on every send, not trusted from registration (TOCTOU), and

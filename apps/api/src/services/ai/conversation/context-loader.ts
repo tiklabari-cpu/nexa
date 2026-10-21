@@ -364,11 +364,13 @@ const EXCHANGE_AUTHORS: Readonly<Record<ExchangeRole, string>> = {
  * roles, the merging, the character budget and the gap marker are
  * {@link buildConnectionContext}'s — so a preview is answered with what the
  * live path would have. Every line is earlier than the message being
- * answered. Undefined for an empty exchange.
+ * answered. Undefined for an empty exchange. A simulation's (tm 314.2) passes
+ * the conversation's state, which the digest reads as a connection's does.
  */
 export function exchangeHistory(
   exchange: ReadonlyArray<{ role: ExchangeRole; text: string }>,
   budget: HistoryBudget = DEFAULT_HISTORY_BUDGET,
+  state: TurnState = emptyTurnState(),
 ): TurnHistory | undefined {
   if (exchange.length === 0) return undefined;
   const events: ConnectionEvent[] = exchange.map((line, index) => ({
@@ -390,7 +392,7 @@ export function exchangeHistory(
         ? { events: [opening, ...window], gapAfter: opening.sequence }
         : { events: window, gapAfter: first.sequence - 1 };
   const context = buildConnectionContext(read, {
-    state: emptyTurnState(),
+    state,
     processedThrough: events.length,
     budget,
   });

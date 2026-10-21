@@ -53,6 +53,9 @@ export async function startTestServer(
   const request = async (options: InjectOptions): Promise<LightMyRequestResponse> => {
     const response = await app.inject(options);
     await app.aiJobs.idle();
+    // A queued test run is played after its 202 (tm 314.2): the suite reads
+    // its results the way the Test tab reads them once it has finished.
+    await app.aiTestRuns.idle();
     // A counted model call tells the AI usage alerts after it settles, and they
     // run beside the response (tm 283.3); a suite that resets the database
     // next must not TRUNCATE under their transaction.

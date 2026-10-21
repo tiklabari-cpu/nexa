@@ -50,7 +50,8 @@
  * the setting (`updated_at` stays; `config-draft.ts` is for the panel's
  * writes) — on the service's own clock, never a simulation's. It is written
  * only while the row still names the URL that was fetched, so a setting
- * changed meanwhile never takes the old URL's value.
+ * changed meanwhile never takes the old URL's value. A simulation (tm 314.2)
+ * fetches like a live turn and writes no cache.
  *
  * Until tm 316 versions the configuration the setting is read live;
  * afterwards from the published package, the cache from the row.
@@ -70,6 +71,7 @@ import {
   type SafeHttpErrorKind,
   type SafeResponse,
 } from '../../lib/safe-fetch.js';
+import { simulationScope } from '../../lib/simulation-context.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { TenantRunner } from '../ai/conversation/turn.js';
 import { readAiAccessInfo } from './rows.js';
@@ -387,12 +389,16 @@ export class AccessInfoResolver implements AccessInfoSource {
 
     const fetched = await this.#fetchOnce(setting.id, url, now);
     if (fetched.ok) {
-      await input.db((tx) =>
-        tx.aiAccessInfo.updateMany({
-          where: { id: setting.id, sourceType: 'dynamic_url', url },
-          data: { lastValue: fetched.value, lastFetchedAt: this.#clock() },
-        }),
-      );
+      // A simulation leaves the cache as it found it (tm 314.2): its runner
+      // is read-only, and a test turn writes no row of the workspace's.
+      if (simulationScope() === null) {
+        await input.db((tx) =>
+          tx.aiAccessInfo.updateMany({
+            where: { id: setting.id, sourceType: 'dynamic_url', url },
+            data: { lastValue: fetched.value, lastFetchedAt: this.#clock() },
+          }),
+        );
+      }
       return said(fetched.value, 'fetched');
     }
     if (last !== null) return said(last, 'last_value', fetched.failure);

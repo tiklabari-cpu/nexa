@@ -18,6 +18,7 @@ import type { AiAccessInfo } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json, startFakeProvider, type FakeProvider } from '../../../test/helpers/fake-provider.js';
 import { createSafeHttp } from '../../lib/safe-fetch.js';
+import { runInSimulation } from '../../lib/simulation-context.js';
 import type { TenantRunner } from '../ai/conversation/turn.js';
 import {
   ACCESS_INFO_FETCH_MAX_BYTES,
@@ -391,6 +392,19 @@ describe('the resolver (K13)', () => {
         data: { lastValue: 'https://giris7.ornek.com', lastFetchedAt: clock },
       },
     ]);
+  });
+
+  it('inside a simulation it fetches and says the value, and writes no cache (tm 314.2)', async () => {
+    const row = setting({});
+    const { db, writes } = fakeDb([row]);
+    const { fetcher, urls } = scripted({ ok: true, value: 'https://giris7.ornek.com' });
+    const answer = await runInSimulation({ kind: 'test_run', licenseId: 1n }, () =>
+      new AccessInfoResolver({ fetcher }).resolve(read(db)),
+    );
+    expect(answer).toMatchObject({ kind: 'answer', served: 'fetched' });
+    expect(urls).toEqual(['https://api.ornek.com/adres.json']);
+    expect(writes).toEqual([]);
+    expect(row.lastValue).toBeNull();
   });
 
   it('within the cache window says the last value without asking; past it, asks', async () => {

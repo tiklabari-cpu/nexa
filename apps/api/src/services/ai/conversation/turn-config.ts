@@ -4,7 +4,8 @@
  * A turn never reads configuration tables itself: it is handed a
  * {@link TurnConfig}, and the one door it comes through is
  * {@link AiConfigSource} — `forTurn` for a conversation, `forDraft` for the
- * editor's preview. Until tm 316 pins a published package to every
+ * editor's preview, `forSimulation` for a test run and the sandbox (tm 314.2
+ * · AI-19). Until tm 316 pins a published package to every
  * conversation the implementation is "read and compile"
  * ({@link readAndCompile}): the live tables, read the moment the turn starts,
  * with no version (`versionId` and `seq` null). When versions exist only the
@@ -85,6 +86,18 @@ export interface AiConfigSource {
    * 296.4) — as one skill of the agent they belong to.
    */
   forDraft(tx: TenantClient, input: DraftConfigInput): Promise<AiConfigRead>;
+  /**
+   * One agent's, for a simulation (tm 314.2 · AI-19 §2): what a test run and
+   * the sandbox play. `draft` is the editing tables (ADR-14b §2.1 (3));
+   * `published` is the agent's published package once tm 316 writes one,
+   * and until then the same tables — switching a skill on publishes it
+   * today. The agent's pause switch (§2.2) is part of neither: a paused
+   * agent's configuration is tested all the same.
+   */
+  forSimulation(
+    tx: TenantClient,
+    input: { aiAgentId: string; target: 'draft' | 'published' },
+  ): Promise<AiConfigRead>;
 }
 
 /**
@@ -99,18 +112,27 @@ export const readAndCompile: AiConfigSource = {
   async forDraft(tx, input) {
     return { versionId: null, pkg: await previewTurnConfig(tx, input), seq: null };
   },
+  async forSimulation(tx, input) {
+    const pkg = await liveTurnConfig(tx, input.aiAgentId, { paused: true });
+    return { versionId: null, pkg, seq: null };
+  },
 };
 
 /**
  * The live configuration: every active skill of an active AI agent (or of the
  * one named), the most recently edited first — the order the turn tries them in.
+ * `paused`: the named agent's even while it is paused — a simulation's.
  */
-async function liveTurnConfig(tx: TenantClient, aiAgentId: string | null): Promise<TurnConfig> {
+async function liveTurnConfig(
+  tx: TenantClient,
+  aiAgentId: string | null,
+  options: { paused?: boolean } = {},
+): Promise<TurnConfig> {
   const skills = await tx.skill.findMany({
     where: {
       active: true,
       kind: 'ai_agent',
-      aiAgent: { active: true },
+      ...(options.paused ? {} : { aiAgent: { active: true } }),
       ...(aiAgentId ? { aiAgentId } : {}),
     },
     orderBy: { updatedAt: 'desc' },

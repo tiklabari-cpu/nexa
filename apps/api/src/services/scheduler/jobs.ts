@@ -39,6 +39,10 @@
  * to hear about it now rather than on their next poll — so it is the only
  * sweep given the server's realtime publisher. No CLI script: a watchdog
  * measured in seconds has no hand-run equivalent.
+ *
+ * `ai_sandbox_sessions` (tm 314.2) deletes the AI test bench's "talk like a
+ * player" sessions past their `expires_at`, which the routes already refuse —
+ * test data, never a conversation; no CLI script either.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -49,6 +53,7 @@ import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
 import { KnowledgeTableRowKnowledgeSweeper } from '../knowledge-tables/row-knowledge.js';
 import { KnowledgeTableStaleSweeper } from '../knowledge-tables/stale-sweep.js';
+import { SandboxSessionSweeper } from '../ai/simulation/sandbox-sweep.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
 import {
@@ -407,6 +412,15 @@ export function buildSchedulerJobs({
             handed_over: report.totals.handedOver,
           },
         };
+      },
+    },
+    {
+      // The AI test bench's expired sandbox sessions (tm 314.2 · AI-19 §8).
+      name: 'ai_sandbox_sessions',
+      intervalMs: intervals.ai_sandbox_sessions,
+      async run(context) {
+        const report = await new SandboxSessionSweeper(db).run({ signal: context.signal });
+        return { counts: { purged: report.totals.purged, batches: report.totals.batches } };
       },
     },
   ];

@@ -1104,6 +1104,12 @@ export const envSchema = z.object({
    */
   SCHEDULE_AI_STALL_MS: z.coerce.number().int().positive().default(15_000),
   /**
+   * The expired sandbox-session sweep (tm 314.2 · AI-19 §8). Hourly: a session
+   * lives 24 hours past its last turn and the routes already refuse one past
+   * it, so the interval only decides how soon its row goes.
+   */
+  SCHEDULE_AI_SANDBOX_SESSIONS_MS: z.coerce.number().int().positive().default(3_600_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

@@ -105,6 +105,7 @@ describe('GET /health — scheduler (admin caller)', () => {
         'invoice_close',
         'unverified_signups',
         'ai_stall',
+        'ai_sandbox_sessions',
       ]);
       // Registered but never ticked — `SCHEDULER_ENABLED` defaults to off
       // under `NODE_ENV=test` (env.ts), same as every other suite's server.

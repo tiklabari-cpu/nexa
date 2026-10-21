@@ -2,8 +2,8 @@
  * The AI test bench's tables (tm 314.1 · SiyahTuş analysis AI-19; migration
  * 20261021200000_ai_testing; `@siyahtus/types` `ai-testing.ts`).
  *
- * Nothing serves these tables yet — tm 314.2 brings the runner, the routes and
- * the simulation shield. What is pinned here is what they lean on:
+ * tm 314.2's runner, routes and queue (migration 20261022090000) serve them;
+ * what is pinned here is what they lean on:
  *
  *   - **Tenant isolation (NFR-S4).** RLS on all four tables, read and write; a
  *     row cannot name another workspace's agent, brand, run or scenario even
@@ -18,6 +18,8 @@
  *     compliance pack (AI-19-S1) — its counts all or none; an ended run says
  *     when; `errored` is exactly "could not be played"; a result's key is its
  *     scenario's id or a compliance key, once per run, and outlives the scenario.
+ *     The queue's (tm 314.2): a playing run holds a lease, an ended one none;
+ *     one open run per agent and target, one playing run per workspace.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +64,12 @@ const ROLLBACK = new Error('rollback probe');
 const TABLES = ['ai_test_scenarios', 'ai_test_runs', 'ai_test_run_results', 'ai_sandbox_sessions'];
 const MIGRATION = fileURLToPath(
   new URL('../../prisma/migrations/20261021200000_ai_testing/migration.sql', import.meta.url),
+);
+const QUEUE_MIGRATION = fileURLToPath(
+  new URL(
+    '../../prisma/migrations/20261022090000_ai_test_runs_queue/migration.sql',
+    import.meta.url,
+  ),
 );
 
 /** As much of a JSON schema as these tests read. */
@@ -331,7 +339,11 @@ describe('AI test bench tables (AI-19 · tm 314.1)', () => {
       await asTenant(fx.a, (tx) =>
         tx.aiTestRun.update({
           where: { id: r.id },
-          data: { status: 'running', startedAt: new Date() },
+          data: {
+            status: 'running',
+            startedAt: new Date(),
+            leaseUntil: new Date(Date.now() + 60_000),
+          },
         }),
       );
       const s = await scenario(owner, fx.a.licenseId, agentA);
@@ -403,6 +415,10 @@ describe('AI test bench tables (AI-19 · tm 314.1)', () => {
       expect(sql).toContain(`BETWEEN 1 AND ${AI_TEST_SCENARIO_NAME_MAX}`);
       expect(sql).toContain(`jsonb_array_length(turns) <= ${AI_TEST_SCENARIO_TURNS_MAX}`);
       expect(sql).toContain(`scenario_count BETWEEN 0 AND ${AI_TEST_RUN_SCENARIOS_MAX}`);
+      // The queue's (tm 314.2): the scenarios a run fixes, under the same bound.
+      expect(readFileSync(QUEUE_MIGRATION, 'utf8').replace(/\s+/g, ' ')).toContain(
+        `cardinality(scenario_ids) <= ${AI_TEST_RUN_SCENARIOS_MAX}`,
+      );
     });
 
     it('the contract names the same lists and bounds', () => {
@@ -545,17 +561,58 @@ describe('AI test bench tables (AI-19 · tm 314.1)', () => {
     it('an ended run says when, a playing one since when; only a failed run carries an error', async () => {
       const tryRun = (data: Data) => attempt((tx) => run(tx, fx.a.licenseId, agentA, data));
       const now = new Date();
+      // A playing run holds its worker's lease (tm 314.2) — beside the point here.
+      const lease = { leaseUntil: new Date(now.getTime() + 60_000) };
       expect(await tryRun({ status: 'completed' })).toMatch(/check constraint/i);
       expect(await tryRun({ status: 'completed', finishedAt: now })).toBeNull();
       expect(await tryRun({ status: 'queued', finishedAt: now })).toMatch(/check constraint/i);
-      expect(await tryRun({ status: 'running' })).toMatch(/check constraint/i);
-      expect(await tryRun({ status: 'running', startedAt: now })).toBeNull();
+      expect(await tryRun({ status: 'running', ...lease })).toMatch(/check constraint/i);
+      expect(await tryRun({ status: 'running', startedAt: now, ...lease })).toBeNull();
       expect(
         await tryRun({ status: 'failed', finishedAt: now, error: 'provider_down' }),
       ).toBeNull();
       expect(await tryRun({ status: 'completed', finishedAt: now, error: 'x' })).toMatch(
         /check constraint/i,
       );
+    });
+
+    it('a playing run holds a lease and an ended one none; one open run per agent and target, one playing per workspace (tm 314.2)', async () => {
+      const tryRun = (data: Data) => attempt((tx) => run(tx, fx.a.licenseId, agentA, data));
+      const now = new Date();
+      const lease = new Date(now.getTime() + 60_000);
+      // `ai_test_runs_claim` skips a playing run with no lease: the workspace's queue would stop for good.
+      expect(await tryRun({ status: 'running', startedAt: now })).toMatch(/check constraint/i);
+      expect(await tryRun({ status: 'completed', finishedAt: now, leaseUntil: lease })).toMatch(
+        /check constraint/i,
+      );
+      expect(await tryRun({ attempts: -1 })).toMatch(/check constraint/i);
+      const ids = (n: number) => Array.from({ length: n }, () => crypto.randomUUID());
+      expect(await tryRun({ scenarioIds: ids(AI_TEST_RUN_SCENARIOS_MAX) })).toBeNull();
+      expect(await tryRun({ scenarioIds: ids(AI_TEST_RUN_SCENARIOS_MAX + 1) })).toMatch(
+        /check constraint/i,
+      );
+
+      const playing = { status: 'running', startedAt: now, leaseUntil: lease };
+      const twice = (first: Data, second: Data) =>
+        attempt(async (tx) => {
+          await run(tx, fx.a.licenseId, agentA, first);
+          await run(tx, fx.a.licenseId, agentA, second);
+        });
+      expect(await twice({}, {})).toMatch(/unique constraint/i);
+      expect(await twice({}, playing)).toMatch(/unique constraint/i);
+      expect(await twice(playing, { configTarget: 'published', ...playing })).toMatch(
+        /unique constraint/i,
+      );
+      // Queued beside a playing run of another target, or after an ended one of the same: fine.
+      expect(await twice(playing, { configTarget: 'published' })).toBeNull();
+      expect(await twice({ status: 'completed', finishedAt: now }, {})).toBeNull();
+      // Another workspace's playing run is its own.
+      expect(
+        await attempt(async (tx) => {
+          await run(tx, fx.a.licenseId, agentA, playing);
+          await run(tx, fx.b.licenseId, agentB, playing);
+        }),
+      ).toBeNull();
     });
 
     it("errored is exactly 'could not be played'; a key is its scenario's id or a compliance key, once per run", async () => {

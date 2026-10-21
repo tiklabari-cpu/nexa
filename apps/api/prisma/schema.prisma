@@ -4463,12 +4463,21 @@ model AiTestRun {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   startedAt             DateTime? @map("started_at") @db.Timestamptz(6)
   finishedAt            DateTime? @map("finished_at") @db.Timestamptz(6)
+  /// The scenarios the run plays, fixed when it is queued (tm 314.2); a worker
+  /// that takes a run over plays the ones without a result.
+  scenarioIds           String[]  @default([]) @map("scenario_ids") @db.Uuid
+  /// How long the worker's claim holds the run; past it, the next claim takes it.
+  leaseUntil            DateTime? @map("lease_until") @db.Timestamptz(6)
+  /// Claims so far (`ai_test_runs_claim`); past the last, the run fails.
+  attempts              Int       @default(0)
 
   license License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   aiAgent AiAgent           @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
   results AiTestRunResult[]
 
   /// The run history of an agent, newest first; the regression's "previous run".
+  /// Partial indexes Prisma cannot say (20261022090000): one open run per agent
+  /// and target, one running run per workspace, and the claim's scan.
   @@index([licenseId, aiAgentId, createdAt])
   @@map("ai_test_runs")
 }

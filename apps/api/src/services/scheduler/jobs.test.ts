@@ -56,6 +56,7 @@ describe('buildSchedulerJobs', () => {
       'invoice_close',
       'unverified_signups',
       'ai_stall',
+      'ai_sandbox_sessions',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -74,6 +75,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_INVOICE_CLOSE_MS: '88000',
       SCHEDULE_UNVERIFIED_SIGNUPS_MS: '99000',
       SCHEDULE_AI_STALL_MS: '12000',
+      SCHEDULE_AI_SANDBOX_SESSIONS_MS: '13000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -89,6 +91,7 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('invoice_close')).toBe(88_000);
     expect(intervalOf('unverified_signups')).toBe(99_000);
     expect(intervalOf('ai_stall')).toBe(12_000);
+    expect(intervalOf('ai_sandbox_sessions')).toBe(13_000);
   });
 
   it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
@@ -138,6 +141,14 @@ describe('buildSchedulerJobs', () => {
       );
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({ tenants: 0, stalled: 0, handed_over: 0 });
+    });
+
+    it('ai_sandbox_sessions finds nothing expired and deletes nothing (tm 314.2)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'ai_sandbox_sessions',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({ purged: 0, batches: 1 });
     });
 
     it('sla finds nothing to mark and reports zero tenants', async () => {

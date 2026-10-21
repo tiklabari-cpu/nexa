@@ -58,6 +58,7 @@ import {
   resolveHandoffTarget,
   type HandoffRouteConfig,
   type HandoffTarget,
+  type HandoffTargetInput,
   type HandoffTargetLookup,
 } from './conversation/handoff/target-resolver.js';
 import { morePressing } from './conversation/handoff/rules.js';
@@ -274,17 +275,46 @@ export function resolveTurnTarget(
   routes: readonly HandoffRouteConfig[],
 ): Promise<HandoffTarget> {
   return resolveHandoffTarget(
-    {
-      ...(effect.groupId !== undefined ? { groupId: effect.groupId } : {}),
-      team: effect.team,
-      ...(effect.topic !== undefined ? { topic: effect.topic } : {}),
-      ...(effect.ruleId !== undefined ? { ruleId: effect.ruleId } : {}),
-      reasons: orderHandoffReasons(effect.reasons ?? [catalogueReason(effect.reason)]),
-      routes,
-      brandId: at.brandId,
-    },
+    turnTargetInput(effect, routes, at.brandId),
     handoffTargetLookup(tx, at),
   );
+}
+
+/**
+ * Where a simulated conversation's hand-over would land (tm 314.2 · AI-19 §3,
+ * the `team` check): the order a live one follows, read in the simulation's
+ * read-only transaction. A simulated conversation has no day before it, so
+ * no earlier hand-over's team.
+ */
+export function resolveSimulatedTarget(
+  tx: TenantClient,
+  licenseId: bigint,
+  effect: TurnHandoff,
+  routes: readonly HandoffRouteConfig[],
+  brandId: string | null,
+): Promise<HandoffTarget> {
+  const lookup = handoffTargetLookup(tx, { licenseId, chatId: '', threadId: '' });
+  return resolveHandoffTarget(turnTargetInput(effect, routes, brandId), {
+    ...lookup,
+    sameDay: async () => null,
+  });
+}
+
+/** A turn's hand-over as the target order reads it. */
+function turnTargetInput(
+  effect: TurnHandoff,
+  routes: readonly HandoffRouteConfig[],
+  brandId: string | null,
+): HandoffTargetInput {
+  return {
+    ...(effect.groupId !== undefined ? { groupId: effect.groupId } : {}),
+    team: effect.team,
+    ...(effect.topic !== undefined ? { topic: effect.topic } : {}),
+    ...(effect.ruleId !== undefined ? { ruleId: effect.ruleId } : {}),
+    reasons: orderHandoffReasons(effect.reasons ?? [catalogueReason(effect.reason)]),
+    routes,
+    brandId,
+  };
 }
 
 /** The system events' share of the hand-over (AI-09 §6). */

@@ -13648,7 +13648,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T14:15:02.342Z",
+        "updatedAt": "2026-10-21T14:17:51.208Z",
         "subtasks": [
           {
             "id": 1,
@@ -13668,14 +13668,14 @@
             "description": "runner.ts (senaryo başına boş durum, tur başına yapılandırma sürümü, donmuş saat, araç taklitleri, durma koşulları) + simülasyon bağlamı yazma kalkanı",
             "details": "İzolasyon güvenlik sınırı.",
             "testStrategy": "İzolasyon negatif testi; kabul senaryoları.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "314.1",
               "314.6"
             ],
             "parentId": "314",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-21T14:17:51.208Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T14:15:02.342Z",
+      "lastModified": "2026-10-21T14:17:51.208Z",
       "taskCount": 390,
       "completedCount": 309,
       "tags": [

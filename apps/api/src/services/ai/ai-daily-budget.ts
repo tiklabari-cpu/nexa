@@ -60,6 +60,7 @@ import {
 } from '@siyahtus/types';
 import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
+import { refuseInSimulation } from '../../lib/simulation-context.js';
 import { withTenant, type TenantContext } from '../../lib/tenant.js';
 import {
   AiCapResolver,
@@ -141,6 +142,16 @@ export function nextUtcMidnight(at: Date): Date {
 /** Whole seconds from `at` to the next UTC midnight — when a refused call can fit again. At least 1. */
 export function secondsUntilUtcMidnight(at: Date): number {
   return Math.max(1, Math.ceil((nextUtcMidnight(at).getTime() - at.getTime()) / 1000));
+}
+
+/**
+ * The transaction a counter write on `meter` opens: a test meter's is the one
+ * write a simulation may make (tm 314.2, `lib/simulation-context.ts`).
+ */
+function testMeterWrite(meter: AiMeter): { simulationWrite?: 'test_meter' } {
+  return meter === 'llm_test' || meter === 'embedding_test'
+    ? { simulationWrite: 'test_meter' }
+    : {};
 }
 
 /**
@@ -317,6 +328,9 @@ export class AiDailyBudget {
     const at = this.#now();
     const day = utcDayKey(at);
     const counted = aiUsageMeterFor(meter, attribution.surface);
+    // Inside a simulation (tm 314.2 · AI-19-S2) a call is counted on the test
+    // meter alone: one on a live meter is a defect, refused before any row moves.
+    if (counted === meter) refuseInSimulation('live_meter');
     const caps = await this.#caps.capsFor(tenant);
     const amount = Math.max(0, Math.ceil(estimate));
     const rows = await withTenant(
@@ -325,6 +339,7 @@ export class AiDailyBudget {
       (tx) => tx.$queryRaw<Array<{ scope: AiCapScope | null }>>`
         SELECT ai_budget_reserve(${day}, ${counted}, ${BigInt(amount)},
           ${BigInt(caps.workspace[counted])}, ${BigInt(caps.global[meter])}) AS scope`,
+      testMeterWrite(counted),
     );
     const scope = rows[0]?.scope ?? null;
     if (scope) throw this.#refuse(tenant, counted, scope, at, caps.workspace[counted]);
@@ -397,6 +412,7 @@ export class AiDailyBudget {
             ${BigInt(input)}, ${BigInt(output)}, ${ledger.surface}::text,
             ${ledger.modelTier}::text, ${ledger.chatId}::text,
             ${ledger.configVersionId}::uuid) AS refused`,
+        testMeterWrite(meter),
       );
       const refused = rows[0]?.refused ?? null;
       if (cap !== null) this.#observe('settled', { tenant, meter, day, cap });

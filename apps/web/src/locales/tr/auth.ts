@@ -302,4 +302,10 @@ export const auth: Messages = {
   'auth.onboarding.sample.alreadySeeded': 'Örnek veri çalışma alanınızda zaten mevcut.',
   'auth.onboarding.sample.footerBefore': 'Gelen kutunuzu açmak için',
   'auth.onboarding.sample.footerAfter': "'i seçin.",
+  'auth.onboarding.company.sectorLabel': 'Sektör (isteğe bağlı)',
+  'auth.onboarding.company.sectorPlaceholder': 'Bir sektör seçin',
+  'auth.onboarding.recommended.title': 'Önerilen kurulum',
+  'auth.onboarding.recommended.body':
+    'Oyun ve bahis ekipleri için hazır iGaming şablonları var: yatırım, çekim, KYC, bonus, sorumlu oyun ve daha fazlası. Kurulum bittikten sonra Türkçe şablonları kapalı taslak olarak kurabilirsiniz.',
+  'auth.onboarding.recommended.openAfter': 'Kurulum bitince iGaming şablonlarını aç',
 };

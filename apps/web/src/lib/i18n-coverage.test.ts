@@ -131,6 +131,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/playbook/SkillEditor.tsx',
   'src/features/playbook/ProcedureSections.tsx',
   'src/features/playbook/TemplateGallery.tsx',
+  'src/features/playbook/IGamingTemplates.tsx',
   'src/features/playbook/RecommendedSkills.tsx',
   'src/features/playbook/ProfileForm.tsx',
   'src/features/playbook/GuidanceRules.tsx',

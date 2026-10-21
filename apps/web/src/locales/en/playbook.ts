@@ -1741,4 +1741,88 @@ export const playbook: Messages = {
   'playbook.tables.access.saved': 'Saved.',
   'playbook.tables.loadError': 'Could not load this table',
   'playbook.tables.access.loadError': 'Could not load the access information',
+  'playbook.gallery.igaming': 'iGaming',
+  'playbook.aiTemplates.loading': 'Loading templates…',
+  'playbook.aiTemplates.loadError': 'Could not load the iGaming templates',
+  'playbook.aiTemplates.detailLoadError': 'Could not load the template',
+  'playbook.aiTemplates.listLabel': 'iGaming templates',
+  'playbook.aiTemplates.listFooter':
+    'Browsing writes nothing. "Install" copies a template as a switched-off draft; the copy is yours and does not change by itself when a newer version comes out.',
+  'playbook.aiTemplates.pack.title': 'iGaming core pack',
+  'playbook.aiTemplates.pack.summary':
+    '{templates} templates, {rules} default behaviour rules and {rows} "example — please verify" table rows.',
+  'playbook.aiTemplates.pack.open': 'Install the pack…',
+  'playbook.aiTemplates.pack.hint':
+    'The pack installs the templates as switched-off drafts; the default behaviour rules come switched off, and the example table rows are written marked as examples — the AI uses none of them until you edit or review them.',
+  'playbook.aiTemplates.pack.createGroups': 'Create teams for topics nothing serves yet',
+  'playbook.aiTemplates.pack.createGroupsHint':
+    'Off, no team is created; unmapped topics block publishing.',
+  'playbook.aiTemplates.pack.noGroupsScope':
+    'Creating teams needs the team management permission; you can create the missing teams later.',
+  'playbook.aiTemplates.pack.confirm': 'Install the pack',
+  'playbook.aiTemplates.pack.done': 'The pack is installed.',
+  'playbook.aiTemplates.pack.resultTemplates':
+    '{created} templates newly installed, {existing} were already installed.',
+  'playbook.aiTemplates.pack.resultRules':
+    '{created} behaviour rules written (switched off), {existing} already existed.',
+  'playbook.aiTemplates.pack.resultRows':
+    '{created} example rows written, {skipped} skipped because the table already has that name.',
+  'playbook.aiTemplates.pack.resultGroups': 'Teams created: {names}.',
+  'playbook.aiTemplates.pack.persona':
+    'Suggestion: address as "{form}", at most {questions} questions per message. The persona setting was not changed.',
+  'playbook.aiTemplates.pack.sampleHint':
+    'Example rows are marked "example — please verify": edit or review them in the Tables tab.',
+  'playbook.aiTemplates.badge.locked': 'Locked',
+  'playbook.aiTemplates.badge.installed': 'Installed',
+  'playbook.aiTemplates.badge.update': 'New version available',
+  'playbook.aiTemplates.mustFillCount': '{count} items for the workspace to fill in',
+  'playbook.aiTemplates.preview': 'Details',
+  'playbook.aiTemplates.previewLabel': 'Preview the {name} template',
+  'playbook.aiTemplates.install': 'Install',
+  'playbook.aiTemplates.installLabel': 'Install the {name} template',
+  'playbook.aiTemplates.back': 'Back',
+  'playbook.aiTemplates.detail.whenToUse': 'When it is used',
+  'playbook.aiTemplates.detail.examples': 'Example messages',
+  'playbook.aiTemplates.detail.handsOverTo': 'Topics it hands over to',
+  'playbook.aiTemplates.detail.noHandover': 'No hand-over.',
+  'playbook.aiTemplates.detail.forbidden': 'Forbidden phrases',
+  'playbook.aiTemplates.detail.scenarios': 'Test scenarios',
+  'playbook.aiTemplates.mustFill.title': 'What the workspace must fill in',
+  'playbook.aiTemplates.mustFill.hint':
+    'A draft cannot be published while a placeholder is left; tables and settings do not block publishing, but the replies depend on them.',
+  'playbook.aiTemplates.mustFill.placeholder': '{label} — placeholder {key} (example: {example})',
+  'playbook.aiTemplates.mustFill.table': '{label} table — fields read: {columns}',
+  'playbook.aiTemplates.mustFill.setting': '{label} setting',
+  'playbook.aiTemplates.mapping.title': 'Hand-over teams',
+  'playbook.aiTemplates.mapping.hint':
+    'Pick a team for every topic the template hands over to. Left empty it still installs, but publishing waits until a route or team serves the topic.',
+  'playbook.aiTemplates.mapping.later': 'I will map it later',
+  'playbook.aiTemplates.mapping.noScope':
+    'Mapping topics needs the access rules permission; map them later from Hand-over routes.',
+  'playbook.aiTemplates.installTitle': '{name} — install',
+  'playbook.aiTemplates.installHint':
+    'The template is copied to your AI agent as a switched-off draft. Installing the same template again makes no new copy; the existing one is shown.',
+  'playbook.aiTemplates.lockedHint':
+    'This template is locked: its copy cannot be switched off or deleted; only its texts and team change.',
+  'playbook.aiTemplates.noInstallScope': 'Installing needs the permission to manage the AI agent.',
+  'playbook.aiTemplates.installing': 'Installing…',
+  'playbook.aiTemplates.installConfirm': 'Install as a draft',
+  'playbook.aiTemplates.result.created': 'The draft is installed.',
+  'playbook.aiTemplates.result.existing':
+    'This agent already has a copy of this template; no new copy was written.',
+  'playbook.aiTemplates.result.draftHint':
+    'The copy is a switched-off draft; it cannot be published until the items below are done.',
+  'playbook.aiTemplates.result.readyToPublish': 'Nothing stops publishing.',
+  'playbook.aiTemplates.result.blockedTitle': 'What stops publishing',
+  'playbook.aiTemplates.result.unfilled': 'Placeholders not filled in (replace them in the text):',
+  'playbook.aiTemplates.result.unmapped':
+    'Hand-over topics nothing serves (add a route or a team):',
+  'playbook.aiTemplates.result.openDraft': 'Open the draft',
+  'playbook.aiTemplates.error.template_route_unknown_topic':
+    'The mapping names a topic the template does not hand over to.',
+  'playbook.aiTemplates.error.handoff_route_unknown_team': 'The chosen team was not found.',
+  'playbook.aiTemplates.error.handoff_route_unknown_brand': 'The chosen brand was not found.',
+  'playbook.aiTemplates.error.handoff_routes_limit': 'The hand-over route limit has been reached.',
+  'playbook.aiTemplates.error.forbidden_phrases_limit':
+    'The forbidden phrase limit has been reached.',
 };

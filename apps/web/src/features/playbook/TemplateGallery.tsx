@@ -20,11 +20,19 @@
  * because it is reached from a primary header action and a keyboard user must be
  * able to open it, pick, and leave without a mouse. That contract is unchanged
  * by the search/filter/virtualization work above.
+ *
+ * Beside the static tabs sits "iGaming" (tm 311.4 · AI-15): the server's twenty
+ * Turkish procedures, installed as drafts. Its content is `IGamingTemplates`,
+ * mounted only while that tab is chosen so the static catalogue stays free of
+ * any query. A workspace whose sector is `gaming_gambling` gets it first and
+ * opens on it.
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { EmptyState } from '../../components/EmptyState.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { IGAMING_CATEGORY } from './ai-templates.js';
+import { IGamingTemplates } from './IGamingTemplates.js';
 import {
   findCategoryMeta,
   SKILL_TEMPLATES,
@@ -33,8 +41,9 @@ import {
   type TemplateBadge,
   type TemplateCategory,
 } from './templates.js';
+import type { Skill } from './types.js';
 
-type GalleryCategoryFilter = TemplateCategory | 'all';
+type GalleryCategoryFilter = TemplateCategory | 'all' | typeof IGAMING_CATEGORY;
 
 /** Catalogue keys for a template's name/summary — `templates.ts`'s own English
  * values stay put (server-shaped seed data, `templateToDraft` reads them
@@ -88,18 +97,34 @@ export function TemplateGallery({
   onClose,
   onUse,
   pendingId,
+  igamingFirst = false,
+  startOnIgaming = false,
+  aiAgentId = null,
+  onOpenSkill,
 }: {
   open: boolean;
   onClose: () => void;
   onUse: (template: SkillTemplate) => void;
   /** Id of the template currently being turned into a skill, if any. */
   pendingId: string | null;
+  /** The workspace's sector is gaming/gambling: the iGaming tab leads and is the one the gallery opens on. */
+  igamingFirst?: boolean;
+  /** Open on the iGaming tab even when it does not lead (the onboarding's "recommended setup" link). */
+  startOnIgaming?: boolean;
+  /** The AI agent an installed iGaming copy belongs to. */
+  aiAgentId?: string | null;
+  /** Open an installed iGaming draft in the editor. */
+  onOpenSkill?: (skill: Skill) => void;
 }): ReactElement | null {
   const t = useTranslate();
   const closeRef = useRef<HTMLButtonElement>(null);
+  /** The admin chose a tab since the gallery opened. */
+  const picked = useRef(false);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<GalleryCategoryFilter>('all');
+  const openingCategory: GalleryCategoryFilter =
+    igamingFirst || startOnIgaming ? IGAMING_CATEGORY : 'all';
+  const [category, setCategory] = useState<GalleryCategoryFilter>(openingCategory);
 
   // A fresh browse every time the gallery opens — a filter left over from a
   // previous visit would otherwise silently hide templates the admin expects
@@ -115,9 +140,19 @@ export function TemplateGallery({
     if (!open) return;
     setSearch('');
     setQuery('');
-    setCategory('all');
+    picked.current = false;
+    setCategory(openingCategory);
     closeRef.current?.focus();
+    // `openingCategory` is read when the gallery opens; a sector that settles a
+    // moment later is the next effect's, so this one stays keyed on `open` alone.
   }, [open]);
+
+  // The sector is read when the gallery opens, so for a first-ever open it lands
+  // a beat after it: move to the iGaming tab then — unless the admin has already
+  // chosen a tab, which a late answer must not take back.
+  useEffect(() => {
+    if (open && igamingFirst && !picked.current) setCategory(IGAMING_CATEGORY);
+  }, [open, igamingFirst]);
 
   // Escape closes. Its own effect, because this one *does* need the current
   // `onClose` and so must re-subscribe when the caller hands over a new one.
@@ -139,8 +174,9 @@ export function TemplateGallery({
 
   if (!open) return null;
 
+  const onIgaming = category === IGAMING_CATEGORY;
   const categoryTemplates =
-    category === 'all'
+    category === 'all' || category === IGAMING_CATEGORY
       ? SKILL_TEMPLATES
       : SKILL_TEMPLATES.filter((template) => template.category === category);
   const visibleTemplates = categoryTemplates.filter((template) =>
@@ -148,11 +184,35 @@ export function TemplateGallery({
   );
   const hasActiveFilters = query.trim() !== '' || category !== 'all';
 
+  const pickCategory = (next: GalleryCategoryFilter): void => {
+    picked.current = true;
+    setCategory(next);
+  };
+
   const clearFilters = (): void => {
     setSearch('');
     setQuery('');
     setCategory('all');
   };
+
+  const igamingTab = (
+    <button
+      key={IGAMING_CATEGORY}
+      type="button"
+      role="tab"
+      id={`gallery-tab-${IGAMING_CATEGORY}`}
+      aria-selected={onIgaming}
+      aria-controls="gallery-tabpanel"
+      onClick={() => pickCategory(IGAMING_CATEGORY)}
+      className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+        onIgaming
+          ? 'border-brand-500 text-content'
+          : 'border-transparent text-content-secondary hover:text-content'
+      }`}
+    >
+      <span>{t('playbook.gallery.igaming')}</span>
+    </button>
+  );
 
   return (
     <div
@@ -189,13 +249,14 @@ export function TemplateGallery({
             aria-label={t('playbook.gallery.categoryTablistLabel')}
             className="flex flex-wrap gap-1 border-b border-border"
           >
+            {igamingFirst && igamingTab}
             <button
               type="button"
               role="tab"
               id="gallery-tab-all"
               aria-selected={category === 'all'}
               aria-controls="gallery-tabpanel"
-              onClick={() => setCategory('all')}
+              onClick={() => pickCategory('all')}
               className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                 category === 'all'
                   ? 'border-brand-500 text-content'
@@ -215,7 +276,7 @@ export function TemplateGallery({
                   id={`gallery-tab-${meta.id}`}
                   aria-selected={active}
                   aria-controls="gallery-tabpanel"
-                  onClick={() => setCategory(meta.id)}
+                  onClick={() => pickCategory(meta.id)}
                   className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? 'border-brand-500 text-content'
@@ -230,18 +291,21 @@ export function TemplateGallery({
                 </button>
               );
             })}
+            {!igamingFirst && igamingTab}
           </div>
 
-          <label className="flex items-center">
-            <span className="sr-only">{t('playbook.gallery.searchLabel')}</span>
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t('playbook.gallery.searchPlaceholder')}
-              className="w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
-            />
-          </label>
+          {!onIgaming && (
+            <label className="flex items-center">
+              <span className="sr-only">{t('playbook.gallery.searchLabel')}</span>
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t('playbook.gallery.searchPlaceholder')}
+                className="w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+              />
+            </label>
+          )}
 
           <div
             id="gallery-tabpanel"
@@ -249,7 +313,12 @@ export function TemplateGallery({
             aria-labelledby={category === 'all' ? 'gallery-tab-all' : `gallery-tab-${category}`}
             className="max-h-[55vh]"
           >
-            {visibleTemplates.length === 0 ? (
+            {onIgaming ? (
+              <IGamingTemplates
+                aiAgentId={aiAgentId}
+                onOpenSkill={(skill) => onOpenSkill?.(skill)}
+              />
+            ) : visibleTemplates.length === 0 ? (
               <EmptyState
                 title={t('playbook.gallery.noMatchTitle')}
                 description={t('playbook.gallery.noMatchDescription')}

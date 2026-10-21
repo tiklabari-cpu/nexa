@@ -1733,4 +1733,87 @@ export const playbook: Messages = {
   'playbook.tables.access.saved': 'Kaydedildi.',
   'playbook.tables.loadError': 'Bu tablo yüklenemedi',
   'playbook.tables.access.loadError': 'Erişim bilgisi yüklenemedi',
+  'playbook.gallery.igaming': 'iGaming',
+  'playbook.aiTemplates.loading': 'Şablonlar yükleniyor…',
+  'playbook.aiTemplates.loadError': 'iGaming şablonları yüklenemedi',
+  'playbook.aiTemplates.detailLoadError': 'Şablon yüklenemedi',
+  'playbook.aiTemplates.listLabel': 'iGaming şablonları',
+  'playbook.aiTemplates.listFooter':
+    'Göz atmak hiçbir şey yazmaz. "Kur" şablonu kapalı bir taslak olarak kopyalar; kopya sizindir, yeni sürüm çıksa da kendiliğinden değişmez.',
+  'playbook.aiTemplates.pack.title': 'iGaming çekirdek paketi',
+  'playbook.aiTemplates.pack.summary':
+    '{templates} şablon, {rules} varsayılan davranış kuralı ve {rows} "örnek — doğrulayın" tablo satırı.',
+  'playbook.aiTemplates.pack.open': 'Paketi kur…',
+  'playbook.aiTemplates.pack.hint':
+    'Paket şablonları kapalı taslak olarak kurar; varsayılan davranış kuralları kapalı gelir, örnek tablo satırları "örnek" işaretiyle yazılır ve siz düzenleyip doğrulayana kadar yapay zekâ onları kullanmaz.',
+  'playbook.aiTemplates.pack.createGroups': 'Hiçbir şeyin karşılamadığı konular için ekip oluştur',
+  'playbook.aiTemplates.pack.createGroupsHint':
+    'Kapalıysa hiçbir ekip oluşturulmaz; eşlenmemiş konular yayını engeller.',
+  'playbook.aiTemplates.pack.noGroupsScope':
+    'Ekip oluşturmak için ekip yönetimi yetkisi gerekir; eksik ekipleri sonra oluşturabilirsiniz.',
+  'playbook.aiTemplates.pack.confirm': 'Paketi kur',
+  'playbook.aiTemplates.pack.done': 'Paket kuruldu.',
+  'playbook.aiTemplates.pack.resultTemplates':
+    '{created} şablon yeni kuruldu, {existing} şablon zaten kuruluydu.',
+  'playbook.aiTemplates.pack.resultRules':
+    '{created} davranış kuralı yazıldı (kapalı), {existing} kural zaten vardı.',
+  'playbook.aiTemplates.pack.resultRows':
+    '{created} örnek satır yazıldı, {skipped} satır adı tabloda olduğu için atlandı.',
+  'playbook.aiTemplates.pack.resultGroups': 'Oluşturulan ekipler: {names}.',
+  'playbook.aiTemplates.pack.persona':
+    'Öneri: "{form}" hitabı, mesaj başına en fazla {questions} soru. Kişilik ayarı değiştirilmedi.',
+  'playbook.aiTemplates.pack.sampleHint':
+    'Örnek satırlar "örnek — doğrulayın" işaretlidir: Tablolar sekmesinde düzenleyin ya da gözden geçirin.',
+  'playbook.aiTemplates.badge.locked': 'Kilitli',
+  'playbook.aiTemplates.badge.installed': 'Kurulu',
+  'playbook.aiTemplates.badge.update': 'Yeni sürüm var',
+  'playbook.aiTemplates.mustFillCount': '{count} madde kiracı tarafından doldurulmalı',
+  'playbook.aiTemplates.preview': 'Ayrıntı',
+  'playbook.aiTemplates.previewLabel': '{name} şablonunu önizle',
+  'playbook.aiTemplates.install': 'Kur',
+  'playbook.aiTemplates.installLabel': '{name} şablonunu kur',
+  'playbook.aiTemplates.back': 'Geri',
+  'playbook.aiTemplates.detail.whenToUse': 'Ne zaman kullanılır',
+  'playbook.aiTemplates.detail.examples': 'Örnek mesajlar',
+  'playbook.aiTemplates.detail.handsOverTo': 'Devrettiği konular',
+  'playbook.aiTemplates.detail.noHandover': 'Devir yok.',
+  'playbook.aiTemplates.detail.forbidden': 'Yasak ifadeler',
+  'playbook.aiTemplates.detail.scenarios': 'Test senaryoları',
+  'playbook.aiTemplates.mustFill.title': 'Kiracının doldurması gerekenler',
+  'playbook.aiTemplates.mustFill.hint':
+    'Yer tutucular doldurulmadan taslak yayına alınamaz; tablo ve ayarlar yayını engellemez ama yanıtların doğruluğu onlara bağlıdır.',
+  'playbook.aiTemplates.mustFill.placeholder': '{label} — yer tutucu {key} (örnek: {example})',
+  'playbook.aiTemplates.mustFill.table': '{label} tablosu — okunan alanlar: {columns}',
+  'playbook.aiTemplates.mustFill.setting': '{label} ayarı',
+  'playbook.aiTemplates.mapping.title': 'Devir ekipleri',
+  'playbook.aiTemplates.mapping.hint':
+    'Şablonun devrettiği her konu için bir ekip seçin. Seçmezseniz kurulur, ama konuyu karşılayan bir rota ya da ekip olmadan yayın açılmaz.',
+  'playbook.aiTemplates.mapping.later': 'Sonra eşlerim',
+  'playbook.aiTemplates.mapping.noScope':
+    'Konu eşlemesi için erişim kuralları yetkisi gerekir; eşlemeyi sonra Devir rotaları ekranından yapın.',
+  'playbook.aiTemplates.installTitle': '{name} — kurulum',
+  'playbook.aiTemplates.installHint':
+    'Şablon yapay zekâ ajanınıza kapalı bir taslak olarak kopyalanır. Aynı şablonu bir kez daha kurarsanız yeni kopya oluşmaz, var olan gösterilir.',
+  'playbook.aiTemplates.lockedHint':
+    'Bu şablon kilitlidir: kopyası kapatılamaz ya da silinemez; yalnız metinleri ve ekibi değişir.',
+  'playbook.aiTemplates.noInstallScope': 'Kurulum için yapay zekâ ajanını yönetme yetkisi gerekir.',
+  'playbook.aiTemplates.installing': 'Kuruluyor…',
+  'playbook.aiTemplates.installConfirm': 'Taslak olarak kur',
+  'playbook.aiTemplates.result.created': 'Taslak kuruldu.',
+  'playbook.aiTemplates.result.existing':
+    'Bu ajanda bu şablonun bir kopyası zaten var; yeni kopya yazılmadı.',
+  'playbook.aiTemplates.result.draftHint':
+    'Kopya kapalı bir taslaktır; aşağıdakiler bitmeden yayına alınamaz.',
+  'playbook.aiTemplates.result.readyToPublish': 'Yayına engel kalmadı.',
+  'playbook.aiTemplates.result.blockedTitle': 'Yayını engelleyenler',
+  'playbook.aiTemplates.result.unfilled': 'Doldurulmamış yer tutucular (metinde değiştirin):',
+  'playbook.aiTemplates.result.unmapped':
+    'Karşılığı olmayan devir konuları (rota ya da ekip ekleyin):',
+  'playbook.aiTemplates.result.openDraft': 'Taslağı aç',
+  'playbook.aiTemplates.error.template_route_unknown_topic':
+    'Eşleme, şablonun devretmediği bir konu içeriyor.',
+  'playbook.aiTemplates.error.handoff_route_unknown_team': 'Seçilen ekip bulunamadı.',
+  'playbook.aiTemplates.error.handoff_route_unknown_brand': 'Seçilen marka bulunamadı.',
+  'playbook.aiTemplates.error.handoff_routes_limit': 'Devir rotası sınırına ulaşıldı.',
+  'playbook.aiTemplates.error.forbidden_phrases_limit': 'Yasak ifade sınırına ulaşıldı.',
 };

@@ -976,6 +976,29 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The Test tab's lab (tm 314.5 · AI-19): status dots, the locked pack's
+       * disclosure list and the run controls are new to the panel. Scanned with
+       * the pack's list open, so its rows are part of what axe reads.
+       */
+      test('the AI test lab has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/playbook');
+        await scanPanel(agentPage, 'AI test lab', theme, testInfo, async () => {
+          await agentPage
+            .getByRole('tablist', { name: 'AI Agent' })
+            .getByRole('tab', { name: 'Test' })
+            .click();
+          const pack = agentPage.getByRole('region', { name: 'Compliance pack' });
+          await pack.getByText('Show the locked scenarios').click();
+          await expect(
+            pack.getByRole('list', { name: 'Locked compliance scenarios' }).getByRole('listitem'),
+          ).toHaveCount(14);
+        });
+      });
+
+      /**
        * The knowledge source row's `…` menu and its edit dialog
        * (FR-MOD-06.3.3).
        *

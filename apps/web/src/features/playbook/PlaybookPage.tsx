@@ -33,6 +33,7 @@ import { ProfileForm } from './ProfileForm.js';
 import { GuardrailsPage } from './GuardrailsPage.js';
 import { HandoffSettings } from './HandoffSettings.js';
 import { AiPerformance } from './AiPerformance.js';
+import { TestLab } from './TestLab.js';
 import { IGAMING_CATEGORY, galleryStartsOnIgaming } from './ai-templates.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
@@ -91,7 +92,7 @@ import {
  * from the AI's own `knowledge` (what it answers a customer from).
  */
 type PlaybookView =
-  'performance' | 'profile' | 'guardrails' | 'skills' | 'knowledge' | 'tables' | 'kb';
+  'performance' | 'profile' | 'guardrails' | 'skills' | 'knowledge' | 'tables' | 'kb' | 'test';
 const VIEW_TABS: readonly PlaybookView[] = [
   'performance',
   'profile',
@@ -100,6 +101,7 @@ const VIEW_TABS: readonly PlaybookView[] = [
   'knowledge',
   'tables',
   'kb',
+  'test',
 ];
 const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
   performance: 'playbook.tabs.performance',
@@ -109,6 +111,7 @@ const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
   knowledge: 'playbook.tabs.knowledge',
   tables: 'playbook.tabs.tables',
   kb: 'playbook.tabs.kb',
+  test: 'playbook.tabs.test',
 };
 
 /**
@@ -160,6 +163,10 @@ export function PlaybookPage(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const canEdit = scopes.includes('agents-bot--all:rw');
   const canViewReports = scopes.includes('reports_read');
+  // The simulation lab (tm 314.5 · AI-19) reads the AI's configuration: a team
+  // member has neither scope in the default matrix, so the tab is not drawn.
+  const canSeeTests = canEdit || scopes.includes('agents-bot--all:ro');
+  const viewTabs = VIEW_TABS.filter((tabId) => tabId !== 'test' || canSeeTests);
 
   // The AI Agent surface is one place with four tabs (FR-MOD-06.1). Skills is the
   // landing tab — the thing an admin opens the Playbook to do.
@@ -435,7 +442,7 @@ export function PlaybookPage(): ReactElement {
             aria-label={t('playbook.page.tabsLabel')}
             className="flex gap-1 border-b border-border"
           >
-            {VIEW_TABS.map((tabId) => {
+            {viewTabs.map((tabId) => {
               const active = view === tabId;
               return (
                 <button
@@ -882,6 +889,24 @@ export function PlaybookPage(): ReactElement {
                 <KbArticleList canEdit={canEdit} />
               </div>
             )}
+
+            {view === 'test' &&
+              canSeeTests &&
+              (aiAgent ? (
+                <TestLab
+                  key={`test-${aiAgent.id}`}
+                  agentId={aiAgent.id}
+                  skills={items.map(({ id, name }) => ({ id, name }))}
+                  canEdit={canEdit}
+                />
+              ) : (
+                <Card>
+                  <EmptyState
+                    title={t('playbook.profile.noAgentTitle')}
+                    description={t('playbook.profile.noAgentDescription')}
+                  />
+                </Card>
+              ))}
           </div>
 
           <TemplateGallery

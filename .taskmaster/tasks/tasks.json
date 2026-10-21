@@ -13362,7 +13362,7 @@
           "309"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T03:23:07.951Z",
+        "updatedAt": "2026-10-21T04:23:36.841Z",
         "subtasks": [
           {
             "id": 1,
@@ -13410,13 +13410,13 @@
             "description": "K13 Erişim bilgisi çözücüsü: KB satırı / dinamik URL (SSRF korumalı, önbellek, son değer) / sabit link; G14 bağlantısı",
             "details": "XHIGH GEREKÇESİ: (1) SSRF'e açık dış istek.",
             "testStrategy": "SSRF negatif; çekim hatası yolları.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "310.1"
             ],
             "parentId": "310",
             "priority": "high",
-            "updatedAt": "2026-10-21T03:23:07.951Z"
+            "updatedAt": "2026-10-21T04:23:36.841Z"
           },
           {
             "id": 5,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T03:23:07.951Z",
+      "lastModified": "2026-10-21T04:23:36.841Z",
       "taskCount": 390,
       "completedCount": 307,
       "tags": [

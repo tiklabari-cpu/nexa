@@ -1,19 +1,8 @@
 # Structured knowledge tables and the access information setting (tm 310 ·
 # SiyahTuş analysis AI-13, owner decision K13; ADR-14b §2.12).
 #
-# The tables' paths are mounted (tm 310.2, `routes/knowledge-tables.ts`).
-#
-# ===========================================================================
-# NOT MOUNTED YET — `aiAccessInfo` waits for the subtask that serves it
-# (PLAN §D308, the tm 287.1 precedent §D240). `contract-parity.test.ts`
-# fails a documented operation no route serves, so `openapi.yaml` `paths:`
-# references it only together with its route:
-#
-#   /ai-access-info                            → tm 310.4 (read, replace)
-#
-# The mounting subtask also bumps the mobile parity count and adds an
-# `endpoint-ui.cjs` TRACKED entry while no client calls it yet.
-# ===========================================================================
+# Every path is mounted (`routes/knowledge-tables.ts`): the tables' in
+# tm 310.2, `/ai-access-info` in tm 310.4.
 
 knowledgeTableRows:
   parameters:
@@ -245,8 +234,11 @@ aiAccessInfo:
     operationId: listAiAccessInfo
     summary: The access information settings
     description: |
-      The every-brand setting and each brand's (K13). No setting: the AI has
-      nothing it may say about reaching the site, and hands over.
+      The every-brand setting and each brand's (K13), the every-brand one
+      first. No setting: the AI has nothing it may say about reaching the
+      site, and hands over. `last_value` / `last_fetched_at` are what a
+      `dynamic_url` answered last — the value the AI falls back on when a
+      fetch fails.
     responses:
       "200":
         description: Settings
@@ -268,8 +260,17 @@ aiAccessInfo:
     operationId: putAiAccessInfo
     summary: Set the access information for a brand or for every brand
     description: |
-      Replaces the setting whole. Refusals are 400 `validation` with
-      `details.problems`. The change is kept in the AI change history (AI-21).
+      Replaces the setting of `brand_id` (null or omitted: every brand)
+      whole — a field left out is cleared, `cache_seconds` back to 300.
+      Refusals are 400 `validation`, `details.reason = ai_access_info_invalid`,
+      with every problem in `details.problems` (`{field, code}`): besides the
+      field rules, a brand that is not this workspace's, a `kb_source_id`
+      that is not one of its knowledge sources, and a `dynamic_url` that is
+      not https or names a private, loopback or link-local host are
+      `invalid`. The host is checked again on every fetch (DNS can change),
+      and a fetch never follows a redirect. A new URL or source type drops
+      the last fetched value. The AI change history (AI-21) records the
+      change once tm 315 opens it.
     requestBody:
       required: true
       content:

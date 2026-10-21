@@ -406,6 +406,8 @@ paths:
     $ref: "./paths/knowledge-tables.yaml#/knowledgeTableRow"
   /knowledge-tables/{table}/{rowId}/review:
     $ref: "./paths/knowledge-tables.yaml#/knowledgeTableRowReview"
+  /ai-access-info:
+    $ref: "./paths/knowledge-tables.yaml#/aiAccessInfo"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"
@@ -4303,7 +4305,7 @@ components:
           type: string
           maxLength: 2048
           nullable: true
-          description: The URL a `dynamic_url` fetches, or the `fixed_link` itself (http or https).
+          description: The URL a `dynamic_url` fetches (https), or the `fixed_link` itself (http or https).
         cache_seconds: { type: integer, minimum: 30, maximum: 86400 }
         fixed_text:
           type: string
@@ -4331,7 +4333,11 @@ components:
         brand_id: { type: string, format: uuid, nullable: true }
         source_type: { $ref: "#/components/schemas/AiAccessInfoSourceType" }
         kb_source_id: { type: string, format: uuid, nullable: true }
-        url: { type: string, maxLength: 2048, nullable: true }
+        url:
+          type: string
+          maxLength: 2048
+          nullable: true
+          description: https for a `dynamic_url`; http or https for a `fixed_link`.
         cache_seconds: { type: integer, minimum: 30, maximum: 86400, default: 300 }
         fixed_text: { type: string, maxLength: 1000, nullable: true }
 

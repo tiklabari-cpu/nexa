@@ -137,6 +137,44 @@ describe('the workspace’s forbidden phrases', () => {
   });
 });
 
+describe('G14 and the access information (K13 · tm 310.4)', () => {
+  const given = 'Yeni giriş adresimiz: https://giris7.ornek.com';
+
+  it('lets through the workspace’s own access words, said verbatim', () => {
+    expect(checkOutput(given, plain).violations.map(ruleOf)).toEqual(['G14']);
+    expect(checkOutput(given, { ...plain, access: [given] })).toEqual({
+      violations: [],
+      warnings: [],
+    });
+    expect(
+      checkOutput(`Merhaba!\n${given}\nİyi oyunlar.`, { ...plain, access: [given] }).violations,
+    ).toEqual([]);
+  });
+
+  it('still stops an address, a mirror or a VPN the AI was not given', () => {
+    for (const draft of [
+      'Yeni giriş adresimiz: https://baska.ornek.com',
+      `${given} Ayrıca VPN kullanabilirsiniz.`,
+      'Alternatif link olarak ayna site de var.',
+    ]) {
+      expect(
+        checkOutput(draft, { ...plain, access: [given] }).violations.map(ruleOf),
+        draft,
+      ).toEqual(['G14']);
+    }
+  });
+
+  it('exempts G14 alone: another rule or a forbidden phrase inside the same text is found', () => {
+    const said = 'Kontrol ettim, yeni giriş adresimiz kesin çalışıyor: https://g.ornek.com';
+    const { violations } = checkOutput(said, {
+      riskFlagged: false,
+      phrases: [phrase('k', 'kesin')],
+      access: [said],
+    });
+    expect(violations.map(ruleOf)).toEqual(['G8', 'phrase:k']);
+  });
+});
+
 describe('the rewrite (AI-08 §8)', () => {
   it('names every rule the draft broke, and quotes it', () => {
     const { violations } = checkOutput('Kontrol ettim. Tekrar yatırın.', plain);

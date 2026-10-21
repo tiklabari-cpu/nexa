@@ -13,9 +13,10 @@
  * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
  * settings, rules and forbidden phrases (tm 301.2), the hand-over rules
  * (tm 303.3), the hand-over routes (tm 307.1), the knowledge sources
- * (tm 309.1; a KB article's from tm 309.2) and the structured knowledge tables'
- * rows with their sources (tm 310.2). A route that writes `updated_at` itself, or opens a
- * `status`/`version` column, breaks the rule.
+ * (tm 309.1; a KB article's from tm 309.2), the structured knowledge tables'
+ * rows with their sources (tm 310.2) and the access information (tm 310.4). A
+ * route that writes `updated_at` itself, or opens a `status`/`version` column,
+ * breaks the rule.
  */
 import type { Prisma } from '@prisma/client';
 import {
@@ -620,4 +621,23 @@ export async function updateTableRowSourceDraft(
     },
   });
   return count;
+}
+
+// The access information (tm 310.4 · K13). What the panel writes is the
+// draft; `last_value` / `last_fetched_at` are not — they are the fetch's cache
+// (`knowledge-tables/access-info.ts`), written at run time and never a change.
+
+type AccessInfoCreate = Omit<Prisma.AiAccessInfoUncheckedCreateInput, 'updatedAt'>;
+type AccessInfoUpdate = Omit<Prisma.AiAccessInfoUncheckedUpdateInput, 'updatedAt'>;
+
+export async function createAiAccessInfoDraft(tx: TenantClient, data: AccessInfoCreate) {
+  return tx.aiAccessInfo.create({ data: { ...data, updatedAt: new Date() } });
+}
+
+export async function updateAiAccessInfoDraft(
+  tx: TenantClient,
+  id: string,
+  data: AccessInfoUpdate,
+) {
+  return tx.aiAccessInfo.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
 }

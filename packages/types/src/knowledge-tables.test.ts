@@ -734,4 +734,16 @@ describe('access information (K13)', () => {
       fields(validateAiAccessInfo({ source_type: 'fixed_link', url: 'https://bad host' })),
     ).toEqual(['url:invalid']);
   });
+
+  it('fetches only over https; a fixed link may be http (tm 310.4)', () => {
+    expect(
+      fields(validateAiAccessInfo({ source_type: 'dynamic_url', url: 'http://api.ornek.com/a' })),
+    ).toEqual(['url:invalid']);
+    expect(
+      validateAiAccessInfo({ source_type: 'dynamic_url', url: 'HTTPS://api.ornek.com/a' }),
+    ).toEqual([]);
+    expect(
+      validateAiAccessInfo({ source_type: 'fixed_link', url: 'http://giris.ornek.com' }),
+    ).toEqual([]);
+  });
 });

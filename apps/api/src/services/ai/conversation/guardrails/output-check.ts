@@ -13,10 +13,15 @@
  * recorded and sent. The persona's address form and emoji are warnings of the
  * same kind, already in the run log (`styleWarnings`, AI-07 §3).
  *
- * G14 lets through what the workspace's access information itself says (K13);
- * that setting is AI-13's (#310) and no workspace has it yet, so every
- * address, mirror and VPN line is a violation — and the hand-over that follows
- * is "no access information: a person answers".
+ * G14 lets through what the workspace's access information itself says
+ * (K13 · tm 310.4): a G14 match that lies inside a text the turn's access
+ * answer gave (`OutputCheckInput.access`, verbatim in the draft) is the
+ * workspace's own word — its link, its "yeni giriş adresimiz" — and the
+ * workspace answers for it. Every other address, mirror and VPN line is a
+ * violation: the AI says nothing of access it was not given, and with no
+ * access information the hand-over that follows is "a person answers". The
+ * exemption is G14's alone — a platform rule or a forbidden phrase inside the
+ * same text is still found.
  */
 import {
   PLATFORM_GUARDRAILS,
@@ -57,6 +62,20 @@ export interface OutputCheckInput {
   readonly riskFlagged: boolean;
   /** The workspace's forbidden phrases in this turn's scope and language. */
   readonly phrases: readonly ForbiddenPhraseConfig[];
+  /** What the turn's access answers said (tm 310.4): G14 lets these through, verbatim. */
+  readonly access?: readonly string[];
+}
+
+/** Where in `text` the access texts stand, each occurrence as `[start, end)`. */
+function accessSpans(text: string, access: readonly string[]): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  for (const said of access) {
+    if (said === '') continue;
+    for (let at = text.indexOf(said); at !== -1; at = text.indexOf(said, at + 1)) {
+      spans.push([at, at + said.length]);
+    }
+  }
+  return spans;
 }
 
 /** Every rule with an output lexicon; G4's only on a risk-flagged conversation. */
@@ -72,7 +91,15 @@ export function checkOutput(text: string, input: OutputCheckInput): OutputCheck 
   const warnings: OutputViolation[] = [];
 
   const seen = new Set<GuardrailId>();
+  const spans = accessSpans(text, input.access ?? []);
   for (const match of scanGuardrails(text, 'output', { rules: outputRules(input.riskFlagged) })) {
+    // The workspace's own access information (K13): G14 lets it through.
+    if (
+      match.rule === 'G14' &&
+      spans.some(([start, end]) => start <= match.start && match.end <= end)
+    ) {
+      continue;
+    }
     // One violation per rule: the rewrite is told the rule once, with its first quote.
     if (seen.has(match.rule)) continue;
     seen.add(match.rule);

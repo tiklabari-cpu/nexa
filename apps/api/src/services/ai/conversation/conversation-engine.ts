@@ -239,6 +239,8 @@ import {
   type SingleTurnProcedure,
 } from './legacy-skill.js';
 import { NO_FACTS, slotSettled, type ProcedureFacts } from './procedure/conditions.js';
+import { isAccessQuestion } from './access-question.js';
+import type { AccessAnswer, AccessInfoSource } from '../../knowledge-tables/access-info.js';
 import type { SlotEnumOption } from './slots/validators.js';
 import {
   NO_FACT_TABLE_READER,
@@ -355,6 +357,16 @@ export interface ConversationEngineOptions {
    * table-sourced slot options (tm 310.3). Default: none (`NO_FACT_TABLE_READER`).
    */
   tables?: FactTableReader;
+  /**
+   * The access information (tm 310.4 · K13 · AI-08 G14): what an access
+   * question ("site açılmıyor", "güncel adres") is answered from — the
+   * setting's link, its knowledge source or its fetched value — before the
+   * tables and the knowledge base, wherever they are asked; nothing to say is
+   * a hand-over. Default: none — an access question is searched like any
+   * other, and G14's output check stops an address the AI was not given. The
+   * server's is `AccessInfoResolver`.
+   */
+  access?: AccessInfoSource;
 }
 
 /** The meter each mode's spend is counted on (`TurnMode`). */
@@ -584,6 +596,11 @@ interface TurnGuard {
    * (`#closeGuard`).
    */
   readonly deferred: GuardrailTrigger[];
+  /**
+   * What the turn's access answers said (tm 310.4 · K13): the workspace's own
+   * words, which G14 lets through wherever the reply carries them.
+   */
+  readonly access: string[];
 }
 
 /** A draft's verdict: the output check's, and the judge's where it ran. */
@@ -606,6 +623,7 @@ export class ConversationEngine {
   readonly #examples: ProcedureExamples;
   readonly #facts: KnowledgeFacts;
   readonly #tables: FactTableReader;
+  readonly #access: AccessInfoSource | null;
   /** The turn's tables, read once however many procedures it touches (`#tablesOf`). */
   readonly #turnTables = new WeakMap<TurnContext, Promise<FactTables>>();
   readonly #llm: MeteredLlm;
@@ -628,6 +646,7 @@ export class ConversationEngine {
     this.#examples = options.procedureExamples ?? new ProcedureExamples();
     this.#facts = options.facts ?? NO_FACT_TABLES;
     this.#tables = options.tables ?? NO_FACT_TABLE_READER;
+    this.#access = options.access ?? null;
     this.#llm = MeteredLlm.wrap(options.llm);
     this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
     this.#maxPromptChars = options.maxPromptChars;
@@ -877,6 +896,7 @@ export class ConversationEngine {
       riskFlagged: readRiskFlags(state.signals).length > 0 || ctx.risk?.noBonusTalk === true,
       hits: [],
       deferred: [],
+      access: [],
     };
     this.#guards.set(message, guard);
     return guard;
@@ -891,6 +911,7 @@ export class ConversationEngine {
         riskFlagged: false,
         hits: [],
         deferred: [],
+        access: [],
       }
     );
   }
@@ -1086,6 +1107,7 @@ export class ConversationEngine {
       const check = checkOutput(out.reply, {
         riskFlagged: guard.riskFlagged,
         phrases: forbiddenPhrasesFor(guard.config, situation, answerIn),
+        access: guard.access,
       });
       for (const warning of check.warnings) {
         hits.push(guardrailHit(warning.rule, 'output', 'warn', warning.quote));
@@ -1554,6 +1576,27 @@ export class ConversationEngine {
           break;
 
         case 'answer_from_knowledge': {
+          // An access question (K13 · G14): the access information, or a person.
+          const access = await this.#accessAnswer(
+            input.message,
+            input.message.text,
+            input.skill.aiAgentId,
+            input.answerIn,
+            input.ctx,
+          );
+          if (access) {
+            log.push({ step: name, detail: accessAnswerDetail(access), ok: true });
+            replyKind = 'answer';
+            if (access.kind === 'answer') {
+              reply = access.text;
+            } else {
+              reply = NO_ANSWER_PHRASES[input.answerIn ?? 'tr'].handoff;
+              handedOver = true;
+              handoffReason = ACCESS_HANDOFF_REASON;
+              sideEffects.push({ kind: 'handoff', team: null, reason: ACCESS_HANDOFF_REASON });
+            }
+            break;
+          }
           // A row of the AI-13 tables before any passage (AI-06 §3).
           const fact = await this.#tableAnswer(input.message.text, null, input.answerIn, input.ctx);
           if (fact) {
@@ -2244,6 +2287,33 @@ export class ConversationEngine {
     });
   }
 
+  /**
+   * The access information's answer to `text` (tm 310.4 · K13 · AI-08 G14),
+   * asked before the tables wherever they are. Null when the message is no
+   * access question (`isAccessQuestion`) or the engine has no access
+   * information; otherwise the setting's words — kept on the turn's guard, so
+   * the output check lets G14 through for them — or nothing to say, which the
+   * caller makes a hand-over.
+   */
+  async #accessAnswer(
+    message: TurnMessage,
+    text: string,
+    aiAgentId: string | null,
+    answerIn: PersonaLanguage | null,
+    ctx: TurnContext,
+  ): Promise<AccessAnswer | null> {
+    if (this.#access === null || !isAccessQuestion(text)) return null;
+    const answer = await this.#access.resolve({
+      db: ctx.db,
+      brandId: turnBrandId(ctx),
+      aiAgentId,
+      now: ctx.now,
+      language: answerIn,
+    });
+    if (answer.kind === 'answer') this.#guardOf(message, ctx).access.push(answer.text);
+    return answer;
+  }
+
   /** The turn's view of the tables — its brand's rows — read on first use. */
   #tablesOf(ctx: TurnContext): Promise<FactTables> {
     let read = this.#turnTables.get(ctx);
@@ -2361,6 +2431,24 @@ export class ConversationEngine {
           instructions.push({ at: part.at, text: part.text });
           break;
         case 'knowledge': {
+          // An access question (K13 · G14): the access information, or a person.
+          const access = await this.#accessAnswer(
+            message,
+            part.queryHint ? `${part.queryHint}\n${message.text}` : message.text,
+            run.skill.aiAgentId,
+            run.answerIn,
+            ctx,
+          );
+          if (access) {
+            log.push({ step: part.at, detail: accessAnswerDetail(access), ok: true });
+            if (access.kind === 'answer') {
+              segments.push({ kind: 'text', text: access.text });
+            } else {
+              blocked = { reason: ACCESS_HANDOFF_REASON };
+              failedAt = part.at;
+            }
+            break;
+          }
           // A row of the AI-13 tables before any passage (AI-06 §1, §3).
           const fact = await this.#tableAnswer(
             part.queryHint ? `${part.queryHint}\n${message.text}` : message.text,
@@ -2780,6 +2868,7 @@ export class ConversationEngine {
     const check = checkOutput(draft, {
       riskFlagged: guard.riskFlagged,
       phrases: forbiddenPhrasesFor(guard.config, situation, input.answerIn),
+      access: guard.access,
     });
     const settings = guardrailSettingsFor(guard.config, input.skill.aiAgentId);
     const judged =
@@ -3209,6 +3298,59 @@ export class ConversationEngine {
         lastProcessedEventSeq: Math.max(state.lastProcessedEventSeq, message.throughSeq ?? 0),
       },
     });
+
+    // An access question (K13 · G14): the access information, or a person —
+    // never a passage the search happened to find.
+    const access = await this.#accessAnswer(
+      message,
+      message.text,
+      turnAgentId(ctx.config.skills),
+      answerIn,
+      ctx,
+    );
+    if (access) {
+      const line: SkillRunLogEntry = {
+        step: 'access_info',
+        detail: accessAnswerDetail(access),
+        ok: true,
+      };
+      if (access.kind === 'answer') {
+        return taken({
+          reply: access.text,
+          decisions: {
+            ...NOTHING_DECIDED,
+            ...input.decided,
+            outcome: 'answered',
+            replyKind: 'answer',
+            resolution,
+            usage: input.spent,
+            log: [...input.log, line],
+          },
+          sideEffects: [],
+        });
+      }
+      // G14: no access information to give — a person answers, at once.
+      return taken({
+        reply:
+          (ctx.noAnswer ?? DEFAULT_NO_ANSWER).text ?? NO_ANSWER_PHRASES[answerIn ?? 'tr'].handoff,
+        decisions: {
+          ...NOTHING_DECIDED,
+          ...input.decided,
+          outcome: 'handed_off',
+          replyKind: 'answer',
+          handoffReason: ACCESS_HANDOFF_REASON,
+          usage: input.spent,
+          log: [...input.log, line],
+          unanswered: {
+            language: answerIn,
+            category: noAnswerCategory(message.text, input.understanding),
+            policy: 'handoff',
+            reason: 'nothing_answered',
+          },
+        },
+        sideEffects: [{ kind: 'handoff', team: null, reason: ACCESS_HANDOFF_REASON }],
+      });
+    }
 
     // A row of the AI-13 tables before any passage (AI-06 §3): its value, exact.
     const fact = await this.#tableAnswer(message.text, input.understanding, answerIn, ctx);
@@ -4037,6 +4179,26 @@ function joinSegments(segments: readonly Segment[]): string | null {
  */
 function turnBrandId(ctx: TurnContext): string | null {
   return ctx.brandId !== undefined ? ctx.brandId : (ctx.tenant.brandId ?? null);
+}
+
+/** An access question with no access information to give hands over as one the AI cannot answer (G14). */
+const ACCESS_HANDOFF_REASON: HandoffReason = 'no_knowledge';
+
+const ACCESS_SERVED_DETAIL = {
+  fixed: 'the fixed link',
+  source: 'its knowledge source',
+  fetched: 'fetched now',
+  cached: 'the cached value',
+  last_value: 'the last known value',
+} as const;
+
+/** The run log's line for an access answer: where it came from, never what it said. */
+function accessAnswerDetail(answer: AccessAnswer): string {
+  const failed = answer.failure ? ` — the fetch failed (${answer.failure})` : '';
+  if (answer.kind === 'none') {
+    return `no access information to give (${answer.reason})${failed} — handed to a human`;
+  }
+  return `answered from the access information (${answer.sourceType}, ${ACCESS_SERVED_DETAIL[answer.served]})${failed}`;
 }
 
 /** The run log's line for an answer from the tables: how many rows, never their values. */

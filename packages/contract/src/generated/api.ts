@@ -4461,6 +4461,44 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai-access-info': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The access information settings
+     * @description The every-brand setting and each brand's (K13), the every-brand one
+     *     first. No setting: the AI has nothing it may say about reaching the
+     *     site, and hands over. `last_value` / `last_fetched_at` are what a
+     *     `dynamic_url` answered last — the value the AI falls back on when a
+     *     fetch fails.
+     */
+    get: operations['listAiAccessInfo'];
+    /**
+     * Set the access information for a brand or for every brand
+     * @description Replaces the setting of `brand_id` (null or omitted: every brand)
+     *     whole — a field left out is cleared, `cache_seconds` back to 300.
+     *     Refusals are 400 `validation`, `details.reason = ai_access_info_invalid`,
+     *     with every problem in `details.problems` (`{field, code}`): besides the
+     *     field rules, a brand that is not this workspace's, a `kb_source_id`
+     *     that is not one of its knowledge sources, and a `dynamic_url` that is
+     *     not https or names a private, loopback or link-local host are
+     *     `invalid`. The host is checked again on every fetch (DNS can change),
+     *     and a fetch never follows a redirect. A new URL or source type drops
+     *     the last fetched value. The AI change history (AI-21) records the
+     *     change once tm 315 opens it.
+     */
+    put: operations['putAiAccessInfo'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/copilot/knowledge': {
     parameters: {
       query?: never;
@@ -12291,7 +12329,7 @@ export interface components {
        * @description The knowledge source a `kb_row` answer comes from.
        */
       kb_source_id: string | null;
-      /** @description The URL a `dynamic_url` fetches, or the `fixed_link` itself (http or https). */
+      /** @description The URL a `dynamic_url` fetches (https), or the `fixed_link` itself (http or https). */
       url: string | null;
       cache_seconds: number;
       /** @description What the AI says with a fixed link. */
@@ -12320,6 +12358,7 @@ export interface components {
       source_type: components['schemas']['AiAccessInfoSourceType'];
       /** Format: uuid */
       kb_source_id?: string | null;
+      /** @description https for a `dynamic_url`; http or https for a `fixed_link`. */
       url?: string | null;
       /** @default 300 */
       cache_seconds: number;
@@ -24255,6 +24294,59 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiAccessInfo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiAccessInfo'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  putAiAccessInfo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiAccessInfoUpdate'];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiAccessInfo'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

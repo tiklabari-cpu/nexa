@@ -377,6 +377,13 @@ const TRACKED = [
       'the structured knowledge tables (tm 310.2 · AI-13) — the four-tab "Tablolar" screen ' +
       'with its form, CSV import/export and "Gözden geçirdim" button, which tm 310.5 draws.',
   })),
+  ...['GET /ai-access-info', 'PUT /ai-access-info'].map((op) => ({
+    op,
+    owner: 'tm 310.5',
+    reason:
+      'the access information (tm 310.4 · K13) — the "Erişim bilgisi" card beside the tables, ' +
+      'with its "Bu bilgi kiracı tarafından girilir" note, which tm 310.5 draws.',
+  })),
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

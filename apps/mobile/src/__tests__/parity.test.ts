@@ -974,7 +974,10 @@ describe('module parity matrix — what is still owed', () => {
       // `/export`, `/{rowId}` and `/{rowId}/review` (tm 310.2) — AI-13's
       // structured tables, kept in the web panel's "Tablolar" screen
       // (tm 310.5). The app keeps no AI knowledge; nothing here re-scopes.
-      contractEndpoints: 269,
+      // 269 -> 270 with `/ai-access-info` (tm 310.4) — K13's access
+      // information, set on the web panel's "Erişim bilgisi" card (tm 310.5).
+      // The app configures no AI; nothing here re-scopes.
+      contractEndpoints: 270,
       scopeBoundaries: 1,
     });
   });

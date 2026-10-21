@@ -1435,7 +1435,12 @@ export function isAccessInfoUrl(value: unknown): value is string {
   }
 }
 
-/** Every problem in the access information setting. */
+/**
+ * Every problem in the access information setting. A `dynamic_url` is
+ * fetched (tm 310.4), so it is https: whatever answers it is said to
+ * players as the site's address, and plain http would let anyone on the path
+ * change what they are told. A `fixed_link` is only said, http or https.
+ */
 export function validateAiAccessInfo(input: unknown): KnowledgeTableProblem[] {
   const problems: KnowledgeTableProblem[] = [];
   const report: Report = (field, code) => void problems.push({ field, code });
@@ -1453,7 +1458,9 @@ export function validateAiAccessInfo(input: unknown): KnowledgeTableProblem[] {
   }
   const url = row['url'];
   if (given(url) && !isAccessInfoUrl(url)) report('url', 'invalid');
-  else if (
+  else if (row['source_type'] === 'dynamic_url' && given(url) && !/^https:/i.test(String(url))) {
+    report('url', 'invalid');
+  } else if (
     (row['source_type'] === 'dynamic_url' || row['source_type'] === 'fixed_link') &&
     !given(url)
   ) {

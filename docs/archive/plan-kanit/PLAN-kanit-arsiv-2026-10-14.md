@@ -839,6 +839,8 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 - ℹ tm 275 · tm 98'in "katalog yerel, şablon kontrata girmez" varsayımı (`task_098.md:28`) iGaming prosedür şablonları için kalktı: paket `packages/ai-templates`, kontratta `GET /ai-templates`, `GET /ai-templates/{key}`, `POST /ai-templates/{key}/install`, `POST /ai-templates/packs/{pack}/install`; kurulum kopya, `self_exclusion` / `responsible_gambling_signal` kilitli (`409 template_locked`); 33 yerel şablon ve bu satırın kapsamı aynen — damga `✅` kaldı, kod değişmedi (uygulama tm 311) · `docs/adr/ai-template-catalog.md` · test yok (yalnız doküman) · §D224
 
+- ℹ tm 311.1 · AI-15 1/4 (iGaming şablonları #311; damga `✅` kaldı — 33 yerel şablon aynen): `@siyahtus/ai-templates` paketi (20 anahtar, 2 kilitli, `igaming_core`), `validateAiTemplate` (19 kod) ve §3.1 `deposit_not_credited` tam şablonu (12 slot, 38 adım, A–D + üçüncü kişi + tutar yolları, 7 yasak ifade, pasif `deposit_lookup`, 5 senaryo motorla mock'ta geçer) · `packages/ai-templates/src/validate.ts`, `src/igaming/deposit-not-credited.ts` · `validate.test.ts` (54), `deposit-not-credited.test.ts` (14), `package.test.ts` (2), api `template-scenarios.test.ts` (6) · §D313
+
 #### KI18N1-2 — I18N1/2 · Widget + panel i18n
 
 ✅ tm 26 (26.1–26.4): bağımlılıksız katalog (tr/en) + t() fallback zinciri (aktif locale→en→anahtar, eksik-anahtar güvenliği) · panel shell/nav/⌘K t()'ye taşındı + hesap menüsü dil değiştirici · widget `createTranslator` (data-language → sabit locale, runtime değişimi yok) · format.ts Intl helper'ları locale'e bağlı · testler: t() fallback unit (panel+widget) · panel locale-switch smoke · widget mount-locale smoke · bundle P3 7.57 KB gzip ≪ 50 KB

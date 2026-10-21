@@ -33,6 +33,7 @@ import { ProfileForm } from './ProfileForm.js';
 import { GuardrailsPage } from './GuardrailsPage.js';
 import { HandoffSettings } from './HandoffSettings.js';
 import { AiPerformance } from './AiPerformance.js';
+import { IGAMING_CATEGORY, galleryStartsOnIgaming } from './ai-templates.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
 import { KnowledgeSourceActions } from './KnowledgeSourceActions.js';
@@ -167,7 +168,12 @@ export function PlaybookPage(): ReactElement {
   // "New skill" opens a blank editor; the skill exists on the server only once
   // its first Save posts it (O12), so a click nobody follows up leaves nothing behind.
   const [drafting, setDrafting] = useState(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
+  // The onboarding's "recommended setup" lands here with `?gallery=igaming` (tm 311.4):
+  // read once, at mount — the page is not a router consumer and the param is a one-shot.
+  const [openedFromLink] = useState(
+    () => new URLSearchParams(window.location.search).get('gallery') === IGAMING_CATEGORY,
+  );
+  const [galleryOpen, setGalleryOpen] = useState(openedFromLink);
   const [tab, setTab] = useState<SkillTab>('all');
 
   // List controls (FR-MOD-05.4). `search` is the raw input; it settles into
@@ -187,6 +193,14 @@ export function PlaybookPage(): ReactElement {
     const timer = setTimeout(() => setQuery(search.trim()), 200);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // The workspace's sector orders the gallery's tabs (iGaming first for gaming/gambling).
+  // Read when the gallery is open, not on every visit to the page.
+  const company = useQuery({
+    queryKey: ['settings', 'company'],
+    queryFn: () => api.get<{ sector: string | null }>('/settings/company'),
+    enabled: galleryOpen,
+  });
 
   const skills = useQuery({
     queryKey: ['playbook', 'skills'],
@@ -877,6 +891,13 @@ export function PlaybookPage(): ReactElement {
             pendingId={
               createFromTemplate.isPending ? (createFromTemplate.variables?.id ?? null) : null
             }
+            igamingFirst={galleryStartsOnIgaming(company.data?.sector)}
+            startOnIgaming={openedFromLink}
+            aiAgentId={aiAgent?.id ?? null}
+            onOpenSkill={(skill) => {
+              adopt(skill);
+              setGalleryOpen(false);
+            }}
           />
         </>
       )}

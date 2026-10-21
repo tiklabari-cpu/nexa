@@ -305,4 +305,10 @@ export const auth: Messages = {
   'auth.onboarding.sample.alreadySeeded': 'Sample data is already in your workspace.',
   'auth.onboarding.sample.footerBefore': 'When you are done, choose',
   'auth.onboarding.sample.footerAfter': 'to open your inbox.',
+  'auth.onboarding.company.sectorLabel': 'Sector (optional)',
+  'auth.onboarding.company.sectorPlaceholder': 'Choose a sector',
+  'auth.onboarding.recommended.title': 'Recommended setup',
+  'auth.onboarding.recommended.body':
+    'There are ready-made iGaming templates for gaming and betting teams: deposits, withdrawals, KYC, bonuses, responsible gambling and more. Once setup is done you can install the Turkish templates as switched-off drafts.',
+  'auth.onboarding.recommended.openAfter': 'Open the iGaming templates when setup is done',
 };

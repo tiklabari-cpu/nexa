@@ -13451,7 +13451,7 @@
           "310"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T10:38:00.843Z",
+        "updatedAt": "2026-10-21T10:38:58.459Z",
         "subtasks": [
           {
             "id": 1,
@@ -13499,13 +13499,13 @@
             "description": "TemplateGallery iGaming kategorisi + kurulum diyaloğu + onboarding önerisi",
             "details": "Üst görev 311 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "311.3"
             ],
             "parentId": "311",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-21T10:38:58.459Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T10:38:00.844Z",
+      "lastModified": "2026-10-21T10:38:58.461Z",
       "taskCount": 390,
       "completedCount": 308,
       "tags": [

@@ -362,29 +362,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  {
-    op: 'GET /ai-templates',
-    owner: 'tm 311.4',
-    reason:
-      'the ready-made iGaming procedures (tm 311.3 · AI-15) — the Playbook gallery\'s "iGaming" ' +
-      'category and the onboarding wizard\'s "Önerilen kurulum", which TPL-WEB-ONBOARD (tm 311.4) draws.',
-  },
-  {
-    op: 'GET /ai-templates/{templateKey}',
-    owner: 'tm 311.4',
-    reason: "one template's preview in the same gallery (tm 311.4).",
-  },
-  {
-    op: 'POST /ai-templates/{templateKey}/install',
-    owner: 'tm 311.4',
-    reason: 'the gallery\'s "Kur" with its team-mapping dialog (tm 311.4).',
-  },
-  {
-    op: 'POST /ai-templates/packs/{packKey}/install',
-    owner: 'tm 311.4',
-    reason:
-      'the onboarding wizard\'s "Önerilen kurulum" for a gaming_gambling workspace (tm 311.4).',
-  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

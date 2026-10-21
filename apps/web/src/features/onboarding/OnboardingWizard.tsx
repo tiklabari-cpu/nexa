@@ -35,7 +35,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  COMPANY_SECTORS,
   COMPANY_SIZES,
+  type CompanySector,
   type CompanySize,
   type OnboardingSeedResult,
   type OnboardingState,
@@ -116,11 +118,17 @@ export function OnboardingWizard(): ReactElement {
 
   // Completing and skipping are the same server call — the workspace is set up
   // either way. On success the local gate flips and the shell takes over.
+  // The gaming/gambling "recommended setup" (tm 311.4): ticked on the company step,
+  // it sends the owner to the iGaming templates once the wizard is done. The wizard
+  // gates every route, so it can only be a destination, never a mid-wizard link.
+  const [openTemplatesAfter, setOpenTemplatesAfter] = useState(false);
   const finish = useMutation({
     mutationFn: () => api.post('/onboarding/complete'),
     onSuccess: () => {
       markOnboarded();
-      navigate('/app/inbox', { replace: true });
+      navigate(openTemplatesAfter ? '/app/playbook?gallery=igaming' : '/app/inbox', {
+        replace: true,
+      });
     },
   });
 
@@ -157,7 +165,12 @@ export function OnboardingWizard(): ReactElement {
           {stepId === 'welcome' && <WelcomeStep name={agentName} pilotMode={pilotMode} />}
           {stepId === 'website' && <WebsiteStep />}
           {stepId === 'channels' && <ChannelsStep />}
-          {stepId === 'company' && <CompanySizeStep />}
+          {stepId === 'company' && (
+            <CompanySizeStep
+              openTemplatesAfter={openTemplatesAfter}
+              onOpenTemplatesAfter={setOpenTemplatesAfter}
+            />
+          )}
           {stepId === 'team' && (
             <div className="flex flex-col gap-6">
               <TeamStep />
@@ -392,22 +405,37 @@ function ChannelsStep(): ReactElement {
  * select starts unset and Continue works without a choice; only the
  * in-page Save button is gated on one being made.
  */
-function CompanySizeStep(): ReactElement {
+function CompanySizeStep({
+  openTemplatesAfter,
+  onOpenTemplatesAfter,
+}: {
+  openTemplatesAfter: boolean;
+  onOpenTemplatesAfter: (value: boolean) => void;
+}): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
 
+  // The sector is optional and rides on the same PATCH: it is sent only when one
+  // is chosen, so a size-only save is the body it always was.
   const save = useMutation({
-    mutationFn: (size: CompanySize) => api.patch('/settings/company', { company_size: size }),
+    mutationFn: (values: { size: CompanySize; sector: CompanySector | '' }) =>
+      api.patch('/settings/company', {
+        company_size: values.size,
+        ...(values.sector ? { sector: values.sector } : {}),
+      }),
   });
 
   const form = useForm({
-    initial: { company_size: '' },
+    initial: { company_size: '', sector: '' },
     validators: {
       company_size: required(t('auth.onboarding.company.sizeRequiredError')),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
-        await save.mutateAsync(values.company_size as CompanySize);
+        await save.mutateAsync({
+          size: values.company_size as CompanySize,
+          sector: values.sector as CompanySector | '',
+        });
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
@@ -417,7 +445,10 @@ function CompanySizeStep(): ReactElement {
   // Only while the current selection is exactly what was last saved —
   // changing it again hides the note rather than leaving it over a value
   // that was never sent.
-  const justSaved = save.isSuccess && save.variables === form.values.company_size;
+  const justSaved =
+    save.isSuccess &&
+    save.variables?.size === form.values.company_size &&
+    save.variables.sector === form.values.sector;
 
   return (
     <div className="flex flex-col gap-3">
@@ -446,6 +477,24 @@ function CompanySizeStep(): ReactElement {
           </select>
           <FieldError id="onboarding-company-size-error" message={sizeError} />
         </label>
+        <label htmlFor="onboarding-company-sector" className="flex min-w-56 flex-1 flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('auth.onboarding.company.sectorLabel')}
+          </span>
+          <select
+            id="onboarding-company-sector"
+            value={form.values.sector}
+            onChange={(event) => form.setValue('sector', event.target.value)}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          >
+            <option value="">{t('auth.onboarding.company.sectorPlaceholder')}</option>
+            {COMPANY_SECTORS.map((sector) => (
+              <option key={sector} value={sector}>
+                {t(`settings.company.sector.${sector}`)}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="submit"
           disabled={!form.canSubmit}
@@ -456,6 +505,24 @@ function CompanySizeStep(): ReactElement {
             : t('auth.onboarding.company.submit')}
         </button>
       </form>
+      {form.values.sector === 'gaming_gambling' && (
+        <section
+          aria-label={t('auth.onboarding.recommended.title')}
+          className="flex flex-col gap-2 rounded-md border border-brand-500/40 bg-brand-500/5 p-3"
+        >
+          <h3 className="text-sm font-semibold">{t('auth.onboarding.recommended.title')}</h3>
+          <p className="text-2xs text-content-secondary">{t('auth.onboarding.recommended.body')}</p>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={openTemplatesAfter}
+              onChange={(event) => onOpenTemplatesAfter(event.target.checked)}
+              className="mt-1"
+            />
+            <span>{t('auth.onboarding.recommended.openAfter')}</span>
+          </label>
+        </section>
+      )}
       {justSaved && (
         <p role="status" className="text-2xs text-success">
           {t('auth.onboarding.company.saved')}

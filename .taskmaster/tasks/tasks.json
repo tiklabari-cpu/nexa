@@ -13451,7 +13451,7 @@
           "310"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T07:36:28.838Z",
+        "updatedAt": "2026-10-21T08:41:20.903Z",
         "subtasks": [
           {
             "id": 1,
@@ -13485,13 +13485,13 @@
             "description": "Kurulum ve paket uçları (idempotent, rota eşleme, tenant_must_fill, kilit, template_unfilled)",
             "details": "Üst görev 311 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "311.1"
             ],
             "parentId": "311",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-21T08:41:20.903Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T07:36:28.839Z",
+      "lastModified": "2026-10-21T08:41:20.904Z",
       "taskCount": 390,
       "completedCount": 308,
       "tags": [

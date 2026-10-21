@@ -59,6 +59,8 @@ export const common: Messages = {
   'common.errors.service_unavailable':
     'The service is temporarily unavailable — try again shortly.',
   'common.errors.takeover_conflict': 'Someone else took this conversation first.',
+  'common.errors.template_locked':
+    'This procedure was installed from a locked template — it cannot be switched off or deleted; only its texts and team can change.',
   'common.errors.ticket_exists': 'A ticket already exists for this conversation.',
   'common.errors.too_many_requests': 'Too many attempts — wait a moment and try again.',
   'common.errors.two_factor_already_enabled':

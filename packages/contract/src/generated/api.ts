@@ -3927,7 +3927,11 @@ export interface paths {
     get: operations['getSkill'];
     put?: never;
     post?: never;
-    /** Delete a skill */
+    /**
+     * Delete a skill
+     * @description A locked template copy (`self_exclusion`, `responsible_gambling_signal`)
+     *     is never deleted, switched on or not: 409 `template_locked`.
+     */
     delete: operations['deleteSkill'];
     options?: never;
     head?: never;
@@ -3945,7 +3949,14 @@ export interface paths {
      *     A procedure is judged whole — the fields sent over the ones stored — so
      *     changing one slot re-checks every step that names it. `procedure`
      *     replaces the stored one; it is not merged. A locked template copy
-     *     (`locked`) may change only its texts and its team, never its mode.
+     *     (`locked`) may change only its texts and its team, never its mode, and
+     *     is never switched off: `active: false` is a 409 `template_locked`.
+     *
+     *     An installed template copy (`template_key`) is switched on only once its
+     *     placeholders are replaced (400 `template_unfilled`, `details.placeholders`)
+     *     and every topic it hands over to reaches a team — a hand-over route or a
+     *     team's topic role (400 `template_unmapped`, `details.topics`). The same
+     *     holds for an edit to a copy that is on.
      */
     patch: operations['updateSkill'];
     trace?: never;
@@ -4493,6 +4504,125 @@ export interface paths {
      */
     put: operations['putAiAccessInfo'];
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The ready-made procedure templates
+     * @description The catalogue (v1: twenty iGaming templates in Turkish) and its packs,
+     *     with the version of each template this workspace has installed. Reading
+     *     it writes nothing. Sorting by the workspace's sector is the client's.
+     */
+    get: operations['listAiTemplates'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-templates/{templateKey}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        templateKey: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One template, whole
+     * @description The template as the preview shows it: its procedure, the phrases its
+     *     replies must never carry, what the workspace must fill in, its test
+     *     scenarios and the hand-over card it leaves. Reading it writes nothing.
+     */
+    get: operations['getAiTemplate'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-templates/{templateKey}/install': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        templateKey: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Install a template as a draft procedure
+     * @description Copies the template into a procedure skill of the AI agent, switched off,
+     *     with the template's forbidden phrases scoped to it. Idempotent per agent
+     *     and template: when the agent already has a copy, nothing is written and
+     *     that copy is returned (`200`, `created: false`); `force_copy: true` makes
+     *     another (`201`). Two installs at once leave one copy.
+     *
+     *     `route_mapping` sends a topic the template hands over to to a team: a
+     *     hand-over route for every brand, or for each of `brand_ids`; an existing
+     *     route for that topic and brand is pointed at the team. It needs the
+     *     `access_rules:rw` scope as well (403 otherwise). A topic left unmapped
+     *     does not stop the install — it stops publishing, and `unmapped_topics`
+     *     says which.
+     *
+     *     Refusals are 400 `validation` with `details.reason`:
+     *     `template_route_unknown_topic` (a mapped topic the template does not hand
+     *     over to), `handoff_route_unknown_team`, `handoff_route_unknown_brand`,
+     *     `handoff_routes_limit`, `forbidden_phrases_limit`.
+     */
+    post: operations['installAiTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-templates/packs/{packKey}/install': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        packKey: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Install a pack — its templates, rules and example rows
+     * @description v1's one pack is `igaming_core`: the twenty templates (each as `POST
+     *     /ai-templates/{templateKey}/install` without `force_copy`), the default
+     *     behaviour rules (switched off, matched by title on a re-install; a rule
+     *     for some templates is scoped to their copies), and the "örnek —
+     *     doğrulayın" rows of the structured knowledge tables (`source: sample` —
+     *     the AI uses none until a person edits or reviews it; a row whose name
+     *     the table already has is skipped). One transaction: a re-install fills
+     *     in only what is missing.
+     *
+     *     `create_groups: true` makes a team for every topic the templates hand
+     *     over to that no route maps and no team holds (the Responsible Gambling
+     *     team with a "Sorumlu Oyun eğitimi" expertise as its requirement); it
+     *     needs the `groups--all:rw` scope as well. Without it no team is made.
+     *     `persona_style` is a suggestion: the agent's persona is not changed.
+     */
+    post: operations['installAiTemplatePack'];
     delete?: never;
     options?: never;
     head?: never;
@@ -11715,8 +11845,188 @@ export interface components {
     SkillValidationError: components['schemas']['Error'] & {
       error?: {
         details?:
-          components['schemas']['StepProblem'] | components['schemas']['ProcedureProblemDetails'];
+          | components['schemas']['StepProblem']
+          | components['schemas']['ProcedureProblemDetails']
+          | components['schemas']['TemplatePublishProblem'];
       };
+    };
+    /**
+     * @description Why an installed template copy cannot be switched on (AI-15): a
+     *     placeholder the workspace has not replaced yet (`template_unfilled`,
+     *     `placeholders` names their keys), or a topic it hands over to that
+     *     neither a hand-over route nor a team's topic role sends anywhere
+     *     (`template_unmapped`, `topics`).
+     */
+    TemplatePublishProblem: {
+      /** @enum {string} */
+      reason: 'template_unfilled' | 'template_unmapped';
+      placeholders?: string[];
+      topics?: string[];
+    };
+    /**
+     * @description One item of "Kiracının doldurması gerekenler" (AI-15-S1):
+     *     `placeholder` — a `{key}` left in a reply text, with the "örnek —
+     *     doğrulayın" value the scenarios run with (never installed); publishing
+     *     with one left is `template_unfilled`. `table` — the structured
+     *     knowledge table and the columns the procedure reads. `setting` — a
+     *     workspace text it relies on (the crisis text, the complaint procedure,
+     *     the access information).
+     */
+    AiTemplateTenantMustFill: {
+      /** @enum {string} */
+      kind: 'placeholder' | 'table' | 'setting';
+      label: string;
+      /** @description placeholder: the key, without braces. */
+      key?: string;
+      /** @description placeholder: an example value. */
+      example?: string;
+      /** @description table: the table, and for payment methods the direction (`payment_methods.deposit`). */
+      table?: string;
+      /** @description table: the procedure facts it reads (`method.expected_minutes`). */
+      columns?: string[];
+      /** @enum {string} */
+      setting?: 'crisis' | 'complaint' | 'access_info';
+    };
+    AiTemplateSummary: {
+      key: string;
+      name: string;
+      summary: string;
+      /** @enum {string} */
+      industry: 'igaming';
+      /** @enum {string} */
+      lang: 'tr';
+      /** @description Raised when the platform changes the template; an installed copy keeps its own. */
+      version: number;
+      /** @description A copy can be neither switched off nor deleted; only its texts and team change. */
+      locked: boolean;
+      /** @description The routing topics it hands over to — what `route_mapping` maps. */
+      topics: components['schemas']['QueueTopicRole'][];
+      tenant_must_fill_count: number;
+      /**
+       * @description The newest version of it among this workspace's copies; null when it
+       *     has none. Below `version`: a newer template is out ("yeni sürüm var").
+       */
+      installed_version: number | null;
+    };
+    AiTemplatePackSummary: {
+      /** @enum {string} */
+      key: 'igaming_core';
+      /** @description The package's version. */
+      version: string;
+      /** @enum {string} */
+      industry: 'igaming';
+      /** @enum {string} */
+      lang: 'tr';
+      template_keys: string[];
+      default_rules_count: number;
+      sample_rows_count: number;
+    };
+    AiTemplateList: {
+      items: components['schemas']['AiTemplateSummary'][];
+      packs: components['schemas']['AiTemplatePackSummary'][];
+    };
+    /**
+     * @description A whole template (AI-15): the summary, the procedure in the shape a
+     *     skill stores it (hand-overs name a topic, never a team), the phrases
+     *     its replies must never carry, the checklist, its scenarios (AI-19
+     *     seeds) and the hand-over card it leaves.
+     */
+    AiTemplate: components['schemas']['AiTemplateSummary'] & {
+      when_to_use: string;
+      examples: string[];
+      priority: number;
+      slots: components['schemas']['SlotDef'][];
+      procedure: components['schemas']['SkillProcedure'];
+      forbidden_phrases: {
+        phrase: string;
+        /** @enum {string} */
+        match: 'exact' | 'word' | 'regex';
+        why: string;
+      }[];
+      tenant_must_fill: components['schemas']['AiTemplateTenantMustFill'][];
+      /** @description Scripted test conversations — the player's turns and how the conversation must end. */
+      scenarios: ({
+        key: string;
+        name: string;
+        persona: string;
+        turns: string[];
+        expect: {
+          [key: string]: unknown;
+        };
+      } & {
+        [key: string]: unknown;
+      })[];
+      /** @description The hand-over card an agent sees for this topic, for the preview. */
+      card_example?: string | null;
+    };
+    AiTemplateInstallRequest: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** @description The brands `route_mapping`'s routes are for; omitted, every brand. */
+      brand_ids?: string[];
+      /** @description `{ <topic>: <team id> }` — a hand-over route per topic (AI-12). */
+      route_mapping?: {
+        [key: string]: number;
+      };
+      /** @description Make another copy even when the agent has one. */
+      force_copy?: boolean;
+    };
+    AiTemplateInstallResult: {
+      created: boolean;
+      skill: components['schemas']['Skill'];
+      tenant_must_fill: components['schemas']['AiTemplateTenantMustFill'][];
+      /** @description The copy's `{key}`s still to replace; publishing waits for none. */
+      unfilled_placeholders: string[];
+      /** @description The copy's topics no route or team serves; publishing waits for none. */
+      unmapped_topics: string[];
+    };
+    AiTemplatePackInstallRequest: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      brand_ids?: string[];
+      route_mapping?: {
+        [key: string]: number;
+      };
+      /** @description Make the teams for the topics nothing serves yet. Default false. */
+      create_groups?: boolean;
+    };
+    AiTemplatePackInstallResult: {
+      pack: string;
+      version: string;
+      templates: {
+        template_key: string;
+        /** Format: uuid */
+        skill_id: string;
+        created: boolean;
+        tenant_must_fill: components['schemas']['AiTemplateTenantMustFill'][];
+        unfilled_placeholders: string[];
+        unmapped_topics: string[];
+      }[];
+      rules: {
+        /** @description The behaviour rules written, switched off. */
+        created: components['schemas']['AiGuidanceRule'][];
+        existing: number;
+      };
+      /**
+       * @description The "örnek — doğrulayın" rows (`source: sample`); skipped ones the
+       *     table had by name.
+       */
+      sample_rows: {
+        created: number;
+        skipped: number;
+      };
+      groups_created: {
+        id: number;
+        name: string;
+        topic_role: components['schemas']['QueueTopicRole'];
+      }[];
+      /** @description A suggestion the console shows; the agent's persona is not changed. */
+      persona_style: {
+        address_form: string;
+        emoji: string;
+        max_questions_per_message: number;
+      };
+      unmapped_topics: string[];
     };
     SkillLogEntry: {
       step: string;
@@ -11963,11 +12273,13 @@ export interface components {
      */
     KnowledgeTableSegment: 'payment-methods' | 'bonuses' | 'kyc-documents' | 'rules';
     /**
-     * @description Who filled the row: a person, or an integration (F2) — whose rows are
-     *     not edited by hand.
+     * @description Who filled the row: a person, an integration (F2) — whose rows are
+     *     not edited by hand — or a template pack (`sample`, AI-15): an "örnek
+     *     — doğrulayın" row the AI does not use until a person edits or reviews
+     *     it, which makes it `manual`.
      * @enum {string}
      */
-    KnowledgeTableRowSource: 'manual' | 'integration';
+    KnowledgeTableRowSource: 'manual' | 'integration' | 'sample';
     /**
      * @description One refused field of a row (`validateKnowledgeTableRow`). `field` is a
      *     path (`aliases[2]`, `working_hours.windows[0].end`); `taken` — another
@@ -17083,6 +17395,7 @@ export interface components {
       | 'request_timeout'
       | 'service_unavailable'
       | 'takeover_conflict'
+      | 'template_locked'
       | 'too_many_requests'
       | 'unsupported_version'
       | 'users_limit_reached'
@@ -23564,6 +23877,15 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      /** @description `template_locked`: a locked template copy. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -23635,6 +23957,15 @@ export interface operations {
         };
       };
       404: components['responses']['NotFound'];
+      /** @description `template_locked`: switching off a locked template copy. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -24347,6 +24678,139 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiTemplates: {
+    parameters: {
+      query?: {
+        industry?: 'igaming';
+        lang?: 'tr';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTemplateList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        templateKey: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The template */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTemplate'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  installAiTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        templateKey: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiTemplateInstallRequest'];
+      };
+    };
+    responses: {
+      /** @description The agent's existing copy; nothing was written. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTemplateInstallResult'];
+        };
+      };
+      /** @description A new copy. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTemplateInstallResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  installAiTemplatePack: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        packKey: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiTemplatePackInstallRequest'];
+      };
+    };
+    responses: {
+      /** @description Everything was installed already; nothing was written. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTemplatePackInstallResult'];
+        };
+      };
+      /** @description Something was written. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTemplatePackInstallResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

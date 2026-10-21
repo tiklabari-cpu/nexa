@@ -347,13 +347,21 @@ function targetTopic(target: HandoffTarget | undefined): string | undefined {
  * The keys `route_mapping` maps to teams; one left unmapped blocks publishing.
  */
 export function templateTopics(template: AiTemplate): string[] {
+  return procedureTopics(template.procedure);
+}
+
+/**
+ * {@link templateTopics} of a procedure as a skill stores it — an installed
+ * copy's, whose team the tenant may have set on a step in place of the topic.
+ */
+export function procedureTopics(procedure: Pick<TemplateProcedure, 'handoff' | 'steps'>): string[] {
   const topics = new Set<string>();
   const add = (target: HandoffTarget | undefined) => {
     const topic = targetTopic(target);
     if (topic !== undefined) topics.add(topic);
   };
-  add(template.procedure.handoff.target);
-  for (const step of template.procedure.steps) {
+  add(procedure.handoff.target);
+  for (const step of procedure.steps) {
     if (step.type === 'handoff') add(step.target);
     if (step.type === 'check') {
       for (const branch of [step.then, step.else]) {

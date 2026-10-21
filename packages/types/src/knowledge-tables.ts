@@ -90,11 +90,16 @@ export const KNOWLEDGE_TABLE_REVIEW_INTERVAL_DAYS = Object.freeze({
 } as const satisfies Record<KnowledgeTable, number>);
 
 /**
- * Who filled a row: a person (`manual`) or an integration (`integration`, F2),
- * whose rows are not edited by hand.
+ * Who filled a row: a person (`manual`), an integration (`integration`, F2),
+ * whose rows are not edited by hand, or a template pack (`sample`, AI-15-S1):
+ * an "örnek — doğrulayın" row the AI does not read until a person edits or
+ * reviews it, which makes it `manual`.
  */
-export const KNOWLEDGE_TABLE_ROW_SOURCES = ['manual', 'integration'] as const;
+export const KNOWLEDGE_TABLE_ROW_SOURCES = ['manual', 'integration', 'sample'] as const;
 export type KnowledgeTableRowSource = (typeof KNOWLEDGE_TABLE_ROW_SOURCES)[number];
+
+/** The example rows' source ({@link KNOWLEDGE_TABLE_ROW_SOURCES}). */
+export const KNOWLEDGE_TABLE_SAMPLE_SOURCE = 'sample' satisfies KnowledgeTableRowSource;
 
 /** Rows one table holds per workspace — a typo guard, not a plan limit. */
 export const KNOWLEDGE_TABLE_ROWS_MAX = 500;

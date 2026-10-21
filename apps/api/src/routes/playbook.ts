@@ -96,6 +96,13 @@ import {
 } from '../services/ai/config-draft.js';
 import { withStepTeamIds } from '../services/ai/step-teams.js';
 import {
+  copyPlaceholders,
+  isLockedCopy,
+  refuseTemplatePublish,
+  templateLocked,
+  templatePublishProblem,
+} from '../services/ai-templates/install.js';
+import {
   refuseUnembeddable,
   type KnowledgeService,
   type PreparedChunks,
@@ -759,7 +766,7 @@ async function skillDefinitionData(
   mode: SkillMode,
   fields: SkillProcedureFields,
   written: SkillDefinitionBody,
-  locked?: Procedure,
+  context: { locked?: Procedure; placeholders?: ReadonlySet<string> } = {},
 ): Promise<Prisma.SkillUncheckedUpdateInput> {
   if (mode === 'single') {
     for (const field of ['slots', 'procedure'] as const) {
@@ -786,7 +793,8 @@ async function skillDefinitionData(
   const groups = await tx.group.findMany({ select: { id: true } });
   const result = validateSkillProcedure(fields, {
     groupIds: new Set(groups.map((group) => Number(group.id))),
-    ...(locked ? { locked } : {}),
+    ...(context.locked ? { locked: context.locked } : {}),
+    ...(context.placeholders ? { placeholders: context.placeholders } : {}),
   });
   if (!result.ok) throwProcedureProblem(result.problems[0]!);
   const split = splitSkillProcedure(result.procedure);
@@ -1256,7 +1264,10 @@ export default async function playbookRoutes(
         ) {
           throw new ApiError('not_allowed', 'A skill needs at least one step before it can run.');
         }
-        if (existing.locked && mode !== existing.mode) {
+        // The lock is the copy's template's (ADR `ai-template-catalog.md` §2.4).
+        const locked = isLockedCopy(existing);
+        if (locked && body.active === false) throw templateLocked('switched off');
+        if (locked && mode !== existing.mode) {
           throwProcedureProblem({
             code: 'procedure_locked_change',
             section: 'procedure',
@@ -1269,10 +1280,14 @@ export default async function playbookRoutes(
         const writesDefinition = (
           Object.keys(skillDefinitionFields) as Array<keyof typeof skillDefinitionFields>
         ).some((field) => body[field] !== undefined);
-        // A locked copy may change only its texts and its team: judged against
-        // the definition as stored.
+        // A template copy's texts may hold its placeholders until they are
+        // replaced; a locked copy may change only its texts and its team:
+        // judged against the definition as stored.
+        const placeholders = copyPlaceholders(existing.templateKey);
         const lockedAs =
-          existing.locked && existing.mode === 'procedure' ? validateSkillProcedure(stored) : null;
+          locked && existing.mode === 'procedure'
+            ? validateSkillProcedure(stored, placeholders ? { placeholders } : {})
+            : null;
         const definition = writesDefinition
           ? await skillDefinitionData(
               tx,
@@ -1285,9 +1300,32 @@ export default async function playbookRoutes(
                 procedure: body.procedure ?? stored.procedure,
               },
               body,
-              lockedAs?.ok ? lockedAs.procedure : undefined,
+              {
+                ...(lockedAs?.ok ? { locked: lockedAs.procedure } : {}),
+                ...(placeholders ? { placeholders } : {}),
+              },
             )
           : {};
+
+        // A copy goes on only filled in and routed (AI-15 §3–§4); an edit to
+        // one that is on is held to the same.
+        if (
+          existing.templateKey !== null &&
+          mode === 'procedure' &&
+          (body.active ?? existing.active) &&
+          (body.active === true || writesDefinition)
+        ) {
+          const problem = await templatePublishProblem(tx, {
+            templateKey: existing.templateKey,
+            whenToUse:
+              definition.whenToUse !== undefined
+                ? (definition.whenToUse as string | null)
+                : existing.whenToUse,
+            slots: definition.slots ?? existing.slots,
+            procedure: definition.procedure ?? existing.procedure,
+          });
+          if (problem) refuseTemplatePublish(problem);
+        }
 
         if (body.is_fallback === true && !existing.isFallback) {
           await requireFallbackFree(tx, existing.aiAgentId, existing.id);
@@ -1335,6 +1373,11 @@ export default async function playbookRoutes(
     async (request, reply) => {
       const id = parse(uuid, request.params.skillId);
       const deleted = await request.withTenant(async (tx) => {
+        const existing = await tx.skill.findFirst({
+          where: { id },
+          select: { locked: true, templateKey: true },
+        });
+        if (existing && isLockedCopy(existing)) throw templateLocked('deleted');
         const count = await deleteSkillDraft(tx, id);
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
@@ -2759,7 +2802,10 @@ async function requireAiAgent(tx: TenantClient, aiAgentId: string): Promise<Know
   return agent;
 }
 
-async function creatorName(tx: TenantClient, createdBy: string | null): Promise<string | null> {
+export async function creatorName(
+  tx: TenantClient,
+  createdBy: string | null,
+): Promise<string | null> {
   if (!createdBy) return null;
   const account = await tx.account.findFirst({ where: { id: createdBy }, select: { name: true } });
   return account?.name ?? null;
@@ -2779,7 +2825,7 @@ async function creatorNamesByIds(
   return new Map(accounts.map((account) => [account.id, account.name]));
 }
 
-function serialiseSkill(
+export function serialiseSkill(
   skill: {
     id: string;
     aiAgentId: string | null;

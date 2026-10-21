@@ -164,7 +164,7 @@ async function requireScopeTargets(
   }
 }
 
-function serialiseRule(rule: AiGuidanceRule) {
+export function serialiseRule(rule: AiGuidanceRule) {
   return {
     id: rule.id,
     ai_agent_id: rule.aiAgentId,

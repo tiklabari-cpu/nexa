@@ -163,6 +163,9 @@ describe('error taxonomy', () => {
     // or empty training requirement.
     'group_expertise_missing',
     'group_protected',
+    // Ready-made templates (AI-15 · tm 311.3): switching off or deleting a
+    // locked template copy.
+    'template_locked',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

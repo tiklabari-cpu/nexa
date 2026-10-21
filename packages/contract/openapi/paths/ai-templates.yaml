@@ -1,0 +1,161 @@
+# Ready-made procedure templates (tm 311.3 · SiyahTuş analysis AI-15 · ADR
+# `docs/adr/ai-template-catalog.md`).
+#
+# The platform drafts the twenty iGaming procedures; a workspace browses them
+# and installs a copy. Browsing and previewing write nothing. An install writes
+# an ordinary procedure skill, switched off (the draft), that carries the
+# template's key and version; from then on the copy is the workspace's and a
+# newer template version does not change it. Publishing it is `PATCH
+# /skills/{skillId}` `{ active: true }`, refused while a placeholder is left
+# (`template_unfilled`) or a topic it hands over to reaches no team
+# (`template_unmapped`). The two locked templates (`self_exclusion`,
+# `responsible_gambling_signal`) cannot be switched off or deleted.
+
+aiTemplates:
+  get:
+    tags: [Playbook]
+    operationId: listAiTemplates
+    summary: The ready-made procedure templates
+    description: |
+      The catalogue (v1: twenty iGaming templates in Turkish) and its packs,
+      with the version of each template this workspace has installed. Reading
+      it writes nothing. Sorting by the workspace's sector is the client's.
+    parameters:
+      - name: industry
+        in: query
+        schema: { type: string, enum: [igaming] }
+      - name: lang
+        in: query
+        schema: { type: string, enum: [tr] }
+    responses:
+      "200":
+        description: The catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplateList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiTemplate:
+  parameters:
+    - name: templateKey
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+  get:
+    tags: [Playbook]
+    operationId: getAiTemplate
+    summary: One template, whole
+    description: |
+      The template as the preview shows it: its procedure, the phrases its
+      replies must never carry, what the workspace must fill in, its test
+      scenarios and the hand-over card it leaves. Reading it writes nothing.
+    responses:
+      "200":
+        description: The template
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplate" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiTemplateInstall:
+  parameters:
+    - name: templateKey
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+  post:
+    tags: [Playbook]
+    operationId: installAiTemplate
+    summary: Install a template as a draft procedure
+    description: |
+      Copies the template into a procedure skill of the AI agent, switched off,
+      with the template's forbidden phrases scoped to it. Idempotent per agent
+      and template: when the agent already has a copy, nothing is written and
+      that copy is returned (`200`, `created: false`); `force_copy: true` makes
+      another (`201`). Two installs at once leave one copy.
+
+      `route_mapping` sends a topic the template hands over to to a team: a
+      hand-over route for every brand, or for each of `brand_ids`; an existing
+      route for that topic and brand is pointed at the team. It needs the
+      `access_rules:rw` scope as well (403 otherwise). A topic left unmapped
+      does not stop the install — it stops publishing, and `unmapped_topics`
+      says which.
+
+      Refusals are 400 `validation` with `details.reason`:
+      `template_route_unknown_topic` (a mapped topic the template does not hand
+      over to), `handoff_route_unknown_team`, `handoff_route_unknown_brand`,
+      `handoff_routes_limit`, `forbidden_phrases_limit`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplateInstallRequest" }
+    responses:
+      "200":
+        description: The agent's existing copy; nothing was written.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplateInstallResult" }
+      "201":
+        description: A new copy.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplateInstallResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiTemplatePackInstall:
+  parameters:
+    - name: packKey
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+  post:
+    tags: [Playbook]
+    operationId: installAiTemplatePack
+    summary: Install a pack — its templates, rules and example rows
+    description: |
+      v1's one pack is `igaming_core`: the twenty templates (each as `POST
+      /ai-templates/{templateKey}/install` without `force_copy`), the default
+      behaviour rules (switched off, matched by title on a re-install; a rule
+      for some templates is scoped to their copies), and the "örnek —
+      doğrulayın" rows of the structured knowledge tables (`source: sample` —
+      the AI uses none until a person edits or reviews it; a row whose name
+      the table already has is skipped). One transaction: a re-install fills
+      in only what is missing.
+
+      `create_groups: true` makes a team for every topic the templates hand
+      over to that no route maps and no team holds (the Responsible Gambling
+      team with a "Sorumlu Oyun eğitimi" expertise as its requirement); it
+      needs the `groups--all:rw` scope as well. Without it no team is made.
+      `persona_style` is a suggestion: the agent's persona is not changed.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplatePackInstallRequest" }
+    responses:
+      "200":
+        description: Everything was installed already; nothing was written.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplatePackInstallResult" }
+      "201":
+        description: Something was written.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTemplatePackInstallResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

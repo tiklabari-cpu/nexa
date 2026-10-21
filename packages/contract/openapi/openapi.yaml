@@ -408,6 +408,14 @@ paths:
     $ref: "./paths/knowledge-tables.yaml#/knowledgeTableRowReview"
   /ai-access-info:
     $ref: "./paths/knowledge-tables.yaml#/aiAccessInfo"
+  /ai-templates:
+    $ref: "./paths/ai-templates.yaml#/aiTemplates"
+  /ai-templates/{templateKey}:
+    $ref: "./paths/ai-templates.yaml#/aiTemplate"
+  /ai-templates/{templateKey}/install:
+    $ref: "./paths/ai-templates.yaml#/aiTemplateInstall"
+  /ai-templates/packs/{packKey}/install:
+    $ref: "./paths/ai-templates.yaml#/aiTemplatePackInstall"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"
@@ -3516,6 +3524,315 @@ components:
                   anyOf:
                     - $ref: "#/components/schemas/StepProblem"
                     - $ref: "#/components/schemas/ProcedureProblemDetails"
+                    - $ref: "#/components/schemas/TemplatePublishProblem"
+
+    TemplatePublishProblem:
+      type: object
+      required: [reason]
+      description: |
+        Why an installed template copy cannot be switched on (AI-15): a
+        placeholder the workspace has not replaced yet (`template_unfilled`,
+        `placeholders` names their keys), or a topic it hands over to that
+        neither a hand-over route nor a team's topic role sends anywhere
+        (`template_unmapped`, `topics`).
+      properties:
+        reason: { type: string, enum: [template_unfilled, template_unmapped] }
+        placeholders:
+          type: array
+          items: { type: string }
+        topics:
+          type: array
+          items: { type: string }
+
+    AiTemplateTenantMustFill:
+      type: object
+      required: [kind, label]
+      description: |
+        One item of "Kiracının doldurması gerekenler" (AI-15-S1):
+        `placeholder` — a `{key}` left in a reply text, with the "örnek —
+        doğrulayın" value the scenarios run with (never installed); publishing
+        with one left is `template_unfilled`. `table` — the structured
+        knowledge table and the columns the procedure reads. `setting` — a
+        workspace text it relies on (the crisis text, the complaint procedure,
+        the access information).
+      properties:
+        kind: { type: string, enum: [placeholder, table, setting] }
+        label: { type: string }
+        key: { type: string, description: "placeholder: the key, without braces." }
+        example: { type: string, description: "placeholder: an example value." }
+        table:
+          type: string
+          description: "table: the table, and for payment methods the direction (`payment_methods.deposit`)."
+        columns:
+          type: array
+          description: "table: the procedure facts it reads (`method.expected_minutes`)."
+          items: { type: string }
+        setting: { type: string, enum: [crisis, complaint, access_info] }
+
+    AiTemplateSummary:
+      type: object
+      required:
+        - key
+        - name
+        - summary
+        - industry
+        - lang
+        - version
+        - locked
+        - topics
+        - tenant_must_fill_count
+        - installed_version
+      properties:
+        key: { type: string }
+        name: { type: string, maxLength: 80 }
+        summary: { type: string, maxLength: 300 }
+        industry: { type: string, enum: [igaming] }
+        lang: { type: string, enum: [tr] }
+        version:
+          type: integer
+          minimum: 1
+          description: Raised when the platform changes the template; an installed copy keeps its own.
+        locked:
+          type: boolean
+          description: A copy can be neither switched off nor deleted; only its texts and team change.
+        topics:
+          type: array
+          description: The routing topics it hands over to — what `route_mapping` maps.
+          items: { $ref: "#/components/schemas/QueueTopicRole" }
+        tenant_must_fill_count: { type: integer, minimum: 0 }
+        installed_version:
+          type: integer
+          nullable: true
+          description: |
+            The newest version of it among this workspace's copies; null when it
+            has none. Below `version`: a newer template is out ("yeni sürüm var").
+
+    AiTemplatePackSummary:
+      type: object
+      required:
+        [key, version, industry, lang, template_keys, default_rules_count, sample_rows_count]
+      properties:
+        key: { type: string, enum: [igaming_core] }
+        version: { type: string, description: The package's version. }
+        industry: { type: string, enum: [igaming] }
+        lang: { type: string, enum: [tr] }
+        template_keys:
+          type: array
+          items: { type: string }
+        default_rules_count: { type: integer, minimum: 0 }
+        sample_rows_count: { type: integer, minimum: 0 }
+
+    AiTemplateList:
+      type: object
+      required: [items, packs]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AiTemplateSummary" }
+        packs:
+          type: array
+          items: { $ref: "#/components/schemas/AiTemplatePackSummary" }
+
+    AiTemplate:
+      description: |
+        A whole template (AI-15): the summary, the procedure in the shape a
+        skill stores it (hand-overs name a topic, never a team), the phrases
+        its replies must never carry, the checklist, its scenarios (AI-19
+        seeds) and the hand-over card it leaves.
+      allOf:
+        - $ref: "#/components/schemas/AiTemplateSummary"
+        - type: object
+          required:
+            [
+              when_to_use,
+              examples,
+              priority,
+              slots,
+              procedure,
+              forbidden_phrases,
+              tenant_must_fill,
+              scenarios,
+            ]
+          properties:
+            when_to_use: { type: string }
+            examples:
+              type: array
+              items: { type: string }
+            priority: { type: integer, minimum: 1, maximum: 1000 }
+            slots:
+              type: array
+              items: { $ref: "#/components/schemas/SlotDef" }
+            procedure: { $ref: "#/components/schemas/SkillProcedure" }
+            forbidden_phrases:
+              type: array
+              items:
+                type: object
+                required: [phrase, match, why]
+                properties:
+                  phrase: { type: string }
+                  match: { type: string, enum: [exact, word, regex] }
+                  why: { type: string }
+            tenant_must_fill:
+              type: array
+              items: { $ref: "#/components/schemas/AiTemplateTenantMustFill" }
+            scenarios:
+              type: array
+              description: Scripted test conversations — the player's turns and how the conversation must end.
+              items:
+                type: object
+                required: [key, name, persona, turns, expect]
+                additionalProperties: true
+                properties:
+                  key: { type: string }
+                  name: { type: string }
+                  persona: { type: string }
+                  turns:
+                    type: array
+                    items: { type: string }
+                  expect:
+                    type: object
+                    additionalProperties: true
+            card_example:
+              type: string
+              nullable: true
+              description: The hand-over card an agent sees for this topic, for the preview.
+
+    AiTemplateInstallRequest:
+      type: object
+      additionalProperties: false
+      required: [ai_agent_id]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        brand_ids:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          description: The brands `route_mapping`'s routes are for; omitted, every brand.
+          items: { type: string, format: uuid }
+        route_mapping:
+          type: object
+          description: "`{ <topic>: <team id> }` — a hand-over route per topic (AI-12)."
+          additionalProperties: { type: integer, minimum: 1 }
+        force_copy:
+          type: boolean
+          description: Make another copy even when the agent has one.
+
+    AiTemplateInstallResult:
+      type: object
+      required: [created, skill, tenant_must_fill, unfilled_placeholders, unmapped_topics]
+      properties:
+        created: { type: boolean }
+        skill: { $ref: "#/components/schemas/Skill" }
+        tenant_must_fill:
+          type: array
+          items: { $ref: "#/components/schemas/AiTemplateTenantMustFill" }
+        unfilled_placeholders:
+          type: array
+          description: The copy's `{key}`s still to replace; publishing waits for none.
+          items: { type: string }
+        unmapped_topics:
+          type: array
+          description: The copy's topics no route or team serves; publishing waits for none.
+          items: { type: string }
+
+    AiTemplatePackInstallRequest:
+      type: object
+      additionalProperties: false
+      required: [ai_agent_id]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        brand_ids:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        route_mapping:
+          type: object
+          additionalProperties: { type: integer, minimum: 1 }
+        create_groups:
+          type: boolean
+          description: Make the teams for the topics nothing serves yet. Default false.
+
+    AiTemplatePackInstallResult:
+      type: object
+      required:
+        - pack
+        - version
+        - templates
+        - rules
+        - sample_rows
+        - groups_created
+        - persona_style
+        - unmapped_topics
+      properties:
+        pack: { type: string }
+        version: { type: string }
+        templates:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                template_key,
+                skill_id,
+                created,
+                tenant_must_fill,
+                unfilled_placeholders,
+                unmapped_topics,
+              ]
+            properties:
+              template_key: { type: string }
+              skill_id: { type: string, format: uuid }
+              created: { type: boolean }
+              tenant_must_fill:
+                type: array
+                items: { $ref: "#/components/schemas/AiTemplateTenantMustFill" }
+              unfilled_placeholders:
+                type: array
+                items: { type: string }
+              unmapped_topics:
+                type: array
+                items: { type: string }
+        rules:
+          type: object
+          required: [created, existing]
+          properties:
+            created:
+              type: array
+              description: The behaviour rules written, switched off.
+              items: { $ref: "#/components/schemas/AiGuidanceRule" }
+            existing: { type: integer, minimum: 0 }
+        sample_rows:
+          type: object
+          required: [created, skipped]
+          description: |
+            The "örnek — doğrulayın" rows (`source: sample`); skipped ones the
+            table had by name.
+          properties:
+            created: { type: integer, minimum: 0 }
+            skipped: { type: integer, minimum: 0 }
+        groups_created:
+          type: array
+          items:
+            type: object
+            required: [id, name, topic_role]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              topic_role: { $ref: "#/components/schemas/QueueTopicRole" }
+        persona_style:
+          type: object
+          required: [address_form, emoji, max_questions_per_message]
+          description: A suggestion the console shows; the agent's persona is not changed.
+          properties:
+            address_form: { type: string }
+            emoji: { type: string }
+            max_questions_per_message: { type: integer }
+        unmapped_topics:
+          type: array
+          items: { type: string }
 
     SkillLogEntry:
       type: object
@@ -3809,9 +4126,11 @@ components:
     KnowledgeTableRowSource:
       type: string
       description: |
-        Who filled the row: a person, or an integration (F2) — whose rows are
-        not edited by hand.
-      enum: [manual, integration]
+        Who filled the row: a person, an integration (F2) — whose rows are
+        not edited by hand — or a template pack (`sample`, AI-15): an "örnek
+        — doğrulayın" row the AI does not use until a person edits or reviews
+        it, which makes it `manual`.
+      enum: [manual, integration, sample]
 
     KnowledgeTableProblem:
       type: object
@@ -10432,6 +10751,7 @@ components:
         - request_timeout
         - service_unavailable
         - takeover_conflict
+        - template_locked
         - too_many_requests
         - unsupported_version
         - users_limit_reached

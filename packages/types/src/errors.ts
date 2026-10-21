@@ -107,6 +107,11 @@ export const ERROR_TYPES = [
   // — the loser *was* allowed, they simply lost the race) and not `chat_inactive`
   // (the chat is open); kept narrow like `ticket_exists`, not a generic conflict.
   'takeover_conflict',
+  // SiyahTuş addition — ready-made templates (AI-15 · tm 311.3): switching off
+  // or deleting an installed copy of a locked template (`self_exclusion`,
+  // `responsible_gambling_signal`). The request was fine and allowed; the
+  // copy's lock, which the server derives from its template, refused it.
+  'template_locked',
   // SiyahTuş addition. The source catalogue (v2-03 §1.8) is chat-only — ticketing
   // lives in a separate product there — so it has no "this already exists"
   // conflict. Kept narrow rather than adding a generic `conflict`, which is how
@@ -180,6 +185,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   sandbox_exists: 409,
   service_unavailable: 503,
   takeover_conflict: 409,
+  template_locked: 409,
   ticket_exists: 409,
   too_many_requests: 429,
   two_factor_already_enabled: 409,

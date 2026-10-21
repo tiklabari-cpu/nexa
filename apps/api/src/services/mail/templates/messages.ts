@@ -994,6 +994,71 @@ export function aiUsageAlertMail(
 }
 
 /**
+ * The structured knowledge tables' stale-row digest (tm 310.5 · AI-13-S2): one
+ * mail per workspace per sweep that found rows newly due for review, naming at
+ * most ten of them. The AI keeps using a stale row — the mail only asks for a
+ * look.
+ */
+export function knowledgeStaleMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    /** How many rows fell due, per table label, in the order given. */
+    groups: Array<{ label: string; count: number }>;
+    /** Up to ten row names, as the workspace wrote them. */
+    sample: string[];
+    total: number;
+    tablesUrl: string | null;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: t
+        ? `${input.workspaceName} çalışma alanında ${input.total} bilgi tablosu satırının gözden geçirme zamanı geldi. Yapay zekâ bu satırları kullanmaya devam ediyor; bilgilerin hâlâ doğru olduğunu doğrulayın.`
+        : `${input.total} rows of ${input.workspaceName}'s knowledge tables are due for review. The AI keeps using them; please confirm they are still correct.`,
+    },
+    { type: 'facts', rows: input.groups.map((group) => [group.label, String(group.count)]) },
+  ];
+  if (input.sample.length > 0) {
+    blocks.push({
+      type: 'paragraph',
+      text: input.sample.join(', ') + (input.total > input.sample.length ? '…' : ''),
+    });
+  }
+  if (input.tablesUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Tabloları aç' : 'Open the tables',
+      url: input.tablesUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `SiyahTuş: ${input.total} bilgi satırı gözden geçirme bekliyor`
+      : `SiyahTuş: ${input.total} knowledge rows are due for review`,
+    preheader: t
+      ? 'Yapay zekâ eski satırları kullanmaya devam ediyor.'
+      : 'The AI keeps using the old rows.',
+    icon: ICON.alarm,
+    tone: 'brand',
+    heading: t ? 'Gözden geçirme zamanı geldi' : 'Rows are due for review',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının sahibi, yardımcı sahibi ya da yöneticisi olduğunuz için aldınız.'
+        : 'You received this email because you are an owner, vice-owner or admin of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
  * A ticket update a workspace wrote itself (FR-MOD-08.7.5): its subject and
  * its text, untouched, inside the shared frame. The workspace's words are the
  * whole message: the HTML puts them in the frame (escaped like everything

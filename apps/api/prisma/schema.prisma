@@ -184,6 +184,7 @@ model License {
   aiUsageEvents          AiUsageEvent[]
   aiUsageAlerts          AiUsageAlert[]
   aiUsageAlertRecipients AiUsageAlertRecipient[]
+  knowledgeStaleNotices  KnowledgeTableStaleNotice[]
   aiDecisionLogs         AiDecisionLog[]
   aiJobs                 AiJob[]
   queueEntries           QueueEntry[]
@@ -3597,6 +3598,25 @@ model AiUsageAlert {
 
   @@unique([licenseId, day, meter, threshold])
   @@map("ai_usage_alerts")
+}
+
+/// A structured-table row announced as due for review (tm 310.5 · AI-13-S2).
+/// The unique key is the "once": per workspace, table, row and due date — the
+/// sweep whose insert lands sends the notice, and a row reviewed and lapsing
+/// again has a new `due_at` and so a new notice.
+model KnowledgeTableStaleNotice {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  /// `KNOWLEDGE_TABLES`.
+  tableName String   @map("table_name")
+  rowId     String   @map("row_id") @db.Uuid
+  dueAt     DateTime @map("due_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, tableName, rowId, dueAt], map: "knowledge_table_stale_notices_once_key")
+  @@map("knowledge_table_stale_notices")
 }
 
 /// Who besides the owner hears about the AI allowance (tm 283.3), chosen by

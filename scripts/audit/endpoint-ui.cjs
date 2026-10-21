@@ -362,28 +362,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  ...[
-    'GET /knowledge-tables/{table}',
-    'POST /knowledge-tables/{table}',
-    'POST /knowledge-tables/{table}/import',
-    'GET /knowledge-tables/{table}/export',
-    'PATCH /knowledge-tables/{table}/{rowId}',
-    'DELETE /knowledge-tables/{table}/{rowId}',
-    'POST /knowledge-tables/{table}/{rowId}/review',
-  ].map((op) => ({
-    op,
-    owner: 'tm 310.5',
-    reason:
-      'the structured knowledge tables (tm 310.2 · AI-13) — the four-tab "Tablolar" screen ' +
-      'with its form, CSV import/export and "Gözden geçirdim" button, which tm 310.5 draws.',
-  })),
-  ...['GET /ai-access-info', 'PUT /ai-access-info'].map((op) => ({
-    op,
-    owner: 'tm 310.5',
-    reason:
-      'the access information (tm 310.4 · K13) — the "Erişim bilgisi" card beside the tables, ' +
-      'with its "Bu bilgi kiracı tarafından girilir" note, which tm 310.5 draws.',
-  })),
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

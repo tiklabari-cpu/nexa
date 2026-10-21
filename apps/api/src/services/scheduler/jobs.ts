@@ -48,6 +48,7 @@ import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
 import { KnowledgeTableRowKnowledgeSweeper } from '../knowledge-tables/row-knowledge.js';
+import { KnowledgeTableStaleSweeper } from '../knowledge-tables/stale-sweep.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
 import {
@@ -285,7 +286,9 @@ export function buildSchedulerJobs({
       // The store's freshness: the `website` sources past their window, then
       // the published KB articles whose knowledge source is not what they say
       // (tm 309.2 · AI-14-S2 — `kb-article-knowledge.ts`), then the structured
-      // table rows whose source is not (tm 310.2 · AI-13 — `row-knowledge.ts`).
+      // table rows whose source is not (tm 310.2 · AI-13 — `row-knowledge.ts`), and
+      // last the table rows past their review date, announced once to the
+      // owner and admins (tm 310.5 · AI-13-S2 — `stale-sweep.ts`).
       name: 'knowledge_refresh',
       intervalMs: intervals.knowledge_refresh,
       async run() {
@@ -302,6 +305,7 @@ export function buildSchedulerJobs({
           knowledge,
           embeddingInference,
         }).run();
+        const stale = await new KnowledgeTableStaleSweeper(db, mailer, env.WEB_APP_URL).run();
         return {
           counts: {
             tenants: report.totals.tenants,
@@ -314,6 +318,9 @@ export function buildSchedulerJobs({
             table_rows_checked: rows.totals.checked,
             table_rows_synced: rows.totals.synced,
             table_rows_deferred: rows.totals.deferred,
+            table_rows_stale: stale.totals.stale,
+            table_rows_stale_announced: stale.totals.announced,
+            table_rows_stale_mailed: stale.totals.mailed,
           },
         };
       },

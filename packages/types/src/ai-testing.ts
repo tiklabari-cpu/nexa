@@ -256,7 +256,11 @@ export interface AiTestCheck {
   passed: boolean;
   expected?: unknown;
   actual?: unknown;
-  /** Which message broke it, for `forbidden_phrase` / `sensitive_request` / `language`. */
+  /**
+   * Which turn's AI message broke it first, for `forbidden_phrase` /
+   * `sensitive_request` / `language`: 0-based in play order — the n-th player
+   * message and the AI's answer to it (tm 314.6).
+   */
   turn_index?: number;
   detail?: string;
 }

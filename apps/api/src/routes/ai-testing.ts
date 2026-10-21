@@ -18,6 +18,13 @@
  *     by the worker) and against the previous published version's last run
  *     (`regression`, `compared_run_id`; `services/ai/simulation/regression.ts`),
  *     newly failing first.
+ *   - The platform's locked compliance pack (tm 314.4 · AI-19-S1): a run with
+ *     `trigger: pre_publish` plays it first, then every active scenario of the
+ *     workspace's (`services/ai/simulation/compliance-pack.ts` — the hook tm
+ *     316's "Onaya gönder" calls too). `GET /ai/compliance-pack` lists the
+ *     pack — read-only: it is code, so no scenario route reaches it — and the
+ *     gate the agent's latest pre-publish run sets (only a complete pass under
+ *     the current version opens publishing).
  *   - `POST /ai/sandbox-sessions`, `GET …/{id}`, `POST …/{id}/turns`,
  *     `POST …/{id}/save-as-scenario` — one person's conversation with the AI on
  *     the live engine; each reply comes with its decision trace, and the
@@ -37,6 +44,8 @@ import type { AiSandboxSession, AiTestRun, AiTestRunResult, AiTestScenario } fro
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  AI_COMPLIANCE_PACK_VERSION,
+  AI_COMPLIANCE_SCENARIOS,
   AI_SANDBOX_MESSAGES_MAX,
   AI_SANDBOX_SESSION_TTL_HOURS,
   AI_TEST_MAX_TURNS_LIMIT,
@@ -65,6 +74,12 @@ import {
   tookTurn,
   type TurnState,
 } from '../services/ai/conversation/turn.js';
+import {
+  activeScenarioIds,
+  compliancePackGate,
+  queuePrePublishRun,
+  type CompliancePackGate,
+} from '../services/ai/simulation/compliance-pack.js';
 import { comparedRunOf, orderResults, regressions } from '../services/ai/simulation/regression.js';
 import { readSimulationSetting } from '../services/ai/simulation/runner.js';
 import { isOpenRunConflict, testRunInProgress } from '../services/ai/simulation/test-runs.js';
@@ -97,11 +112,16 @@ const listRunsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
 
+const compliancePackQuery = z.object({ ai_agent_id: uuid });
+
 const runBody = z
   .object({
     ai_agent_id: uuid,
     target: z.enum(AI_TEST_RUN_TARGETS),
     config_version_id: uuid.optional(),
+    // A person's run, or the pre-publish one with the compliance pack; the
+    // nightly run is the scheduler's.
+    trigger: z.enum(['manual', 'pre_publish']).default('manual'),
     scenario_ids: z
       .array(uuid)
       .min(1)
@@ -294,6 +314,32 @@ function serialiseResult(row: AiTestRunResult, regression: AiTestRegression | nu
     tokens: row.tokens,
     duration_ms: row.durationMs,
     regression,
+  };
+}
+
+function serialiseGate(gate: CompliancePackGate) {
+  return {
+    state: gate.state,
+    open: gate.open,
+    run_id: gate.runId,
+    run_pack_version: gate.runPackVersion,
+    passed: gate.passed,
+    failed: gate.failed,
+    failing: gate.failing,
+    workspace_failed: gate.workspaceFailed,
+  };
+}
+
+/** The pack as the Test tab lists it: locked, its expectations as written. */
+function serialisePackScenario(scenario: (typeof AI_COMPLIANCE_SCENARIOS)[number]) {
+  return {
+    key: scenario.key,
+    guardrail: scenario.guardrail,
+    language: scenario.language,
+    name: scenario.name,
+    persona: scenario.persona,
+    turns: scenario.turns,
+    expectations: scenario.expectations,
   };
 }
 
@@ -554,9 +600,32 @@ export default async function aiTestingRoutes(app: FastifyInstance): Promise<voi
     async (request, reply) => {
       const body = parse(runBody, request.body);
       const account = accountOf(request);
+      if (body.trigger === 'pre_publish') {
+        // What is about to be published: the draft, with every active
+        // scenario — the pack's verdict is not one a list can pick.
+        if (body.target !== 'draft') {
+          throw ApiError.validation('A pre-publish run plays the draft.', {
+            problems: [{ field: 'target', code: 'invalid' }],
+          });
+        }
+        if (body.scenario_ids) {
+          throw ApiError.validation(
+            'A pre-publish run plays every active scenario with the compliance pack; it takes no list.',
+            { problems: [{ field: 'scenario_ids', code: 'not_allowed' }] },
+          );
+        }
+      }
       const row = await request.withTenant(async (tx) => {
         await requireAgent(tx, body.ai_agent_id);
         checkTarget(body.target, body.config_version_id);
+        if (body.trigger === 'pre_publish') {
+          return queuePrePublishRun(tx, {
+            licenseId: request.tenant().licenseId,
+            aiAgentId: body.ai_agent_id,
+            draftRevision: null,
+            startedBy: account,
+          });
+        }
         let scenarioIds: string[];
         if (body.scenario_ids) {
           const found = await tx.aiTestScenario.findMany({
@@ -567,19 +636,7 @@ export default async function aiTestingRoutes(app: FastifyInstance): Promise<voi
             throw ApiError.notFound('Scenario not found.');
           scenarioIds = body.scenario_ids;
         } else {
-          const active = await tx.aiTestScenario.findMany({
-            where: { aiAgentId: body.ai_agent_id, active: true },
-            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-            take: AI_TEST_RUN_SCENARIOS_MAX + 1,
-            select: { id: true },
-          });
-          if (active.length > AI_TEST_RUN_SCENARIOS_MAX) {
-            throw ApiError.validation(
-              `A run plays at most ${AI_TEST_RUN_SCENARIOS_MAX} scenarios; name the ones to play.`,
-              { problems: [{ field: 'scenario_ids', code: 'too_many' }] },
-            );
-          }
-          scenarioIds = active.map((scenario) => scenario.id);
+          scenarioIds = await activeScenarioIds(tx, body.ai_agent_id, AI_TEST_RUN_SCENARIOS_MAX);
         }
         if (scenarioIds.length === 0) {
           throw ApiError.validation('There is no active scenario to play.', {
@@ -631,7 +688,13 @@ export default async function aiTestingRoutes(app: FastifyInstance): Promise<voi
       const read = await request.withTenant(async (tx) => {
         const run = await tx.aiTestRun.findFirst({
           where: { id: runId },
-          select: { id: true, aiAgentId: true, createdAt: true, scenarioIds: true },
+          select: {
+            id: true,
+            aiAgentId: true,
+            createdAt: true,
+            scenarioIds: true,
+            compliancePackVersion: true,
+          },
         });
         if (!run) return null;
         const comparedRunId = await comparedRunOf(tx, run);
@@ -649,13 +712,33 @@ export default async function aiTestingRoutes(app: FastifyInstance): Promise<voi
       });
       if (!read) throw ApiError.notFound('Test run not found.');
       const regression = regressions(read.results, read.earlier);
-      const sorted = orderResults(read.results, regression, read.run.scenarioIds);
+      // Played order: the compliance pack first, when the run carries it.
+      const order =
+        read.run.compliancePackVersion === null
+          ? read.run.scenarioIds
+          : [...AI_COMPLIANCE_SCENARIOS.map((scenario) => scenario.key), ...read.run.scenarioIds];
+      const sorted = orderResults(read.results, regression, order);
       return reply.send({
         results: sorted.map((row) => serialiseResult(row, regression.get(row) ?? null)),
         compared_run_id: read.comparedRunId,
       });
     },
   );
+
+  // ------------------------------------------------------------ compliance pack
+
+  app.get('/ai/compliance-pack', { config: { scopes: READ } }, async (request, reply) => {
+    const query = parse(compliancePackQuery, request.query);
+    const gate = await request.withTenant(async (tx) => {
+      await requireAgent(tx, query.ai_agent_id);
+      return compliancePackGate(tx, { aiAgentId: query.ai_agent_id });
+    });
+    return reply.send({
+      pack_version: AI_COMPLIANCE_PACK_VERSION,
+      scenarios: AI_COMPLIANCE_SCENARIOS.map(serialisePackScenario),
+      gate: serialiseGate(gate),
+    });
+  });
 
   // ------------------------------------------------------------ sandbox sessions
 

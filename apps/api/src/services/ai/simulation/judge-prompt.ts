@@ -65,7 +65,8 @@ export interface ScenarioJudgeGrounding {
   readonly language: string;
   readonly persona: string;
   readonly goal: string | null;
-  readonly expected: ScenarioOutcome;
+  /** Null: any ending will do (a compliance-pack scenario of an output rule). */
+  readonly expected: ScenarioOutcome | null;
   readonly outcome: ScenarioOutcome | null;
   readonly handedOver: boolean;
   /** The kinds of the hard checks that failed — context for the comment, not a decision. */
@@ -167,7 +168,7 @@ export function buildScenarioJudgePrompt(
       (key) =>
         `- ${key}: ${CRITERION_TEXT[key]}${HANDOFF_CRITERIA.has(key) ? ' (null unless the conversation was handed over)' : ''}.`,
     ),
-    'The context below has the player, what the conversation should have ended in, how it ended, the hard checks that failed (already decided — explain them, do not re-decide them) and the conversation, each assistant message with the procedure it followed, the knowledge it used and why it handed over.',
+    'The context below has the player, what the conversation should have ended in (null: any ending), how it ended, the hard checks that failed (already decided — explain them, do not re-decide them) and the conversation, each assistant message with the procedure it followed, the knowledge it used and why it handed over.',
     'Write the comment in English, at most two sentences, without quoting personal data.',
     'Reply with one JSON object: score, comment and criteria.',
     SCENARIO_JUDGE_MARKER,
@@ -202,7 +203,7 @@ export function readScenarioJudgeGrounding(system: string): ScenarioJudgeGroundi
     typeof g['language'] !== 'string' ||
     typeof g['persona'] !== 'string' ||
     !(g['goal'] === null || typeof g['goal'] === 'string') ||
-    !outcomes.includes(g['expected']) ||
+    !(g['expected'] === null || outcomes.includes(g['expected'])) ||
     !(g['outcome'] === null || outcomes.includes(g['outcome'])) ||
     typeof g['handedOver'] !== 'boolean' ||
     !Array.isArray(g['failedChecks']) ||

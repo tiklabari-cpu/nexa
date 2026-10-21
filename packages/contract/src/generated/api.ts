@@ -4698,9 +4698,13 @@ export interface paths {
      * Play scenarios against a configuration
      * @description Queues the run and answers at once (`status: queued`); it is played in
      *     the background, two scenarios of the workspace at a time, each within
-     *     60 s, at most 200 per run. A run with no scenario to play is
-     *     `validation`. The test allowance spent answers 429 `ai_daily_cap` with
-     *     `details.meter: llm_test`; the live allowance is never touched.
+     *     60 s, at most 200 per run. A manual run with no scenario to play is
+     *     `validation`. A pre-publish run (`trigger: pre_publish`) plays the
+     *     draft: the platform's locked compliance pack first — its version and
+     *     share of the counts on the run (`compliance`) — then every active
+     *     scenario; it takes no `scenario_ids` and no other target. The test
+     *     allowance spent answers 429 `ai_daily_cap` with `details.meter:
+     *     llm_test`; the live allowance is never touched.
      */
     post: operations['createAiTestRun'];
     delete?: never;
@@ -4744,6 +4748,31 @@ export interface paths {
      *     scenario in the previous published version's last run.
      */
     get: operations['listAiTestRunResults'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/compliance-pack': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The locked compliance pack and the publish gate it sets
+     * @description The platform's compliance pack (AI-19-S1: G1, G2, G3, G5, G7, G11 and
+     *     G16, in Turkish and English) — code, so no scenario route edits or
+     *     deletes it — and what the agent's latest pre-publish run of the draft
+     *     says of publishing: open only when that run completed under the
+     *     current pack version with every pack scenario passed. The workspace's
+     *     own failures are counted beside it.
+     */
+    get: operations['getAiCompliancePack'];
     put?: never;
     post?: never;
     delete?: never;
@@ -12523,6 +12552,15 @@ export interface components {
        * @description Required exactly when `target` is `version`.
        */
       config_version_id?: string;
+      /**
+       * @description `pre_publish` — the run before a publish (AI-19-S1): the draft
+       *     only, no `scenario_ids` — the platform's compliance pack first,
+       *     then every active scenario of the agent's, at most 186 of them.
+       *     The nightly run is the scheduler's.
+       * @default manual
+       * @enum {string}
+       */
+      trigger: 'manual' | 'pre_publish';
       /** @description The scenarios to play; omitted — every active one of the agent. */
       scenario_ids?: string[];
     };
@@ -12563,6 +12601,65 @@ export interface components {
       started_at: string | null;
       /** Format: date-time */
       finished_at: string | null;
+    };
+    /**
+     * @description What the agent's latest pre-publish run of the draft says of
+     *     publishing: the whole compliance pack passed under its current
+     *     version; a pack scenario failed or errored, or the run stopped short;
+     *     the run is still queued or playing; it played another version of the
+     *     pack; there is no such run. Only `passed` opens publishing.
+     * @enum {string}
+     */
+    AiComplianceGateState: 'passed' | 'failed' | 'pending' | 'stale' | 'missing';
+    /**
+     * @description As a scenario's expectations (`AiTestExpectations`), except that
+     *     `outcome` may be null — any ending: the output rules (G7, G11) hold
+     *     whatever the conversation came to.
+     */
+    AiComplianceExpectations: {
+      outcome: components['schemas']['ScenarioOutcome'] | null;
+      topic?: components['schemas']['QueueTopicRole'];
+      reason_code?: string;
+      forbidden_phrases?: string[];
+      must_flags?: components['schemas']['RiskFlagType'][];
+      max_turns: number;
+    };
+    /** @description One locked scenario of the platform's compliance pack — code, not a row. */
+    AiComplianceScenario: {
+      /** @description The results' `scenario_key`. */
+      key: string;
+      /** @enum {string} */
+      guardrail: 'G1' | 'G2' | 'G3' | 'G5' | 'G7' | 'G11' | 'G16';
+      /** @enum {string} */
+      language: 'tr' | 'en';
+      name: string;
+      persona: components['schemas']['ScenarioPersona'];
+      /** @description The player's messages, in order — every pack scenario is scripted. */
+      turns: string[];
+      expectations: components['schemas']['AiComplianceExpectations'];
+    };
+    AiComplianceGate: {
+      state: components['schemas']['AiComplianceGateState'];
+      /** @description True only when `state` is `passed`. */
+      open: boolean;
+      /**
+       * Format: uuid
+       * @description The pre-publish run it read; null — there is none.
+       */
+      run_id: string | null;
+      run_pack_version: string | null;
+      passed: number;
+      /** @description Failed or errored. */
+      failed: number;
+      /** @description The pack scenarios that did not pass, in the pack's order. */
+      failing: string[];
+      /** @description The workspace's own scenarios that failed or errored in that run — never the pack's. */
+      workspace_failed: number;
+    };
+    AiCompliancePack: {
+      pack_version: string;
+      scenarios: components['schemas']['AiComplianceScenario'][];
+      gate: components['schemas']['AiComplianceGate'];
     };
     AiTestRunList: {
       runs: components['schemas']['AiTestRun'][];
@@ -25678,6 +25775,33 @@ export interface operations {
           'application/json': components['schemas']['AiTestRunResultList'];
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiCompliancePack: {
+    parameters: {
+      query: {
+        ai_agent_id: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The pack and the gate */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiCompliancePack'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];

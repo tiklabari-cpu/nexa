@@ -988,7 +988,11 @@ describe('module parity matrix — what is still owed', () => {
       // and `/save-as-scenario` (tm 314.2) — AI-19's test bench, drawn in the
       // web panel's Test tab (tm 314.5). The app tests no AI; nothing here
       // re-scopes.
-      contractEndpoints: 283,
+      // 283 -> 284 with `/ai/compliance-pack` (tm 314.4) — the platform's
+      // locked compliance pack and the publish gate it sets, read by the Test
+      // tab (tm 314.5) and publishing (tm 316). The app publishes no AI;
+      // nothing here re-scopes.
+      contractEndpoints: 284,
       scopeBoundaries: 1,
     });
   });

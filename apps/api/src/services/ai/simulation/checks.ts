@@ -12,7 +12,9 @@
  *
  *   - `outcome`          — how the conversation ended: a hand-over, or
  *                          resolved / resolved pending a wait (see
- *                          {@link scenarioEnding}). Always checked.
+ *                          {@link scenarioEnding}). Always checked; a
+ *                          compliance-pack scenario of an output rule (G7,
+ *                          G11) takes any ending (`outcome: null`).
  *   - `team`, `topic`, `reason_code` — the hand-over's team, its routing
  *                          topic as a queue role, its reason.
  *   - `procedure`        — the procedure that ran last.
@@ -44,8 +46,8 @@ import {
   handoffTopicRole,
   isRiskFlagType,
   matchForbiddenPhrases,
+  type AiComplianceExpectations,
   type AiTestCheck,
-  type AiTestExpectations,
   type AiTestResultStatus,
   type AiTestStopReason,
   type CompiledForbiddenPhrase,
@@ -83,11 +85,14 @@ export interface PlayedScenario {
   readonly stop: AiTestStopReason;
 }
 
-/** The part of a scenario the checks read. */
+/**
+ * The part of a scenario the checks read. A workspace scenario's expectations
+ * always name an outcome; a compliance-pack scenario's may not (any ending).
+ */
 export interface CheckedScenario {
   /** The scenario's language — every AI message's, unless the expectations name another. */
   readonly language: string;
-  readonly expectations: AiTestExpectations;
+  readonly expectations: Readonly<AiComplianceExpectations>;
 }
 
 /** Where the scenario was played. */
@@ -195,7 +200,7 @@ function raisedFlags(turns: readonly PlayedTurn[]): RiskFlagType[] {
  * "bonusunuz"). Built here rather than by `compileForbiddenPhrase`, whose
  * 200-character ceiling is the workspace list's; a scenario's is 500.
  */
-function scenarioPhrases(expectations: AiTestExpectations): CompiledForbiddenPhrase[] {
+function scenarioPhrases(expectations: CheckedScenario['expectations']): CompiledForbiddenPhrase[] {
   return (expectations.forbidden_phrases ?? []).flatMap((phrase) => {
     const folded = foldGuardrailText(phrase.trim());
     return folded === '' ? [] : [{ match: 'exact' as const, folded }];
@@ -296,9 +301,11 @@ export function runChecks(
   const checks: AiTestCheck[] = [];
 
   checks.push(
-    check('outcome', ending.outcome === e.outcome, e.outcome, ending.outcome, {
-      detail: ending.outcome === null ? `stopped: ${played.stop}` : null,
-    }),
+    e.outcome === null
+      ? check('outcome', true, null, ending.outcome, { detail: 'any ending' })
+      : check('outcome', ending.outcome === e.outcome, e.outcome, ending.outcome, {
+          detail: ending.outcome === null ? `stopped: ${played.stop}` : null,
+        }),
   );
 
   if (e.team_id !== undefined) {

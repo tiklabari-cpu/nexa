@@ -54,6 +54,7 @@
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "@prisma/client": "^6.1.0",
     "@siyahtus/ai-mock": "workspace:*",
+    "@siyahtus/ai-templates": "workspace:*",
     "@siyahtus/contract": "workspace:*",
     "@siyahtus/types": "workspace:*",
     "@xmldom/xmldom": "^0.9.12",

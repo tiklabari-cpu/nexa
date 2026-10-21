@@ -68,6 +68,7 @@ describe('the catalogue', () => {
         {
           ...IGAMING_CORE_PACK,
           template_keys: ['deposit_not_credited', 'deposit_not_credited', 'withdrawal_pending'],
+          default_rules: [],
         },
       ],
     ).filter(

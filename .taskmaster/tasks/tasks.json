@@ -13648,7 +13648,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T17:44:37.505Z",
+        "updatedAt": "2026-10-21T20:26:17.700Z",
         "subtasks": [
           {
             "id": 1,
@@ -13683,13 +13683,13 @@
             "description": "Hakem (öneri) + regresyon farkı + test kotası",
             "details": "Üst görev 314 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Regresyon sıralaması; kota.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "314.2"
             ],
             "parentId": "314",
             "priority": "high",
-            "updatedAt": "2026-10-21T17:44:37.505Z"
+            "updatedAt": "2026-10-21T20:26:17.700Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T17:44:37.506Z",
+      "lastModified": "2026-10-21T20:26:17.700Z",
       "taskCount": 390,
       "completedCount": 309,
       "tags": [

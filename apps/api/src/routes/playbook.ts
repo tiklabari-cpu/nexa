@@ -39,6 +39,7 @@ import {
   KNOWLEDGE_LIST_AUDIENCES,
   KNOWLEDGE_REVIEW_INTERVAL_DAYS,
   KNOWLEDGE_SCOPE_IDS_MAX,
+  KNOWLEDGE_TABLE_SOURCE_TYPE,
   LOCKED_HANDOFF_REASONS,
   isKnowledgeReviewDue,
   isLockedHandoffReason,
@@ -1528,6 +1529,9 @@ export default async function playbookRoutes(
         // sources the AI agent answers players from — what this list has
         // always meant to the apps already installed; `all` is the whole store.
         where: {
+          // A structured-table row's source is the row's (tm 310.2): it is
+          // listed, edited and reviewed as the row, under /knowledge-tables.
+          type: { not: KNOWLEDGE_TABLE_SOURCE_TYPE },
           ...(query.audience === 'all' ? {} : { audiences: { has: query.audience } }),
           ...(query.brand_id === undefined
             ? {}
@@ -2089,11 +2093,14 @@ export default async function playbookRoutes(
             addedBy: true,
             refreshAfterDays: true,
             kbArticleId: true,
+            sourceTable: true,
+            sourceRowId: true,
             audiences: true,
             aiAgentIds: true,
           },
         });
         if (found?.kbArticleId) refuseKbArticleOwned(found.kbArticleId, body);
+        if (found) refuseTableRowOwned(found);
         // The owner and the scope before the crawl and the embedding, like the
         // agent on create.
         if (found) {
@@ -2248,10 +2255,13 @@ export default async function playbookRoutes(
             content: true,
             addedBy: true,
             refreshAfterDays: true,
+            sourceTable: true,
+            sourceRowId: true,
           },
         }),
       );
       if (!existing) throw ApiError.notFound('Knowledge source not found.');
+      refuseTableRowOwned(existing);
 
       // Re-checked, not trusted from creation — and outside the transaction,
       // so a refusal costs no row lock and writes nothing. Same crawl path
@@ -2312,8 +2322,9 @@ export default async function playbookRoutes(
       const reviewed = await request.withTenant(async (tx) => {
         const existing = await tx.knowledgeSource.findFirst({
           where: { id },
-          select: { id: true },
+          select: { id: true, sourceTable: true, sourceRowId: true },
         });
+        if (existing) refuseTableRowOwned(existing);
         if (!existing || (await reviewKnowledgeSourceDraft(tx, id)) === 0) {
           throw ApiError.notFound('Knowledge source not found.');
         }
@@ -2338,13 +2349,18 @@ export default async function playbookRoutes(
         // AI is switched off (AI-14-S2); deleted here it would come back with
         // the article's next save.
         const mirror = await tx.knowledgeSource.findFirst({
-          where: { id, kbArticleId: { not: null } },
-          select: { kbArticleId: true },
+          where: { id, OR: [{ kbArticleId: { not: null } }, { sourceTable: { not: null } }] },
+          select: { kbArticleId: true, sourceTable: true, sourceRowId: true },
         });
         if (mirror?.kbArticleId) refuseKbArticleOwned(mirror.kbArticleId);
+        // A table row's source goes with its row (tm 310.2).
+        if (mirror) refuseTableRowOwned(mirror);
         // Chunks cascade with the source; leaving them would keep answering
         // from text the admin believes they deleted.
-        const count = await deleteKnowledgeSourceDraft(tx, id, { kbArticleId: null });
+        const count = await deleteKnowledgeSourceDraft(tx, id, {
+          kbArticleId: null,
+          sourceTable: null,
+        });
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
         if (count > 0) {
@@ -2532,6 +2548,27 @@ function refuseKbArticleOwned(kbArticleId: string, body?: Record<string, unknown
       ? `${field}: this source is a published KB article's — edit the article instead.`
       : "This source is a published KB article's: unpublish the article, or switch its AI audiences off.",
     { reason: 'knowledge_source_from_kb_article', kb_article_id: kbArticleId },
+  );
+}
+
+/**
+ * A structured-table row's source (tm 310.2 · AI-13) holds the row's text and
+ * meta fields, written by the row's writer alone: editing, reindexing,
+ * reviewing or deleting it here is refused with the row to go to instead
+ * (`/knowledge-tables/{table}/{rowId}`).
+ */
+function refuseTableRowOwned(source: {
+  sourceTable: string | null;
+  sourceRowId: string | null;
+}): void {
+  if (source.sourceTable === null) return;
+  throw ApiError.validation(
+    "This source is a structured table row's: change, review or delete the row instead.",
+    {
+      reason: 'knowledge_source_from_table_row',
+      source_table: source.sourceTable,
+      source_row_id: source.sourceRowId,
+    },
   );
 }
 

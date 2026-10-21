@@ -84,6 +84,7 @@ import aiGuardrailRoutes from './routes/ai-guardrails.js';
 import { riskFlagRoutes } from './routes/risk-flags.js';
 import { aiHandoffRoutes } from './routes/ai-handoffs.js';
 import kbRoutes from './routes/kb.js';
+import knowledgeTableRoutes from './routes/knowledge-tables.js';
 import publicKbRoutes from './routes/public-kb.js';
 import publicKbHtmlRoutes from './routes/public-kb-html.js';
 import publicKbSitemapRoutes from './routes/public-kb-sitemap.js';
@@ -655,6 +656,7 @@ export async function buildServer({
       await api.register(riskFlagRoutes);
       await api.register(aiHandoffRoutes);
       await api.register(kbRoutes, { knowledge });
+      await api.register(knowledgeTableRoutes, { knowledge });
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,

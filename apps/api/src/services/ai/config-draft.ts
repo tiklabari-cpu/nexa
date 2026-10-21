@@ -12,13 +12,20 @@
  * This first form does §2.5 step 1 only: it stamps the row's `updated_at` —
  * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
  * settings, rules and forbidden phrases (tm 301.2), the hand-over rules
- * (tm 303.3), the hand-over routes (tm 307.1) and the knowledge sources
- * (tm 309.1; a KB article's from tm 309.2). A route that writes `updated_at` itself, or opens a
+ * (tm 303.3), the hand-over routes (tm 307.1), the knowledge sources
+ * (tm 309.1; a KB article's from tm 309.2) and the structured knowledge tables'
+ * rows with their sources (tm 310.2). A route that writes `updated_at` itself, or opens a
  * `status`/`version` column, breaks the rule.
  */
 import type { Prisma } from '@prisma/client';
-import type { KnowledgeAudience } from '@siyahtus/types';
+import {
+  KNOWLEDGE_TABLE_SOURCE_TYPE,
+  KNOWLEDGE_TABLE_SQL_NAMES,
+  type KnowledgeAudience,
+  type KnowledgeTable,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
+import { knowledgeTableDelegate, type KnowledgeTableRecords } from '../knowledge-tables/rows.js';
 
 type SkillCreate = Omit<Prisma.SkillUncheckedCreateInput, 'updatedAt'>;
 type SkillUpdate = Omit<Prisma.SkillUncheckedUpdateInput, 'updatedAt'>;
@@ -444,6 +451,169 @@ export async function updateKbArticleSourceDraft(
       ...scope,
       aiAgentId: await knowledgeFilingOf(tx, source.licenseId, scope),
       reviewedAt: fields.reviewedAt,
+      lastRefreshError: pending,
+      ...(pending === null ? {} : { status: 'indexing' }),
+      updatedAt: new Date(),
+    },
+  });
+  return count;
+}
+
+// Structured knowledge tables (tm 310.2 · AI-13, ADR-14b §2.12): the four
+// tables' rows are editing tables like any above — no publish state, written
+// here, copied into the package once tm 316 versions it (and then always
+// behind the configuration's approval, never the fast path, §2.10). Each row
+// is mirrored by one knowledge source (`type = 'table_row'`, AI-13 coding
+// logic 3) that `services/knowledge-tables/row-knowledge.ts` alone writes,
+// through the two source helpers at the end; a row's delete takes its source
+// in the same transaction.
+
+/** The row as written: the table's columns in Prisma's terms (`records.ts` `knowledgeTableDataOf`). */
+type KnowledgeTableRowData = Record<string, unknown>;
+
+/**
+ * A new row, reviewed the moment it is added (AI-13-S2, as a knowledge
+ * source is — AI-14-S3); `by` is who added it.
+ */
+export async function createKnowledgeTableRowDraft<T extends KnowledgeTable>(
+  tx: TenantClient,
+  table: T,
+  licenseId: bigint,
+  data: KnowledgeTableRowData,
+  by: string | null,
+): Promise<KnowledgeTableRecords[T]> {
+  const at = new Date();
+  return (await knowledgeTableDelegate(tx, table).create({
+    data: {
+      ...data,
+      licenseId,
+      createdBy: by,
+      updatedBy: by,
+      reviewedAt: at,
+      updatedAt: at,
+    },
+  })) as KnowledgeTableRecords[T];
+}
+
+/**
+ * How many rows changed — 0 when the row is not this workspace's. An edit is
+ * not a review: `reviewed_at` stays.
+ */
+export async function updateKnowledgeTableRowDraft(
+  tx: TenantClient,
+  table: KnowledgeTable,
+  id: string,
+  data: KnowledgeTableRowData,
+  by: string | null,
+): Promise<number> {
+  const { count } = await knowledgeTableDelegate(tx, table).updateMany({
+    where: { id },
+    data: { ...data, updatedBy: by, updatedAt: new Date() },
+  });
+  return count;
+}
+
+/**
+ * "Gözden geçirdim" (AI-13-S2): the row's review moves to `at`. A meta write
+ * (§2.2) — nothing the AI says changes — yet a write, so `updated_at` moves.
+ */
+export async function reviewKnowledgeTableRowDraft(
+  tx: TenantClient,
+  table: KnowledgeTable,
+  id: string,
+  by: string | null,
+  at: Date = new Date(),
+): Promise<number> {
+  const { count } = await knowledgeTableDelegate(tx, table).updateMany({
+    where: { id },
+    data: { reviewedAt: at, updatedBy: by, updatedAt: at },
+  });
+  return count;
+}
+
+/** How many rows went — 0 when the row is not this workspace's. Its knowledge source and chunks go with it. */
+export async function deleteKnowledgeTableRowDraft(
+  tx: TenantClient,
+  table: KnowledgeTable,
+  id: string,
+): Promise<number> {
+  const { count } = await knowledgeTableDelegate(tx, table).deleteMany({ where: { id } });
+  await tx.knowledgeSource.deleteMany({
+    where: { sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[table], sourceRowId: id },
+  });
+  return count;
+}
+
+/**
+ * What a row's knowledge source holds (AI-13 coding logic 3): the row's
+ * label and Turkish text, and its meta fields — the row's brands, owner and
+ * review (the store's badge and the AI-14 filters read the source), a bonus's
+ * campaign end as the source's end. For the AI and Copilot, every AI agent.
+ */
+export interface TableRowSourceFields {
+  name: string;
+  content: string;
+  brandIds: string[];
+  ownerId: string | null;
+  reviewedAt: Date;
+  reviewIntervalDays: number;
+  validUntil: Date | null;
+  addedBy: string | null;
+}
+
+/**
+ * Who a row's source is for: the AI's answers and Copilot ("Copilot da aynı
+ * veriyi kullanır", AI-13), every AI agent — a workspace has one set of tables.
+ */
+export const TABLE_ROW_SOURCE_SCOPE: KnowledgeAudienceScope = {
+  audiences: ['ai_agent', 'copilot'],
+  aiAgentIds: [],
+};
+
+/**
+ * The source a row becomes, indexed by the caller in the same transaction
+ * (`KnowledgeService.index`). `pending` says why its text is not indexed now
+ * (the sweep indexes it later); it stays `indexing`.
+ */
+export async function createTableRowSourceDraft(
+  tx: TenantClient,
+  row: { licenseId: bigint; table: KnowledgeTable; id: string },
+  fields: TableRowSourceFields,
+  pending: string | null = null,
+) {
+  return tx.knowledgeSource.create({
+    data: {
+      licenseId: row.licenseId,
+      type: KNOWLEDGE_TABLE_SOURCE_TYPE,
+      sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[row.table],
+      sourceRowId: row.id,
+      status: 'indexing',
+      lastRefreshError: pending,
+      ...fields,
+      ...TABLE_ROW_SOURCE_SCOPE,
+      aiAgentId: await knowledgeFilingOf(tx, row.licenseId, TABLE_ROW_SOURCE_SCOPE),
+      updatedAt: new Date(),
+    },
+  });
+}
+
+/**
+ * The row changed: its source takes what the row says now. `pending` as on
+ * create — the caller has taken the source's chunks away first
+ * (`KnowledgeService.unindex`), so it answers nothing the row no longer says.
+ */
+export async function updateTableRowSourceDraft(
+  tx: TenantClient,
+  source: { id: string; licenseId: bigint },
+  fields: TableRowSourceFields,
+  pending: string | null = null,
+): Promise<number> {
+  const { count } = await tx.knowledgeSource.updateMany({
+    where: { id: source.id },
+    data: {
+      ...fields,
+      ...TABLE_ROW_SOURCE_SCOPE,
+      aiAgentId: await knowledgeFilingOf(tx, source.licenseId, TABLE_ROW_SOURCE_SCOPE),
       lastRefreshError: pending,
       ...(pending === null ? {} : { status: 'indexing' }),
       updatedAt: new Date(),

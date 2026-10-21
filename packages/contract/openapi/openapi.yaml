@@ -396,6 +396,16 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSourceReindex"
   /knowledge-sources/{sourceId}/review:
     $ref: "./paths/playbook.yaml#/knowledgeSourceReview"
+  /knowledge-tables/{table}:
+    $ref: "./paths/knowledge-tables.yaml#/knowledgeTableRows"
+  /knowledge-tables/{table}/import:
+    $ref: "./paths/knowledge-tables.yaml#/knowledgeTableImport"
+  /knowledge-tables/{table}/export:
+    $ref: "./paths/knowledge-tables.yaml#/knowledgeTableExport"
+  /knowledge-tables/{table}/{rowId}:
+    $ref: "./paths/knowledge-tables.yaml#/knowledgeTableRow"
+  /knowledge-tables/{table}/{rowId}/review:
+    $ref: "./paths/knowledge-tables.yaml#/knowledgeTableRowReview"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"

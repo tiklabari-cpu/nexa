@@ -373,6 +373,124 @@ export interface KnowledgeTableFields {
   rules: KbRuleFields;
 }
 
+/** The meta fields a row is written with (`KnowledgeTableRowMetaWrite`); the rest are the server's. */
+export const KNOWLEDGE_TABLE_META_WRITE_FIELDS = [
+  'brand_ids',
+  'owner_id',
+  'review_interval_days',
+] as const;
+export type KnowledgeTableMetaWriteField = (typeof KNOWLEDGE_TABLE_META_WRITE_FIELDS)[number];
+
+/**
+ * How a field is spelled outside JSON — a CSV cell (tm 310.2): `text` as
+ * written (an ISO moment and a closed-list value too), `number` with a `.`
+ * decimal point, `boolean` `true`/`false`, `list` its items joined by `|`,
+ * `json` the field's JSON (working hours, usual errors, contributions).
+ */
+export type KnowledgeTableFieldKind = 'text' | 'number' | 'boolean' | 'list' | 'json';
+
+/** A writable field and its kind. */
+export type KnowledgeTableColumn<T extends KnowledgeTable> = readonly [
+  keyof KnowledgeTableFields[T] & string,
+  KnowledgeTableFieldKind,
+];
+
+/**
+ * Each table's writable fields in their CSV order — the columns an export
+ * writes and an import reads, after {@link KNOWLEDGE_TABLE_META_WRITE_FIELDS}.
+ */
+export const KNOWLEDGE_TABLE_COLUMNS: {
+  readonly [T in KnowledgeTable]: KnowledgeTableColumn<T>[];
+} = {
+  payment_methods: [
+    ['name', 'text'],
+    ['aliases', 'list'],
+    ['direction', 'text'],
+    ['currency', 'text'],
+    ['min_amount', 'number'],
+    ['max_amount', 'number'],
+    ['expected_minutes', 'number'],
+    ['delay_threshold_minutes', 'number'],
+    ['working_hours', 'json'],
+    ['requires_site_request', 'boolean'],
+    ['reference_instructions', 'text'],
+    ['reference_format', 'text'],
+    ['receipt_required', 'boolean'],
+    ['third_party_allowed', 'boolean'],
+    ['networks', 'list'],
+    ['common_errors', 'json'],
+    ['customer_notes', 'text'],
+    ['active', 'boolean'],
+  ],
+  bonuses: [
+    ['name', 'text'],
+    ['aliases', 'list'],
+    ['type', 'text'],
+    ['min_deposit', 'number'],
+    ['wagering_multiplier', 'number'],
+    ['wagering_base', 'text'],
+    ['contributing', 'json'],
+    ['min_odds', 'number'],
+    ['max_bet', 'number'],
+    ['max_cashout', 'number'],
+    ['validity_days', 'number'],
+    ['claim_method', 'text'],
+    ['promo_code', 'text'],
+    ['excluded_method_ids', 'list'],
+    ['active_from', 'text'],
+    ['active_to', 'text'],
+    ['terms_text', 'text'],
+  ],
+  kyc_documents: [
+    ['doc_type', 'text'],
+    ['acceptance_criteria', 'list'],
+    ['when_required', 'text'],
+    ['review_hours', 'number'],
+    ['upload_path_text', 'text'],
+    ['chat_upload_allowed', 'boolean'],
+  ],
+  rules: [
+    ['key', 'text'],
+    ['category', 'text'],
+    ['title', 'text'],
+    ['value_text', 'text'],
+    ['numeric_value', 'number'],
+    ['unit', 'text'],
+    ['description', 'text'],
+  ],
+};
+
+/** The fields a new row must give (the contract's create schemas). */
+export const KNOWLEDGE_TABLE_REQUIRED_FIELDS: {
+  readonly [T in KnowledgeTable]: readonly string[];
+} = {
+  payment_methods: ['name', 'direction'],
+  bonuses: ['name'],
+  kyc_documents: ['doc_type'],
+  rules: ['key', 'title'],
+};
+
+/**
+ * A rendered row's knowledge source type (tm 310.2) — beside
+ * `KNOWLEDGE_SOURCE_TYPES`, which a person adds; this one only the row's
+ * writer does.
+ */
+export const KNOWLEDGE_TABLE_SOURCE_TYPE = 'table_row';
+
+/**
+ * What a row is called — its knowledge source's name, an import report's
+ * label: a payment method's or bonus's name, a KYC document, a rule's title.
+ * Null when the row does not say it (yet).
+ */
+export function knowledgeTableRowLabel(
+  table: KnowledgeTable,
+  row: Readonly<Record<string, unknown>>,
+): string | null {
+  const field = table === 'kyc_documents' ? 'doc_type' : table === 'rules' ? 'title' : 'name';
+  const value = row[field];
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
 // ===========================================================================
 // Validation
 // ===========================================================================

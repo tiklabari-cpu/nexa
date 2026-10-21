@@ -62,5 +62,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     css: false,
+    // A hang guard, not a speed budget: inside the DoD gate every package runs
+    // at once and a 1 s render test was measured past 5 s and 20 s (tm 311.3).
+    // api and rtm use the same 30 s.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

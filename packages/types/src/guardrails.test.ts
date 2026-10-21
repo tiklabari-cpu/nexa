@@ -20,6 +20,17 @@ import {
   type GuardrailStage,
 } from './guardrails.js';
 
+// CPU time of this test process, in ms. Wall clock counts the time the gate's
+// other jobs hold the CPU (a 1.8 s run measured 8.8 s under load); CPU time
+// does not, so the budget still catches a quadratic pattern without flaking.
+// No Node types in this package, hence the narrow cast.
+const cpuMs = (): number => {
+  const usage = (
+    globalThis as unknown as { process: { cpuUsage(): { user: number; system: number } } }
+  ).process.cpuUsage();
+  return (usage.user + usage.system) / 1000;
+};
+
 /** The rules the text trips at a stage. */
 const hits = (text: string, stage: GuardrailStage) => guardrailsHit(scanGuardrails(text, stage));
 
@@ -977,9 +988,9 @@ describe('scanGuardrails', () => {
     ];
     for (const text of inputs) {
       for (const stage of ['input', 'output'] as const) {
-        const started = performance.now();
+        const started = cpuMs();
         scanGuardrails(text, stage);
-        expect(performance.now() - started, `${stage} ${text.slice(0, 12)}`).toBeLessThan(5_000);
+        expect(cpuMs() - started, `${stage} ${text.slice(0, 12)}`).toBeLessThan(5_000);
       }
     }
   });

@@ -258,6 +258,10 @@ describe('data model invariants', () => {
       await dayChat();
       await dayChat({ localDay: NEXT_DAY });
       for (let i = 0; i < 3; i++) await dayChat({ localDay: null, dayTz: null });
+      // Fresh statistics, so the plan does not depend on whatever an earlier
+      // test or a late autovacuum left behind. Without this the planner picked
+      // chats_customer_id_idx in loaded gate runs.
+      await owner.$executeRawUnsafe('ANALYZE chats');
 
       const appRole = new PrismaClient({ datasourceUrl: APP_URL });
       try {

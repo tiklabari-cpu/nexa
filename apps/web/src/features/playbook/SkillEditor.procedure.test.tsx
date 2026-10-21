@@ -34,7 +34,9 @@ const { SkillEditor } = await import('./SkillEditor.js');
 // things by role across that tree — 1–3 s each on an idle machine, and the
 // first one went past the default 5 s inside the full DoD gate, where every
 // package's suite runs at once (as `auth-store.test.ts` measured, tm 259.1).
-vi.setConfig({ testTimeout: 20_000 });
+// 20 s was not enough either: the first test, which also pays for the first
+// render, timed out at 20 s in the tm 311.3 gate.
+vi.setConfig({ testTimeout: 60_000 });
 
 function depositRow() {
   const result = validateSkillProcedure(depositProcedureFields());

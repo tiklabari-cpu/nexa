@@ -1130,6 +1130,9 @@ test.describe('attachments', () => {
   // the config only keeps artefacts on failure, and a passing autonomous run
   // must still leave a human something to look at.
   test('a file crosses from visitor to agent and back', async ({ browser, organizationId }) => {
+    // Two uploads, each a grant + a PUT, plus two image paints: 45 s is tight
+    // when the e2e shards share the machine with each other.
+    test.setTimeout(90_000);
     const visitorContext = await browser.newContext();
     const agentContext = await browser.newContext();
     const visitor = await visitorContext.newPage();
@@ -1171,7 +1174,11 @@ test.describe('attachments', () => {
       // --- Agent attaches one back -------------------------------------------
       await agent.getByRole('radio', { name: 'Reply' }).click();
       await agent.locator('input[type="file"]').setInputFiles(SAMPLE_PNG);
-      await expect(agent.getByTestId('composer-attachment')).toContainText('sample.png');
+      // The chip appears only once the grant and the PUT have both answered;
+      // under gate load that went past the default 10 s (tm 311.3).
+      await expect(agent.getByTestId('composer-attachment')).toContainText('sample.png', {
+        timeout: 30_000,
+      });
       await agent.getByRole('button', { name: 'Send' }).click();
 
       // The visitor sees the agent's image (polling picks it up within seconds).

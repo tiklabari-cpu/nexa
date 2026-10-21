@@ -240,6 +240,10 @@ stream_task(){
   local logf="$LOG_DIR/task-$id.jsonl"
   : > "$logf"
   # Fast mode YALNIZ Opus'ta çalışır (Sonnet'te etkisiz). Varsayılan KAPALI; açmak: FAST_MODE=1 ./run-loop.sh
+  # KAPALI KALIR (sahip kararı, 2026-10-21): abonelikte fast mode plan kotasından değil,
+  # ayrı ücretli "usage credits"ten düşer (kota dolmamış olsa bile); Opus 5.5 fast
+  # $8/$40 MTok. Normal kullanımımız değil — sahip açıkça istemedikçe açılmaz.
+  # Kaynak: code.claude.com/docs/en/fast-mode, platform.claude.com/docs/en/build-with-claude/fast-mode
   local FAST_ARGS=()
   if [[ "${FAST_MODE:-0}" == "1" && "$mdl" == *opus* ]]; then FAST_ARGS=(--settings '{"fastMode": true}'); fi
   local turns="$MAX_TURNS"

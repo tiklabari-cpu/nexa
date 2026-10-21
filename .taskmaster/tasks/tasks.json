@@ -13648,7 +13648,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-21T20:27:26.074Z",
+        "updatedAt": "2026-10-21T21:34:41.855Z",
         "subtasks": [
           {
             "id": 1,
@@ -13697,13 +13697,13 @@
             "description": "Kilitli uyum paketi (G1, G2, G3, G5, G7, G11, G16; TR+EN) + yayın öncesi otomatik koşu kancası",
             "details": "XHIGH GEREKÇESİ: uyum kapısı (güvenlik yüzeyi).",
             "testStrategy": "Paket koşusu; silinemez.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "314.2"
             ],
             "parentId": "314",
             "priority": "high",
-            "updatedAt": "2026-10-21T20:27:26.074Z"
+            "updatedAt": "2026-10-21T21:34:41.855Z"
           },
           {
             "id": 5,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-21T20:27:26.074Z",
+      "lastModified": "2026-10-21T21:34:41.856Z",
       "taskCount": 390,
       "completedCount": 309,
       "tags": [

@@ -208,6 +208,7 @@ export async function recordScenarioResult(
             handoffTeamId: play.handoffTeamId === null ? null : BigInt(play.handoffTeamId),
             transcript: play.transcript as unknown as Prisma.InputJsonValue,
             checks: play.checks as unknown as Prisma.InputJsonValue,
+            ...(play.judge ? { judge: play.judge as unknown as Prisma.InputJsonValue } : {}),
             tokens: play.tokens,
             durationMs: play.durationMs,
           },

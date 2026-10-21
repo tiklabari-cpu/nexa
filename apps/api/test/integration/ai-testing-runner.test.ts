@@ -212,7 +212,8 @@ describe('the AI test bench plays scenarios on the live engine (tm 314.2 · AI-1
         stop_reason: 'handoff',
         outcome: 'handoff',
         handoff_team_id: financeId,
-        judge: null,
+        // The stub judge's advice (tm 314.3): every hard check held.
+        judge: { score: 5, comment: 'Stub judge: every hard check held.' },
         regression: null,
       });
       expect(result.checks.filter((check) => !check.passed)).toEqual([]);

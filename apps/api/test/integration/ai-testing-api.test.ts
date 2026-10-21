@@ -358,7 +358,7 @@ describe('the AI test bench’s endpoints (tm 314.2 · AI-19)', () => {
       expect(history.runs.map((run) => run.id)).toEqual([second.id, id]);
     });
 
-    it('lists failed results first, with no regression and no judge yet (tm 314.3)', async () => {
+    it('lists failed results first, with the stub judge’s advice and no regression without a published run (tm 314.3)', async () => {
       const failing = (
         (
           await create({
@@ -397,7 +397,10 @@ describe('the AI test bench’s endpoints (tm 314.2 · AI-19)', () => {
       };
       expect(body.compared_run_id).toBeNull();
       expect(body.results.map((result) => result.scenario_key)).toEqual([failing, passing]);
-      expect(body.results[0]).toMatchObject({ status: 'failed', regression: null, judge: null });
+      expect(body.results[0]).toMatchObject({ status: 'failed', regression: null });
+      expect(body.results[0]!.judge).toMatchObject({
+        comment: expect.stringMatching(/^Stub judge/),
+      });
     });
 
     it('refuses a second open run of the agent and target (409), but not another target', async () => {

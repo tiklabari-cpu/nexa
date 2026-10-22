@@ -98,6 +98,30 @@ export const common: Messages = {
   'ui.form.phone': 'Enter a valid phone number, e.g. +15551234567.',
   'ui.form.cardLast4': 'Enter the last 4 digits — exactly 4 numbers.',
   'ui.form.submitFailed': 'Something went wrong. Please try again.',
+  // components/settings — the shared save pattern (tm 323.1 · GV-06): a form that writes on
+  // Save, a toggle that writes at once, and the reasoned confirm for high-risk settings.
+  'ui.save.unsaved': 'Unsaved changes',
+  'ui.save.clean': 'All changes saved',
+  'ui.save.save': 'Save',
+  'ui.save.saving': 'Saving…',
+  'ui.save.discard': 'Discard',
+  'ui.save.failed': 'Your changes were not saved. They are still here — try again.',
+  'ui.save.leaveMessage': 'You have unsaved changes in this section. Leave and discard them?',
+  'ui.instant.hint': 'Saves instantly',
+  'ui.instant.saved': 'Saved',
+  'ui.instant.undo': 'Undo',
+  'ui.instant.failed': "This setting couldn't be saved.",
+  'ui.highRisk.title': 'Confirm this change',
+  'ui.highRisk.description':
+    'This setting changes who can see or do what in the workspace. Check the change below and say why you are making it — the reason is written to the audit log.',
+  'ui.highRisk.changes': 'Changes',
+  'ui.highRisk.before': 'Before',
+  'ui.highRisk.after': 'After',
+  'ui.highRisk.empty': '(empty)',
+  'ui.highRisk.reason': 'Reason',
+  'ui.highRisk.reasonHint': 'Required. Recorded in the audit log.',
+  'ui.highRisk.reasonRequired': 'Enter a reason for this change.',
+  'ui.highRisk.confirm': 'Confirm and save',
   'common.actions.collapsePanel': 'Collapse panel',
   // Tour.tsx's own chrome (FR-MOD-02.2.3) — step content is the caller's, but
   // Back/Next/Skip/Done and the counter are generic across every tour.

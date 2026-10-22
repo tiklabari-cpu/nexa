@@ -21,7 +21,12 @@ import {
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
-import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
+import {
+  TICKET_STATUSES,
+  TicketService,
+  maskTicketContact,
+} from '../services/tickets/ticket-service.js';
+import { seesPlayerContact } from '../services/customers/player-contact.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { TicketEmailTemplateService } from '../services/tickets/ticket-email-template-service.js';
 import {
@@ -218,7 +223,9 @@ export default async function ticketRoutes(
       created_at: ticket.created_at,
     });
 
-    return reply.code(201).send(ticket);
+    return reply
+      .code(201)
+      .send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
   });
 
   // Bulk actions (PRD §5.2 "Ticketing (gelişmiş)" · FR-13-EK.3 ·
@@ -256,7 +263,8 @@ export default async function ticketRoutes(
       const ticketId = parse(ticketIdSchema, request.params.ticketId);
       const principal = request.requirePrincipal();
 
-      return reply.send(await request.withTenant((tx) => tickets.get(tx, principal, ticketId)));
+      const ticket = await request.withTenant((tx) => tickets.get(tx, principal, ticketId));
+      return reply.send(maskTicketContact(ticket, seesPlayerContact(principal)));
     },
   );
 
@@ -372,7 +380,7 @@ export default async function ticketRoutes(
         );
       }
 
-      return reply.send(ticket);
+      return reply.send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
     },
   );
 
@@ -398,7 +406,7 @@ export default async function ticketRoutes(
         return tickets.get(tx, principal, ticketId);
       });
 
-      return reply.send(ticket);
+      return reply.send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
     },
   );
 
@@ -417,7 +425,7 @@ export default async function ticketRoutes(
         tickets.merge(tx, tenant, principal, request.auditContext(), ticketId, into),
       );
 
-      return reply.send(ticket);
+      return reply.send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
     },
   );
 
@@ -433,7 +441,7 @@ export default async function ticketRoutes(
         tickets.unmerge(tx, tenant, principal, request.auditContext(), ticketId),
       );
 
-      return reply.send(ticket);
+      return reply.send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
     },
   );
 
@@ -450,7 +458,7 @@ export default async function ticketRoutes(
         tickets.addFollower(tx, tenant, principal, request.auditContext(), ticketId, account_id),
       );
 
-      return reply.send(ticket);
+      return reply.send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
     },
   );
 
@@ -467,7 +475,7 @@ export default async function ticketRoutes(
         tickets.removeFollower(tx, tenant, principal, request.auditContext(), ticketId, accountId),
       );
 
-      return reply.send(ticket);
+      return reply.send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
     },
   );
 }

@@ -1410,6 +1410,7 @@ export const settings: Messages = {
   'permissions.group.logs': 'Logs',
   'permissions.capability.chats.view': 'View chats',
   'permissions.capability.tickets.view': 'View tickets',
+  'permissions.capability.customers.contact.view': "See a player's email and username",
   'permissions.capability.customers.edit': 'Edit player records',
   'permissions.capability.customers.ban': 'Ban players',
   'permissions.capability.customers.erase': 'Erase a player’s data',

@@ -37,7 +37,6 @@
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
-import type { RealtimePublisher } from '../realtime/publisher.js';
 import { selectRuleBotMatch, type RuleBotMatch } from './rule-bot-engine.js';
 
 export interface RuleBotOutcome extends RuleBotMatch {
@@ -54,10 +53,7 @@ export interface RuleBotOutcome extends RuleBotMatch {
 }
 
 export class RuleBotResponder {
-  constructor(
-    private readonly chats: ChatService,
-    private readonly publisher: RealtimePublisher,
-  ) {}
+  constructor(private readonly chats: ChatService) {}
 
   /**
    * Run the first matching rule and apply it. Returns what happened, or null
@@ -160,12 +156,10 @@ export class RuleBotResponder {
       return false;
     }
 
-    await this.publisher.publish(
-      tenant,
-      'chat_transferred',
-      { allAgents: true },
-      { chat_id: chatId, reason: 'bot_handoff', transferred_to: { group_ids: [Number(groupId)] } },
-    );
+    // No push of its own: `transfer` announces `chat_transferred` to the
+    // chat's audience, before and after. A second one to every agent told the
+    // other teams — and, at `own`/`none`, people the matrix keeps out of this
+    // chat — which conversation went where (tm 325.6).
     return true;
   }
 }

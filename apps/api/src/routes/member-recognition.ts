@@ -28,7 +28,11 @@ import { MEMBER_KEY_ROTATION_GRACE, MEMBER_TOKEN_TTL } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { selfAccountId } from '../services/auth/principal.js';
-import { CustomerIdentityService } from '../services/customers/customer-identity.js';
+import {
+  CustomerIdentityService,
+  type CustomerIdentityLinkView,
+} from '../services/customers/customer-identity.js';
+import { maskPlayerContact, seesPlayerContact } from '../services/customers/player-contact.js';
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -232,7 +236,16 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
       );
       // Another organization's customer reads as absent (NFR-S5).
       if (!matches) throw ApiError.notFound('Customer not found.');
-      return reply.send(matches);
+      // `matched_on` stays: it says the two records share a detail, not what
+      // it is (tm 325.6).
+      const visible = seesPlayerContact(request.requirePrincipal());
+      return reply.send({
+        ...matches,
+        items: matches.items.map((match) => ({
+          ...match,
+          customer: maskPlayerContact(match.customer, visible),
+        })),
+      });
     },
   );
 
@@ -244,7 +257,8 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
 
       const items = await request.withTenant((tx) => identities.links(tx, customerId));
       if (!items) throw ApiError.notFound('Customer not found.');
-      return reply.send({ items });
+      const visible = seesPlayerContact(request.requirePrincipal());
+      return reply.send({ items: items.map((link) => maskedLink(link, visible)) });
     },
   );
 
@@ -280,7 +294,9 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
         return result;
       });
 
-      return reply.code(outcome.kind === 'linked' ? 201 : 200).send(outcome.link);
+      return reply
+        .code(outcome.kind === 'linked' ? 201 : 200)
+        .send(maskedLink(outcome.link, seesPlayerContact(request.requirePrincipal())));
     },
   );
 
@@ -305,4 +321,9 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
       return reply.code(204).send();
     },
   );
+}
+
+/** A link with the linked record's email and username masked when the caller may not see them. */
+function maskedLink(link: CustomerIdentityLinkView, visible: boolean): CustomerIdentityLinkView {
+  return { ...link, linked_customer: maskPlayerContact(link.linked_customer, visible) };
 }

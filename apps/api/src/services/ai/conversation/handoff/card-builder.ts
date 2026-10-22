@@ -43,6 +43,7 @@ import { fillTemplate, variableText, type TemplateContext } from '../procedure/t
 import { slotCardLines, slotRecord } from '../slots/extract.js';
 import { readRiskFlags } from '../guardrails/guardrail-turn.js';
 import type { TurnDecisions, TurnState } from '../turn.js';
+import { redactPlayerContact } from '../../../customers/player-contact.js';
 
 /** What the card is built from. */
 export interface HandoffCardSource {
@@ -102,6 +103,14 @@ export interface HandoffCard {
   targetGroupId: number | null;
   priority: GuardrailPriority;
   cardText: string;
+  /**
+   * The text of the agents-only note in the transcript: `cardText` without the
+   * player's username and email, wherever it quotes them (tm 325.6). The note is one event every viewer
+   * of the chat reads, and `customers.contact.view` is a per-person answer —
+   * the card itself (`GET /chats/{id}/ai-handoffs`) carries them, masked per
+   * viewer.
+   */
+  noteText: string;
 }
 
 /** The longest stretch of the player's question the summary quotes. */
@@ -180,7 +189,7 @@ export function buildHandoffCard(source: HandoffCardSource): HandoffCard {
   const checks = state ? pendingChecks(state.signals) : [];
   const summary = cardSummary(topic, slots, source.firstMessage ?? source.turnText, source);
 
-  const card: Omit<HandoffCard, 'cardText'> = {
+  const card: Omit<HandoffCard, 'cardText' | 'noteText'> = {
     skillId: state?.activeSkillId ?? decisions?.skillId ?? null,
     procedureKey: decisions?.understood?.procedure_key ?? state?.activeSkillId ?? null,
     procedureSnapshotHash: state?.procedureSnapshotHash ?? null,
@@ -202,7 +211,17 @@ export function buildHandoffCard(source: HandoffCardSource): HandoffCard {
     targetGroupId: source.targetGroupId,
     priority: source.priority,
   };
-  return { ...card, cardText: cardText(card) };
+  return {
+    ...card,
+    cardText: cardText(card),
+    // Without the Oyuncu line's two values, and without them anywhere else the
+    // text quotes them (the summary, the question, a slot).
+    noteText: redactPlayerContact(
+      cardText({ ...card, player: { ...card.player, username: null, email: null } }),
+      [card.player.username, card.player.email],
+      false,
+    ),
+  };
 }
 
 /**
@@ -313,7 +332,7 @@ function pendingChecks(signals: TurnState['signals']): string[] {
 }
 
 /** The card as plain text — the agents-only line and the archive (Turkish, like the research card). */
-function cardText(card: Omit<HandoffCard, 'cardText'>): string {
+function cardText(card: Omit<HandoffCard, 'cardText' | 'noteText'>): string {
   const lines: string[] = [];
   lines.push(`Konu: ${card.topic ?? 'Prosedür dışı soru'}`);
   lines.push(`Özet: ${card.summary}`);

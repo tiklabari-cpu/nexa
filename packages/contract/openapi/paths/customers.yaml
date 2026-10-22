@@ -30,7 +30,7 @@ customers:
     parameters:
       - name: query
         in: query
-        description: Case-insensitive match against name, email and phone (anywhere in the text) and the pre-chat username (from its start).
+        description: Case-insensitive match against name, email and phone (anywhere in the text) and the pre-chat username (from its start). Email and username are matched only for a caller whose role may see a player's contact details (`customers.contact.view`).
         schema: { type: string, maxLength: 320 }
       - name: segment
         in: query

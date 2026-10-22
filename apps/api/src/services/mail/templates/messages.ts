@@ -1067,6 +1067,10 @@ export function knowledgeStaleMail(
 const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
   'chats.view': { en: 'View chats', tr: 'Sohbetleri görme' },
   'tickets.view': { en: 'View tickets', tr: 'Talepleri görme' },
+  'customers.contact.view': {
+    en: "See a player's email and username",
+    tr: 'Oyuncunun e-postasını ve kullanıcı adını görme',
+  },
   'customers.edit': { en: 'Edit player records', tr: 'Oyuncu kayıtlarını düzenleme' },
   'customers.ban': { en: 'Ban players', tr: 'Oyuncu engelleme' },
   'customers.erase': { en: "Erase a player's data", tr: 'Oyuncu verisini silme' },

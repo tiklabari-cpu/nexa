@@ -442,11 +442,14 @@ export function TicketDetailPane({
   // one transition, and a picker that stayed set would mail the next customer
   // whatever the last one got.
   const [noticeTemplateId, setNoticeTemplateId] = useState('');
-  const customerEmail = ticket.data?.customer_email ?? null;
+  // Somebody to write to: an address shown, or one the caller's role may not
+  // see (`customers.contact.view` off, tm 325.6) — the server still mails it.
+  const reachable =
+    (ticket.data?.customer_email ?? null) !== null || ticket.data?.customer_has_email === true;
   // Only asked for when there is somebody to write to. A picker offering a
   // notice that the server can only refuse with "no customer e-mail address" is
   // a control that exists to fail.
-  const templates = useTicketEmailTemplates(ticketId !== null && customerEmail !== null);
+  const templates = useTicketEmailTemplates(ticketId !== null && reachable);
   const t = useTranslate();
 
   if (!ticketId || !ticket.data) {
@@ -620,9 +623,11 @@ export function TicketDetailPane({
                 ))}
               </select>
               <p className="mt-1.5 text-xs text-content-tertiary">
-                {noticeTemplateId
-                  ? t('inbox.ticket.notice.hintSelected', { email: data.customer_email ?? '' })
-                  : t('inbox.ticket.notice.hint')}
+                {!noticeTemplateId
+                  ? t('inbox.ticket.notice.hint')
+                  : data.customer_email
+                    ? t('inbox.ticket.notice.hintSelected', { email: data.customer_email })
+                    : t('inbox.ticket.notice.hintSelectedHidden')}
               </p>
             </>
           )}

@@ -2056,9 +2056,15 @@ components:
           type: object
           required: [username, name, email, basis, recognized_device]
           properties:
-            username: { type: string, nullable: true }
+            username:
+              type: string
+              nullable: true
+              description: Null when the caller's role may not see a player's contact details (`customers.contact.view`).
             name: { type: string, nullable: true }
-            email: { type: string, nullable: true }
+            email:
+              type: string
+              nullable: true
+              description: Null when the caller's role may not see a player's contact details (`customers.contact.view`).
             basis:
               type: string
               enum: [declared]
@@ -2140,7 +2146,12 @@ components:
         priority: { type: string, enum: [urgent, high, normal] }
         card_text:
           type: string
-          description: The card as plain text — the agents-only line in the transcript.
+          description: |
+            The card as plain text. The agents-only line in the transcript is
+            this text without the player's username and email — one event every
+            viewer reads — and here both are blanked out (`•••`) for a caller
+            whose role may not see a player's contact details
+            (`customers.contact.view`).
         created_at: { type: string, format: date-time }
         accepted_by:
           type: string
@@ -2200,7 +2211,11 @@ components:
         member_key:
           type: string
           nullable: true
-          description: The player's key on the operator's site (the folded pre-chat username in F1).
+          description: |
+            The player's key on the operator's site (the folded pre-chat
+            username in F1). Null when the caller's role may not see a player's
+            contact details (`customers.contact.view`); never in the realtime
+            push.
         type: { $ref: "#/components/schemas/RiskFlagType" }
         severity: { type: string, enum: [info, high, urgent] }
         source:
@@ -7575,11 +7590,14 @@ components:
           type: string
           nullable: true
           description: Null for a visitor who never introduced themselves.
-        email: { type: string, nullable: true }
+        email:
+          type: string
+          nullable: true
+          description: Null when the caller's role may not see a player's contact details (`customers.contact.view`).
         username:
           type: string
           nullable: true
-          description: The username the visitor typed into the pre-chat form, unverified.
+          description: The username the visitor typed into the pre-chat form, unverified. Null when the caller's role may not see a player's contact details (`customers.contact.view`).
         phone: { type: string, nullable: true }
         country_code: { type: string, nullable: true, minLength: 2, maxLength: 2 }
         country: { type: string, nullable: true }
@@ -7630,7 +7648,9 @@ components:
       description: |
         Just enough of another customer record to tell an agent who it is,
         for a possible match or a link (ID-03). The full record is
-        `GET /customers/{customerId}`.
+        `GET /customers/{customerId}`. `username` and `email` are null when the
+        caller's role may not see a player's contact details
+        (`customers.contact.view`); `matched_on` still names the field shared.
       required: [id, name, username, email, last_activity_at]
       properties:
         id: { type: string, format: uuid }
@@ -8137,7 +8157,10 @@ components:
           type: string
           nullable: true
           description: Null for a visitor who never introduced themselves.
-        email: { type: string, nullable: true }
+        email:
+          type: string
+          nullable: true
+          description: Null when the caller's role may not see a player's contact details (`customers.contact.view`).
         activity:
           type: string
           enum: [browsing, queued, waiting, chatting, supervised, invited]
@@ -9109,8 +9132,9 @@ components:
       additionalProperties: { $ref: "#/components/schemas/CapabilityValue" }
       description: |
         Every capability's resolved value, by key (`chats.view` → `team`). What
-        a capability with no scope of its own — `chats.view`'s `own` level, say —
-        is checked against.
+        a capability with no scope of its own — `chats.view`'s `own` level, or
+        seeing a player's email and username (`customers.contact.view`) — is
+        checked against.
 
     PermissionCell:
       type: object
@@ -9263,7 +9287,16 @@ components:
           type: string
           nullable: true
           description: Null for a visitor who never introduced themselves.
-        customer_email: { type: string, nullable: true }
+        customer_email:
+          type: string
+          nullable: true
+          description: Null when the caller's role may not see a player's contact details (`customers.contact.view`).
+        customer_has_email:
+          type: boolean
+          description: |
+            Whether the customer left an address — whether a status change can
+            e-mail them (`email_template_id`). True also when `customer_email`
+            is masked.
         source_chat_id:
           type: string
           nullable: true

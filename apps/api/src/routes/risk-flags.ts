@@ -35,6 +35,7 @@ import {
 import { ApiError } from '../lib/api-error.js';
 import type { TenantClient } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { seesPlayerContact } from '../services/customers/player-contact.js';
 import {
   canSeeChat,
   chatVisibilityFilter,
@@ -236,7 +237,7 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
       if (result.created) app.riskFlags.announce(tenant, [{ kind: 'raised', flag: result.flag }]);
       return reply
         .code(result.created ? 201 : 200)
-        .send(serialiseRiskFlag(result.flag, result.detailsVisible));
+        .send(serialiseRiskFlag(result.flag, result.detailsVisible, seesPlayerContact(principal)));
     },
   );
 
@@ -283,7 +284,9 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
       });
 
       app.riskFlags.announce(tenant, [{ kind: 'cleared', flag: result.flag }]);
-      return reply.send(serialiseRiskFlag(result.flag, result.detailsVisible));
+      return reply.send(
+        serialiseRiskFlag(result.flag, result.detailsVisible, seesPlayerContact(principal)),
+      );
     },
   );
 
@@ -315,7 +318,9 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
       });
 
       return reply.send({
-        items: result.items.map((row) => serialiseRiskFlag(row, result.detailsVisible)),
+        items: result.items.map((row) =>
+          serialiseRiskFlag(row, result.detailsVisible, seesPlayerContact(principal)),
+        ),
         ...(result.next ? { next_page_id: result.next } : {}),
       });
     },
@@ -355,7 +360,9 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
       });
 
       return reply.send({
-        items: result.items.map((row) => serialiseRiskFlag(row, result.detailsVisible)),
+        items: result.items.map((row) =>
+          serialiseRiskFlag(row, result.detailsVisible, seesPlayerContact(principal)),
+        ),
         ...(result.next ? { next_page_id: result.next } : {}),
       });
     },

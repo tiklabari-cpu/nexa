@@ -196,7 +196,7 @@ export class HandoffCardService implements HandoffCardWriter {
       tenant,
       { chatId, threadId },
       {
-        text: card.cardText,
+        text: card.noteText,
         properties: {
           system_event: AI_HANDOFF_CARD_SYSTEM_EVENT,
           ai_handoff_id: handoff.handoffId,

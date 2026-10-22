@@ -25,6 +25,7 @@ import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import type { Principal } from '../auth/principal.js';
+import { seesPlayerContact } from '../customers/player-contact.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { evaluate, evaluateSubject, readClock } from '../sla/sla-service.js';
 import { applyTicketRules } from './apply-ticket-rules.js';
@@ -67,6 +68,12 @@ export interface TicketSummary {
   customer_id: string | null;
   customer_name: string | null;
   customer_email: string | null;
+  /**
+   * Whether the customer left an address — what the panel offers a notice on.
+   * Stays true when `customer_email` is masked (tm 325.6): not seeing the
+   * address is no reason the customer cannot be written to.
+   */
+  customer_has_email: boolean;
   source_chat_id: string | null;
   /** The primary this ticket is folded into, or null when it stands alone. */
   merged_into_id: string | null;
@@ -139,6 +146,10 @@ export class TicketService {
     options: ListOptions,
   ): Promise<{ items: TicketSummary[]; total: number; nextPageId?: string }> {
     const visibility = await resolveVisibility(tx, principal, 'read');
+    // A list feeds no mail, so it masks here — `GET /tickets` and the MCP
+    // `search_tickets` tool alike (tm 325.6). `get` does not: the customer
+    // notice reads the address from it; its routes mask their response.
+    const contactVisible = seesPlayerContact(principal);
     const where = {
       // A merged ticket is folded under its primary and never appears in a list
       // on its own — the whole point of a merge is that it stops being separate
@@ -147,7 +158,7 @@ export class TicketService {
       mergedIntoId: null,
       ...visibilityFilter(visibility),
       ...viewFilter(options.view, visibility.actorId),
-      ...queryFilter(options.query),
+      ...queryFilter(options.query, contactVisible),
     };
 
     // The sort is the server's, over every row the view matches — not the
@@ -186,7 +197,7 @@ export class TicketService {
     );
 
     return {
-      items: page.map((row) => serialise(row, names)),
+      items: page.map((row) => maskTicketContact(serialise(row, names), contactVisible)),
       total,
       ...(hasMore && last ? { nextPageId: encodeCursor(sort, order, column, last) } : {}),
     };
@@ -941,7 +952,8 @@ function viewFilter(view: TicketView, actorId: string): Record<string, unknown> 
   }
 }
 
-function queryFilter(query: string | undefined): Record<string, unknown> {
+/** `contactVisible` false keeps the search off the email and username (`player-contact.ts`). */
+function queryFilter(query: string | undefined, contactVisible: boolean): Record<string, unknown> {
   const trimmed = query?.trim();
   if (!trimmed) return {};
   const contains = { contains: trimmed, mode: 'insensitive' as const };
@@ -949,12 +961,31 @@ function queryFilter(query: string | undefined): Record<string, unknown> {
     OR: [
       { subject: contains },
       { customer: { name: contains } },
-      { customer: { email: contains } },
-      // The pre-chat username, as a prefix of its folded form — the same
-      // rule as the Contacts search (`customer-service.ts#where`).
-      { customer: { usernameNormalized: { startsWith: trimmed, mode: 'insensitive' as const } } },
+      ...(contactVisible
+        ? [
+            { customer: { email: contains } },
+            // The pre-chat username, as a prefix of its folded form — the same
+            // rule as the Contacts search (`customer-service.ts#where`).
+            {
+              customer: {
+                usernameNormalized: { startsWith: trimmed, mode: 'insensitive' as const },
+              },
+            },
+          ]
+        : []),
     ],
   };
+}
+
+/**
+ * A ticket with the customer's address masked when the caller may not see a
+ * player's contact details (`customers.contact.view`, tm 325.6).
+ */
+export function maskTicketContact<T extends { customer_email: string | null }>(
+  ticket: T,
+  visible: boolean,
+): T {
+  return visible ? ticket : { ...ticket, customer_email: null };
 }
 
 /** The fields an audit comparison needs — narrow on purpose, so the bulk path's
@@ -1069,6 +1100,7 @@ function serialise(row: TicketRow, names: Map<string, string>): TicketSummary {
     customer_id: row.customerId,
     customer_name: row.customer?.name ?? null,
     customer_email: row.customer?.email ?? null,
+    customer_has_email: Boolean(row.customer?.email?.trim()),
     source_chat_id: row.sourceChatId,
     merged_into_id: row.mergedIntoId,
     last_message_at: row.lastMessageAt?.toISOString() ?? null,

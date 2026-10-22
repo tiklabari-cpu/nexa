@@ -454,6 +454,7 @@ export const inbox: Messages = {
   'inbox.ticket.notice.none': 'Do not send an e-mail',
   'inbox.ticket.notice.hint': 'Pick a template to e-mail the customer when you change the status.',
   'inbox.ticket.notice.hintSelected': 'The next status change e-mails {email}.',
+  'inbox.ticket.notice.hintSelectedHidden': 'The next status change e-mails the customer.',
   'inbox.ticket.updateError': 'Could not save that change.',
 
   // Tickets grid

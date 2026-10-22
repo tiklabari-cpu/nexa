@@ -263,15 +263,19 @@ export async function riskFlagDetailsVisible(
   return canSeeRiskFlagDetails(principal.role, member !== null);
 }
 
-/** A flag on the API (`RiskFlag` in the contract). */
-export function serialiseRiskFlag(row: RiskFlag, detailsVisible: boolean) {
+/**
+ * A flag on the API (`RiskFlag` in the contract). `member_key` is the
+ * player's folded pre-chat username: null to a caller whose role may not see
+ * a player's contact details (`customers.contact.view`, tm 325.6).
+ */
+export function serialiseRiskFlag(row: RiskFlag, detailsVisible: boolean, contactVisible = true) {
   return {
     id: row.id,
     scope: row.scope as RiskFlagScope,
     chat_id: row.chatId,
     thread_id: row.threadId,
     customer_id: row.customerId,
-    member_key: row.memberKey,
+    member_key: contactVisible ? row.memberKey : null,
     type: row.type as RiskFlagType,
     severity: row.severity as RiskFlagSeverity,
     source: row.source as RiskFlagSource,
@@ -307,8 +311,11 @@ export function riskFlagSignal(row: RiskFlag): RiskFlagSignal {
 
 /** The realtime push: the signal and what the panel shows without asking. */
 export function riskFlagPush(row: RiskFlag): RiskFlagPush {
+  // Not `member_key`: one frame reaches every recipient, and the username is a
+  // per-person answer (`RiskFlagPush`, tm 325.6).
+  const { member_key: _memberKey, ...signal } = riskFlagSignal(row);
   return {
-    ...riskFlagSignal(row),
+    ...signal,
     customer_id: row.customerId,
     source: row.source as RiskFlagSource,
     rule_ref: row.ruleRef,

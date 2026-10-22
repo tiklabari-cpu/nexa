@@ -183,6 +183,8 @@ export interface Ticket {
   customer_id: string | null;
   customer_name: string | null;
   customer_email: string | null;
+  /** The customer left an address; true when `customer_email` is masked (tm 325.6). */
+  customer_has_email?: boolean;
   source_chat_id: string | null;
   merged_into_id: string | null;
   last_message_at: string | null;

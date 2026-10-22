@@ -25,8 +25,20 @@ import {
   type GuardrailPriority,
   type HandoffReason,
 } from '@siyahtus/types';
+import { maskPlayerContact, redactPlayerContact } from '../customers/player-contact.js';
 
-export function serialiseAiHandoff(row: AiHandoff): AiHandoffCardView {
+/**
+ * `contactVisible` false (`customers.contact.view` off for the caller, tm
+ * 325.6) nulls the player's username and email, and blanks both out of every
+ * free-text field of the card: `card_text` was written with them, and the
+ * summary, the question, a collected slot, a decision fact, what the AI said
+ * and the next step can quote them. No default — every caller decides.
+ */
+export function serialiseAiHandoff(row: AiHandoff, contactVisible: boolean): AiHandoffCardView {
+  const player = playerOf(row.player);
+  const needles = [player.username, player.email];
+  const text = (value: string) => redactPlayerContact(value, needles, contactVisible);
+  const textOrNull = (value: string | null) => (value === null ? null : text(value));
   return {
     id: row.id,
     chat_id: row.chatId,
@@ -35,13 +47,19 @@ export function serialiseAiHandoff(row: AiHandoff): AiHandoffCardView {
     procedure_key: row.procedureKey,
     procedure_snapshot_hash: row.procedureSnapshotHash,
     topic: row.intentLabel,
-    summary: row.summary,
-    question: row.question,
-    player: playerOf(row.player),
-    slots: arrayOf(row.slotsSnapshot).filter(isSlotLine),
-    decision_facts: arrayOf(row.decisionFacts).filter(isFact),
+    summary: text(row.summary),
+    question: textOrNull(row.question),
+    player: maskPlayerContact(player, contactVisible),
+    slots: arrayOf(row.slotsSnapshot)
+      .filter(isSlotLine)
+      .map((line) => ({ ...line, text: textOrNull(line.text) })),
+    decision_facts: arrayOf(row.decisionFacts)
+      .filter(isFact)
+      .map((fact) => ({ ...fact, text: textOrNull(fact.text) })),
     checks: arrayOf(row.checks).filter((entry): entry is string => typeof entry === 'string'),
-    ai_statements: arrayOf(row.aiStatements).filter(isStatement),
+    ai_statements: arrayOf(row.aiStatements)
+      .filter(isStatement)
+      .map((statement) => ({ ...statement, text: text(statement.text) })),
     output_check_flags: row.outputCheckFlags.filter((flag): flag is AiHandoffOutputFlag =>
       (AI_HANDOFF_OUTPUT_FLAGS as readonly string[]).includes(flag),
     ),
@@ -49,13 +67,13 @@ export function serialiseAiHandoff(row: AiHandoff): AiHandoffCardView {
     primary_reason: row.primaryReason as HandoffReason,
     risk_flags: [...row.riskFlags],
     sentiment: (row.sentiment as AiHandoffSentiment | null) ?? null,
-    suggested_next_step: row.suggestedNextStep,
+    suggested_next_step: textOrNull(row.suggestedNextStep),
     attachments: arrayOf(row.attachments).filter(isAttachment),
     target_group_id: row.targetGroupId === null ? null : Number(row.targetGroupId),
     priority: (GUARDRAIL_PRIORITIES as readonly string[]).includes(row.priority)
       ? (row.priority as GuardrailPriority)
       : 'normal',
-    card_text: row.cardText,
+    card_text: text(row.cardText),
     created_at: row.createdAt.toISOString(),
     accepted_by: row.acceptedBy,
     accepted_at: row.acceptedAt?.toISOString() ?? null,

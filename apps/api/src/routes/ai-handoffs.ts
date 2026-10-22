@@ -24,6 +24,7 @@ import type { TenantClient } from '../lib/tenant.js';
 import type { Principal } from '../services/auth/principal.js';
 import { canSeeChat, resolveVisibility } from '../services/chat/access.js';
 import { serialiseAiHandoff } from '../services/chat/ai-handoff-view.js';
+import { seesPlayerContact } from '../services/customers/player-contact.js';
 
 const CHAT_READ = ['chats--all:ro', 'chats--access:ro'];
 const CHAT_WRITE = ['chats--all:rw', 'chats--access:rw'];
@@ -85,7 +86,8 @@ export async function aiHandoffRoutes(app: FastifyInstance): Promise<void> {
           take: CARDS_MAX,
         });
       });
-      return reply.send({ items: rows.map(serialiseAiHandoff) });
+      const contactVisible = seesPlayerContact(principal);
+      return reply.send({ items: rows.map((row) => serialiseAiHandoff(row, contactVisible)) });
     },
   );
 
@@ -119,7 +121,7 @@ export async function aiHandoffRoutes(app: FastifyInstance): Promise<void> {
           },
         });
       });
-      return reply.send(serialiseAiHandoff(row));
+      return reply.send(serialiseAiHandoff(row, seesPlayerContact(principal)));
     },
   );
 }

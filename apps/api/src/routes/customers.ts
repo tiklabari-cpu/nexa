@@ -16,6 +16,11 @@ import { CUSTOMER_SORT_KEYS, DEFAULT_CUSTOMER_SORT_KEY, SORT_ORDERS } from '@siy
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
+import { requireCapability } from '../services/auth/capability.js';
+import {
+  PLAYER_CONTACT_CAPABILITY,
+  seesPlayerContact,
+} from '../services/customers/player-contact.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { eraseCustomer } from '../services/retention/erasure.js';
@@ -105,6 +110,7 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
 
       const result = await request.withTenant((tx) =>
         customers.list(tx, tenant, {
+          contactVisible: seesPlayerContact(request.requirePrincipal()),
           segment: query.segment,
           limit: query.limit,
           sort: query.sort,
@@ -137,7 +143,10 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
       const customerId = parse(customerIdSchema, request.params.customerId);
       const tenant = request.tenant();
 
-      const customer = await request.withTenant((tx) => customers.get(tx, tenant, customerId));
+      const contactVisible = seesPlayerContact(request.requirePrincipal());
+      const customer = await request.withTenant((tx) =>
+        customers.get(tx, tenant, customerId, contactVisible),
+      );
       // Also the answer for a customer belonging to another tenant: RLS returns
       // nothing, and 404 keeps ids un-enumerable (NFR-S5).
       if (!customer) throw ApiError.notFound('Customer not found.');
@@ -153,6 +162,13 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
       const customerId = parse(customerIdSchema, request.params.customerId);
       const body = parse(updateBody, request.body);
       const tenant = request.tenant();
+      // Not over a value the caller cannot see (tm 325.6): the field reads
+      // empty to them, and "filling it in" would overwrite the player's address
+      // blind. A bot is held to its scopes, as on every read.
+      const principal = request.requirePrincipal();
+      if ((body.email !== undefined || body.username !== undefined) && principal.kind === 'agent') {
+        requireCapability(principal, PLAYER_CONTACT_CAPABILITY);
+      }
 
       const { updated, becameLead } = await request.withTenant(async (tx) => {
         const existing = await tx.customer.findFirst({
@@ -177,7 +193,7 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
         });
 
         return {
-          updated: await customers.get(tx, tenant, customerId),
+          updated: await customers.get(tx, tenant, customerId, seesPlayerContact(principal)),
           // The transition, not the state: `isLead` never goes back to false, so
           // re-evaluating on every later edit would ask a question already
           // answered.
@@ -213,7 +229,7 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
         if (!existing) throw ApiError.notFound('Customer not found.');
 
         await customFields.setValues(tx, tenant, 'contact', customerId, values);
-        return customers.get(tx, tenant, customerId);
+        return customers.get(tx, tenant, customerId, seesPlayerContact(request.requirePrincipal()));
       });
 
       return reply.send(updated);
@@ -330,6 +346,6 @@ async function setBanned(
       });
     }
 
-    return customers.get(tx, tenant, customerId);
+    return customers.get(tx, tenant, customerId, seesPlayerContact(request.requirePrincipal()));
   });
 }

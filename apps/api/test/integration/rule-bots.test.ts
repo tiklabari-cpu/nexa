@@ -21,6 +21,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { licenseChannel, type PushAudience } from '@siyahtus/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -454,6 +455,35 @@ describe('rule bots (FR-MOD-06.6)', () => {
 
       const access = await owner.chatAccess.findMany({ where: { chatId } });
       expect(access.map((a) => a.groupId)).toEqual([salesGroupId]);
+    });
+
+    it('announces its transfer to the chat’s audience only, never to every agent (tm 325.6)', async () => {
+      // `transfer` pushes `chat_transferred` to the teams before and after; a
+      // second frame to every agent told the other teams — and members the
+      // matrix keeps to their own chats — which conversation went where.
+      await seedBot({
+        conditions: { message_word: 'buy' },
+        actions: { transfer_to_group_id: Number(salesGroupId) },
+      });
+
+      const sub = server.app.redis.duplicate();
+      const seen: Array<{ action: string; audience: PushAudience }> = [];
+      await sub.subscribe(licenseChannel(fx.a.licenseId));
+      sub.on('message', (_channel, raw: string) => {
+        seen.push(JSON.parse(raw) as { action: string; audience: PushAudience });
+      });
+      try {
+        await writeIn('i want to buy the pro plan');
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      } finally {
+        await sub.unsubscribe(licenseChannel(fx.a.licenseId));
+        sub.disconnect();
+      }
+
+      const transferred = seen.filter((e) => e.action === 'chat_transferred');
+      expect(transferred).toHaveLength(1);
+      expect(transferred[0]!.audience.allAgents).toBeUndefined();
+      expect(transferred[0]!.audience.groupIds).toContain(Number(salesGroupId));
     });
 
     it('files its transfer as bot_handoff, never as ai_handoff', async () => {

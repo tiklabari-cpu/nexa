@@ -14222,7 +14222,7 @@
           "324"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T19:13:31.231Z",
+        "updatedAt": "2026-10-22T19:14:26.411Z",
         "subtasks": [
           {
             "id": 1,
@@ -14298,13 +14298,13 @@
             "description": "customers.contact.view sunucu denetimi — oyuncu e-posta/kullanıcı adı maskesi (REST + RTM itmeleri)",
             "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm + tm 325.3 kararı (PLAN §D335 (10)).\nNEDEN AYRI: 325.3 `requireCapability`/`hasCapability` (apps/api/src/services/auth/capability.ts) ve `own` görünürlüğünü uyguladı; `customers.contact.view` (RL-02-S2: oyuncunun e-postası/kullanıcı adı) maskesi ~10 serileştiriciye ve RTM itme yüklerine yayıldığı için ayrıldı — yarım uygulama Kurucu'ya yanlış güven verirdi. Katalog satırı tm 325.3'te ÇIKARILDI (güvenlik incelemesi Low: PUT etkisiz bir ayarı kabul ediyordu; kataloğun kendi kuralı \"etkisiz satır listelenmez\"). Bu görev satırı denetimiyle birlikte geri ekler: packages/types/src/capabilities.ts CAPABILITIES (key `customers.contact.view`, group `customers`, switch, floor agent, varsayılan herkes `on` — RL-02-S2), mail etiketi (`services/mail/templates/messages.ts` CAPABILITY_LABELS — `Record<CapabilityKey,…>` olduğu için derleyici ister), web i18n (`permissions.capability.customers.contact.view`, 325.4 sonrasıysa).\nYÜZEY (2026-10-22 grep, başlamadan yeniden doğrula): REST — services/customers/customer-service.ts (GET /customers, /customers/:id: email, username), customer-identity.ts, services/chat/chat-service.ts (`chatInclude` ve liste: customer {name, email}), services/tickets/ticket-service.ts (`customer_email`), services/traffic/traffic-service.ts (ziyaretçi e-postası), services/apps/app-service.ts (uygulama bağlamı), services/ai/handoff-card.ts + handoff-service.ts (devir kartı), müşteri araması (`email contains` e-postayı doğrulama kanalıdır), dışa aktarmalar (rapor CSV, arşiv). RTM — sohbet özeti itmeleri `customer.email` taşıyorsa tek çerçeve bütün alıcılara gider: ya e-posta itmeden çıkar ya da API alıcıya göre iki zarf yayınlar (ağ geçidi bilerek \"aptal\", fanout.ts) — karar bu görevde.\nKURAL: değer `principal.capabilities['customers.contact.view']` (token-service aynı anlık görüntüden çözer); bot/SCIM principal kapsamıyla yönetilir. Varsayılan (açık) bugünkü davranışın aynısı.\nKK: Kurucu Ekip Üyesi için kapatınca EÜ hiçbir REST yanıtında ve RTM itmesinde oyuncunun e-postasını/kullanıcı adını görmez, e-postayla arayamaz; Yönetici/Kurucu görür; değişiklik ≤60 sn, yeniden giriş yok; web/mobil maskeli alanı boş durumla gösterir.\nNOT: satır katalogda yok; 325.4 ayrıca gizlemez, bu görev ekleyince matriste kendiliğinden görünür.\nAYRICA (tm 325.3 güvenlik incelemesi Low): `allAgents` itmeleri `own`/`none` soketlerine de gider. Kural botunun `chat_transferred` itmesi (`services/bots/rule-bot-responder.ts:163`) sohbet kimliği + hedef ekip kimliğini bütün ajanlara yayınlıyor — bugün `team` düzeyinde başka ekiplerin ajanlarına da; kitlesi sohbetin kitlesi (`chat-service` `#audienceFor`) olmalı. Trafik itmeleri yalnız müşteri kimliği taşır ve REST karşılığı `customers:ro` (taban küme) ile herkese açık — tutarlı; `routing_status_set` varlık bilgisi.",
             "testStrategy": "Entegrasyon: kapalıyken her yüzeyde e-posta/kullanıcı adı yok (REST + RTM), açıkken bugünkü gibi; e-postayla arama kapalıyken eşleşmez; ≤60 sn yeniden girişsiz; kiracı yalıtımı.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "325.3"
             ],
             "parentId": "325",
             "priority": "high",
-            "updatedAt": "2026-10-22T16:08:40.136Z"
+            "updatedAt": "2026-10-22T19:14:26.411Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T19:13:31.232Z",
+      "lastModified": "2026-10-22T19:14:26.412Z",
       "taskCount": 390,
       "completedCount": 313,
       "tags": [

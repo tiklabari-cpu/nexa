@@ -439,6 +439,7 @@ export const inbox: Messages = {
     'Durumu değiştirdiğinizde müşteriye e-posta gitmesi için bir şablon seçin.',
   'inbox.ticket.notice.hintSelected':
     'Sonraki durum değişikliği {email} adresine e-posta gönderir.',
+  'inbox.ticket.notice.hintSelectedHidden': 'Sonraki durum değişikliği müşteriye e-posta gönderir.',
   'inbox.ticket.updateError': 'Bu değişiklik kaydedilemedi.',
 
   // Tickets grid

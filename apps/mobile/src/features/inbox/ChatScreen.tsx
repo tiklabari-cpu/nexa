@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ChatIds } from './ChatIds';
 import { Composer } from './Composer';
 import { ConnectionBanner } from './ConnectionBanner';
 import { Transcript } from './Transcript';
@@ -38,6 +39,11 @@ export function ChatScreen({ chatId }: { chatId: string }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ConnectionBanner status={state.connection} />
+      {/* The two numbers a colleague or an operator quotes (ID-05): the day, and the open connection. */}
+      <ChatIds
+        chatId={chatId}
+        threadId={chat?.thread_id ?? transcript.events[0]?.thread_id ?? null}
+      />
 
       {transcript.status === 'error' ? (
         <View style={styles.centre} testID="transcript-error">

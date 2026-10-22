@@ -1530,6 +1530,7 @@ export default async function playbookRoutes(
           return {
             id: run.id,
             chat_id: run.chatId,
+            thread_id: run.threadId,
             status: run.status,
             outcome: isEnvelope ? ((log.outcome as string | undefined) ?? null) : null,
             ran_at: run.ranAt.toISOString(),

@@ -48,6 +48,8 @@ export const audit: Messages = {
   'audit.detail.noMetadata': 'This action records no further detail.',
   'audit.detail.minimalNote':
     'Audit entries deliberately record field names, counts and roles — never values, secrets or message content. Some actions omit the source address on purpose.',
+  'audit.detail.id.thread': 'day',
+  'audit.detail.id.chat': 'connection',
   'audit.detail.linkedEntry': 'Linked entry — outside the current filter or page',
   'audit.detail.loadError':
     'Could not load this entry. It may have passed the workspace’s retention window.',

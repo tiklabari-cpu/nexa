@@ -1444,6 +1444,10 @@ model Ticket {
   licenseId        BigInt    @map("license_id")
   customerId       String?   @map("customer_id") @db.Uuid
   sourceChatId     String?   @map("source_chat_id") @db.VarChar(12)
+  /// The connection (`threads.id`, "Chat ID") the ticket was opened from — the
+  /// chat's newest when it was created. No relation on purpose: it records where
+  /// the ticket came from and outlives the thread. Null off a chat and before ID-05.
+  sourceThreadId   String?   @map("source_thread_id") @db.VarChar(12)
   subject          String
   status           String    @default("open")
   /// Queue priority (FR-MOD-13.6). Higher is more urgent; 0 is the default. A

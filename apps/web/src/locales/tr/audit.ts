@@ -41,6 +41,8 @@ export const audit: Messages = {
   'audit.detail.noMetadata': 'Bu eylem başka ayrıntı kaydetmiyor.',
   'audit.detail.minimalNote':
     'Denetim kayıtları bilerek yalnız alan adlarını, sayıları ve rolleri tutar — değerleri, sırları veya mesaj içeriğini asla. Bazı eylemler kaynak adresi de bilerek yazmaz.',
+  'audit.detail.id.thread': 'günlük',
+  'audit.detail.id.chat': 'bağlantı',
   'audit.detail.linkedEntry': 'Bağlantı verilen kayıt — geçerli filtrenin veya sayfanın dışında',
   'audit.detail.loadError':
     'Bu kayıt yüklenemedi. Çalışma alanının saklama penceresini geçmiş olabilir.',

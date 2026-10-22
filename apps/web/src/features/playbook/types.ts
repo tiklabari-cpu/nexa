@@ -207,6 +207,8 @@ export interface SkillLogEntry {
 export interface SkillRun {
   id: string;
   chat_id: string | null;
+  /** The connection inside that day; null on a run recorded before it was kept (ID-05). */
+  thread_id?: string | null;
   status: 'succeeded' | 'failed' | 'aborted';
   outcome: 'answered' | 'handed_off' | 'skipped' | null;
   ran_at: string;

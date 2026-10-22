@@ -13233,7 +13233,13 @@ export interface components {
     SkillRun: {
       /** Format: uuid */
       id: string;
+      /** @description The member's day that set the run off. Panelde: Thread ID (günlük). */
       chat_id?: string | null;
+      /**
+       * @description The connection inside that day (`skill_runs.thread_id`, tm 288). Null for
+       *     a run recorded before it was kept. Panelde: Chat ID (bağlantı).
+       */
+      thread_id?: string | null;
       /**
        * @description Whether the run completed — not what it did to the chat.
        * @enum {string}
@@ -16691,6 +16697,14 @@ export interface components {
       /** @description The conversation this followed on from, if any. */
       source_chat_id?: string | null;
       /**
+       * @description The connection the ticket was opened from — the chat's newest when
+       *     it was created (`source_chat_id` is the member's day, this is one
+       *     connection inside it). Null off a chat, and on tickets created before
+       *     it was recorded. Panelde: Chat ID (bağlantı); `source_chat_id` is
+       *     Panelde: Thread ID (günlük).
+       */
+      source_thread_id?: string | null;
+      /**
        * @description The primary ticket this one is folded into (FR-MOD-13.6), or null
        *     when it stands alone. A merged ticket is hidden from the lists.
        */
@@ -16779,6 +16793,18 @@ export interface components {
         created_at: string;
         /** Format: date-time */
         last_event_at?: string | null;
+        /**
+         * @description The day's connections (`threads`), oldest first, newest 20 at most —
+         *     the profile reads "day → connection" (ID-05). `id` above is the day
+         *     (Panelde: Thread ID, günlük); each connection's `id` here is
+         *     Panelde: Chat ID (bağlantı).
+         */
+        connections?: {
+          id: string;
+          active: boolean;
+          /** Format: date-time */
+          created_at: string;
+        }[];
       }[];
     };
     Visit: {

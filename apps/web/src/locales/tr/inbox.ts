@@ -97,6 +97,7 @@ export const inbox: Messages = {
   'inbox.thread.statusArchived': 'Arşivlendi',
   'inbox.thread.copyLink': 'Bağlantıyı kopyala',
   'inbox.thread.copied': 'Kopyalandı',
+  'inbox.thread.ids': 'Konuşma numaraları',
   'inbox.thread.showDetails': 'Ayrıntılar panelini göster',
   'inbox.thread.detailsLabel': 'Ayrıntılar',
   'inbox.thread.copilotLabel': 'Copilot',

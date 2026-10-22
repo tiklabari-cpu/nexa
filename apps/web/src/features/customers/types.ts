@@ -54,6 +54,8 @@ export interface CustomerDetail extends CustomerSummary {
     active: boolean;
     created_at: string;
     last_event_at: string | null;
+    /** The day's connections, oldest first (ID-05). Absent on a server before it. */
+    connections?: Array<{ id: string; active: boolean; created_at: string }>;
   }>;
   /** Custom fields defined for contacts, with this contact's values (FR-MOD-08.7.6). */
   custom_fields: CustomFieldValue[];

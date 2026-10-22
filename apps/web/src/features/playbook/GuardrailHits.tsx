@@ -17,6 +17,7 @@ import {
   readGuardrailHitRuleKey,
   type GuardrailHitAction,
 } from '@siyahtus/types';
+import { CopyId } from '../../components/CopyId.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { Card, CardSkeleton } from '../../components/Page.js';
@@ -234,7 +235,8 @@ function HitRow({
         </blockquote>
       )}
       <p className="text-2xs text-content-tertiary">
-        {t('ids.thread.label')}: {hit.chat_id} ·{' '}
+        <CopyId kind="thread" value={hit.chat_id} /> · <CopyId kind="chat" value={hit.thread_id} />{' '}
+        ·{' '}
         <Link to={`/app/inbox?chat=${encodeURIComponent(hit.chat_id)}`} className="underline">
           {t('playbook.guardrails.hits.openChat')}
         </Link>

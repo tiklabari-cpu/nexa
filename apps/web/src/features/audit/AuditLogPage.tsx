@@ -62,6 +62,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Fragment } from 'react';
 import type { ChangeEvent, ReactElement } from 'react';
+import { CopyId } from '../../components/CopyId.js';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -329,6 +330,16 @@ const DETAIL_MAX_HEIGHT = 240;
 function detailRowId(entryId: string): string {
   return `audit-entry-detail-${entryId}`;
 }
+
+/**
+ * Metadata keys that hold one of the two conversation numbers (ID-05, K1 = A):
+ * the code's `chat_id` is the member's day, its `thread_id` one connection — the
+ * ids catalogue names them.
+ */
+const ID_METADATA_KEYS: Readonly<Record<string, 'thread' | 'chat'>> = {
+  chat_id: 'thread',
+  thread_id: 'chat',
+};
 
 /**
  * One metadata value as text.
@@ -658,9 +669,24 @@ function AuditEntryDetail({ entryId }: { entryId: string }): ReactElement {
           <p className="text-xs text-content-tertiary">{t('audit.detail.noMetadata')}</p>
         ) : (
           <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-[max-content_1fr]">
-            {fields.map(([key, value]) => (
-              <DetailField key={key} label={key} value={formatMetadataValue(value)} mono />
-            ))}
+            {fields.map(([key, value]) => {
+              // The two numbers a complaint quotes (ID-05): named the way the
+              // panel names them, the code's key kept in the tooltip, copyable.
+              const idKind = ID_METADATA_KEYS[key];
+              if (idKind && typeof value === 'string') {
+                return (
+                  <div key={key} className="contents">
+                    <dt title={key} className="text-xs text-content-tertiary">
+                      {t(`ids.${idKind}.label`)} ({t(`audit.detail.id.${idKind}`)})
+                    </dt>
+                    <dd className="text-xs">
+                      <CopyId kind={idKind} value={value} showLabel={false} />
+                    </dd>
+                  </div>
+                );
+              }
+              return <DetailField key={key} label={key} value={formatMetadataValue(value)} mono />;
+            })}
           </dl>
         )}
       </div>

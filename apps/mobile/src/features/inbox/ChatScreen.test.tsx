@@ -120,6 +120,14 @@ describe('ChatScreen', () => {
     expect(screen.queryByTestId('connection-THREAD1')).toBeNull();
   });
 
+  it('shows the day and the open connection under the title, each copyable (ID-05 · tm 329)', async () => {
+    const api = fakeApi({ pages: [{ items: [event({ id: 'THREAD1_1', text: 'hello' })] }] });
+    await mount(new InboxStore({ api }));
+
+    expect(screen.getByTestId('chat-id-day_thread')).toHaveTextContent(/^Thread IDs*chat-1/);
+    expect(screen.getByTestId('chat-id-connection')).toHaveTextContent(/^Chat IDs*THREAD1/);
+  });
+
   it('says an empty conversation is empty rather than showing a spinner forever', async () => {
     await mount(new InboxStore({ api: fakeApi() }));
 

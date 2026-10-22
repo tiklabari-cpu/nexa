@@ -412,6 +412,33 @@ describe('AuditLogPage entry detail', () => {
     expect(screen.getByText(/never values, secrets or message content/)).toBeInTheDocument();
   });
 
+  // ID-05 (tm 329): the two conversation numbers a record carries are named the
+  // way the panel names them (the code's key stays in the tooltip) and copy alone.
+  it("names an entry's chat_id and thread_id as the day and the connection, each copyable", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    mockApi({
+      ...LOGIN_ENTRY,
+      action: 'chat.archived',
+      metadata: { chat_id: 'TJ1H8CFKRV', thread_id: 'K3M9Q2XW7B', reason: 'day_rollover' },
+      chain_seq: 9,
+    });
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    await userEvent.click(toggle());
+
+    const connection = await screen.findByText('Chat ID (connection)');
+    expect(connection).toHaveAttribute('title', 'thread_id');
+    expect(screen.getByText('Thread ID (day)')).toHaveAttribute('title', 'chat_id');
+    // Everything else stays under its own key, verbatim.
+    expect(screen.getByText('reason')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Chat ID' }));
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('K3M9Q2XW7B');
+    Reflect.deleteProperty(navigator, 'clipboard');
+  });
+
   it('says an unchained entry is unchained instead of leaving the position blank', async () => {
     mockApi({ ...LOGIN_ENTRY, chain_seq: null });
     renderPage(<AuditLogPage />);

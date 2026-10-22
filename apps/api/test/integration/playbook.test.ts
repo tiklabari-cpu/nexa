@@ -512,6 +512,40 @@ describe('playbook — skills', () => {
       expect(items[0]?.log).toEqual([{ step: 'send_message', detail: 'ok' }]);
     });
 
+    it('names the day and the connection a run belongs to (ID-05)', async () => {
+      const token = await writeToken(fx.a);
+      const created = await createSkillViaApi(token);
+      const skillId = (created.json() as { id: string }).id;
+      await owner.chat.create({
+        data: { id: 'RUNCHAT001', licenseId: fx.a.licenseId, customerId: fx.a.customerId },
+      });
+      await owner.thread.create({
+        data: { id: 'RUNTHREAD1', chatId: 'RUNCHAT001', licenseId: fx.a.licenseId },
+      });
+      await owner.skillRun.create({
+        data: {
+          skillId,
+          licenseId: fx.a.licenseId,
+          chatId: 'RUNCHAT001',
+          threadId: 'RUNTHREAD1',
+          status: 'succeeded',
+          log: { outcome: 'answered', entries: [] },
+        },
+      });
+      await owner.skillRun.create({
+        data: { skillId, licenseId: fx.a.licenseId, status: 'succeeded', log: [] },
+      });
+
+      const response = await server.get(`/skills/${skillId}/runs`, auth(token));
+      const items = (
+        response.json() as { items: Array<{ chat_id: string | null; thread_id: string | null }> }
+      ).items;
+      expect(items).toHaveLength(2);
+      expect(items.find((item) => item.chat_id === 'RUNCHAT001')?.thread_id).toBe('RUNTHREAD1');
+      // A run with no conversation has no connection either.
+      expect(items.find((item) => item.chat_id === null)?.thread_id).toBeNull();
+    });
+
     it('reads back a run recorded before the log gained an outcome (plain array)', async () => {
       const token = await writeToken(fx.a);
       const created = await createSkillViaApi(token);

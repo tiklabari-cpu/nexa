@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { UNRESOLVED_ADD_EXAMPLES_MAX, UNRESOLVED_IGNORE_REASON_MAX } from '@siyahtus/types';
 import { Card, CardSkeleton, Section } from '../../components/Page.js';
+import { CopyId } from '../../components/CopyId.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
@@ -387,12 +388,8 @@ export function ClusterDetail({
                     <span>{t(`playbook.unresolved.reason.${example.reason}`)}</span>
                     <span>{formatDateTime(example.created_at)}</span>
                     {example.language && <span>{formatLanguage(example.language)}</span>}
-                    <span title={t('ids.thread.hint')}>
-                      {t('ids.thread.label')} <code>{example.chat_id}</code>
-                    </span>
-                    <span title={t('ids.chat.hint')}>
-                      {t('ids.chat.label')} <code>{example.thread_id}</code>
-                    </span>
+                    <CopyId kind="thread" value={example.chat_id} />
+                    <CopyId kind="chat" value={example.thread_id} />
                   </p>
                 </li>
               ))}

@@ -8,14 +8,18 @@
  * the viewport's: collapsing the panel gives the full layout back. Narrow, the
  * actions keep their accessible names (`aria-label`) and a tooltip, the status
  * keeps its word for a screen reader, and the two numbers (the day's and the
- * newest connection's, `ids.thread` / `ids.chat`) — both also in the Details
- * panel — are dropped (tm 259.12 · UX audit O3 + O4 · tm 286.4).
+ * newest connection's, `ids.thread` / `ids.chat`) fold into a small menu —
+ * never out of reach: a number the team cannot read off the screen is a number
+ * they cannot say to each other (tm 259.12 · UX audit O3 + O4 · tm 286.4 · ID-05
+ * tm 329). Wide, they sit in the header, each with its own copy button.
  */
 import { useState, type ReactElement } from 'react';
 import { hasAnyScope } from '@siyahtus/types';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { CopyId } from '../../components/CopyId.js';
 import { StatusDot } from '../../components/StatusDot.js';
+import { Dropdown } from '../../components/ui/Dropdown.js';
 import { RiskChips } from '../risk/RiskChips.js';
 import { AiModeControls } from './AiModeControls.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
@@ -61,28 +65,22 @@ export function ThreadHeader({
     <header
       ref={ref}
       className={`relative flex h-topbar shrink-0 items-center border-b border-border bg-surface ${
-        narrow ? 'gap-2 px-3' : 'gap-3 px-4'
+        narrow ? 'gap-1.5 px-2' : 'gap-3 px-4'
       }`}
     >
       <h2 title={name} className="min-w-0 flex-1 truncate text-sm font-semibold">
         {name}
       </h2>
-      {!narrow && (
-        // Both numbers (ID-02 · tm 286.4): the member's day, and the connection
-        // the composer writes into. Stacked rather than side by side, so the
-        // second number costs the name no width.
-        <dl className="flex shrink-0 flex-col text-2xs leading-tight text-content-tertiary">
-          <div title={`${t('ids.thread.label')} — ${t('ids.thread.hint')}`} className="flex gap-1">
-            <dt>{t('ids.thread.label')}</dt>
-            <dd className="font-mono">{chatId}</dd>
-          </div>
-          {threadId && (
-            <div title={`${t('ids.chat.label')} — ${t('ids.chat.hint')}`} className="flex gap-1">
-              <dt>{t('ids.chat.label')}</dt>
-              <dd className="font-mono">{threadId}</dd>
-            </div>
-          )}
-        </dl>
+      {/* Both numbers (ID-02 · tm 286.4, ID-05 · tm 329): the member's day, and the
+          connection the composer writes into. Stacked rather than side by side, so
+          the second number costs the name no width; narrow, they are one click away. */}
+      {narrow ? (
+        <IdsMenu chatId={chatId} threadId={threadId} />
+      ) : (
+        <div className="flex shrink-0 flex-col text-2xs leading-none">
+          <CopyId kind="thread" value={chatId} />
+          {threadId && <CopyId kind="chat" value={threadId} />}
+        </div>
       )}
       <StatusDot
         compact={narrow}
@@ -109,6 +107,32 @@ export function ThreadHeader({
       <CopilotButton onOpen={onOpenCopilot} compact={narrow} />
       {onShowDetails && <ShowDetailsButton onShow={onShowDetails} compact={narrow} />}
     </header>
+  );
+}
+
+/**
+ * The two numbers when the header has no room to draw them (ID-05): a `#` button
+ * that opens both, each with its copy button. The numbers are not hidden, they
+ * are folded.
+ */
+function IdsMenu({ chatId, threadId }: { chatId: string; threadId: string | null }): ReactElement {
+  const t = useTranslate();
+  return (
+    <Dropdown
+      label={t('inbox.thread.ids')}
+      triggerTitle={t('inbox.thread.ids')}
+      trigger={<span aria-hidden="true">#</span>}
+      triggerClassName={`${actionClass(true)} cursor-pointer`}
+      className="shrink-0"
+      panelClassName="right-0 top-full mt-1 flex w-max flex-col gap-1.5 p-3 text-xs"
+    >
+      {() => (
+        <>
+          <CopyId kind="thread" value={chatId} />
+          {threadId && <CopyId kind="chat" value={threadId} />}
+        </>
+      )}
+    </Dropdown>
   );
 }
 

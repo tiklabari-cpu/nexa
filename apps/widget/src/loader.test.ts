@@ -49,6 +49,13 @@ describe('widget loader', () => {
     expect(frame()).toBeNull();
   });
 
+  it('lets the iframe write to the clipboard, for the "support number" copy button (ID-05)', () => {
+    const win = setup({});
+    boot(win);
+
+    expect(frame()!.getAttribute('allow')).toBe('clipboard-write');
+  });
+
   it('creates a sandboxed iframe pointed at the widget origin', () => {
     const win = setup({});
     boot(win);

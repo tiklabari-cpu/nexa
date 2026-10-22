@@ -13551,9 +13551,9 @@
           },
           {
             "id": 3,
-            "title": "CRAWL-JOB-RUNNER [OPUS-XHIGH] (Opus 5.5) knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması",
+            "title": "CRAWL-JOB-RUNNER [OPUS-HIGH] (Opus 5.5) knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması",
             "description": "knowledge-job-runner (SKIP LOCKED, kiracı başına 1), değişiklik tespiti, kota bekleme, refresh süpürmesinin kuyruğa bağlanması",
-            "details": "XHIGH GEREKÇESİ: (3) teslim güvencesi — SKIP LOCKED kuyruğu, kiracı başına tek iş, kota bekleme; bir hata çift taramaya ya da kaybolan yenilemeye yol açar. NOT (sahip kararı 2026-10-21 · §D-efor): PLAN §5.1.1 \"eşzamanlılık/kilit = OPUS-MAX\" kuralından bilinçli sapma — SKIP LOCKED deseni depoda var (team-drain, knowledge-job), MAX pencerelerinin ölçülen maliyeti/tur sayısı xhigh'un ~2 katı ve kalite farkı ölçülemedi; Anthropic efor belgesi max'ı ajan/araç döngüsü için önermiyor.",
+            "details": "HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): SKIP LOCKED kuyruk deseni depoda var (team-drain, knowledge-job, scheduler/lock.ts); bir hata çift taramaya ya da gecikmiş yenilemeye yol açar — mesaj kaybı ya da para etkisi yok. Kiracı başına tek iş ve aynı işi iki işçinin almaması entegrasyon testiyle kanıtlanır. Geçmiş: 2026-10-21 MAX→XHIGH (§D315; §5.1.1 \"eşzamanlılık/kilit = OPUS-MAX\" kuralından bilinçli sapma).",
             "testStrategy": "Entegrasyon.",
             "status": "pending",
             "dependencies": [
@@ -13767,9 +13767,9 @@
         "subtasks": [
           {
             "id": 1,
-            "title": "VER-SCHEMA [OPUS-XHIGH] (Opus 5.5) ai_config_versions + ai_agents.published_version_id/draft_revision + knowledge_chunks görünürlük kolonları ve indeks + geri dolum v1",
+            "title": "VER-SCHEMA [OPUS-HIGH] (Opus 5.5) ai_config_versions + ai_agents.published_version_id/draft_revision + knowledge_chunks görünürlük kolonları ve indeks + geri dolum v1",
             "description": "ai_config_versions + ai_agents.published_version_id/draft_revision + knowledge_chunks görünürlük kolonları ve indeks + geri dolum v1",
-            "details": "Üst görev 316 ayrıntılarındaki ilgili bölüm.",
+            "details": "Üst görev 316 ayrıntılarındaki ilgili bölüm. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): şema alanları üst görevin PRİSMA bölümünde tam yazılı; üst görevin XHIGH gerekçesi (If-Match, yayın transaction'ı, önbellek geçersizleştirme, yetki) 316.2 ve 316.3'te uygulanır, onlar XHIGH kalır. Geri dolumun mevcut her ajanı v1 yayınlanmış sürüme bağladığı testle kanıtlanır.",
             "testStrategy": "db:check-drift; derleyici birim.",
             "status": "pending",
             "dependencies": [],
@@ -14465,9 +14465,9 @@
         "subtasks": [
           {
             "id": 1,
-            "title": "FTS-EXT-INDEX [OPUS-XHIGH] (Opus 5.5) pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL",
+            "title": "FTS-EXT-INDEX [OPUS-HIGH] (Opus 5.5) pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL",
             "description": "pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL",
-            "details": "Her CONCURRENTLY kendi migration dosyasında tek ifade. XHIGH GEREKÇESİ: (4) pencere içinde verilecek karar — bölümlenmiş tabloda CONCURRENTLY + ATTACH sırası ve kısmi indeks doğrulaması (Prisma diff kısmi indeksleri görmez; pg_index.indisvalid + test pencerede tasarlanır). (MAX→XHIGH, sahip kararı 2026-10-21: indeks işi mekanik; SECURITY DEFINER fonksiyonu 333.2'de MAX kalır.)",
+            "details": "Her CONCURRENTLY kendi migration dosyasında tek ifade. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): indeks işi mekanik ve hatası sessiz kalmaz. Bölümlenmiş tabloda üst tabloda CONCURRENTLY desteklenmez: üstte ON ONLY ile indeks, her bölümde CONCURRENTLY, sonra ALTER INDEX … ATTACH PARTITION; pg_index.indisvalid testi zorunlu (Prisma diff kısmi indeksleri görmez). SECURITY DEFINER fonksiyonu 333.2'de MAX kalır. Geçmiş: 2026-10-21 MAX→XHIGH (§D315).",
             "testStrategy": "db:check-drift; plan testi.",
             "status": "pending",
             "dependencies": [],
@@ -15063,9 +15063,9 @@
           },
           {
             "id": 3,
-            "title": "TR-MAIL-PILOT [OPUS-XHIGH] (Opus 5.5) E-posta gönderimi (BackgroundMail ticket_reply, Message-ID zinciri, delivery_status) + pilot kapısı ayarı (K23)",
+            "title": "TR-MAIL-PILOT [OPUS-HIGH] (Opus 5.5) E-posta gönderimi (BackgroundMail ticket_reply, Message-ID zinciri, delivery_status) + pilot kapısı ayarı (K23)",
             "description": "E-posta gönderimi (BackgroundMail ticket_reply, Message-ID zinciri, delivery_status) + pilot kapısı ayarı (K23)",
-            "details": "Üst görev 356 ayrıntılarındaki ilgili bölüm.",
+            "details": "Üst görev 356 ayrıntılarındaki ilgili bölüm. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): BackgroundMail kuyruğu ve pilot-gate deseni depoda var; iç notun e-postaya gitmemesi ve idempotency 356.2'de (XHIGH kalır). Bu alt görevde de kind=internal_note için posta yolunun hiç çağrılmadığı bir testle kanıtlanır.",
             "testStrategy": "Spool testi; pilot kapısı testi.",
             "status": "pending",
             "dependencies": [

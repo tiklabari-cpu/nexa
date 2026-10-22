@@ -52,12 +52,12 @@ Dört göz 403, Kurucu kuralı, uyum kapısı, geri alma, zamanlı yayın, If-Ma
 
 ## Subtasks
 
-### 316.1. VER-SCHEMA [OPUS-XHIGH] ai_config_versions + ai_agents.published_version_id/draft_revision + knowledge_chunks görünürlük kolonları ve indeks + geri dolum v1
+### 316.1. VER-SCHEMA [OPUS-HIGH] ai_config_versions + ai_agents.published_version_id/draft_revision + knowledge_chunks görünürlük kolonları ve indeks + geri dolum v1
 
 **Status:** pending  
 **Dependencies:** None  
 
-Üst görev 316 ayrıntılarındaki ilgili bölüm.
+Üst görev 316 ayrıntılarındaki ilgili bölüm. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): şema alanları üst görevin PRİSMA bölümünde tam yazılı; üst görevin XHIGH gerekçesi (If-Match, yayın transaction'ı, önbellek geçersizleştirme, yetki) 316.2 ve 316.3'te uygulanır, onlar XHIGH kalır. Geri dolumun mevcut her ajanı v1 yayınlanmış sürüme bağladığı testle kanıtlanır.
 
 ### 316.5. VER-COMPILER [OPUS-HIGH] config-compiler.ts: taslak → derlenmiş paket + doğrulama (adımlar, AI-07 çelişki, devir hedefleri) + fark özeti + touches_compliance
 

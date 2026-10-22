@@ -63,12 +63,12 @@ ticket-messages.test.ts (iç not spool, kiracılar arası, idempotency, birleşi
 
 Üst görev 356 ayrıntılarındaki ilgili bölüm.
 
-### 356.3. TR-MAIL-PILOT [OPUS-XHIGH] E-posta gönderimi (BackgroundMail ticket_reply, Message-ID zinciri, delivery_status) + pilot kapısı ayarı (K23)
+### 356.3. TR-MAIL-PILOT [OPUS-HIGH] E-posta gönderimi (BackgroundMail ticket_reply, Message-ID zinciri, delivery_status) + pilot kapısı ayarı (K23)
 
 **Status:** pending  
 **Dependencies:** 356.2  
 
-Üst görev 356 ayrıntılarındaki ilgili bölüm.
+Üst görev 356 ayrıntılarındaki ilgili bölüm. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): BackgroundMail kuyruğu ve pilot-gate deseni depoda var; iç notun e-postaya gitmemesi ve idempotency 356.2'de (XHIGH kalır). Bu alt görevde de kind=internal_note için posta yolunun hiç çağrılmadığı bir testle kanıtlanır.
 
 ### 356.4. TR-WEB [SONNET-HIGH] TicketThread + TicketComposer (Yanıt/İç not) + tekrar dene + e2e
 

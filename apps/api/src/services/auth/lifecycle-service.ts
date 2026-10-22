@@ -105,6 +105,8 @@ export interface InvitationRecord {
   id: string;
   email: string;
   role: InvitableRole;
+  /** The teams the invitee joins on accepting, and which they lead (RL-04). */
+  groups: Array<{ group_id: number; lead: boolean }>;
   invited_by_name: string | null;
   expires_at: string;
   created_at: string;
@@ -526,6 +528,9 @@ export class LifecycleService {
         id: row.id,
         email,
         role,
+        // Nothing writes `invitation_groups` yet — the body that names teams
+        // is tm 324.2 — so every invitation names none.
+        groups: [],
         invited_by_name: null,
         expires_at: row.expires_at.toISOString(),
         created_at: row.created_at.toISOString(),

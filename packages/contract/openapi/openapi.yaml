@@ -9028,7 +9028,7 @@ components:
               license_id: { type: string }
               organization_id: { type: string, format: uuid }
               organization_name: { type: string }
-              role: { type: string, enum: [owner, viceowner, admin, agent] }
+              role: { $ref: "#/components/schemas/AgentRole" }
               license_status: { type: string }
               client_id:
                 type: string
@@ -9051,13 +9051,52 @@ components:
           type: string
           example: Check your inbox to continue.
 
+    AgentRole:
+      type: string
+      enum: [owner, viceowner, admin, team_lead, agent]
+      description: |
+        A member's role in the workspace, highest first (`@siyahtus/types`
+        `AGENT_ROLES`, RL-01): `owner` (Kurucu, exactly one), `admin`
+        (Yönetici), `team_lead` (Ekip Lideri), `agent` (Ekip Üyesi).
+        `viceowner` is the old vice owner, which no new assignment offers (K6):
+        its holders become `admin`. A `team_lead` ranks below `admin`, so
+        nothing an admin-only endpoint guards is open to one.
+
+    InvitationRole:
+      type: string
+      enum: [admin, team_lead, agent]
+      description: |
+        The roles an invitation may carry (`INVITATION_ROLES`): `owner` is not
+        invitable — ownership transfers deliberately, not by an email someone
+        can forward — and `viceowner` is offered to nobody new (K6).
+
+    InvitationGroup:
+      type: object
+      required: [group_id]
+      properties:
+        group_id: { type: integer, format: int64 }
+        lead:
+          type: boolean
+          default: false
+          description: Whether the invitee leads this team once they join (RL-04-S1).
+
     Invitation:
       type: object
-      required: [id, email, role, expires_at, created_at]
+      required: [id, email, role, groups, expires_at, created_at]
       properties:
         id: { type: string, format: uuid }
         email: { type: string }
-        role: { type: string, enum: [admin, agent] }
+        role: { $ref: "#/components/schemas/InvitationRole" }
+        groups:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/InvitationGroup"
+            required: [group_id, lead]
+          description: |
+            The teams the invitee joins on accepting, and which they lead
+            (RL-04), in team id order. Empty: none — they join no team until
+            someone adds them to one.
         invited_by_name: { type: string, nullable: true }
         expires_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
@@ -9255,7 +9294,7 @@ components:
         name: { type: string }
         email: { type: string, format: email }
         avatar_url: { type: string, nullable: true }
-        role: { type: string, enum: [owner, viceowner, admin, agent] }
+        role: { $ref: "#/components/schemas/AgentRole" }
         routing_status:
           type: string
           enum: [accepting_chats, not_accepting_chats, offline]
@@ -9519,7 +9558,7 @@ components:
           type: array
           items:
             type: object
-            required: [agent_id, priority]
+            required: [agent_id, priority, lead]
             properties:
               agent_id: { type: string, format: uuid }
               priority:
@@ -9528,6 +9567,12 @@ components:
                 description: |
                   Assignment preference within the team (ADR-08). A full tier is
                   skipped rather than queued behind.
+              lead:
+                type: boolean
+                description: |
+                  Whether this member leads the team (RL-01,
+                  `group_agents.is_lead`). A lead is a member too: they are
+                  offered the team's chats like anyone in it.
 
     RoutingQueue:
       type: object
@@ -11267,9 +11312,7 @@ components:
               account_id: { type: string, format: uuid }
               name: { type: string }
               email: { type: string }
-              role:
-                type: string
-                enum: [owner, viceowner, admin, agent]
+              role: { $ref: "#/components/schemas/AgentRole" }
               status:
                 type: string
                 enum: [active, awaiting_approval, suspended]

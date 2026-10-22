@@ -71,8 +71,8 @@ describe('GroupListScreen', () => {
             name: 'Support',
             language_code: 'en',
             agents: [
-              { agent_id: 'agent-1', priority: 'normal' },
-              { agent_id: 'agent-2', priority: 'first' },
+              { agent_id: 'agent-1', priority: 'normal', lead: false },
+              { agent_id: 'agent-2', priority: 'first', lead: false },
             ],
           }),
         ],
@@ -90,7 +90,7 @@ describe('GroupListScreen', () => {
           group({
             id: 1,
             name: 'Escalations',
-            agents: [{ agent_id: 'agent-1', priority: 'primary' }],
+            agents: [{ agent_id: 'agent-1', priority: 'primary', lead: false }],
           }),
         ],
       }),

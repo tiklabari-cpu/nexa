@@ -880,10 +880,11 @@ model Group {
   /// `AFTER_HOURS_MODES`, enforced by `groups_after_hours_mode_check`.
   afterHoursMode String   @default("queue") @map("after_hours_mode")
 
-  license           License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license           License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   agents            GroupAgent[]
   bots              BotGroup[]
   requiredExpertise GroupExpertise[]
+  invitations       InvitationGroup[]
 
   @@id([licenseId, id])
   @@map("groups")
@@ -892,10 +893,16 @@ model Group {
 /// Membership of an agent in a team, with the routing preference that decides
 /// who gets offered a chat first (ADR-08 step 2).
 model GroupAgent {
-  licenseId BigInt @map("license_id")
-  groupId   BigInt @map("group_id")
-  agentId   String @map("agent_id") @db.Uuid
-  priority  String @default("normal")
+  licenseId BigInt  @map("license_id")
+  groupId   BigInt  @map("group_id")
+  agentId   String  @map("agent_id") @db.Uuid
+  priority  String  @default("normal")
+  /// Whether this member leads the team (RL-01 · tm 324.1). A lead is a member
+  /// too, offered the team's chats like anyone in it; one person may lead
+  /// several teams (RL-01-S2). "Which teams does this person lead" is the
+  /// partial index `group_agents_lead_agent_id_idx`, hand-written in the
+  /// migration (Prisma cannot spell its WHERE).
+  isLead    Boolean @default(false) @map("is_lead")
 
   group Group   @relation(fields: [licenseId, groupId], references: [licenseId, id], onDelete: Cascade)
   agent Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -1582,13 +1589,36 @@ model Invitation {
   /// join happens in `auth_join_pending_invitations`.
   pendingAccountId String? @map("pending_account_id") @db.Uuid
 
-  license        License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  invitedBy      Account  @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
-  pendingAccount Account? @relation("InvitationPendingAccount", fields: [pendingAccountId], references: [id], onDelete: SetNull)
+  license        License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  invitedBy      Account           @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+  pendingAccount Account?          @relation("InvitationPendingAccount", fields: [pendingAccountId], references: [id], onDelete: SetNull)
+  groups         InvitationGroup[]
 
+  /// The key `invitation_groups` points at, so a team row can only name an
+  /// invitation of its own workspace (`id` alone is already unique).
+  @@unique([id, licenseId], map: "invitations_id_license_id_key")
   @@index([licenseId, createdAt(sort: Desc)], map: "invitations_license_id_idx")
   @@index([pendingAccountId])
   @@map("invitations")
+}
+
+/// A team an invitation names (RL-04 · tm 324.1): the invitee joins it on
+/// accepting, and leads it when `isLead` (RL-04-S1 — a Team Lead's invitation
+/// leads at least one, which the API enforces). Both foreign keys carry the
+/// licence, so one workspace's invitation cannot name another's team. Removed
+/// with the invitation and with the team, as a membership is.
+model InvitationGroup {
+  invitationId String  @map("invitation_id") @db.Uuid
+  licenseId    BigInt  @map("license_id")
+  groupId      BigInt  @map("group_id")
+  isLead       Boolean @default(false) @map("is_lead")
+
+  invitation Invitation @relation(fields: [invitationId, licenseId], references: [id, licenseId], onDelete: Cascade)
+  group      Group      @relation(fields: [licenseId, groupId], references: [licenseId, id], onDelete: Cascade)
+
+  @@id([invitationId, groupId])
+  @@index([licenseId, groupId])
+  @@map("invitation_groups")
 }
 
 /// Customer satisfaction, recorded against the chat (PRD §8.4).

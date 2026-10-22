@@ -5,8 +5,34 @@
 
 // --- Identity & tenancy -----------------------------------------------------
 
-export const AGENT_ROLES = ['owner', 'viceowner', 'admin', 'agent'] as const;
+/**
+ * The membership roles, highest first (`agent_memberships_role_check`). Shown
+ * as Kurucu / Yönetici / Ekip Lideri / Ekip Üyesi (RL-01 · K6); `viceowner` is
+ * the old "vice owner", kept for the members who still hold it until they move
+ * to `admin` (tm 324.3). `team_lead` sits below `admin`, so every
+ * `minimumRole: 'admin'` gate refuses it (`ROLE_RANK`).
+ */
+export const AGENT_ROLES = ['owner', 'viceowner', 'admin', 'team_lead', 'agent'] as const;
 export type AgentRole = (typeof AGENT_ROLES)[number];
+
+/**
+ * The roles an invitation may carry (`invitations_role_check`, RL-04): never
+ * `owner` — ownership transfers deliberately, not by an e-mail someone can
+ * forward — and never `viceowner`, which no new assignment offers (K6).
+ */
+export const INVITATION_ROLES = [
+  'admin',
+  'team_lead',
+  'agent',
+] as const satisfies readonly AgentRole[];
+export type InvitationRole = (typeof INVITATION_ROLES)[number];
+
+/**
+ * How many teams one invitation may name (`invitation_groups`). A Team Lead's
+ * invitation names the teams they will lead (RL-04-S1); anyone else's, the
+ * teams they join. A payload bound, as `emails` is.
+ */
+export const MAX_INVITATION_GROUPS = 50;
 
 export const ROUTING_STATUSES = ['accepting_chats', 'not_accepting_chats', 'offline'] as const;
 export type RoutingStatus = (typeof ROUTING_STATUSES)[number];

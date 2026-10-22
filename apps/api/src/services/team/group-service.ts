@@ -90,7 +90,7 @@ export interface GroupWithAgents {
   topicRole: string | null;
   afterHoursMode: string;
   requiredExpertise: Array<{ expertiseId: bigint }>;
-  agents: Array<{ agentId: string; priority: string }>;
+  agents: Array<{ agentId: string; priority: string; isLead: boolean }>;
 }
 
 /**
@@ -120,7 +120,7 @@ export async function acceptingCounts(
 
 /** What a read of a team includes, so every reader serialises the same shape. */
 export const GROUP_INCLUDE = {
-  agents: { select: { agentId: true, priority: true } },
+  agents: { select: { agentId: true, priority: true, isLead: true } },
   requiredExpertise: { select: { expertiseId: true }, orderBy: { expertiseId: 'asc' } },
 } as const;
 

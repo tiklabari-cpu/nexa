@@ -16387,8 +16387,7 @@ export interface components {
         /** Format: uuid */
         organization_id: string;
         organization_name: string;
-        /** @enum {string} */
-        role: 'owner' | 'viceowner' | 'admin' | 'agent';
+        role: components['schemas']['AgentRole'];
         license_status?: string;
         /**
          * @description The workspace's OAuth client. Returned so the agent app does
@@ -16408,12 +16407,43 @@ export interface components {
       /** @example Check your inbox to continue. */
       message: string;
     };
+    /**
+     * @description A member's role in the workspace, highest first (`@siyahtus/types`
+     *     `AGENT_ROLES`, RL-01): `owner` (Kurucu, exactly one), `admin`
+     *     (Yönetici), `team_lead` (Ekip Lideri), `agent` (Ekip Üyesi).
+     *     `viceowner` is the old vice owner, which no new assignment offers (K6):
+     *     its holders become `admin`. A `team_lead` ranks below `admin`, so
+     *     nothing an admin-only endpoint guards is open to one.
+     * @enum {string}
+     */
+    AgentRole: 'owner' | 'viceowner' | 'admin' | 'team_lead' | 'agent';
+    /**
+     * @description The roles an invitation may carry (`INVITATION_ROLES`): `owner` is not
+     *     invitable — ownership transfers deliberately, not by an email someone
+     *     can forward — and `viceowner` is offered to nobody new (K6).
+     * @enum {string}
+     */
+    InvitationRole: 'admin' | 'team_lead' | 'agent';
+    InvitationGroup: {
+      /** Format: int64 */
+      group_id: number;
+      /**
+       * @description Whether the invitee leads this team once they join (RL-04-S1).
+       * @default false
+       */
+      lead: boolean;
+    };
     Invitation: {
       /** Format: uuid */
       id: string;
       email: string;
-      /** @enum {string} */
-      role: 'admin' | 'agent';
+      role: components['schemas']['InvitationRole'];
+      /**
+       * @description The teams the invitee joins on accepting, and which they lead
+       *     (RL-04), in team id order. Empty: none — they join no team until
+       *     someone adds them to one.
+       */
+      groups: WithRequired<components['schemas']['InvitationGroup'], 'group_id' | 'lead'>[];
       invited_by_name?: string | null;
       /** Format: date-time */
       expires_at: string;
@@ -16566,8 +16596,7 @@ export interface components {
       /** Format: email */
       email: string;
       avatar_url?: string | null;
-      /** @enum {string} */
-      role: 'owner' | 'viceowner' | 'admin' | 'agent';
+      role: components['schemas']['AgentRole'];
       /** @enum {string} */
       routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
       /** @description Routing never assigns past this. Over-limit means queued. */
@@ -16778,6 +16807,12 @@ export interface components {
          * @enum {string}
          */
         priority: 'primary' | 'first' | 'normal' | 'last';
+        /**
+         * @description Whether this member leads the team (RL-01,
+         *     `group_agents.is_lead`). A lead is a member too: they are
+         *     offered the team's chats like anyone in it.
+         */
+        lead: boolean;
       }[];
     };
     /**
@@ -18152,8 +18187,7 @@ export interface components {
         account_id: string;
         name: string;
         email: string;
-        /** @enum {string} */
-        role: 'owner' | 'viceowner' | 'admin' | 'agent';
+        role: components['schemas']['AgentRole'];
         /**
          * @description The two flags below collapsed into one value, `suspended`
          *     winning — a suspended member cannot get in whatever else is
@@ -19056,8 +19090,7 @@ export interface operations {
               /** Format: uuid */
               organization_id: string;
               organization_name: string;
-              /** @enum {string} */
-              role: 'owner' | 'viceowner' | 'admin' | 'agent';
+              role: components['schemas']['AgentRole'];
               license_status?: string;
               client_id?: string | null;
               /**
@@ -19243,8 +19276,7 @@ export interface operations {
             account_id?: string;
             email?: string;
             name?: string;
-            /** @enum {string} */
-            role?: 'owner' | 'viceowner' | 'admin' | 'agent';
+            role?: components['schemas']['AgentRole'];
             /** Format: uuid */
             organization_id: string;
             /**
@@ -19781,8 +19813,7 @@ export interface operations {
           'application/json': {
             organization_name: string;
             email: string;
-            /** @enum {string} */
-            role: 'admin' | 'agent';
+            role: components['schemas']['InvitationRole'];
             /**
              * @description True when no account holds the address, or the one that does
              *     is unverified and belongs to no workspace — an account an
@@ -19941,9 +19972,19 @@ export interface operations {
            *     never mints an administrator by omission. `owner` is not
            *     invitable — ownership transfers deliberately, not by email.
            * @default agent
-           * @enum {string}
            */
-          role?: 'admin' | 'agent';
+          role?: components['schemas']['InvitationRole'];
+          /**
+           * @description The teams every invitee in this call joins on accepting, and
+           *     which of them they lead (RL-04). A `team_lead` invitation
+           *     must lead at least one team (RL-04-S1), and only a
+           *     `team_lead` invitation may lead one; other roles may name
+           *     teams to join or none. Breaking either rule, or naming a team
+           *     twice, is a 400; a team this workspace does not have is a 404
+           *     `group_not_found`. Either way nothing is written.
+           * @default []
+           */
+          groups?: components['schemas']['InvitationGroup'][];
         };
       };
     };
@@ -20000,6 +20041,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       402: components['responses']['PaymentRequired'];
       403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       /**
        * @description The rate limit (`too_many_requests`, as everywhere); the seat ceiling
        *     (`users_limit_reached`, above); or today's invitations are used up
@@ -23008,9 +23050,8 @@ export interface operations {
            *     always refused (ownership transfer is out of scope here), and
            *     any role above the caller's own rank is refused — both as
            *     `403`, not `400`.
-           * @enum {string}
            */
-          role: 'owner' | 'viceowner' | 'admin' | 'agent';
+          role: components['schemas']['AgentRole'];
         };
       };
     };
@@ -23548,6 +23589,15 @@ export interface operations {
            * @enum {string}
            */
           priority?: 'primary' | 'first' | 'normal' | 'last';
+          /**
+           * @description Whether this member leads the team (RL-01). A Team Lead leads
+           *     the teams marked here, and may lead several (RL-01-S2); the
+           *     mark is what bounds what leading adds (RL-03). Only an admin
+           *     or the owner sets or clears it — a Team Lead does not make
+           *     themselves the lead of another team. Leaving it out keeps the
+           *     member's mark as it is, `false` for a new member.
+           */
+          lead?: boolean;
         };
       };
     };

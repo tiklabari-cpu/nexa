@@ -19,7 +19,8 @@
  *   - **checked** — `scopes` is empty; a server check reads the resolved value
  *     (`capabilitiesForRole`). `chats.view`'s `own` level is one (it holds
  *     the `team` level's scopes; the narrowing to assigned and joined chats is
- *     the check's), and so are the Founder-only rows.
+ *     the check's), and so are the Founder-only rows but `billing.manage`
+ *     (whose scope is the owner's alone, `OWNER_SCOPES`).
  *
  * A capability whose surface does not exist yet is not listed here — a row
  * that changes nothing would tell the Founder something false. The feature
@@ -115,9 +116,19 @@ export const MEMBER_BASE_SCOPES = [
 ] as const satisfies readonly Scope[];
 
 /**
- * The catalogue. Defaults are today's role sets, cell for cell
- * (`defaultScopesForRole`); the K7 changes are a separate, visible step
- * (tm 325.5).
+ * The catalogue. Defaults are the role sets, cell for cell
+ * (`defaultScopesForRole`): RL-02 shipped them as the product behaved before
+ * the matrix, and the owner's K7 decisions moved them in one separate step
+ * (tm 325.5, PLAN §D337):
+ *   - Ekip Üyesi sees only their own teams' chats — `chats.view` `team`, the
+ *     level the role already had;
+ *   - Ekip Lideri sees only their own teams in reports — `reports.view` stays
+ *     `none` until the `team` level exists (#368): `all` would show every
+ *     team's figures, more than K7 allows;
+ *   - Yönetici sees billing and does not change it — `billing.manage` became
+ *     Founder-only (`OWNER_SCOPES`);
+ *   - only the Kurucu changes the matrix — `settings.permissions`, already
+ *     Founder-only.
  *
  * Floors, and why each one sits where it does:
  *   - a route already refuses the role (`minimumRole: 'admin'` or a handler
@@ -138,7 +149,8 @@ export const CAPABILITIES = [
     // rule (the chat's teams ∩ the person's); `all` = the workspace. Archive
     // and takeover ride on it: the archive applies the same visibility rule,
     // and taking over or supervising any chat is what `chats--all:rw` opens
-    // today. Team-bounded takeover is #326's row.
+    // today. Team-bounded takeover is #326's row. K7: an Ekip Üyesi sees
+    // their own teams' chats and the ones they are in, never another team's.
     key: 'chats.view',
     group: 'chats',
     labelKey: 'permissions.capability.chats.view',
@@ -227,7 +239,9 @@ export const CAPABILITIES = [
     // A level row with no `team` level yet: a team-bounded report needs the
     // server-side team filter (#368), and `reports_read` alone opens the whole
     // workspace. `reports_read` also reads billing (`BILLING_READ_SCOPES`) and
-    // every member's performance — opening this row opens those too.
+    // every member's performance — opening this row opens those too. K7 wants
+    // an Ekip Lideri to see their own teams' figures: `none` until #368 adds
+    // the `team` level, which then becomes the Ekip Lideri default.
     key: 'reports.view',
     group: 'reports',
     labelKey: 'permissions.capability.reports.view',
@@ -370,16 +384,20 @@ export const CAPABILITIES = [
   },
   // Faturalama
   {
-    // Changing the plan, payment method, packages. Reading billing comes with
-    // `reports.view` today (`BILLING_READ_SCOPES`). K7 makes this Founder-only
-    // (tm 325.5).
+    // Changing the plan, seats, payment method, packages. Founder-only since K7
+    // (tm 325.5): a Yönetici reads billing — it comes with `reports.view`
+    // (`BILLING_READ_SCOPES`) — and does not change it. The one Founder-only
+    // row that carries a scope: the billing routes check `billing_manage` (a
+    // partner app can be granted it) and `exactRole: 'owner'` both, and the
+    // scope sits in the owner's set alone (`OWNER_SCOPES`).
     key: 'billing.manage',
     group: 'billing',
     labelKey: 'permissions.capability.billing.manage',
     values: ['off', 'on'],
     scopes: { on: ['billing_manage'] },
-    floorRole: 'admin',
-    defaults: { owner: 'on', admin: 'on', team_lead: 'off', agent: 'off' },
+    floorRole: 'owner',
+    ownerOnly: true,
+    defaults: { owner: 'on', admin: 'off', team_lead: 'off', agent: 'off' },
   },
   // Loglar
   {

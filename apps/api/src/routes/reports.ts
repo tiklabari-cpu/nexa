@@ -131,6 +131,15 @@ import {
   serialiseAiPackagePurchase,
 } from '../services/billing/ai-package-service.js';
 
+/**
+ * Who may change the bill: a billing scope, on the owner's own credential
+ * (`exactRole: 'owner'` on every write). Owner's decision K7 (RL-02-S4 ·
+ * tm 325.5): a Yönetici reads billing (`BILLING_READ_SCOPES`) and does not
+ * change it. The role gate is not belt-and-braces: a personal access token an
+ * admin minted before K7 still lists `billing_manage`, and the permission
+ * matrix only takes from a token what it takes from the role's default set
+ * (`credential-scopes.ts`).
+ */
 const BILLING_WRITE_SCOPES = ['billing_manage', 'billing_admin'];
 
 /** Who may read billing: either billing scope, or the plain reports reader. */
@@ -2129,7 +2138,7 @@ export default async function reportRoutes(
     // Writable while read-only: subscribing is exactly how an expired trial
     // comes back (ADR-10). `reports_read` is a read scope and so is not accepted
     // here — changing the bill needs a billing scope.
-    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
+    { config: { scopes: BILLING_WRITE_SCOPES, exactRole: 'owner', allowWhenReadOnly: true } },
     async (request, reply) => {
       const body = parse(updateSubscriptionBody, request.body);
       const tenant = request.tenant();
@@ -2251,7 +2260,7 @@ export default async function reportRoutes(
     // Writable while read-only, like the subscription PATCH: putting a card on
     // file is part of how an expired trial comes back, so the trial gate must
     // not block it. Changing the payment method still needs a billing scope.
-    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
+    { config: { scopes: BILLING_WRITE_SCOPES, exactRole: 'owner', allowWhenReadOnly: true } },
     async (request, reply) => {
       const body = parse(paymentMethodBody, request.body);
       const tenant = request.tenant();
@@ -2303,7 +2312,7 @@ export default async function reportRoutes(
     // method PUT: a workspace that has run out of capacity is exactly the one
     // that needs to buy some, and the trial gate must not be what stops it.
     // `reports_read` still cannot get in here — reading prices is not spending.
-    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
+    { config: { scopes: BILLING_WRITE_SCOPES, exactRole: 'owner', allowWhenReadOnly: true } },
     async (request, reply) => {
       const body = parse(purchaseApiPackageBody, request.body);
       const tenant = request.tenant();
@@ -2378,7 +2387,7 @@ export default async function reportRoutes(
     // workspace that has run out of AI resolutions is exactly the one that needs
     // to buy more, and the trial gate must not be what stops it. `reports_read`
     // still cannot get in — reading the price is not spending.
-    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
+    { config: { scopes: BILLING_WRITE_SCOPES, exactRole: 'owner', allowWhenReadOnly: true } },
     async (request, reply) => {
       const body = parse(purchaseAiPackageBody, request.body);
       const tenant = request.tenant();

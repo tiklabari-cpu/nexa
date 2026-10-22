@@ -1096,6 +1096,10 @@ subscription:
       including the downgrade guard that refuses a plan whose included quota is
       below what the workspace has already used this month.
 
+      **Owner only** (K7): the billing scope and the owner role are both
+      checked. An admin or vice owner reads billing (`reports_read`) and gets
+      `403` here, on a token minted before the change too.
+
       `seats` is the purchased count; its floor is the number of non-suspended
       agents (`min_seats`) — you cannot buy fewer seats than you have people.
       `billing_cycle: annual` recomputes the total as ten monthly charges (two
@@ -1270,6 +1274,10 @@ paymentMethod:
       No card is charged and no full card number is accepted — only the brand,
       last four, expiry and holder. An expired card is rejected.
 
+      **Owner only** (K7): the billing scope and the owner role are both
+      checked. An admin or vice owner reads billing (`reports_read`) and gets
+      `403` here, on a token minted before the change too.
+
       Writable even while the workspace is read-only: putting a card on file is
       part of how an expired trial comes back, so this is never blocked by the
       trial gate.
@@ -1329,6 +1337,10 @@ apiPackages:
       allowance (FR-MOD-09.3), returning the receipt together with usage as it
       stands *after* the purchase — a client never has to re-read
       `/billing/usage` to show the raised quota.
+
+      **Owner only** (K7): the billing scope and the owner role are both
+      checked. An admin or vice owner reads billing (`reports_read`) and gets
+      `403` here, on a token minted before the change too.
 
       Payment is mocked (ADR-13): no card is charged, no payment method has to be
       on file and no external provider is called. The quota it buys is real.
@@ -1431,6 +1443,10 @@ aiPackages:
       Buys `packs` packs and credits their resolutions to the current period's
       allowance (FR-MOD-10.1.4), returning the receipt together with usage as it
       stands *after* the purchase.
+
+      **Owner only** (K7): the billing scope and the owner role are both
+      checked. An admin or vice owner reads billing (`reports_read`) and gets
+      `403` here, on a token minted before the change too.
 
       **The price is the server's.** It is `packs × resolutions_per_pack ×` the
       per-resolution overage rate, computed here; a price named in the body is

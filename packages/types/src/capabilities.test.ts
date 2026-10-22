@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AGENT_ROLES } from './domain.js';
 import { SCOPES, effectiveScopes, expandScope, type Scope } from './scopes.js';
-import { ROLE_RANK, defaultScopesForRole } from './role-scopes.js';
+import { OWNER_SCOPES, ROLE_RANK, defaultScopesForRole } from './role-scopes.js';
 import {
   CAPABILITIES,
   CAPABILITY_GROUPS,
@@ -123,13 +123,22 @@ describe('floors and locks', () => {
     }
   });
 
-  it('makes a Founder-only row exactly a row floored at owner, and lets it grant no scope', () => {
+  it('makes a Founder-only row exactly a row floored at owner, whose scope only the owner holds', () => {
     for (const c of CATALOGUE) {
       expect(c.ownerOnly === true, c.key).toBe(c.floorRole === 'owner');
-      // The route gate (`exactRole: 'owner'`) is what enforces it; a scope here
-      // would sit in the owner's session and nobody else's, which is what the
-      // default set already gives the owner.
-      if (c.ownerOnly) expect(grantable(c).size, c.key).toBe(0);
+      if (!c.ownerOnly) continue;
+      // The route gate (`exactRole: 'owner'`) is what enforces it. A scope
+      // here (`billing.manage`'s) is the owner's alone — `OWNER_SCOPES` — so
+      // no other role's set, nor the locked cell, can carry it.
+      for (const scope of grantable(c)) {
+        expect(OWNER_SCOPES, `${c.key} ${scope}`).toContain(scope);
+        for (const role of AGENT_ROLES) {
+          if (role === 'owner') continue;
+          expect(effectiveScopes(defaultScopesForRole(role)).has(scope), `${role} ${scope}`).toBe(
+            false,
+          );
+        }
+      }
     }
   });
 
@@ -146,11 +155,15 @@ describe('floors and locks', () => {
       'team.members.manage',
       'team.groups.manage',
       'settings.security',
-      'billing.manage',
     ]) {
       expect(ROLE_RANK[def(key).floorRole], key).toBeGreaterThanOrEqual(ROLE_RANK.admin);
     }
-    for (const key of ['settings.sso', 'settings.permissions', 'ai.guardrails.edit']) {
+    for (const key of [
+      'settings.sso',
+      'settings.permissions',
+      'ai.guardrails.edit',
+      'billing.manage',
+    ]) {
       expect(def(key).ownerOnly, key).toBe(true);
     }
   });
@@ -192,6 +205,51 @@ describe('floors and locks', () => {
     expect(capabilityLock(def('customers.erase'), 'team_lead')).toBe('below_floor');
     expect(capabilityLock(def('customers.erase'), 'admin')).toBeNull();
     expect(capabilityLock(def('reports.view'), 'agent')).toBeNull();
+  });
+});
+
+describe('the owner’s K7 defaults (tm 325.5)', () => {
+  const at = (role: string) => capabilitiesForRole(role, []);
+
+  it('keeps an Ekip Üyesi to their own teams’ chats, never the workspace’s (FR-MOD-04.RBAC)', () => {
+    expect(at('agent')['chats.view']).toBe('team');
+    const held = effectiveScopes(scopesForRole('agent', []));
+    expect(held.has('chats--access:rw')).toBe(true);
+    expect(held.has('chats--all:ro')).toBe(false);
+  });
+
+  it('shows an Ekip Lideri their own teams’ reports and never every team’s (FR-MOD-04.RBAC)', () => {
+    // `team` is the K7 default once the level exists (#368); until then the
+    // only levels are `none` and `all`, and `all` would be every team's.
+    const expected = def('reports.view').values.includes('team') ? 'team' : 'none';
+    expect(at('team_lead')['reports.view']).toBe(expected);
+    expect(scopesForRole('team_lead', [])).not.toContain('reports_read');
+  });
+
+  it('lets a Yönetici read billing and not change it, in a cell the Founder cannot unlock (FR-MOD-04.RBAC)', () => {
+    for (const role of ['admin', 'viceowner']) {
+      expect(at(role)['billing.manage'], role).toBe('off');
+      // Reading the bill is `reports_read` (`BILLING_READ_SCOPES`).
+      expect(at(role)['reports.view'], role).toBe('all');
+      expect(scopesForRole(role, []), role).not.toContain('billing_manage');
+    }
+    expect(capabilityLock(def('billing.manage'), 'admin')).toBe('owner_only');
+    expect(capabilityChangeProblem(set('admin', 'billing.manage', 'on'))).toBe('locked');
+    expect(scopesForRole('admin', [set('admin', 'billing.manage', 'on')])).not.toContain(
+      'billing_manage',
+    );
+    expect(at('owner')['billing.manage']).toBe('on');
+    expect(scopesForRole('owner', [])).toContain('billing_manage');
+  });
+
+  it('leaves the matrix to the Kurucu alone (FR-MOD-04.RBAC)', () => {
+    for (const role of ['admin', 'viceowner', 'team_lead', 'agent']) {
+      expect(at(role)['settings.permissions'], role).toBe('off');
+    }
+    for (const role of ['admin', 'team_lead', 'agent']) {
+      expect(capabilityChangeProblem(set(role, 'settings.permissions', 'on')), role).toBe('locked');
+    }
+    expect(at('owner')['settings.permissions']).toBe('on');
   });
 });
 
@@ -326,11 +384,11 @@ describe('scopesForRole with the workspace’s choices', () => {
   });
 
   it('reads the Yönetici column for a remaining vice owner, so a restriction on admins reaches it', () => {
-    const overrides = [set('admin', 'billing.manage', 'off')];
-    expect(scopesForRole('viceowner', overrides)).not.toContain('billing_manage');
+    const overrides = [set('admin', 'settings.webhooks', 'off')];
+    expect(scopesForRole('viceowner', overrides)).not.toContain('webhooks--all:rw');
     // A row stored under `viceowner` is not a column and changes nothing.
-    expect(scopesForRole('viceowner', [set('viceowner', 'billing.manage', 'off')])).toContain(
-      'billing_manage',
+    expect(scopesForRole('viceowner', [set('viceowner', 'settings.webhooks', 'off')])).toContain(
+      'webhooks--all:rw',
     );
   });
 
@@ -348,7 +406,7 @@ describe('scopesForRole with the workspace’s choices', () => {
 describe('capabilityChangeProblem — the PUT’s validation', () => {
   it('accepts a change inside the row, at or above its floor', () => {
     expect(capabilityChangeProblem(set('agent', 'reports.view', 'all'))).toBeNull();
-    expect(capabilityChangeProblem(set('admin', 'billing.manage', 'off'))).toBeNull();
+    expect(capabilityChangeProblem(set('admin', 'settings.webhooks', 'off'))).toBeNull();
     expect(capabilityChangeProblem(set('team_lead', 'chats.view', 'own'))).toBeNull();
   });
 
@@ -363,6 +421,7 @@ describe('capabilityChangeProblem — the PUT’s validation', () => {
     expect(capabilityChangeProblem(set('owner', 'chats.view', 'team'))).toBe('locked');
     expect(capabilityChangeProblem(set('admin', 'settings.permissions', 'on'))).toBe('locked');
     expect(capabilityChangeProblem(set('agent', 'settings.sso', 'on'))).toBe('locked');
+    expect(capabilityChangeProblem(set('admin', 'billing.manage', 'on'))).toBe('locked');
     expect(capabilityChangeProblem(set('owner', 'chats.view', 'all'))).toBeNull();
     expect(capabilityChangeProblem(set('admin', 'settings.permissions', 'off'))).toBeNull();
     expect(capabilityChangeProblem(set('agent', 'customers.erase', 'off'))).toBeNull();

@@ -195,6 +195,7 @@ export {
   roleAtLeast,
   DEFAULT_AGENT_SCOPES,
   ADMIN_SCOPES,
+  OWNER_SCOPES,
   defaultScopesForRole,
   scopesWithinRole,
 } from '@siyahtus/types';

@@ -7,6 +7,13 @@
  * An expired trial is read-only, not locked (ADR-10): the workspace keeps its
  * data and can still export it. The banner says so plainly, because "your trial
  * ended" without that reads as "your data is gone".
+ *
+ * Only the owner changes the bill (owner's decision K7, tm 325.5): every billing
+ * write is `exactRole: 'owner'` on top of a billing scope. Everyone else who
+ * reaches this page — an admin or vice owner, through `reports_read` — reads
+ * the same figures with the levers greyed out and the purchase buttons gone,
+ * and a banner says who can change them. Offering a control certain to 403 is
+ * the live trap tm 181.3 ruled out.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -21,7 +28,7 @@ import {
 } from '../../components/Page.js';
 import { Banner } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { reasonMessage } from '../../lib/reason-message.js';
 import { formatCount, formatDate, formatMoney, formatPeriod } from '../../lib/format.js';
@@ -193,9 +200,20 @@ function planChangeErrorMessage(t: TFunction, error: unknown): string {
   );
 }
 
+/** What a billing write asks for besides the owner role (`routes/reports.ts`). */
+const BILLING_WRITE_SCOPES = ['billing_manage', 'billing_admin'];
+
+/** Whether the server would let this session change the bill — the route's two gates. */
+function useCanManageBilling(): boolean {
+  const role = useAuth((s) => s.agent?.role);
+  const scopes = useAuth((s) => s.agent?.scopes) ?? [];
+  return role === 'owner' && scopes.some((scope) => BILLING_WRITE_SCOPES.includes(scope));
+}
+
 export function BillingPage(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
+  const canManage = useCanManageBilling();
 
   const subscription = useQuery({
     queryKey: ['billing', 'subscription'],
@@ -275,6 +293,12 @@ export function BillingPage(): ReactElement {
         </Banner>
       )}
 
+      {!canManage && (
+        <Banner tone="info" title={t('billing.ownerOnly.title')}>
+          {t('billing.ownerOnly.description')}
+        </Banner>
+      )}
+
       {sub.access === 'trialing' && sub.trial.days_remaining !== null && (
         <div role="status" className="rounded-lg border border-border bg-surface p-4">
           <p className="text-sm font-medium">
@@ -326,6 +350,7 @@ export function BillingPage(): ReactElement {
         aiUsed={ai.used}
         onChange={change.mutate}
         pending={change.isPending}
+        locked={!canManage}
         error={change.error ? planChangeErrorMessage(t, change.error) : null}
       />
 
@@ -424,7 +449,7 @@ export function BillingPage(): ReactElement {
               </div>
             </div>
 
-            <BuyOveragePacks />
+            {canManage && <BuyOveragePacks />}
           </div>
         </Card>
       </Section>
@@ -467,11 +492,11 @@ export function BillingPage(): ReactElement {
         </Card>
       </Section>
 
-      <ApiPackagesSection />
+      <ApiPackagesSection canBuy={canManage} />
 
       <ApiPackagePurchasesSection />
 
-      <PaymentMethodSection readOnly={sub.access === 'read_only'} />
+      <PaymentMethodSection readOnly={sub.access === 'read_only'} canEdit={canManage} />
 
       <InvoicesSection />
 
@@ -678,6 +703,7 @@ function ManagePlan({
   aiUsed,
   onChange,
   pending,
+  locked,
   error,
 }: {
   sub: Subscription;
@@ -685,10 +711,13 @@ function ManagePlan({
   aiUsed: number;
   onChange: (body: { plan?: string; billing_cycle?: string; seats?: number }) => void;
   pending: boolean;
+  /** Not the owner (K7): every lever is shown, none can be moved. */
+  locked: boolean;
   /** The last change's server error, already resolved to display text — `null` when there is none. */
   error: string | null;
 }): ReactElement {
   const t = useTranslate();
+  const frozen = pending || locked;
   const annual = sub.billing_cycle === 'annual';
   const cycleUnit = t(`billing.managePlan.cycleUnit.${annual ? 'year' : 'month'}`);
   const trialing = sub.access === 'trialing';
@@ -720,7 +749,7 @@ function ManagePlan({
             cycleUnit={cycleUnit}
             annual={annual}
             aiUsed={aiUsed}
-            pending={pending}
+            pending={frozen}
             error={error}
             onSelect={(plan) => onChange({ plan })}
           />
@@ -738,7 +767,7 @@ function ManagePlan({
               <button
                 type="button"
                 aria-pressed={!annual}
-                disabled={pending || !annual}
+                disabled={frozen || !annual}
                 onClick={() => onChange({ billing_cycle: 'monthly' })}
                 className={cycleButton(!annual)}
               >
@@ -747,7 +776,7 @@ function ManagePlan({
               <button
                 type="button"
                 aria-pressed={annual}
-                disabled={pending || annual}
+                disabled={frozen || annual}
                 onClick={() => onChange({ billing_cycle: 'annual' })}
                 className={cycleButton(annual)}
               >
@@ -770,7 +799,7 @@ function ManagePlan({
               <button
                 type="button"
                 aria-label={t('billing.managePlan.removeSeat')}
-                disabled={pending || sub.seats <= sub.min_seats}
+                disabled={frozen || sub.seats <= sub.min_seats}
                 onClick={() => onChange({ seats: sub.seats - 1 })}
                 className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
               >
@@ -785,7 +814,7 @@ function ManagePlan({
               <button
                 type="button"
                 aria-label={t('billing.managePlan.addSeat')}
-                disabled={pending}
+                disabled={frozen}
                 onClick={() => onChange({ seats: sub.seats + 1 })}
                 className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
               >
@@ -1043,7 +1072,7 @@ function PlanSelector({
  * on the backend (09.3-d) — buying capacity is one of the ways an expired
  * trial comes back.
  */
-function ApiPackagesSection(): ReactElement {
+function ApiPackagesSection({ canBuy }: { canBuy: boolean }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
@@ -1105,6 +1134,7 @@ function ApiPackagesSection(): ReactElement {
             <ApiPackageCard
               key={pkg.id}
               pkg={pkg}
+              canBuy={canBuy}
               confirming={confirmingId === pkg.id}
               pending={buy.isPending && buy.variables === pkg.id}
               onBuyClick={() => {
@@ -1126,6 +1156,7 @@ function ApiPackagesSection(): ReactElement {
 
 function ApiPackageCard({
   pkg,
+  canBuy,
   confirming,
   pending,
   onBuyClick,
@@ -1133,6 +1164,8 @@ function ApiPackageCard({
   onConfirm,
 }: {
   pkg: ApiPackageItem;
+  /** Not the owner (K7): the package and its price, no buy button. */
+  canBuy: boolean;
   confirming: boolean;
   pending: boolean;
   onBuyClick: () => void;
@@ -1185,14 +1218,16 @@ function ApiPackageCard({
             </div>
           </div>
         ) : (
-          <button
-            type="button"
-            aria-label={t('billing.apiPackages.buyAriaLabel', { name: pkg.name })}
-            onClick={onBuyClick}
-            className="mt-2 self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
-          >
-            {t('billing.apiPackages.buy')}
-          </button>
+          canBuy && (
+            <button
+              type="button"
+              aria-label={t('billing.apiPackages.buyAriaLabel', { name: pkg.name })}
+              onClick={onBuyClick}
+              className="mt-2 self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+            >
+              {t('billing.apiPackages.buy')}
+            </button>
+          )
         )}
       </div>
     </Card>
@@ -1305,7 +1340,14 @@ function ApiPackagePurchasesSection(): ReactElement {
  * Editable even while the workspace is read-only — putting a card on file is
  * part of how an expired trial comes back.
  */
-function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement {
+function PaymentMethodSection({
+  readOnly,
+  canEdit,
+}: {
+  readOnly: boolean;
+  /** Not the owner (K7): the method on file, no way to change it. */
+  canEdit: boolean;
+}): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
@@ -1384,7 +1426,7 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
               onCancel={() => setEditing(false)}
               onSubmit={(body) => save.mutate(body)}
             />
-          ) : (
+          ) : canEdit ? (
             <div>
               <button
                 type="button"
@@ -1401,7 +1443,7 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
                 </p>
               )}
             </div>
-          )}
+          ) : null}
         </div>
       </Card>
     </Section>

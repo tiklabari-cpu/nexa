@@ -21,6 +21,11 @@ export const billing: Messages = {
   'billing.readOnly.description':
     'The trial has ended. Existing conversations stay readable and exportable and nothing has been deleted — but new conversations cannot be started until a plan is active.',
 
+  // Only the owner changes the bill (K7)
+  'billing.ownerOnly.title': 'Only the Owner can change billing.',
+  'billing.ownerOnly.description':
+    'You can see the plan, usage, invoices and payment method. Changing the plan, seats or payment method and buying packages is up to the Owner.',
+
   // Trial status banner
   'billing.trial.daysLeft.one': '{count} day left in your trial',
   'billing.trial.daysLeft.other': '{count} days left in your trial',

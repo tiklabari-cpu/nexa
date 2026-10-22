@@ -39,6 +39,7 @@ export const auditLabels: Messages = {
   'audit.action.member.suspended': 'Teammate suspended',
   'audit.action.member.unsuspended': 'Teammate reactivated',
   'audit.action.member.role_changed': 'Role changed',
+  'audit.action.permissions.changed': 'Permissions changed',
   'audit.action.member.chat_limit_changed': 'Chat limit changed',
   'audit.action.work_schedule.updated': 'Work schedule updated',
   'audit.action.group.created': 'Team created',

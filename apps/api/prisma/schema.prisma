@@ -145,6 +145,11 @@ model License {
   /// Prisma cannot model, so this comment is where the schema says so.
   aiDailyLlmTokensCap       BigInt? @map("ai_daily_llm_tokens_cap")
   aiDailyEmbeddingTokensCap BigInt? @map("ai_daily_embedding_tokens_cap")
+  /// The permission matrix's revision (tm 325.2 · RL-02): 0 until the Founder
+  /// first changes it, plus one for every change that moved a stored row —
+  /// bumped in that transaction, so a cache keyed by licence and version is
+  /// never older than the rows once a reader asks for the current version.
+  permissionsVersion    Int       @default(0) @map("permissions_version")
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -222,6 +227,7 @@ model License {
   auditEntries           AuditLogEntry[]
   auditChainHead         AuditChainHead?
   pendingAuditEntries    PendingAuditEntry[]
+  roleCapabilityOverrides RoleCapabilityOverride[]
   siemExportCursors      SiemExportCursor[]
   ipAllowlistEntries     IpAllowlistEntry[]
   ssoConnections         SsoConnection[]
@@ -3989,6 +3995,27 @@ model PendingAuditEntry {
 
   @@index([licenseId, id])
   @@map("pending_audit_entries")
+}
+
+/// A workspace's permission matrix choices (tm 325.2 · RL-02): one row per
+/// cell that differs from the catalogue's default (`@siyahtus/types`
+/// `CAPABILITIES`). Written only by `PUT /settings/permissions`, which deletes
+/// a row set back to its default. `role` is one of the columns the Founder may
+/// change — `admin`, `team_lead`, `agent` (`role_capability_overrides_role_check`,
+/// which Prisma cannot model); `capability` and `value` are checked against the
+/// catalogue by the resolution, which ignores a row it does not recognise.
+model RoleCapabilityOverride {
+  licenseId  BigInt   @map("license_id")
+  role       String
+  capability String
+  value      String
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, role, capability])
+  @@map("role_capability_overrides")
 }
 
 /// Where a workspace's audit trail is shipped, and how far it has got

@@ -65,3 +65,4 @@ export * from './ai-compliance-scenarios.js';
 export * from './ai-unresolved.js';
 export * from './high-risk.js';
 export * from './capabilities.js';
+export * from './permission-matrix.js';

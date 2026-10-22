@@ -1041,6 +1041,73 @@ retention:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# The permission matrix (RL-02 · tm 325.2): which role may do what in this
+# workspace, on top of the catalogue's defaults (`@siyahtus/types`
+# `CAPABILITIES`). Licence-scoped like retention: the matrix is the workspace's,
+# not a brand's.
+permissions:
+  get:
+    tags: [Settings]
+    operationId: getPermissionMatrix
+    summary: Who may do what in this workspace
+    description: |
+      Every capability, its values, the lowest role that may hold it, and for
+      each matrix column what the role holds here, what it would hold by
+      default, and whether the cell is locked (RL-02).
+
+      `access_rules:ro` (or `:rw`) plus `minimumRole: admin`: a Yönetici reads
+      the matrix, only the Kurucu changes it. A member reads their own
+      capabilities on `GET /auth/me` (`capabilities`).
+    responses:
+      "200":
+        description: The workspace's matrix
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PermissionMatrix" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: updatePermissionMatrix
+    summary: Change who may do what in this workspace
+    description: |
+      Sets the listed cells, with the reason (RL-02-S5). **Kurucu only**
+      (`exactRole: owner`, `access_rules:rw`).
+
+      Refused whole, with nothing stored, when any change is not allowed —
+      400 with `details.reason`, `details.role` and `details.capability`:
+      `unknown_role`, `unknown_capability`, `invalid_value`, `locked` (the
+      Kurucu column, a Founder-only row), `below_floor` (more than the weakest
+      value for a role below the row's floor), `duplicate_change` (one cell
+      twice). Floors and route gates are platform safety: a role a route
+      refuses stays refused whatever the matrix says.
+
+      A change that moves a cell writes `permissions.changed` to the audit
+      trail — every cell that moved, `from` and `to`, with the reason — and
+      mails the workspace's Yöneticiler. A request that moves nothing writes
+      nothing and keeps the version.
+
+      Sessions pick a change up within a minute, without signing in again: the
+      servers cache each workspace's matrix by its `version` and are told of a
+      change after it commits.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PermissionMatrixUpdate" }
+    responses:
+      "200":
+        description: The matrix after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PermissionMatrix" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 compliance:
   get:
     tags: [Settings]

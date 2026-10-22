@@ -179,6 +179,7 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'member.suspended',
       'member.unsuspended',
       'member.role_changed',
+      'permissions.changed',
     ],
   },
   {

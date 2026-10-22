@@ -17,6 +17,7 @@ import {
   invitationMail,
   joinVerifyEmailMail,
   passwordResetMail,
+  permissionsChangedMail,
   scheduledReportMail,
   slaBreachMail,
   ssoDomainChallengeMail,
@@ -136,14 +137,21 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       timeZone: 'Europe/Istanbul',
       chatUrl: `${APP}/app/inbox?chat=CH1H8CFKRV`,
     }),
+    permissions: permissionsChangedMail(ctx, {
+      workspaceName: 'Acme',
+      actorName: 'Ayşe',
+      changes: [{ role: 'agent', capability: 'reports.view', from: 'none', to: 'all' }],
+      reason: 'Shift reports',
+      matrixUrl: `${APP}/app/settings/permissions`,
+    }),
   };
 }
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all fifteen in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all sixteen in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(15);
+      expect(Object.keys(mails)).toHaveLength(16);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();
@@ -219,6 +227,44 @@ describe('the shared frame', () => {
     );
     expect(ticket.html).not.toContain('<script>');
     expect(ticket.html).toContain('line two');
+
+    // The Founder's name and reason reach every admin's inbox (tm 325.2).
+    const permissions = permissionsChangedMail(
+      { locale: 'en', appUrl: APP },
+      {
+        workspaceName: HOSTILE,
+        actorName: HOSTILE,
+        changes: [{ role: 'agent', capability: 'reports.view', from: 'none', to: 'all' }],
+        reason: HOSTILE,
+        matrixUrl: `${APP}/app/settings/permissions`,
+      },
+    );
+    expect(permissions.html).not.toContain('<script>');
+    expect(permissions.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  it('names at most twenty changed cells, and counts the rest (tm 325.2)', () => {
+    const changes = Array.from({ length: 23 }, () => ({
+      role: 'agent' as const,
+      capability: 'reports.view' as const,
+      from: 'none' as const,
+      to: 'all' as const,
+    }));
+    const input = {
+      workspaceName: 'Acme',
+      actorName: 'Ayşe',
+      changes,
+      reason: 'r',
+      matrixUrl: null,
+    };
+    const en = permissionsChangedMail({ locale: 'en', appUrl: APP }, input);
+    expect(en.body.split('Agent · View reports')).toHaveLength(21);
+    expect(en.body).toContain('(23 changes)');
+    expect(en.body).toContain('and 3 more — all of them are in the audit log.');
+    expect(en.body).not.toContain('/app/settings/permissions');
+    const tr = permissionsChangedMail({ locale: 'tr', appUrl: APP }, input);
+    expect(tr.body.split('Ekip Üyesi · Raporları görme')).toHaveLength(21);
+    expect(tr.body).toContain('ve 3 değişiklik daha');
   });
 
   it('never puts a non-http(s) address in an href', () => {

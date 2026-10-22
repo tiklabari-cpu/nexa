@@ -32,6 +32,7 @@ export const auditLabels: Messages = {
   'audit.action.member.suspended': 'Ekip arkadaşı askıya alındı',
   'audit.action.member.unsuspended': 'Ekip arkadaşı yeniden etkinleştirildi',
   'audit.action.member.role_changed': 'Rol değiştirildi',
+  'audit.action.permissions.changed': 'İzinler değiştirildi',
   'audit.action.member.chat_limit_changed': 'Sohbet sınırı değiştirildi',
   'audit.action.work_schedule.updated': 'Çalışma takvimi güncellendi',
   'audit.action.group.created': 'Ekip oluşturuldu',

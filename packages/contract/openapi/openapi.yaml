@@ -549,6 +549,8 @@ paths:
     $ref: "./paths/settings.yaml#/memberRecognitionRevokeAll"
   /settings/retention:
     $ref: "./paths/settings.yaml#/retention"
+  /settings/permissions:
+    $ref: "./paths/settings.yaml#/permissions"
   /settings/compliance:
     $ref: "./paths/settings.yaml#/compliance"
   /settings/compliance/baa:
@@ -9069,6 +9071,135 @@ components:
         The roles an invitation may carry (`INVITATION_ROLES`): `owner` is not
         invitable — ownership transfers deliberately, not by an email someone
         can forward — and `viceowner` is offered to nobody new (K6).
+
+    MatrixRole:
+      type: string
+      enum: [owner, admin, team_lead, agent]
+      description: |
+        A column of the permission matrix (`@siyahtus/types` `MATRIX_ROLES`,
+        RL-02): Kurucu, Yönetici, Ekip Lideri, Ekip Üyesi. A `viceowner` reads
+        the `admin` column until the role is retired; a role the matrix does
+        not know reads `agent`.
+
+    CapabilityValue:
+      type: string
+      enum: ["off", "on", none, own, team, all]
+      description: |
+        A matrix cell's value: a switch is `off`/`on`; a visibility row takes
+        the levels its `values` list — nothing, the chats the person is
+        assigned to or has joined, their teams', the whole workspace.
+
+    CapabilityGroup:
+      type: string
+      enum: [chats, customers, ai, reports, team, settings, billing, logs]
+      description: The matrix's row groups, in the order the screen draws them.
+
+    CapabilityLock:
+      type: string
+      enum: [owner_column, owner_only, below_floor]
+      description: |
+        Why a cell cannot be changed: the Kurucu column is locked whole (the one
+        person who changes the matrix cannot switch off their own way back
+        into it), a Founder-only row is on for the Founder and off for everyone
+        else, and a role below the row's `floor_role` holds its weakest value —
+        platform safety, not a workspace choice.
+
+    CapabilityValues:
+      type: object
+      additionalProperties: { $ref: "#/components/schemas/CapabilityValue" }
+      description: |
+        Every capability's resolved value, by key (`chats.view` → `team`). What
+        a capability with no scope of its own — seeing a player's contact
+        details, say — is checked against.
+
+    PermissionCell:
+      type: object
+      required: [role, value, default, lock]
+      properties:
+        role: { $ref: "#/components/schemas/MatrixRole" }
+        value:
+          allOf: [{ $ref: "#/components/schemas/CapabilityValue" }]
+          description: What the role holds in this workspace.
+        default:
+          allOf: [{ $ref: "#/components/schemas/CapabilityValue" }]
+          description: |
+            What it holds in a workspace that never changed the cell. A value
+            that differs from it is the workspace's choice; setting it back
+            removes the choice, so a later change of default reaches the cell.
+        lock:
+          allOf: [{ $ref: "#/components/schemas/CapabilityLock" }]
+          nullable: true
+
+    PermissionCapability:
+      type: object
+      required: [key, group, values, floor_role, owner_only, cells]
+      properties:
+        key:
+          type: string
+          description: |
+            The capability (`reports.view`). The web catalogue labels it
+            `permissions.capability.<key>`.
+        group: { $ref: "#/components/schemas/CapabilityGroup" }
+        values:
+          type: array
+          items: { $ref: "#/components/schemas/CapabilityValue" }
+          description: The values a cell may take, weakest first.
+        floor_role:
+          allOf: [{ $ref: "#/components/schemas/MatrixRole" }]
+          description: The lowest role that may hold more than the weakest value.
+        owner_only:
+          type: boolean
+          description: Founder only — the whole row is locked.
+        cells:
+          type: array
+          items: { $ref: "#/components/schemas/PermissionCell" }
+          description: One per matrix column, in `roles` order.
+
+    PermissionMatrix:
+      type: object
+      required: [version, roles, capabilities]
+      properties:
+        version:
+          type: integer
+          description: |
+            The matrix's revision: 0 until it is first changed, plus one for
+            every change that moved a stored cell.
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/MatrixRole" }
+          description: The columns, in the order the screen draws them.
+        capabilities:
+          type: array
+          items: { $ref: "#/components/schemas/PermissionCapability" }
+          description: The rows, grouped, in catalogue order.
+
+    PermissionChange:
+      type: object
+      required: [role, capability, value]
+      properties:
+        role: { $ref: "#/components/schemas/MatrixRole" }
+        capability: { type: string, maxLength: 64 }
+        value: { $ref: "#/components/schemas/CapabilityValue" }
+
+    PermissionMatrixUpdate:
+      type: object
+      required: [changes, reason]
+      properties:
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { $ref: "#/components/schemas/PermissionChange" }
+          description: |
+            The cells to set — each at most once. A cell set to its default
+            stops being the workspace's choice; a locked cell accepts only the
+            value it already holds (sending a whole row back is not an error).
+        reason:
+          allOf: [{ $ref: "#/components/schemas/HighRiskReason" }]
+          description: |
+            Why (RL-02-S5). **Required here**, unlike the older high-risk
+            writes: this endpoint is new, so no integration predates it, and
+            every change of who may do what is filed with its reason.
 
     InvitationGroup:
       type: object

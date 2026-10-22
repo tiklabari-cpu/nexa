@@ -17,6 +17,7 @@
  * - The plain-text body keeps every link alone on its line, so a client links
  *   it and nothing trails into the URL.
  */
+import type { CapabilityKey, CapabilityValue, MatrixRole } from '@siyahtus/types';
 import {
   renderEmail,
   type EmailBlock,
@@ -1053,6 +1054,144 @@ export function knowledgeStaleMail(
       t
         ? 'Bu e-postayı, bu çalışma alanının sahibi, yardımcı sahibi ya da yöneticisi olduğunuz için aldınız.'
         : 'You received this email because you are an owner, vice-owner or admin of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
+ * The permission matrix's names, for the mail that says what moved (tm 325.2).
+ * Keyed by the catalogue's own type, so a capability added to `CAPABILITIES`
+ * does not compile until its mail says what it is.
+ */
+const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
+  'chats.view': { en: 'View chats', tr: 'Sohbetleri görme' },
+  'tickets.view': { en: 'View tickets', tr: 'Talepleri görme' },
+  'customers.contact.view': {
+    en: "See a player's email and username",
+    tr: 'Oyuncunun e-postasını ve kullanıcı adını görme',
+  },
+  'customers.edit': { en: 'Edit player records', tr: 'Oyuncu kayıtlarını düzenleme' },
+  'customers.ban': { en: 'Ban players', tr: 'Oyuncu engelleme' },
+  'customers.erase': { en: "Erase a player's data", tr: 'Oyuncu verisini silme' },
+  'ai.manage': { en: 'Configure the AI Agent', tr: "AI Agent'ı yapılandırma" },
+  'ai.guardrails.edit': { en: 'Edit AI compliance rules', tr: 'AI uyum kurallarını düzenleme' },
+  'reports.view': { en: 'View reports', tr: 'Raporları görme' },
+  'reports.schedule': { en: 'Schedule report emails', tr: 'Rapor e-postalarını zamanlama' },
+  'team.invite': { en: 'Invite teammates', tr: 'Ekip arkadaşı davet etme' },
+  'team.members.manage': { en: "Manage members' roles", tr: 'Üyelerin rolünü yönetme' },
+  'team.groups.manage': { en: 'Manage teams', tr: 'Ekipleri yönetme' },
+  'settings.security': { en: 'Security settings', tr: 'Güvenlik ayarları' },
+  'settings.company': { en: 'Company and appearance', tr: 'Şirket ve görünüm' },
+  'settings.brands': { en: 'Brands', tr: 'Markalar' },
+  'settings.channels': { en: 'Channels', tr: 'Kanallar' },
+  'settings.webhooks': { en: 'Webhooks', tr: "Webhook'lar" },
+  'settings.tags': { en: 'Tags', tr: 'Etiketler' },
+  'settings.canned_responses': { en: 'Canned responses', tr: 'Hazır yanıtlar' },
+  'settings.sso': { en: 'Single sign-on', tr: 'Tek oturum açma (SSO)' },
+  'settings.permissions': { en: 'Change permissions', tr: 'İzinleri değiştirme' },
+  'billing.manage': { en: 'Manage billing', tr: 'Faturalamayı yönetme' },
+  'logs.audit.view': { en: 'View the audit log', tr: 'Denetim kaydını görme' },
+  'logs.audit.export': { en: 'Stream the audit log (SIEM)', tr: 'Denetim kaydını aktarma (SIEM)' },
+};
+
+const MATRIX_ROLE_LABELS: Record<MatrixRole, { en: string; tr: string }> = {
+  owner: { en: 'Owner', tr: 'Kurucu' },
+  admin: { en: 'Admin', tr: 'Yönetici' },
+  team_lead: { en: 'Team Lead', tr: 'Ekip Lideri' },
+  agent: { en: 'Agent', tr: 'Ekip Üyesi' },
+};
+
+const CAPABILITY_VALUE_LABELS: Record<CapabilityValue, { en: string; tr: string }> = {
+  off: { en: 'Off', tr: 'Kapalı' },
+  on: { en: 'On', tr: 'Açık' },
+  none: { en: 'None', tr: 'Yok' },
+  own: { en: 'Own', tr: 'Kendi' },
+  team: { en: 'Team', tr: 'Ekip' },
+  all: { en: 'All', tr: 'Tümü' },
+};
+
+/** Cells named in the mail; the rest is a count and the audit log. */
+const PERMISSION_MAIL_ROWS = 20;
+
+/**
+ * The Founder changed who may do what (RL-02-S5): every Yönetici is told what
+ * moved and why, so a widened reach is never a surprise found later in the
+ * audit log.
+ */
+export function permissionsChangedMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    actorName: string;
+    changes: ReadonlyArray<{
+      role: MatrixRole;
+      capability: CapabilityKey;
+      from: CapabilityValue;
+      to: CapabilityValue;
+    }>;
+    reason: string;
+    matrixUrl: string | null;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const label = (names: { en: string; tr: string }): string => (t ? names.tr : names.en);
+  const rows = input.changes
+    .slice(0, PERMISSION_MAIL_ROWS)
+    .map(
+      (change) =>
+        [
+          `${label(MATRIX_ROLE_LABELS[change.role])} · ${label(CAPABILITY_LABELS[change.capability])}`,
+          `${label(CAPABILITY_VALUE_LABELS[change.from])} → ${label(CAPABILITY_VALUE_LABELS[change.to])}`,
+        ] as const,
+    );
+  const count = input.changes.length;
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: t
+        ? `${input.actorName}, ${input.workspaceName} çalışma alanında rollerin yetkilerini değiştirdi (${count} değişiklik). Değişiklik, oturumlara bir dakika içinde, yeniden giriş gerekmeden yansır.`
+        : `${input.actorName} changed what roles may do in ${input.workspaceName} (${count} ${count === 1 ? 'change' : 'changes'}). Sessions pick it up within a minute, without signing in again.`,
+    },
+    { type: 'facts', rows },
+  ];
+  if (count > rows.length) {
+    blocks.push({
+      type: 'note',
+      text: t
+        ? `ve ${count - rows.length} değişiklik daha — tamamı denetim kaydında.`
+        : `and ${count - rows.length} more — all of them are in the audit log.`,
+    });
+  }
+  blocks.push({
+    type: 'callout',
+    text: `${t ? 'Gerekçe' : 'Reason'}: ${input.reason}`,
+  });
+  if (input.matrixUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'İzinleri aç' : 'Open permissions',
+      url: input.matrixUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `SiyahTuş: ${input.workspaceName} çalışma alanında izinler değişti`
+      : `SiyahTuş: permissions changed in ${input.workspaceName}`,
+    preheader: t
+      ? 'Hangi rolün neye erişebildiği değişti.'
+      : 'What each role may reach has changed.',
+    icon: ICON.lock,
+    heading: t ? 'İzinler değişti' : 'Permissions changed',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının yöneticisi olduğunuz için aldınız.'
+        : 'You received this email because you are an admin of this workspace.',
       signature(ctx),
     ],
   });

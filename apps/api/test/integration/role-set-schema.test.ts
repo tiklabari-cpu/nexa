@@ -25,6 +25,7 @@ import { loadOpenApiDocument } from '@siyahtus/contract';
 import {
   AGENT_ROLES,
   INVITATION_ROLES,
+  MATRIX_ROLES,
   MAX_INVITATION_GROUPS,
   TEAM_LEAD_SCOPES,
   defaultScopesForRole,
@@ -156,6 +157,9 @@ describe('the Team Lead role — vocabulary and schema (RL-01 · RL-04 · K6 · 
       };
       expect(document.components.schemas['AgentRole']?.enum).toEqual([...AGENT_ROLES]);
       expect(document.components.schemas['InvitationRole']?.enum).toEqual([...INVITATION_ROLES]);
+      // The permission matrix's columns (tm 325.2 · RL-02): a third list on
+      // purpose — no `viceowner` column, it reads the admin one.
+      expect(document.components.schemas['MatrixRole']?.enum).toEqual([...MATRIX_ROLES]);
 
       // Every other place a role appears is a `$ref` to one of the two: an
       // inline copy is a list that drifts the next time a role is added.
@@ -165,6 +169,7 @@ describe('the Team Lead role — vocabulary and schema (RL-01 · RL-04 · K6 · 
       expect(roleLists.map(({ at }) => at).sort()).toEqual([
         '/components/schemas/AgentRole',
         '/components/schemas/InvitationRole',
+        '/components/schemas/MatrixRole',
       ]);
 
       const invite = document.paths['/invitations']!['post'] as {

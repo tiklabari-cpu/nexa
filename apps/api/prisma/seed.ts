@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { embed, LEXICAL_EMBEDDING_SPACE, toVectorLiteral } from '@siyahtus/ai-mock';
 import {
+  capabilitiesForRole,
   buildEventId,
   generateShortId,
   GUIDANCE_GENERAL_TITLE,
@@ -1105,6 +1106,7 @@ async function seedTickets(input: {
     licenseId,
     organizationId,
     role: 'owner',
+    capabilities: capabilitiesForRole('owner', []),
     scopes: [...ADMIN_SCOPES],
     tokenId: 'seed',
     tokenKind: 'pat',

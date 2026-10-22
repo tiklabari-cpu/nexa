@@ -136,6 +136,7 @@ export class Dispatcher {
       actorType: principal.kind,
       groupIds: principal.groupIds,
       unrestricted: principal.unrestricted,
+      authority: principal.authority,
     });
 
     // Requested subscriptions are applied at login so a client is live from its
@@ -287,6 +288,7 @@ export class Dispatcher {
       scopes: [],
       groupIds: connection.groupIds,
       unrestricted: connection.unrestricted,
+      authority: connection.authority,
     };
   }
 

@@ -346,6 +346,14 @@ export async function grantToken(
     /** Position the token in time — session-policy tests need a stale credential. */
     lastUsedAt?: Date | null;
     createdAt?: Date;
+    /**
+     * The OAuth client a session was issued to. Omitted, an `oauth` token has
+     * none and resolves like a partner app's grant: its own list, capped by the
+     * permission matrix. The workspace's sign-in client (`TenantFixture
+     * .clientId`, no scope list of its own) makes it a panel session, which
+     * follows the matrix both ways (tm 325.3).
+     */
+    clientId?: string;
   },
 ): Promise<string> {
   const token = `test_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
@@ -358,6 +366,7 @@ export async function grantToken(
       tokenHash: hashToken(token),
       scopes: input.scopes,
       name: 'test token',
+      ...(input.clientId !== undefined ? { clientId: input.clientId } : {}),
       expiresAt: input.expiresAt ?? null,
       revokedAt: input.revokedAt ?? null,
       ...(input.lastUsedAt !== undefined ? { lastUsedAt: input.lastUsedAt } : {}),

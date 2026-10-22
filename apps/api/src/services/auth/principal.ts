@@ -7,7 +7,7 @@
  * treating widget traffic as an agent (I4 — a customer token must never reach
  * beyond the Customer Chat API).
  */
-import type { AgentRole, IdentityTrust } from '@siyahtus/types';
+import type { AgentRole, CapabilityKey, CapabilityValue, IdentityTrust } from '@siyahtus/types';
 import type { TenantContext } from '../../lib/tenant.js';
 
 export interface AgentPrincipal {
@@ -17,6 +17,13 @@ export interface AgentPrincipal {
   organizationId: string;
   role: AgentRole;
   scopes: string[];
+  /**
+   * What the member's role holds in the workspace's permission matrix (RL-02 ·
+   * tm 325.3), resolved from the same snapshot as `scopes` — the person's
+   * answer, not the credential's. A capability without a scope of its own
+   * (`chats.view`'s `own` level) is read from here (`requireCapability`).
+   */
+  capabilities: Readonly<Record<CapabilityKey, CapabilityValue>>;
   tokenId: string;
   tokenKind: 'pat' | 'oauth';
 }

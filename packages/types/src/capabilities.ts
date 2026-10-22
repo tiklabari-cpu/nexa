@@ -24,7 +24,8 @@
  * A capability whose surface does not exist yet is not listed here — a row
  * that changes nothing would tell the Founder something false. The feature
  * that builds the surface adds its row with its check (timeline export #334,
- * AI publish #316, team takeover #326, team-scoped reports #368).
+ * AI publish #316, team takeover #326, team-scoped reports #368, a player's
+ * contact details tm 325.6).
  *
  * Here rather than in `apps/api` for the reason `role-scopes.ts` is: the REST
  * edge and the RTM gateway have to reach the same answer for the same session
@@ -166,18 +167,9 @@ export const CAPABILITIES = [
     floorRole: 'agent',
     defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'team' },
   },
-  // Oyuncu verisi
-  {
-    // Checked: seeing a player's email and username in the panel (RL-02-S2).
-    // Reading the record itself is in the base set.
-    key: 'customers.contact.view',
-    group: 'customers',
-    labelKey: 'permissions.capability.customers.contact.view',
-    values: ['off', 'on'],
-    scopes: {},
-    floorRole: 'agent',
-    defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'on' },
-  },
+  // Oyuncu verisi. Seeing a player's email and username (RL-02-S2) joins this
+  // group with its masking check (tm 325.6): until a server reads it, a row
+  // the Founder could switch off would mask nothing (tm 325.3 security review).
   {
     // Editing player records, and the engage tools gated on the same scope
     // (campaigns, goals, traffic actions).

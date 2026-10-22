@@ -36,7 +36,7 @@
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildEventId, generateShortId } from '@siyahtus/types';
+import { capabilitiesForRole, buildEventId, generateShortId } from '@siyahtus/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import type { TenantClient } from '../../src/lib/tenant.js';
 import type { AgentPrincipal, CustomerPrincipal } from '../../src/services/auth/principal.js';
@@ -153,6 +153,7 @@ describe('transcript page plan (NFR-P6)', () => {
     licenseId: t.licenseId,
     organizationId: t.organizationId,
     role: 'agent',
+    capabilities: capabilitiesForRole('agent', []),
     scopes: ['chats--all:rw', 'chats--all:ro'],
     tokenId: 'test-token',
     tokenKind: 'pat',

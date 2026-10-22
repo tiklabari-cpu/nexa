@@ -155,6 +155,12 @@ export async function grantToken(
      * against the holder's current role at login (SEC-2, tm 146).
      */
     kind?: 'pat' | 'oauth';
+    /**
+     * The OAuth client a session was issued to. A session from the
+     * workspace's sign-in client (no scope list of its own) follows the
+     * permission matrix both ways; any other keeps its own list (tm 325.3).
+     */
+    clientId?: string;
     revokedAt?: Date;
     expiresAt?: Date;
   },
@@ -168,6 +174,7 @@ export async function grantToken(
       kind: input.kind ?? 'pat',
       tokenHash: createHash('sha256').update(token, 'utf8').digest('base64url'),
       scopes: input.scopes,
+      ...(input.clientId ? { clientId: input.clientId } : {}),
       ...(input.revokedAt ? { revokedAt: input.revokedAt } : {}),
       ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
     },

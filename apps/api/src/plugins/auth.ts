@@ -104,7 +104,9 @@ const DEFAULT_PRINCIPALS: Array<Principal['kind']> = ['agent', 'bot'];
 async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
   const { env } = options;
 
-  const tokens = new TokenService(app.db);
+  // A member's token is resolved against the workspace's permission matrix
+  // (RL-02 · tm 325.3), through the same cache `/settings/permissions` drops.
+  const tokens = new TokenService(app.db, app.permissionMatrix.cache);
   const lastSeen = new LastSeenRecorder();
   const customerTokens = new CustomerTokenService(
     env.CUSTOMER_TOKEN_SECRET,
@@ -433,9 +435,9 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     // scope (tm 146). Before that, routes like `PATCH /settings/security` were
     // held by scope alone, and a demoted admin's credential still carried the
     // admin scope it was minted with: enough to switch off IP allow-listing and
-    // the 2FA requirement. `scopesWithinRole` closed the session half of that;
-    // this is what binds a personal access token minted while its holder was
-    // still an admin.
+    // the 2FA requirement. Resolving a session against the role it holds now
+    // closed the session half of that (`token-service.ts`); this is what binds
+    // a personal access token minted while its holder was still an admin.
     if (config.minimumRole) {
       if (principal.kind !== 'agent' || !roleAtLeast(principal.role, config.minimumRole)) {
         throw ApiError.authorization(`This action requires the ${config.minimumRole} role.`);
@@ -525,4 +527,4 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   });
 }
 
-export default fp(authPlugin, { name: 'auth', dependencies: ['database'] });
+export default fp(authPlugin, { name: 'auth', dependencies: ['database', 'permission-matrix'] });

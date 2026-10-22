@@ -928,7 +928,11 @@ export interface paths {
      *     is stored. A token cannot be granted scopes the creating session does not
      *     already hold (403, `error.details.reason: scopes_not_held`, `scopes` the
      *     comma-separated ones it lacks); a request left with no valid scope is a 400
-     *     with `reason: scopes_required` (tm 261).
+     *     with `reason: scopes_required` (tm 261). Nor scopes the workspace's
+     *     permission matrix lends the caller's role beyond its default set — a token
+     *     keeps its list, and would outlive the loan (403, `reason:
+     *     scopes_not_delegable`, `scopes`; RL-02 · tm 325.3). Without `scopes`, the
+     *     token takes the role's default set as far as the session holds it.
      */
     post: operations['createPersonalAccessToken'];
     delete?: never;
@@ -1056,7 +1060,10 @@ export interface paths {
     /**
      * List conversations
      * @description Returns chats the caller may see. An agent sees a chat only through a team
-     *     they belong to unless their token carries `chats--all:ro`.
+     *     they belong to unless their token carries `chats--all:ro`. A member whose
+     *     role the workspace's permission matrix sets to `own` for `chats.view`
+     *     sees only the chats they are assigned to or have joined, whatever their
+     *     token carries; at `none` the request is a 403 (RL-02 · tm 325.3).
      *
      *     Paginated by opaque keyset cursor rather than offset: an offset page shifts
      *     under you every time a new message arrives, which in an active inbox means
@@ -16522,8 +16529,8 @@ export interface components {
     CapabilityLock: 'owner_column' | 'owner_only' | 'below_floor';
     /**
      * @description Every capability's resolved value, by key (`chats.view` → `team`). What
-     *     a capability with no scope of its own — seeing a player's contact
-     *     details, say — is checked against.
+     *     a capability with no scope of its own — `chats.view`'s `own` level, say —
+     *     is checked against.
      */
     CapabilityValues: {
       [key: string]: components['schemas']['CapabilityValue'];
@@ -19459,13 +19466,21 @@ export interface operations {
              * @enum {string}
              */
             region?: 'eu' | 'us';
+            /**
+             * @description What this credential may do on this request. For an agent it
+             *     is resolved against the role the caller holds now and the
+             *     workspace's permission matrix (RL-02 · tm 325.3): a sign-in
+             *     session follows the matrix both ways; a partner app's grant
+             *     and a personal access token keep their own list, less what
+             *     the matrix takes from the role.
+             */
             scopes: string[];
             /**
              * @description Agent principals only. What the caller's role holds in this
              *     workspace's permission matrix (RL-02), every capability by
              *     key — the panel's "Yetkilerim", and what a capability with no
-             *     scope of its own is read from. Resolved from the same cached
-             *     matrix the session's checks use.
+             *     scope of its own is read from. Resolved from the same matrix
+             *     snapshot as `scopes`.
              */
             capabilities?: components['schemas']['CapabilityValues'];
             /** @enum {string} */

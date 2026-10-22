@@ -5,7 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import {
-  capabilitiesForRole,
+  delegableScopes,
   isScope,
   DEFAULT_PRECHAT_CONFIG,
   isMemberTokenCookieName,
@@ -948,11 +948,9 @@ export default async function authRoutes(
             // The onboarding gate: the shell reads this to decide whether to send a
             // new owner to the first-run wizard, so it rides along with the profile
             // the app already fetches on load rather than costing a second request.
-            // `permissionsVersion` too, so the matrix below is read at the
-            // version this transaction saw, never a cached older one.
             tx.license.findUnique({
               where: { id: principal.licenseId },
-              select: { onboardingCompletedAt: true, permissionsVersion: true },
+              select: { onboardingCompletedAt: true },
             }),
             // The mobile Settings → Account card's only source for "which
             // workspace" (13.7-r) — a long-lived session has no other request
@@ -988,15 +986,6 @@ export default async function authRoutes(
         }),
         twoFactor.status(principal.accountId),
       ]);
-      // What the caller's role holds in the permission matrix (RL-02 · tm
-      // 325.2) — "Yetkilerim", and what a capability without a scope of its
-      // own is read from. Through the cache a session's checks read, at the
-      // version just read, so the two answer from the same matrix.
-      const matrix = await app.permissionMatrix.cache.get(
-        request.tenant(),
-        profile.license?.permissionsVersion,
-      );
-
       return reply.send({
         kind: 'agent',
         account_id: principal.accountId,
@@ -1009,7 +998,11 @@ export default async function authRoutes(
         license_id: principal.licenseId.toString(),
         region: request.requireRegion(),
         scopes: principal.scopes,
-        capabilities: capabilitiesForRole(principal.role, matrix.overrides),
+        // What the caller's role holds in the permission matrix (RL-02) —
+        // "Yetkilerim", and what a capability without a scope of its own is
+        // read from. Off the principal, resolved from the same matrix snapshot
+        // as `scopes` above (tm 325.3), so the two cannot disagree.
+        capabilities: principal.capabilities,
         routing_status: profile.membership?.routingStatus ?? 'offline',
         concurrent_chats_limit: profile.membership?.concurrentChatsLimit ?? 0,
         // All five channels, not just e-mail. The console reads them on load and
@@ -1072,17 +1065,34 @@ export default async function authRoutes(
       const principal = request.requirePrincipal() as AgentPrincipal;
       const body = parse(createPatBody, request.body);
 
-      const requested = body.scopes?.length ? body.scopes : defaultScopesForRole(principal.role);
+      const held = new Set(principal.scopes);
+      // Without a list, the role's default set as far as this session holds
+      // it — a session the permission matrix narrowed (RL-02) mints a token
+      // narrowed the same way rather than being refused for scopes it lacks.
+      const requested = body.scopes?.length
+        ? body.scopes
+        : defaultScopesForRole(principal.role).filter((s) => held.has(s));
 
       // Privilege escalation guard: a session can only mint a token weaker than
       // or equal to itself. Without this, an agent-scoped session could create
       // an admin-scoped PAT and use it immediately.
-      const held = new Set(principal.scopes);
       const escalating = requested.filter((s) => !held.has(s));
       if (escalating.length > 0) {
         throw ApiError.authorization(
           `Cannot grant scopes the current session does not hold: ${escalating.join(', ')}`,
           { reason: 'scopes_not_held', scopes: escalating.join(', ') },
+        );
+      }
+      // A scope the matrix lends the role beyond its default set stays on the
+      // session (tm 325.3). A personal token keeps its list, losing only what
+      // the matrix takes from the role's default set — so a loan minted into
+      // one would outlive the Founder taking it back.
+      const delegable = delegableScopes(principal.role);
+      const lent = requested.filter((s) => !delegable.has(s));
+      if (lent.length > 0) {
+        throw ApiError.authorization(
+          `These scopes are lent to your role by the workspace's permission matrix and cannot be put in a personal access token: ${lent.join(', ')}`,
+          { reason: 'scopes_not_delegable', scopes: lent.join(', ') },
         );
       }
       const scopes = requested.filter(isScope);

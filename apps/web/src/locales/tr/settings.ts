@@ -1244,6 +1244,8 @@ export const settings: Messages = {
   'settings.pat.reason.scopes_required': 'En az bir kapsam seçin.',
   'settings.pat.reason.scopes_not_held':
     'Kendi oturumunuzun sahip olmadığı kapsamları veremezsiniz: {scopes}.',
+  'settings.pat.reason.scopes_not_delegable':
+    'Bu kapsamlar rolünüzden değil, çalışma alanının izinlerinden geliyor; jetona eklenemez: {scopes}.',
   'settings.pat.form.expiryLabel': 'Geçerlilik süresi',
   'settings.pat.form.days': '{days} gün',
   'settings.pat.form.scopesLabel': 'Kapsamlar',

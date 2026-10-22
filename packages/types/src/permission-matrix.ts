@@ -59,6 +59,36 @@ export interface PermissionMatrixTenant {
   readonly organizationId: string;
 }
 
+/**
+ * One row of the snapshot statement both processes run — the licence's version
+ * `LEFT JOIN`ed to its stored choices, so a workspace with none still answers
+ * with its version and one row of nulls.
+ */
+export interface PermissionMatrixRow {
+  readonly version: number;
+  readonly role: string | null;
+  readonly capability: string | null;
+  readonly value: string | null;
+}
+
+/**
+ * The snapshot those rows describe. Shared so the REST edge
+ * (`services/auth/permission-matrix.ts`) and the RTM gateway
+ * (`apps/rtm/src/permissions.ts`) read one statement into one shape; no rows
+ * at all (the licence is not visible) reads as version 0 with no choices.
+ */
+export function permissionMatrixFromRows(
+  rows: readonly PermissionMatrixRow[],
+): PermissionMatrixSnapshot {
+  const overrides: CapabilityOverride[] = [];
+  for (const row of rows) {
+    if (row.role !== null && row.capability !== null && row.value !== null) {
+      overrides.push({ role: row.role, capability: row.capability, value: row.value });
+    }
+  }
+  return { version: rows[0]?.version ?? 0, overrides };
+}
+
 /** The announcement for `licenseId`'s matrix reaching `version`. */
 export function permissionsChangedMessage(licenseId: bigint, version: number): string {
   return `${licenseId.toString()}:${version}`;

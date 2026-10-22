@@ -15,7 +15,7 @@ import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { pino, type Logger } from 'pino';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@siyahtus/types';
+import { PermissionMatrixCache, RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@siyahtus/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
@@ -23,6 +23,12 @@ import { ConflictPublisher } from './conflict-publisher.js';
 import { ConnectionRegistry, connectionLogContext, type Connection } from './connection.js';
 import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
+import {
+  AUTHORITY_SWEEP_MS,
+  AuthorityRefresher,
+  listenForPermissionsChanges,
+  rtmPermissionMatrixLoader,
+} from './permissions.js';
 import { decodeRequest, encodeError } from './protocol.js';
 import { SyncService } from './sync.js';
 import {
@@ -84,6 +90,8 @@ export interface RtmServer {
   http: Server;
   wss: WebSocketServer;
   registry: ConnectionRegistry;
+  /** Keeps open member sockets in step with the permission matrix (tm 325.3). */
+  authority: AuthorityRefresher;
   listen: () => Promise<void>;
   close: () => Promise<void>;
   address: () => { port: number } | null;
@@ -168,7 +176,16 @@ export function buildRtmServer(
     maxRetriesPerRequest: 3,
     retryStrategy: (attempt) => Math.min(attempt * 200, 3_000),
   });
-  for (const client of [commands, subscriber, publisher]) {
+  // A fourth connection, for `permissions.changed` alone (tm 325.3): the fan-out
+  // subscriber parses every message on its connection as a bus envelope, and a
+  // subscribed client can do nothing else. Never a reason not to serve — without
+  // it the sweep below still catches every change within its interval.
+  const permissionsSubscriber = new Redis(env.REDIS_URL, {
+    connectionName: 'siyahtus-rtm-permissions',
+    maxRetriesPerRequest: null,
+    retryStrategy: (attempt) => Math.min(attempt * 200, 5_000),
+  });
+  for (const client of [commands, subscriber, publisher, permissionsSubscriber]) {
     client.on('error', (error) => log.error({ err: error }, 'redis connection error'));
   }
 
@@ -178,11 +195,30 @@ export function buildRtmServer(
   telemetryInstance?.instruments.activeConnections.addCallback((result) => {
     result.observe(registry.size);
   });
+  // The same cache class and version rules the API resolves a token through
+  // (`@siyahtus/types` · `permission-matrix.ts`), with this process's loader.
+  const permissionMatrix = new PermissionMatrixCache({ load: rtmPermissionMatrixLoader(db) });
   const authenticator = new SocketAuthenticator(
     db,
     env.JWT_SIGNING_KEY_CUSTOMER,
     env.SIYAHTUS_REGION,
+    permissionMatrix,
   );
+  const authority = new AuthorityRefresher(registry, authenticator, log);
+  listenForPermissionsChanges(permissionsSubscriber, permissionMatrix, authority, log).catch(
+    (error: unknown) => {
+      log.warn(
+        { err: error },
+        'permissions.changed not subscribed; the sweep keeps sockets in step',
+      );
+    },
+  );
+  const authoritySweep = setInterval(() => {
+    authority.sweep().catch((error: unknown) => {
+      log.warn({ err: error }, 'permission sweep failed');
+    });
+  }, AUTHORITY_SWEEP_MS);
+  authoritySweep.unref();
   const sync = new SyncService(db);
   // Typing flags are written on the command connection: a subscriber-mode client
   // may issue no other commands, so it cannot be reused for a `SET`.
@@ -384,6 +420,7 @@ export function buildRtmServer(
     http,
     wss,
     registry,
+    authority,
     address: () => {
       const address = http.address();
       return address && typeof address === 'object' ? { port: address.port } : null;
@@ -431,6 +468,7 @@ export function buildRtmServer(
         await delay(env.shutdownDrainMs);
       }
 
+      clearInterval(authoritySweep);
       registry.closeAll(1001, 'server shutting down');
       await closeSockets(wss);
       await new Promise<void>((resolve) => {
@@ -444,6 +482,7 @@ export function buildRtmServer(
         commands.quit().catch(() => commands.disconnect()),
         subscriber.quit().catch(() => subscriber.disconnect()),
         publisher.quit().catch(() => publisher.disconnect()),
+        permissionsSubscriber.quit().catch(() => permissionsSubscriber.disconnect()),
         db.$disconnect(),
         // A plain `shutdown()` would discard whatever the periodic reader has
         // not exported yet — and the disconnect reason this drain itself just

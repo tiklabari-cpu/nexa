@@ -166,7 +166,11 @@ function serialiseGroup(group: GroupWithAgents, accepting: ReadonlyMap<bigint, n
     after_hours_mode: group.afterHoursMode,
     required_expertise_ids: group.requiredExpertise.map((row) => Number(row.expertiseId)),
     accepting_count: accepting.get(group.id) ?? 0,
-    agents: group.agents.map((a) => ({ agent_id: a.agentId, priority: a.priority })),
+    agents: group.agents.map((a) => ({
+      agent_id: a.agentId,
+      priority: a.priority,
+      lead: a.isLead,
+    })),
   };
 }
 

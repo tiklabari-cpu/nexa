@@ -473,13 +473,26 @@ invitations:
                 maxItems: 50
                 items: { type: string, maxLength: 320 }
               role:
-                type: string
-                enum: [admin, agent]
+                allOf:
+                  - $ref: "../openapi.yaml#/components/schemas/InvitationRole"
                 default: agent
                 description: |
                   Defaults to `agent`, the lowest role — a caller that names none
                   never mints an administrator by omission. `owner` is not
                   invitable — ownership transfers deliberately, not by email.
+              groups:
+                type: array
+                maxItems: 50
+                default: []
+                items: { $ref: "../openapi.yaml#/components/schemas/InvitationGroup" }
+                description: |
+                  The teams every invitee in this call joins on accepting, and
+                  which of them they lead (RL-04). A `team_lead` invitation
+                  must lead at least one team (RL-04-S1), and only a
+                  `team_lead` invitation may lead one; other roles may name
+                  teams to join or none. Breaking either rule, or naming a team
+                  twice, is a 400; a team this workspace does not have is a 404
+                  `group_not_found`. Either way nothing is written.
     responses:
       "201":
         description: |
@@ -534,6 +547,7 @@ invitations:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429":
         description: |
           The rate limit (`too_many_requests`, as everywhere); the seat ceiling
@@ -594,7 +608,7 @@ invitationPreview:
               properties:
                 organization_name: { type: string }
                 email: { type: string }
-                role: { type: string, enum: [admin, agent] }
+                role: { $ref: "../openapi.yaml#/components/schemas/InvitationRole" }
                 needs_password:
                   type: boolean
                   description: |

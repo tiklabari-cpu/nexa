@@ -211,9 +211,13 @@ describe('riskPolicy (AI-27 §3 · tm 302.1)', () => {
 describe('who reads a flag’s note and evidence (AI-27 “Görünürlük” · tm 302.2)', () => {
   it('the Responsible Gaming team and a Team Lead and up (admin until RL-01); a Team Member reads the type only', () => {
     const read = (role: AgentRole, team: boolean) => canSeeRiskFlagDetails(role, team);
-    expect(AGENT_ROLES.filter((role) => read(role, false))).toEqual(
-      AGENT_ROLES.filter((role) => role !== 'agent'),
-    );
+    // `team_lead` exists since tm 324.1 but still reads as a member here:
+    // `RISK_FLAG_CLEAR_MIN_ROLE.team_lead` stays `admin` until it moves down.
+    expect(AGENT_ROLES.filter((role) => read(role, false))).toEqual([
+      'owner',
+      'viceowner',
+      'admin',
+    ]);
     expect(read('agent', false)).toBe(false);
     expect(read('agent', true)).toBe(true);
   });

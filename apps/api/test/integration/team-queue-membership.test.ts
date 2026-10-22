@@ -236,7 +236,7 @@ describe('team queues — membership, the Responsible Gambling team, topic resol
       const moved = await join(both.id, agent, 'primary');
       expect(moved.statusCode, moved.body).toBe(200);
       expect((moved.json() as GroupBody).agents).toEqual([
-        { agent_id: agent, priority: 'primary' },
+        { agent_id: agent, priority: 'primary', lead: false },
       ]);
     });
 

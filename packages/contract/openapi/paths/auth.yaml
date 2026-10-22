@@ -91,7 +91,7 @@ login:
                       license_id: { type: string }
                       organization_id: { type: string, format: uuid }
                       organization_name: { type: string }
-                      role: { type: string, enum: [owner, viceowner, admin, agent] }
+                      role: { $ref: "../openapi.yaml#/components/schemas/AgentRole" }
                       license_status: { type: string }
                       client_id: { type: string, nullable: true }
                       sso_enforced_connection_id:
@@ -351,7 +351,7 @@ me:
                 account_id: { type: string, format: uuid }
                 email: { type: string }
                 name: { type: string }
-                role: { type: string, enum: [owner, viceowner, admin, agent] }
+                role: { $ref: "../openapi.yaml#/components/schemas/AgentRole" }
                 organization_id: { type: string, format: uuid }
                 organization_name:
                   type: string

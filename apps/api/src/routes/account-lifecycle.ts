@@ -785,7 +785,10 @@ export default async function accountLifecycleRoutes(
       items: await tx.invitation.findMany({
         where: { acceptedAt: null, expiresAt: { gt: new Date() } },
         orderBy: { createdAt: 'desc' },
-        include: { invitedBy: { select: { name: true } } },
+        include: {
+          invitedBy: { select: { name: true } },
+          groups: { select: { groupId: true, isLead: true }, orderBy: { groupId: 'asc' } },
+        },
       }),
       headcount: await tx.agentMembership.count({ where: { suspended: false } }),
       subscription: await tx.subscription.findFirst({
@@ -800,6 +803,7 @@ export default async function accountLifecycleRoutes(
         id: invite.id,
         email: invite.email,
         role: invite.role,
+        groups: invite.groups.map((row) => ({ group_id: Number(row.groupId), lead: row.isLead })),
         invited_by_name: invite.invitedBy.name,
         expires_at: invite.expiresAt.toISOString(),
         created_at: invite.createdAt.toISOString(),

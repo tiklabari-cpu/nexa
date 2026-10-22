@@ -16,11 +16,17 @@ import { effectiveScopes, type Scope } from './scopes.js';
  * Roles are coarse ("can this person administer the workspace"); scopes are
  * fine ("may this token write chats"). Both are enforced — a route that only
  * checked scopes would let an Agent-role user with a broad PAT act as an admin.
+ *
+ * The numbers are an order, not a value: nothing stores, sends or compares one
+ * outside `ROLE_RANK[a] >= ROLE_RANK[b]`, which is what let RL-01 renumber them
+ * to fit `team_lead` in under `admin` (tm 324.1). Below `admin` is the point —
+ * every `minimumRole: 'admin'` gate refuses a Team Lead with no gate edited.
  */
 export const ROLE_RANK: Record<AgentRole, number> = {
-  owner: 3,
-  viceowner: 2,
-  admin: 1,
+  owner: 4,
+  viceowner: 3,
+  admin: 2,
+  team_lead: 1,
   agent: 0,
 };
 
@@ -138,17 +144,34 @@ export const ADMIN_SCOPES: Scope[] = [
 ];
 
 /**
+ * A Team Lead's set (RL-01): a Team Member's, and what leading a team adds.
+ *
+ * Today it adds nothing, on purpose. Each thing a lead does that a member does
+ * not — watching and taking over their team's chats, their team's reports
+ * (RL-03) — needs a server check bounded by the teams they lead
+ * (`group_agents.is_lead`), and the scopes that would open those routes today
+ * (`chats--all:rw`, `reports_read`) open them for the whole workspace. Handing
+ * one over before its team bound exists would make a Team Lead an admin of
+ * that surface. The additions arrive with those checks, and the permission
+ * matrix (RL-02) makes them a workspace's choice.
+ */
+export const TEAM_LEAD_SCOPES: Scope[] = [...DEFAULT_AGENT_SCOPES];
+
+/**
  * The scopes a session gets when the caller asks for none.
  *
  * Three doors into the product answer this question — the password sign-in
  * (`routes/auth.ts`), the SAML ACS (`routes/saml.ts`, S11-d) and a PAT minted
  * without an explicit list — so it is stated once. Restating it would let them
  * drift apart on what an `admin` is allowed to do.
+ *
+ * A role this list does not know (a row the CHECK predates, a typo) gets the
+ * Team Member's set: unknown is the lowest rank, never a higher one.
  */
 export function defaultScopesForRole(role: string): Scope[] {
-  return roleAtLeast(role as AgentRole, 'admin')
-    ? [...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES]
-    : [...DEFAULT_AGENT_SCOPES];
+  if (roleAtLeast(role as AgentRole, 'admin')) return [...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES];
+  if (role === 'team_lead') return [...TEAM_LEAD_SCOPES];
+  return [...DEFAULT_AGENT_SCOPES];
 }
 
 /**

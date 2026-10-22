@@ -27,6 +27,7 @@ import {
 } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
@@ -228,8 +229,12 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
-  /** Set only while the "turn two-factor on" confirmation is open. */
-  const [confirmTwoFactor, setConfirmTwoFactor] = useState(false);
+  /**
+   * The save waiting on the "turn two-factor on" confirmation — set only while
+   * it is open; Confirm sends it, Cancel drops it and the draft stays as typed.
+   */
+  const [pending, setPending] = useState<Partial<SecuritySettings> | null>(null);
+  const confirmTwoFactor = pending !== null;
 
   const settings = useQuery({
     queryKey: ['settings', 'security'],
@@ -251,16 +256,9 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
       api.patch<SecuritySettings>('/settings/security', body),
     onSuccess: (data) => {
       queryClient.setQueryData(['settings', 'security'], data);
-      setConfirmTwoFactor(false);
+      setPending(null);
     },
   });
-
-  function handleRequireTwoFactorChange(checked: boolean): void {
-    // Only the "on" direction needs confirming — switching off reopens a
-    // door instead of closing one, nobody regrets that at 2am.
-    if (checked) setConfirmTwoFactor(true);
-    else save.mutate({ require_two_factor: false });
-  }
 
   if (settings.error)
     return <ErrorNotice message={t('settings.ipAllowlist.sessionPolicyLoadError')} />;
@@ -313,14 +311,14 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
             current={current!}
             save={save}
             confirmTwoFactor={confirmTwoFactor}
-            onRequireTwoFactorChange={handleRequireTwoFactorChange}
+            onConfirmTwoFactor={setPending}
           />
         )}
       </Card>
 
       {confirmTwoFactor && (
         <Modal
-          onClose={() => setConfirmTwoFactor(false)}
+          onClose={() => setPending(null)}
           title={t('settings.ipAllowlist.requireTwoFactorConfirmTitle')}
           description={t('settings.ipAllowlist.requireTwoFactorConfirmDescription')}
         >
@@ -340,14 +338,14 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setConfirmTwoFactor(false)}
+              onClick={() => setPending(null)}
               className="rounded-md border border-border px-3 py-1.5 text-sm"
             >
               {t('settings.cancel')}
             </button>
             <button
               type="button"
-              onClick={() => save.mutate({ require_two_factor: true })}
+              onClick={() => pending && save.mutate(pending)}
               disabled={save.isPending}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
@@ -364,20 +362,25 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
 
 /**
  * Mounted only once the settings have loaded, so `useForm`'s `initial` is the
- * real saved values on the very first render (`SlaPolicy`'s reasoning). The two
- * checkboxes save immediately on change, outside `useForm`'s value state —
- * only the idle-timeout/max-sessions pair goes through the submit button.
+ * real saved values on the very first render (`SlaPolicy`'s reasoning).
+ *
+ * All four controls are one draft written by the SaveBar (tm 323.2 · GV-06).
+ * The two checkboxes used to write the moment they were ticked — for the whole
+ * workspace, one of them able to turn a sign-in away. Turning two-factor *on*
+ * still asks first: Save opens the confirmation with the body it will send.
+ * Only the "on" direction needs confirming — switching off reopens a door
+ * instead of closing one, nobody regrets that at 2am.
  */
 function SessionPolicyForm({
   current,
   save,
   confirmTwoFactor,
-  onRequireTwoFactorChange,
+  onConfirmTwoFactor,
 }: {
   current: SecuritySettings;
   save: UseMutationResult<SecuritySettings, unknown, Partial<SecuritySettings>>;
   confirmTwoFactor: boolean;
-  onRequireTwoFactorChange: (checked: boolean) => void;
+  onConfirmTwoFactor: (body: Partial<SecuritySettings>) => void;
 }): ReactElement {
   const t = useTranslate();
   // The session-policy Save changes nothing on screen (the inputs already hold
@@ -385,32 +388,50 @@ function SessionPolicyForm({
   // edit or save: "Saved." must never sit beside a value that was not.
   const [saved, setSaved] = useState(false);
 
+  const initial = {
+    enforced: String(current.ip_allowlist_enforced),
+    twoFactor: String(current.require_two_factor),
+    idleMinutes:
+      current.session_idle_timeout_seconds != null
+        ? String(Math.round(current.session_idle_timeout_seconds / 60))
+        : '',
+    maxSessions:
+      current.max_concurrent_sessions != null ? String(current.max_concurrent_sessions) : '',
+  };
   const form = useForm({
-    initial: {
-      idleMinutes:
-        current.session_idle_timeout_seconds != null
-          ? String(Math.round(current.session_idle_timeout_seconds / 60))
-          : '',
-      maxSessions:
-        current.max_concurrent_sessions != null ? String(current.max_concurrent_sessions) : '',
-    },
+    initial,
     validators: {
       idleMinutes: optional(positiveMinutes(t('settings.ipAllowlist.idleTimeoutError'))),
       maxSessions: optional(positiveSessionCount(t('settings.ipAllowlist.maxSessionsError'))),
     },
     onSubmit: async (values) => {
       setSaved(false);
+      // Only what moved: the audit entry names the fields written.
+      const body: Partial<SecuritySettings> = {};
+      if (values.enforced !== initial.enforced) {
+        body.ip_allowlist_enforced = values.enforced === 'true';
+      }
+      if (values.twoFactor !== initial.twoFactor) {
+        body.require_two_factor = values.twoFactor === 'true';
+      }
+      if (values.idleMinutes !== initial.idleMinutes) {
+        body.session_idle_timeout_seconds =
+          values.idleMinutes.trim() === '' ? null : Math.round(Number(values.idleMinutes) * 60);
+      }
+      if (values.maxSessions !== initial.maxSessions) {
+        body.max_concurrent_sessions =
+          values.maxSessions.trim() === '' ? null : Number(values.maxSessions);
+      }
+      if (body.require_two_factor === true) {
+        onConfirmTwoFactor(body);
+        return;
+      }
       try {
-        await save.mutateAsync({
-          session_idle_timeout_seconds:
-            values.idleMinutes.trim() === '' ? null : Math.round(Number(values.idleMinutes) * 60),
-          max_concurrent_sessions:
-            values.maxSessions.trim() === '' ? null : Number(values.maxSessions),
-        });
+        await save.mutateAsync(body);
         setSaved(true);
       } catch {
         // Surfaced below via the shared `save.isError` banner — the same
-        // mutation the two checkboxes and the confirmation modal use.
+        // mutation the confirmation modal uses.
       }
     },
   });
@@ -422,9 +443,11 @@ function SessionPolicyForm({
       <label className="flex items-start gap-3">
         <input
           type="checkbox"
-          checked={current.ip_allowlist_enforced}
-          disabled={save.isPending}
-          onChange={(event) => save.mutate({ ip_allowlist_enforced: event.target.checked })}
+          checked={form.values.enforced === 'true'}
+          onChange={(event) => {
+            setSaved(false);
+            form.setValue('enforced', String(event.target.checked));
+          }}
         />
         <span className="flex-1 text-sm">
           {t('settings.ipAllowlist.enforceCheckboxLabel')}
@@ -437,9 +460,11 @@ function SessionPolicyForm({
       <label className="flex items-start gap-3">
         <input
           type="checkbox"
-          checked={current.require_two_factor}
-          disabled={save.isPending}
-          onChange={(event) => onRequireTwoFactorChange(event.target.checked)}
+          checked={form.values.twoFactor === 'true'}
+          onChange={(event) => {
+            setSaved(false);
+            form.setValue('twoFactor', String(event.target.checked));
+          }}
         />
         <span className="flex-1 text-sm">
           {t('settings.ipAllowlist.requireTwoFactorCheckboxLabel')}
@@ -493,14 +518,6 @@ function SessionPolicyForm({
           />
           <FieldError id="max-sessions-error" message={maxSessionsError} />
         </label>
-
-        <button
-          type="submit"
-          disabled={!form.canSubmit}
-          className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-        >
-          {form.isSubmitting ? t('settings.saving') : t('settings.save')}
-        </button>
       </div>
 
       {save.isError && !confirmTwoFactor && (
@@ -513,6 +530,12 @@ function SessionPolicyForm({
           {t('settings.ipAllowlist.savedNote')}
         </p>
       )}
+      {/* The rejection is the banner above, shared with the confirmation; the
+          bar does not repeat it. Saving covers the wait on the confirmation. */}
+      <FormSaveBar
+        form={{ ...form, isSubmitting: form.isSubmitting || save.isPending || confirmTwoFactor }}
+        error={null}
+      />
     </form>
   );
 }

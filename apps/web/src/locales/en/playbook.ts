@@ -1200,6 +1200,7 @@ export const playbook: Messages = {
   'playbook.guardrails.rules.activeLabel': 'Compliance rule “{title}”',
   'playbook.guardrails.rules.editLabel': 'Edit compliance rule “{title}”',
   'playbook.guardrails.rules.deleteLabel': 'Delete compliance rule “{title}”',
+  'playbook.guardrails.rules.deleted': 'Deleted',
   'playbook.guardrails.rules.editorNew': 'New compliance rule',
   'playbook.guardrails.rules.editorEdit': 'Edit compliance rule',
   'playbook.guardrails.rules.bodyPlaceholder':

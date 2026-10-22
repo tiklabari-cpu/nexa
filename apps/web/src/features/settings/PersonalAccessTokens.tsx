@@ -55,6 +55,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
@@ -145,6 +146,7 @@ export function PersonalAccessTokens(): ReactElement {
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   const nameError = form.errorFor('name');
   // A token with no scopes is unbounded at the API's default, not restricted —

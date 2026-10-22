@@ -10,10 +10,15 @@
  * coverage sentinel claims a whole *file* as translated. Not exported from
  * `SettingsPage.tsx` (never was): no test imports it directly, coverage comes
  * from the targeted `settings.spec.ts` e2e.
+ *
+ * One form (tm 323.2 · GV-06): the on/off switch used to write the moment it
+ * was ticked — for the whole workspace and every visitor — while the limits
+ * beside it waited for Save. All three are written by the SaveBar now.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -99,6 +104,8 @@ function FileSharingForm({
 
   const form = useForm({
     initial: {
+      // A string like every other field; the checkbox reads and writes 'true'.
+      enabled: String(current.file_sharing_enabled),
       types: current.allowed_file_types.join(', '),
       sizeMb: String(Math.round(current.max_file_size_bytes / 1048576)),
     },
@@ -112,6 +119,10 @@ function FileSharingForm({
         .filter(Boolean);
       try {
         await save.mutateAsync({
+          // The switch only when it moved: the audit entry names the fields written.
+          ...(values.enabled !== String(current.file_sharing_enabled)
+            ? { file_sharing_enabled: values.enabled === 'true' }
+            : {}),
           allowed_file_types: parsedTypes,
           max_file_size_bytes: Math.round(Number(values.sizeMb.trim()) * 1048576),
         });
@@ -122,14 +133,16 @@ function FileSharingForm({
   });
   const sizeError = form.errorFor('sizeMb');
 
+  const enabled = form.values.enabled === 'true';
+
   return (
-    <div className="divide-y divide-border">
+    <form onSubmit={form.handleSubmit} noValidate className="divide-y divide-border">
       <label className="flex items-center gap-3 p-4">
         <input
           type="checkbox"
-          checked={current.file_sharing_enabled}
-          disabled={!canEdit || save.isPending}
-          onChange={(event) => save.mutate({ file_sharing_enabled: event.target.checked })}
+          checked={enabled}
+          disabled={!canEdit}
+          onChange={(event) => form.setValue('enabled', String(event.target.checked))}
         />
         <span className="flex-1 text-sm">
           {t('settings.fileSharing.allowLabel')}
@@ -138,16 +151,12 @@ function FileSharingForm({
           </span>
         </span>
         <StatusDot
-          tone={current.file_sharing_enabled ? 'success' : 'neutral'}
-          label={current.file_sharing_enabled ? t('settings.on') : t('settings.off')}
+          tone={enabled ? 'success' : 'neutral'}
+          label={enabled ? t('settings.on') : t('settings.off')}
         />
       </label>
 
-      <form
-        onSubmit={form.handleSubmit}
-        noValidate
-        className="flex flex-wrap items-start gap-3 p-4"
-      >
+      <div className="flex flex-wrap items-start gap-3 p-4">
         <label htmlFor="allowed-types" className="flex min-w-64 flex-1 flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
             {t('settings.fileSharing.allowedTypesLabel')}
@@ -184,23 +193,9 @@ function FileSharingForm({
           />
           <FieldError id="max-size-error" message={sizeError} />
         </label>
+      </div>
 
-        {canEdit && (
-          <button
-            type="submit"
-            disabled={!form.canSubmit}
-            className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {form.isSubmitting ? t('settings.saving') : t('settings.save')}
-          </button>
-        )}
-
-        {form.submitError && (
-          <p role="alert" className="w-full text-2xs text-danger">
-            {form.submitError}
-          </p>
-        )}
-      </form>
-    </div>
+      {canEdit && <FormSaveBar form={form} />}
+    </form>
   );
 }

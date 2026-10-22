@@ -72,7 +72,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const checkbox = (name: RegExp) => screen.getByRole('checkbox', { name });
+const checkbox = (name: RegExp) => screen.getByRole('switch', { name });
 
 describe('NotificationSettings', () => {
   it('renders every channel from the account, without looping', () => {
@@ -84,13 +84,18 @@ describe('NotificationSettings', () => {
     expect(checkbox(/Email notifications/)).toBeChecked();
   });
 
-  it('labels the sound row On or Off like its siblings (UX audit D7)', async () => {
-    render(<NotificationSettings />);
-    const row = (): HTMLElement => checkbox(/Play a sound/).closest('label') as HTMLElement;
-    expect(row()).toHaveTextContent('On');
+  it('saves each row the moment it is flipped, and says so with an Undo (GV-06)', async () => {
+    const { container } = render(<NotificationSettings />);
+    // Every row is the person's own preference: the instant pattern, never a Save bar.
+    expect(container.querySelectorAll('[data-save-pattern="instant"]')).toHaveLength(5);
+    expect(container.querySelector('[data-save-pattern="form"]')).toBeNull();
 
     await userEvent.click(checkbox(/Play a sound/));
-    await waitFor(() => expect(row()).toHaveTextContent('Off'));
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    await waitFor(() => expect(patches).toEqual([{ sound: false }, { sound: true }]));
+    await waitFor(() => expect(checkbox(/Play a sound/)).toBeChecked());
   });
 
   it('reflects a channel the account has switched off', () => {
@@ -129,7 +134,7 @@ describe('NotificationSettings', () => {
     render(<NotificationSettings />);
     await userEvent.click(checkbox(/Play a sound/));
 
-    expect(await screen.findByText(/Could not save/)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn't be saved/)).toBeInTheDocument();
     // Nothing was applied: the store still holds the old value.
     expect(checkbox(/Play a sound/)).toBeChecked();
   });
@@ -155,6 +160,6 @@ describe('NotificationSettings localisation (NFR-I18N2)', () => {
     renderWithLocale(<NotificationSettings />, 'tr');
 
     expect(screen.getByRole('region', { name: 'Bildirimler' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /Bildirimleri etkinleştir/ })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /Bildirimleri etkinleştir/ })).toBeChecked();
   });
 });

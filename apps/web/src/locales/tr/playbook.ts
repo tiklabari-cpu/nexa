@@ -1198,6 +1198,7 @@ export const playbook: Messages = {
   'playbook.guardrails.rules.activeLabel': 'Uyum kuralı “{title}”',
   'playbook.guardrails.rules.editLabel': '“{title}” uyum kuralını düzenle',
   'playbook.guardrails.rules.deleteLabel': '“{title}” uyum kuralını sil',
+  'playbook.guardrails.rules.deleted': 'Silindi',
   'playbook.guardrails.rules.editorNew': 'Yeni uyum kuralı',
   'playbook.guardrails.rules.editorEdit': 'Uyum kuralını düzenle',
   'playbook.guardrails.rules.bodyPlaceholder':

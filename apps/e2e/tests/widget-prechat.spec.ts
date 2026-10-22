@@ -67,7 +67,7 @@ test.describe('pre-chat form setting (WG-01)', () => {
       await expect(card.getByText(/member recognition and same-day/)).toBeVisible();
       await expect(card.getByRole('checkbox', { name: 'Require Username' })).toBeDisabled();
       await agentPage.screenshot({ path: 'kanit/wg-01-prechat-card.png', fullPage: true });
-      await card.getByRole('button', { name: 'Discard changes' }).click();
+      await card.getByRole('button', { name: 'Discard', exact: true }).click();
       await expect(showUsername).toBeChecked();
 
       // --- 2. A second brand with its own website, its form switched off.

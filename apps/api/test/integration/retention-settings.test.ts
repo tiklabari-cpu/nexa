@@ -417,6 +417,50 @@ describe('per-workspace retention windows (NFR-C8)', () => {
         fields: ['visit_window'],
         visit_window: '30d',
       });
+      // No reason given, none invented.
+      expect(entries[0]?.metadata).not.toHaveProperty('reason');
+    });
+
+    it('files the reason the panel asked for with the audit entry, trimmed (NFR-C8)', async () => {
+      // GV-06-S1: retention is a high-risk setting; the panel saves it only
+      // after the person says why, and the trail has to be able to repeat it.
+      const token = await adminToken(fx.a);
+      const response = await server.patch(
+        '/settings/retention',
+        { thread_window: '60d', reason: '  Legal asked for two months  ' },
+        { authorization: `Bearer ${token}` },
+      );
+      expect(response.statusCode).toBe(200);
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'settings.security_updated' },
+      });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.metadata).toMatchObject({
+        resource: 'retention',
+        // The reason is not a window: it is not listed among the fields written.
+        fields: ['thread_window'],
+        thread_window: '60d',
+        reason: 'Legal asked for two months',
+      });
+    });
+
+    it('refuses a body that carries only a reason, and a blank or overlong one', async () => {
+      const token = await adminToken(fx.a);
+      const headers = { authorization: `Bearer ${token}` };
+      for (const body of [
+        { reason: 'nothing else' },
+        { thread_window: '30d', reason: '   ' },
+        { thread_window: '30d', reason: 'x'.repeat(501) },
+      ]) {
+        const response = await server.patch('/settings/retention', body, headers);
+        expect(response.statusCode, JSON.stringify(body).slice(0, 60)).toBe(400);
+      }
+      expect(
+        await owner.auditLogEntry.count({
+          where: { licenseId: fx.a.licenseId, action: 'settings.security_updated' },
+        }),
+      ).toBe(0);
     });
   });
 

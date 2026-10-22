@@ -12,6 +12,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -151,6 +152,7 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const nameError = form.errorFor('name');
   const urlError = form.errorFor('url_contains');
   const teamError = form.errorFor('target_group_id');

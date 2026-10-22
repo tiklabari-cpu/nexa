@@ -332,10 +332,10 @@ test.describe('two-factor authentication', () => {
     // --- The switch, from Settings → Session policy --------------------------
     await page.goto('/app/settings/ip-allowlist');
     const policy = page.getByRole('region', { name: 'Session policy' });
-    // `click`, not `check`: the box is controlled by the saved setting, and
-    // ticking it opens the confirmation instead of changing anything. It only
-    // moves once the server has said yes, which is the behaviour under test.
-    await policy.getByLabel('Require two-factor authentication').click();
+    // Ticking the box is a draft; Save opens the confirmation (GV-06 · tm
+    // 323.2), and nothing is written until it is confirmed.
+    await policy.getByLabel('Require two-factor authentication').check();
+    await policy.getByRole('button', { name: 'Save', exact: true }).click();
 
     const confirm = page.getByRole('dialog', { name: 'Require two-factor authentication?' });
     // The count is the reason the confirmation exists: it names how many people

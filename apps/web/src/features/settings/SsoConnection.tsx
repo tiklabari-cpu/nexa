@@ -38,9 +38,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { Modal } from '../../components/ui/index.js';
+import { Modal, useConfirm } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
@@ -462,6 +463,24 @@ function SsoConnections({
    * two in the morning. Same reasoning as the remove dialog next to it.
    */
   const [enforceTarget, setEnforceTarget] = useState<SsoConnectionRecord | null>(null);
+  const { confirm, dialog: enabledDialog } = useConfirm();
+
+  /**
+   * Switching a connection on or off asks first, both ways (tm 323.2 · GV-06):
+   * on opens a sign-in path for everyone the identity provider vouches for, off
+   * closes it for everyone who uses it. A box that did either on a single click
+   * is the silent grant the save pattern exists to stop.
+   */
+  function confirmEnabled(connection: SsoConnectionRecord, enabled: boolean): void {
+    const prefix = enabled ? 'settings.sso.enableConfirm' : 'settings.sso.disableConfirm';
+    confirm({
+      title: t(`${prefix}Title`, { name: connection.name }),
+      description: t(`${prefix}Description`),
+      confirmLabel: t(`${prefix}Button`),
+      failureTitle: t(`${prefix}Failed`, { name: connection.name }),
+      onConfirm: () => toggle.mutateAsync({ id: connection.id, enabled }),
+    });
+  }
 
   const list = useQuery({
     queryKey: ['settings', 'sso'],
@@ -539,6 +558,7 @@ function SsoConnections({
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const nameError = form.errorFor('name');
   const entityIdError = form.errorFor('idp_entity_id');
   const ssoUrlError = form.errorFor('idp_sso_url');
@@ -867,9 +887,7 @@ function SsoConnections({
                           type="checkbox"
                           checked={connection.enabled}
                           disabled={toggle.isPending}
-                          onChange={(event) =>
-                            toggle.mutate({ id: connection.id, enabled: event.target.checked })
-                          }
+                          onChange={(event) => confirmEnabled(connection, event.target.checked)}
                         />
                         {t('settings.sso.enabledCheckboxLabel')}
                       </label>
@@ -900,6 +918,8 @@ function SsoConnections({
           )}
         </Card>
       )}
+
+      {enabledDialog}
 
       {enforceTarget && (
         <Modal
@@ -1034,6 +1054,7 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const nameError = form.errorFor('name');
 
   return (

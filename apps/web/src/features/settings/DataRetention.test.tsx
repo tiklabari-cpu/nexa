@@ -75,6 +75,16 @@ beforeEach(() => {
   api.patch.mockReset();
 });
 
+/** Say why in the high-risk confirm and save (GV-06-S1). */
+async function confirmWithReason(
+  user: ReturnType<typeof userEvent.setup>,
+  reason: string,
+): Promise<void> {
+  const dialog = await screen.findByRole('dialog');
+  await user.type(within(dialog).getByLabelText('Reason'), reason);
+  await user.click(within(dialog).getByRole('button', { name: 'Confirm and save' }));
+}
+
 describe('DataRetention (NFR-C8)', () => {
   it('says what the deployment default is, rather than showing an empty field', async () => {
     api.get.mockResolvedValue(INHERITING);
@@ -106,13 +116,37 @@ describe('DataRetention (NFR-C8)', () => {
 
     await user.selectOptions(await screen.findByLabelText('Closed conversations'), '30d');
     await user.click(screen.getByRole('button', { name: 'Save' }));
+    await confirmWithReason(user, 'Legal asked for a month');
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith('/settings/retention', {
         thread_window: '30d',
         visit_window: null,
+        reason: 'Legal asked for a month',
       }),
     );
+  });
+
+  it('shows the change and refuses to save it without a reason (GV-06-S1)', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue(INHERITING);
+
+    renderComponent(<DataRetention canEdit />);
+
+    await user.selectOptions(await screen.findByLabelText('Closed conversations'), '30d');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const dialog = await screen.findByRole('dialog');
+    // Before / after of the window that moved — the default spelled out, not blank.
+    expect(within(dialog).getByTestId('high-risk-from-thread_window')).toHaveTextContent(
+      'Use the default (365 days)',
+    );
+    expect(within(dialog).getByTestId('high-risk-to-thread_window')).toHaveTextContent('30 days');
+    expect(within(dialog).queryByTestId('high-risk-to-visit_window')).toBeNull();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm and save' }));
+    expect(within(dialog).getByText('Enter a reason for this change.')).toBeInTheDocument();
+    expect(api.patch).not.toHaveBeenCalled();
   });
 
   it('sends "unlimited" as itself — not as 0, and not as a very large number', async () => {
@@ -132,6 +166,7 @@ describe('DataRetention (NFR-C8)', () => {
 
     await user.selectOptions(await screen.findByLabelText('Closed conversations'), 'unlimited');
     await user.click(screen.getByRole('button', { name: 'Save' }));
+    await confirmWithReason(user, 'Kept for the audit');
 
     await waitFor(() => expect(api.patch).toHaveBeenCalled());
     const body = api.patch.mock.calls[0]?.[1] as { thread_window: unknown };

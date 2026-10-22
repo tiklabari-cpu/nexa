@@ -179,6 +179,7 @@ guardrailRules:
               action: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailRuleAction" }
               scope: { $ref: "../openapi.yaml#/components/schemas/AiGuidanceScope" }
               active: { type: boolean }
+              reason: { $ref: "../openapi.yaml#/components/schemas/HighRiskReason" }
     responses:
       "201":
         description: Created
@@ -204,7 +205,9 @@ guardrailRule:
     tags: [Playbook]
     operationId: updateAiGuardrailRule
     summary: Edit a compliance rule
-    description: Owner only. Any field alone; refused like a new rule.
+    description: |
+      Owner only. Any field alone; refused like a new rule. `reason` is not a
+      field of the rule: a body carrying only a reason is a 400.
     requestBody:
       required: true
       content:
@@ -214,6 +217,7 @@ guardrailRule:
             minProperties: 1
             additionalProperties: false
             properties:
+              reason: { $ref: "../openapi.yaml#/components/schemas/HighRiskReason" }
               title: { type: string, minLength: 1, maxLength: 120 }
               body: { type: string, minLength: 1, maxLength: 600 }
               category: { $ref: "../openapi.yaml#/components/schemas/AiGuardrailCategory" }
@@ -236,7 +240,18 @@ guardrailRule:
     tags: [Playbook]
     operationId: deleteAiGuardrailRule
     summary: Delete a compliance rule
-    description: Owner only.
+    description: |
+      Owner only. The body is optional and carries only the `reason`
+      (GV-06-S1), filed with the audit entry.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              reason: { $ref: "../openapi.yaml#/components/schemas/HighRiskReason" }
     responses:
       "204": { description: Deleted }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }

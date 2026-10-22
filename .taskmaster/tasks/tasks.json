@@ -14111,7 +14111,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-22T03:06:59.819Z",
+        "updatedAt": "2026-10-22T03:07:45.333Z",
         "subtasks": [
           {
             "id": 1,
@@ -14131,13 +14131,13 @@
             "description": "Ayar bölümlerinin kalıba geçirilmesi + Tags.tsx + reason alanı",
             "details": "Üst görev 323 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "e2e settings.spec.ts.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "323.1"
             ],
             "parentId": "323",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-22T03:07:45.333Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T03:06:59.820Z",
+      "lastModified": "2026-10-22T03:07:45.333Z",
       "taskCount": 390,
       "completedCount": 311,
       "tags": [

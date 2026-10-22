@@ -146,22 +146,19 @@ test.describe('the trail leaves the building (NFR-C6 · C6-g)', () => {
     const enable = card.getByRole('checkbox', { name: /Enable export/ });
     await expect(enable).not.toBeChecked();
 
-    // The change saves on the tick — this screen has no Save button — so the
-    // write is the thing to wait for before claiming anything about it.
-    //
-    // `click`, not `check`: the input is controlled by the server's answer and
-    // holds no optimistic value, so between the click and the response it renders
-    // back as unchecked. `check` asserts the box flipped straight away and would
-    // fail against a screen that is behaving exactly as C6-f designed it.
+    // The tick is a draft; Save writes it (GV-06 · tm 323.2) — so the write is
+    // the thing to wait for before claiming anything about it.
     const saved = agentPage.waitForResponse(
       (response) =>
         response.url().includes('/settings/siem') &&
         response.request().method() === 'PATCH' &&
         response.ok(),
     );
-    await enable.click();
+    await enable.check();
+    await card.getByRole('button', { name: 'Save', exact: true }).click();
     await saved;
     await expect(enable).toBeChecked();
+    await expect(card.getByText('All changes saved')).toBeVisible();
 
     // Reloading proves it reached the server rather than the page's own state.
     await agentPage.reload();

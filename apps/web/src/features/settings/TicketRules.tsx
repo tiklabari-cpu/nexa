@@ -14,6 +14,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -110,6 +111,7 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const nameError = form.errorFor('name');
   const subjectError = form.errorFor('subject_contains');
   const valueError = form.errorFor('value');

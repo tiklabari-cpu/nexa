@@ -755,7 +755,10 @@ test.describe('settings', () => {
     await agentPage.goto('/app/settings/ip-allowlist');
     const section = agentPage.getByRole('region', { name: 'Session policy' });
     const idle = section.getByLabel('Idle timeout (minutes)');
-    const saveButton = section.getByRole('button', { name: 'Save' });
+    const saveButton = section.getByRole('button', { name: 'Save', exact: true });
+    // The SaveBar keeps a status of its own ("All changes saved"); the note
+    // under test is the section's "Saved.".
+    const savedNote = section.getByText('Saved.', { exact: true });
     await expect(idle).toBeVisible();
 
     const save = (): Promise<unknown> =>
@@ -770,17 +773,17 @@ test.describe('settings', () => {
 
     try {
       await idle.fill('45');
-      await expect(section.getByRole('status')).toHaveCount(0);
+      await expect(savedNote).toHaveCount(0);
       await save();
-      await expect(section.getByRole('status')).toHaveText('Saved.');
+      await expect(savedNote).toHaveAttribute('role', 'status');
       await section.screenshot({ path: 'kanit/259.9-session-policy-saved.png' });
 
       await idle.fill('46');
-      await expect(section.getByRole('status')).toHaveCount(0);
+      await expect(savedNote).toHaveCount(0);
     } finally {
       await idle.fill('');
       await save();
-      await expect(section.getByRole('status')).toHaveText('Saved.');
+      await expect(savedNote).toHaveAttribute('role', 'status');
     }
   });
 
@@ -1546,5 +1549,61 @@ test.describe('composer shortcuts', () => {
 
     await composer.fill('#hel');
     await expect(agentPage.getByRole('listbox', { name: 'Saved replies' })).toBeVisible();
+  });
+});
+
+/**
+ * The save pattern (GV-06 · tm 323.2): a section with an unsaved change asks
+ * before it is left, "Stay" keeps the change, a clean section never asks, and
+ * the tab itself warns before a reload throws the draft away.
+ */
+test.describe('unsaved settings changes', () => {
+  test('ask before the section is left, keep the draft on Stay, and never ask when clean', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/settings/company');
+    const section = agentPage.getByRole('region', { name: 'Company details' });
+    const name = section.getByLabel('Company name');
+    await expect(name).not.toHaveValue('');
+    const saved = await name.inputValue();
+    const nav = agentPage.getByRole('navigation', { name: 'Settings navigation' });
+
+    // Clean: the link just goes, with no dialog at all.
+    const asked: string[] = [];
+    const record = (dialog: { type: () => string; dismiss: () => Promise<void> }) => {
+      asked.push(dialog.type());
+      return dialog.dismiss();
+    };
+    agentPage.on('dialog', record);
+    await nav.getByRole('link', { name: 'Tags' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/settings\/tags$/);
+    expect(asked).toEqual([]);
+    agentPage.off('dialog', record);
+
+    // Dirty: the same link asks, and "Stay" (dismiss) keeps the page and the draft.
+    await agentPage.goto('/app/settings/company');
+    await name.fill(`${saved} (draft)`);
+    await expect(section.getByText('Unsaved changes')).toBeVisible();
+    agentPage.once('dialog', (dialog) => {
+      expect(dialog.type()).toBe('confirm');
+      expect(dialog.message()).toContain('unsaved changes');
+      void dialog.dismiss();
+    });
+    await nav.getByRole('link', { name: 'Tags' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/settings\/company$/);
+    await expect(name).toHaveValue(`${saved} (draft)`);
+
+    // The tab warns too: a reload with the draft open raises `beforeunload`.
+    const unload = new Promise<string>((resolve) =>
+      agentPage.once('dialog', (dialog) => {
+        resolve(dialog.type());
+        void dialog.accept();
+      }),
+    );
+    await agentPage.reload();
+    expect(await unload).toBe('beforeunload');
+
+    // Nothing was saved along the way: the reload reads the old name back.
+    await expect(name).toHaveValue(saved);
   });
 });

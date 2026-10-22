@@ -441,6 +441,48 @@ describe('SsoConnection', () => {
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/settings/sso/conn-1'));
   });
 
+  // --- Switching a connection on or off (GV-06 · tm 323.2) ---------------------
+
+  it('asks before switching a connection off, and only writes on confirm', async () => {
+    // A box that opened or closed a sign-in path on one click is the silent
+    // grant the save pattern exists to stop: both directions ask.
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await userEvent.click(screen.getByLabelText('Enabled', { exact: true }));
+    const dialog = await screen.findByRole('dialog', { name: 'Turn off Okta (corp)?' });
+    expect(api.patch).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Enabled', { exact: true })).toBeChecked();
+
+    api.patch.mockResolvedValue({ ...CONNECTIONS.items[0], enabled: false });
+    await userEvent.click(screen.getByLabelText('Enabled', { exact: true }));
+    const again = await screen.findByRole('dialog', { name: 'Turn off Okta (corp)?' });
+    await userEvent.click(within(again).getByRole('button', { name: 'Turn off' }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/settings/sso/conn-1', { enabled: false }),
+    );
+  });
+
+  it('asks before switching a connection on, too', async () => {
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso' ? Promise.resolve(connections({ enabled: false })) : mockGet(path),
+    );
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await userEvent.click(screen.getByLabelText('Enabled', { exact: true }));
+    const dialog = await screen.findByRole('dialog', { name: 'Turn on Okta (corp)?' });
+    expect(api.patch).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Turn on' }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/settings/sso/conn-1', { enabled: true }),
+    );
+  });
+
   // --- Requiring SSO (S11-h) ---------------------------------------------------
 
   it('asks before requiring SSO, because it closes the password door for everyone', async () => {

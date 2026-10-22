@@ -12,14 +12,15 @@
  * A refused save stays here: the dialog keeps the reason typed so far and shows
  * the failure above the buttons, rather than closing on an unexplained error.
  */
+import { HIGH_RISK_REASON_MAX } from '@siyahtus/types';
 import { useId, useState, type ReactElement, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { FieldError, maxLength } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 
-/** The audit entry's reason column is bounded; the box is held to the same. */
-export const HIGH_RISK_REASON_MAX = 500;
+/** The API's bound on `reason`; the box is held to the same (`@siyahtus/types`). */
+export { HIGH_RISK_REASON_MAX };
 
 export interface HighRiskChange {
   key: string;
@@ -33,6 +34,8 @@ export interface HighRiskChange {
 export interface ConfirmHighRiskProps {
   changes: readonly HighRiskChange[];
   title?: ReactNode;
+  /** The confirm button; defaults to "Confirm and save" (a delete says "Delete"). */
+  confirmLabel?: ReactNode;
   description?: ReactNode;
   /** Send the save with `reason`. Reject to keep the dialog open with the failure. */
   onConfirm: (reason: string) => unknown;
@@ -45,6 +48,7 @@ const tooLong = maxLength(HIGH_RISK_REASON_MAX);
 export function ConfirmHighRisk({
   changes,
   title,
+  confirmLabel,
   description,
   onConfirm,
   onClose,
@@ -79,7 +83,9 @@ export function ConfirmHighRisk({
       onClose={pending ? noop : onClose}
       title={title ?? t('ui.highRisk.title')}
       description={description ?? t('ui.highRisk.description')}
-      className="w-full max-w-lg rounded-lg border border-border bg-surface p-5 shadow-md outline-none"
+      // Scrolls inside the viewport: a new compliance rule lists six fields, and
+      // the confirm button must stay reachable below them.
+      className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-surface p-5 shadow-md outline-none"
     >
       <div data-testid="high-risk-diff" className="mb-4">
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-content-tertiary">
@@ -148,7 +154,7 @@ export function ConfirmHighRisk({
           onClick={() => void confirm()}
           className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
         >
-          {pending ? t('ui.save.saving') : t('ui.highRisk.confirm')}
+          {pending ? t('ui.save.saving') : (confirmLabel ?? t('ui.highRisk.confirm'))}
         </button>
       </div>
     </Modal>

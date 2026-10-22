@@ -108,26 +108,40 @@ describe('SiemExport', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
+  it('writes nothing on a click — the switch waits for Save (GV-06)', async () => {
+    renderComponent(<SiemExport canEdit />);
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Enable export/ }));
+
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
   it('toggles the export on by PATCHing enabled', async () => {
     renderComponent(<SiemExport canEdit />);
     const checkbox = await screen.findByRole('checkbox', { name: /Enable export/ });
 
     await userEvent.click(checkbox);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith('/settings/siem', { enabled: true }),
     );
   });
 
-  it('changes the destination by PATCHing target', async () => {
+  it('switches a running export off without restating its destination', async () => {
+    // One destination exists today, so picking it again is no change at all;
+    // the body names only what moved, and the audit entry with it.
     api.get.mockImplementation(mockGet(ON_NEVER_RUN, STATUS_RUNNING));
     renderComponent(<SiemExport canEdit />);
     const select = await screen.findByRole('combobox', { name: 'Destination' });
-
     await userEvent.selectOptions(select, 'file');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Enable export/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
-      expect(api.patch).toHaveBeenCalledWith('/settings/siem', { target: 'file' }),
+      expect(api.patch).toHaveBeenCalledWith('/settings/siem', { enabled: false }),
     );
   });
 
@@ -168,6 +182,7 @@ describe('SiemExport', () => {
     const checkbox = await screen.findByRole('checkbox', { name: /Enable export/ });
 
     await userEvent.click(checkbox);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('That is not allowed here.');
   });
@@ -186,6 +201,7 @@ describe('SiemExport', () => {
     const checkbox = await screen.findByRole('checkbox', { name: /Enable export/ });
 
     await userEvent.click(checkbox);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Enterprise feature/);
   });

@@ -17,6 +17,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
@@ -118,6 +119,7 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   const groupError = form.errorFor('group');
   const recipientsError = form.errorFor('recipients');

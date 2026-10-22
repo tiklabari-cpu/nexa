@@ -77,7 +77,7 @@ describe('WidgetCustomization', () => {
 
   it('keeps Save disabled until something is changed', async () => {
     renderWidget();
-    const save = await screen.findByRole('button', { name: 'Save appearance' });
+    const save = await screen.findByRole('button', { name: 'Save' });
     expect(save).toBeDisabled();
   });
 
@@ -88,7 +88,7 @@ describe('WidgetCustomization', () => {
     await userEvent.type(hex, 'notacolour');
 
     expect(screen.getByRole('alert')).toHaveTextContent(/hex colour/);
-    expect(screen.getByRole('button', { name: 'Save appearance' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
   it('saves a valid change through PUT /settings/widget', async () => {
@@ -97,7 +97,7 @@ describe('WidgetCustomization', () => {
     await userEvent.clear(hex);
     await userEvent.type(hex, '#123456');
 
-    const save = screen.getByRole('button', { name: 'Save appearance' });
+    const save = screen.getByRole('button', { name: 'Save' });
     expect(save).toBeEnabled();
     await userEvent.click(save);
 
@@ -114,7 +114,7 @@ describe('WidgetCustomization', () => {
 
     await userEvent.type(title, 'Welcome to Acme!');
     await userEvent.type(text, 'Our stores are listed here.');
-    await userEvent.click(screen.getByRole('button', { name: 'Save appearance' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(putBodies).toHaveLength(1));
     expect(putBodies[0]).toEqual({
@@ -139,7 +139,7 @@ describe('WidgetCustomization', () => {
     // A pinned language makes the fallback moot: it is shown, not editable.
     expect(fallback).toBeDisabled();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Save appearance' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(putBodies).toHaveLength(1));
     expect(putBodies[0]).toEqual({ language: 'en', fallback_language: 'de' });
   });
@@ -205,7 +205,7 @@ describe('WidgetCustomization', () => {
 
     renderWidget();
     await userEvent.click(await screen.findByRole('checkbox', { name: /Powered by SiyahTuş/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Save appearance' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/Removing the SiyahTuş badge is an Enterprise feature/);

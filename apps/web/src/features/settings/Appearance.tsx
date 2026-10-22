@@ -9,8 +9,11 @@
  * A saved default repaints every member whose own choice is older — the rule
  * is the server's (`resolvePanelFontPreset`), so after a save this screen
  * re-reads the caller's resolved font rather than guessing it.
+ *
+ * Built on `SettingsForm` (tm 323.2 · GV-06): picking a card — or "Remove
+ * default" — changes the draft, and the SaveBar writes it.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
 import {
   PANEL_FONT_DESIGNS,
@@ -19,13 +22,18 @@ import {
   type WorkspaceAppearanceSettings,
 } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { SettingsForm } from '../../components/settings/SettingsForm.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { fontNameKey, fontSourceText, loadAllFontFiles, useFontStore } from '../../lib/font.js';
 import { formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 const QUERY_KEY = ['settings', 'appearance'] as const;
+
+/** The draft: the workspace default, `null` for none. */
+interface Draft {
+  font_preset: PanelFontPreset | null;
+}
 
 export function Appearance({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
@@ -71,20 +79,18 @@ function AppearanceForm({
   const queryClient = useQueryClient();
   const refreshAppearance = useAuth((s) => s.refreshAppearance);
   const appearance = useFontStore((s) => s.appearance);
-  const [selected, setSelected] = useState<PanelFontPreset>(saved.font_preset ?? 'inter');
   const [note, setNote] = useState<string | null>(null);
 
-  const save = useMutation({
-    mutationFn: (font_preset: PanelFontPreset | null) =>
-      api.put<WorkspaceAppearanceSettings>('/settings/appearance', { font_preset }),
-    onSuccess: async (data) => {
-      queryClient.setQueryData(QUERY_KEY, data);
-      setNote(t(data.font_preset ? 'settings.appearance.saved' : 'settings.appearance.removed'));
-      if (!data.font_preset) setSelected('inter');
-      // The owner's own panel follows the rule like everyone else's.
-      await refreshAppearance().catch(() => undefined);
-    },
-  });
+  async function save({ font_preset }: Draft): Promise<void> {
+    setNote(null);
+    const data = await api.put<WorkspaceAppearanceSettings>('/settings/appearance', {
+      font_preset,
+    });
+    queryClient.setQueryData(QUERY_KEY, data);
+    setNote(t(data.font_preset ? 'settings.appearance.saved' : 'settings.appearance.removed'));
+    // The owner's own panel follows the rule like everyone else's.
+    await refreshAppearance().catch(() => undefined);
+  }
 
   const current = saved.font_preset
     ? t('settings.appearance.current.set', {
@@ -93,8 +99,11 @@ function AppearanceForm({
       })
     : t('settings.appearance.current.none');
 
-  return (
-    <div className="flex flex-col gap-4 p-4">
+  const fields = (
+    values: Draft,
+    setPreset: (preset: PanelFontPreset | null) => void,
+  ): ReactElement => (
+    <>
       <p className="text-sm text-content-secondary">{current}</p>
 
       <fieldset disabled={!canEdit} className="m-0 border-0 p-0">
@@ -104,7 +113,8 @@ function AppearanceForm({
         <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
           {PANEL_FONT_PRESETS.map((preset) => {
             const design = PANEL_FONT_DESIGNS[preset];
-            const checked = selected === preset;
+            // No workspace default reads as the built-in face, Inter.
+            const checked = (values.font_preset ?? 'inter') === preset;
             return (
               <label
                 key={preset}
@@ -121,7 +131,7 @@ function AppearanceForm({
                     value={preset}
                     checked={checked}
                     onChange={() => {
-                      setSelected(preset);
+                      setPreset(preset);
                       setNote(null);
                     }}
                   />
@@ -157,18 +167,15 @@ function AppearanceForm({
 
       {canEdit ? (
         <div className="flex flex-wrap items-center gap-3">
+          {/* Removing the default is a change like any other: it goes into the
+              draft and Save writes it (GV-06). */}
           <button
             type="button"
-            disabled={save.isPending || selected === saved.font_preset}
-            onClick={() => save.mutate(selected)}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
-          >
-            {t('settings.appearance.save')}
-          </button>
-          <button
-            type="button"
-            disabled={save.isPending || saved.font_preset === null}
-            onClick={() => save.mutate(null)}
+            disabled={values.font_preset === null}
+            onClick={() => {
+              setPreset(null);
+              setNote(null);
+            }}
             className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
           >
             {t('settings.appearance.remove')}
@@ -176,11 +183,6 @@ function AppearanceForm({
           {note && (
             <p role="status" className="text-sm text-success">
               {note}
-            </p>
-          )}
-          {save.error && (
-            <p role="alert" className="text-sm text-danger">
-              {t(errorMessageKey(save.error))}
             </p>
           )}
         </div>
@@ -191,6 +193,28 @@ function AppearanceForm({
       <p className="text-2xs text-content-tertiary">
         {t('settings.appearance.yours', { source: fontSourceText(t, appearance) })}
       </p>
-    </div>
+    </>
+  );
+
+  if (!canEdit) {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        {fields({ font_preset: saved.font_preset }, () => undefined)}
+      </div>
+    );
+  }
+
+  return (
+    <SettingsForm
+      saved={{ font_preset: saved.font_preset }}
+      onSave={save}
+      label={t('settings.appearance.title')}
+    >
+      {(form) => (
+        <div className="flex flex-col gap-4 p-4">
+          {fields(form.values, (preset) => form.setValue('font_preset', preset))}
+        </div>
+      )}
+    </SettingsForm>
   );
 }

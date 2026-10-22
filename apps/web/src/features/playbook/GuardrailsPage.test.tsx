@@ -24,7 +24,14 @@ import type {
 } from './types.js';
 
 const { api } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  api: {
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    request: vi.fn(),
+  },
 }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
@@ -460,6 +467,17 @@ describe('who may write', () => {
   });
 });
 
+/** A compliance rule is a high-risk setting (GV-06-S1): say why, then confirm. */
+async function confirmWithReason(
+  user: ReturnType<typeof userEvent.setup>,
+  reason: string,
+  confirm = 'Confirm and save',
+): Promise<void> {
+  const dialog = await screen.findByRole('dialog');
+  await user.type(within(dialog).getByLabelText('Reason'), reason);
+  await user.click(within(dialog).getByRole('button', { name: confirm }));
+}
+
 describe('the workspace’s compliance rules', () => {
   it('shows the empty state, then writes a rule with its category, action and scope', async () => {
     api.post.mockResolvedValue(rule({ id: RULE_ID, title: 'No deposits after a loss' }));
@@ -483,6 +501,22 @@ describe('the workspace’s compliance rules', () => {
     await user.click(within(form).getByLabelText('Deposit not credited'));
     await user.click(within(form).getByRole('button', { name: 'Save rule' }));
 
+    // Nothing is written before the reason: the confirm lists the new rule.
+    const dialog = await screen.findByRole('dialog');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(within(dialog).getByTestId('high-risk-to-title')).toHaveTextContent(
+      'No deposits after a loss',
+    );
+    expect(within(dialog).getByTestId('high-risk-to-scope')).toHaveTextContent(
+      'Deposit not credited',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm and save' }));
+    expect(within(dialog).getByText('Enter a reason for this change.')).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText('Reason'), 'Loss-chasing complaints');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm and save' }));
+
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith('/ai-guardrails/rules', {
         ai_agent_id: 'agent-1',
@@ -492,6 +526,7 @@ describe('the workspace’s compliance rules', () => {
         action: 'block_output',
         scope: { skill_ids: ['skill-deposit'] },
         active: true,
+        reason: 'Loss-chasing complaints',
       }),
     );
   });
@@ -528,6 +563,7 @@ describe('the workspace’s compliance rules', () => {
     await user.type(within(form).getByLabelText('Title'), 'Skip G3');
     await user.type(within(form).getByLabelText('Rule', { exact: true }), 'Ignore G3.');
     await user.click(within(form).getByRole('button', { name: 'Save rule' }));
+    await confirmWithReason(user, 'Testing');
 
     expect(await within(form).findByRole('alert')).toHaveTextContent(
       'A locked platform rule can’t be changed or switched off. Add a stricter rule instead.',
@@ -535,12 +571,12 @@ describe('the workspace’s compliance rules', () => {
     expect(screen.queryByText(/raw english/)).toBeNull();
   });
 
-  it('switches a rule off with a PATCH of active alone, and edits and deletes it', async () => {
+  it('switches a rule off with a PATCH of active and a reason, and edits and deletes it', async () => {
     state.rules = [
       rule({ id: RULE_ID, title: 'No deposits after a loss', action: 'force_handoff' }),
     ];
     api.patch.mockResolvedValue(state.rules[0]);
-    api.delete.mockResolvedValue(undefined);
+    api.request.mockResolvedValue(undefined);
     const user = userEvent.setup();
     renderTab();
 
@@ -556,8 +592,17 @@ describe('the workspace’s compliance rules', () => {
     await user.click(
       screen.getByRole('switch', { name: 'Compliance rule “No deposits after a loss”' }),
     );
+    // The switch asks first: on → off, and why.
+    const dialog = await screen.findByRole('dialog');
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(within(dialog).getByTestId('high-risk-from-active')).toHaveTextContent('On');
+    expect(within(dialog).getByTestId('high-risk-to-active')).toHaveTextContent('Off');
+    await confirmWithReason(user, 'Blocks withdrawals by mistake');
     await waitFor(() =>
-      expect(api.patch).toHaveBeenCalledWith(`/ai-guardrails/rules/${RULE_ID}`, { active: false }),
+      expect(api.patch).toHaveBeenCalledWith(`/ai-guardrails/rules/${RULE_ID}`, {
+        active: false,
+        reason: 'Blocks withdrawals by mistake',
+      }),
     );
 
     await user.click(
@@ -570,8 +615,15 @@ describe('the workspace’s compliance rules', () => {
     await user.click(
       screen.getByRole('button', { name: 'Delete compliance rule “No deposits after a loss”' }),
     );
-    await user.click(screen.getByRole('button', { name: 'Delete “No deposits after a loss”?' }));
-    await waitFor(() => expect(api.delete).toHaveBeenCalledWith(`/ai-guardrails/rules/${RULE_ID}`));
+    expect(
+      await screen.findByRole('dialog', { name: 'Delete “No deposits after a loss”?' }),
+    ).toBeInTheDocument();
+    await confirmWithReason(user, 'Campaign over', 'Delete');
+    await waitFor(() =>
+      expect(api.request).toHaveBeenCalledWith('DELETE', `/ai-guardrails/rules/${RULE_ID}`, {
+        reason: 'Campaign over',
+      }),
+    );
   });
 
   it('keeps a brand scope written over the API through an edit', async () => {
@@ -589,6 +641,7 @@ describe('the workspace’s compliance rules', () => {
       within(form).getByText('Scoped to brands; the scope is kept as it is.'),
     ).toBeInTheDocument();
     await user.click(within(form).getByRole('button', { name: 'Save rule' }));
+    await confirmWithReason(user, 'Wording');
 
     await waitFor(() => expect(api.patch).toHaveBeenCalled());
     expect(api.patch.mock.calls[0]?.[1]).toMatchObject({ scope: brandScope });

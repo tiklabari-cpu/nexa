@@ -6902,6 +6902,9 @@ components:
         `null` clears the choice and returns the window to the deployment
         default. Both are needed: without the distinction, saving a conversation
         window would silently reset the telemetry one.
+
+        At least one window. `reason` is not a window: a body carrying only a
+        reason changes nothing and is refused (400).
       minProperties: 1
       properties:
         thread_window:
@@ -6910,6 +6913,19 @@ components:
         visit_window:
           allOf: [{ $ref: "#/components/schemas/RetentionTier" }]
           nullable: true
+        reason: { $ref: "#/components/schemas/HighRiskReason" }
+
+    HighRiskReason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: |
+        Why a high-risk setting is being changed (GV-06-S1) — data retention,
+        an AI compliance rule. The panel asks for it after showing the change
+        and always sends it; the API files it with the change's audit entry
+        (`metadata.reason`). Optional on the wire, so an integration written
+        before it existed keeps working; a write without one is audited as
+        before. Trimmed; blank is refused.
 
     ErasureReceipt:
       type: object

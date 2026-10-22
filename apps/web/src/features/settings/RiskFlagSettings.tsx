@@ -25,6 +25,7 @@ import {
   type RiskFlagType,
 } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { FieldError, useForm, type Validator } from '../../lib/form.js';
@@ -223,18 +224,6 @@ function RiskFlagSettingsForm({
 
       {canEdit && (
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={!form.isDirty || form.isSubmitting || !form.isValid}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {form.isSubmitting ? t('settings.saving') : t('settings.save')}
-          </button>
-          {form.submitError && (
-            <p role="alert" className="text-2xs text-danger">
-              {form.submitError}
-            </p>
-          )}
           {save.isSuccess && !form.isDirty && (
             <p role="status" className="text-2xs text-success">
               {t('settings.riskFlags.saved')}
@@ -242,6 +231,7 @@ function RiskFlagSettingsForm({
           )}
         </div>
       )}
+      {canEdit && <FormSaveBar form={form} />}
     </form>
   );
 }

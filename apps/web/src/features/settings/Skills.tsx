@@ -13,6 +13,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -78,6 +79,7 @@ export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const nameError = form.errorFor('name');
 
   return (

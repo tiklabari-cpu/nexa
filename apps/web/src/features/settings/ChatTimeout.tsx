@@ -27,6 +27,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { DEFAULT_DAY_BOUNDARY, isDayBoundaryHour, localDayKey } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, useForm } from '../../lib/form.js';
@@ -373,23 +374,7 @@ function ChatTimeoutForm({
         <p className="text-2xs text-content-tertiary">{t('settings.dayBoundary.scopeNote')}</p>
       </fieldset>
 
-      {canEdit && (
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={!form.isDirty || form.isSubmitting || durationError !== null}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {form.isSubmitting ? t('settings.saving') : t('settings.save')}
-          </button>
-
-          {form.submitError && (
-            <p role="alert" className="text-2xs text-danger">
-              {form.submitError}
-            </p>
-          )}
-        </div>
-      )}
+      {canEdit && <FormSaveBar form={form} valid={durationError === null} />}
     </form>
   );
 }

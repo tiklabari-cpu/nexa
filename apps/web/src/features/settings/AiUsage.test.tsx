@@ -220,7 +220,7 @@ describe('AiUsage (AI-16)', () => {
     expect(screen.queryByRole('checkbox', { name: 'Amy Agent' })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: 'Sam Suspended' })).not.toBeInTheDocument();
 
-    const save = screen.getByRole('button', { name: 'Save recipients' });
+    const save = screen.getByRole('button', { name: 'Save' });
     expect(save).toBeDisabled();
     await user.click(screen.getByRole('checkbox', { name: 'Vic Vice' }));
     await user.click(save);
@@ -241,7 +241,7 @@ describe('AiUsage (AI-16)', () => {
     const box = await screen.findByRole('checkbox', { name: 'Alex Admin' });
     expect(box).toBeChecked();
     expect(box).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Save recipients' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
   });
 
   it('says so when the usage cannot be loaded', async () => {

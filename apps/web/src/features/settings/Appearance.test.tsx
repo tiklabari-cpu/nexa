@@ -69,12 +69,18 @@ describe('Appearance', () => {
   it('lets the owner save a default and then remove it', async () => {
     renderSection(true);
     await userEvent.click(await screen.findByRole('radio', { name: /Figtree/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Save default' }));
+    expect(puts).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(puts).toEqual([{ font_preset: 'figtree' }]));
-    expect(await screen.findByRole('status')).toHaveTextContent(/Saved/);
+    expect(await screen.findByText(/^Saved — /)).toBeInTheDocument();
     expect(screen.getByText(/Current default: Figtree/)).toBeInTheDocument();
+    expect(screen.getByText('All changes saved')).toBeInTheDocument();
 
+    // Removing is a draft change too: nothing is written until Save (GV-06).
     await userEvent.click(screen.getByRole('button', { name: 'Remove default' }));
+    expect(puts).toHaveLength(1);
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(puts).toEqual([{ font_preset: 'figtree' }, { font_preset: null }]));
     expect(await screen.findByText('Default removed.')).toBeInTheDocument();
   });
@@ -83,7 +89,7 @@ describe('Appearance', () => {
     renderSection(false);
     const radios = await screen.findAllByRole('radio');
     for (const radio of radios) expect(radio).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Save default' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     expect(
       screen.getByText('Only the workspace owner can change this setting.'),
     ).toBeInTheDocument();

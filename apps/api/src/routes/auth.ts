@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import {
+  capabilitiesForRole,
   isScope,
   DEFAULT_PRECHAT_CONFIG,
   isMemberTokenCookieName,
@@ -947,9 +948,11 @@ export default async function authRoutes(
             // The onboarding gate: the shell reads this to decide whether to send a
             // new owner to the first-run wizard, so it rides along with the profile
             // the app already fetches on load rather than costing a second request.
+            // `permissionsVersion` too, so the matrix below is read at the
+            // version this transaction saw, never a cached older one.
             tx.license.findUnique({
               where: { id: principal.licenseId },
-              select: { onboardingCompletedAt: true },
+              select: { onboardingCompletedAt: true, permissionsVersion: true },
             }),
             // The mobile Settings → Account card's only source for "which
             // workspace" (13.7-r) — a long-lived session has no other request
@@ -985,6 +988,14 @@ export default async function authRoutes(
         }),
         twoFactor.status(principal.accountId),
       ]);
+      // What the caller's role holds in the permission matrix (RL-02 · tm
+      // 325.2) — "Yetkilerim", and what a capability without a scope of its
+      // own is read from. Through the cache a session's checks read, at the
+      // version just read, so the two answer from the same matrix.
+      const matrix = await app.permissionMatrix.cache.get(
+        request.tenant(),
+        profile.license?.permissionsVersion,
+      );
 
       return reply.send({
         kind: 'agent',
@@ -998,6 +1009,7 @@ export default async function authRoutes(
         license_id: principal.licenseId.toString(),
         region: request.requireRegion(),
         scopes: principal.scopes,
+        capabilities: capabilitiesForRole(principal.role, matrix.overrides),
         routing_status: profile.membership?.routingStatus ?? 'offline',
         concurrent_chats_limit: profile.membership?.concurrentChatsLimit ?? 0,
         // All five channels, not just e-mail. The console reads them on load and

@@ -6725,6 +6725,54 @@ export interface paths {
     patch: operations['updateRetentionSettings'];
     trace?: never;
   };
+  '/settings/permissions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Who may do what in this workspace
+     * @description Every capability, its values, the lowest role that may hold it, and for
+     *     each matrix column what the role holds here, what it would hold by
+     *     default, and whether the cell is locked (RL-02).
+     *
+     *     `access_rules:ro` (or `:rw`) plus `minimumRole: admin`: a Yönetici reads
+     *     the matrix, only the Kurucu changes it. A member reads their own
+     *     capabilities on `GET /auth/me` (`capabilities`).
+     */
+    get: operations['getPermissionMatrix'];
+    /**
+     * Change who may do what in this workspace
+     * @description Sets the listed cells, with the reason (RL-02-S5). **Kurucu only**
+     *     (`exactRole: owner`, `access_rules:rw`).
+     *
+     *     Refused whole, with nothing stored, when any change is not allowed —
+     *     400 with `details.reason`, `details.role` and `details.capability`:
+     *     `unknown_role`, `unknown_capability`, `invalid_value`, `locked` (the
+     *     Kurucu column, a Founder-only row), `below_floor` (more than the weakest
+     *     value for a role below the row's floor), `duplicate_change` (one cell
+     *     twice). Floors and route gates are platform safety: a role a route
+     *     refuses stays refused whatever the matrix says.
+     *
+     *     A change that moves a cell writes `permissions.changed` to the audit
+     *     trail — every cell that moved, `from` and `to`, with the reason — and
+     *     mails the workspace's Yöneticiler. A request that moves nothing writes
+     *     nothing and keeps the version.
+     *
+     *     Sessions pick a change up within a minute, without signing in again: the
+     *     servers cache each workspace's matrix by its `version` and are told of a
+     *     change after it commits.
+     */
+    put: operations['updatePermissionMatrix'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/compliance': {
     parameters: {
       query?: never;
@@ -16442,6 +16490,102 @@ export interface components {
      * @enum {string}
      */
     InvitationRole: 'admin' | 'team_lead' | 'agent';
+    /**
+     * @description A column of the permission matrix (`@siyahtus/types` `MATRIX_ROLES`,
+     *     RL-02): Kurucu, Yönetici, Ekip Lideri, Ekip Üyesi. A `viceowner` reads
+     *     the `admin` column until the role is retired; a role the matrix does
+     *     not know reads `agent`.
+     * @enum {string}
+     */
+    MatrixRole: 'owner' | 'admin' | 'team_lead' | 'agent';
+    /**
+     * @description A matrix cell's value: a switch is `off`/`on`; a visibility row takes
+     *     the levels its `values` list — nothing, the chats the person is
+     *     assigned to or has joined, their teams', the whole workspace.
+     * @enum {string}
+     */
+    CapabilityValue: 'off' | 'on' | 'none' | 'own' | 'team' | 'all';
+    /**
+     * @description The matrix's row groups, in the order the screen draws them.
+     * @enum {string}
+     */
+    CapabilityGroup:
+      'chats' | 'customers' | 'ai' | 'reports' | 'team' | 'settings' | 'billing' | 'logs';
+    /**
+     * @description Why a cell cannot be changed: the Kurucu column is locked whole (the one
+     *     person who changes the matrix cannot switch off their own way back
+     *     into it), a Founder-only row is on for the Founder and off for everyone
+     *     else, and a role below the row's `floor_role` holds its weakest value —
+     *     platform safety, not a workspace choice.
+     * @enum {string}
+     */
+    CapabilityLock: 'owner_column' | 'owner_only' | 'below_floor';
+    /**
+     * @description Every capability's resolved value, by key (`chats.view` → `team`). What
+     *     a capability with no scope of its own — seeing a player's contact
+     *     details, say — is checked against.
+     */
+    CapabilityValues: {
+      [key: string]: components['schemas']['CapabilityValue'];
+    };
+    PermissionCell: {
+      role: components['schemas']['MatrixRole'];
+      /** @description What the role holds in this workspace. */
+      value: components['schemas']['CapabilityValue'];
+      /**
+       * @description What it holds in a workspace that never changed the cell. A value
+       *     that differs from it is the workspace's choice; setting it back
+       *     removes the choice, so a later change of default reaches the cell.
+       */
+      default: components['schemas']['CapabilityValue'];
+      lock: components['schemas']['CapabilityLock'] | null;
+    };
+    PermissionCapability: {
+      /**
+       * @description The capability (`reports.view`). The web catalogue labels it
+       *     `permissions.capability.<key>`.
+       */
+      key: string;
+      group: components['schemas']['CapabilityGroup'];
+      /** @description The values a cell may take, weakest first. */
+      values: components['schemas']['CapabilityValue'][];
+      /** @description The lowest role that may hold more than the weakest value. */
+      floor_role: components['schemas']['MatrixRole'];
+      /** @description Founder only — the whole row is locked. */
+      owner_only: boolean;
+      /** @description One per matrix column, in `roles` order. */
+      cells: components['schemas']['PermissionCell'][];
+    };
+    PermissionMatrix: {
+      /**
+       * @description The matrix's revision: 0 until it is first changed, plus one for
+       *     every change that moved a stored cell.
+       */
+      version: number;
+      /** @description The columns, in the order the screen draws them. */
+      roles: components['schemas']['MatrixRole'][];
+      /** @description The rows, grouped, in catalogue order. */
+      capabilities: components['schemas']['PermissionCapability'][];
+    };
+    PermissionChange: {
+      role: components['schemas']['MatrixRole'];
+      capability: string;
+      value: components['schemas']['CapabilityValue'];
+    };
+    PermissionMatrixUpdate: {
+      /**
+       * @description The cells to set — each at most once. A cell set to its default
+       *     stops being the workspace's choice; a locked cell accepts only the
+       *     value it already holds (sending a whole row back is not an error).
+       */
+      changes: components['schemas']['PermissionChange'][];
+      /**
+       * @description Why (RL-02-S5). **Required here**, unlike the older high-risk
+       *     writes: this endpoint is new, so no integration predates it, and
+       *     every change of who may do what is filed with its reason.
+       */
+      reason: components['schemas']['HighRiskReason'];
+    };
     InvitationGroup: {
       /** Format: int64 */
       group_id: number;
@@ -19316,6 +19460,14 @@ export interface operations {
              */
             region?: 'eu' | 'us';
             scopes: string[];
+            /**
+             * @description Agent principals only. What the caller's role holds in this
+             *     workspace's permission matrix (RL-02), every capability by
+             *     key — the panel's "Yetkilerim", and what a capability with no
+             *     scope of its own is read from. Resolved from the same cached
+             *     matrix the session's checks use.
+             */
+            capabilities?: components['schemas']['CapabilityValues'];
             /** @enum {string} */
             routing_status?: 'accepting_chats' | 'not_accepting_chats' | 'offline';
             /**
@@ -29287,6 +29439,57 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['RetentionSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPermissionMatrix: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's matrix */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PermissionMatrix'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updatePermissionMatrix: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PermissionMatrixUpdate'];
+      };
+    };
+    responses: {
+      /** @description The matrix after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PermissionMatrix'];
         };
       };
       400: components['responses']['BadRequest'];

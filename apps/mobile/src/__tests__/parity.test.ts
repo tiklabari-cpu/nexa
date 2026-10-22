@@ -997,7 +997,12 @@ describe('module parity matrix — what is still owed', () => {
       // `/add-examples` and `/ai/unresolved/settings` (tm 317.3) — AI-22's
       // report, drawn in the web panel's Unresolved questions tab. The app
       // configures no AI; nothing here re-scopes.
-      contractEndpoints: 293,
+      // 293 -> 294 with `/settings/permissions` (tm 325.2) — RL-02's
+      // permission matrix, read by a Yönetici and changed by the Kurucu in the
+      // web panel's security settings (tm 325.4). The app configures no
+      // permissions; a member's own capabilities ride on `/auth/me`, which the
+      // app already reads. Nothing here re-scopes.
+      contractEndpoints: 294,
       scopeBoundaries: 1,
     });
   });

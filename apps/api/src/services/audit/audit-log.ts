@@ -194,6 +194,12 @@ export const AUDIT_ACTIONS = [
   // owner is immutable, and no grant above the actor's own rank); the entry
   // records only the from/to roles, never the whole membership.
   'member.role_changed',
+  // What a role may do was changed in the permission matrix (RL-02 · tm 325.2)
+  // — the role-wide counterpart of the line above, and wider: one entry can
+  // give every Ekip Üyesi a reach none of them had. Only the Founder writes
+  // it. Metadata is every cell that moved (`role`, `capability`, `from`,
+  // `to`), the matrix's new `version` and the `reason` the Founder gave.
+  'permissions.changed',
   // A teammate's routing capacity was changed (FR-MOD-04.3.4). Not an authority
   // change, but it decides who is offered conversations and who is not — the
   // same reason `group.member_set` is recorded — and it is a change one person

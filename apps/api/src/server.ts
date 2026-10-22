@@ -25,6 +25,7 @@ import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
 import pendingAudit from './plugins/pending-audit.js';
+import permissionMatrix from './plugins/permission-matrix.js';
 import pilotGate, { PILOT_REFUSED_PATHS, type PilotRefusedPath } from './plugins/pilot-gate.js';
 import type { SafeHttp } from './lib/safe-fetch.js';
 import { liveAppIds } from './services/apps/verifiers/registry.js';
@@ -71,6 +72,7 @@ import reportRoutes from './routes/reports.js';
 import scheduledReportRoutes from './routes/scheduled-reports.js';
 import homeRoutes from './routes/home.js';
 import settingsRoutes from './routes/settings.js';
+import permissionRoutes from './routes/permissions.js';
 import onboardingRoutes from './routes/onboarding.js';
 import websiteRoutes from './routes/websites.js';
 import brandRoutes from './routes/brands.js';
@@ -442,6 +444,9 @@ export async function buildServer({
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  // Each workspace's permission matrix (tm 325.2 · RL-02): cached for a
+  // minute, dropped everywhere when a change is announced.
+  await app.register(permissionMatrix);
   // The daily AI caps (tm 257.8): one budget over the primary, and every
   // model the routes call goes through it — the visitor's and Copilot's
   // instances alike, so both spend from the same workspace and deployment
@@ -670,6 +675,7 @@ export async function buildServer({
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
       await api.register(settingsRoutes, { env, mailer });
+      await api.register(permissionRoutes, { env });
       await api.register(onboardingRoutes);
       await api.register(websiteRoutes, { env });
       await api.register(brandRoutes);

@@ -362,6 +362,20 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  {
+    op: 'GET /settings/permissions',
+    owner: 'tm 325.4',
+    reason:
+      'the permission matrix (tm 325.2 · RL-02) — Ayarlar › Güvenlik › Roller ve izinler, ' +
+      'which PM-WEB (tm 325.4) draws; a Yönetici reads it there.',
+  },
+  {
+    op: 'PUT /settings/permissions',
+    owner: 'tm 325.4',
+    reason:
+      "the Founder's save of the permission matrix (tm 325.2 · RL-02) — the same screen's " +
+      'Kaydet → fark → gerekçe → onay flow (GV-06), drawn by PM-WEB (tm 325.4).',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

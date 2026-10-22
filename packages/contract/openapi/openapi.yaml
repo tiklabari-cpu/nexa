@@ -436,6 +436,24 @@ paths:
     $ref: "./paths/ai-testing.yaml#/sandboxSessionTurns"
   /ai/sandbox-sessions/{sessionId}/save-as-scenario:
     $ref: "./paths/ai-testing.yaml#/sandboxSessionSaveAsScenario"
+  /ai/unresolved/clusters:
+    $ref: "./paths/ai-unresolved.yaml#/clusters"
+  /ai/unresolved/clusters/{clusterId}:
+    $ref: "./paths/ai-unresolved.yaml#/cluster"
+  /ai/unresolved/clusters/{clusterId}/ignore:
+    $ref: "./paths/ai-unresolved.yaml#/clusterIgnore"
+  /ai/unresolved/clusters/{clusterId}/reopen:
+    $ref: "./paths/ai-unresolved.yaml#/clusterReopen"
+  /ai/unresolved/clusters/{clusterId}/resolve:
+    $ref: "./paths/ai-unresolved.yaml#/clusterResolve"
+  /ai/unresolved/clusters/{clusterId}/merge:
+    $ref: "./paths/ai-unresolved.yaml#/clusterMerge"
+  /ai/unresolved/clusters/{clusterId}/suggest-knowledge:
+    $ref: "./paths/ai-unresolved.yaml#/clusterSuggestKnowledge"
+  /ai/unresolved/clusters/{clusterId}/add-examples:
+    $ref: "./paths/ai-unresolved.yaml#/clusterAddExamples"
+  /ai/unresolved/settings:
+    $ref: "./paths/ai-unresolved.yaml#/settings"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"
@@ -4515,6 +4533,241 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         expectations: { $ref: "#/components/schemas/AiTestExpectations" }
+
+    AiUnresolvedReason:
+      type: string
+      description: |
+        Why a message is on the list (`UNRESOLVED_REASONS`, one definition with
+        AI-25's hand-over metrics).
+      enum:
+        - no_procedure_match
+        - no_knowledge
+        - low_confidence
+        - said_dont_know
+        - unsupported_language
+        - not_understood_handoff
+        - player_abandoned
+        - asked_human_after_ai
+        - agent_flagged
+
+    AiUnresolvedReasonCount:
+      type: object
+      required: [reason, count]
+      properties:
+        reason: { $ref: "#/components/schemas/AiUnresolvedReason" }
+        count: { type: integer, minimum: 0 }
+
+    AiUnresolvedCluster:
+      type: object
+      required:
+        - id
+        - ai_agent_id
+        - label
+        - label_source
+        - suggested_action
+        - status
+        - ignore_reason
+        - item_count
+        - count_7d
+        - handoff_count
+        - abandon_count
+        - handoff_rate
+        - abandon_rate
+        - post_fix_count
+        - is_new
+        - first_seen
+        - last_seen
+        - resolved_at
+        - linked_change_id
+        - reasons
+        - matching_count
+      description: |
+        A group of messages that ask the same thing. The counts are the
+        clustering job's and outlive the messages' words (90 days).
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        label:
+          type: string
+          description: At most eight words; the lexical labeller's where no model ran. A summary — read the examples.
+        label_source: { type: string, enum: [llm, lexical] }
+        suggested_action:
+          type: string
+          nullable: true
+          enum: [add_knowledge, add_examples, new_procedure, review, null]
+        status: { type: string, enum: [open, ignored, resolved] }
+        ignore_reason: { type: string, nullable: true }
+        item_count: { type: integer, minimum: 0 }
+        count_7d: { type: integer, minimum: 0 }
+        handoff_count: { type: integer, minimum: 0 }
+        abandon_count: { type: integer, minimum: 0 }
+        handoff_rate: { type: number, minimum: 0, maximum: 1 }
+        abandon_rate: { type: number, minimum: 0, maximum: 1 }
+        post_fix_count:
+          type: integer
+          minimum: 0
+          description: Items that arrived after `resolved_at` ("düzeltmeden sonra").
+        is_new: { type: boolean, description: First seen less than 48 hours ago. }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        linked_change_id: { type: string, format: uuid, nullable: true }
+        reasons:
+          type: array
+          description: The reasons of the items still kept, most frequent first.
+          items: { $ref: "#/components/schemas/AiUnresolvedReasonCount" }
+        matching_count:
+          type: integer
+          nullable: true
+          description: Items matching the list's `from`/`to`/`brand_id`/`reason`/`language`; null — none was given.
+
+    AiUnresolvedClusterList:
+      type: object
+      required: [clusters, total, unclustered_count, spike_threshold]
+      properties:
+        clusters:
+          type: array
+          items: { $ref: "#/components/schemas/AiUnresolvedCluster" }
+        total:
+          { type: integer, minimum: 0, description: Clusters matching, before `limit`/`offset`. }
+        unclustered_count:
+          type: integer
+          minimum: 0
+          description: This agent's items not in any cluster yet (the 15-minute job, or no embedding allowed).
+        spike_threshold:
+          type: integer
+          description: Items in an hour that alarm; the workspace's own or the default.
+
+    AiUnresolvedExample:
+      type: object
+      required: [id, text, context, reason, language, brand_id, chat_id, thread_id, created_at]
+      description: One masked message. `chat_id` is the panel's "Thread ID", `thread_id` its "Chat ID".
+      properties:
+        id: { type: string, format: uuid }
+        text: { type: string }
+        context:
+          { type: string, nullable: true, description: The player's message before it, masked. }
+        reason: { $ref: "#/components/schemas/AiUnresolvedReason" }
+        language: { type: string, nullable: true }
+        brand_id: { type: string, format: uuid, nullable: true }
+        chat_id: { type: string }
+        thread_id: { type: string }
+        created_at: { type: string, format: date-time }
+
+    AiUnresolvedTrendPoint:
+      type: object
+      required: [date, count]
+      properties:
+        date: { type: string, format: date, description: UTC day. }
+        count: { type: integer, minimum: 0 }
+
+    AiUnresolvedLanguageCount:
+      type: object
+      required: [language, count]
+      properties:
+        language: { type: string, nullable: true }
+        count: { type: integer, minimum: 0 }
+
+    AiUnresolvedClusterDetail:
+      allOf:
+        - $ref: "#/components/schemas/AiUnresolvedCluster"
+        - type: object
+          required: [examples, trend, languages]
+          properties:
+            examples:
+              type: array
+              description: The newest first, at most 50.
+              items: { $ref: "#/components/schemas/AiUnresolvedExample" }
+            trend:
+              type: array
+              description: The last 14 days, oldest first, a day with none as 0.
+              items: { $ref: "#/components/schemas/AiUnresolvedTrendPoint" }
+            languages:
+              type: array
+              items: { $ref: "#/components/schemas/AiUnresolvedLanguageCount" }
+
+    AiUnresolvedIgnoreRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+
+    AiUnresolvedResolveRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        linked_change_id: { type: string, format: uuid }
+
+    AiUnresolvedMergeRequest:
+      type: object
+      additionalProperties: false
+      required: [source_ids]
+      properties:
+        source_ids:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string, format: uuid }
+
+    AiUnresolvedMergeResponse:
+      type: object
+      required: [cluster, absorbed]
+      properties:
+        cluster: { $ref: "#/components/schemas/AiUnresolvedCluster" }
+        absorbed: { type: integer, minimum: 0 }
+
+    AiUnresolvedKnowledgeSuggestion:
+      type: object
+      required: [cluster_id, ai_agent_id, target, title, questions, body]
+      properties:
+        cluster_id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        target: { type: string, enum: [knowledge_snippet] }
+        title: { type: string }
+        questions:
+          type: array
+          items: { type: string }
+        body: { type: string, description: The outline the answer is written in. }
+
+    AiUnresolvedAddExamplesRequest:
+      type: object
+      additionalProperties: false
+      required: [skill_id, sentences]
+      properties:
+        skill_id: { type: string, format: uuid }
+        sentences:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 300 }
+
+    AiUnresolvedAddExamplesResponse:
+      type: object
+      required: [skill_id, added, skipped, examples_count]
+      properties:
+        skill_id: { type: string, format: uuid }
+        added:
+          type: array
+          items: { type: string }
+        skipped: { type: integer, minimum: 0, description: Sentences the procedure already had. }
+        examples_count: { type: integer, minimum: 0 }
+
+    AiUnresolvedSettings:
+      type: object
+      required: [spike_threshold, default_threshold, window_minutes, min_threshold, max_threshold]
+      properties:
+        spike_threshold: { type: integer }
+        default_threshold: { type: integer }
+        window_minutes: { type: integer }
+        min_threshold: { type: integer }
+        max_threshold: { type: integer }
+
+    AiUnresolvedSettingsInput:
+      type: object
+      additionalProperties: false
+      required: [spike_threshold]
+      properties:
+        spike_threshold: { type: integer, minimum: 5, maximum: 1000 }
 
     SkillLogEntry:
       type: object

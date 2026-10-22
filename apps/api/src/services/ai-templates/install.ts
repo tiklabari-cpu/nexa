@@ -104,7 +104,7 @@ export function isLockedCopy(skill: { locked: boolean; templateKey: string | nul
 }
 
 /** 409 `template_locked`: switching off or deleting a locked copy. */
-export function templateLocked(action: 'switched off' | 'deleted'): ApiError {
+export function templateLocked(action: 'switched off' | 'deleted' | 'given examples'): ApiError {
   return new ApiError(
     'template_locked',
     `A procedure installed from a locked template cannot be ${action}; only its texts and its team change.`,

@@ -127,7 +127,7 @@ import {
   type BulkCrawlRefusal,
 } from '../services/ai/knowledge-bulk-crawl.js';
 import { crawl } from '../services/ai/web-crawler.js';
-import { embedProcedureExamples, ProcedureExamples } from '../services/ai/procedure-examples.js';
+import { ProcedureExamples, storeProcedureExamples } from '../services/ai/procedure-examples.js';
 import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
 import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
@@ -895,50 +895,12 @@ export default async function playbookRoutes(
   });
   const procedureExamples = new ProcedureExamples();
 
-  /**
-   * After a procedure skill's save commits (tm 297.3 · AI-05 §2): its example
-   * sentences embedded — outside any transaction — and stored for the
-   * catalogue narrowing. A provider failure or today's cap leaves the skill
-   * without rows, which the narrowing reads as "always offer it"; the save
-   * stands and the log says so. Stored only if the skill still holds these
-   * examples, so a slower write never replaces a newer save's.
-   */
-  async function storeProcedureExamples(
+  /** After a procedure skill's save commits: its examples embedded and stored (`storeProcedureExamples`). */
+  function storeExamples(
     request: FastifyRequest,
     skill: { id: string; mode: string; examples: string[] },
   ): Promise<void> {
-    if (skill.mode !== 'procedure' || skill.examples.length === 0) return;
-    const tenant = request.tenant();
-    let prepared;
-    try {
-      prepared = await embedProcedureExamples(knowledge, skill.examples, tenant);
-    } catch (error) {
-      if (!(error instanceof EmbeddingProviderError) && !(error instanceof AiDailyCapError)) {
-        throw error;
-      }
-      request.log.warn(
-        {
-          skill_id: skill.id,
-          kind: error instanceof EmbeddingProviderError ? error.kind : 'ai_cap_reached',
-        },
-        'procedure examples not embedded; the skill is never narrowed away until its next save',
-      );
-      return;
-    }
-    await request.withTenant(async (tx) => {
-      const current = await tx.skill.findFirst({
-        where: { id: skill.id },
-        select: { mode: true, examples: true },
-      });
-      if (
-        current?.mode !== 'procedure' ||
-        current.examples.length !== skill.examples.length ||
-        current.examples.some((example, index) => example !== skill.examples[index])
-      ) {
-        return;
-      }
-      await procedureExamples.write(tx, tenant, skill.id, prepared);
-    });
+    return storeProcedureExamples(request, knowledge, procedureExamples, skill);
   }
 
   // --- AI agents -------------------------------------------------------------
@@ -1221,7 +1183,7 @@ export default async function playbookRoutes(
 
       return { created, createdByName: await creatorName(tx, createdBy) };
     });
-    await storeProcedureExamples(request, created);
+    await storeExamples(request, created);
 
     return reply.status(201).send(serialiseSkill(created, createdByName));
   });
@@ -1361,7 +1323,7 @@ export default async function playbookRoutes(
 
         return { updated, createdByName: await creatorName(tx, updated.createdBy), reembed };
       });
-      if (result.reembed) await storeProcedureExamples(request, result.updated);
+      if (result.reembed) await storeExamples(request, result.updated);
 
       return reply.send(serialiseSkill(result.updated, result.createdByName));
     },

@@ -1,0 +1,326 @@
+# The unresolved questions report (tm 317 · SiyahTuş analysis AI-22).
+#
+# Messages the AI could not resolve (a procedure matched nothing, the
+# knowledge had no answer, a hand-over after it did not understand, an
+# abandoned question…) are kept masked (AI-26) and grouped by what they ask:
+# a cluster per AI agent and embedding space. Capture is tm 317.1, the
+# clustering job, the title and the surge alarm tm 317.2; this file is the
+# report that reads them (tm 317.3) — Playbook › Analiz › Çözülemeyen sorular.
+#
+# Served by `apps/api/src/routes/ai-unresolved.ts`. Whoever configures the AI
+# reads (`agents-bot--all:ro`) and acts (`:rw`) — owners and admins in the
+# default matrix; a team member has neither ("Ekip Üyesi: yok"). The
+# component schemas are in `openapi.yaml` (`AiUnresolved*`); `@siyahtus/types`
+# `ai-unresolved.ts` holds the same lists and bounds. In the panel the
+# `chat_id` below is the day container ("Thread ID") and `thread_id` the
+# connection ("Chat ID") — the names in the API stay (K1=A).
+#
+# An ignored cluster is still counted, only out of the default view; a
+# resolved one counts what arrives after the fix (`post_fix_count`) and opens
+# again at five (tm 317.2).
+
+clusters:
+  get:
+    tags: [Playbook]
+    operationId: listAiUnresolvedClusters
+    summary: An AI agent's unresolved question clusters
+    description: |
+      The default view is the open clusters, by the last seven days' count,
+      highest first. `from`, `to`, `brand_id`, `reason` and `language` keep the
+      clusters that have at least one item of that kind, and `matching_count`
+      then counts those items. Ignored and resolved clusters are listed with
+      `status`.
+    parameters:
+      - name: ai_agent_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - name: status
+        in: query
+        schema: { type: string, enum: [open, ignored, resolved, all], default: open }
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum: [count_7d, handoff_rate, abandon_rate, first_seen, last_seen]
+          default: count_7d
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+      - name: brand_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: reason
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedReason" }
+      - name: language
+        in: query
+        schema: { type: string, pattern: "^[a-z]{2}$" }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: offset
+        in: query
+        schema: { type: integer, minimum: 0, default: 0 }
+    responses:
+      "200":
+        description: The clusters
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedClusterList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+cluster:
+  parameters:
+    - name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiUnresolvedCluster
+    summary: One cluster with its examples and trend
+    description: |
+      The newest masked examples are always returned — the title is a
+      summary, and a model's summary can mislead — with their `chat_id` and
+      `thread_id`, and the daily count of the last fourteen days.
+    responses:
+      "200":
+        description: The cluster
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedClusterDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+clusterIgnore:
+  parameters:
+    - name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: ignoreAiUnresolvedCluster
+    summary: Ignore a cluster
+    description: |
+      It leaves the default view and never alarms; similar messages are still
+      counted. A fixed cluster can be ignored too.
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedIgnoreRequest" }
+    responses:
+      "200":
+        description: The cluster, ignored
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedCluster" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+clusterReopen:
+  parameters:
+    - name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: reopenAiUnresolvedCluster
+    summary: Bring an ignored or fixed cluster back to the list
+    description: |
+      Status `open`; the ignore reason, the fix time and the count after the
+      fix are cleared.
+    responses:
+      "200":
+        description: The cluster, open
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedCluster" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+clusterResolve:
+  parameters:
+    - name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: resolveAiUnresolvedCluster
+    summary: Mark a cluster fixed
+    description: |
+      `resolved_at` is now and `post_fix_count` starts again at zero — what
+      arrives after this is "after the fix". Five of those open the cluster
+      again and notify (tm 317.2). `linked_change_id` points at the AI-21
+      change or version that fixed it, when there is one.
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedResolveRequest" }
+    responses:
+      "200":
+        description: The cluster, resolved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedCluster" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+clusterMerge:
+  parameters:
+    - name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: mergeAiUnresolvedClusters
+    summary: Fold other clusters into this one
+    description: |
+      The clusters in `source_ids` go: their items move here, the counts add
+      up and the earliest first sighting stays. This cluster keeps its title
+      and state. All must be the same AI agent's and in the same embedding
+      space (400 `validation` otherwise — nothing is merged).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedMergeRequest" }
+    responses:
+      "200":
+        description: The merged cluster
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedMergeResponse" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+clusterSuggestKnowledge:
+  parameters:
+    - name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: suggestAiUnresolvedKnowledge
+    summary: A knowledge snippet to write for this cluster
+    description: |
+      A proposal, not a write: the title is the cluster's, the questions are
+      its newest masked examples, and `body` is the outline to answer them in.
+      The panel opens it in the knowledge editor; a person writes the answer.
+      (AI-23's suggestion queue, tm 318, takes this over as a stored
+      suggestion; until then nothing is kept.)
+    responses:
+      "200":
+        description: The proposal
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedKnowledgeSuggestion" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+clusterAddExamples:
+  parameters:
+    - name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: addAiUnresolvedExamples
+    summary: Add example sentences to a procedure's draft
+    description: |
+      The sentences are masked (AI-26) and added to the procedure's example
+      sentences (AI-03) in the draft — what the AI offers the procedure by.
+      A sentence the procedure already has is skipped; sentences that would
+      take it past its 30 are refused (400 `validation`, nothing is added), a
+      locked template copy is refused (409 `template_locked`) and another
+      agent's procedure is not found (404). The sentences are embedded after the
+      write, as a save does.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedAddExamplesRequest" }
+    responses:
+      "200":
+        description: What was added
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedAddExamplesResponse" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+settings:
+  get:
+    tags: [Playbook]
+    operationId: getAiUnresolvedSettings
+    summary: The surge alarm's threshold
+    description: |
+      Items one cluster gathers in an hour that alarm the workspace's admins
+      (AI-22-S2); the default when the workspace set none.
+    responses:
+      "200":
+        description: The settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Playbook]
+    operationId: updateAiUnresolvedSettings
+    summary: Set the surge alarm's threshold
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedSettingsInput" }
+    responses:
+      "200":
+        description: The settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiUnresolvedSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

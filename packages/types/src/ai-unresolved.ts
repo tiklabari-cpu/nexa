@@ -289,3 +289,58 @@ export interface AiUnresolvedAlertPush {
   /** `spike`: {@link UNRESOLVED_SPIKE_WINDOW_MINUTES}; `reopened`: null. */
   window_minutes: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// The report (tm 317.3 · AI-22 §6, `paths/ai-unresolved.yaml`)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the report is ordered by (AI-22 §6): the last seven days' count (the
+ * default), the share of the cluster's items that ended in a hand-over, the
+ * share that were abandoned, the first or the last sighting.
+ */
+export const UNRESOLVED_LIST_SORTS = [
+  'count_7d',
+  'handoff_rate',
+  'abandon_rate',
+  'first_seen',
+  'last_seen',
+] as const;
+export type UnresolvedListSort = (typeof UNRESOLVED_LIST_SORTS)[number];
+
+/**
+ * Which clusters the report lists: `open` is the default view — the ones to
+ * work on, an ignored cluster still counted but out of the way (AI-22 KK 4);
+ * `all` is every one.
+ */
+export const UNRESOLVED_LIST_STATUSES = ['open', 'ignored', 'resolved', 'all'] as const;
+export type UnresolvedListStatus = (typeof UNRESOLVED_LIST_STATUSES)[number];
+
+/** The report's page. */
+export const UNRESOLVED_LIST_LIMIT_DEFAULT = 50;
+export const UNRESOLVED_LIST_LIMIT_MAX = 100;
+
+/** A cluster's detail shows this many of its newest masked examples — always, the title may mislead (AI-22 notes). */
+export const UNRESOLVED_EXAMPLES_PER_CLUSTER = 50;
+
+/** …and a trend of this many days. */
+export const UNRESOLVED_TREND_DAYS = 14;
+
+/** A merge folds at most this many clusters into one. */
+export const UNRESOLVED_MERGE_SOURCES_MAX = 20;
+
+/** Sentences "add examples" (AI-03) takes in one request, and the ones "add knowledge" prefills. */
+export const UNRESOLVED_ADD_EXAMPLES_MAX = 10;
+export const UNRESOLVED_KNOWLEDGE_QUESTIONS_MAX = 10;
+
+/** A cluster's share of hand-overs or abandonments: 0–1, three decimals; 0 for an empty cluster. */
+export function unresolvedRate(count: number, itemCount: number): number {
+  if (itemCount <= 0) return 0;
+  return Math.round((Math.min(count, itemCount) / itemCount) * 1000) / 1000;
+}
+
+/** Whether a cluster first seen at `firstSeen` still wears the "new" badge (AI-22 §6). */
+export function unresolvedIsNew(firstSeen: Date | string, now: Date = new Date()): boolean {
+  const at = typeof firstSeen === 'string' ? new Date(firstSeen) : firstSeen;
+  return now.getTime() - at.getTime() < UNRESOLVED_NEW_HOURS * 3_600_000;
+}

@@ -992,7 +992,12 @@ describe('module parity matrix — what is still owed', () => {
       // locked compliance pack and the publish gate it sets, read by the Test
       // tab (tm 314.5) and publishing (tm 316). The app publishes no AI;
       // nothing here re-scopes.
-      contractEndpoints: 284,
+      // 284 -> 293 with `/ai/unresolved/clusters` and its `{clusterId}` detail,
+      // `/ignore`, `/reopen`, `/resolve`, `/merge`, `/suggest-knowledge`,
+      // `/add-examples` and `/ai/unresolved/settings` (tm 317.3) — AI-22's
+      // report, drawn in the web panel's Unresolved questions tab. The app
+      // configures no AI; nothing here re-scopes.
+      contractEndpoints: 293,
       scopeBoundaries: 1,
     });
   });

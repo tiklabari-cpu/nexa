@@ -4872,6 +4872,226 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai/unresolved/clusters': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * An AI agent's unresolved question clusters
+     * @description The default view is the open clusters, by the last seven days' count,
+     *     highest first. `from`, `to`, `brand_id`, `reason` and `language` keep the
+     *     clusters that have at least one item of that kind, and `matching_count`
+     *     then counts those items. Ignored and resolved clusters are listed with
+     *     `status`.
+     */
+    get: operations['listAiUnresolvedClusters'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/clusters/{clusterId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One cluster with its examples and trend
+     * @description The newest masked examples are always returned — the title is a
+     *     summary, and a model's summary can mislead — with their `chat_id` and
+     *     `thread_id`, and the daily count of the last fourteen days.
+     */
+    get: operations['getAiUnresolvedCluster'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/clusters/{clusterId}/ignore': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ignore a cluster
+     * @description It leaves the default view and never alarms; similar messages are still
+     *     counted. A fixed cluster can be ignored too.
+     */
+    post: operations['ignoreAiUnresolvedCluster'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/clusters/{clusterId}/reopen': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Bring an ignored or fixed cluster back to the list
+     * @description Status `open`; the ignore reason, the fix time and the count after the
+     *     fix are cleared.
+     */
+    post: operations['reopenAiUnresolvedCluster'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/clusters/{clusterId}/resolve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark a cluster fixed
+     * @description `resolved_at` is now and `post_fix_count` starts again at zero — what
+     *     arrives after this is "after the fix". Five of those open the cluster
+     *     again and notify (tm 317.2). `linked_change_id` points at the AI-21
+     *     change or version that fixed it, when there is one.
+     */
+    post: operations['resolveAiUnresolvedCluster'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/clusters/{clusterId}/merge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Fold other clusters into this one
+     * @description The clusters in `source_ids` go: their items move here, the counts add
+     *     up and the earliest first sighting stays. This cluster keeps its title
+     *     and state. All must be the same AI agent's and in the same embedding
+     *     space (400 `validation` otherwise — nothing is merged).
+     */
+    post: operations['mergeAiUnresolvedClusters'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/clusters/{clusterId}/suggest-knowledge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A knowledge snippet to write for this cluster
+     * @description A proposal, not a write: the title is the cluster's, the questions are
+     *     its newest masked examples, and `body` is the outline to answer them in.
+     *     The panel opens it in the knowledge editor; a person writes the answer.
+     *     (AI-23's suggestion queue, tm 318, takes this over as a stored
+     *     suggestion; until then nothing is kept.)
+     */
+    post: operations['suggestAiUnresolvedKnowledge'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/clusters/{clusterId}/add-examples': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add example sentences to a procedure's draft
+     * @description The sentences are masked (AI-26) and added to the procedure's example
+     *     sentences (AI-03) in the draft — what the AI offers the procedure by.
+     *     A sentence the procedure already has is skipped; sentences that would
+     *     take it past its 30 are refused (400 `validation`, nothing is added), a
+     *     locked template copy is refused (409 `template_locked`) and another
+     *     agent's procedure is not found (404). The sentences are embedded after the
+     *     write, as a save does.
+     */
+    post: operations['addAiUnresolvedExamples'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/unresolved/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The surge alarm's threshold
+     * @description Items one cluster gathers in an hour that alarm the workspace's admins
+     *     (AI-22-S2); the default when the workspace set none.
+     */
+    get: operations['getAiUnresolvedSettings'];
+    /** Set the surge alarm's threshold */
+    put: operations['updateAiUnresolvedSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/copilot/knowledge': {
     parameters: {
       query?: never;
@@ -12747,6 +12967,159 @@ export interface components {
     AiSandboxSaveAsScenario: {
       name: string;
       expectations?: components['schemas']['AiTestExpectations'];
+    };
+    /**
+     * @description Why a message is on the list (`UNRESOLVED_REASONS`, one definition with
+     *     AI-25's hand-over metrics).
+     * @enum {string}
+     */
+    AiUnresolvedReason:
+      | 'no_procedure_match'
+      | 'no_knowledge'
+      | 'low_confidence'
+      | 'said_dont_know'
+      | 'unsupported_language'
+      | 'not_understood_handoff'
+      | 'player_abandoned'
+      | 'asked_human_after_ai'
+      | 'agent_flagged';
+    AiUnresolvedReasonCount: {
+      reason: components['schemas']['AiUnresolvedReason'];
+      count: number;
+    };
+    /**
+     * @description A group of messages that ask the same thing. The counts are the
+     *     clustering job's and outlive the messages' words (90 days).
+     */
+    AiUnresolvedCluster: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** @description At most eight words; the lexical labeller's where no model ran. A summary — read the examples. */
+      label: string;
+      /** @enum {string} */
+      label_source: 'llm' | 'lexical';
+      /** @enum {string|null} */
+      suggested_action: 'add_knowledge' | 'add_examples' | 'new_procedure' | 'review' | null;
+      /** @enum {string} */
+      status: 'open' | 'ignored' | 'resolved';
+      ignore_reason: string | null;
+      item_count: number;
+      count_7d: number;
+      handoff_count: number;
+      abandon_count: number;
+      handoff_rate: number;
+      abandon_rate: number;
+      /** @description Items that arrived after `resolved_at` ("düzeltmeden sonra"). */
+      post_fix_count: number;
+      /** @description First seen less than 48 hours ago. */
+      is_new: boolean;
+      /** Format: date-time */
+      first_seen: string;
+      /** Format: date-time */
+      last_seen: string;
+      /** Format: date-time */
+      resolved_at: string | null;
+      /** Format: uuid */
+      linked_change_id: string | null;
+      /** @description The reasons of the items still kept, most frequent first. */
+      reasons: components['schemas']['AiUnresolvedReasonCount'][];
+      /** @description Items matching the list's `from`/`to`/`brand_id`/`reason`/`language`; null — none was given. */
+      matching_count: number | null;
+    };
+    AiUnresolvedClusterList: {
+      clusters: components['schemas']['AiUnresolvedCluster'][];
+      /** @description Clusters matching */
+      total: number;
+      /** @description This agent's items not in any cluster yet (the 15-minute job, or no embedding allowed). */
+      unclustered_count: number;
+      /** @description Items in an hour that alarm; the workspace's own or the default. */
+      spike_threshold: number;
+    };
+    /** @description One masked message. `chat_id` is the panel's "Thread ID", `thread_id` its "Chat ID". */
+    AiUnresolvedExample: {
+      /** Format: uuid */
+      id: string;
+      text: string;
+      /** @description The player's message before it */
+      context: string | null;
+      reason: components['schemas']['AiUnresolvedReason'];
+      language: string | null;
+      /** Format: uuid */
+      brand_id: string | null;
+      chat_id: string;
+      thread_id: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    AiUnresolvedTrendPoint: {
+      /**
+       * Format: date
+       * @description UTC day.
+       */
+      date: string;
+      count: number;
+    };
+    AiUnresolvedLanguageCount: {
+      language: string | null;
+      count: number;
+    };
+    AiUnresolvedClusterDetail: components['schemas']['AiUnresolvedCluster'] & {
+      /** @description The newest first, at most 50. */
+      examples: components['schemas']['AiUnresolvedExample'][];
+      /** @description The last 14 days, oldest first, a day with none as 0. */
+      trend: components['schemas']['AiUnresolvedTrendPoint'][];
+      languages: components['schemas']['AiUnresolvedLanguageCount'][];
+    };
+    AiUnresolvedIgnoreRequest: {
+      reason?: string;
+    };
+    AiUnresolvedResolveRequest: {
+      /** Format: uuid */
+      linked_change_id?: string;
+    };
+    AiUnresolvedMergeRequest: {
+      source_ids: string[];
+    };
+    AiUnresolvedMergeResponse: {
+      cluster: components['schemas']['AiUnresolvedCluster'];
+      absorbed: number;
+    };
+    AiUnresolvedKnowledgeSuggestion: {
+      /** Format: uuid */
+      cluster_id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** @enum {string} */
+      target: 'knowledge_snippet';
+      title: string;
+      questions: string[];
+      /** @description The outline the answer is written in. */
+      body: string;
+    };
+    AiUnresolvedAddExamplesRequest: {
+      /** Format: uuid */
+      skill_id: string;
+      sentences: string[];
+    };
+    AiUnresolvedAddExamplesResponse: {
+      /** Format: uuid */
+      skill_id: string;
+      added: string[];
+      /** @description Sentences the procedure already had. */
+      skipped: number;
+      examples_count: number;
+    };
+    AiUnresolvedSettings: {
+      spike_threshold: number;
+      default_threshold: number;
+      window_minutes: number;
+      min_threshold: number;
+      max_threshold: number;
+    };
+    AiUnresolvedSettingsInput: {
+      spike_threshold: number;
     };
     SkillLogEntry: {
       step: string;
@@ -25923,6 +26296,295 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiUnresolvedClusters: {
+    parameters: {
+      query: {
+        ai_agent_id: string;
+        status?: 'open' | 'ignored' | 'resolved' | 'all';
+        sort?: 'count_7d' | 'handoff_rate' | 'abandon_rate' | 'first_seen' | 'last_seen';
+        from?: string;
+        to?: string;
+        brand_id?: string;
+        reason?: components['schemas']['AiUnresolvedReason'];
+        language?: string;
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The clusters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedClusterList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiUnresolvedCluster: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The cluster */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedClusterDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  ignoreAiUnresolvedCluster: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['AiUnresolvedIgnoreRequest'];
+      };
+    };
+    responses: {
+      /** @description The cluster, ignored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedCluster'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  reopenAiUnresolvedCluster: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The cluster, open */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedCluster'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  resolveAiUnresolvedCluster: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['AiUnresolvedResolveRequest'];
+      };
+    };
+    responses: {
+      /** @description The cluster, resolved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedCluster'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  mergeAiUnresolvedClusters: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiUnresolvedMergeRequest'];
+      };
+    };
+    responses: {
+      /** @description The merged cluster */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedMergeResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  suggestAiUnresolvedKnowledge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The proposal */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedKnowledgeSuggestion'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  addAiUnresolvedExamples: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clusterId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiUnresolvedAddExamplesRequest'];
+      };
+    };
+    responses: {
+      /** @description What was added */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedAddExamplesResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiUnresolvedSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiUnresolvedSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiUnresolvedSettingsInput'];
+      };
+    };
+    responses: {
+      /** @description The settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiUnresolvedSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

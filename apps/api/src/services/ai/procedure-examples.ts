@@ -28,13 +28,16 @@
  */
 import { Prisma } from '@prisma/client';
 import { PROCEDURE_EXAMPLES_MAX } from '@siyahtus/types';
+import type { FastifyRequest } from 'fastify';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { AiDailyCapError } from './ai-daily-budget.js';
 import {
   APPROXIMATE_SEARCH,
   type KnowledgeService,
   type QueryEmbedding,
 } from './knowledge-service.js';
 import type { EmbeddingPayer } from './metered-embeddings.js';
+import { EmbeddingProviderError } from './provider/embedding-error.js';
 import type { EmbeddingUsage } from './provider/embedding-provider.js';
 
 /** How many procedures the narrowing keeps by nearness (AI-05 §2). */
@@ -84,6 +87,56 @@ export function embedProcedureExamples(
   payer: EmbeddingPayer,
 ): Promise<PreparedExamples> {
   return knowledge.embedSentences(examples, payer);
+}
+
+/**
+ * After a procedure skill's save commits (tm 297.3 · AI-05 §2): its example
+ * sentences embedded — outside any transaction — and stored for the
+ * catalogue narrowing. A provider failure or today's cap leaves the skill
+ * without rows, which the narrowing reads as "always offer it"; the save
+ * stands and the log says so. Stored only if the skill still holds these
+ * examples, so a slower write never replaces a newer save's. The one door for
+ * every write of a skill's examples (the editor's save, tm 317.3's "add
+ * examples"); `examples` clears the rows inside the write that changes them.
+ */
+export async function storeProcedureExamples(
+  request: FastifyRequest,
+  knowledge: KnowledgeService,
+  examples: ProcedureExamples,
+  skill: { id: string; mode: string; examples: string[] },
+): Promise<void> {
+  if (skill.mode !== 'procedure' || skill.examples.length === 0) return;
+  const tenant = request.tenant();
+  let prepared;
+  try {
+    prepared = await embedProcedureExamples(knowledge, skill.examples, tenant);
+  } catch (error) {
+    if (!(error instanceof EmbeddingProviderError) && !(error instanceof AiDailyCapError)) {
+      throw error;
+    }
+    request.log.warn(
+      {
+        skill_id: skill.id,
+        kind: error instanceof EmbeddingProviderError ? error.kind : 'ai_cap_reached',
+      },
+      'procedure examples not embedded; the skill is never narrowed away until its next save',
+    );
+    return;
+  }
+  await request.withTenant(async (tx) => {
+    const current = await tx.skill.findFirst({
+      where: { id: skill.id },
+      select: { mode: true, examples: true },
+    });
+    if (
+      current?.mode !== 'procedure' ||
+      current.examples.length !== skill.examples.length ||
+      current.examples.some((example, index) => example !== skill.examples[index])
+    ) {
+      return;
+    }
+    await examples.write(tx, tenant, skill.id, prepared);
+  });
 }
 
 interface ExampleRow {

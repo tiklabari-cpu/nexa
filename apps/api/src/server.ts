@@ -530,6 +530,7 @@ export async function buildServer({
     automations,
     knowledge,
     publisher: new RealtimePublisher(app.redis, app.log),
+    llm: meteredLlm,
   });
   // Mail a response must not wait for — the password reset's (tm 255.4), so its
   // answer cannot depend on the carrier, and since tm 256.4 the assignee notice,

@@ -288,6 +288,15 @@ export class KnowledgeService {
     return this.#embeddings.space;
   }
 
+  /**
+   * The embeddings this service writes with — for work that must land in the
+   * same space and spend from the same allowance: the unresolved questions'
+   * clustering (tm 317.2).
+   */
+  get embeddings(): MeteredEmbeddings {
+    return this.#embeddings;
+  }
+
   /** The similarity below which a chunk is not an answer — {@link RETRIEVAL_THRESHOLD} unless overridden. */
   get threshold(): number {
     return this.#threshold;

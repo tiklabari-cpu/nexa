@@ -177,6 +177,9 @@ export const RTM_PUSH_ACTIONS = [
   // The AI's hand-over card was written (tm 304.1 · AI-10, `AiHandoffCreatedPush`):
   // to the agents who see the conversation and the target team.
   'ai_handoff_created',
+  // A cluster of unresolved questions surged or came back after its fix (tm
+  // 317.2 · AI-22-S2, `AiUnresolvedAlertPush`): to the Team Leads and up.
+  'ai_unresolved_alert',
   // Errors
   'incoming_error',
 ] as const;

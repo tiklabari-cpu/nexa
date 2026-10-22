@@ -212,6 +212,7 @@ model License {
   aiSandboxSessions      AiSandboxSession[]
   aiUnresolvedItems      AiUnresolvedItem[]
   aiUnresolvedClusters   AiUnresolvedCluster[]
+  aiUnresolvedSettings   AiUnresolvedSettings?
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -4622,6 +4623,12 @@ model AiUnresolvedCluster {
   postFixCount   Int                         @default(0) @map("post_fix_count")
   createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime                    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// What the title writer suggested (`UNRESOLVED_SUGGESTED_ACTIONS`); null from the lexical labeller (tm 317.2).
+  suggestedAction String?                    @map("suggested_action")
+  /// `item_count` when the title was written: grown by half, it is written again.
+  labelledCount   Int                        @default(0) @map("labelled_count")
+  /// When it last alarmed (AI-22-S2): at most once in `UNRESOLVED_ALERT_REPEAT_HOURS`.
+  alertedAt       DateTime?                  @map("alerted_at") @db.Timestamptz(6)
 
   license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   aiAgent AiAgent            @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
@@ -4629,4 +4636,19 @@ model AiUnresolvedCluster {
 
   @@index([licenseId, aiAgentId, embeddingSpace], map: "ai_unresolved_clusters_agent_space_idx")
   @@map("ai_unresolved_clusters")
+}
+
+/// A workspace's unresolved-questions settings (tm 317.2 · AI-22-S2): the
+/// number of items one cluster gathers in `UNRESOLVED_SPIKE_WINDOW_MINUTES`
+/// that alarms. No row is `UNRESOLVED_SPIKE_THRESHOLD_DEFAULT`. The CHECK,
+/// RLS and grants live in the migration (20261022150000_ai_unresolved_clustering).
+model AiUnresolvedSettings {
+  licenseId      BigInt   @id @map("license_id")
+  spikeThreshold Int      @default(20) @map("spike_threshold")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("ai_unresolved_settings")
 }

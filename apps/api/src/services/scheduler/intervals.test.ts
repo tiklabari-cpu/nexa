@@ -31,7 +31,7 @@ describe('the job list', () => {
     );
   });
 
-  it('names the five sweeps that had no scheduler, plus webhook redelivery, the knowledge freshness sweep, the billing period close, the unverified sign-up sweep, the stalled-AI watchdog and the sandbox-session sweep', () => {
+  it('names the five sweeps that had no scheduler, plus webhook redelivery, the knowledge freshness sweep, the billing period close, the unverified sign-up sweep, the stalled-AI watchdog, the sandbox-session sweep and the unresolved questions’ clustering and merge', () => {
     // §D113/K1's list, in one place, because a job renamed here and nowhere else
     // would leave two instances holding different locks for the same sweep.
     expect([...SCHEDULER_JOB_NAMES]).toEqual([
@@ -46,6 +46,8 @@ describe('the job list', () => {
       'unverified_signups',
       'ai_stall',
       'ai_sandbox_sessions',
+      'ai_unresolved_cluster',
+      'ai_unresolved_merge',
     ]);
   });
 
@@ -57,7 +59,7 @@ describe('the job list', () => {
 });
 
 describe('intervals', () => {
-  it('defaults to a minute for the ones a person can feel, an hour for retention, knowledge refresh, the period close, the unverified sign-up and the sandbox-session sweeps, and 15 s for the stalled-AI watchdog', () => {
+  it('defaults to a minute for the ones a person can feel, an hour for retention, knowledge refresh, the period close, the unverified sign-up and the sandbox-session sweeps, 15 s for the stalled-AI watchdog, 15 min for the unresolved questions’ clustering and a day for their merge', () => {
     expect(jobIntervals(parseEnv(BASE))).toEqual({
       chat_timeout: 60_000,
       sla: 60_000,
@@ -70,6 +72,8 @@ describe('intervals', () => {
       unverified_signups: 3_600_000,
       ai_stall: 15_000,
       ai_sandbox_sessions: 3_600_000,
+      ai_unresolved_cluster: 900_000,
+      ai_unresolved_merge: 86_400_000,
     });
   });
 

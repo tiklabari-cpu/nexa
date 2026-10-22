@@ -1110,6 +1110,19 @@ export const envSchema = z.object({
    */
   SCHEDULE_AI_SANDBOX_SESSIONS_MS: z.coerce.number().int().positive().default(3_600_000),
   /**
+   * The unresolved questions' clustering (tm 317.2 · AI-22): embeds, groups,
+   * titles and counts the messages the AI could not resolve, and raises the
+   * surge alarm. Every 15 minutes — AI-22's promise is that such a message is
+   * on the list within 15 minutes.
+   */
+  SCHEDULE_AI_UNRESOLVED_CLUSTER_MS: z.coerce.number().int().positive().default(900_000),
+  /**
+   * The nightly merge of unresolved-question clusters the 15-minute pass split
+   * (tm 317.2 · AI-22 §4). Daily: a split costs a duplicate row in a report,
+   * not a wrong answer.
+   */
+  SCHEDULE_AI_UNRESOLVED_MERGE_MS: z.coerce.number().int().positive().default(86_400_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

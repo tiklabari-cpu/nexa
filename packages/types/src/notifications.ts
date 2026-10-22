@@ -24,6 +24,7 @@
  * desktop and tab alerts alike"), so the rule is transcribed rather than
  * invented.
  */
+import type { RtmPushAction } from './rtm.js';
 
 /** The mobile platforms a push token can come from (13.7-c). */
 export const DEVICE_PLATFORMS = ['ios', 'android'] as const;
@@ -118,3 +119,17 @@ export function readNotificationPreferences(value: unknown): NotificationPrefere
   }
   return prefs;
 }
+
+/**
+ * The workspace notices: realtime pushes that tell the people who manage the
+ * workspace something about it rather than about a conversation — today's AI
+ * allowance (tm 283.3, `AiUsageAlertPush`) and a cluster of unresolved
+ * questions that surged or came back after its fix (tm 317.2 · AI-22-S2,
+ * `AiUnresolvedAlertPush`). In-app only; one list, so a console that shows
+ * notices subscribes to all of them.
+ */
+export const WORKSPACE_NOTICE_PUSHES = [
+  'ai_usage_alert',
+  'ai_unresolved_alert',
+] as const satisfies readonly RtmPushAction[];
+export type WorkspaceNoticePush = (typeof WORKSPACE_NOTICE_PUSHES)[number];

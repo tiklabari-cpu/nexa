@@ -144,3 +144,148 @@ export function unresolvedTextOf(text: string | null | undefined): string | null
     ? collapsed.slice(0, UNRESOLVED_TEXT_MAX).trimEnd()
     : collapsed;
 }
+
+// ---------------------------------------------------------------------------
+// Clustering (tm 317.2 · AI-22 §4–§8)
+// ---------------------------------------------------------------------------
+
+/**
+ * The cosine an item must reach to join a cluster's centre (τ), by kind of
+ * space. A model's space (`openai:…`) puts two wordings of one question at
+ * about 0.85 and a neighbouring question at 0.6–0.75: 0.8 is the analysis's
+ * starting value, held by the fixture of 30 "Papara ile yatırdım gözükmüyor"
+ * sentences (`unresolved-assign.test.ts`). The lexical stub (`mock:…`) is
+ * `topics.ts`' space, and its floor is the topic report's
+ * (`TOPIC_SIMILARITY_THRESHOLD`).
+ */
+export const UNRESOLVED_CLUSTER_SIMILARITY = { model: 0.8, lexical: 0.3 } as const;
+
+/**
+ * The cosine two clusters' centres must reach for the nightly pass to merge
+ * them (τ_merge) — above τ: only clusters the greedy pass split by the order
+ * the items came in, never two neighbouring questions.
+ */
+export const UNRESOLVED_MERGE_SIMILARITY = { model: 0.9, lexical: 0.6 } as const;
+
+/** The kind of space a vector lives in: the stub's lexical one, or a model's. */
+export type UnresolvedSpaceKind = keyof typeof UNRESOLVED_CLUSTER_SIMILARITY;
+
+/** `EmbeddingProvider.space` is `<provider>:<model>`; the stub's provider is `mock`. */
+export function unresolvedSpaceKind(space: string): UnresolvedSpaceKind {
+  return space.startsWith('mock:') ? 'lexical' : 'model';
+}
+
+/** The items the clustering job embeds, or assigns, per workspace and pass. */
+export const UNRESOLVED_CLUSTER_BATCH = 500;
+
+/** A cluster's title is written from at most this many of its newest items. */
+export const UNRESOLVED_LABEL_SAMPLES = 10;
+
+/** A title is at most this many words (AI-22 §5). */
+export const UNRESOLVED_LABEL_WORDS_MAX = 8;
+
+/**
+ * A cluster is titled again once it has grown by half since its title was
+ * written (AI-22 §5): `item_count * 2 >= labelled_count * 3`.
+ */
+export function unresolvedLabelDue(itemCount: number, labelledCount: number): boolean {
+  return labelledCount === 0 ? itemCount > 0 : itemCount * 2 >= labelledCount * 3;
+}
+
+/**
+ * What the title writer suggests doing about a cluster (AI-22 §5): add
+ * knowledge (AI-23), add example sentences to a procedure (AI-03), write a new
+ * procedure, or only look at it. The lexical labeller suggests nothing.
+ */
+export const UNRESOLVED_SUGGESTED_ACTIONS = [
+  'add_knowledge',
+  'add_examples',
+  'new_procedure',
+  'review',
+] as const;
+export type UnresolvedSuggestedAction = (typeof UNRESOLVED_SUGGESTED_ACTIONS)[number];
+
+export function isUnresolvedSuggestedAction(value: unknown): value is UnresolvedSuggestedAction {
+  return (UNRESOLVED_SUGGESTED_ACTIONS as readonly unknown[]).includes(value);
+}
+
+/**
+ * A title as the list keeps it, or null when it is not one: whitespace and
+ * wrapping quotes gone, at most {@link UNRESOLVED_LABEL_WORDS_MAX} words and
+ * {@link UNRESOLVED_LABEL_MAX} characters. A digit or a mask's star makes it
+ * null — a title never carries an amount, an order or a card number.
+ */
+export function unresolvedLabelOf(text: string | null | undefined): string | null {
+  if (typeof text !== 'string') return null;
+  const words = text
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .replace(/^["'“”‘’«»]+|["'“”‘’«».]+$/gu, '')
+    .trim()
+    .split(' ')
+    .filter((word) => word.length > 0)
+    .slice(0, UNRESOLVED_LABEL_WORDS_MAX);
+  const label = words.join(' ').slice(0, UNRESOLVED_LABEL_MAX).trim();
+  if (!/[\p{L}]/u.test(label) || /[\p{N}*]/u.test(label)) return null;
+  return label;
+}
+
+// ---------------------------------------------------------------------------
+// Counting and the alarm (AI-22 §6–§8, AI-22-S2)
+// ---------------------------------------------------------------------------
+
+/** The report's window: a cluster's `count_7d`. */
+export const UNRESOLVED_RECENT_DAYS = 7;
+
+/** A cluster younger than this is "new" (AI-22 §6). */
+export const UNRESOLVED_NEW_HOURS = 48;
+
+/** The reasons that are a hand-over in themselves; any other item counts one when its connection was handed over. */
+export const UNRESOLVED_HANDOFF_REASONS = [
+  'unsupported_language',
+  'not_understood_handoff',
+  'asked_human_after_ai',
+] as const satisfies readonly UnresolvedReason[];
+
+/** AI-22-S2: the window a cluster's surge is counted in. */
+export const UNRESOLVED_SPIKE_WINDOW_MINUTES = 60;
+
+/** AI-22-S2: the surge that alarms, unless the workspace set its own. */
+export const UNRESOLVED_SPIKE_THRESHOLD_DEFAULT = 20;
+
+/** The workspace's own surge threshold is between these (`ai_unresolved_settings`). */
+export const UNRESOLVED_SPIKE_THRESHOLD_MIN = 5;
+export const UNRESOLVED_SPIKE_THRESHOLD_MAX = 1000;
+
+/** A cluster alarms at most once in this many hours (AI-22 §8). */
+export const UNRESOLVED_ALERT_REPEAT_HOURS = 6;
+
+/**
+ * A fixed cluster that collects this many new items after its fix is open
+ * again, and says so (AI-22 §7).
+ */
+export const UNRESOLVED_REOPEN_AFTER_FIX = 5;
+
+/** Why the people who read the report are told of a cluster. */
+export const UNRESOLVED_ALERT_KINDS = ['spike', 'reopened'] as const;
+export type UnresolvedAlertKind = (typeof UNRESOLVED_ALERT_KINDS)[number];
+
+/**
+ * The in-app notice (`RTM_PUSH_ACTIONS` `ai_unresolved_alert`) to the
+ * workspace's Team Leads and up (admin and up until RL-01): a cluster surged
+ * past the threshold in the last hour, or came back after its fix. Carries
+ * the cluster's title — what the report shows the same people — and numbers;
+ * never an item's words.
+ */
+export interface AiUnresolvedAlertPush {
+  kind: UnresolvedAlertKind;
+  cluster_id: string;
+  ai_agent_id: string;
+  label: string;
+  /** `spike`: items in the window; `reopened`: items since the fix. */
+  count: number;
+  /** `spike`: the workspace's threshold; `reopened`: {@link UNRESOLVED_REOPEN_AFTER_FIX}. */
+  threshold: number;
+  /** `spike`: {@link UNRESOLVED_SPIKE_WINDOW_MINUTES}; `reopened`: null. */
+  window_minutes: number | null;
+}

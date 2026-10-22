@@ -24,7 +24,9 @@ import type { Env } from '../../config/env.js';
  * subscription (FR-MOD-10.3, tm 230); the ninth deletes a sign-up nobody
  * verified, once it has expired with its workspace still empty (tm 257.19);
  * the tenth sends a person to a visitor the AI left unanswered (tm 293.6);
- * the eleventh deletes the AI test bench's expired sandbox sessions (tm 314.2).
+ * the eleventh deletes the AI test bench's expired sandbox sessions (tm 314.2);
+ * the twelfth groups the questions the AI could not resolve and raises their
+ * surge alarm, and the thirteenth merges the groups it split, nightly (tm 317.2).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -38,6 +40,8 @@ export const SCHEDULER_JOB_NAMES = [
   'unverified_signups',
   'ai_stall',
   'ai_sandbox_sessions',
+  'ai_unresolved_cluster',
+  'ai_unresolved_merge',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -61,6 +65,8 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_UNVERIFIED_SIGNUPS_MS'
   | 'SCHEDULE_AI_STALL_MS'
   | 'SCHEDULE_AI_SANDBOX_SESSIONS_MS'
+  | 'SCHEDULE_AI_UNRESOLVED_CLUSTER_MS'
+  | 'SCHEDULE_AI_UNRESOLVED_MERGE_MS'
 >;
 
 /**
@@ -83,6 +89,8 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     unverified_signups: env.SCHEDULE_UNVERIFIED_SIGNUPS_MS,
     ai_stall: env.SCHEDULE_AI_STALL_MS,
     ai_sandbox_sessions: env.SCHEDULE_AI_SANDBOX_SESSIONS_MS,
+    ai_unresolved_cluster: env.SCHEDULE_AI_UNRESOLVED_CLUSTER_MS,
+    ai_unresolved_merge: env.SCHEDULE_AI_UNRESOLVED_MERGE_MS,
   };
 }
 

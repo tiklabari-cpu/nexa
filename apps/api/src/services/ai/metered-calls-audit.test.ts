@@ -74,6 +74,11 @@ const ALLOWED: Readonly<Record<string, Allowance>> = {
     calls: 1,
     why: 'completeStructured calls the provider it is handed (tm 283.1) — in production only ever MeteredLlm.forTenant(...) (checked below), so each try is counted',
   },
+  'services/ai/unresolved/cluster-job.ts': {
+    calls: 1,
+    why: 'the unresolved questions’ clustering (tm 317.2) embeds the items with no vector through the MeteredEmbeddings it is given, the workspace as payer, on the `cluster` surface; its titles go through completeStructured over MeteredLlm.forTenant(...)',
+    holds: /readonly embeddings: MeteredEmbeddings;/,
+  },
   'routes/onboarding.ts': {
     calls: 1,
     why: 'onboarding.complete(): the setup checklist, not a model',

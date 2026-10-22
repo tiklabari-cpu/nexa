@@ -14111,7 +14111,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-22T02:35:15.205Z",
+        "updatedAt": "2026-10-22T03:06:59.819Z",
         "subtasks": [
           {
             "id": 1,
@@ -14119,11 +14119,11 @@
             "description": "SettingsForm, SaveBar, InstantToggle, ConfirmHighRisk + SettingsNav confirmLeave + kalıp testi",
             "details": "Üst görev 323 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Birim + kalıp testi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "323",
             "priority": "high",
-            "updatedAt": "2026-10-22T02:35:15.205Z"
+            "updatedAt": "2026-10-22T03:06:59.819Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T02:35:15.206Z",
+      "lastModified": "2026-10-22T03:06:59.820Z",
       "taskCount": 390,
       "completedCount": 311,
       "tags": [

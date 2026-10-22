@@ -14152,7 +14152,7 @@
           "281"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T05:28:46.495Z",
+        "updatedAt": "2026-10-22T08:17:13.303Z",
         "subtasks": [
           {
             "id": 1,
@@ -14172,13 +14172,13 @@
             "description": "Rol değiştirme (team_lead), grup liderliği (admin+), davet akışı (RL-04-S1), principal + RTM rol listeleri, SCIM, seed",
             "details": "Üst görev 324 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon + e2e team.spec.ts.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "324.1"
             ],
             "parentId": "324",
             "priority": "high",
-            "updatedAt": "2026-10-22T05:28:46.495Z"
+            "updatedAt": "2026-10-22T08:17:13.303Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T05:28:46.497Z",
+      "lastModified": "2026-10-22T08:17:13.304Z",
       "taskCount": 390,
       "completedCount": 312,
       "tags": [

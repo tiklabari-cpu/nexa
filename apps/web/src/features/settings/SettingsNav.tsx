@@ -28,6 +28,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement } f
 import { NavLink, useNavigate } from 'react-router-dom';
 import { DEFAULT_UI_PREFERENCES, hasAnyScope, type UiPreferences } from '@siyahtus/types';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { confirmLeave } from '../../lib/dirty-guard.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { liveDataApps } from '../../lib/live-apps.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -111,7 +112,8 @@ export function SettingsNav(): ReactElement {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const target = results[activeIndex];
-      if (target) {
+      // Enter is another way out of a dirty section (GV-06).
+      if (target && confirmLeave()) {
         navigate(sectionHref(target));
         setQuery('');
       }
@@ -184,7 +186,14 @@ export function SettingsNav(): ReactElement {
                 aria-selected={index === activeIndex}
                 to={sectionHref(section)}
                 onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => setQuery('')}
+                onClick={(event) => {
+                  // Walking to another section throws an unsaved draft away (GV-06).
+                  if (!confirmLeave()) {
+                    event.preventDefault();
+                    return;
+                  }
+                  setQuery('');
+                }}
                 className={`block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
                   index === activeIndex
                     ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
@@ -217,6 +226,11 @@ export function SettingsNav(): ReactElement {
                 <li key={section.slug}>
                   <NavLink
                     to={sectionHref(section)}
+                    // Same question every other way out of a dirty screen asks; a
+                    // refusal keeps the draft and the person where they are (GV-06).
+                    onClick={(event) => {
+                      if (!confirmLeave()) event.preventDefault();
+                    }}
                     className={({ isActive }) =>
                       `block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
                         isActive

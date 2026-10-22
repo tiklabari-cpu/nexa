@@ -20,6 +20,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { ADMIN_SCOPES, DEFAULT_AGENT_SCOPES } from '@siyahtus/types';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { useLeaveGuard } from '../../lib/dirty-guard.js';
 import { settings as EN_SETTINGS } from '../../locales/en/settings.js';
 import {
   SETTINGS_GROUPS,
@@ -495,5 +496,70 @@ describe('Settings navigation pin (FR-MOD-08.1)', () => {
     currentScopes = ['tags--groups:ro'];
     renderAt('/app/settings/tags');
     expect(screen.queryByRole('button', { name: /side navigation/ })).not.toBeInTheDocument();
+  });
+});
+
+/** A screen holding an unsaved draft, the way `SettingsForm` does while dirty. */
+function DirtyDraft(): ReactElement {
+  useLeaveGuard(true, 'Leave and discard?');
+  return <p>draft</p>;
+}
+
+describe('Settings navigation leave guard (tm 323.1 · GV-06)', () => {
+  function renderWithDraft(dirty: boolean): void {
+    currentScopes = ADMIN;
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/app/settings/notifications']}>
+          <SettingsNav />
+          {dirty && <DirtyDraft />}
+          <Where />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('asks before leaving a dirty section, and "stay" keeps the person where they are', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderWithDraft(true);
+    await userEvent.click(screen.getByRole('link', { name: 'Trusted domains' }));
+    expect(confirm).toHaveBeenCalledWith('Leave and discard?');
+    expect(screen.getByTestId('where')).toHaveTextContent('/app/settings/notifications');
+    expect(screen.getByText('draft')).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it('leaves when the person confirms', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderWithDraft(true);
+    await userEvent.click(screen.getByRole('link', { name: 'Trusted domains' }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('where')).toHaveTextContent('/app/settings/trusted-domains');
+    confirm.mockRestore();
+  });
+
+  it('does not ask when nothing is dirty', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderWithDraft(false);
+    await userEvent.click(screen.getByRole('link', { name: 'Trusted domains' }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByTestId('where')).toHaveTextContent('/app/settings/trusted-domains');
+    confirm.mockRestore();
+  });
+
+  it('asks on a search result and on Enter in the search box as well', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderWithDraft(true);
+    await userEvent.type(screen.getByRole('combobox'), 'trusted');
+    await userEvent.click(screen.getByRole('option', { name: 'Trusted domains' }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('where')).toHaveTextContent('/app/settings/notifications');
+
+    await userEvent.click(screen.getByRole('combobox'));
+    await userEvent.keyboard('{Enter}');
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('where')).toHaveTextContent('/app/settings/notifications');
+    confirm.mockRestore();
   });
 });

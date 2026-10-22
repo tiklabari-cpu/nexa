@@ -369,7 +369,7 @@ export default async function customerRoutes(
       riskFlags: app.riskFlags,
     },
   );
-  const ruleBots = new RuleBotResponder(chats, publisher);
+  const ruleBots = new RuleBotResponder(chats);
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
 
   /**

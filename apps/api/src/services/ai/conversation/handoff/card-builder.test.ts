@@ -177,6 +177,26 @@ describe('buildHandoffCard — a deposit hand-over (AI-10 §1 · research §3.1)
       'Önerilen adım: Papara referansı ile ödeme sağlayıcı panelinde eşleştirme.',
     );
     expect(card.cardText).not.toContain('Customer asked');
+
+    // The transcript note is one event for every viewer, and seeing the
+    // player's contact details is a per-person answer (tm 325.6): the note
+    // keeps the name and drops the pre-chat username and the address — from
+    // the Oyuncu line and from anywhere else it quotes them (the collected
+    // "Kullanıcı adı" slot and the summary built from it here).
+    expect(card.noteText).toContain(
+      'Oyuncu: Ali Veli (oyuncu beyanı, doğrulanmadı; tanınan cihaz)',
+    );
+    expect(card.noteText).not.toContain('ali@example.com');
+    expect(card.noteText).not.toContain('ali123');
+    expect(card.noteText).toContain(
+      'Toplanan bilgiler: Kullanıcı adı: ••• | Ödeme yöntemi: Papara',
+    );
+    // Nothing else moves.
+    expect(card.noteText).toBe(
+      card.cardText
+        .replace(/^Oyuncu: .*$/m, 'Oyuncu: Ali Veli (oyuncu beyanı, doğrulanmadı; tanınan cihaz)')
+        .replaceAll('ali123', '•••'),
+    );
   });
 
   it('keeps a pii: high value off the card entirely — the line says only that it was given', () => {

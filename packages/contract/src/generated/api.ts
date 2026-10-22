@@ -11261,8 +11261,10 @@ export interface components {
       /** @description The player's question, on a hand-over no procedure ran. */
       question: string | null;
       player: {
+        /** @description Null when the caller's role may not see a player's contact details (`customers.contact.view`). */
         username: string | null;
         name: string | null;
+        /** @description Null when the caller's role may not see a player's contact details (`customers.contact.view`). */
         email: string | null;
         /**
          * @description The player's own claim — not verified in F1.
@@ -11323,7 +11325,13 @@ export interface components {
       target_group_id: number | null;
       /** @enum {string} */
       priority: 'urgent' | 'high' | 'normal';
-      /** @description The card as plain text — the agents-only line in the transcript. */
+      /**
+       * @description The card as plain text. The agents-only line in the transcript is
+       *     this text without the player's username and email — one event every
+       *     viewer reads — and here both are blanked out (`•••`) for a caller
+       *     whose role may not see a player's contact details
+       *     (`customers.contact.view`).
+       */
       card_text: string;
       /** Format: date-time */
       created_at: string;
@@ -11361,7 +11369,12 @@ export interface components {
       thread_id: string | null;
       /** Format: uuid */
       customer_id: string | null;
-      /** @description The player's key on the operator's site (the folded pre-chat username in F1). */
+      /**
+       * @description The player's key on the operator's site (the folded pre-chat
+       *     username in F1). Null when the caller's role may not see a player's
+       *     contact details (`customers.contact.view`); never in the realtime
+       *     push.
+       */
       member_key: string | null;
       type: components['schemas']['RiskFlagType'];
       /** @enum {string} */
@@ -15358,8 +15371,9 @@ export interface components {
       id: string;
       /** @description Null for a visitor who never introduced themselves. */
       name: string | null;
+      /** @description Null when the caller's role may not see a player's contact details (`customers.contact.view`). */
       email: string | null;
-      /** @description The username the visitor typed into the pre-chat form, unverified. */
+      /** @description The username the visitor typed into the pre-chat form, unverified. Null when the caller's role may not see a player's contact details (`customers.contact.view`). */
       username: string | null;
       phone?: string | null;
       country_code?: string | null;
@@ -15407,7 +15421,9 @@ export interface components {
     /**
      * @description Just enough of another customer record to tell an agent who it is,
      *     for a possible match or a link (ID-03). The full record is
-     *     `GET /customers/{customerId}`.
+     *     `GET /customers/{customerId}`. `username` and `email` are null when the
+     *     caller's role may not see a player's contact details
+     *     (`customers.contact.view`); `matched_on` still names the field shared.
      */
     CustomerMatchSummary: {
       /** Format: uuid */
@@ -15766,6 +15782,7 @@ export interface components {
       customer_id: string;
       /** @description Null for a visitor who never introduced themselves. */
       name: string | null;
+      /** @description Null when the caller's role may not see a player's contact details (`customers.contact.view`). */
       email: string | null;
       /**
        * @description Where the visitor is in the funnel — see `listTraffic`.
@@ -16545,8 +16562,9 @@ export interface components {
     CapabilityLock: 'owner_column' | 'owner_only' | 'below_floor';
     /**
      * @description Every capability's resolved value, by key (`chats.view` → `team`). What
-     *     a capability with no scope of its own — `chats.view`'s `own` level, say —
-     *     is checked against.
+     *     a capability with no scope of its own — `chats.view`'s `own` level, or
+     *     seeing a player's email and username (`customers.contact.view`) — is
+     *     checked against.
      */
     CapabilityValues: {
       [key: string]: components['schemas']['CapabilityValue'];
@@ -16662,7 +16680,14 @@ export interface components {
       customer_id?: string | null;
       /** @description Null for a visitor who never introduced themselves. */
       customer_name?: string | null;
+      /** @description Null when the caller's role may not see a player's contact details (`customers.contact.view`). */
       customer_email?: string | null;
+      /**
+       * @description Whether the customer left an address — whether a status change can
+       *     e-mail them (`email_template_id`). True also when `customer_email`
+       *     is masked.
+       */
+      customer_has_email?: boolean;
       /** @description The conversation this followed on from, if any. */
       source_chat_id?: string | null;
       /**
@@ -22121,7 +22146,7 @@ export interface operations {
   listCustomers: {
     parameters: {
       query?: {
-        /** @description Case-insensitive match against name, email and phone (anywhere in the text) and the pre-chat username (from its start). */
+        /** @description Case-insensitive match against name, email and phone (anywhere in the text) and the pre-chat username (from its start). Email and username are matched only for a caller whose role may see a player's contact details (`customers.contact.view`). */
         query?: string;
         /**
          * @description `all` · `leads` — gave an email · `recent` — active in the last 30 days
@@ -22251,7 +22276,7 @@ export interface operations {
     parameters: {
       query?: {
         view?: 'all' | 'unassigned' | 'my_open' | 'solved';
-        /** @description Case-insensitive match against subject and customer name/email (anywhere in the text), and the customer's pre-chat username (from its start). */
+        /** @description Case-insensitive match against subject and customer name/email (anywhere in the text), and the customer's pre-chat username (from its start). Email and username are matched only for a caller whose role may see a player's contact details (`customers.contact.view`). */
         query?: string;
         /**
          * @description The column the whole collection is ordered by. `customer` sorts on the

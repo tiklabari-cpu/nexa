@@ -89,6 +89,7 @@ import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import { loadDailyDigests, settleDailyDigest, type DailyDigest } from './ai-digest.js';
 import { recordAbandonment } from './ai-unresolved.js';
 import { serialiseAiHandoff } from './ai-handoff-view.js';
+import { seesPlayerContact } from '../customers/player-contact.js';
 import {
   AI_MODE_SYSTEM_ACTOR,
   aiModeNoteText,
@@ -582,7 +583,9 @@ export class ChatService {
           where: { chatId: chat.id },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         });
-        detail.latest_ai_handoff = card ? serialiseAiHandoff(card) : null;
+        detail.latest_ai_handoff = card
+          ? serialiseAiHandoff(card, seesPlayerContact(principal))
+          : null;
       }
       return detail;
     });

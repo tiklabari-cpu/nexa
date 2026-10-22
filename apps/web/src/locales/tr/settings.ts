@@ -1407,6 +1407,7 @@ export const settings: Messages = {
   'permissions.group.logs': 'Kayıtlar',
   'permissions.capability.chats.view': 'Sohbetleri görme',
   'permissions.capability.tickets.view': 'Talepleri görme',
+  'permissions.capability.customers.contact.view': 'Oyuncunun e-postasını ve kullanıcı adını görme',
   'permissions.capability.customers.edit': 'Oyuncu kayıtlarını düzenleme',
   'permissions.capability.customers.ban': 'Oyuncu engelleme',
   'permissions.capability.customers.erase': 'Oyuncu verisini silme',

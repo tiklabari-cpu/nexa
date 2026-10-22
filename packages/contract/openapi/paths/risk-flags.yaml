@@ -15,7 +15,8 @@
 # anyone else they are null and `details_visible` is false.
 #
 # Raising or clearing a flag is pushed (`risk_flag_raised` /
-# `risk_flag_cleared`) and delivered to the workspace's webhooks under the same
+# `risk_flag_cleared`, without `member_key`: one frame reaches every
+# recipient, and the username is masked per person) and delivered to the workspace's webhooks under the same
 # names, without any text; an urgent flag is mailed to the supervisors, the
 # Responsible Gaming team and the addresses the settings name.
 

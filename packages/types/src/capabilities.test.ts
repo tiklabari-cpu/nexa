@@ -340,6 +340,25 @@ describe('scopesForRole with the workspace’s choices', () => {
     }
   });
 
+  it('masks a player’s contact details by a checked switch that moves no scope (tm 325.6)', () => {
+    const row = def('customers.contact.view');
+    expect(row.group).toBe('customers');
+    expect(row.values).toEqual(['off', 'on']);
+    expect(grantable(row).size).toBe(0);
+    // Today's behaviour for everyone: every role saw both fields before the matrix.
+    for (const role of MATRIX_ROLES) expect(row.defaults[role], role).toBe('on');
+    for (const role of ['admin', 'team_lead', 'agent'] as const) {
+      const off = [set(role, 'customers.contact.view', 'off')];
+      expect(capabilityChangeProblem(off[0]!), role).toBeNull();
+      expect(capabilitiesForRole(role, off)['customers.contact.view'], role).toBe('off');
+      expect(sorted(scopesForRole(role, off)), role).toEqual(sorted(scopesForRole(role, [])));
+    }
+    // The Founder column stays on: the cell is locked.
+    expect(
+      capabilitiesForRole('owner', [set('owner', row.key, 'off')])['customers.contact.view'],
+    ).toBe('on');
+  });
+
   it('narrows chat visibility by level: all → team → own → none', () => {
     const at = (level: string) => scopesForRole('admin', [set('admin', 'chats.view', level)]);
     expect(at('all')).toContain('chats--all:rw');

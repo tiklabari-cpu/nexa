@@ -10,6 +10,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
+import { maskPlayerContact, seesPlayerContact } from '../services/customers/player-contact.js';
 import { TRAFFIC_ACTIVITIES, TrafficService } from '../services/traffic/traffic-service.js';
 
 /**
@@ -87,8 +88,12 @@ export default async function trafficRoutes(app: FastifyInstance): Promise<void>
         }),
       );
 
+      // The visitor's address, masked for a caller who may not see a player's
+      // contact details (tm 325.6). The board's push names only the customer
+      // id, so the masked list is the only way the address reaches the board.
+      const contactVisible = seesPlayerContact(request.requirePrincipal());
       return reply.send({
-        items: live.items,
+        items: live.items.map((item) => maskPlayerContact(item, contactVisible)),
         total: live.total,
         ...(live.nextPageId ? { next_page_id: live.nextPageId } : {}),
       });

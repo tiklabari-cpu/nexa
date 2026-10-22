@@ -248,8 +248,13 @@ export interface RiskFlagSignal {
  * `risk_flag_cleared`), to the conversation's members, the supervisors and,
  * for an urgent flag, the Responsible Gaming team: the signal, and what the
  * panel shows of the flag without asking — still nothing anyone wrote.
+ *
+ * Without `member_key` (tm 325.6): it is the player's folded pre-chat
+ * username, and one frame reaches every recipient while
+ * `customers.contact.view` is a per-person answer. The panel reads it, masked
+ * or not, from `GET /risk-flags`.
  */
-export interface RiskFlagPush extends RiskFlagSignal {
+export interface RiskFlagPush extends Omit<RiskFlagSignal, 'member_key'> {
   readonly customer_id: string | null;
   readonly source: RiskFlagSource;
   readonly rule_ref: string | null;

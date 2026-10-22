@@ -34,6 +34,7 @@ import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { visitedPagesOf, visitorPageUrls } from '../campaigns/campaign-matching.js';
+import { maskPlayerContact } from './player-contact.js';
 
 export type CustomerSegment = 'all' | 'leads' | 'recent' | 'banned';
 
@@ -52,6 +53,13 @@ export interface ListOptions {
   /** Column the whole collection is ordered by; defaults to most recent activity. */
   sort?: CustomerSortKey;
   order?: SortOrder;
+  /**
+   * Whether the caller may see a player's email and username
+   * (`seesPlayerContact`, tm 325.6). False masks both on every row and keeps
+   * `query` off them — a match on an address the row does not show would
+   * still confirm it. Defaults to true.
+   */
+  contactVisible?: boolean;
 }
 
 export interface CustomerSummary {
@@ -156,9 +164,10 @@ export class CustomerService {
     const tableFields = await this.#tableCustomFields(tx, tenant, pageIds);
     const connections = await connectionCounts(tx, tenant, pageIds);
 
+    const contactVisible = options.contactVisible ?? true;
     return {
       items: page.map((row) => ({
-        ...toSummary(row, connections.get(row.id) ?? 0),
+        ...maskPlayerContact(toSummary(row, connections.get(row.id) ?? 0), contactVisible),
         table_custom_fields: tableFields.get(row.id) ?? [],
       })),
       total,
@@ -166,10 +175,12 @@ export class CustomerService {
     };
   }
 
+  /** `contactVisible` false masks the email and username (`ListOptions`). */
   async get(
     tx: TenantClient,
     tenant: TenantContext,
     customerId: string,
+    contactVisible = true,
   ): Promise<CustomerDetail | null> {
     const customer = await tx.customer.findFirst({
       where: { id: customerId },
@@ -204,7 +215,7 @@ export class CustomerService {
     ]);
 
     return {
-      ...toSummary(customer, connections.get(customer.id) ?? 0),
+      ...maskPlayerContact(toSummary(customer, connections.get(customer.id) ?? 0), contactVisible),
       banned_at: customer.bannedAt?.toISOString() ?? null,
       custom_fields: customFields,
       // The same subset `list()` returns, derived here rather than a second
@@ -320,17 +331,20 @@ export class CustomerService {
 
     if (options.query) {
       const contains = options.query.trim();
+      const contact: Prisma.CustomerWhereInput[] =
+        (options.contactVisible ?? true)
+          ? [
+              { email: { contains, mode: 'insensitive' } },
+              // A handle is typed from its first character, so it is matched as
+              // a prefix of the folded column rather than anywhere inside the
+              // raw one (tm 278). `insensitive` keeps the folding on Postgres's
+              // side: a JS `toLowerCase()` turns "İ" into "i̇", which
+              // `lower()` does not.
+              { usernameNormalized: { startsWith: contains, mode: 'insensitive' } },
+            ]
+          : [];
       filters.push({
-        OR: [
-          { name: { contains, mode: 'insensitive' } },
-          { email: { contains, mode: 'insensitive' } },
-          // A handle is typed from its first character, so it is matched as a
-          // prefix of the folded column rather than anywhere inside the raw
-          // one (tm 278). `insensitive` keeps the folding on Postgres's side:
-          // a JS `toLowerCase()` turns "İ" into "i̇", which `lower()` does not.
-          { usernameNormalized: { startsWith: contains, mode: 'insensitive' } },
-          { phone: { contains } },
-        ],
+        OR: [{ name: { contains, mode: 'insensitive' } }, ...contact, { phone: { contains } }],
       });
     }
 

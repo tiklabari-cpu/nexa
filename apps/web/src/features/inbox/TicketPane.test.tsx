@@ -411,6 +411,24 @@ describe('TicketPane customer notice (FR-MOD-08.7.5)', () => {
     expect(handles.calls.some((c) => c.path === '/settings/ticket-email-templates')).toBe(false);
   });
 
+  it('still offers a notice when the address is masked from this person, without naming it (tm 325.6)', async () => {
+    // `customers.contact.view` off: the server sends no address, but the
+    // customer left one, and the notice is mailed server-side.
+    const handles = renderPaneWithTemplates(
+      makeDetail({ customer_email: null, customer_has_email: true }),
+    );
+
+    const picker = await screen.findByLabelText('Notify the customer');
+    await userEvent.selectOptions(picker, 'tpl-1');
+    expect(screen.getByText('The next status change e-mails the customer.')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'solved');
+
+    await waitFor(() => {
+      const patch = handles.calls.find((c) => c.method === 'PATCH' && c.path === '/tickets/TCK1');
+      expect(patch?.body).toEqual({ status: 'solved', email_template_id: 'tpl-1' });
+    });
+  });
+
   it('hides the picker when the workspace has authored none', async () => {
     renderPaneWithTemplates(makeDetail(REACHABLE), []);
     await screen.findByLabelText('Status');

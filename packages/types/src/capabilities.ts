@@ -19,14 +19,15 @@
  *   - **checked** — `scopes` is empty; a server check reads the resolved value
  *     (`capabilitiesForRole`). `chats.view`'s `own` level is one (it holds
  *     the `team` level's scopes; the narrowing to assigned and joined chats is
- *     the check's), and so are the Founder-only rows but `billing.manage`
- *     (whose scope is the owner's alone, `OWNER_SCOPES`).
+ *     the check's), `customers.contact.view` is another (the player's email
+ *     and username, masked where they are serialised), and so are the
+ *     Founder-only rows but `billing.manage` (whose scope is the owner's
+ *     alone, `OWNER_SCOPES`).
  *
  * A capability whose surface does not exist yet is not listed here — a row
  * that changes nothing would tell the Founder something false. The feature
  * that builds the surface adds its row with its check (timeline export #334,
- * AI publish #316, team takeover #326, team-scoped reports #368, a player's
- * contact details tm 325.6).
+ * AI publish #316, team takeover #326, team-scoped reports #368).
  *
  * Here rather than in `apps/api` for the reason `role-scopes.ts` is: the REST
  * edge and the RTM gateway have to reach the same answer for the same session
@@ -179,9 +180,22 @@ export const CAPABILITIES = [
     floorRole: 'agent',
     defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'team' },
   },
-  // Oyuncu verisi. Seeing a player's email and username (RL-02-S2) joins this
-  // group with its masking check (tm 325.6): until a server reads it, a row
-  // the Founder could switch off would mask nothing (tm 325.3 security review).
+  // Oyuncu verisi
+  {
+    // Checked (tm 325.6): seeing a player's email and pre-chat username
+    // (RL-02-S2). Reading the record itself is in the base set; `off` masks the
+    // two fields in every agent-facing response and push, and drops them from
+    // the searches that would otherwise confirm a guessed address
+    // (`services/customers/player-contact.ts`). On for everyone by default —
+    // what every role saw before the matrix.
+    key: 'customers.contact.view',
+    group: 'customers',
+    labelKey: 'permissions.capability.customers.contact.view',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'agent',
+    defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'on' },
+  },
   {
     // Editing player records, and the engage tools gated on the same scope
     // (campaigns, goals, traffic actions).

@@ -35,7 +35,6 @@ import { deriveCodeChallenge, generateToken } from '../../src/lib/crypto.js';
 import {
   grantToken,
   ownerClient,
-  seedDefaultBrand,
   seedFixtures,
   TEST_PASSWORD,
   type Fixtures,
@@ -44,13 +43,6 @@ import {
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const REASON = 'Vardiya düzeni değişti';
-const CARD = {
-  brand: 'visa',
-  last4: '4242',
-  exp_month: 12,
-  exp_year: 2030,
-  holder_name: 'Jane Doe',
-};
 
 type Headers = Record<string, string>;
 
@@ -237,24 +229,26 @@ describe('credentials under the permission matrix (RL-02 · tm 325.3)', () => {
       expect(await status(session, overview)).toBe(200);
     });
 
-    it("takes billing from a Yönetici's session and personal token when the Founder takes it from the column (FR-MOD-04.RBAC)", async () => {
-      await seedDefaultBrand(owner, fx.a.licenseId);
+    it("takes the audit trail from a Yönetici's session and personal token when the Founder takes it from the column (FR-MOD-04.RBAC)", async () => {
+      // Billing was this test's row until K7 made it Founder-only (tm 325.5,
+      // `permission-k7-defaults.test.ts`); the audit trail is an admin row the
+      // Founder can still switch.
       const admin = await member(fx.a, 'admin');
       const session = await signIn(fx.a, admin.email);
       const minted = await mintPat(session);
       expect(minted.statusCode).toBe(201);
       const pat = minted.json() as { token: string; scopes: string[] };
-      expect(pat.scopes).toContain('billing_manage');
+      expect(pat.scopes).toContain('audit_log--all:ro');
       const token = basic(admin.id, pat.token);
-      expect((await server.put('/billing/payment-method', CARD, token)).statusCode).toBe(200);
+      expect(await status(token, '/audit-log')).toBe(200);
 
-      await put([{ role: 'admin', capability: 'billing.manage', value: 'off' }]);
+      await put([{ role: 'admin', capability: 'logs.audit.view', value: 'off' }]);
 
       for (const auth of [session, token]) {
-        expect((await server.put('/billing/payment-method', CARD, auth)).statusCode).toBe(403);
-        expect((await me(auth)).scopes).not.toContain('billing_manage');
+        expect(await status(auth, '/audit-log')).toBe(403);
+        expect((await me(auth)).scopes).not.toContain('audit_log--all:ro');
       }
-      // Reading the bill is another row's (`reports.view`), and it stays.
+      // Reports are another row's, and they stay.
       expect(await status(token, overview)).toBe(200);
     });
   });

@@ -15,6 +15,11 @@ export const billing: Messages = {
   'billing.readOnly.description':
     'Deneme süresi sona erdi. Mevcut sohbetler okunabilir ve dışa aktarılabilir durumda kalır, hiçbir şey silinmedi — ama bir plan etkinleşene kadar yeni sohbet başlatılamaz.',
 
+  // Faturayı yalnız Kurucu değiştirir (K7)
+  'billing.ownerOnly.title': 'Faturalandırmayı yalnız Kurucu değiştirebilir.',
+  'billing.ownerOnly.description':
+    'Planı, kullanımı, faturaları ve ödeme yöntemini görebilirsiniz. Planı, koltukları ya da ödeme yöntemini değiştirmek ve paket satın almak Kurucu’ya aittir.',
+
   // Trial status banner
   'billing.trial.daysLeft.one': 'Deneme sürenizden {count} gün kaldı',
   'billing.trial.daysLeft.other': 'Deneme sürenizden {count} gün kaldı',

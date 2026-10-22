@@ -26,7 +26,7 @@ import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
 import { knowledgeScopeOfFiling } from '../src/services/ai/config-draft.js';
 import { type AuditContext } from '../src/services/audit/audit-log.js';
-import { ADMIN_SCOPES, type AgentPrincipal } from '../src/services/auth/principal.js';
+import { ADMIN_SCOPES, OWNER_SCOPES, type AgentPrincipal } from '../src/services/auth/principal.js';
 import { InvoiceCloseSweeper } from '../src/services/billing/invoice-close-sweep.js';
 import { previousPeriod } from '../src/services/billing/invoice-service.js';
 import { currentPeriod } from '../src/services/billing/metering.js';
@@ -928,7 +928,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       // here drifts the moment a module adds a scope, and the symptom is that
       // the demo owner cannot open the feature that was just built — which is
       // exactly what happened when Playbook and then tickets landed.
-      scopes: [...ADMIN_SCOPES],
+      scopes: [...ADMIN_SCOPES, ...OWNER_SCOPES],
     },
   });
 
@@ -1107,7 +1107,7 @@ async function seedTickets(input: {
     organizationId,
     role: 'owner',
     capabilities: capabilitiesForRole('owner', []),
-    scopes: [...ADMIN_SCOPES],
+    scopes: [...ADMIN_SCOPES, ...OWNER_SCOPES],
     tokenId: 'seed',
     tokenKind: 'pat',
   };

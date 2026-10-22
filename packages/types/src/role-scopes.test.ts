@@ -4,6 +4,7 @@ import { effectiveScopes, SCOPES } from './scopes.js';
 import {
   ADMIN_SCOPES,
   DEFAULT_AGENT_SCOPES,
+  OWNER_SCOPES,
   ROLE_RANK,
   TEAM_LEAD_SCOPES,
   defaultScopesForRole,
@@ -16,10 +17,27 @@ describe('defaultScopesForRole', () => {
     expect(defaultScopesForRole('agent')).toEqual(DEFAULT_AGENT_SCOPES);
   });
 
-  it('adds the tenant-wide set from admin upwards', () => {
-    for (const role of ['admin', 'viceowner', 'owner']) {
+  it('adds the tenant-wide set from admin upwards, and the bill on top for the owner', () => {
+    for (const role of ['admin', 'viceowner']) {
       expect(defaultScopesForRole(role)).toEqual([...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES]);
     }
+    expect(defaultScopesForRole('owner')).toEqual([
+      ...DEFAULT_AGENT_SCOPES,
+      ...ADMIN_SCOPES,
+      ...OWNER_SCOPES,
+    ]);
+  });
+
+  it('K7: lets an admin or vice owner read the bill and only the owner change it (FR-MOD-04.RBAC)', () => {
+    for (const role of ['admin', 'viceowner']) {
+      const held = effectiveScopes(defaultScopesForRole(role));
+      expect(held.has('reports_read'), role).toBe(true);
+      for (const scope of ['billing_manage', 'billing_admin', 'billing--all:rw']) {
+        expect(held.has(scope), `${role} ${scope}`).toBe(false);
+      }
+    }
+    expect(defaultScopesForRole('owner')).toContain('billing_manage');
+    expect(ADMIN_SCOPES).not.toContain('billing_manage');
   });
 
   it('gives a Team Lead the Team Lead set — the agent set until its team-bounded checks exist (RL-01)', () => {
@@ -61,10 +79,17 @@ describe('defaultScopesForRole', () => {
   it('lists only scopes the catalogue actually defines', () => {
     // A typo in either list would otherwise sit there granting nothing, or
     // silently drop a real grant when intersected below.
-    for (const scope of [...DEFAULT_AGENT_SCOPES, ...TEAM_LEAD_SCOPES, ...ADMIN_SCOPES]) {
+    for (const scope of [
+      ...DEFAULT_AGENT_SCOPES,
+      ...TEAM_LEAD_SCOPES,
+      ...ADMIN_SCOPES,
+      ...OWNER_SCOPES,
+    ]) {
       expect(SCOPES).toContain(scope);
     }
-    expect(new Set(ADMIN_SCOPES).size).toBe(ADMIN_SCOPES.length);
+    expect(new Set([...ADMIN_SCOPES, ...OWNER_SCOPES]).size).toBe(
+      ADMIN_SCOPES.length + OWNER_SCOPES.length,
+    );
     expect(new Set(DEFAULT_AGENT_SCOPES).size).toBe(DEFAULT_AGENT_SCOPES.length);
     expect(new Set(TEAM_LEAD_SCOPES).size).toBe(TEAM_LEAD_SCOPES.length);
   });

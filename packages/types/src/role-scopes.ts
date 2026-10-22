@@ -85,7 +85,10 @@ export const DEFAULT_AGENT_SCOPES: Scope[] = [
   'brands--all:ro',
 ];
 
-/** An owner or admin gets the tenant-wide set. */
+/**
+ * An owner or admin gets the tenant-wide set — everything but changing the
+ * bill, which is the owner's alone ({@link OWNER_SCOPES}).
+ */
 export const ADMIN_SCOPES: Scope[] = [
   'accounts--all:rw',
   'agents--all:rw',
@@ -140,8 +143,23 @@ export const ADMIN_SCOPES: Scope[] = [
   // timer, so it is an owner/admin power and stops here — `DEFAULT_AGENT_SCOPES`
   // deliberately does not carry it, exactly as it carries no reports scope at all.
   'reports_manage',
-  'billing_manage',
 ];
+
+/**
+ * What the owner holds on top of {@link ADMIN_SCOPES}: changing the plan, the
+ * seats, the payment method and buying packages.
+ *
+ * Owner's decision K7 (RL-02-S4 · tm 325.5): a Yönetici sees billing and does
+ * not change it. Until then `billing_manage` sat in the admin set and every
+ * admin and vice owner could re-price the workspace. Reading the bill stays
+ * with `reports_read` (`BILLING_READ_SCOPES`, `routes/reports.ts`), which the
+ * admin set keeps. The billing writes are `exactRole: 'owner'` as well: a
+ * personal access token minted for an admin before this change still lists
+ * `billing_manage`, and a personal token loses only what the matrix takes
+ * from the role's *default* set (`credential-scopes.ts`) — this moved the
+ * default, so the role gate is what refuses it.
+ */
+export const OWNER_SCOPES: Scope[] = ['billing_manage'];
 
 /**
  * A Team Lead's set (RL-01): a Team Member's, and what leading a team adds.
@@ -169,6 +187,7 @@ export const TEAM_LEAD_SCOPES: Scope[] = [...DEFAULT_AGENT_SCOPES];
  * Team Member's set: unknown is the lowest rank, never a higher one.
  */
 export function defaultScopesForRole(role: string): Scope[] {
+  if (role === 'owner') return [...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES, ...OWNER_SCOPES];
   if (roleAtLeast(role as AgentRole, 'admin')) return [...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES];
   if (role === 'team_lead') return [...TEAM_LEAD_SCOPES];
   return [...DEFAULT_AGENT_SCOPES];

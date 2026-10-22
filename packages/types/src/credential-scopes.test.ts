@@ -100,11 +100,11 @@ describe('the matrix takes from a role', () => {
     }
   });
 
-  it("takes billing from an admin's session, partner grant and personal token alike", () => {
-    const billingOff = [set('admin', 'billing.manage', 'off')];
+  it("takes a workspace power from an admin's session, partner grant and personal token alike", () => {
+    const webhooksOff = [set('admin', 'settings.webhooks', 'off')];
     for (const grant of GRANTS) {
-      const scopes = resolve(grant, 'admin', [...ADMIN_SCOPES], billingOff);
-      expect(scopes, grant).not.toContain('billing_manage');
+      const scopes = resolve(grant, 'admin', [...ADMIN_SCOPES], webhooksOff);
+      expect(scopes, grant).not.toContain('webhooks--all:rw');
       expect(scopes, grant).toContain('reports_read');
     }
   });
@@ -184,12 +184,46 @@ describe('a role change on an open credential (SEC-2 · tm 146)', () => {
   });
 });
 
+describe('K7: billing became the Founder’s (tm 325.5)', () => {
+  // What an admin or vice owner was minted with before the change: the old
+  // admin set, `billing_manage` in it.
+  const before = [...defaultScopesForRole('admin'), 'billing_manage'];
+
+  it('takes billing from an admin’s and a vice owner’s open session and partner grant at the next resolution (FR-MOD-04.RBAC)', () => {
+    for (const role of ['admin', 'viceowner']) {
+      for (const grant of ['session', 'delegated'] as const) {
+        const scopes = resolve(grant, role, before);
+        expect(scopes, `${grant} ${role}`).not.toContain('billing_manage');
+        // Reading the bill is `reports.view`'s, and it stays.
+        expect(scopes, `${grant} ${role}`).toContain('reports_read');
+      }
+    }
+  });
+
+  it('leaves it on an admin’s earlier personal token — the billing routes’ owner gate refuses it', () => {
+    // A personal token loses only what the matrix takes from the role's
+    // default set, and `billing_manage` is no longer in it: the route's
+    // `exactRole: 'owner'` is the bar (`routes/reports.ts`).
+    expect(resolve('personal', 'admin', before)).toContain('billing_manage');
+    expect(delegableScopes('admin').has('billing_manage')).toBe(false);
+  });
+
+  it('keeps it on every credential of the owner', () => {
+    for (const grant of GRANTS) {
+      expect(resolve(grant, 'owner', defaultScopesForRole('owner')), grant).toContain(
+        'billing_manage',
+      );
+    }
+    expect(delegableScopes('owner').has('billing_manage')).toBe(true);
+  });
+});
+
 describe('what a credential can never do', () => {
   const restrictive = [
     set('agent', 'chats.view', 'own'),
     set('agent', 'reports.view', 'all'),
     set('agent', 'customers.edit', 'on'),
-    set('admin', 'billing.manage', 'off'),
+    set('admin', 'settings.webhooks', 'off'),
     set('admin', 'chats.view', 'team'),
     set('team_lead', 'tickets.view', 'all'),
   ];

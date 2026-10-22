@@ -14,7 +14,9 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
+import { defaultScopesForRole } from '@siyahtus/types';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { useAuth } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
@@ -263,12 +265,34 @@ function renderBilling(ui: ReactElement): void {
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+/** Who is looking: their role and the scopes a sign-in gives it. */
+function signInAs(role: string, scopes: string[] = defaultScopesForRole(role)): void {
+  useAuth.setState({
+    agent: {
+      account_id: 'a-1',
+      email: 'dana@acme.localhost',
+      name: 'Dana Okonkwo',
+      role,
+      organization_id: 'o-1',
+      license_id: '1000003',
+      scopes,
+      routing_status: 'accepting_chats',
+    },
+  });
+}
+
 beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
   api.put.mockReset();
   api.getBlob.mockReset();
+  // The owner, unless a test says otherwise: only the owner changes the bill (K7).
+  signInAs('owner');
+});
+
+afterEach(() => {
+  useAuth.setState({ agent: null });
 });
 
 describe('BillingPage — AI resolutions meter', () => {
@@ -1389,6 +1413,87 @@ describe('BillingPage — raw server values read as words (D21)', () => {
     await screen.findByText('Plan, usage and charges for period July 2026.');
 
     expect(planCard('Plan')).toHaveTextContent('platinum');
+  });
+});
+
+describe('BillingPage — only the Owner changes billing (K7 · tm 325.5)', () => {
+  const OWNER_ONLY = 'Only the Owner can change billing.';
+
+  it('shows a Yönetici every figure with the levers greyed out and nothing to buy or update (FR-MOD-04.RBAC)', async () => {
+    signInAs('admin');
+    mockBilling({ paymentMethod: null, seats: 4 });
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByText(OWNER_ONLY)).toBeInTheDocument();
+    // The figures are all there.
+    expect(screen.getByTestId('ai-counter')).toBeInTheDocument();
+    expect(screen.getByTestId('seat-count')).toHaveTextContent('4');
+    expect(await screen.findByTestId('api-package-essential')).toHaveTextContent('$29.99');
+    expect(await screen.findByTestId('payment-method-empty')).toBeInTheDocument();
+
+    // The levers are shown, and none moves.
+    expect(await screen.findByTestId('plan-option-enterprise')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Monthly' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Annual/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add a seat' })).toBeDisabled();
+
+    // Nothing to buy, no card to change.
+    expect(screen.queryByRole('button', { name: 'Buy packs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Buy Essential' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /payment method/i })).not.toBeInTheDocument();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('reads a vice owner the same way — the Yönetici column', async () => {
+    signInAs('viceowner');
+    mockBilling({});
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByText(OWNER_ONLY)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a seat' })).toBeDisabled();
+  });
+
+  it('leaves the Owner every lever, with no such notice', async () => {
+    mockBilling({ paymentMethod: null });
+    renderBilling(<BillingPage />);
+
+    await screen.findByTestId('ai-counter');
+    expect(screen.queryByText(OWNER_ONLY)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a seat' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Buy packs' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Buy Essential' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Add payment method' })).toBeEnabled();
+  });
+
+  it('asks for the billing scope as well as the role, as the server does', async () => {
+    // An owner whose session the matrix or a narrow sign-in left without it.
+    signInAs(
+      'owner',
+      defaultScopesForRole('owner').filter((scope) => scope !== 'billing_manage'),
+    );
+    mockBilling({});
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByText(OWNER_ONLY)).toBeInTheDocument();
+  });
+
+  it('says who changes billing in Turkish', async () => {
+    signInAs('admin');
+    mockBilling({});
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <BillingPage />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByText('Faturalandırmayı yalnız Kurucu değiştirebilir.'),
+    ).toBeInTheDocument();
+    resetLocale();
   });
 });
 

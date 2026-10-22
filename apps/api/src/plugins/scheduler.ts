@@ -16,6 +16,7 @@ import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import type { Env } from '../config/env.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
+import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import type { RealtimePublisher } from '../services/realtime/publisher.js';
 import { buildSchedulerJobs } from '../services/scheduler/jobs.js';
@@ -44,6 +45,8 @@ export interface SchedulerPluginOptions {
   knowledge?: KnowledgeService;
   /** The stalled-AI watchdog's push to the agent it routes to (tm 293.6). */
   publisher?: RealtimePublisher;
+  /** The server's metered model, which titles the unresolved questions' clusters (tm 317.2). */
+  llm?: MeteredLlm;
 }
 
 async function schedulerPlugin(
@@ -66,6 +69,7 @@ async function schedulerPlugin(
     ...(options.automations ? { automations: options.automations } : {}),
     ...(options.knowledge ? { knowledge: options.knowledge } : {}),
     ...(options.publisher ? { publisher: options.publisher } : {}),
+    ...(options.llm ? { llm: options.llm } : {}),
   })) {
     scheduler.register(job);
   }

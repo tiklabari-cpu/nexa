@@ -15,8 +15,10 @@ import {
   TOPIC_MIN_CONVERSATIONS,
   TOPIC_SIMILARITY_THRESHOLD,
   clusterTopics,
+  labelTopic,
   type TopicDoc,
 } from './topics.js';
+import { tokenize } from './embedding.js';
 
 // Within a topic the conversations share the topic's vocabulary, as the demo
 // seed (07.6-d) crafts them; the lexical embedding groups on shared terms.
@@ -222,5 +224,40 @@ describe('clusterTopics — calibrated constants', () => {
 
   it('needs at least two conversations for a topic', () => {
     expect(TOPIC_MIN_CLUSTER_SIZE).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('labelTopic — naming one group (unresolved questions · tm 317.2)', () => {
+  const papara = [
+    'Papara ile yatırdım gözükmüyor',
+    'Papara yatırımım hesabıma gözükmüyor',
+    'papara ile para yatırdım hala gözükmüyor',
+  ];
+  const others = ['Çekim talebim onaylanmadı', 'Bonus çevrim şartı nedir', 'Çekim ne zaman gelir'];
+
+  it('names a group by the terms it shares and the others do not', () => {
+    const { label, keywords } = labelTopic(papara, others);
+    // Equal weight: the alphabet breaks the tie, as it does for a topic.
+    expect(keywords.slice(0, 2)).toEqual([tokenize('gözükmüyor')[0], 'papara']);
+    expect(label).toBe(keywords.join(' '));
+  });
+
+  it('names a lone text by its own words, with nothing to tell it apart from', () => {
+    expect(labelTopic(['Canlı casino masaları ne zaman açık']).keywords).toHaveLength(3);
+  });
+
+  it('never names a group by a number, and says nothing when nothing else is left', () => {
+    const { keywords } = labelTopic(['4111 1111 1111 1111 9876', '4111 1111 1111 1111 9876']);
+    expect(keywords).toEqual([]);
+    expect(labelTopic(['kartım 4111 1111 1111 1111 çalışmıyor']).label).not.toMatch(/\d/);
+  });
+
+  it('never names a group by a Turkish function word', () => {
+    const { keywords } = labelTopic(['ile ve bir Papara', 'ile ve bir Papara'], others);
+    expect(keywords).toEqual(['papara']);
+  });
+
+  it('is deterministic', () => {
+    expect(labelTopic([...papara].reverse(), others)).toEqual(labelTopic(papara, others));
   });
 });

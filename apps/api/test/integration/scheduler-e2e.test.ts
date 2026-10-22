@@ -114,6 +114,8 @@ const UNCONDITIONAL = [
   'invoice_close',
   'ai_stall',
   'ai_sandbox_sessions',
+  'ai_unresolved_cluster',
+  'ai_unresolved_merge',
 ];
 
 /**
@@ -413,6 +415,8 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_UNVERIFIED_SIGNUPS_MS: TICK_MS,
         SCHEDULE_AI_STALL_MS: TICK_MS,
         SCHEDULE_AI_SANDBOX_SESSIONS_MS: TICK_MS,
+        SCHEDULE_AI_UNRESOLVED_CLUSTER_MS: TICK_MS,
+        SCHEDULE_AI_UNRESOLVED_MERGE_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -541,7 +545,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     expect(sweep?.last_run_at).toBeNull();
   });
 
-  it("says so on /health — enabled, eleven jobs, and what each one's last pass did", () => {
+  it("says so on /health — enabled, thirteen jobs, and what each one's last pass did", () => {
     expect(health.scheduler.enabled).toBe(true);
     expect(health.scheduler.jobs.map((job) => job.name)).toEqual([
       'chat_timeout',
@@ -555,6 +559,8 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'unverified_signups',
       'ai_stall',
       'ai_sandbox_sessions',
+      'ai_unresolved_cluster',
+      'ai_unresolved_merge',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -610,6 +616,8 @@ describe('two API instances sharing one Redis', () => {
       SCHEDULE_KNOWLEDGE_REFRESH_MS: '1500',
       SCHEDULE_INVOICE_CLOSE_MS: '1500',
       SCHEDULE_AI_SANDBOX_SESSIONS_MS: '1500',
+      SCHEDULE_AI_UNRESOLVED_CLUSTER_MS: '1500',
+      SCHEDULE_AI_UNRESOLVED_MERGE_MS: '1500',
     };
     // Booted together so the gap between the two `scheduler.start()` calls is
     // as small as two concurrent boots allow — it has to be under the lock's
@@ -719,6 +727,8 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_UNVERIFIED_SIGNUPS_MS: NEVER_MS,
       SCHEDULE_AI_STALL_MS: NEVER_MS,
       SCHEDULE_AI_SANDBOX_SESSIONS_MS: NEVER_MS,
+      SCHEDULE_AI_UNRESOLVED_CLUSTER_MS: NEVER_MS,
+      SCHEDULE_AI_UNRESOLVED_MERGE_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 
@@ -801,6 +811,8 @@ describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICA
       SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
       SCHEDULE_AI_STALL_MS: NEVER_MS,
       SCHEDULE_AI_SANDBOX_SESSIONS_MS: NEVER_MS,
+      SCHEDULE_AI_UNRESOLVED_CLUSTER_MS: NEVER_MS,
+      SCHEDULE_AI_UNRESOLVED_MERGE_MS: NEVER_MS,
     });
 
     await waitForAll({

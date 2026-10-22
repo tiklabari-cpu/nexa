@@ -43,14 +43,25 @@
  * `ai_sandbox_sessions` (tm 314.2) deletes the AI test bench's "talk like a
  * player" sessions past their `expires_at`, which the routes already refuse —
  * test data, never a conversation; no CLI script either.
+ *
+ * `ai_unresolved_cluster` and `ai_unresolved_merge` (tm 317.2) group the
+ * questions the AI could not resolve, title them, count them and raise the
+ * surge alarm (`services/ai/unresolved/cluster-job.ts`) — the second job given
+ * the realtime publisher, for the console's notice. They embed and title with
+ * the server's providers, metered on the workspace's allowance; no CLI script.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
-import { resolveEmbeddingInferenceProvider } from '../ai/inference.js';
+import { AiDailyBudget, aiDailyCaps } from '../ai/ai-daily-budget.js';
+import { resolveEmbeddingInferenceProvider, resolveInferenceProvider } from '../ai/inference.js';
 import { KbArticleKnowledgeSweeper } from '../ai/kb-article-knowledge.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
+import { MeteredLlm } from '../ai/metered-llm.js';
+import { createLlmProvider, type LlmProvider } from '../ai/provider/llm-provider.js';
+import { defaultLlmLogger } from '../ai/provider/openai-llm-provider.js';
+import { UnresolvedClusterer, UnresolvedClusterMerger } from '../ai/unresolved/cluster-job.js';
 import { KnowledgeTableRowKnowledgeSweeper } from '../knowledge-tables/row-knowledge.js';
 import { KnowledgeTableStaleSweeper } from '../knowledge-tables/stale-sweep.js';
 import { SandboxSessionSweeper } from '../ai/simulation/sandbox-sweep.js';
@@ -126,6 +137,13 @@ export interface SchedulerJobsOptions {
    * points — the hand-over is written all the same and seen on the next poll.
    */
   publisher?: RealtimePublisher;
+  /**
+   * The model that titles the unresolved questions' clusters (tm 317.2) — the
+   * server's metered instance. Omitted, one is built from `env` the way
+   * {@link createMeteredEmbeddings} builds the embeddings: the configured
+   * provider, metered over `db`.
+   */
+  llm?: LlmProvider | MeteredLlm;
 }
 
 /**
@@ -139,12 +157,22 @@ export function buildSchedulerJobs({
   mailer,
   automations,
   publisher,
+  llm,
   knowledge = new KnowledgeService({
     embeddings: createMeteredEmbeddings(db, env),
     retrievalThreshold: env.RETRIEVAL_THRESHOLD,
   }),
 }: SchedulerJobsOptions): JobDefinition[] {
   const intervals = jobIntervals(env);
+  // The unresolved questions' providers (tm 317.2): the knowledge service's
+  // embeddings, so a cluster lives in the space the turns search in.
+  const clusterLlm =
+    llm ??
+    new MeteredLlm(
+      createLlmProvider(env.LLM_PROVIDER, env.llm, { logger: defaultLlmLogger() }),
+      new AiDailyBudget(db, aiDailyCaps(env), { logger: defaultLlmLogger() }),
+    );
+  const clusterEmbeddings = knowledge.embeddings;
 
   // Built once and reused across passes, the same instance a long-lived
   // request-handling server would already have — construction itself does no
@@ -422,6 +450,58 @@ export function buildSchedulerJobs({
       async run(context) {
         const report = await new SandboxSessionSweeper(db).run({ signal: context.signal });
         return { counts: { purged: report.totals.purged, batches: report.totals.batches } };
+      },
+    },
+    {
+      // The unresolved questions (tm 317.2 · AI-22): embed, group, title,
+      // count, reopen and alarm. Not gated: a workspace whose AI resolved
+      // everything has nothing for it to find.
+      name: 'ai_unresolved_cluster',
+      intervalMs: intervals.ai_unresolved_cluster,
+      async run(context) {
+        const report = await new UnresolvedClusterer(db, {
+          embeddings: clusterEmbeddings,
+          llm: clusterLlm,
+          llmLimits: {
+            maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+            timeoutMs: env.LLM_TIMEOUT_MS,
+            maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+          },
+          llmInference: resolveInferenceProvider(env),
+          embeddingInference: resolveEmbeddingInferenceProvider(env),
+          publisher: publisher ?? null,
+          logger: context.logger,
+        }).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            embedded: report.totals.embedded,
+            rebuilt: report.totals.rebuilt,
+            assigned: report.totals.assigned,
+            opened: report.totals.opened,
+            labelled: report.totals.labelled,
+            reopened: report.totals.reopened,
+            alerted: report.totals.alerted,
+          },
+        };
+      },
+    },
+    {
+      // The clusters the 15-minute pass split, merged nightly (tm 317.2 · AI-22 §4).
+      name: 'ai_unresolved_merge',
+      intervalMs: intervals.ai_unresolved_merge,
+      async run(context) {
+        const report = await new UnresolvedClusterMerger(db, {
+          space: clusterEmbeddings.space,
+          logger: context.logger,
+        }).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            merged: report.totals.merged,
+            absorbed: report.totals.absorbed,
+          },
+        };
       },
     },
   ];

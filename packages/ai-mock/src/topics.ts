@@ -241,6 +241,80 @@ export function clusterTopics(
 }
 
 /**
+ * Turkish function words, read the way {@link tokenize} reads every word — a
+ * title of "ile papara" names nothing the player asked. The embedding's own
+ * stop words are English and stay as they are: changing them would move
+ * every vector the knowledge search and the topic report compare.
+ */
+const LABEL_STOP_WORDS: ReadonlySet<string> = new Set(
+  [
+    'ile',
+    've',
+    'bir',
+    'bu',
+    'şu',
+    'da',
+    'de',
+    'ki',
+    'mi',
+    'mı',
+    'mu',
+    'mü',
+    'ne',
+    'ama',
+    'için',
+    'hala',
+    'gibi',
+    'çok',
+    'daha',
+    'ben',
+    'sen',
+    'biz',
+    'siz',
+    'ya',
+    'acaba',
+    'neden',
+    'nasıl',
+  ].flatMap((word) => tokenize(word)),
+);
+
+/**
+ * Name one group of texts by its distinguishing terms (up to `maxTerms`): the
+ * more of the group says a term, the better; the more of `others` — the
+ * texts it is told apart from — says it too, the worse. Scored as
+ * `members(term) × ln((others + 2) / (othersWith(term) + 1))`, ties broken by
+ * the alphabet, so with no others the group's most shared words name it. No
+ * digit-only term and no Turkish function word ever names it; with nothing
+ * left, the label is empty. The unresolved questions' clusters use it when no
+ * model writes their title (tm 317.2 · AI-22 §5) — {@link clusterTopics}'
+ * method, scored for one group instead of a whole report.
+ */
+export function labelTopic(
+  texts: readonly string[],
+  others: readonly string[] = [],
+  maxTerms = 3,
+): { label: string; keywords: string[] } {
+  const documentFrequency = (corpus: readonly string[]): Map<string, number> => {
+    const df = new Map<string, number>();
+    for (const text of corpus) {
+      for (const token of new Set(tokenize(text))) df.set(token, (df.get(token) ?? 0) + 1);
+    }
+    return df;
+  };
+  const members = documentFrequency(texts);
+  const outside = documentFrequency(others);
+  const scored = [...members]
+    .filter(([token]) => !PURE_NUMBER.test(token) && !LABEL_STOP_WORDS.has(token))
+    .map(([token, count]) => ({
+      token,
+      score: count * Math.log((others.length + 2) / ((outside.get(token) ?? 0) + 1)),
+    }))
+    .sort((a, b) => b.score - a.score || (a.token < b.token ? -1 : a.token > b.token ? 1 : 0));
+  const keywords = scored.slice(0, maxTerms).map((entry) => entry.token);
+  return { label: keywords.join(' '), keywords };
+}
+
+/**
  * The cluster's distinguishing terms: frequent inside it, rare across the corpus.
  *
  * A term common to every conversation ("order", when every chat mentions an

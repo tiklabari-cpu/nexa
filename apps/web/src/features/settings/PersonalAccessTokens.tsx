@@ -36,7 +36,10 @@
  *     on screen that the server is certain to reject. A refusal is still
  *     handled, because a role demoted mid-session leaves this list stale, and
  *     the server's sentence is shown as-is since it names which scope was
- *     refused.
+ *     refused. A scope the permission matrix only *lends* the role (tm 325.3)
+ *     is left out as well: the server refuses it in a token
+ *     (`scopes_not_delegable`), since the token would keep it after the loan
+ *     is taken back.
  *
  *  3. **Scopes are fixed at creation** (the PRD's KK). There is no edit path,
  *     here or on the server: a token's authority is decided once and the only
@@ -52,6 +55,7 @@
  * and the integration reference on the developer portal's manifest tab — this
  * item is the PAT surface the audit measured as absent.
  */
+import { delegableScopes } from '@siyahtus/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
@@ -97,6 +101,13 @@ export function PersonalAccessTokens(): ReactElement {
   const queryClient = useQueryClient();
 
   const sessionScopes = useAuth((s) => s.agent?.scopes ?? []);
+  const role = useAuth((s) => s.agent?.role);
+  // A scope the permission matrix lends the role beyond its default set stays
+  // on the session but cannot go into a token (403 `scopes_not_delegable`,
+  // tm 325.3): offering it would put a box on screen the server refuses.
+  const delegable = role === undefined ? null : delegableScopes(role);
+  const offeredScopes =
+    delegable === null ? sessionScopes : sessionScopes.filter((scope) => delegable.has(scope));
   const canEdit = sessionScopes.includes('accounts--my:rw');
   // `:rw` satisfies `:ro` at the route gate (`expandScope`), so a session with
   // either can read the list.
@@ -252,7 +263,7 @@ export function PersonalAccessTokens(): ReactElement {
                   {t('settings.pat.form.scopesHint')}
                 </p>
                 <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                  {sessionScopes.map((scope) => (
+                  {offeredScopes.map((scope) => (
                     <li key={scope}>
                       <label className="flex items-center gap-2 text-2xs">
                         <input

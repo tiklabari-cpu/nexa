@@ -383,6 +383,24 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'SsoConnection',
     keywords: ['saml', 'scim', 'identity provider'],
   },
+  // The permission matrix (RL-02 · tm 325.4): `GET /settings/permissions` is
+  // `access_rules` + admin rank — a Yönetici reads it, only the Kurucu saves.
+  {
+    slug: 'permissions',
+    group: 'security',
+    labelKey: 'settings.nav.section.permissions',
+    scope: ACCESS_RULES,
+    file: 'PermissionsMatrix',
+    keywords: ['roles', 'permission matrix', 'capabilities', 'yetki', 'izin', 'rol'],
+  },
+  // The caller's own capabilities (`/auth/me`) — every member, read-only.
+  {
+    slug: 'my-permissions',
+    group: 'security',
+    labelKey: 'settings.nav.section.myPermissions',
+    file: 'MyPermissions',
+    keywords: ['my role', 'what can i do', 'yetkilerim', 'access'],
+  },
   // The caller's own second factor (`/auth/me`).
   {
     slug: 'two-factor',

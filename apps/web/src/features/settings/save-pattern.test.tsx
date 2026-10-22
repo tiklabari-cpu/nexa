@@ -74,6 +74,7 @@ const EXEMPT: Readonly<Record<string, string>> = {
   Integrations: 'Read-only: the doors to the integration pages.',
   McpConnection: 'Read-only: the MCP manifest and the values to copy.',
   SensitiveData: 'Read-only: what is masked, built from the policy itself.',
+  MyPermissions: "Read-only: the person's own capabilities, from `/auth/me`.",
   // One act, not a setting: confirmed where it is taken, nothing held as a draft.
   Compliance:
     'Accepting the BAA is one irreversible act behind its own confirmation, not a setting.',

@@ -26,14 +26,15 @@ const { api } = vi.hoisted(() => ({
 const SESSION_SCOPES = ['accounts--my:rw', 'chats--access:rw', 'reports_read'];
 
 let currentScopes: string[] = SESSION_SCOPES;
+let currentRole: string | undefined;
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthStore>();
   return {
     ...actual,
     useApiClient: () => api,
-    useAuth: (selector: (state: { agent: { scopes: string[] } }) => unknown) =>
-      selector({ agent: { scopes: currentScopes } }),
+    useAuth: (selector: (state: { agent: { scopes: string[]; role?: string } }) => unknown) =>
+      selector({ agent: { scopes: currentScopes, role: currentRole } }),
   };
 });
 
@@ -48,8 +49,9 @@ const EXISTING = {
   expires_at: null,
 };
 
-function signInWith(scopes: string[] = SESSION_SCOPES): void {
+function signInWith(scopes: string[] = SESSION_SCOPES, role?: string): void {
   currentScopes = scopes;
+  currentRole = role;
 }
 
 function renderScreen(): ReturnType<typeof render> {
@@ -84,6 +86,20 @@ describe('PersonalAccessTokens — the scope picker', () => {
     expect(within(picker).queryByLabelText('accounts--my:ro', { exact: true })).toBeNull();
     expect(within(picker).queryByLabelText('chats--all:rw', { exact: true })).toBeNull();
     expect(within(picker).getAllByRole('checkbox')).toHaveLength(SESSION_SCOPES.length);
+  });
+
+  it('leaves out a scope the permission matrix only lends the role (tm 325.3 · RL-02)', async () => {
+    // An Agent whose workspace lent them reports: the session holds
+    // `reports_read`, but a token minted with it would keep it after the
+    // Kurucu takes the loan back, so the server refuses it (`scopes_not_delegable`).
+    signInWith(SESSION_SCOPES, 'agent');
+    renderScreen();
+    await screen.findByText('Nightly reporting job');
+
+    const picker = screen.getByRole('group', { name: 'Scopes' });
+    expect(within(picker).queryByLabelText('reports_read', { exact: true })).toBeNull();
+    expect(within(picker).getByLabelText('chats--access:rw', { exact: true })).toBeInTheDocument();
+    expect(within(picker).getAllByRole('checkbox')).toHaveLength(SESSION_SCOPES.length - 1);
   });
 
   it('keeps Create disabled until a name and at least one scope are given', async () => {

@@ -14222,7 +14222,7 @@
           "324"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T14:42:46.515Z",
+        "updatedAt": "2026-10-22T16:42:08.679Z",
         "subtasks": [
           {
             "id": 1,
@@ -14256,13 +14256,13 @@
             "description": "token-service/oauth/RTM anlık hesap + requireCapability + own görünürlük",
             "details": "Güvenlik incelemesi gerektiren asıl değişiklik.",
             "testStrategy": "Anlık etki; PAT; RTM paritesi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "325.2"
             ],
             "parentId": "325",
             "priority": "high",
-            "updatedAt": "2026-10-22T14:42:46.515Z"
+            "updatedAt": "2026-10-22T16:42:08.679Z"
           },
           {
             "id": 4,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T14:42:46.515Z",
+      "lastModified": "2026-10-22T16:42:08.680Z",
       "taskCount": 390,
       "completedCount": 313,
       "tags": [

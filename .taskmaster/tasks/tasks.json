@@ -14152,7 +14152,7 @@
           "281"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T04:28:15.942Z",
+        "updatedAt": "2026-10-22T05:27:48.043Z",
         "subtasks": [
           {
             "id": 1,
@@ -14160,11 +14160,11 @@
             "description": "types (team_lead, ROLE_RANK), CHECK genişletme, is_lead, davet ekipleri, kontrat",
             "details": "Üst görev 324 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "role-scopes birim; db:check-drift.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "324",
             "priority": "high",
-            "updatedAt": "2026-10-22T04:28:15.942Z"
+            "updatedAt": "2026-10-22T05:27:48.043Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T04:28:15.943Z",
+      "lastModified": "2026-10-22T05:27:48.044Z",
       "taskCount": 390,
       "completedCount": 312,
       "tags": [

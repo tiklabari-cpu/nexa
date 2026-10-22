@@ -294,16 +294,16 @@ describe('account menu', () => {
   afterEach(() => resetLocale());
 
   it('names the signed-in role as a word, not the server code (O8)', async () => {
-    useAuth.setState({ agent: { ...useAuth.getState().agent!, role: 'viceowner' } });
+    useAuth.setState({ agent: { ...useAuth.getState().agent!, role: 'team_lead' } });
     renderShell();
-    expect(screen.getByText('Vice owner')).toBeInTheDocument();
-    expect(screen.queryByText('viceowner')).not.toBeInTheDocument();
+    expect(screen.getByText('Team Lead')).toBeInTheDocument();
+    expect(screen.queryByText('team_lead')).not.toBeInTheDocument();
   });
 
   it('says it in Turkish when the panel is Turkish', () => {
     setLocale('tr');
     renderShell();
-    expect(screen.getByText('Sahip')).toBeInTheDocument();
+    expect(screen.getByText('Kurucu')).toBeInTheDocument();
     expect(screen.queryByText('owner')).not.toBeInTheDocument();
   });
 

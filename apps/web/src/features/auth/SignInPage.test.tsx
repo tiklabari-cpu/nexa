@@ -252,8 +252,8 @@ describe('SignInPage under SSO enforcement', () => {
     await userEvent.type(screen.getByLabelText('Parola'), 'correct-password');
     await userEvent.click(screen.getByRole('button', { name: 'Oturum aç' }));
 
-    expect(await screen.findByRole('button', { name: /Acme/ })).toHaveTextContent('Sahip');
-    expect(screen.getByRole('button', { name: /Globex/ })).toHaveTextContent('Temsilci');
+    expect(await screen.findByRole('button', { name: /Acme/ })).toHaveTextContent('Kurucu');
+    expect(screen.getByRole('button', { name: /Globex/ })).toHaveTextContent('Ekip Üyesi');
     resetLocale();
   });
 

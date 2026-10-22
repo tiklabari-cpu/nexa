@@ -328,7 +328,8 @@ test.describe('Team — changing a teammate’s role (NFR-S12)', () => {
 
       // Owner is never offered: handing over the workspace is a separate,
       // heavier operation the endpoint refuses outright.
-      await expect(dialog.getByRole('option')).toHaveText(['Vice owner', 'Admin', 'Agent']);
+      // Nor Vice owner, which is retired (K6): the server would answer 400.
+      await expect(dialog.getByRole('option')).toHaveText(['Admin', 'Team Lead', 'Agent']);
 
       await dialog.getByLabel('Role').selectOption('agent');
       const saved = agentPage.waitForResponse(
@@ -467,6 +468,127 @@ test.describe('Team — the Team Lead role (RL-01 · RL-04 · tm 324.2)', () => 
         headers: auth,
       });
       expect(revoked.status(), 'could not revoke the test invitation').toBe(204);
+    }
+  });
+});
+
+test.describe('Team — leading a team and inviting a Team Lead from the console (RL-01 · tm 324.4)', () => {
+  /**
+   * The switch on the Members dialog, end to end: the seeded Team Lead leads
+   * Sales, the owner clears the mark and sets it again, and the API agrees each
+   * time. Put back the way it was found — the suite shares one tenant.
+   */
+  test('the owner clears and restores the seeded Team Lead on Sales from the Members dialog', async ({
+    agentPage,
+    request,
+  }) => {
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const leadOf = async (): Promise<{ id: number; lead: boolean | undefined }> => {
+      const groups = await request.get(`${API_BASE}/groups`, { headers: auth });
+      expect(groups.ok()).toBe(true);
+      const { items } = (await groups.json()) as {
+        items: Array<{
+          id: number;
+          name: string;
+          agents: Array<{ agent_id: string; lead: boolean }>;
+        }>;
+      };
+      const sales = items.find((team) => team.name === 'Sales');
+      expect(sales, 'seeded Sales team not found').toBeTruthy();
+      const roster = await request.get(`${API_BASE}/agents`, { headers: auth });
+      const alex = (
+        (await roster.json()) as { items: Array<{ id: string; name: string }> }
+      ).items.find((agent) => agent.name === ACME_TEAM_LEAD.name);
+      return {
+        id: sales!.id,
+        lead: sales!.agents.find((member) => member.agent_id === alex?.id)?.lead,
+      };
+    };
+    expect((await leadOf()).lead, 'this test assumes the seeded lead').toBe(true);
+
+    try {
+      await agentPage.goto('/app/team/teams');
+      await agentPage.getByRole('button', { name: 'Manage members — Sales' }).click();
+      const members = agentPage.getByRole('dialog', { name: 'Members — Sales' });
+      const leadSwitch = members.getByRole('checkbox', {
+        name: `${ACME_TEAM_LEAD.name} leads this team`,
+      });
+      await expect(leadSwitch).toBeChecked();
+
+      const cleared = agentPage.waitForResponse(
+        (r) =>
+          r.url().includes('/groups/') &&
+          r.url().includes('/agents/') &&
+          r.request().method() === 'PUT',
+      );
+      await leadSwitch.click();
+      expect((await cleared).status()).toBe(200);
+      await expect(leadSwitch).not.toBeChecked();
+      expect((await leadOf()).lead).toBe(false);
+
+      const restored = agentPage.waitForResponse(
+        (r) =>
+          r.url().includes('/groups/') &&
+          r.url().includes('/agents/') &&
+          r.request().method() === 'PUT',
+      );
+      await leadSwitch.click();
+      expect((await restored).status()).toBe(200);
+      expect((await leadOf()).lead).toBe(true);
+    } finally {
+      const { id, lead } = await leadOf();
+      if (lead !== true) {
+        const roster = await request.get(`${API_BASE}/agents`, { headers: auth });
+        const alex = (
+          (await roster.json()) as { items: Array<{ id: string; name: string }> }
+        ).items.find((agent) => agent.name === ACME_TEAM_LEAD.name);
+        await request.put(`${API_BASE}/groups/${id}/agents/${alex!.id}`, {
+          headers: auth,
+          data: { priority: 'normal', lead: true },
+        });
+      }
+    }
+  });
+
+  /**
+   * RL-04-S1 on the screen: choosing Team Lead stops Send until a team is
+   * ticked, and the invitation the server stores names that team as led.
+   */
+  test('the invite modal needs a team for a Team Lead and sends it as led', async ({
+    agentPage,
+    request,
+  }) => {
+    const email = `ui-lead-${Date.now()}@invite-lead.test`;
+    let invitationId: string | undefined;
+    try {
+      await agentPage.goto('/app/team');
+      await agentPage.getByRole('button', { name: 'Copy invite link' }).click();
+      const dialog = agentPage.getByRole('dialog', { name: 'Invite teammates' });
+      await dialog.getByLabel('Email addresses').fill(email);
+      await dialog.getByLabel('Role').selectOption('team_lead');
+
+      const send = dialog.getByRole('button', { name: /^Invite/ });
+      await expect(dialog.getByText('Pick at least one team for the Team Lead.')).toBeVisible();
+      await expect(send).toBeDisabled();
+
+      await dialog.getByRole('checkbox', { name: 'Sales' }).check();
+      await expect(send).toBeEnabled();
+      const sent = agentPage.waitForResponse(
+        (r) => r.url().endsWith('/invitations') && r.request().method() === 'POST',
+      );
+      await send.click();
+      const response = await sent;
+      expect(response.status()).toBe(201);
+      const { items } = (await response.json()) as {
+        items: Array<{ id: string; role: string; groups: Array<{ lead: boolean }> }>;
+      };
+      invitationId = items[0]?.id;
+      expect(items[0]).toMatchObject({ role: 'team_lead', groups: [{ lead: true }] });
+    } finally {
+      if (invitationId) {
+        const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+        await request.delete(`${API_BASE}/invitations/${invitationId}`, { headers: auth });
+      }
     }
   });
 });

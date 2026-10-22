@@ -86,8 +86,8 @@ const STATUS_TONE: Record<Agent['routing_status'], StatusTone> = {
   offline: 'neutral',
 };
 
-/** Roster filter options — every rank the roster can hold, in the order RoleMenu ranks them. */
-const ROLE_OPTIONS: Role[] = ['owner', 'viceowner', 'admin', 'agent'];
+/** Roster filter options — every rank the roster can hold, highest first (`viceowner` is retired, K6). */
+const ROLE_OPTIONS: Role[] = ['owner', 'admin', 'team_lead', 'agent'];
 const STATUS_OPTIONS: Agent['routing_status'][] = [
   'accepting_chats',
   'not_accepting_chats',

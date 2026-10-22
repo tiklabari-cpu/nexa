@@ -41,17 +41,19 @@ export interface Group {
   after_hours_mode: AfterHoursMode;
   /** Skills an agent needs — every one — to join and be given its chats. */
   required_expertise_ids: number[];
-  agents: Array<{ agent_id: string; priority: GroupPriority }>;
+  agents: Array<{ agent_id: string; priority: GroupPriority; lead?: boolean }>;
 }
 
 interface TeamsProps {
-  agents: Array<{ id: string; name: string }>;
+  agents: Array<{ id: string; name: string; role?: string }>;
   /** Holds `groups--all:rw` (`routes/agents.ts`) — write controls are hidden
    *  for a read-only viewer, the same courtesy `RoleMenu`/`AgentSkills` pay. */
   canManage: boolean;
+  /** Admin or owner: who leads a team is their call (RL-01), not a token's. */
+  canMarkLead?: boolean;
 }
 
-export function Teams({ agents, canManage }: TeamsProps): ReactElement {
+export function Teams({ agents, canManage, canMarkLead = false }: TeamsProps): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
 
@@ -175,6 +177,11 @@ export function Teams({ agents, canManage }: TeamsProps): ReactElement {
                         <span className="min-w-0 flex-1 truncate">
                           {byId.get(member.agent_id)?.name ?? t('team.page.formerTeammate')}
                         </span>
+                        {member.lead && (
+                          <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-medium text-content-secondary">
+                            {t('team.teams.members.leadBadge')}
+                          </span>
+                        )}
                         <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
                           {t(`team.priority.${member.priority}`)}
                         </span>
@@ -197,7 +204,12 @@ export function Teams({ agents, canManage }: TeamsProps): ReactElement {
       )}
 
       {managing && (
-        <TeamMembers group={managing} agents={agents} onClose={() => setManaging(null)} />
+        <TeamMembers
+          group={managing}
+          agents={agents}
+          canMarkLead={canMarkLead}
+          onClose={() => setManaging(null)}
+        />
       )}
     </Section>
   );

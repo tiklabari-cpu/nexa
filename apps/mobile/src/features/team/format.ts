@@ -9,7 +9,7 @@ import type { Agent } from './types';
 
 const ROLE_LABEL: Record<Agent['role'], string> = {
   owner: 'Owner',
-  viceowner: 'Vice Owner',
+  viceowner: 'Admin (formerly Vice Owner)',
   admin: 'Admin',
   team_lead: 'Team Lead',
   agent: 'Agent',

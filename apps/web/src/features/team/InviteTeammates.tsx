@@ -18,6 +18,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { invitationGroupsProblem, type InvitationRole } from '@siyahtus/types';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
@@ -27,8 +28,12 @@ import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { ErrorNotice } from '../../components/Page.js';
 import { Modal, useConfirm } from '../../components/ui/index.js';
+import type { Group } from './Teams.js';
 
-type InviteRole = 'admin' | 'agent';
+type InviteRole = InvitationRole;
+
+/** The picker's order: the everyday role first, then up the ranks. */
+const INVITE_ROLE_OPTIONS: readonly InviteRole[] = ['agent', 'team_lead', 'admin'];
 
 /** The lowest role: a promotion is a choice, never what a quick invite does (RL-04). */
 const DEFAULT_INVITE_ROLE: InviteRole = 'agent';
@@ -36,7 +41,7 @@ const DEFAULT_INVITE_ROLE: InviteRole = 'agent';
 interface Invitation {
   id: string;
   email: string;
-  role: 'admin' | 'agent';
+  role: InviteRole;
   invited_by_name: string | null;
   expires_at: string;
   accept_url?: string;
@@ -113,6 +118,7 @@ export function InviteTeammates({
   const t = useTranslate();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<InviteRole>(DEFAULT_INVITE_ROLE);
+  const [teamIds, setTeamIds] = useState<number[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [undelivered, setUndelivered] = useState<UndeliveredLink[]>([]);
 
@@ -123,10 +129,24 @@ export function InviteTeammates({
   // screen (FR-MOD-01.1.5), and a seat summary fetched app-wide to answer a
   // question nobody has asked yet is a request per page load for nothing.
   const pending = usePendingInvitations({ enabled: open });
+  // The teams the invitee joins — or, for a Team Lead, leads (RL-04-S1). Same
+  // key as the Teams screen, so a visited tab serves it from cache.
+  const teams = useQuery({
+    queryKey: ['team', 'groups'],
+    queryFn: () => api.get<{ items: Group[] }>('/groups'),
+    enabled: open,
+  });
+  const teamList = teams.data?.items ?? [];
+  // A Team Lead's teams are the ones they lead; anyone else's, the ones they join.
+  const chosenGroups = teamIds.map((id) => ({ group_id: id, lead: role === 'team_lead' }));
+  const groupsProblem = invitationGroupsProblem(role, chosenGroups);
 
   const invite = useMutation({
-    mutationFn: (body: { emails: string[]; role: string }) =>
-      api.post<{ items: Invitation[]; undelivered?: Undelivered[] }>('/invitations', body),
+    mutationFn: (body: {
+      emails: string[];
+      role: InviteRole;
+      groups: Array<{ group_id: number; lead: boolean }>;
+    }) => api.post<{ items: Invitation[]; undelivered?: Undelivered[] }>('/invitations', body),
     onSuccess: async (result) => {
       await client.invalidateQueries({ queryKey: ['invitations'] });
       const links = new Map(result.items.map((item) => [item.id, item.accept_url]));
@@ -148,7 +168,7 @@ export function InviteTeammates({
     validators: { emails: emailList() },
     onSubmit: async (values, { setFieldError, setSubmitError, reset }) => {
       try {
-        await invite.mutateAsync({ emails: splitList(values.emails), role });
+        await invite.mutateAsync({ emails: splitList(values.emails), role, groups: chosenGroups });
         reset();
       } catch (failure) {
         // The server is the final word on an address; surface its verdict under
@@ -199,6 +219,7 @@ export function InviteTeammates({
     onClose: () => {
       setOpen(false);
       setRole(DEFAULT_INVITE_ROLE);
+      setTeamIds([]);
       setCopied(null);
       setUndelivered([]);
       form.reset();
@@ -264,8 +285,11 @@ export function InviteTeammates({
             aria-describedby="invite-role-hints"
             className="mb-2 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
           >
-            <option value="agent">{t('team.role.agent')}</option>
-            <option value="admin">{t('team.role.admin')}</option>
+            {INVITE_ROLE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {t(`team.role.${option}`)}
+              </option>
+            ))}
           </select>
           <ul
             id="invite-role-hints"
@@ -274,6 +298,10 @@ export function InviteTeammates({
             <li>
               <span className="font-medium">{t('team.role.agent')}:</span>{' '}
               {t('team.invite.roleHint.agent')}
+            </li>
+            <li>
+              <span className="font-medium">{t('team.role.team_lead')}:</span>{' '}
+              {t('team.invite.roleHint.team_lead')}
             </li>
             <li>
               <span className="font-medium">{t('team.role.admin')}:</span>{' '}
@@ -286,6 +314,58 @@ export function InviteTeammates({
             </p>
           )}
           <div className="mb-2" />
+
+          {(teamList.length > 0 || role === 'team_lead') && (
+            <fieldset className="mb-3" aria-describedby="invite-teams-hint">
+              <legend className="mb-1 text-sm font-medium">
+                {t(
+                  role === 'team_lead'
+                    ? 'team.invite.groups.legend.lead'
+                    : 'team.invite.groups.legend.member',
+                )}
+              </legend>
+              {teams.isPending ? (
+                <p className="text-xs text-content-tertiary">{t('team.invite.groups.loading')}</p>
+              ) : teams.isError ? (
+                <p role="alert" className="text-xs text-danger">
+                  {t('team.invite.groups.error')}
+                </p>
+              ) : teamList.length === 0 ? (
+                <p className="text-xs text-content-tertiary">{t('team.invite.groups.empty')}</p>
+              ) : (
+                <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+                  {teamList.map((team) => (
+                    <li key={team.id}>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={teamIds.includes(team.id)}
+                          onChange={(event) =>
+                            setTeamIds((current) =>
+                              event.target.checked
+                                ? [...current, team.id]
+                                : current.filter((id) => id !== team.id),
+                            )
+                          }
+                        />
+                        {team.name}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p
+                id="invite-teams-hint"
+                className={`mt-1 text-2xs ${groupsProblem ? 'text-warning' : 'text-content-tertiary'}`}
+              >
+                {groupsProblem
+                  ? t(`team.invite.groups.problem.${groupsProblem}`)
+                  : role === 'team_lead'
+                    ? t('team.invite.groups.hint.lead')
+                    : ''}
+              </p>
+            </fieldset>
+          )}
 
           {pending.data && !copied && undelivered.length === 0 && (
             <SeatNotice
@@ -344,7 +424,7 @@ export function InviteTeammates({
             </button>
             <button
               type="submit"
-              disabled={!form.canSubmit}
+              disabled={!form.canSubmit || groupsProblem !== null}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             >
               {form.isSubmitting

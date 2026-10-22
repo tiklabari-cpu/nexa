@@ -8,6 +8,12 @@
  * `group` prop as handed in, so a priority change or a remove — each
  * invalidating that key — redraws the row it just touched instead of only the
  * card behind this dialog.
+ *
+ * Who leads the team (RL-01) is the same upsert's `lead` field. Only a Team
+ * Lead can be marked (the server answers 400 `lead_requires_team_lead` for
+ * anyone else), so the switch is drawn on their rows alone, and only for an
+ * admin or the owner (`canMarkLead`) — the server refuses anyone else. A member
+ * already marked keeps the badge for every viewer.
  */
 import { useMemo, useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,15 +27,19 @@ import type { Group } from './Teams.js';
 interface AgentOption {
   id: string;
   name: string;
+  role?: string;
 }
 
 export function TeamMembers({
   group,
   agents,
+  canMarkLead = false,
   onClose,
 }: {
   group: Group;
   agents: AgentOption[];
+  /** Admin or owner — the only callers the server lets set the mark. */
+  canMarkLead?: boolean;
   onClose: () => void;
 }): ReactElement {
   const t = useTranslate();
@@ -61,8 +71,21 @@ export function TeamMembers({
     queryClient.invalidateQueries({ queryKey: ['team', 'groups'] });
 
   const setMember = useMutation({
-    mutationFn: ({ agentId, priority }: { agentId: string; priority: GroupPriority }) =>
-      api.put<Group>(`/groups/${group.id}/agents/${agentId}`, { priority }),
+    mutationFn: ({
+      agentId,
+      priority,
+      lead,
+    }: {
+      agentId: string;
+      priority: GroupPriority;
+      lead?: boolean;
+    }) =>
+      // `lead` is sent only when the switch was touched: left out, the member
+      // keeps their mark, and naming it is an admin-only call.
+      api.put<Group>(`/groups/${group.id}/agents/${agentId}`, {
+        priority,
+        ...(lead === undefined ? {} : { lead }),
+      }),
     onSuccess: async () => {
       setError(null);
       await invalidate();
@@ -107,9 +130,33 @@ export function TeamMembers({
           <ul className="mb-4 divide-y divide-border">
             {current.agents.map((member) => {
               const name = byId.get(member.agent_id)?.name ?? t('team.page.formerTeammate');
+              const showSwitch = canMarkLead && byId.get(member.agent_id)?.role === 'team_lead';
               return (
                 <li key={member.agent_id} className="flex items-center gap-2 py-2 text-sm">
                   <span className="min-w-0 flex-1 truncate">{name}</span>
+                  {member.lead && !showSwitch && (
+                    <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-medium text-content-secondary">
+                      {t('team.teams.members.leadBadge')}
+                    </span>
+                  )}
+                  {showSwitch && (
+                    <label className="flex items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        aria-label={t('team.teams.members.leadAriaLabel', { name })}
+                        checked={member.lead === true}
+                        disabled={setMember.isPending}
+                        onChange={(event) =>
+                          setMember.mutate({
+                            agentId: member.agent_id,
+                            priority: member.priority,
+                            lead: event.target.checked,
+                          })
+                        }
+                      />
+                      {t('team.teams.members.leadToggle')}
+                    </label>
+                  )}
                   <label className="flex items-center gap-1.5">
                     <select
                       aria-label={t('team.teams.members.priorityAriaLabel', { name })}

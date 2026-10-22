@@ -11,12 +11,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Page } from '../../components/Page.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { roleAtLeast } from './RoleMenu.js';
 import { TeamTabs } from './TeamTabs.js';
 import { Teams } from './Teams.js';
 
 interface Agent {
   id: string;
   name: string;
+  role: string;
 }
 
 export function TeamsPage(): ReactElement {
@@ -24,6 +26,7 @@ export function TeamsPage(): ReactElement {
   const api = useApiClient();
   const scopes = useAuth((s) => s.agent?.scopes) ?? [];
   const canManageTeams = scopes.includes('groups--all:rw');
+  const role = useAuth((s) => s.agent?.role ?? null);
 
   // Shares `['team', 'agents']` with `TeamPage.tsx`'s own roster read — React
   // Query dedupes the key, so switching tabs never doubles the request once
@@ -40,7 +43,7 @@ export function TeamsPage(): ReactElement {
       description={t('team.teamsPage.description')}
       actions={<TeamTabs />}
     >
-      <Teams agents={items} canManage={canManageTeams} />
+      <Teams agents={items} canManage={canManageTeams} canMarkLead={roleAtLeast(role, 'admin')} />
     </Page>
   );
 }

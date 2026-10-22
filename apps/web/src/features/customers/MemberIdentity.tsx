@@ -6,9 +6,10 @@
  * new customer: nothing a visitor types joins two records. What they typed is
  * still worth showing — another record with the same pre-chat username or
  * e-mail is a **possible match**, labelled unverified, for the agent to ask
- * about. A team lead or above (admin and above until RL-01) then links the two;
- * the link joins this view only, and the AI keeps answering each record from
- * its own conversations. Both are undoable, and both are audited server-side.
+ * about. A team lead or above (admin and above until RL-03 scopes a Team
+ * Lead's controls to their teams) then links the two; the link joins this
+ * view only, and the AI keeps answering each record from its own
+ * conversations. Both are undoable, and both are audited server-side.
  *
  * "Forget this person's browsers" lives here too, beside the records it is
  * about: it refuses every member token this person's browsers hold, so each

@@ -17,27 +17,47 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  INVITATION_ROLES,
+  ROLE_RANK,
+  roleAtLeast as rankAtLeast,
+  type AgentRole,
+} from '@siyahtus/types';
 import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 
-export type Role = 'owner' | 'viceowner' | 'admin' | 'agent';
+export type Role = AgentRole;
 
-/** Roles are coarse ranks; the server enforces the same order (ROLE_RANK). */
-export const ROLE_RANK: Record<Role, number> = { owner: 3, viceowner: 2, admin: 1, agent: 0 };
-
+/**
+ * Roles are coarse ranks; the server enforces the same order. The order itself
+ * is `ROLE_RANK` in `@siyahtus/types` — the one copy the API and the RTM
+ * gateway read too, so a role added there (Team Lead, RL-01) lands on this
+ * screen with no second table to renumber.
+ */
 export function roleAtLeast(role: string | null, minimum: Role): boolean {
-  return role != null && role in ROLE_RANK && ROLE_RANK[role as Role] >= ROLE_RANK[minimum];
+  return role != null && role in ROLE_RANK && rankAtLeast(role as Role, minimum);
 }
 
 /**
- * The roles this caller could actually grant: never `owner` — handing over the
- * workspace is a separate, heavier operation the endpoint refuses outright —
- * and never a rank above their own.
+ * The roles this caller could actually grant: the ones an invitation may carry
+ * — never `owner` (handing over the workspace is a separate, heavier operation
+ * the endpoint refuses outright) and never `viceowner` (retired, K6: the
+ * endpoint answers 400 `role_retired`) — and never a rank above their own.
  */
 export function assignableRoles(actorRole: string | null): Role[] {
-  return (['viceowner', 'admin', 'agent'] as const).filter((role) => roleAtLeast(actorRole, role));
+  return INVITATION_ROLES.filter((role) => roleAtLeast(actorRole, role));
+}
+
+/**
+ * Where the picker starts. A retired `viceowner` is not among the options, and
+ * a select whose value matches none shows its first option without having
+ * chosen it — so such a row starts on `admin`, the role the migration gave
+ * everyone else who held it.
+ */
+function startingRole(role: Role): Role {
+  return role === 'viceowner' ? 'admin' : role;
 }
 
 /**
@@ -73,7 +93,7 @@ export function RoleMenu({ agent, actorRole, isSelf }: RoleMenuProps): ReactElem
   const client = useQueryClient();
 
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<Role>(agent.role);
+  const [role, setRole] = useState<Role>(startingRole(agent.role));
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -104,7 +124,7 @@ export function RoleMenu({ agent, actorRole, isSelf }: RoleMenuProps): ReactElem
   const options = assignableRoles(actorRole);
 
   function openModal(): void {
-    setRole(agent.role);
+    setRole(startingRole(agent.role));
     setError(null);
     save.reset();
     setOpen(true);
@@ -150,6 +170,11 @@ export function RoleMenu({ agent, actorRole, isSelf }: RoleMenuProps): ReactElem
           </select>
 
           <p className="mt-2 text-2xs text-content-tertiary">{t('team.roleChange.ceilingHint')}</p>
+          {role === 'team_lead' && (
+            <p className="mt-1 text-2xs text-content-tertiary">
+              {t('team.roleChange.teamLeadHint')}
+            </p>
+          )}
 
           <div className="mt-4 flex justify-end gap-2">
             <button

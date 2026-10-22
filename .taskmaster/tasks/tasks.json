@@ -14152,7 +14152,7 @@
           "281"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T08:17:13.303Z",
+        "updatedAt": "2026-10-22T08:18:22.573Z",
         "subtasks": [
           {
             "id": 1,
@@ -14186,13 +14186,13 @@
             "description": "viceowner → admin taşıma migration'ı (ayrı, sonraki) + audit",
             "details": "XHIGH GEREKÇESİ: (1) yetki verisi değişikliği, geri alınamaz.",
             "testStrategy": "Migration testi; audit.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "324.2"
             ],
             "parentId": "324",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-22T08:18:22.573Z"
           },
           {
             "id": 4,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T08:17:13.304Z",
+      "lastModified": "2026-10-22T08:18:22.575Z",
       "taskCount": 390,
       "completedCount": 312,
       "tags": [

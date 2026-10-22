@@ -14222,7 +14222,7 @@
           "324"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T10:47:16.567Z",
+        "updatedAt": "2026-10-22T12:32:12.968Z",
         "subtasks": [
           {
             "id": 1,
@@ -14230,11 +14230,11 @@
             "description": "capabilities.ts kataloğu + effectiveScopes + alt sınırlar/kilitler",
             "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm. XHIGH GEREKÇESİ: (4) pencere içinde verilecek karar — yetenek kataloğunun alt sınır/kilit kuralları ve effectiveScopes birleşim sırası KK'da yoruma açık. (MAX→XHIGH, sahip kararı 2026-10-21: katalog verisi mekanik; güvenlik sınırı 325.3'te MAX kalır.)",
             "testStrategy": "Birim.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "325",
             "priority": "high",
-            "updatedAt": "2026-10-22T10:47:16.567Z"
+            "updatedAt": "2026-10-22T12:32:12.968Z"
           },
           {
             "id": 2,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T10:47:16.568Z",
+      "lastModified": "2026-10-22T12:32:12.969Z",
       "taskCount": 390,
       "completedCount": 313,
       "tags": [

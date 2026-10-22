@@ -35,6 +35,8 @@ import { SalesTracker } from './SalesTracker.js';
 import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
 import { SsoConnection } from './SsoConnection.js';
+import { PermissionsMatrix } from './PermissionsMatrix.js';
+import { MyPermissions } from './MyPermissions.js';
 import { Compliance } from './Compliance.js';
 import { AiUsage } from './AiUsage.js';
 import { RiskFlagSettings } from './RiskFlagSettings.js';
@@ -148,6 +150,9 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   'sensitive-data': () => <SensitiveData />,
   'ip-allowlist': (p) => <IpAllowlist canEdit={p.canManageAccess} />,
   sso: (p) => <SsoConnection canEdit={p.canManageAccess} />,
+  // Only the Kurucu saves the matrix (`PUT` is `exactRole: owner`).
+  permissions: (p) => <PermissionsMatrix canEdit={p.isOwner && p.canManageAccess} />,
+  'my-permissions': () => <MyPermissions />,
   'two-factor': () => <TwoFactor />,
   compliance: (p) => <Compliance canEdit={p.canManageAccess} />,
   'data-retention': (p) => <DataRetention canEdit={p.canManageAccess} />,

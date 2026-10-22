@@ -76,7 +76,9 @@ export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   inbox: ['inbox.'],
   playbook: ['playbook.'],
   reports: ['reports.'],
-  settings: ['settings.'],
+  // `permissions.*` is the matrix catalogue's own spelling (`@siyahtus/types`
+  // CAPABILITIES `labelKey`, tm 325.1); its two screens are settings sections.
+  settings: ['settings.', 'permissions.'],
   shell: ['shell.', 'nav.', 'palette.'],
   team: ['team.'],
 };

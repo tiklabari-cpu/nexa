@@ -183,6 +183,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/CompanyDetails.tsx',
   'src/features/settings/Compliance.tsx',
   'src/features/settings/DataRetention.tsx',
+  'src/features/settings/MyPermissions.tsx',
+  'src/features/settings/PermissionsMatrix.tsx',
   'src/features/settings/FileSharing.tsx',
   'src/features/settings/SensitiveData.tsx',
   'src/features/settings/IpAllowlist.tsx',

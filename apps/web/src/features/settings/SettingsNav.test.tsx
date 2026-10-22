@@ -122,7 +122,8 @@ describe('Settings navigation catalogue (FR-MOD-08.1)', () => {
     // Appearance (the workspace's default panel font, 2026-10-13) made 32.
     // AI usage (tm 283.4) made 33; Member recognition (tm 287.5) made 34;
     // Sensitive data (tm 300.2) made 35; Risk flags (tm 302.3) made 36.
-    expect(SECTION_FILES).toHaveLength(36);
+    // Roles and permissions + My permissions (tm 325.4) made 38.
+    expect(SECTION_FILES).toHaveLength(38);
 
     const groups = new Set(SETTINGS_GROUPS.map((g) => g.key));
     for (const s of SETTINGS_SECTIONS) expect(groups.has(s.group), s.slug).toBe(true);
@@ -275,7 +276,7 @@ describe('Settings navigation visibility (FR-MOD-08.1)', () => {
       visibleGroups([])
         .flatMap((g) => g.sections)
         .map((s) => s.slug),
-    ).toEqual(['notifications', 'integrations', 'mcp', 'two-factor']);
+    ).toEqual(['notifications', 'integrations', 'mcp', 'my-permissions', 'two-factor']);
   });
 });
 

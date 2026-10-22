@@ -14222,7 +14222,7 @@
           "324"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T16:42:08.679Z",
+        "updatedAt": "2026-10-22T17:31:55.135Z",
         "subtasks": [
           {
             "id": 1,
@@ -14270,13 +14270,13 @@
             "description": "PermissionsMatrix.tsx (GV-06 kalıbı) + Yetkilerim",
             "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "325.2"
             ],
             "parentId": "325",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-22T17:31:55.135Z"
           },
           {
             "id": 5,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T16:42:08.680Z",
+      "lastModified": "2026-10-22T17:31:55.136Z",
       "taskCount": 390,
       "completedCount": 313,
       "tags": [

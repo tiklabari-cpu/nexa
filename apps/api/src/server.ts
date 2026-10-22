@@ -24,6 +24,7 @@ import licenseGate from './plugins/license-gate.js';
 import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
+import pendingAudit from './plugins/pending-audit.js';
 import pilotGate, { PILOT_REFUSED_PATHS, type PilotRefusedPath } from './plugins/pilot-gate.js';
 import type { SafeHttp } from './lib/safe-fetch.js';
 import { liveAppIds } from './services/apps/verifiers/registry.js';
@@ -572,6 +573,9 @@ export async function buildServer({
   // customer ids to a logger that already says whose request it is (ID-08).
   await app.register(logContext);
   await app.register(audit, { env });
+  // Entries a migration recorded but could not chain (tm 324.3), signed before
+  // the server is ready.
+  await app.register(pendingAudit, { env });
   // After `audit`, which it writes through, and before the routes that declare
   // `aiInference` (NFR-C4 · C4-e).
   await app.register(aiResidency, { env });

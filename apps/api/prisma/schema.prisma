@@ -221,6 +221,7 @@ model License {
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
   auditChainHead         AuditChainHead?
+  pendingAuditEntries    PendingAuditEntry[]
   siemExportCursors      SiemExportCursor[]
   ipAllowlistEntries     IpAllowlistEntry[]
   ssoConnections         SsoConnection[]
@@ -3961,6 +3962,33 @@ model AuditChainHead {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("audit_chain_heads")
+}
+
+/// An audit entry a migration recorded but could not sign (tm 324.3).
+///
+/// The chain's key is derived from `AUDIT_CHAIN_SECRET`, which the database
+/// never holds, so a SQL migration cannot write a valid `audit_log` row: one it
+/// inserted would carry no chain, and after a workspace's genesis that reads as
+/// tampering (`unchained_entry`). The migration writes the entry here instead,
+/// in the statement that makes the change; the API signs it into the chain at
+/// boot and deletes it in that same transaction (`services/audit/pending-audit.ts`).
+/// Empty except between a deploy and the next boot. The application reads and
+/// deletes; only a migration inserts.
+model PendingAuditEntry {
+  id         BigInt   @id @default(autoincrement())
+  licenseId  BigInt   @map("license_id")
+  /// One of `AUDIT_ACTIONS` — checked when signed, where the list lives.
+  action     String
+  target     String?
+  metadata   Json     @default("{}")
+  /// When the change was made. The signed entry's own timestamp is the moment
+  /// it was signed, so this travels in its metadata as `occurred_at`.
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, id])
+  @@map("pending_audit_entries")
 }
 
 /// Where a workspace's audit trail is shipped, and how far it has got

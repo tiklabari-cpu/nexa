@@ -16529,8 +16529,8 @@ export interface components {
     CapabilityLock: 'owner_column' | 'owner_only' | 'below_floor';
     /**
      * @description Every capability's resolved value, by key (`chats.view` → `team`). What
-     *     a capability with no scope of its own — seeing a player's contact
-     *     details, say — is checked against.
+     *     a capability with no scope of its own — `chats.view`'s `own` level, say —
+     *     is checked against.
      */
     CapabilityValues: {
       [key: string]: components['schemas']['CapabilityValue'];

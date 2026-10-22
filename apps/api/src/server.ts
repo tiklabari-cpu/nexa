@@ -79,6 +79,7 @@ import mcpRoutes from './routes/mcp.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
 import aiTestingRoutes from './routes/ai-testing.js';
+import aiUnresolvedRoutes from './routes/ai-unresolved.js';
 import aiGuidanceRoutes from './routes/ai-guidance.js';
 import aiHandoffRulesRoutes from './routes/ai-handoff-rules.js';
 import handoffRoutesRoutes from './routes/handoff-routes.js';
@@ -686,6 +687,7 @@ export async function buildServer({
       await api.register(handoffRoutesRoutes);
       await api.register(aiTemplateRoutes);
       await api.register(aiTestingRoutes);
+      await api.register(aiUnresolvedRoutes, { knowledge });
       await api.register(aiGuardrailRoutes);
       await api.register(riskFlagRoutes);
       await api.register(aiHandoffRoutes);

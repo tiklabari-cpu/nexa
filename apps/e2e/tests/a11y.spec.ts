@@ -999,6 +999,26 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The Unresolved questions tab (tm 317.3 · AI-22): a filter bar of selects
+       * and date boxes, a table of clusters when there are any, and the surge
+       * threshold's form. The e2e stack runs no scheduler, so the scan reads
+       * the filter bar and the form around whatever list is there.
+       */
+      test('the unresolved questions tab has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/playbook');
+        await scanPanel(agentPage, 'Unresolved questions', theme, testInfo, async () => {
+          await agentPage
+            .getByRole('tablist', { name: 'AI Agent' })
+            .getByRole('tab', { name: 'Unresolved questions' })
+            .click();
+          await expect(agentPage.getByLabel('Messages in an hour')).toBeVisible();
+        });
+      });
+
+      /**
        * The knowledge source row's `…` menu and its edit dialog
        * (FR-MOD-06.3.3).
        *

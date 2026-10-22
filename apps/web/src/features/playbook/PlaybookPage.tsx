@@ -34,6 +34,7 @@ import { GuardrailsPage } from './GuardrailsPage.js';
 import { HandoffSettings } from './HandoffSettings.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TestLab } from './TestLab.js';
+import { Unresolved } from './Unresolved.js';
 import { IGAMING_CATEGORY, galleryStartsOnIgaming } from './ai-templates.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
@@ -92,9 +93,18 @@ import {
  * from the AI's own `knowledge` (what it answers a customer from).
  */
 type PlaybookView =
-  'performance' | 'profile' | 'guardrails' | 'skills' | 'knowledge' | 'tables' | 'kb' | 'test';
+  | 'performance'
+  | 'unresolved'
+  | 'profile'
+  | 'guardrails'
+  | 'skills'
+  | 'knowledge'
+  | 'tables'
+  | 'kb'
+  | 'test';
 const VIEW_TABS: readonly PlaybookView[] = [
   'performance',
+  'unresolved',
   'profile',
   'guardrails',
   'skills',
@@ -105,6 +115,7 @@ const VIEW_TABS: readonly PlaybookView[] = [
 ];
 const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
   performance: 'playbook.tabs.performance',
+  unresolved: 'playbook.tabs.unresolved',
   profile: 'playbook.tabs.profile',
   guardrails: 'playbook.tabs.guardrails',
   skills: 'playbook.tabs.skills',
@@ -166,7 +177,10 @@ export function PlaybookPage(): ReactElement {
   // The simulation lab (tm 314.5 · AI-19) reads the AI's configuration: a team
   // member has neither scope in the default matrix, so the tab is not drawn.
   const canSeeTests = canEdit || scopes.includes('agents-bot--all:ro');
-  const viewTabs = VIEW_TABS.filter((tabId) => tabId !== 'test' || canSeeTests);
+  // The unresolved questions (tm 317.3 · AI-22) read the same configuration scope.
+  const viewTabs = VIEW_TABS.filter(
+    (tabId) => (tabId !== 'test' && tabId !== 'unresolved') || canSeeTests,
+  );
 
   // The AI Agent surface is one place with four tabs (FR-MOD-06.1). Skills is the
   // landing tab — the thing an admin opens the Playbook to do.
@@ -889,6 +903,24 @@ export function PlaybookPage(): ReactElement {
                 <KbArticleList canEdit={canEdit} />
               </div>
             )}
+
+            {view === 'unresolved' &&
+              canSeeTests &&
+              (aiAgent ? (
+                <Unresolved
+                  key={`unresolved-${aiAgent.id}`}
+                  agentId={aiAgent.id}
+                  skills={items}
+                  canEdit={canEdit}
+                />
+              ) : (
+                <Card>
+                  <EmptyState
+                    title={t('playbook.profile.noAgentTitle')}
+                    description={t('playbook.profile.noAgentDescription')}
+                  />
+                </Card>
+              ))}
 
             {view === 'test' &&
               canSeeTests &&

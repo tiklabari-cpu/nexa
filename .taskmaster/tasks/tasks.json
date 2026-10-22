@@ -14222,7 +14222,7 @@
           "324"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T12:33:23.244Z",
+        "updatedAt": "2026-10-22T14:41:10.174Z",
         "subtasks": [
           {
             "id": 1,
@@ -14242,13 +14242,13 @@
             "description": "role_capability_overrides + permissions_version + önbellek/pub-sub + GET/PUT uçları + audit/bildirim",
             "details": "Üst görev 325 ayrıntılarındaki ilgili bölüm. XHIGH GEREKÇESİ: (1) güvenlik yüzeyi — rol override'larını yazan yeni yetkili PUT ucu; (4) pencere içinde verilecek karar — permissions_version semantiği ve önbellek geçersizleştirme/pub-sub sırası. (MAX→XHIGH, sahip kararı 2026-10-21: oturum anındaki yetki hesabı 325.3'te MAX kalır.)",
             "testStrategy": "Entegrasyon; RLS.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "325.1"
             ],
             "parentId": "325",
             "priority": "high",
-            "updatedAt": "2026-10-22T12:33:23.244Z"
+            "updatedAt": "2026-10-22T14:41:10.174Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T12:33:23.244Z",
+      "lastModified": "2026-10-22T14:41:10.174Z",
       "taskCount": 390,
       "completedCount": 313,
       "tags": [

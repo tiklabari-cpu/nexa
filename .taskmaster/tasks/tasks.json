@@ -14222,7 +14222,7 @@
           "324"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T18:18:51.887Z",
+        "updatedAt": "2026-10-22T19:13:31.231Z",
         "subtasks": [
           {
             "id": 1,
@@ -14284,13 +14284,13 @@
             "description": "K7 varsayılan değişiklikleri ayrı ve görünür adımda (EÜ kendi ekibi, EL ekip raporu, Yönetici fatura salt okunur, matris yalnız Kurucu)",
             "details": "XHIGH GEREKÇESİ: (1) erişim varsayılanı değişikliği. Sürüm notu + HANDOFF duyurusu.",
             "testStrategy": "Yeni varsayılan testleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "325.3"
             ],
             "parentId": "325",
             "priority": "high",
-            "updatedAt": "2026-10-22T18:18:51.887Z"
+            "updatedAt": "2026-10-22T19:13:31.231Z"
           },
           {
             "id": 6,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T18:18:51.888Z",
+      "lastModified": "2026-10-22T19:13:31.232Z",
       "taskCount": 390,
       "completedCount": 313,
       "tags": [

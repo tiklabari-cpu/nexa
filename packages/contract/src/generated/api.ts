@@ -3772,14 +3772,16 @@ export interface paths {
     post?: never;
     /**
      * Delete a compliance rule
-     * @description Owner only.
+     * @description Owner only. The body is optional and carries only the `reason`
+     *     (GV-06-S1), filed with the audit entry.
      */
     delete: operations['deleteAiGuardrailRule'];
     options?: never;
     head?: never;
     /**
      * Edit a compliance rule
-     * @description Owner only. Any field alone; refused like a new rule.
+     * @description Owner only. Any field alone; refused like a new rule. `reason` is not a
+     *     field of the rule: a body carrying only a reason is a 400.
      */
     patch: operations['updateAiGuardrailRule'];
     trace?: never;
@@ -14757,11 +14759,24 @@ export interface components {
      *     `null` clears the choice and returns the window to the deployment
      *     default. Both are needed: without the distinction, saving a conversation
      *     window would silently reset the telemetry one.
+     *
+     *     At least one window. `reason` is not a window: a body carrying only a
+     *     reason changes nothing and is refused (400).
      */
     RetentionSettingsInput: {
       thread_window?: components['schemas']['RetentionTier'] | null;
       visit_window?: components['schemas']['RetentionTier'] | null;
+      reason?: components['schemas']['HighRiskReason'];
     };
+    /**
+     * @description Why a high-risk setting is being changed (GV-06-S1) — data retention,
+     *     an AI compliance rule. The panel asks for it after showing the change
+     *     and always sends it; the API files it with the change's audit entry
+     *     (`metadata.reason`). Optional on the wire, so an integration written
+     *     before it existed keeps working; a write without one is audited as
+     *     before. Trimmed; blank is refused.
+     */
+    HighRiskReason: string;
     /**
      * @description What a "right to erasure" request actually removed (GDPR Art. 17).
      *
@@ -24588,6 +24603,7 @@ export interface operations {
           action?: components['schemas']['AiGuardrailRuleAction'];
           scope?: components['schemas']['AiGuidanceScope'];
           active?: boolean;
+          reason?: components['schemas']['HighRiskReason'];
         };
       };
     };
@@ -24620,7 +24636,13 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        'application/json': {
+          reason?: components['schemas']['HighRiskReason'];
+        };
+      };
+    };
     responses: {
       /** @description Deleted */
       204: {
@@ -24652,6 +24674,7 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
+          reason?: components['schemas']['HighRiskReason'];
           title?: string;
           body?: string;
           category?: components['schemas']['AiGuardrailCategory'];

@@ -47,7 +47,6 @@ export const settings: Messages = {
     'Bütün üyelerin paneli gördüğü yazı tipi. Üyeler hesap menüsünden kendi seçimini yine yapabilir — en son yapılan seçim geçerlidir.',
   'settings.appearance.legend': 'Çalışma alanı yazı tipi',
   'settings.appearance.sample': 'Pijamalı hasta yağız şoföre çabucak güvendi.',
-  'settings.appearance.save': 'Varsayılanı kaydet',
   'settings.appearance.remove': 'Varsayılanı kaldır',
   'settings.appearance.saved':
     'Kaydedildi — üyeler paneli bir sonraki açışta bu yazı tipiyle görür.',
@@ -351,8 +350,6 @@ export const settings: Messages = {
     'Bu alan yokken ziyaretçinin sohbete yazdığı ilk satır sohbeti açar.',
   'settings.chatForms.builtIn.notSaved':
     'Bunlar varsayılan değerler, henüz kaydedilmedi. Kaydedince zorunlu alanlar sunucuda da denetlenir.',
-  'settings.chatForms.builtIn.save': 'Formu kaydet',
-  'settings.chatForms.builtIn.reset': 'Değişiklikleri at',
   'settings.chatForms.builtIn.leaveMessage':
     'Sohbet öncesi formdaki kaydedilmemiş değişiklikler silinsin mi?',
   'settings.chatForms.builtIn.preview': 'Önizleme',
@@ -595,8 +592,6 @@ export const settings: Messages = {
     'Kurulum kodunuza yazılmış bir dil (data-language), o sayfada bu ayarı geçersiz kılar.',
   'settings.widgetCustomization.entitlementError':
     'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
-  'settings.widgetCustomization.saveButton': 'Görünümü kaydet',
-  'settings.widgetCustomization.resetButton': 'Sıfırla',
   'settings.widgetCustomization.previewLabel': 'Önizleme',
   'settings.widgetCustomization.previewChatWithUs': 'Bizimle sohbet edin',
   'settings.widgetCustomization.previewGreeting': 'Merhaba! Nasıl yardımcı olabiliriz?',
@@ -751,6 +746,16 @@ export const settings: Messages = {
   'settings.sso.removeModalDescription':
     'Bu bağlantı üzerinden oturum açan herkes o yolu hemen kaybeder. Bu geri alınamaz.',
   'settings.sso.removeConfirmButton': 'Bağlantıyı kaldır',
+  'settings.sso.enableConfirmTitle': '{name} açılsın mı?',
+  'settings.sso.enableConfirmDescription':
+    'Kimlik sağlayıcının doğruladığı, doğrulanmış bir alan adındaki herkes bu bağlantı açıldığı anda onunla oturum açabilir.',
+  'settings.sso.enableConfirmButton': 'Aç',
+  'settings.sso.enableConfirmFailed': '{name} açılamadı.',
+  'settings.sso.disableConfirmTitle': '{name} kapatılsın mı?',
+  'settings.sso.disableConfirmDescription':
+    'Bu bağlantı kapalıyken kimse onunla oturum açamaz — kapalı bir zorunlu bağlantı da hiçbir şeyi zorunlu kılmaz.',
+  'settings.sso.disableConfirmButton': 'Kapat',
+  'settings.sso.disableConfirmFailed': '{name} kapatılamadı.',
   'settings.sso.removing': 'Kaldırılıyor…',
   'settings.scim.title': 'SCIM provizyonu',
   'settings.scim.description':
@@ -1330,7 +1335,6 @@ export const settings: Messages = {
   'settings.aiUsage.recipientsNoteOther':
     'Kimin uyarılacağını yalnızca çalışma alanının sahibi değiştirebilir.',
   'settings.aiUsage.recipientsNone': 'Seçilebilecek başka yönetici yok.',
-  'settings.aiUsage.recipientsSave': 'Alıcıları kaydet',
   'settings.aiUsage.recipientsSaved': 'Kaydedildi.',
   'settings.aiUsage.capNote':
     'Günlük kota SiyahTuş ekibi tarafından belirlenir ve buradan değiştirilemez. Artırmak için bizimle iletişime geçin.',

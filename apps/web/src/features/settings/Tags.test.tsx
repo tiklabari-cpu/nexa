@@ -139,6 +139,14 @@ describe("Tags — editing an existing tag's team scope", () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit teams for tag vip' }));
     api.patch.mockResolvedValue({ ...TAG });
+    // Save stays off until the scope differs from what is saved (GV-06).
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Edit teams for tag vip' })).getByLabelText(
+        'Billing',
+        { exact: true },
+      ),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Edit teams for tag vip' })).toHaveFocus(),
@@ -154,6 +162,50 @@ describe("Tags — editing an existing tag's team scope", () => {
 
     expect(screen.queryByRole('group', { name: 'Edit teams for tag vip' })).not.toBeInTheDocument();
     expect(api.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe('Tags — the scope moves only on Save (GV-06)', () => {
+  it('does not write when a team is ticked, only when Save is pressed', async () => {
+    renderTags();
+    await screen.findByText('vip');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit teams for tag vip' }));
+    const group = screen.getByRole('group', { name: 'Edit teams for tag vip' });
+    expect(group.querySelector('[data-save-pattern="form"]')).not.toBeNull();
+    fireEvent.click(within(group).getByLabelText('Billing', { exact: true }));
+
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(within(group).getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('keeps the draft and says so when the save is refused', async () => {
+    renderTags();
+    await screen.findByText('vip');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit teams for tag vip' }));
+    const group = screen.getByRole('group', { name: 'Edit teams for tag vip' });
+    fireEvent.click(within(group).getByLabelText('Billing', { exact: true }));
+    api.patch.mockRejectedValue(new Error('nope'));
+    fireEvent.click(within(group).getByRole('button', { name: 'Save' }));
+
+    expect(await within(group).findByText(/were not saved/)).toBeInTheDocument();
+    expect(within(group).getByLabelText('Billing', { exact: true })).toBeChecked();
+  });
+
+  it('asks before Cancel throws a changed scope away', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderTags();
+    await screen.findByText('vip');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit teams for tag vip' }));
+    const group = screen.getByRole('group', { name: 'Edit teams for tag vip' });
+    fireEvent.click(within(group).getByLabelText('Billing', { exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('group', { name: 'Edit teams for tag vip' })).toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 });
 

@@ -15,6 +15,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -71,6 +72,7 @@ export function BannedCustomerIps({ canEdit }: { canEdit: boolean }): ReactEleme
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const ipError = form.errorFor('ip');
 
   return (

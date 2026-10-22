@@ -513,6 +513,84 @@ describe('compliance guardrails (AI-08 · tm 301.2)', () => {
       );
     });
 
+    it('files every add, edit and delete in the audit trail with the reason given (GV-06-S1)', async () => {
+      // A compliance rule is a high-risk setting: the panel saves one only after
+      // the owner says why, and the trail must be able to repeat it — for a
+      // rule switched off above all, the change that loosens what the AI may do.
+      const auditOf = () =>
+        owner.auditLogEntry.findMany({
+          where: { licenseId: fx.a.licenseId, action: 'settings.security_updated' },
+          orderBy: { chainSeq: 'asc' },
+        });
+
+      const created = await createRule({ reason: '  New bonus campaign  ' });
+      expect(created.statusCode).toBe(201);
+      const rule = created.json() as Rule;
+
+      const off = await server.patch(
+        `/ai-guardrails/rules/${rule.id}`,
+        { active: false, reason: 'Wrongly blocks withdrawals' },
+        ownerHeaders,
+      );
+      expect(off.statusCode).toBe(200);
+      // A reason alone is not an edit.
+      expect(
+        (await server.patch(`/ai-guardrails/rules/${rule.id}`, { reason: 'x' }, ownerHeaders))
+          .statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await server.patch(
+            `/ai-guardrails/rules/${rule.id}`,
+            { active: true, reason: '   ' },
+            ownerHeaders,
+          )
+        ).statusCode,
+      ).toBe(400);
+
+      const removed = await server.app.inject({
+        method: 'DELETE',
+        url: server.url(`/ai-guardrails/rules/${rule.id}`),
+        headers: ownerHeaders,
+        payload: { reason: 'Campaign over' },
+      });
+      expect(removed.statusCode).toBe(204);
+
+      const entries = await auditOf();
+      expect(entries.map((entry) => entry.target)).toEqual([
+        `ai_guardrail_rule:${rule.id}`,
+        `ai_guardrail_rule:${rule.id}`,
+        `ai_guardrail_rule:${rule.id}`,
+      ]);
+      expect(entries.map((entry) => entry.metadata)).toEqual([
+        expect.objectContaining({
+          resource: 'ai_guardrail_rule',
+          operation: 'created',
+          ai_agent_id: aiAgentId,
+          active: true,
+          reason: 'New bonus campaign',
+        }),
+        expect.objectContaining({
+          operation: 'updated',
+          fields: ['active'],
+          active: false,
+          reason: 'Wrongly blocks withdrawals',
+        }),
+        expect.objectContaining({ operation: 'deleted', reason: 'Campaign over' }),
+      ]);
+      // The rule's own words stay on the rule, not in the trail.
+      for (const entry of entries) expect(JSON.stringify(entry.metadata)).not.toContain(rule.body);
+
+      // Without a reason — an API integration — the write is audited as before.
+      const plain = (await createRule()).json() as Rule;
+      expect((await server.del(`/ai-guardrails/rules/${plain.id}`, ownerHeaders)).statusCode).toBe(
+        204,
+      );
+      const last = (await auditOf()).at(-1);
+      expect(last?.metadata).toMatchObject({ operation: 'deleted' });
+      expect(last?.metadata).not.toHaveProperty('reason');
+    });
+
     it('takes a rule about the locked topics that makes them stricter', async () => {
       const response = await createRule({
         title: 'Yaş',

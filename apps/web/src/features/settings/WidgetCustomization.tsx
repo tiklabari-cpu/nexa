@@ -12,6 +12,10 @@
  * value here also rides in the install snippet (WebsiteWidgets) and is applied
  * by the widget at load, so this screen, the snippet and the widget describe one
  * appearance.
+ *
+ * Its controls hold a draft (`edits`) until Save, on the shared `SaveBar`
+ * (tm 323.2 · GV-06); leaving the section — or switching brand, which drops
+ * the draft — with unsaved edits asks first.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
@@ -28,7 +32,9 @@ import {
   type WidgetTheme,
 } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
-import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
+import { SaveBar } from '../../components/settings/SaveBar.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useBrand } from '../../lib/auth-store.js';
 import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -52,6 +58,8 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
   // license default when no brand is selected); an unsaved draft from the
   // previous brand must not be carried over and applied to this one.
   useEffect(() => setEdits({}), [brandId]);
+
+  useSettingsLeaveGuard(Object.keys(edits).length > 0, false);
 
   const settings = useQuery({
     queryKey: ['settings', 'widget', brandId],
@@ -93,6 +101,14 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
     setEdits((prev) => ({ ...prev, [key]: next }));
 
   const colorValid = WIDGET_COLOR_PATTERN.test(value.primary_color);
+  // The plan gate answers `not_allowed` with `details.entitlement` (api
+  // `entitlementDenied`), and ADR-06's generic sentence for that type — "That
+  // is not allowed here." — turns an upsell into an unexplained refusal. Named
+  // here the way Sandbox.tsx and SlaPolicy.tsx already name theirs.
+  const saveError =
+    save.error instanceof ApiClientError && save.error.details?.['entitlement'] === 'white_label'
+      ? entitlementNote('settings.widgetCustomization.entitlementError')
+      : save.error;
 
   return (
     <Section
@@ -113,7 +129,7 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                if (canEdit && dirty && colorValid) save.mutate(edits);
+                if (canEdit && dirty && colorValid && !save.isPending) save.mutate(edits);
               }}
               className="flex flex-col gap-5"
             >
@@ -178,39 +194,17 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
               </fieldset>
 
               {canEdit && (
-                <div className="flex items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={!dirty || !colorValid || save.isPending}
-                    className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-                  >
-                    {save.isPending
-                      ? t('settings.saving')
-                      : t('settings.widgetCustomization.saveButton')}
-                  </button>
-                  {dirty && (
-                    <button
-                      type="button"
-                      onClick={() => setEdits({})}
-                      className="rounded-md border border-border px-3 py-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-                    >
-                      {t('settings.widgetCustomization.resetButton')}
-                    </button>
-                  )}
-                  {save.isError && (
-                    <p role="alert" className="text-2xs text-danger">
-                      {/* The plan gate answers `not_allowed` with
-                          `details.entitlement` (api `entitlementDenied`), and ADR-06's
-                          generic sentence for that type — "That is not allowed here." —
-                          turns an upsell into an unexplained refusal. Named here the way
-                          Sandbox.tsx and SlaPolicy.tsx already name theirs. */}
-                      {save.error instanceof ApiClientError &&
-                      save.error.details?.['entitlement'] === 'white_label'
-                        ? entitlementNote('settings.widgetCustomization.entitlementError')
-                        : t(errorMessageKey(save.error))}
-                    </p>
-                  )}
-                </div>
+                <SaveBar
+                  submit
+                  dirty={dirty}
+                  saving={save.isPending}
+                  valid={colorValid}
+                  error={saveError}
+                  onDiscard={() => {
+                    save.reset();
+                    setEdits({});
+                  }}
+                />
               )}
             </form>
 

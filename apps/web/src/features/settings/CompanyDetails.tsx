@@ -64,6 +64,7 @@ import {
   type CompanyDetails as CompanyDetailsValue,
 } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
@@ -347,26 +348,13 @@ function CompanyDetailsForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={!form.canSubmit || !form.isDirty}
-          className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-        >
-          {form.isSubmitting ? t('settings.saving') : t('settings.save')}
-        </button>
-
-        {form.submitError && (
-          <p role="alert" className="text-2xs text-danger">
-            {form.submitError}
-          </p>
-        )}
-
         {justSavedTimezone && (
           <p className="text-2xs text-content-tertiary">
             {t('settings.company.timezoneSavedNote')}
           </p>
         )}
       </div>
+      <FormSaveBar form={form} />
     </form>
   );
 }

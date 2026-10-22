@@ -27,6 +27,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -486,6 +487,7 @@ function EmailAddressesDialog({ onClose }: { onClose: () => void }): ReactElemen
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   return (
     <Modal
@@ -797,6 +799,7 @@ function InstagramChannelAction({ channel, cta }: { channel: Channel; cta: strin
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
@@ -957,6 +960,7 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
@@ -1138,6 +1142,7 @@ function MessengerChannelAction({ channel, cta }: { channel: Channel; cta: strin
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
@@ -1289,6 +1294,7 @@ function WhatsappChannelAction({ channel, cta }: { channel: Channel; cta: string
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
@@ -1448,6 +1454,7 @@ function SmsChannelAction({ channel, cta }: { channel: Channel; cta: string }): 
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
 
   const close = useCloseGuard({
     isDirty: form.isDirty,

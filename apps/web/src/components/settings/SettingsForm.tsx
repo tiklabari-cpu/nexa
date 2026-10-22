@@ -25,10 +25,9 @@
  *   </SettingsForm>
  */
 import { useState, type ReactElement, type ReactNode } from 'react';
-import { shouldWarnOnLeave, useLeaveGuard } from '../../lib/dirty-guard.js';
-import { useTranslate } from '../../lib/i18n.js';
 import { useSettingsDraft, type SettingsDraft } from '../../lib/settings-draft.js';
 import { ConfirmHighRisk, type HighRiskChange } from './ConfirmHighRisk.js';
+import { useSettingsLeaveGuard } from './FormSaveBar.js';
 import { SaveBar } from './SaveBar.js';
 
 export interface SaveExtra {
@@ -73,11 +72,10 @@ export function SettingsForm<V extends object>({
   className,
   children,
 }: SettingsFormProps<V>): ReactElement {
-  const t = useTranslate();
   const draft = useSettingsDraft<V, SaveExtra>({ saved, onSave });
   const [confirming, setConfirming] = useState(false);
 
-  useLeaveGuard(shouldWarnOnLeave(draft.dirty, draft.saving), t('ui.save.leaveMessage'));
+  useSettingsLeaveGuard(draft.dirty, draft.saving);
 
   const valid = isValid ? isValid(draft.values) : true;
 

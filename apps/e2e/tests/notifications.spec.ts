@@ -48,8 +48,8 @@ test.describe('notification settings (FR-MOD-13.8)', () => {
     const section = agentPage.getByRole('region', { name: 'Notifications' });
     await expect(section).toBeVisible();
 
-    const master = section.getByRole('checkbox', { name: /Enable notifications/ });
-    const sound = section.getByRole('checkbox', { name: /Play a sound/ });
+    const master = section.getByRole('switch', { name: /Enable notifications/ });
+    const sound = section.getByRole('switch', { name: /Play a sound/ });
 
     // Default is on, so both the master and the per-channel toggles are live.
     await expect(master).toBeChecked();
@@ -79,7 +79,7 @@ test.describe('notification settings (FR-MOD-13.8)', () => {
     // Turning the master off disables the channels under it — the negative path
     // an agent takes to go quiet.
     const turnedOff = masterSwitchSaved(agentPage, false);
-    await master.uncheck();
+    await master.click();
     await expect(sound).toBeDisabled();
     expect(await (await turnedOff).json()).toMatchObject({ enabled: false });
 
@@ -87,12 +87,12 @@ test.describe('notification settings (FR-MOD-13.8)', () => {
     await agentPage.reload();
     const masterAfter = agentPage
       .getByRole('region', { name: 'Notifications' })
-      .getByRole('checkbox', { name: /Enable notifications/ });
+      .getByRole('switch', { name: /Enable notifications/ });
     await expect(masterAfter).not.toBeChecked();
 
     // Put it back on so the shared demo workspace is left as it was found.
     const turnedOn = masterSwitchSaved(agentPage, true);
-    await masterAfter.check();
+    await masterAfter.click();
     await expect(masterAfter).toBeChecked();
     expect(await (await turnedOn).json()).toMatchObject({ enabled: true });
   });

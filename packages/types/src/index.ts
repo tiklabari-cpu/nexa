@@ -63,3 +63,4 @@ export * from './log-keys.js';
 export * from './ai-testing.js';
 export * from './ai-compliance-scenarios.js';
 export * from './ai-unresolved.js';
+export * from './high-risk.js';

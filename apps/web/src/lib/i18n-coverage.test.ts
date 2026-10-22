@@ -59,7 +59,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/components/settings/ConfirmHighRisk.tsx',
   'src/components/settings/InstantToggle.tsx',
   'src/components/settings/SaveBar.tsx',
-  'src/components/settings/SettingsForm.tsx',
+  'src/components/settings/FormSaveBar.tsx',
   'src/components/ui/ConfirmDialog.tsx',
   'src/features/auth/AuthCallbackPage.tsx',
   'src/features/auth/LegalLinks.tsx',
@@ -245,6 +245,10 @@ const TEXT_FREE_FILES: readonly string[] = [
   'src/features/team/CreateTeamButton.tsx',
   // No text of its own — renders its children or a redirect (tm 257.2).
   'src/components/PilotHidden.tsx',
+  // No text of its own (tm 323.2) — the form shell around a section's fields;
+  // every word is the SaveBar's, ConfirmHighRisk's or the leave guard's
+  // (`FormSaveBar.tsx`), each registered in its own right.
+  'src/components/settings/SettingsForm.tsx',
 ];
 
 /**

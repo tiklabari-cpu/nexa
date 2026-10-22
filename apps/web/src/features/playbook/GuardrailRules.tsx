@@ -6,6 +6,12 @@
  * a locked one off, ask for a password or make a bonus mandatory is refused by
  * the API (403 `guardrail_platform_locked`) and the editor says so in place. The
  * owner writes; an admin reads the list without the buttons.
+ *
+ * A high-risk setting (GV-06-S1 · tm 323.2): saving a rule, switching one on or
+ * off, and deleting one each go through `ConfirmHighRisk` — the change as a
+ * before/after list and a required reason, which travels in the request body
+ * and the API files with the audit entry. The switch no longer writes on a
+ * click: switching a rule off is exactly the loosening the reason is for.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -21,8 +27,9 @@ import {
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { Card, CardSkeleton, ErrorNotice } from '../../components/Page.js';
+import { ConfirmHighRisk, type HighRiskChange } from '../../components/settings/ConfirmHighRisk.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import { useTranslate } from '../../lib/i18n.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import type { GuidanceSkillOption } from './GuidanceRules.js';
 import { ScopeFields, scopeLabel } from './GuardrailScope.js';
 import {
@@ -92,9 +99,14 @@ export function GuardrailRules({
   const refresh = () =>
     void queryClient.invalidateQueries({ queryKey: guardrailRulesKey(agent.id) });
 
+  // The rule whose switch was flipped, waiting for its reason.
+  const [toggling, setToggling] = useState<GuardrailRule | null>(null);
   const toggle = useMutation({
-    mutationFn: (rule: GuardrailRule) =>
-      api.patch<GuardrailRule>(`/ai-guardrails/rules/${rule.id}`, { active: !rule.active }),
+    mutationFn: ({ rule, reason }: { rule: GuardrailRule; reason: string }) =>
+      api.patch<GuardrailRule>(`/ai-guardrails/rules/${rule.id}`, {
+        active: !rule.active,
+        reason,
+      }),
     onSuccess: refresh,
   });
 
@@ -165,7 +177,7 @@ export function GuardrailRules({
                   skills={skills}
                   canWrite={canWrite}
                   busy={toggle.isPending}
-                  onToggle={() => toggle.mutate(rule)}
+                  onToggle={() => setToggling(rule)}
                   onEdit={() => setEditing(rule)}
                   onDeleted={refresh}
                 />
@@ -174,8 +186,26 @@ export function GuardrailRules({
           </>
         )}
       </div>
+      {toggling && (
+        <ConfirmHighRisk
+          changes={[
+            {
+              key: 'active',
+              label: toggling.title,
+              from: onOff(t, toggling.active),
+              to: onOff(t, !toggling.active),
+            },
+          ]}
+          onClose={() => setToggling(null)}
+          onConfirm={(reason) => toggle.mutateAsync({ rule: toggling, reason })}
+        />
+      )}
     </Card>
   );
+}
+
+function onOff(t: TFunction, active: boolean): string {
+  return active ? t('playbook.guidance.on') : t('playbook.guidance.off');
 }
 
 function RuleRow({
@@ -200,7 +230,9 @@ function RuleRow({
   const [confirming, setConfirming] = useState(false);
 
   const remove = useMutation({
-    mutationFn: () => api.delete(`/ai-guardrails/rules/${rule.id}`),
+    // The reason rides in the DELETE's body — the one write with no other.
+    mutationFn: (reason: string) =>
+      api.request('DELETE', `/ai-guardrails/rules/${rule.id}`, { reason }),
     onSuccess: () => {
       setConfirming(false);
       onDeleted();
@@ -234,51 +266,43 @@ function RuleRow({
           >
             {rule.active ? t('playbook.guidance.on') : t('playbook.guidance.off')}
           </button>
-          {canWrite &&
-            (confirming ? (
-              <>
-                <button
-                  type="button"
-                  disabled={remove.isPending}
-                  onClick={() => remove.mutate()}
-                  className="rounded-md bg-danger px-2 py-1 text-2xs font-medium text-white disabled:opacity-60"
-                >
-                  {t('playbook.guidance.confirmDelete', { title: rule.title })}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirming(false)}
-                  className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary hover:bg-surface-2"
-                >
-                  {t('playbook.guidance.cancel')}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  aria-label={t('playbook.guardrails.rules.editLabel', { title: rule.title })}
-                  onClick={onEdit}
-                  className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary hover:bg-surface-2"
-                >
-                  {t('playbook.guidance.edit')}
-                </button>
-                <button
-                  type="button"
-                  aria-label={t('playbook.guardrails.rules.deleteLabel', { title: rule.title })}
-                  onClick={() => setConfirming(true)}
-                  className="rounded-md border border-border px-2 py-1 text-2xs text-danger hover:bg-surface-2"
-                >
-                  {t('playbook.guidance.delete')}
-                </button>
-              </>
-            ))}
+          {canWrite && (
+            <>
+              <button
+                type="button"
+                aria-label={t('playbook.guardrails.rules.editLabel', { title: rule.title })}
+                onClick={onEdit}
+                className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary hover:bg-surface-2"
+              >
+                {t('playbook.guidance.edit')}
+              </button>
+              <button
+                type="button"
+                aria-label={t('playbook.guardrails.rules.deleteLabel', { title: rule.title })}
+                onClick={() => setConfirming(true)}
+                className="rounded-md border border-border px-2 py-1 text-2xs text-danger hover:bg-surface-2"
+              >
+                {t('playbook.guidance.delete')}
+              </button>
+            </>
+          )}
         </div>
       </div>
-      {remove.isError && (
-        <p role="alert" className="text-2xs text-danger">
-          {t(guardrailErrorKey(remove.error))}
-        </p>
+      {confirming && (
+        <ConfirmHighRisk
+          title={t('playbook.guidance.confirmDelete', { title: rule.title })}
+          confirmLabel={t('playbook.guidance.delete')}
+          changes={[
+            {
+              key: 'rule',
+              label: rule.title,
+              from: onOff(t, rule.active),
+              to: t('playbook.guardrails.rules.deleted'),
+            },
+          ]}
+          onClose={() => setConfirming(false)}
+          onConfirm={(reason) => remove.mutateAsync(reason)}
+        />
       )}
     </li>
   );
@@ -319,7 +343,7 @@ function RuleEditor({
   const valid = title !== '' && body !== '' && !overLimit && !scopeIsEmpty(draft.scope);
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: (reason: string) => {
       const payload = {
         title,
         body,
@@ -327,6 +351,7 @@ function RuleEditor({
         action: draft.action,
         scope: scopeOfDraft(draft.scope, rule ? rule.scope : null),
         active: draft.active,
+        reason,
       };
       return rule
         ? api.patch<GuardrailRule>(`/ai-guardrails/rules/${rule.id}`, payload)
@@ -334,6 +359,7 @@ function RuleEditor({
     },
     onSuccess: onSaved,
   });
+  const [confirming, setConfirming] = useState(false);
 
   const heading = rule
     ? t('playbook.guardrails.rules.editorEdit')
@@ -344,7 +370,7 @@ function RuleEditor({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        if (valid) save.mutate();
+        if (valid && !save.isPending) setConfirming(true);
       }}
       aria-label={heading}
       className="flex flex-col gap-3 rounded-md border border-border bg-surface-2 p-3"
@@ -470,6 +496,55 @@ function RuleEditor({
           </span>
         )}
       </div>
+      {confirming && (
+        <ConfirmHighRisk
+          changes={ruleChanges(t, rule, draft, skills)}
+          onClose={() => setConfirming(false)}
+          onConfirm={async (reason) => {
+            // A refusal is about the rule's own words (a locked topic, a limit):
+            // it is fixed in the editor, so it is told there and the dialog goes.
+            await save.mutateAsync(reason).catch(() => undefined);
+          }}
+        />
+      )}
     </form>
   );
+}
+
+/** The editor's change as the confirm lists it: every field for a new rule. */
+function ruleChanges(
+  t: TFunction,
+  rule: GuardrailRule | null,
+  draft: Draft,
+  skills: readonly GuidanceSkillOption[],
+): HighRiskChange[] {
+  const after = {
+    title: draft.title.trim(),
+    body: draft.body.trim(),
+    category: t(CATEGORY_LABEL_KEYS[draft.category]),
+    action: t(ACTION_LABEL_KEYS[draft.action]),
+    scope: scopeLabel(scopeOfDraft(draft.scope, rule ? rule.scope : null), skills, t),
+    active: onOff(t, draft.active),
+  };
+  const before = rule
+    ? {
+        title: rule.title,
+        body: rule.body,
+        category: t(CATEGORY_LABEL_KEYS[rule.category]),
+        action: t(ACTION_LABEL_KEYS[rule.action]),
+        scope: scopeLabel(rule.scope, skills, t),
+        active: onOff(t, rule.active),
+      }
+    : null;
+  const labels: Record<keyof typeof after, string> = {
+    title: t('playbook.guidance.titleField'),
+    body: t('playbook.guidance.bodyField'),
+    category: t('playbook.guidance.categoryField'),
+    action: t('playbook.guardrails.rules.actionField'),
+    scope: t('playbook.guidance.scopeField'),
+    active: t('playbook.guidance.activeField'),
+  };
+  return (Object.keys(after) as (keyof typeof after)[])
+    .filter((key) => before === null || before[key] !== after[key])
+    .map((key) => ({ key, label: labels[key], from: before?.[key] ?? '', to: after[key] }));
 }

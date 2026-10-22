@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
@@ -113,6 +114,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const domainError = form.errorFor('domain');
 
   return (

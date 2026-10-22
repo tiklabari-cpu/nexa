@@ -19,14 +19,22 @@
  * scoped to, never which ones, and there was no way to change it after
  * creation. The checkboxes below are that missing write path, not a new
  * endpoint.
+ *
+ * The save pattern (tm 323.2 · GV-06): a tag's team scope decides who sees it,
+ * so it never changes on a tick — the row's editor is a `SettingsForm` and the
+ * scope moves only on Save. The "add a tag" form and an open editor with a
+ * change both ask before the section is left.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
+import { SettingsForm } from '../../components/settings/SettingsForm.js';
 import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { confirmDiscard } from '../../lib/dirty-guard.js';
 import { useInlineEditorFocus } from '../../lib/inline-editor-focus.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -95,31 +103,7 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
 
   // `null` closed, otherwise the id of the tag whose team scope is being edited.
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTeamIds, setEditTeamIds] = useState<number[]>([]);
-  const [editError, setEditError] = useState<string | null>(null);
   const focus = useInlineEditorFocus(editingId);
-
-  function startEditingTeams(tag: Tag): void {
-    setEditingId(tag.id);
-    setEditTeamIds(tag.group_ids);
-    setEditError(null);
-  }
-
-  function cancelEditingTeams(): void {
-    setEditingId(null);
-    setEditError(null);
-  }
-
-  async function saveTeams(): Promise<void> {
-    if (!editingId) return;
-    try {
-      await updateTeams.mutateAsync({ id: editingId, group_ids: editTeamIds });
-      setEditingId(null);
-      setEditError(null);
-    } catch (error) {
-      setEditError(t(errorMessageKey(error)));
-    }
-  }
 
   // The one validation primitive: a name is required, Submit disabled until it
   // is present, the field cleared on success (FR-EK-A.1).
@@ -137,6 +121,7 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
     },
   });
   const nameError = form.errorFor('name');
+  useSettingsLeaveGuard(form.isDirty || newTagTeamIds.length > 0, form.isSubmitting);
 
   return (
     <Section title={t('settings.tags.title')} description={t('settings.tags.description')}>
@@ -239,7 +224,7 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
                       <button
                         type="button"
                         ref={focus.opener(tag.id)}
-                        onClick={() => startEditingTeams(tag)}
+                        onClick={() => setEditingId(tag.id)}
                         aria-label={t('settings.tags.editTeamsAriaLabel', { name: tag.name })}
                         className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                       >
@@ -274,46 +259,51 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
                       <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                         {t('settings.tags.editTeamsAriaLabel', { name: tag.name })}
                       </legend>
-                      {editError && (
-                        <p role="alert" className="text-2xs text-danger">
-                          {editError}
-                        </p>
-                      )}
-                      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                        {teams.map((team) => (
-                          <label key={team.id} className="flex items-center gap-1.5 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={editTeamIds.includes(team.id)}
-                              onChange={() =>
-                                setEditTeamIds((current) =>
-                                  current.includes(team.id)
-                                    ? current.filter((id) => id !== team.id)
-                                    : [...current, team.id],
-                                )
-                              }
-                            />
-                            {team.name}
-                          </label>
-                        ))}
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={cancelEditingTeams}
-                          className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-                        >
-                          {t('settings.cancel')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void saveTeams()}
-                          disabled={updateTeams.isPending}
-                          className="rounded-md bg-brand-500 px-2 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-                        >
-                          {updateTeams.isPending ? t('settings.saving') : t('settings.save')}
-                        </button>
-                      </div>
+                      <SettingsForm
+                        saved={{ group_ids: tag.group_ids }}
+                        onSave={async ({ group_ids }) => {
+                          await updateTeams.mutateAsync({ id: tag.id, group_ids });
+                          setEditingId(null);
+                        }}
+                      >
+                        {(draft) => (
+                          <>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                              {teams.map((team) => (
+                                <label key={team.id} className="flex items-center gap-1.5 text-sm">
+                                  <input
+                                    type="checkbox"
+                                    checked={draft.values.group_ids.includes(team.id)}
+                                    onChange={() =>
+                                      draft.setValue(
+                                        'group_ids',
+                                        draft.values.group_ids.includes(team.id)
+                                          ? draft.values.group_ids.filter((id) => id !== team.id)
+                                          : [...draft.values.group_ids, team.id],
+                                      )
+                                    }
+                                  />
+                                  {team.name}
+                                </label>
+                              ))}
+                            </div>
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                disabled={draft.saving}
+                                onClick={() => {
+                                  if (confirmDiscard(draft.dirty, t('ui.save.leaveMessage'))) {
+                                    setEditingId(null);
+                                  }
+                                }}
+                                className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+                              >
+                                {t('settings.cancel')}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </SettingsForm>
                     </fieldset>
                   )}
                 </li>

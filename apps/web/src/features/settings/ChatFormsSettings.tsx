@@ -34,6 +34,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
+import { SaveBar } from '../../components/settings/SaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -116,6 +118,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
       }
     },
   });
+  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const labelError = form.errorFor('label');
 
   // Only the fields asked in the widget: the query returns every custom field,
@@ -379,7 +382,7 @@ function BuiltInPrechatFields({
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              if (canEdit && draft) save.mutate(draft);
+              if (canEdit && draft && !save.isPending) save.mutate(draft);
             }}
             className="flex flex-col gap-4"
           >
@@ -470,29 +473,16 @@ function BuiltInPrechatFields({
             )}
 
             {canEdit && (
-              <div className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={!dirty || save.isPending}
-                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-                >
-                  {save.isPending ? t('settings.saving') : t('settings.chatForms.builtIn.save')}
-                </button>
-                {dirty && (
-                  <button
-                    type="button"
-                    onClick={() => setDraft(null)}
-                    className="rounded-md border border-border px-3 py-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-                  >
-                    {t('settings.chatForms.builtIn.reset')}
-                  </button>
-                )}
-                {save.isError && (
-                  <p role="alert" className="text-2xs text-danger">
-                    {t(errorMessageKey(save.error))}
-                  </p>
-                )}
-              </div>
+              <SaveBar
+                submit
+                dirty={dirty}
+                saving={save.isPending}
+                error={save.error}
+                onDiscard={() => {
+                  save.reset();
+                  setDraft(null);
+                }}
+              />
             )}
           </form>
 

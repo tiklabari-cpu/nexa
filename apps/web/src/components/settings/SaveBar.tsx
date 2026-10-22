@@ -20,7 +20,10 @@ export interface SaveBarProps {
   saving: boolean;
   /** The draft passes validation; Save stays off while it does not. */
   valid?: boolean;
-  /** The last save's rejection. The draft is kept; the bar says so. */
+  /**
+   * The last save's rejection. The draft is kept; the bar says so. A string is a
+   * message the screen already translated (`useForm`'s `submitError`).
+   */
   error?: unknown;
   /** Inside a `<form>`: Save is the form's submit button, so Enter submits too. */
   submit?: boolean;
@@ -49,7 +52,7 @@ export function SaveBar({
       <div className="min-w-0 flex-1 text-sm">
         {failed ? (
           <p role="alert" className="text-danger">
-            {t('ui.save.failed')} {t(errorMessageKey(error))}
+            {t('ui.save.failed')} {typeof error === 'string' ? error : t(errorMessageKey(error))}
           </p>
         ) : (
           <p role="status" className={dirty ? 'font-medium text-content' : 'text-content-tertiary'}>

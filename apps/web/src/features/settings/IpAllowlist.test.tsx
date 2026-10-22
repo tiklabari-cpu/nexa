@@ -161,15 +161,15 @@ describe('IpAllowlist', () => {
   it('says "Saved." as a status once the session policy lands, and drops it on the next edit', async () => {
     renderComponent(<IpAllowlist canEdit />);
     await screen.findByText('10.0.0.0/24');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Saved.')).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Idle timeout (minutes)'), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Saved.');
+    expect(await screen.findByText('Saved.')).toHaveAttribute('role', 'status');
 
     await userEvent.type(screen.getByLabelText('Max concurrent sessions'), '5');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Saved.')).not.toBeInTheDocument();
   });
 
   it('does not say "Saved." when the server refuses the session policy', async () => {
@@ -183,7 +183,17 @@ describe('IpAllowlist', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong on our side');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Saved.')).not.toBeInTheDocument();
+  });
+
+  it('writes nothing when a box is ticked — the policy waits for Save (GV-06)', async () => {
+    renderComponent(<IpAllowlist canEdit />);
+    await screen.findByText('10.0.0.0/24');
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Enforce the IP allowlist/ }));
+
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
   });
 
   it('toggles enforcement by PATCHing ip_allowlist_enforced', async () => {
@@ -191,6 +201,7 @@ describe('IpAllowlist', () => {
     await screen.findByText('10.0.0.0/24');
 
     await userEvent.click(screen.getByRole('checkbox', { name: /Enforce the IP allowlist/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith('/settings/security', { ip_allowlist_enforced: true }),
@@ -204,6 +215,7 @@ describe('IpAllowlist', () => {
     await userEvent.click(
       screen.getByRole('checkbox', { name: /Require two-factor authentication/ }),
     );
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(api.patch).not.toHaveBeenCalled();
 
     expect(
@@ -223,6 +235,7 @@ describe('IpAllowlist', () => {
     await userEvent.click(
       screen.getByRole('checkbox', { name: /Require two-factor authentication/ }),
     );
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await screen.findByRole('dialog');
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -242,6 +255,7 @@ describe('IpAllowlist', () => {
     await userEvent.click(
       screen.getByRole('checkbox', { name: /Require two-factor authentication/ }),
     );
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await waitFor(() =>
@@ -262,6 +276,7 @@ describe('IpAllowlist', () => {
     await screen.findByText('10.0.0.0/24');
 
     await userEvent.click(screen.getByRole('checkbox', { name: /Enforce the IP allowlist/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Check the highlighted fields and try again.');

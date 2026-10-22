@@ -379,7 +379,6 @@ export const team: Messages = {
   'team.notifications.description':
     'How you are alerted to new messages. These follow your account on this workspace; whether this browser may show desktop notifications is its own setting.',
   'team.notifications.enable.label': 'Enable notifications',
-  'team.notifications.saveFailed': 'Could not save — please try again.',
   'team.notifications.enable.hint':
     'Turning this off silences sound, desktop, push and tab alerts alike. Email still reaches you.',
   'team.notifications.sound.label': 'Play a sound',

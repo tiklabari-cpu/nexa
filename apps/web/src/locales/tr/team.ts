@@ -371,7 +371,6 @@ export const team: Messages = {
   'team.notifications.description':
     'Yeni mesajlar için nasıl uyarılacağınız. Bunlar bu çalışma alanındaki hesabınızı izler; bu tarayıcının masaüstü bildirimi gösterip gösteremeyeceği ayrı bir ayardır.',
   'team.notifications.enable.label': 'Bildirimleri etkinleştir',
-  'team.notifications.saveFailed': 'Kaydedilemedi — lütfen tekrar deneyin.',
   'team.notifications.enable.hint':
     'Bunu kapatmak sesi, masaüstünü, push’u ve sekme uyarılarını birlikte susturur. E-posta yine de ulaşır.',
   'team.notifications.sound.label': 'Bir ses çal',

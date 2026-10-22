@@ -14,7 +14,7 @@ const MEMBER = { email: 'agent1@acme.localhost', password: DEMO.password } as co
 async function setWorkspaceDefault(page: Page, name: RegExp): Promise<void> {
   await page.goto('/app/settings/appearance');
   await page.getByRole('radio', { name }).check();
-  await page.getByRole('button', { name: 'Save default' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText(/^Saved — /)).toBeVisible();
 }
 

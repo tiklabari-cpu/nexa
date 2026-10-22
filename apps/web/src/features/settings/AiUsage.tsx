@@ -21,11 +21,11 @@
  * only); an admin sees the same list read-only. The role gate mirrors the
  * route's `minimumRole: 'admin'` — the courtesy hide `DataRetention` uses.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type ReactElement } from 'react';
 import { AI_LIVE_METERS, type AiLiveMeter, type AiUsageMeter } from '@siyahtus/types';
 import { Card, ErrorNotice, Kpi, KpiGrid, Section } from '../../components/Page.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { SettingsForm } from '../../components/settings/SettingsForm.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import {
   formatCount,
@@ -387,6 +387,11 @@ function AlertsCard({ usage, isOwner }: { usage: AiUsageData; isOwner: boolean }
   );
 }
 
+/** Who besides the owner hears the alerts — a set, kept sorted so order never reads as a change. */
+interface RecipientsDraft {
+  account_ids: string[];
+}
+
 function Recipients({
   selected,
   isOwner,
@@ -397,6 +402,7 @@ function Recipients({
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const [saved, setSaved] = useState(false);
 
   const roster = useQuery({
     queryKey: ['ai', 'usage', 'roster'],
@@ -407,34 +413,32 @@ function Recipients({
     (m) => m.role !== 'agent' && m.role !== 'owner' && m.suspended !== true,
   );
 
-  const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set(selected));
-  // A refetch (or a save elsewhere) is the server's word; the box follows it.
-  const savedKey = selected.join(',');
-  useEffect(() => {
-    setChosen(new Set(savedKey === '' ? [] : savedKey.split(',')));
-  }, [savedKey]);
-
-  const save = useMutation({
-    mutationFn: (accountIds: string[]) =>
-      api.put<{ alert_recipients: string[] }>('/ai/usage/alert-recipients', {
-        account_ids: accountIds,
-      }),
-    onSuccess: (data) =>
-      queryClient.setQueryData<AiUsageData>(AI_USAGE_QUERY_KEY, (old) =>
-        old ? { ...old, alert_recipients: data.alert_recipients } : old,
-      ),
-  });
-
-  const dirty = chosen.size !== selected.length || selected.some((id) => !chosen.has(id));
-  const toggle = (id: string): void => {
-    save.reset();
-    setChosen((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  async function save({ account_ids }: RecipientsDraft): Promise<void> {
+    setSaved(false);
+    const data = await api.put<{ alert_recipients: string[] }>('/ai/usage/alert-recipients', {
+      account_ids,
     });
-  };
+    queryClient.setQueryData<AiUsageData>(AI_USAGE_QUERY_KEY, (old) =>
+      old ? { ...old, alert_recipients: data.alert_recipients } : old,
+    );
+    setSaved(true);
+  }
+
+  const boxes = (chosen: readonly string[], toggle?: (id: string) => void): ReactElement => (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+      {candidates.map((member) => (
+        <label key={member.id} className="flex items-center gap-1.5 text-sm">
+          <input
+            type="checkbox"
+            checked={chosen.includes(member.id)}
+            disabled={toggle === undefined}
+            onChange={() => toggle?.(member.id)}
+          />
+          {member.name}
+        </label>
+      ))}
+    </div>
+  );
 
   return (
     <fieldset className="flex flex-col gap-2 border-t border-border pt-3">
@@ -450,38 +454,34 @@ function Recipients({
         <p className="text-sm text-content-secondary">{t('settings.loading')}</p>
       ) : candidates.length === 0 ? (
         <p className="text-sm text-content-secondary">{t('settings.aiUsage.recipientsNone')}</p>
-      ) : (
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-          {candidates.map((member) => (
-            <label key={member.id} className="flex items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                checked={chosen.has(member.id)}
-                disabled={!isOwner || save.isPending}
-                onChange={() => toggle(member.id)}
-              />
-              {member.name}
-            </label>
-          ))}
-        </div>
-      )}
-      {save.isError && <ErrorNotice message={t(errorMessageKey(save.error))} />}
-      {isOwner && candidates.length > 0 && (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={!dirty || save.isPending}
-            onClick={() => save.mutate([...chosen])}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {t('settings.aiUsage.recipientsSave')}
-          </button>
-          {save.isSuccess && !dirty && (
-            <span role="status" className="text-2xs text-content-secondary">
-              {t('settings.aiUsage.recipientsSaved')}
-            </span>
+      ) : isOwner ? (
+        <SettingsForm<RecipientsDraft>
+          saved={{ account_ids: [...selected].sort() }}
+          onSave={save}
+          label={t('settings.aiUsage.recipientsLegend')}
+        >
+          {(form) => (
+            <>
+              {boxes(form.values.account_ids, (id) => {
+                setSaved(false);
+                const current = form.values.account_ids;
+                form.setValue(
+                  'account_ids',
+                  current.includes(id)
+                    ? current.filter((other) => other !== id)
+                    : [...current, id].sort(),
+                );
+              })}
+              {saved && !form.dirty && (
+                <span role="status" className="text-2xs text-content-secondary">
+                  {t('settings.aiUsage.recipientsSaved')}
+                </span>
+              )}
+            </>
           )}
-        </div>
+        </SettingsForm>
+      ) : (
+        boxes(selected)
       )}
     </fieldset>
   );

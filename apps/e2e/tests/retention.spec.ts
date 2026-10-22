@@ -32,8 +32,20 @@
  */
 import { expect, test, openWidget, visitorSends, widgetFrame } from './fixtures.js';
 import { allChats, API_BASE, ownerAccessToken } from './fixtures.js';
+import type { Page } from '@playwright/test';
 
 const RETENTION_SECTION = '#section-data-retention';
+
+/**
+ * Retention is a high-risk setting (GV-06-S1 · tm 323.2): Save opens the
+ * before/after confirm, which refuses to save without a reason.
+ */
+async function confirmWithReason(page: Page, reason: string): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: 'Confirm this change' });
+  await expect(dialog.getByTestId('high-risk-diff')).toBeVisible();
+  await dialog.getByLabel('Reason').fill(reason);
+  await dialog.getByRole('button', { name: 'Confirm and save' }).click();
+}
 
 test.describe('data retention (NFR-C8)', () => {
   test('an admin chooses how long this workspace keeps its conversations', async ({
@@ -59,7 +71,14 @@ test.describe('data retention (NFR-C8)', () => {
       );
       await conversations.selectOption('30d');
       await section.getByRole('button', { name: 'Save' }).click();
-      expect((await saved).status()).toBe(200);
+      await confirmWithReason(agentPage, 'e2e: a month is enough');
+      const response = await saved;
+      expect(response.status()).toBe(200);
+      // The reason travels with the write; the API files it with the audit entry.
+      expect(response.request().postDataJSON()).toMatchObject({
+        thread_window: '30d',
+        reason: 'e2e: a month is enough',
+      });
 
       // The consequence, in the server's words — not a restatement of the
       // option that was just picked.
@@ -80,6 +99,7 @@ test.describe('data retention (NFR-C8)', () => {
       );
       await agentPage.getByLabel('Closed conversations').selectOption('');
       await agentPage.locator(RETENTION_SECTION).getByRole('button', { name: 'Save' }).click();
+      await confirmWithReason(agentPage, 'e2e: restore the default');
       expect((await restored).status()).toBe(200);
     }
   });

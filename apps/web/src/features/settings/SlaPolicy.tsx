@@ -20,6 +20,7 @@ import type { ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { SLA_MAX_TARGET_MINUTES } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -237,20 +238,6 @@ function SlaPolicyForm({
 
       {canEdit && (
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={!form.canSubmit || !form.isDirty}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {form.isSubmitting ? t('settings.saving') : t('settings.save')}
-          </button>
-
-          {form.submitError && (
-            <p role="alert" className="text-2xs text-danger">
-              {form.submitError}
-            </p>
-          )}
-
           {justSaved && (
             <p className="text-2xs text-content-tertiary">
               {t('settings.sla.savedNotePrefix')}{' '}
@@ -262,6 +249,7 @@ function SlaPolicyForm({
           )}
         </div>
       )}
+      {canEdit && <FormSaveBar form={form} />}
     </form>
   );
 }

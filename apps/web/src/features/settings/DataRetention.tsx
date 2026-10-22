@@ -22,13 +22,12 @@
  * `Compliance`/`SiemExport`/`AuditLog` all use: whoever cannot read this is not
  * shown a door that only leads to a 403.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { RETENTION_TIERS, type RetentionTier } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { SettingsForm } from '../../components/settings/SettingsForm.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
-import { useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 interface RetentionSettings {
@@ -45,8 +44,6 @@ interface RetentionSettings {
 
 /** The empty option's value — a `<select>` cannot carry `null`. */
 const INHERIT = '';
-
-type FormValues = Record<'thread' | 'visit', string>;
 
 const VIEWER_ROLES = new Set(['admin', 'viceowner', 'owner']);
 
@@ -120,11 +117,17 @@ function RetentionCard({ canEdit }: { canEdit: boolean }): ReactElement {
   );
 }
 
+/** The draft: a tier per window, `null` for the deployment default. */
+interface Draft {
+  thread_window: RetentionTier | null;
+  visit_window: RetentionTier | null;
+}
+
 /**
- * Mounted only once the settings have loaded, so `useForm`'s `initial` is the
- * saved choice on the first render rather than a default racing a fetch —
- * `ChatTimeoutForm`'s reasoning, and the same failure it avoids (a form that
- * looks dirty before anybody touched it).
+ * A high-risk setting (GV-06-S1 · tm 323.2): how long the workspace keeps
+ * people's conversations. Save shows the before/after of each window and asks
+ * why; the reason travels with the PATCH and the API writes it to the audit
+ * entry beside the tiers.
  */
 function RetentionForm({
   settings,
@@ -138,36 +141,17 @@ function RetentionForm({
   const t = useTranslate();
   const api = useApiClient();
 
-  const save = useMutation({
-    mutationFn: (body: {
-      thread_window: RetentionTier | null;
-      visit_window: RetentionTier | null;
-    }) => api.patch<RetentionSettings>('/settings/retention', body),
-    onSuccess: onSaved,
-  });
+  const saved: Draft = {
+    thread_window: settings.thread_window,
+    visit_window: settings.visit_window,
+  };
+  const defaults: Record<keyof Draft, number> = {
+    thread_window: settings.default_thread_days,
+    visit_window: settings.default_visit_days,
+  };
 
-  const form = useForm<FormValues>({
-    initial: {
-      thread: settings.thread_window ?? INHERIT,
-      visit: settings.visit_window ?? INHERIT,
-    },
-    onSubmit: async (values, { setSubmitError }) => {
-      try {
-        // Both windows every time, because both are on the screen: a partial
-        // body would be the right shape for a single-field editor and the wrong
-        // one here, where the person just read and confirmed the pair.
-        await save.mutateAsync({
-          thread_window: toTier(values.thread),
-          visit_window: toTier(values.visit),
-        });
-      } catch (error) {
-        setSubmitError(t(errorMessageKey(error)));
-      }
-    },
-  });
-
-  return (
-    <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-5 p-4">
+  const fields = (values: Draft, set: (key: keyof Draft, tier: RetentionTier | null) => void) => (
+    <>
       {settings.hipaa_scope && (
         <p className="text-2xs text-content-tertiary">
           {t('settings.retention.hipaaNote', { days: String(settings.max_thread_days ?? '') })}
@@ -179,44 +163,64 @@ function RetentionForm({
           id="retention-thread"
           label={t('settings.retention.threadLabel')}
           hint={t('settings.retention.threadHint')}
-          value={form.values.thread}
+          value={values.thread_window ?? INHERIT}
           maxDays={settings.max_thread_days}
           defaultDays={settings.default_thread_days}
           effectiveDays={settings.effective_thread_days}
-          onChange={(value) => form.setValue('thread', value)}
+          onChange={(value) => set('thread_window', toTier(value))}
         />
         <WindowField
           id="retention-visit"
           label={t('settings.retention.visitLabel')}
           hint={t('settings.retention.visitHint')}
-          value={form.values.visit}
+          value={values.visit_window ?? INHERIT}
           maxDays={settings.max_visit_days}
           defaultDays={settings.default_visit_days}
           effectiveDays={settings.effective_visit_days}
-          onChange={(value) => form.setValue('visit', value)}
+          onChange={(value) => set('visit_window', toTier(value))}
         />
       </fieldset>
 
       <p className="text-2xs text-content-tertiary">{t('settings.retention.auditNote')}</p>
+    </>
+  );
 
-      {canEdit && (
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={!form.isDirty || form.isSubmitting}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {form.isSubmitting ? t('settings.saving') : t('settings.save')}
-          </button>
+  if (!canEdit) {
+    return <div className="flex flex-col gap-5 p-4">{fields(saved, () => undefined)}</div>;
+  }
 
-          {form.submitError && (
-            <p role="alert" className="text-2xs text-danger">
-              {form.submitError}
-            </p>
-          )}
+  return (
+    <SettingsForm<Draft>
+      saved={saved}
+      label={t('settings.retention.title')}
+      highRisk={{
+        labels: {
+          thread_window: t('settings.retention.threadLabel'),
+          visit_window: t('settings.retention.visitLabel'),
+        },
+        format: (key, value) =>
+          value === null
+            ? t('settings.retention.inherit', { days: String(defaults[key]) })
+            : tierLabel(t, value as RetentionTier),
+      }}
+      onSave={async (values, { reason }) => {
+        // Both windows every time, because both are on the screen: a partial
+        // body would be the right shape for a single-field editor and the wrong
+        // one here, where the person just read and confirmed the pair.
+        const data = await api.patch<RetentionSettings>('/settings/retention', {
+          thread_window: values.thread_window,
+          visit_window: values.visit_window,
+          reason,
+        });
+        onSaved(data);
+      }}
+    >
+      {(form) => (
+        <div className="flex flex-col gap-5 p-4">
+          {fields(form.values, (key, tier) => form.setValue(key, tier))}
         </div>
       )}
-    </form>
+    </SettingsForm>
   );
 }
 

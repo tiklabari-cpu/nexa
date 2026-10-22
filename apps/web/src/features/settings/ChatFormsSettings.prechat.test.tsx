@@ -69,7 +69,7 @@ describe('built-in pre-chat fields (WG-01)', () => {
       expect(within(box).getByRole('checkbox', { name: `Require ${field}` })).toBeChecked();
     }
     expect(within(box).getByText(/have not been saved/)).toBeInTheDocument();
-    expect(within(box).getByRole('button', { name: 'Save form' })).toBeDisabled();
+    expect(within(box).getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
   it('hiding the username clears its requirement, warns, and saves the whole form', async () => {
@@ -84,7 +84,7 @@ describe('built-in pre-chat fields (WG-01)', () => {
     // The preview no longer asks for it.
     expect(within(screen.getByTestId('prechat-preview')).queryByText('Username')).toBeNull();
 
-    await userEvent.click(within(box).getByRole('button', { name: 'Save form' }));
+    await userEvent.click(within(box).getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
     expect(api.put).toHaveBeenCalledWith('/settings/prechat', {
       enabled: true,
@@ -95,7 +95,7 @@ describe('built-in pre-chat fields (WG-01)', () => {
     });
     // Saved: the draft is gone and the button rests again.
     await vi.waitFor(() =>
-      expect(within(box).getByRole('button', { name: 'Save form' })).toBeDisabled(),
+      expect(within(box).getByRole('button', { name: 'Save' })).toBeDisabled(),
     );
   });
 
@@ -144,7 +144,7 @@ describe('built-in pre-chat fields (WG-01)', () => {
     expect(within(box).queryByText(/have not been saved/)).toBeNull();
 
     await userEvent.click(within(box).getByRole('checkbox', { name: 'Show Email' }));
-    await userEvent.click(within(box).getByRole('button', { name: 'Discard changes' }));
+    await userEvent.click(within(box).getByRole('button', { name: 'Discard' }));
     expect(within(box).getByRole('checkbox', { name: 'Show Email' })).toBeChecked();
     expect(within(box).getByRole('checkbox', { name: 'Require Email' })).not.toBeChecked();
   });
@@ -153,7 +153,7 @@ describe('built-in pre-chat fields (WG-01)', () => {
     renderCard(<ChatFormsSettings canEdit={false} />);
     const box = await card();
     expect(within(box).getByRole('checkbox', { name: 'Show Username' })).toBeDisabled();
-    expect(within(box).queryByRole('button', { name: 'Save form' })).toBeNull();
+    expect(within(box).queryByRole('button', { name: 'Save' })).toBeNull();
   });
 
   it('warns in Turkish when the username is hidden', async () => {

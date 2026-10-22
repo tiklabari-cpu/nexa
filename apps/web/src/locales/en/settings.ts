@@ -62,7 +62,6 @@ export const settings: Messages = {
   // languages on purpose: the dotted/dotless i and the cedillas are where
   // fonts differ most.
   'settings.appearance.sample': 'Pijamalı hasta yağız şoföre çabucak güvendi.',
-  'settings.appearance.save': 'Save default',
   'settings.appearance.remove': 'Remove default',
   'settings.appearance.saved': 'Saved — members see it the next time the panel loads.',
   'settings.appearance.removed': 'Default removed.',
@@ -361,8 +360,6 @@ export const settings: Messages = {
     "Without it, the visitor's first line in the chat opens the conversation.",
   'settings.chatForms.builtIn.notSaved':
     'These are the defaults and have not been saved. Once saved, required fields are also checked by the server.',
-  'settings.chatForms.builtIn.save': 'Save form',
-  'settings.chatForms.builtIn.reset': 'Discard changes',
   'settings.chatForms.builtIn.leaveMessage': 'Discard your unsaved pre-chat form changes?',
   'settings.chatForms.builtIn.preview': 'Preview',
   'settings.chatForms.builtIn.previewSubmit': 'Start the chat',
@@ -601,8 +598,6 @@ export const settings: Messages = {
     'A language written into your install snippet (data-language) overrides this setting on that page.',
   'settings.widgetCustomization.entitlementError':
     'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
-  'settings.widgetCustomization.saveButton': 'Save appearance',
-  'settings.widgetCustomization.resetButton': 'Reset',
   'settings.widgetCustomization.previewLabel': 'Preview',
   'settings.widgetCustomization.previewChatWithUs': 'Chat with us',
   'settings.widgetCustomization.previewGreeting': 'Hi! How can we help?',
@@ -755,6 +750,16 @@ export const settings: Messages = {
   'settings.sso.removeModalDescription':
     'Anyone who signs in through this connection loses that path immediately. This cannot be undone.',
   'settings.sso.removeConfirmButton': 'Remove connection',
+  'settings.sso.enableConfirmTitle': 'Turn on {name}?',
+  'settings.sso.enableConfirmDescription':
+    'Anyone the identity provider vouches for, on a verified domain, can sign in through this connection as soon as it is on.',
+  'settings.sso.enableConfirmButton': 'Turn on',
+  'settings.sso.enableConfirmFailed': '{name} couldn’t be turned on.',
+  'settings.sso.disableConfirmTitle': 'Turn off {name}?',
+  'settings.sso.disableConfirmDescription':
+    'Nobody can sign in through this connection while it is off — and a required connection that is off requires nothing.',
+  'settings.sso.disableConfirmButton': 'Turn off',
+  'settings.sso.disableConfirmFailed': '{name} couldn’t be turned off.',
   'settings.sso.removing': 'Removing…',
   'settings.scim.title': 'SCIM provisioning',
   'settings.scim.description':
@@ -1278,7 +1283,6 @@ export const settings: Messages = {
     'Choose which vice-owners and admins are warned besides you.',
   'settings.aiUsage.recipientsNoteOther': 'Only the workspace owner can change who is warned.',
   'settings.aiUsage.recipientsNone': 'There are no other admins to choose from.',
-  'settings.aiUsage.recipientsSave': 'Save recipients',
   'settings.aiUsage.recipientsSaved': 'Saved.',
   'settings.aiUsage.capNote':
     'The daily allowance is set by the SiyahTuş team and cannot be changed here. To raise it, contact us.',

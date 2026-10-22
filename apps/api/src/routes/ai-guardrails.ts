@@ -18,7 +18,7 @@
  * `config-draft.ts` (ADR-14b §2.5). Settings, rules and phrases belong to a
  * customer-facing agent — Copilot never talks to a player.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type {
   AiForbiddenPhrase,
   AiGuardrailHit,
@@ -56,6 +56,7 @@ import {
   type PlatformGuardrail,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
+import { highRiskReason, reasonMetadata } from '../lib/high-risk-reason.js';
 import type { TenantClient } from '../lib/tenant.js';
 import {
   createForbiddenPhraseDraft,
@@ -68,6 +69,7 @@ import {
 } from '../services/ai/config-draft.js';
 import { guardrailRuleLoosening } from '../services/ai/guardrail-lock.js';
 import type { Principal } from '../services/auth/principal.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
 const WRITE = ['agents-bot--all:rw'];
@@ -123,9 +125,12 @@ const createRuleBody = z
     action: ruleAction.optional(),
     scope: scopeSchema.optional(),
     active: z.boolean().optional(),
+    reason: highRiskReason.optional(),
   })
   .strict();
 
+// `reason` (GV-06-S1) is not a field of the rule: a body carrying only a
+// reason changes nothing, and is refused like an empty one.
 const updateRuleBody = z
   .object({
     title: ruleTitle.optional(),
@@ -134,9 +139,45 @@ const updateRuleBody = z
     action: ruleAction.optional(),
     scope: scopeSchema.optional(),
     active: z.boolean().optional(),
+    reason: highRiskReason.optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, 'at least one field is required');
+  .refine(
+    (value) => Object.keys(value).some((key) => key !== 'reason'),
+    'at least one field is required',
+  );
+
+const deleteRuleBody = z.object({ reason: highRiskReason.optional() }).strict();
+
+/**
+ * A compliance rule written, changed or removed, in the audit trail (GV-06-S1 ·
+ * tm 323.2). These rules are what the AI may not do; loosening one is the
+ * change an owner most needs to be able to account for later, so each write
+ * is filed with the reason the panel asked for. The shape is the one retention,
+ * SIEM and SSO use — `settings.security_updated` with the resource in metadata
+ * — and carries the rule's switches, never its text.
+ */
+async function auditRuleChange(
+  tx: TenantClient,
+  request: FastifyRequest,
+  rule: { id: string; aiAgentId: string; active?: boolean; action?: string },
+  operation: 'created' | 'updated' | 'deleted',
+  extra: { fields?: string[]; reason?: string },
+): Promise<void> {
+  await writeAuditEntry(tx, request.auditContext(), {
+    action: 'settings.security_updated',
+    target: `ai_guardrail_rule:${rule.id}`,
+    metadata: {
+      resource: 'ai_guardrail_rule',
+      operation,
+      ai_agent_id: rule.aiAgentId,
+      ...(extra.fields ? { fields: extra.fields } : {}),
+      ...(rule.active !== undefined ? { active: rule.active } : {}),
+      ...(rule.action !== undefined ? { rule_action: rule.action } : {}),
+      ...reasonMetadata(extra.reason),
+    },
+  });
+}
 
 // The length is the dialect's (`forbiddenPhraseProblem`), which knows the
 // match; this is only the outer bound.
@@ -523,7 +564,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
           { reason: 'guardrail_rules_limit', limit: GUARDRAIL_RULES_PER_AGENT_MAX },
         );
       }
-      return createGuardrailRuleDraft(tx, {
+      const rule = await createGuardrailRuleDraft(tx, {
         licenseId: tenant.licenseId,
         aiAgentId: input.ai_agent_id,
         title: input.title,
@@ -535,6 +576,8 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
         createdBy: actor,
         updatedBy: actor,
       });
+      await auditRuleChange(tx, request, rule, 'created', { reason: input.reason });
+      return rule;
     });
     return reply.code(201).send(serialiseRule(created));
   });
@@ -567,7 +610,8 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
         });
         if (!existing) throw ApiError.notFound('Compliance rule not found.');
         if (input.scope) await requireScopeTargets(tx, existing.aiAgentId, input.scope);
-        return updateGuardrailRuleDraft(tx, id, {
+        const { reason, ...fields } = input;
+        const rule = await updateGuardrailRuleDraft(tx, id, {
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.body !== undefined ? { body: input.body } : {}),
           ...(input.category !== undefined ? { category: input.category } : {}),
@@ -576,6 +620,11 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
           ...(input.active !== undefined ? { active: input.active } : {}),
           updatedBy: actor,
         });
+        await auditRuleChange(tx, request, rule, 'updated', {
+          fields: Object.keys(fields),
+          reason,
+        });
+        return rule;
       });
       return reply.send(serialiseRule(updated));
     },
@@ -587,8 +636,16 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
     async (request, reply) => {
       refusePlatformKey(request.params.ruleId);
       const id = parse(uuid, request.params.ruleId);
-      const deleted = await request.withTenant((tx) => deleteGuardrailRuleDraft(tx, id));
-      if (deleted === 0) throw ApiError.notFound('Compliance rule not found.');
+      const { reason } = parse(deleteRuleBody, request.body ?? {});
+      await request.withTenant(async (tx) => {
+        const existing = await tx.aiGuardrailRule.findFirst({
+          where: { id },
+          select: { id: true, aiAgentId: true, active: true, action: true },
+        });
+        if (!existing) throw ApiError.notFound('Compliance rule not found.');
+        await deleteGuardrailRuleDraft(tx, id);
+        await auditRuleChange(tx, request, existing, 'deleted', { reason });
+      });
       return reply.code(204).send();
     },
   );

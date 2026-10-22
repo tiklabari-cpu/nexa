@@ -53,6 +53,7 @@ import { ApiError } from '../lib/api-error.js';
 import { constantTimeEqual, generateToken, hashToken } from '../lib/crypto.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { inHipaaScope } from '../lib/hipaa.js';
+import { highRiskReason, reasonMetadata } from '../lib/high-risk-reason.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { prechatFromRow, type BrandPrechat } from '../services/websites/prechat.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
@@ -788,15 +789,20 @@ const updateSiemBody = z
  * refuse, because a zero window puts the cutoff at "now" and matches every row.
  * See `@siyahtus/types/retention.ts`.
  *
- * At least one field, like the other partial-update bodies here: an empty PATCH
- * would write an audit entry for a change nobody made.
+ * At least one window, like the other partial-update bodies here: an empty PATCH
+ * would write an audit entry for a change nobody made. `reason` (GV-06-S1) is
+ * not a window — a body carrying only a reason changes nothing and is refused.
  */
 const updateRetentionBody = z
   .object({
     thread_window: z.enum(RETENTION_TIERS).nullable().optional(),
     visit_window: z.enum(RETENTION_TIERS).nullable().optional(),
+    reason: highRiskReason.optional(),
   })
-  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+  .refine(
+    (body) => body.thread_window !== undefined || body.visit_window !== undefined,
+    'at least one field is required',
+  );
 
 /**
  * SLA targets (FR-MOD-11.5 · 11.5-d).
@@ -2221,15 +2227,20 @@ export default async function settingsRoutes(
         // answer to "how long do you keep people's conversations", and the
         // trail that records a deletion has to be able to say under which
         // policy it happened.
+        //
+        // A high-risk setting (GV-06-S1): the panel asks why before it saves,
+        // and the reason is filed here beside the tiers it explains.
+        const { reason, ...windows } = body;
         await writeAuditEntry(tx, request.auditContext(), {
           action: 'settings.security_updated',
           target: `retention:${licenceId}`,
           metadata: {
             resource: 'retention',
             operation: 'updated',
-            fields: Object.keys(body),
+            fields: Object.keys(windows),
             thread_window: updated.retentionThreadWindow,
             visit_window: updated.retentionVisitWindow,
+            ...reasonMetadata(reason),
           },
         });
         return updated;

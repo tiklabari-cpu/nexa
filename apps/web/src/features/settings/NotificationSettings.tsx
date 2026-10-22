@@ -23,10 +23,15 @@
  *     just changed.
  *   - **The master switch does not reach e-mail.** That is the one rule in this
  *     surface a reader is likely to assume the other way round.
+ *
+ * Every row is the person's *own* preference, so it is the one section built
+ * on `InstantToggle` rather than a Save button (tm 323.2 · GV-06): it writes the
+ * moment it is flipped, says "Saved" with an Undo, and a refused write puts
+ * the switch back.
  */
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Card, Section } from '../../components/Page.js';
-import { StatusDot } from '../../components/StatusDot.js';
+import { InstantToggle } from '../../components/settings/InstantToggle.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { type Permission } from '../notifications/notifications.js';
@@ -39,8 +44,6 @@ import {
 export function NotificationSettings(): ReactElement {
   const t = useTranslate();
   const [permission, setPermission] = useState<Permission>('default');
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   // Selected as the stored reference and normalised outside the selector. Zustand
   // v5 compares the selector's result with `Object.is`, so building the object
@@ -56,12 +59,9 @@ export function NotificationSettings(): ReactElement {
     setPermission(currentPermission());
   }, []);
 
-  function update(patch: Partial<NotificationPreferences>): void {
-    setBusy(true);
-    setFailed(false);
-    void setPreferences(patch)
-      .catch(() => setFailed(true))
-      .finally(() => setBusy(false));
+  /** Rejects when the write is refused, so the toggle goes back and says so. */
+  function update(patch: Partial<NotificationPreferences>): Promise<void> {
+    return setPreferences(patch);
   }
 
   async function enableDesktop(): Promise<void> {
@@ -69,7 +69,7 @@ export function NotificationSettings(): ReactElement {
     setPermission(result);
     // Turning the desktop toggle on is pointless if the browser refuses; keep
     // the stored preference honest about what will actually happen.
-    if (result === 'granted') update({ desktop: true });
+    if (result === 'granted') await update({ desktop: true }).catch(() => undefined);
   }
 
   const desktopBlocked = permission === 'denied' || permission === 'unsupported';
@@ -80,65 +80,38 @@ export function NotificationSettings(): ReactElement {
       description={t('team.notifications.description')}
     >
       <Card>
-        <div className="divide-y divide-border">
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.enabled}
-              onChange={(event) => update({ enabled: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              {t('team.notifications.enable.label')}
-              <span className="block text-2xs text-content-tertiary">
-                {failed ? t('team.notifications.saveFailed') : t('team.notifications.enable.hint')}
-              </span>
-            </span>
-            <StatusDot
-              tone={prefs.enabled ? 'success' : 'neutral'}
-              label={prefs.enabled ? t('team.status.on') : t('team.status.off')}
-            />
-          </label>
+        <div className="flex flex-col gap-3 p-4">
+          <InstantToggle
+            label={t('team.notifications.enable.label')}
+            description={t('team.notifications.enable.hint')}
+            checked={prefs.enabled}
+            onChange={(enabled) => update({ enabled })}
+          />
 
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.sound}
-              disabled={!prefs.enabled}
-              onChange={(event) => update({ sound: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              {t('team.notifications.sound.label')}
-              <span className="block text-2xs text-content-tertiary">
-                {t('team.notifications.sound.hint')}
-              </span>
-            </span>
-            <StatusDot
-              tone={prefs.enabled && prefs.sound ? 'success' : 'neutral'}
-              label={prefs.enabled && prefs.sound ? t('team.status.on') : t('team.status.off')}
-            />
-          </label>
+          <InstantToggle
+            label={t('team.notifications.sound.label')}
+            description={t('team.notifications.sound.hint')}
+            checked={prefs.sound}
+            disabled={!prefs.enabled}
+            onChange={(sound) => update({ sound })}
+          />
 
-          <div className="flex flex-wrap items-center gap-3 p-4">
-            <label className="flex flex-1 items-center gap-3">
-              <input
-                type="checkbox"
-                checked={prefs.desktop && permission === 'granted'}
-                disabled={!prefs.enabled || desktopBlocked}
-                onChange={(event) => update({ desktop: event.target.checked })}
-              />
-              <span className="text-sm">
-                {t('team.notifications.desktop.label')}
-                <span className="block text-2xs text-content-tertiary">
-                  {permission === 'granted'
-                    ? t('team.notifications.desktop.granted')
-                    : permission === 'denied'
-                      ? t('team.notifications.desktop.denied')
-                      : permission === 'unsupported'
-                        ? t('team.notifications.desktop.unsupported')
-                        : t('team.notifications.desktop.default')}
-                </span>
-              </span>
-            </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <InstantToggle
+              label={t('team.notifications.desktop.label')}
+              description={
+                permission === 'granted'
+                  ? t('team.notifications.desktop.granted')
+                  : permission === 'denied'
+                    ? t('team.notifications.desktop.denied')
+                    : permission === 'unsupported'
+                      ? t('team.notifications.desktop.unsupported')
+                      : t('team.notifications.desktop.default')
+              }
+              checked={prefs.desktop && permission === 'granted'}
+              disabled={!prefs.enabled || desktopBlocked}
+              onChange={(desktop) => update({ desktop })}
+            />
 
             {prefs.enabled && permission !== 'granted' && permission !== 'unsupported' && (
               <button
@@ -152,43 +125,20 @@ export function NotificationSettings(): ReactElement {
             )}
           </div>
 
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.push}
-              disabled={!prefs.enabled || busy}
-              onChange={(event) => update({ push: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              {t('team.notifications.push.label')}
-              <span className="block text-2xs text-content-tertiary">
-                {t('team.notifications.push.hint')}
-              </span>
-            </span>
-            <StatusDot
-              tone={prefs.enabled && prefs.push ? 'success' : 'neutral'}
-              label={prefs.enabled && prefs.push ? t('team.status.on') : t('team.status.off')}
-            />
-          </label>
+          <InstantToggle
+            label={t('team.notifications.push.label')}
+            description={t('team.notifications.push.hint')}
+            checked={prefs.push}
+            disabled={!prefs.enabled}
+            onChange={(push) => update({ push })}
+          />
 
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.email}
-              disabled={busy}
-              onChange={(event) => update({ email: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              {t('team.notifications.email.label')}
-              <span className="block text-2xs text-content-tertiary">
-                {t('team.notifications.email.hint')}
-              </span>
-            </span>
-            <StatusDot
-              tone={prefs.email ? 'success' : 'neutral'}
-              label={prefs.email ? t('team.status.on') : t('team.status.off')}
-            />
-          </label>
+          <InstantToggle
+            label={t('team.notifications.email.label')}
+            description={t('team.notifications.email.hint')}
+            checked={prefs.email}
+            onChange={(email) => update({ email })}
+          />
         </div>
       </Card>
     </Section>

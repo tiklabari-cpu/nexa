@@ -111,7 +111,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
       await admin.goto('/app/settings/widget');
       const appearance = admin.getByRole('region', { name: /Widget appearance/ });
       const branding = appearance.getByLabel(/Powered by SiyahTuş/);
-      const save = appearance.getByRole('button', { name: 'Save appearance' });
+      const save = appearance.getByRole('button', { name: 'Save', exact: true });
 
       // --- Enterprise: an admin turns it off, from the screen ---------------
       await expect(branding).toBeChecked();
@@ -552,20 +552,30 @@ test.describe('SIEM export (NFR-C6 · C6-f)', () => {
       await expect(section).toBeVisible();
 
       // Whatever `siem.spec.ts` left the switch at (that file enables export
-      // and never turns it back off) — the point here is that the click does
-      // not move it, not which way it starts.
+      // and never turns it back off) — the point here is that the write does
+      // not take, not which way it starts. The tick is a draft; Save writes it
+      // (GV-06 · tm 323.2).
       const enable = section.getByRole('checkbox', { name: /Enable export/ });
       const before = await enable.isChecked();
       await enable.click();
+      await section.getByRole('button', { name: 'Save', exact: true }).click();
 
       // Same ADR-06 substitution as the SSO and SLA screens: the console
       // recognises `details.entitlement` and answers in its own catalogue
       // sentence rather than repeating the server's English prose or falling
       // through to the generic refusal.
       await expect(section.getByRole('alert')).toContainText(/Enterprise feature/i);
-      // Nothing was half-applied: the write never took, and the screen has no
-      // optimistic state to roll back, so the switch reads exactly as it did.
-      expect(await enable.isChecked()).toBe(before);
+      // The refused draft is kept for another try — and nothing was half-applied:
+      // the server still holds the switch exactly as it was.
+      expect(await enable.isChecked()).toBe(!before);
+      // Discarded first, so the reload is not held up by the unsaved-changes guard.
+      await section.getByRole('button', { name: 'Discard', exact: true }).click();
+      await agentPage.reload();
+      await expect(
+        agentPage
+          .getByRole('region', { name: 'SIEM export' })
+          .getByRole('checkbox', { name: /Enable export/ }),
+      ).toBeChecked({ checked: before });
     } finally {
       await setPlan(request, token, 'enterprise');
     }

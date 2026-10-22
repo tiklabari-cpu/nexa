@@ -417,8 +417,8 @@ identityLinks:
       nothing and answers 200. Linking a record to itself is a 400; a customer
       of another organization is a 404, whichever of the two it is.
 
-      Team lead and above: `customers:rw` plus `minimumRole: admin` until the
-      RL-01 role set adds the team lead. Writes `customer.identity_linked` to
+      Team lead and above: `customers:rw` plus `minimumRole: admin` until
+      RL-03 bounds the team lead (RL-01) to their teams. Writes `customer.identity_linked` to
       the audit trail.
     requestBody:
       required: true

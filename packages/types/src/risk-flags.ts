@@ -95,9 +95,10 @@ export const RISK_FLAG_CLEARERS = ['manager', 'team_lead'] as const;
 export type RiskFlagClearer = (typeof RISK_FLAG_CLEARERS)[number];
 
 /**
- * The lowest role of today's set each clearer is (K6: Manager = `admin`). The
- * Team Lead role does not exist until RL-01, so until then `team_lead` is
- * `admin` too — RL-01 moves it down and nothing else changes.
+ * The lowest role of today's set each clearer is (K6: Manager = `admin`).
+ * `team_lead` is `admin` too although the role exists (tm 324.1): until
+ * RL-03 bounds a Team Lead to their teams, a Team Lead holds a Team Member's
+ * powers (PLAN §D328, §D329). RL-03 moves it down and nothing else changes.
  */
 export const RISK_FLAG_CLEAR_MIN_ROLE: Readonly<Record<RiskFlagClearer, AgentRole>> = Object.freeze(
   {

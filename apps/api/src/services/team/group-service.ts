@@ -733,6 +733,14 @@ export async function deleteGroup(
  * re-checked, so a nightly SCIM restatement never trips over a member who was
  * on the team before the requirement was.
  *
+ * `lead` (RL-01 · tm 324.2) marks the member as the team's lead, and follows
+ * the tier's rule: `undefined` keeps the mark they have, `false` for a new
+ * member — so a directory, which never names one, never clears one. Only a
+ * Team Lead leads (400 `lead_requires_team_lead` otherwise); leaving the role
+ * clears the marks (`clearLeadMarks`). *Who* may set it — an admin or the
+ * owner — is the caller's question, not this function's: the console asks it,
+ * SCIM never passes the field.
+ *
  * Returns whether anything changed, which is also what decides whether an entry
  * is written.
  */
@@ -740,7 +748,7 @@ export async function setGroupMember(
   tx: TenantClient,
   audit: AuditContext,
   licenseId: bigint,
-  input: { groupId: bigint; agentId: string; priority?: GroupPriority },
+  input: { groupId: bigint; agentId: string; priority?: GroupPriority; lead?: boolean },
   options: AuditOptions = {},
 ): Promise<boolean> {
   const { groupId, agentId } = input;
@@ -753,11 +761,36 @@ export async function setGroupMember(
     throw ApiError.notFound('That agent is not a member of this workspace.');
   }
 
-  const key = { licenseId_groupId_agentId: { licenseId, groupId, agentId } };
-  const existing = await tx.groupAgent.findUnique({ where: key, select: { priority: true } });
-  const wanted = input.priority ?? (existing?.priority as GroupPriority | undefined);
+  if (input.lead === true) {
+    const membership = await tx.agentMembership.findFirst({
+      where: { agentId },
+      select: { role: true },
+    });
+    if (membership?.role !== 'team_lead') {
+      throw ApiError.validation(
+        'lead: Only a Team Lead leads a team. Make them a Team Lead first.',
+        {
+          reason: 'lead_requires_team_lead',
+        },
+      );
+    }
+  }
 
-  if (existing && (wanted === undefined || wanted === existing.priority)) return false;
+  const key = { licenseId_groupId_agentId: { licenseId, groupId, agentId } };
+  const existing = await tx.groupAgent.findUnique({
+    where: key,
+    select: { priority: true, isLead: true },
+  });
+  const wanted = input.priority ?? (existing?.priority as GroupPriority | undefined);
+  const lead = input.lead ?? existing?.isLead ?? false;
+
+  if (
+    existing &&
+    (wanted === undefined || wanted === existing.priority) &&
+    lead === existing.isLead
+  ) {
+    return false;
+  }
 
   if (!existing) {
     await lockTeamStaffing(tx, licenseId);
@@ -791,15 +824,33 @@ export async function setGroupMember(
   const priority = wanted ?? DEFAULT_GROUP_PRIORITY;
   await tx.groupAgent.upsert({
     where: key,
-    create: { licenseId, groupId, agentId, priority },
-    update: { priority },
+    create: { licenseId, groupId, agentId, priority, isLead: lead },
+    update: { priority, isLead: lead },
   });
   await writeAuditEntry(tx, audit, {
     action: 'group.member_set',
     target: `group:${groupId}`,
-    metadata: { ...options.metadata, agent_id: agentId, priority },
+    metadata: { ...options.metadata, agent_id: agentId, priority, lead },
   });
   return true;
+}
+
+/**
+ * Clear every lead mark `agentId` holds (RL-01 · tm 324.2), in the role
+ * change that takes them off `team_lead`: leading is the Team Lead's, so a
+ * mark left on an admin or a Team Member would be a lead the role no longer
+ * backs — and the first thing RL-03's team-bounded checks would read. Returns
+ * the teams cleared, in id order, for the role change's own audit entry.
+ */
+export async function clearLeadMarks(tx: TenantClient, agentId: string): Promise<bigint[]> {
+  const led = await tx.groupAgent.findMany({
+    where: { agentId, isLead: true },
+    select: { groupId: true },
+    orderBy: { groupId: 'asc' },
+  });
+  if (led.length === 0) return [];
+  await tx.groupAgent.updateMany({ where: { agentId, isLead: true }, data: { isLead: false } });
+  return led.map((row) => row.groupId);
 }
 
 /**

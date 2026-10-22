@@ -5,7 +5,7 @@
  *   - **a realtime push** (`risk_flag_raised` / `risk_flag_cleared`,
  *     `RiskFlagPush`) to the conversation's members — its teams and the
  *     agents in it — the supervisors (admin and up: the Team Lead and up of
- *     AI-27 until RL-01) and, for an urgent flag, the Responsible Gaming team;
+ *     AI-27 until RL-03 bounds a Team Lead to their teams) and, for an urgent flag, the Responsible Gaming team;
  *   - **a webhook delivery** under the same names (`RiskFlagSignal`): the
  *     operator hears at once, and the account is theirs to act on;
  *   - **for an urgent flag raised** — self-harm, a suspected minor, a self-
@@ -36,7 +36,11 @@ declare module 'fastify' {
   }
 }
 
-/** The roles that hear of every flag (AI-27's Team Lead and up: admin and up until RL-01). */
+/**
+ * The roles that hear of every flag (AI-27's Team Lead and up). Admin and up
+ * until RL-03: "every flag" is every team's, and a Team Lead (tm 324.1) sees
+ * their own teams' conversations only.
+ */
 export const RISK_FLAG_SUPERVISOR_ROLES = ['owner', 'viceowner', 'admin'] as const;
 
 export interface RiskFlagAnnouncerLogger {

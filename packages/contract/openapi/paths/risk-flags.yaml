@@ -95,7 +95,7 @@ riskFlag:
       why (AI-27-S2), and the audit log records `risk_flag.cleared`. The reason
       is required. `rg_signal`, `self_exclusion_request` and
       `underage_suspected` need a Manager and up, the rest a Team Lead and up
-      (admin and up until RL-01): below that, `403 authorization` with
+      (admin and up until RL-03 bounds a Team Lead to their teams): below that, `403 authorization` with
       `details.reason: risk_flag_clear_role` and `details.required_role`. A
       flag already cleared is `403 not_allowed`,
       `details.reason: risk_flag_already_cleared`.

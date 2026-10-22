@@ -34,6 +34,52 @@ export type InvitationRole = (typeof INVITATION_ROLES)[number];
  */
 export const MAX_INVITATION_GROUPS = 50;
 
+/** One team an invitation names: the invitee joins it, and leads it when `lead`. */
+export interface InvitationGroupChoice {
+  group_id: number;
+  lead: boolean;
+}
+
+/**
+ * What can be wrong with the teams an invitation names (RL-04-S1):
+ *
+ *   - `lead_team_required` — a Team Lead invitation that leads no team. A lead
+ *     of nothing joins as a Team Member who cannot see what they were hired to
+ *     lead, so the sender is stopped rather than the joiner surprised;
+ *   - `lead_requires_team_lead` — another role's invitation marks a team to
+ *     lead. Leading is the Team Lead's, on an invitation as on a membership
+ *     (`PUT /groups/{id}/agents/{agentId}`);
+ *   - `duplicate_group` — a team named twice, which could only disagree with
+ *     itself about `lead`;
+ *   - `too_many_groups` — past {@link MAX_INVITATION_GROUPS}.
+ */
+export const INVITATION_GROUP_PROBLEMS = [
+  'lead_team_required',
+  'lead_requires_team_lead',
+  'duplicate_group',
+  'too_many_groups',
+] as const;
+export type InvitationGroupProblem = (typeof INVITATION_GROUP_PROBLEMS)[number];
+
+/**
+ * The first rule {@link INVITATION_GROUP_PROBLEMS} names that `groups` breaks
+ * for an invitation carrying `role`, or `null`. One function for the server
+ * (`POST /invitations` refuses with 400) and the invite modal (Send stays
+ * disabled), so the two cannot drift. Whether each team exists is the
+ * server's to answer — it is not knowable here.
+ */
+export function invitationGroupsProblem(
+  role: InvitationRole,
+  groups: readonly InvitationGroupChoice[],
+): InvitationGroupProblem | null {
+  if (groups.length > MAX_INVITATION_GROUPS) return 'too_many_groups';
+  if (new Set(groups.map((g) => g.group_id)).size !== groups.length) return 'duplicate_group';
+  const leads = groups.some((g) => g.lead);
+  if (role === 'team_lead' && !leads) return 'lead_team_required';
+  if (role !== 'team_lead' && leads) return 'lead_requires_team_lead';
+  return null;
+}
+
 export const ROUTING_STATUSES = ['accepting_chats', 'not_accepting_chats', 'offline'] as const;
 export type RoutingStatus = (typeof ROUTING_STATUSES)[number];
 

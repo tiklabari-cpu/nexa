@@ -1598,6 +1598,45 @@ describe('scim server core', () => {
         );
       });
 
+      it("keeps a Team Lead's lead mark, which a directory cannot name (RL-01)", async () => {
+        // The tier's rule, for the mark an admin sets (tm 324.2): SCIM has no
+        // attribute for leading a team, so restating the members must neither
+        // clear it nor — the role being the console's alone — grant one.
+        await owner.agentMembership.update({
+          where: {
+            licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+          },
+          data: { role: 'team_lead' },
+        });
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+        await owner.groupAgent.update({
+          where: {
+            licenseId_groupId_agentId: {
+              licenseId: fx.a.licenseId,
+              groupId: BigInt(team.id),
+              agentId: fx.a.agentAccountId,
+            },
+          },
+          data: { isLead: true },
+        });
+
+        const res = await server.put(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            displayName: 'Support',
+            members: [{ value: fx.a.agentAccountId }, { value: fx.a.ownerAccountId }],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        const leads = await owner.groupAgent.findMany({
+          where: { groupId: BigInt(team.id), isLead: true },
+          select: { agentId: true },
+        });
+        expect(leads).toEqual([{ agentId: fx.a.agentAccountId }]);
+      });
+
       it('writes nothing when it restates what is already stored', async () => {
         const team = await createTeam('Support', [fx.a.agentAccountId]);
         const before = (await groupEntries()).length;

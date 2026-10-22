@@ -52,6 +52,7 @@ import {
   GROUP_INCLUDE,
   acceptingCounts,
   assertKeepsTeamTraining,
+  clearLeadMarks,
   createGroup,
   deleteGroup,
   loadGroup,
@@ -108,8 +109,12 @@ const groupPatchBody = groupBody.partial().refine((b) => Object.keys(b).length >
 
 /** `priority` is the routing preference ADR-08 step 2 reads, and the PRD's
  *  "Primary agent önceliği" is its `primary` tier. Enumerated here so a typo is
- *  a 400 rather than a row the CHECK constraint rejects mid-transaction. */
-const membershipBody = z.object({ priority: z.enum(GROUP_PRIORITIES).default('normal') });
+ *  a 400 rather than a row the CHECK constraint rejects mid-transaction.
+ *  `lead` (RL-01) is optional — left out, the member keeps their mark. */
+const membershipBody = z.object({
+  priority: z.enum(GROUP_PRIORITIES).default('normal'),
+  lead: z.boolean().optional(),
+});
 
 const GROUP_BODY_MESSAGE =
   'name is required (1–120 characters); language_code is a two-letter code, optionally with a region (e.g. en, en-GB); ' +
@@ -135,7 +140,9 @@ function parseGroupPatchBody(raw: unknown): z.infer<typeof groupPatchBody> {
 function parseMembershipBody(raw: unknown): z.infer<typeof membershipBody> {
   const parsed = membershipBody.safeParse(raw ?? {});
   if (!parsed.success) {
-    throw ApiError.validation(`priority must be one of: ${GROUP_PRIORITIES.join(', ')}.`);
+    throw ApiError.validation(
+      `priority must be one of: ${GROUP_PRIORITIES.join(', ')}; lead is true or false.`,
+    );
   }
   return parsed.data;
 }
@@ -715,16 +722,34 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         // writing a second, misleading audit entry.
         if (currentRole === nextRole) return target;
 
+        // The vice owner is offered to nobody new (K6): its holders become
+        // admins (tm 324.3), and its powers are an admin's. A 400, not a 403 —
+        // nobody's rank is in question, the role is retired. Checked after the
+        // ceiling so an admin reaching above their rank still hears 403.
+        if (nextRole === 'viceowner') {
+          throw ApiError.validation('role: viceowner is no longer assigned; choose admin.', {
+            reason: 'role_retired',
+          });
+        }
+
         const next = await tx.agentMembership.update({
           where: { licenseId_agentId: { licenseId: target.licenseId, agentId } },
           data: { role: nextRole },
           include: { agent: { select: agentSelect } },
         });
 
+        // Off `team_lead`, off every team they led — in this transaction, so
+        // no moment exists where the role says one thing and the marks another.
+        const leadCleared = currentRole === 'team_lead' ? await clearLeadMarks(tx, agentId) : [];
+
         await writeAuditEntry(tx, request.auditContext(), {
           action: 'member.role_changed',
           target: `account:${agentId}`,
-          metadata: { from: currentRole, to: nextRole },
+          metadata: {
+            from: currentRole,
+            to: nextRole,
+            ...(leadCleared.length > 0 ? { lead_cleared_group_ids: leadCleared.map(Number) } : {}),
+          },
         });
 
         return next;
@@ -1123,12 +1148,28 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       // Always an explicit tier — the dropdown on screen always has one
       // selected, and the schema's default fills it in for a body that omits it.
       // (SCIM has no such field and deliberately passes none; see the service.)
-      const { priority } = parseMembershipBody(request.body);
+      const { priority, lead } = parseMembershipBody(request.body);
+
+      // Who leads a team is an admin's call (RL-01): `groups--all:rw` lets a
+      // token staff teams, and a Team Lead — whose role ranks under admin —
+      // does not crown themselves or anyone else, whatever token they hold.
+      // Checked whether the mark is set or cleared, and before any read.
+      if (lead !== undefined) {
+        const principal = request.requirePrincipal();
+        if (principal.kind !== 'agent' || !roleAtLeast(principal.role, 'admin')) {
+          throw ApiError.authorization('Only an admin or the owner marks a team lead.');
+        }
+      }
 
       const { group, accepting } = await request.withTenant(async (tx) => {
         const licenseId = request.tenant().licenseId;
         await loadGroup(tx, groupId);
-        await setGroupMember(tx, request.auditContext(), licenseId, { groupId, agentId, priority });
+        await setGroupMember(tx, request.auditContext(), licenseId, {
+          groupId,
+          agentId,
+          priority,
+          ...(lead !== undefined ? { lead } : {}),
+        });
         return {
           group: await readGroup(tx, licenseId, groupId),
           accepting: await acceptingCounts(tx, licenseId, [groupId]),

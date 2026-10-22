@@ -311,7 +311,16 @@ agentRole:
       A change to the role the teammate already holds is a no-op: it returns the
       unchanged agent and writes nothing to the audit log. A real change writes
       exactly one `member.role_changed` entry recording only the `from`/`to`
-      roles.
+      roles — and, for a Team Lead moved to another role, the teams they no
+      longer lead (`lead_cleared_group_ids`).
+
+      `team_lead` (Ekip Lideri, RL-01) is assignable by an admin or the owner;
+      a Team Lead ranks below admin, so they change nobody's role. `viceowner`
+      is offered to nobody new (K6): asking for it is a 400 (`error.details.reason`
+      `role_retired`) — its powers are an admin's. Leading a team is the Team
+      Lead's: moving one to any other role clears every team lead mark they hold
+      (`PUT /groups/{groupId}/agents/{agentId}`, `lead`), in the same
+      transaction.
     requestBody:
       required: true
       content:
@@ -657,8 +666,12 @@ groupMember:
                   the teams marked here, and may lead several (RL-01-S2); the
                   mark is what bounds what leading adds (RL-03). Only an admin
                   or the owner sets or clears it — a Team Lead does not make
-                  themselves the lead of another team. Leaving it out keeps the
-                  member's mark as it is, `false` for a new member.
+                  themselves the lead of another team: sending `lead` at all
+                  is a 403 for anyone else, whatever the token's scopes. Only a
+                  Team Lead leads: `true` for a member of any other role is a
+                  400 (`error.details.reason` `lead_requires_team_lead`), and
+                  changing a Team Lead's role clears their marks. Leaving it out
+                  keeps the member's mark as it is, `false` for a new member.
     responses:
       "200":
         description: The team, with the membership applied

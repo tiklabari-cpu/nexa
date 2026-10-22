@@ -639,6 +639,15 @@ export interface paths {
      *     spent by the join (401 afterwards), and the raise sets seats *to* the
      *     headcount rather than incrementing them.
      *
+     *     **The join puts the member on the invitation's teams** (`groups`, RL-04),
+     *     marked lead of the ones it says they lead, in the same transaction — here
+     *     for a verified account, at `POST /auth/verify-email` (or a password
+     *     reset) for any other. Only a membership the join creates gets them: an
+     *     invitation that finds the person already a member changes neither their
+     *     role nor their teams. A team deleted meanwhile is simply not joined, and
+     *     one that has since come to require areas of expertise the newcomer does
+     *     not hold (AU-01) is skipped — an admin adds them once trained.
+     *
      *     This call is never refused for a seat ceiling. The person holding the link
      *     cannot buy seats or revoke anybody, and the check at `POST /invitations`
      *     already counts outstanding invitations, so accepting one can never be the
@@ -1676,7 +1685,7 @@ export interface paths {
      *     why (AI-27-S2), and the audit log records `risk_flag.cleared`. The reason
      *     is required. `rg_signal`, `self_exclusion_request` and
      *     `underage_suspected` need a Manager and up, the rest a Team Lead and up
-     *     (admin and up until RL-01): below that, `403 authorization` with
+     *     (admin and up until RL-03 bounds a Team Lead to their teams): below that, `403 authorization` with
      *     `details.reason: risk_flag_clear_role` and `details.required_role`. A
      *     flag already cleared is `403 not_allowed`,
      *     `details.reason: risk_flag_already_cleared`.
@@ -2532,8 +2541,8 @@ export interface paths {
      *     nothing and answers 200. Linking a record to itself is a 400; a customer
      *     of another organization is a 404, whichever of the two it is.
      *
-     *     Team lead and above: `customers:rw` plus `minimumRole: admin` until the
-     *     RL-01 role set adds the team lead. Writes `customer.identity_linked` to
+     *     Team lead and above: `customers:rw` plus `minimumRole: admin` until
+     *     RL-03 bounds the team lead (RL-01) to their teams. Writes `customer.identity_linked` to
      *     the audit trail.
      */
     post: operations['linkCustomerIdentity'];
@@ -2824,7 +2833,16 @@ export interface paths {
      *     A change to the role the teammate already holds is a no-op: it returns the
      *     unchanged agent and writes nothing to the audit log. A real change writes
      *     exactly one `member.role_changed` entry recording only the `from`/`to`
-     *     roles.
+     *     roles — and, for a Team Lead moved to another role, the teams they no
+     *     longer lead (`lead_cleared_group_ids`).
+     *
+     *     `team_lead` (Ekip Lideri, RL-01) is assignable by an admin or the owner;
+     *     a Team Lead ranks below admin, so they change nobody's role. `viceowner`
+     *     is offered to nobody new (K6): asking for it is a 400 (`error.details.reason`
+     *     `role_retired`) — its powers are an admin's. Leading a team is the Team
+     *     Lead's: moving one to any other role clears every team lead mark they hold
+     *     (`PUT /groups/{groupId}/agents/{agentId}`, `lead`), in the same
+     *     transaction.
      */
     put: operations['setAgentRole'];
     post?: never;
@@ -19980,8 +19998,17 @@ export interface operations {
            *     must lead at least one team (RL-04-S1), and only a
            *     `team_lead` invitation may lead one; other roles may name
            *     teams to join or none. Breaking either rule, or naming a team
-           *     twice, is a 400; a team this workspace does not have is a 404
-           *     `group_not_found`. Either way nothing is written.
+           *     twice, is a 400 whose `error.details.reason` is one of
+           *     `lead_team_required`, `lead_requires_team_lead`,
+           *     `duplicate_group`, `too_many_groups` (`@siyahtus/types`
+           *     `invitationGroupsProblem`); a team this workspace does not
+           *     have is a 404 `group_not_found` (`details.group_ids`); a
+           *     team that requires areas of expertise is a 409
+           *     `group_expertise_missing` (`details.group_id`,
+           *     `details.expertise_ids`) — a newcomer holds none, so they are
+           *     added to it once trained (AU-01). Either way nothing is
+           *     written. Inviting an address again replaces its teams with
+           *     this call's.
            * @default []
            */
           groups?: components['schemas']['InvitationGroup'][];
@@ -20042,6 +20069,7 @@ export interface operations {
       402: components['responses']['PaymentRequired'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       /**
        * @description The rate limit (`too_many_requests`, as everywhere); the seat ceiling
        *     (`users_limit_reached`, above); or today's invitations are used up
@@ -23594,8 +23622,12 @@ export interface operations {
            *     the teams marked here, and may lead several (RL-01-S2); the
            *     mark is what bounds what leading adds (RL-03). Only an admin
            *     or the owner sets or clears it — a Team Lead does not make
-           *     themselves the lead of another team. Leaving it out keeps the
-           *     member's mark as it is, `false` for a new member.
+           *     themselves the lead of another team: sending `lead` at all
+           *     is a 403 for anyone else, whatever the token's scopes. Only a
+           *     Team Lead leads: `true` for a member of any other role is a
+           *     400 (`error.details.reason` `lead_requires_team_lead`), and
+           *     changing a Team Lead's role clears their marks. Leaving it out
+           *     keeps the member's mark as it is, `false` for a new member.
            */
           lead?: boolean;
         };

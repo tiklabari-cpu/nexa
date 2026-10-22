@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_ROLES } from './domain.js';
+import { AGENT_ROLES, MAX_INVITATION_GROUPS, invitationGroupsProblem } from './domain.js';
 import { effectiveScopes, SCOPES } from './scopes.js';
 import {
   ADMIN_SCOPES,
@@ -173,5 +173,39 @@ describe('roleAtLeast', () => {
     const ranks = AGENT_ROLES.map((role) => ROLE_RANK[role]);
     for (let i = 1; i < ranks.length; i += 1) expect(ranks[i]!).toBeLessThan(ranks[i - 1]!);
     expect(ROLE_RANK.agent).toBe(0);
+  });
+});
+
+describe('invitationGroupsProblem (RL-04-S1)', () => {
+  const team = (group_id: number, lead = false) => ({ group_id, lead });
+
+  it('asks a Team Lead invitation to lead at least one team (FR-MOD-04.4)', () => {
+    expect(invitationGroupsProblem('team_lead', [])).toBe('lead_team_required');
+    expect(invitationGroupsProblem('team_lead', [team(1), team(2)])).toBe('lead_team_required');
+    expect(invitationGroupsProblem('team_lead', [team(1, true)])).toBeNull();
+    // Leading one team and joining another is one invitation (RL-01-S2).
+    expect(invitationGroupsProblem('team_lead', [team(1, true), team(2)])).toBeNull();
+    expect(invitationGroupsProblem('team_lead', [team(1, true), team(2, true)])).toBeNull();
+  });
+
+  it('lets no other role lead a team, and lets every role join teams or none (FR-MOD-04.4)', () => {
+    for (const role of ['admin', 'agent'] as const) {
+      expect(invitationGroupsProblem(role, [])).toBeNull();
+      expect(invitationGroupsProblem(role, [team(1), team(2)])).toBeNull();
+      expect(invitationGroupsProblem(role, [team(1), team(2, true)])).toBe(
+        'lead_requires_team_lead',
+      );
+    }
+  });
+
+  it('refuses a team named twice, even when the two agree', () => {
+    expect(invitationGroupsProblem('agent', [team(3), team(3)])).toBe('duplicate_group');
+    expect(invitationGroupsProblem('team_lead', [team(3, true), team(3)])).toBe('duplicate_group');
+  });
+
+  it('bounds the list at MAX_INVITATION_GROUPS', () => {
+    const many = Array.from({ length: MAX_INVITATION_GROUPS + 1 }, (_, i) => team(i + 1));
+    expect(invitationGroupsProblem('agent', many.slice(0, MAX_INVITATION_GROUPS))).toBeNull();
+    expect(invitationGroupsProblem('agent', many)).toBe('too_many_groups');
   });
 });

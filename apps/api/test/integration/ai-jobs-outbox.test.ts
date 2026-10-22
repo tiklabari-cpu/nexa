@@ -19,7 +19,7 @@
  *      at the door; the message itself still commits.
  */
 import { PrismaClient } from '@prisma/client';
-import { buildEventId } from '@siyahtus/types';
+import { capabilitiesForRole, buildEventId } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTenant, type TenantContext } from '../../src/lib/tenant.js';
 import type { AgentPrincipal, CustomerPrincipal } from '../../src/services/auth/principal.js';
@@ -87,6 +87,7 @@ describe('the AI job outbox (GV-02 · ADR-11a §2.1)', () => {
     licenseId: t.licenseId,
     organizationId: t.organizationId,
     role: 'agent',
+    capabilities: capabilitiesForRole('agent', []),
     scopes: ['chats--all:rw', 'chats--all:ro'],
     tokenId: 'test-token',
     tokenKind: 'pat',

@@ -98,6 +98,12 @@ const WORDED: ReadonlyArray<
     'Kendi oturumunuzun sahip olmadığı kapsamları veremezsiniz: reports_read.',
   ],
   [
+    'settings.pat.reason',
+    { reason: 'scopes_not_delegable', scopes: 'reports_read' },
+    'These scopes come from your workspace’s permissions, not your role, and cannot go into a token: reports_read.',
+    'Bu kapsamlar rolünüzden değil, çalışma alanının izinlerinden geliyor; jetona eklenemez: reports_read.',
+  ],
+  [
     'playbook.bulk.reason',
     { reason: 'csv_too_many_rows', line: 202, column: 1, max_rows: 200 },
     'Line 202, column 1: the file holds more than 200 rows.',
@@ -152,7 +158,7 @@ describe('reasonMessage — the refusals worded in tm 261', () => {
         'app_not_automation',
         'app_not_connected',
       ],
-      'settings.pat.reason': ['scopes_required', 'scopes_not_held'],
+      'settings.pat.reason': ['scopes_required', 'scopes_not_held', 'scopes_not_delegable'],
       'playbook.bulk.reason': [
         'csv_file_too_large',
         'csv_too_many_rows',

@@ -24,7 +24,7 @@
  * of it under test. Nothing here depends on today's date.
  */
 import { PrismaClient } from '@prisma/client';
-import { AI_BOT_ID, TRANSFER_REASONS } from '@siyahtus/types';
+import { capabilitiesForRole, AI_BOT_ID, TRANSFER_REASONS } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentPrincipal, BotPrincipal } from '../../src/services/auth/principal.js';
 import {
@@ -116,6 +116,7 @@ describe('a thread handed off automatically is not an AI resolution (ADR-09a · 
     licenseId: fx.a.licenseId,
     organizationId: fx.a.organizationId,
     role: 'owner',
+    capabilities: capabilitiesForRole('owner', []),
     scopes: ['chats--all:rw', 'chats--all:ro'],
     tokenId: 'test-token',
     tokenKind: 'pat',

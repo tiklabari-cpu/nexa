@@ -212,6 +212,13 @@ export function defaultScopesForRole(role: string): Scope[] {
  * stale PAT is the other half of tm 146: the admin surfaces it can reach now
  * carry `minimumRole: 'admin'`, and the role behind them is read fresh on every
  * request.
+ *
+ * Since the permission matrix (RL-02 · tm 325.3) this is the cap a session's
+ * *record* is written with — at mint and at every rotation
+ * (`oauth-service.#issueGrant`). On each request a member's token is resolved
+ * by `scopesForCredential` (`credential-scopes.ts`), which is this function
+ * with the matrix's role set as the ceiling, plus what the matrix lends a
+ * sign-in session, minus what it takes from a personal token.
  */
 export function scopesWithinRole(role: AgentRole, granted: readonly string[]): string[] {
   const ceiling = effectiveScopes(defaultScopesForRole(role));

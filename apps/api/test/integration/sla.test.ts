@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId, WORK_SCHEDULE_DAYS } from '@siyahtus/types';
+import { capabilitiesForRole, generateShortId, WORK_SCHEDULE_DAYS } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
@@ -93,6 +93,7 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
     licenseId: t.licenseId,
     organizationId: t.organizationId,
     role: 'owner',
+    capabilities: capabilitiesForRole('owner', []),
     scopes: ['chats--all:rw'],
     tokenId: 'test-token',
     tokenKind: 'pat',

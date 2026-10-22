@@ -20,7 +20,10 @@ chats:
     summary: List conversations
     description: |
       Returns chats the caller may see. An agent sees a chat only through a team
-      they belong to unless their token carries `chats--all:ro`.
+      they belong to unless their token carries `chats--all:ro`. A member whose
+      role the workspace's permission matrix sets to `own` for `chats.view`
+      sees only the chats they are assigned to or have joined, whatever their
+      token carries; at `none` the request is a 403 (RL-02 · tm 325.3).
 
       Paginated by opaque keyset cursor rather than offset: an offset page shifts
       under you every time a new message arrives, which in an active inbox means

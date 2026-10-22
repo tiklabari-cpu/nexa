@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { LogContext } from '@siyahtus/types';
+import type { SocketAuthority } from './auth.js';
 
 export interface Connection {
   id: string;
@@ -25,6 +26,12 @@ export interface Connection {
   groupIds: number[];
   /** True when the token may see every chat in the licence. */
   unrestricted: boolean;
+  /**
+   * What a member's socket was authorised from — re-read when the permission
+   * matrix moves, so `groupIds`/`unrestricted` follow it (tm 325.3). Null for
+   * bots, customers and a socket not yet logged in.
+   */
+  authority: SocketAuthority | null;
   /**
    * Push actions this socket asked for. Empty means none: a client receives
    * only what it explicitly subscribed to, so adding a new push type cannot
@@ -56,6 +63,7 @@ export class ConnectionRegistry {
       actorType: null,
       groupIds: [],
       unrestricted: false,
+      authority: null,
       subscriptions: new Set(),
       pendingRequests: 0,
       lastSeenAt: Date.now(),
@@ -78,6 +86,7 @@ export class ConnectionRegistry {
       actorType?: string;
       groupIds?: number[];
       unrestricted?: boolean;
+      authority?: SocketAuthority | null;
     },
   ): Connection | undefined {
     const connection = this.#byId.get(id);
@@ -88,12 +97,29 @@ export class ConnectionRegistry {
     connection.actorType = actor.actorType ?? connection.side;
     connection.groupIds = actor.groupIds ?? [];
     connection.unrestricted = actor.unrestricted ?? false;
+    connection.authority = actor.authority ?? null;
     this.#index(this.#byActor, this.#actorKey(connection.organizationId, actor.actorId), id);
     return connection;
   }
 
   get(id: string): Connection | undefined {
     return this.#byId.get(id);
+  }
+
+  /**
+   * Every logged-in member socket — the ones whose reach the permission matrix
+   * decides — of one licence, or of every licence. A walk over the node's
+   * sockets: it runs when a matrix moves and on the gateway's sweep, not per
+   * push.
+   */
+  members(licenseId?: string): Connection[] {
+    const out: Connection[] = [];
+    for (const connection of this.#byId.values()) {
+      if (!connection.authenticated || connection.authority === null) continue;
+      if (licenseId !== undefined && connection.licenseId !== licenseId) continue;
+      out.push(connection);
+    }
+    return out;
   }
 
   /** Every authenticated socket for a tenant. Never crosses organizations. */

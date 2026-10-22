@@ -41,6 +41,7 @@ function principalFor(
     scopes: [],
     groupIds: opts.groupIds ?? [Number(tenant.supportGroupId)],
     unrestricted: opts.unrestricted ?? false,
+    authority: null,
   };
 }
 

@@ -33,6 +33,7 @@ function principalFor(tenant: RtmTenant, accountId: string): SocketPrincipal {
     scopes: [],
     groupIds: [Number(tenant.supportGroupId)],
     unrestricted: false,
+    authority: null,
   };
 }
 

@@ -28,6 +28,7 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+  capabilitiesForRole,
   generateShortId,
   licenseChannel,
   type PushAudience,
@@ -309,6 +310,7 @@ describe('real-time traffic — the board is pushed, not only polled (FR-MOD-03.
           licenseId: fx.a.licenseId,
           organizationId: fx.a.organizationId,
           role: 'owner',
+          capabilities: capabilitiesForRole('owner', []),
           scopes: ['chats--all:rw', 'chats--all:ro'],
           tokenId: 'test-token',
           tokenKind: 'pat',

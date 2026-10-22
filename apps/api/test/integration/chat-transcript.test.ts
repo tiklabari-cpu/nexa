@@ -18,7 +18,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@siyahtus/types';
+import { capabilitiesForRole, generateShortId } from '@siyahtus/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
 import { PermanentMailError } from '../../src/services/mail/mail-error.js';
@@ -66,6 +66,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     licenseId: t.licenseId,
     organizationId: t.organizationId,
     role: 'agent',
+    capabilities: capabilitiesForRole('agent', []),
     // The unrestricted scope, so the archive sees the chat without a group ACL.
     scopes: ['chats--all:rw', 'chats--all:ro'],
     tokenId: 'test-token',

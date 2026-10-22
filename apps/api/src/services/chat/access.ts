@@ -13,10 +13,18 @@
  * A chat the caller may not see is reported as absent rather than forbidden
  * (NFR-S5) — a 403 confirms the id is real and turns short ids into an
  * enumeration oracle.
+ *
+ * The person's half has a third input since the permission matrix (RL-02 ·
+ * tm 325.3): their role's `chats.view` level. `team` and `all` are carried by
+ * the scopes above; `own` holds the `team` level's scopes and is narrowed
+ * here, to the chats the person is assigned to or has joined — whatever the
+ * credential says, so a token minted for a wider level does not undo it. `none`
+ * refuses the person outright.
  */
-import { hasAnyScope } from '@siyahtus/types';
+import { hasAnyScope, narrowsChatReach } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
+import { hasCapability } from '../auth/capability.js';
 import type { Principal } from '../auth/principal.js';
 
 export type AccessMode = 'read' | 'write';
@@ -41,14 +49,26 @@ export interface ChatVisibility {
   isCustomer: boolean;
 }
 
+/**
+ * Whether the person behind an agent credential is kept to their own chats by
+ * the matrix (`own`, `none`). A bot has no role and no person — its scopes are
+ * its whole answer.
+ */
+function personNarrowed(principal: Principal): boolean {
+  return principal.kind === 'agent' && narrowsChatReach(principal.capabilities['chats.view']);
+}
+
 export function hasChatScope(principal: Principal, mode: AccessMode): boolean {
   if (principal.kind === 'customer') return false;
+  // `none`: the person sees no chats, whatever a token minted earlier carries.
+  if (principal.kind === 'agent' && !hasCapability(principal, 'chats.view')) return false;
   const scopes = SCOPES[mode];
   return hasAnyScope(principal.scopes, [scopes.all, scopes.scoped]);
 }
 
 export function hasUnrestrictedChatScope(principal: Principal, mode: AccessMode): boolean {
   if (principal.kind === 'customer') return false;
+  if (personNarrowed(principal)) return false;
   return hasAnyScope(principal.scopes, [SCOPES[mode].all]);
 }
 
@@ -90,8 +110,20 @@ export async function resolveVisibility(
 
   const actorId = principal.kind === 'agent' ? principal.accountId : principal.botId;
 
+  // `none`: the person sees no conversation at all. A session at that level
+  // holds no chat scope and never gets here; a token minted for a higher level
+  // does, and is refused as that session would be at the route gate.
+  if (principal.kind === 'agent' && !hasCapability(principal, 'chats.view')) {
+    throw ApiError.authorization('Your role has no access to conversations in this workspace.');
+  }
+
   if (hasUnrestrictedChatScope(principal, mode)) {
     return { unrestricted: true, groupIds: [], actorId, isCustomer: false };
+  }
+
+  // `own`: no team reaches a chat for this person — only being in it does.
+  if (personNarrowed(principal)) {
+    return { unrestricted: false, groupIds: [], actorId, isCustomer: false };
   }
 
   const memberships = await tx.groupAgent.findMany({

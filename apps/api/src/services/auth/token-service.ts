@@ -10,10 +10,18 @@
  * inside a tenant context.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { AgentRole, Region } from '@siyahtus/types';
+import {
+  capabilitiesForRole,
+  credentialGrantFor,
+  scopesForCredential,
+  type AgentRole,
+  type PermissionMatrixCache,
+  type PermissionMatrixSnapshot,
+  type Region,
+} from '@siyahtus/types';
 import { generateToken, hashToken } from '../../lib/crypto.js';
-import { withTenant, type TenantClient } from '../../lib/tenant.js';
-import { ENROLLMENT_TICKET_SCOPES, scopesWithinRole, type Principal } from './principal.js';
+import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
+import { ENROLLMENT_TICKET_SCOPES, type Principal } from './principal.js';
 
 /** v2-03 §8.6: at most 25 live access tokens per (client, user). */
 export const MAX_ACTIVE_TOKENS_PER_OWNER = 25;
@@ -57,11 +65,34 @@ export type TokenResolution =
   | { ok: true; principal: Principal; licenseStatus: string; region: Region }
   | { ok: false; reason: TokenRejection };
 
+/** The membership read that decides a member's token, in one statement. */
+interface MembershipRow {
+  role: string;
+  suspended: boolean;
+  awaiting_approval: boolean;
+  /** `licenses.permissions_version` — which matrix snapshot this request reads. */
+  version: number;
+  /** Whether the token's client is the workspace's sign-in client (no scope list of its own). */
+  sign_in_client: boolean;
+}
+
 export class TokenService {
   /** Tokens whose `last_used_at` stamp is on its way to the database — see touch(). */
   readonly #stamping = new Set<string>();
+  readonly #matrix: PermissionMatrixCache | null;
 
-  constructor(private readonly db: PrismaClient) {}
+  /**
+   * `matrix` is what a member's token is resolved against (RL-02 · tm 325.3) —
+   * the process's one `app.permissionMatrix.cache`. Optional only because the
+   * OAuth service holds a TokenService to *mint* with, and minting reads no
+   * matrix; resolving without one throws rather than guessing.
+   */
+  constructor(
+    private readonly db: PrismaClient,
+    matrix: PermissionMatrixCache | null = null,
+  ) {
+    this.#matrix = matrix;
+  }
 
   /**
    * Resolve a bearer token to a principal.
@@ -139,20 +170,34 @@ export class TokenService {
     // Until tm 146 that promise was only half kept. The role below was read
     // fresh; `scopes` was not, and every admin route protected by scope alone
     // stayed open to a demoted admin's live session — including the one that
-    // switches off IP allow-listing and the 2FA requirement. `scopesWithinRole`
-    // closes the other half, a few lines down.
+    // switches off IP allow-listing and the 2FA requirement. The scopes are
+    // re-derived against the role a few lines down.
+    //
+    // The same statement reads the two other facts a member's token is decided
+    // by (RL-02 · tm 325.3): which revision of the permission matrix is current
+    // — so the snapshot read below is that revision, never an older cached one
+    // — and whether the token was issued to the workspace's sign-in client.
+    // One statement, so a request cannot pair a role with another moment's
+    // matrix.
     const context = { licenseId: row.license_id, organizationId: row.organization_id };
     const check = await withTenant(
       this.db,
       context,
       async (
         tx,
-      ): Promise<{ ok: false; reason: TokenRejection } | { ok: true; role: AgentRole }> => {
-        const membership = await tx.agentMembership.findUnique({
-          where: { licenseId_agentId: { licenseId: row.license_id, agentId: row.owner_id } },
-          select: { role: true, suspended: true, awaitingApproval: true },
-        });
-        if (!membership || membership.suspended || membership.awaitingApproval) {
+      ): Promise<
+        | { ok: false; reason: TokenRejection }
+        | { ok: true; role: AgentRole; version: number; signInClient: boolean }
+      > => {
+        const [membership] = await tx.$queryRaw<MembershipRow[]>`
+          SELECT m.role, m.suspended, m.awaiting_approval,
+                 l.permissions_version AS version,
+                 COALESCE(cardinality(c.scopes) = 0, false) AS sign_in_client
+            FROM agent_memberships m
+            JOIN licenses l ON l.id = m.license_id
+            LEFT JOIN oauth_clients c ON c.id = ${row.client_id}
+           WHERE m.license_id = ${row.license_id} AND m.agent_id = ${row.owner_id}::uuid`;
+        if (!membership || membership.suspended || membership.awaiting_approval) {
           return { ok: false, reason: 'membership_missing' };
         }
         // Idle timeout is a *session* policy: it governs oauth access tokens — the
@@ -163,7 +208,12 @@ export class TokenService {
         if (row.kind === 'oauth' && (await this.#idleExpired(tx, row.id))) {
           return { ok: false, reason: 'idle_expired' };
         }
-        return { ok: true, role: membership.role as AgentRole };
+        return {
+          ok: true,
+          role: membership.role as AgentRole,
+          version: membership.version,
+          signInClient: membership.sign_in_client,
+        };
       },
     );
 
@@ -198,6 +248,7 @@ export class TokenService {
       };
     }
 
+    const matrix = await this.#matrixAt(context, check.version);
     return {
       ok: true,
       licenseStatus: row.license_status,
@@ -208,16 +259,39 @@ export class TokenService {
         licenseId: row.license_id,
         organizationId: row.organization_id,
         role: check.role,
-        // A session's scopes are role-derived at mint, so they are re-derived
-        // here against the role we have just read; a personal access token is a
-        // named credential with a list somebody chose, and keeps it. Why the
-        // two kinds are treated differently — and what binds a stale PAT
-        // instead — is written out on `scopesWithinRole` (SEC-2, tm 146).
-        scopes: row.kind === 'oauth' ? scopesWithinRole(check.role, row.scopes) : row.scopes,
+        // Re-derived here against the role just read and the matrix at the
+        // version just read: a sign-in session follows the matrix both ways, a
+        // partner app's grant and a personal access token keep their own list
+        // less what the matrix takes from the role. Why the three differ, and
+        // why the RTM gateway runs the very same function, is written out in
+        // `@siyahtus/types` (`credential-scopes.ts`).
+        scopes: scopesForCredential({
+          grant: credentialGrantFor(row.kind, check.signInClient),
+          role: check.role,
+          stored: row.scopes,
+          overrides: matrix.overrides,
+        }),
+        capabilities: capabilitiesForRole(check.role, matrix.overrides),
         tokenId: row.id,
         tokenKind: row.kind,
       },
     };
+  }
+
+  /**
+   * The workspace's matrix at `version` — a cache hit unless it just moved.
+   * The version comes from the same statement as the role, so the snapshot
+   * this returns is the one that was current when the role was read: a change
+   * reaches the next request, not the next minute.
+   */
+  async #matrixAt(tenant: TenantContext, version: number): Promise<PermissionMatrixSnapshot> {
+    if (!this.#matrix) {
+      throw new Error('TokenService.resolve needs the permission matrix cache');
+    }
+    return this.#matrix.get(
+      { licenseId: tenant.licenseId, organizationId: tenant.organizationId },
+      version,
+    );
   }
 
   /**

@@ -9,6 +9,7 @@
  * has no safe default (an `IN ()` would be a syntax error, and dropping the
  * whole clause would show everything), so it is worth pinning on its own.
  */
+import { capabilitiesForRole } from '@siyahtus/types';
 import { describe, expect, it } from 'vitest';
 import {
   cannedVisibilityFilter,
@@ -24,6 +25,7 @@ function agent(scopes: string[]): Principal {
     licenseId: 1n,
     organizationId: '22222222-2222-2222-2222-222222222222',
     role: 'agent',
+    capabilities: capabilitiesForRole('agent', []),
     scopes,
     tokenId: '33333333-3333-3333-3333-333333333333',
     tokenKind: 'pat',

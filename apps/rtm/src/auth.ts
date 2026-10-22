@@ -14,12 +14,39 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import {
   REGIONS,
-  scopesWithinRole,
+  capabilitiesForRole,
+  credentialGrantFor,
+  narrowsChatReach,
+  scopesForCredential,
   servesRegion,
   type AgentRole,
+  type CredentialGrant,
   type LogContext,
+  type PermissionMatrixCache,
   type Region,
 } from '@siyahtus/types';
+
+/**
+ * What a member's socket was authorised from, kept on the connection so its
+ * reach can be derived again when the permission matrix moves (RL-02 · tm
+ * 325.3) — without the token, which the gateway does not keep.
+ */
+export interface SocketAuthority {
+  /** Which rule the token follows (`credential-scopes.ts`); fixed by the token. */
+  grant: CredentialGrant;
+  /** The token row's own list — what `scopesForCredential` reads. */
+  stored: readonly string[];
+  /** The matrix version the socket's current reach was derived at. */
+  version: number;
+}
+
+/** How far a member's socket reaches: what the fan-out and the reads key on. */
+export interface SocketReach {
+  scopes: string[];
+  groupIds: number[];
+  unrestricted: boolean;
+  version: number;
+}
 
 export interface SocketPrincipal {
   kind: 'agent' | 'bot' | 'customer';
@@ -31,6 +58,8 @@ export interface SocketPrincipal {
   groupIds: number[];
   /** True when the token may see every chat in the license. */
   unrestricted: boolean;
+  /** A member's socket's basis for re-derivation; null for bots and customers. */
+  authority: SocketAuthority | null;
 }
 
 /** The identity half of a log line written for this principal (ID-08 · `LOG_KEYS`). */
@@ -83,11 +112,21 @@ interface ResolvedTokenRow {
    */
   kind: string;
   scopes: string[];
+  /** The OAuth client a session was issued to — which rule it follows (tm 325.3). */
+  client_id: string | null;
   expires_at: Date | null;
   revoked_at: Date | null;
   license_status: string;
   /** The tenant root's own column — see the residency check in `authenticate`. */
   organization_region: string;
+}
+
+/** The membership facts a member's socket is decided by, read in one statement. */
+interface MemberFacts {
+  /** Null when the membership is gone, suspended or still awaiting approval. */
+  role: string | null;
+  version: number;
+  sign_in_client: boolean;
 }
 
 export class SocketAuthenticator {
@@ -101,6 +140,12 @@ export class SocketAuthenticator {
      * is always the workspace's own.
      */
     private readonly region: Region,
+    /**
+     * Each workspace's permission matrix (RL-02 · tm 325.3) — the same cache
+     * class and rules the API resolves a token through, with this process's
+     * loader, so a socket and a REST call holding one token reach one answer.
+     */
+    private readonly matrix: PermissionMatrixCache,
   ) {}
 
   /**
@@ -159,44 +204,147 @@ export class SocketAuthenticator {
     }
     if (row.license_status === 'canceled') return { ok: false, reason: 'expired' };
 
+    // A bot has no membership and no role: its scopes are its whole answer.
+    if (row.kind === 'bot') {
+      const unrestricted = row.scopes.some((s) => s === 'chats--all:ro' || s === 'chats--all:rw');
+      const groupIds = unrestricted
+        ? []
+        : await this.#groupsFor(row.license_id, row.organization_id, row.owner_id);
+      return {
+        ok: true,
+        principal: {
+          kind: 'bot',
+          actorId: row.owner_id,
+          licenseId: row.license_id.toString(),
+          organizationId: row.organization_id,
+          scopes: row.scopes,
+          groupIds,
+          unrestricted,
+          authority: null,
+        },
+      };
+    }
+
     // Role and suspension live on the membership, so a suspended agent's
     // existing socket credential stops working at once — and, since tm 146, so
     // does a demoted one's reach. Read before the visibility decision below,
-    // which now depends on it; it used to run after, which cost a needless
-    // group query for a credential that was about to be refused anyway.
-    let role: AgentRole | null = null;
-    if (row.kind !== 'bot') {
-      role = await this.#membershipRole(row.license_id, row.organization_id, row.owner_id);
-      if (!role) return { ok: false, reason: 'membership_missing' };
-    }
+    // which depends on it, together with the permission matrix's version and
+    // whether the token came from the workspace's sign-in client (tm 325.3).
+    const facts = await this.#memberFacts(
+      row.license_id,
+      row.organization_id,
+      row.owner_id,
+      row.client_id,
+    );
+    if (!facts?.role) return { ok: false, reason: 'membership_missing' };
 
-    // `chats--all` is what widens a socket from "my teams" to "the whole
-    // workspace", and on a session it is a role-derived scope. The REST edge
-    // caps those against the role the account holds now
-    // (`services/auth/token-service.ts`), so the socket does the same, through
-    // the same shared function: an admin demoted to agent who is refused the
-    // workspace's chats over HTTP must not keep being pushed them over the
-    // socket. A personal access token keeps its list here for the same reason
-    // it does there — see `scopesWithinRole` (@siyahtus/types).
-    const scopes = role && row.kind === 'oauth' ? scopesWithinRole(role, row.scopes) : row.scopes;
-
-    const unrestricted = scopes.some((s) => s === 'chats--all:ro' || s === 'chats--all:rw');
-    const groupIds = unrestricted
-      ? []
-      : await this.#groupsFor(row.license_id, row.organization_id, row.owner_id);
+    const authority: SocketAuthority = {
+      grant: credentialGrantFor(row.kind, facts.sign_in_client),
+      stored: row.scopes,
+      version: facts.version,
+    };
+    const reach = await this.#reach(
+      row.license_id,
+      row.organization_id,
+      row.owner_id,
+      facts.role,
+      authority,
+      facts.version,
+    );
 
     return {
       ok: true,
       principal: {
-        kind: row.kind === 'bot' ? 'bot' : 'agent',
+        kind: 'agent',
         actorId: row.owner_id,
         licenseId: row.license_id.toString(),
         organizationId: row.organization_id,
-        scopes,
-        groupIds,
-        unrestricted,
+        scopes: reach.scopes,
+        groupIds: reach.groupIds,
+        unrestricted: reach.unrestricted,
+        authority: { ...authority, version: reach.version },
       },
     };
+  }
+
+  /**
+   * A member's socket's reach derived again from the role and the matrix as
+   * they stand now — what an open socket gets when the matrix moves, so a
+   * Founder's change reaches it without a new login (RL-02 · tm 325.3). A
+   * membership that is gone narrows the socket to nothing rather than leaving
+   * it as it was; the next login is refused outright.
+   */
+  async reassess(target: {
+    licenseId: string;
+    organizationId: string;
+    actorId: string;
+    authority: SocketAuthority;
+  }): Promise<SocketReach> {
+    const licenseId = BigInt(target.licenseId);
+    const facts = await this.#memberFacts(licenseId, target.organizationId, target.actorId, null);
+    if (!facts?.role) {
+      return {
+        scopes: [],
+        groupIds: [],
+        unrestricted: false,
+        version: facts?.version ?? target.authority.version,
+      };
+    }
+    return this.#reach(
+      licenseId,
+      target.organizationId,
+      target.actorId,
+      facts.role,
+      target.authority,
+      facts.version,
+    );
+  }
+
+  /** The workspace's current permission-matrix version — what the gateway's sweep compares. */
+  async matrixVersion(licenseId: string, organizationId: string): Promise<number> {
+    const id = BigInt(licenseId);
+    const rows = await this.#scoped(
+      id,
+      organizationId,
+      (tx) =>
+        tx.$queryRaw<Array<{ version: number }>>`
+        SELECT permissions_version AS version FROM licenses WHERE id = ${id}
+      `,
+    );
+    return rows[0]?.version ?? 0;
+  }
+
+  /**
+   * The scopes and the chat reach of a member's socket, by the rule the REST
+   * edge resolves the same token with (`credential-scopes.ts`, tm 145): a
+   * sign-in session follows the matrix both ways, a partner grant and a
+   * personal token keep their own list less what the matrix takes from the
+   * role. `chats--all` widens a socket from "my teams" to the whole workspace —
+   * unless the member's own `chats.view` level is `own` or `none`, which keeps
+   * the socket to the chats they are in, exactly as the inbox's visibility
+   * rule does (`apps/api/src/services/chat/access.ts`).
+   */
+  async #reach(
+    licenseId: bigint,
+    organizationId: string,
+    agentId: string,
+    role: string,
+    authority: SocketAuthority,
+    version: number,
+  ): Promise<SocketReach> {
+    const snapshot = await this.matrix.get({ licenseId, organizationId }, version);
+    const scopes = scopesForCredential({
+      grant: authority.grant,
+      role,
+      stored: authority.stored,
+      overrides: snapshot.overrides,
+    });
+    const narrowed = narrowsChatReach(capabilitiesForRole(role, snapshot.overrides)['chats.view']);
+    const unrestricted =
+      !narrowed && scopes.some((s) => s === 'chats--all:ro' || s === 'chats--all:rw');
+    const groupIds =
+      unrestricted || narrowed ? [] : await this.#groupsFor(licenseId, organizationId, agentId);
+    return { scopes, groupIds, unrestricted, version: snapshot.version };
   }
 
   #authenticateCustomer(token: string, organizationId: string): AuthResult {
@@ -249,6 +397,7 @@ export class SocketAuthenticator {
         scopes: [],
         groupIds: [],
         unrestricted: false,
+        authority: null,
       },
     };
   }
@@ -308,6 +457,38 @@ export class SocketAuthenticator {
       `,
     );
     return (rows[0]?.role as AgentRole | undefined) ?? null;
+  }
+
+  /**
+   * The facts a member's socket is decided by, in one statement — the REST
+   * edge reads the same three in one (`token-service.ts`): the role behind a
+   * live membership (null when there is none to speak of), the permission
+   * matrix's version, and whether `clientId` is the workspace's sign-in
+   * client (registered with no scope list of its own). From the licence, so a
+   * missing membership still answers with the version.
+   */
+  async #memberFacts(
+    licenseId: bigint,
+    organizationId: string,
+    agentId: string,
+    clientId: string | null,
+  ): Promise<MemberFacts | null> {
+    const rows = await this.#scoped(
+      licenseId,
+      organizationId,
+      (tx) =>
+        tx.$queryRaw<MemberFacts[]>`
+        SELECT m.role, l.permissions_version AS version,
+               COALESCE(cardinality(c.scopes) = 0, false) AS sign_in_client
+          FROM licenses l
+          LEFT JOIN agent_memberships m
+                 ON m.license_id = l.id AND m.agent_id = ${agentId}::uuid
+                AND NOT m.suspended AND NOT m.awaiting_approval
+          LEFT JOIN oauth_clients c ON c.id = ${clientId}
+         WHERE l.id = ${licenseId}
+      `,
+    );
+    return rows[0] ?? null;
   }
 
   async #groupsFor(licenseId: bigint, organizationId: string, agentId: string): Promise<number[]> {

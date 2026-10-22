@@ -1194,6 +1194,8 @@ export const settings: Messages = {
   'settings.pat.reason.scopes_required': 'Select at least one scope.',
   'settings.pat.reason.scopes_not_held':
     'You cannot grant scopes your own session does not hold: {scopes}.',
+  'settings.pat.reason.scopes_not_delegable':
+    'These scopes come from your workspace’s permissions, not your role, and cannot go into a token: {scopes}.',
   'settings.pat.form.expiryLabel': 'Expires after',
   'settings.pat.form.days': '{days} days',
   'settings.pat.form.scopesLabel': 'Scopes',

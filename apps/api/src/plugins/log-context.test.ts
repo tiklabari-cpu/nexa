@@ -8,7 +8,7 @@
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LOG_KEY_LIST } from '@siyahtus/types';
+import { capabilitiesForRole, LOG_KEY_LIST } from '@siyahtus/types';
 import type { Principal } from '../services/auth/principal.js';
 import logContext, {
   bindChatLogContext,
@@ -23,6 +23,7 @@ const AGENT: Principal = {
   licenseId: 9_007_199_254_740_993n, // past Number's precision on purpose
   organizationId: '0f9e8d7c-6b5a-4f3e-9d2c-1b0a9f8e7d6c',
   role: 'agent',
+  capabilities: capabilitiesForRole('agent', []),
   scopes: [],
   tokenId: 'tok-1',
   tokenKind: 'pat',

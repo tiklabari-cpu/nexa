@@ -35,6 +35,7 @@ import {
   capabilityDefinition,
   capabilityLock,
   matrixRoleFor,
+  permissionMatrixFromRows,
   type CapabilityChangeProblem,
   type CapabilityDefinition,
   type CapabilityGroup,
@@ -43,6 +44,7 @@ import {
   type CapabilityOverride,
   type CapabilityValue,
   type MatrixRole,
+  type PermissionMatrixRow,
   type PermissionMatrixSnapshot,
   type PermissionMatrixTenant,
 } from '@siyahtus/types';
@@ -61,21 +63,14 @@ export async function readPermissionMatrix(
   tx: TenantClient,
   licenseId: bigint,
 ): Promise<PermissionMatrixSnapshot> {
-  const rows = await tx.$queryRaw<
-    Array<{ version: number; role: string | null; capability: string | null; value: string | null }>
-  >`
+  // The RTM gateway runs this same statement (`apps/rtm/src/permissions.ts`).
+  const rows = await tx.$queryRaw<PermissionMatrixRow[]>`
     SELECT l.permissions_version AS version, o.role, o.capability, o.value
       FROM licenses l
       LEFT JOIN role_capability_overrides o ON o.license_id = l.id
      WHERE l.id = ${licenseId}
      ORDER BY o.role, o.capability`;
-  const overrides: CapabilityOverride[] = [];
-  for (const row of rows) {
-    if (row.role !== null && row.capability !== null && row.value !== null) {
-      overrides.push({ role: row.role, capability: row.capability, value: row.value });
-    }
-  }
-  return { version: rows[0]?.version ?? 0, overrides };
+  return permissionMatrixFromRows(rows);
 }
 
 /**

@@ -374,6 +374,13 @@ me:
                 scopes:
                   type: array
                   items: { type: string }
+                  description: |
+                    What this credential may do on this request. For an agent it
+                    is resolved against the role the caller holds now and the
+                    workspace's permission matrix (RL-02 · tm 325.3): a sign-in
+                    session follows the matrix both ways; a partner app's grant
+                    and a personal access token keep their own list, less what
+                    the matrix takes from the role.
                 capabilities:
                   allOf:
                     - $ref: "../openapi.yaml#/components/schemas/CapabilityValues"
@@ -381,8 +388,8 @@ me:
                     Agent principals only. What the caller's role holds in this
                     workspace's permission matrix (RL-02), every capability by
                     key — the panel's "Yetkilerim", and what a capability with no
-                    scope of its own is read from. Resolved from the same cached
-                    matrix the session's checks use.
+                    scope of its own is read from. Resolved from the same matrix
+                    snapshot as `scopes`.
                 routing_status:
                   type: string
                   enum: [accepting_chats, not_accepting_chats, offline]
@@ -745,7 +752,11 @@ personalAccessTokens:
       is stored. A token cannot be granted scopes the creating session does not
       already hold (403, `error.details.reason: scopes_not_held`, `scopes` the
       comma-separated ones it lacks); a request left with no valid scope is a 400
-      with `reason: scopes_required` (tm 261).
+      with `reason: scopes_required` (tm 261). Nor scopes the workspace's
+      permission matrix lends the caller's role beyond its default set — a token
+      keeps its list, and would outlive the loan (403, `reason:
+      scopes_not_delegable`, `scopes`; RL-02 · tm 325.3). Without `scopes`, the
+      token takes the role's default set as far as the session holds it.
     requestBody:
       required: true
       content:

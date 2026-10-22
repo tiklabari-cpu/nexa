@@ -18,13 +18,14 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
+import { CopyId } from '../../components/CopyId.js';
 import { Card, CardSkeleton } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/Modal.js';
 import { useConfirm } from '../../components/ui/ConfirmDialog.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import { formatDate } from '../../lib/format.js';
+import { formatDate, formatDateTime } from '../../lib/format.js';
 import { email, FieldError, optional, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { CustomFields } from '../custom-fields/CustomFields.js';
@@ -299,25 +300,40 @@ export function CustomerDetailPanel({
         ) : (
           <ul className="divide-y divide-border">
             {customer.chats.map((chat) => (
-              <li key={chat.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
-                {/* The row is the conversation: it opens in the inbox, which shows a
-                    closed one read-only rather than 404ing. The id stays as a
-                    quiet, select-in-one-click second column for support to quote. */}
-                <Link
-                  to={`/app/inbox?chat=${encodeURIComponent(chat.id)}`}
-                  className="flex-1 text-content-brand underline underline-offset-2"
-                >
-                  {t('customers.detail.chatLink', { date: formatDate(chat.created_at) ?? '' })}
-                </Link>
-                <span className="select-all font-mono text-2xs text-content-tertiary">
-                  {chat.id}
-                </span>
-                <StatusDot
-                  tone={chat.active ? 'success' : 'neutral'}
-                  label={
-                    chat.active ? t('customers.detail.chatOpen') : t('customers.detail.chatClosed')
-                  }
-                />
+              <li key={chat.id} className="flex flex-col gap-1 px-4 py-2.5 text-sm">
+                <div className="flex items-center gap-2">
+                  {/* The row is the conversation: it opens in the inbox, which shows a
+                      closed one read-only rather than 404ing. The day's number sits
+                      beside it, copyable, for support to quote (ID-05). */}
+                  <Link
+                    to={`/app/inbox?chat=${encodeURIComponent(chat.id)}`}
+                    className="flex-1 text-content-brand underline underline-offset-2"
+                  >
+                    {t('customers.detail.chatLink', { date: formatDate(chat.created_at) ?? '' })}
+                  </Link>
+                  <CopyId kind="thread" value={chat.id} className="text-2xs" />
+                  <StatusDot
+                    tone={chat.active ? 'success' : 'neutral'}
+                    label={
+                      chat.active
+                        ? t('customers.detail.chatOpen')
+                        : t('customers.detail.chatClosed')
+                    }
+                  />
+                </div>
+                {/* Day → connection: the numbers a player quotes are the connection's. */}
+                {(chat.connections?.length ?? 0) > 0 && (
+                  <ul className="flex flex-col gap-0.5 pl-4">
+                    {chat.connections!.map((connection) => (
+                      <li key={connection.id} className="flex items-center gap-2 text-2xs">
+                        <CopyId kind="chat" value={connection.id} />
+                        <span className="tabular text-content-secondary">
+                          {formatDateTime(connection.created_at)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

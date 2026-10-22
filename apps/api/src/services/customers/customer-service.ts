@@ -109,6 +109,8 @@ export interface CustomerDetail extends CustomerSummary {
     active: boolean;
     created_at: string;
     last_event_at: string | null;
+    /** The day's connections, oldest first (ID-05: the profile reads day → connection). */
+    connections: Array<{ id: string; active: boolean; created_at: string }>;
   }>;
   /** Custom fields defined for contacts, with this contact's values (08.7.6). */
   custom_fields: CustomFieldValue[];
@@ -117,6 +119,8 @@ export interface CustomerDetail extends CustomerSummary {
 const RECENT_WINDOW_DAYS = 30;
 const MAX_VISITS = 10;
 const MAX_CHATS = 10;
+/** Connections listed under one day on the profile. */
+const MAX_DAY_CONNECTIONS = 20;
 
 export class CustomerService {
   async list(
@@ -198,8 +202,8 @@ export class CustomerService {
           include: {
             threads: {
               orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: { createdAt: true, closedAt: true },
+              take: MAX_DAY_CONNECTIONS,
+              select: { id: true, active: true, createdAt: true, closedAt: true },
             },
           },
         },
@@ -242,6 +246,13 @@ export class CustomerService {
         active: chat.active,
         created_at: chat.createdAt.toISOString(),
         last_event_at: chat.threads[0]?.createdAt.toISOString() ?? null,
+        connections: chat.threads
+          .map((thread) => ({
+            id: thread.id,
+            active: thread.active,
+            created_at: thread.createdAt.toISOString(),
+          }))
+          .reverse(),
       })),
     };
   }

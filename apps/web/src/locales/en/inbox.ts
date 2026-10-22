@@ -112,6 +112,7 @@ export const inbox: Messages = {
   'inbox.thread.statusArchived': 'Archived',
   'inbox.thread.copyLink': 'Copy link',
   'inbox.thread.copied': 'Copied',
+  'inbox.thread.ids': 'Conversation numbers',
   'inbox.thread.showDetails': 'Show details panel',
   'inbox.thread.detailsLabel': 'Details',
   'inbox.thread.copilotLabel': 'Copilot',

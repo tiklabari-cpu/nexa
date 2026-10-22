@@ -197,6 +197,10 @@ export function boot(
   // not authenticate at all.
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
   frame.setAttribute('allowtransparency', 'true');
+  // The "Your support number" menu item copies to the clipboard from inside the
+  // frame (ID-05). A cross-origin frame may only do that when the embedder
+  // delegates it; without it the widget falls back to selecting the number.
+  frame.setAttribute('allow', 'clipboard-write');
   frame.src = buildFrameUrl(widgetOrigin, config, hostPageUrl(win));
 
   let corner = frameEdge(config.position, config.language);

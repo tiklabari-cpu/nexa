@@ -13,10 +13,10 @@
  * merged-in children are listed here with their own unmerge affordance.
  */
 import { useState, type ReactElement } from 'react';
-import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualList } from '../../components/VirtualList.js';
+import { CopyId } from '../../components/CopyId.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -523,12 +523,16 @@ export function TicketDetailPane({
           <dt className="text-content-tertiary">{t('inbox.ticket.row.fromChat')}</dt>
           <dd>
             {data.source_chat_id ? (
-              <Link
-                to={`/app/inbox?chat=${encodeURIComponent(data.source_chat_id)}`}
-                className="font-mono text-xs text-content-brand underline underline-offset-2"
-              >
-                {data.source_chat_id}
-              </Link>
+              // Both numbers (ID-05): the day the chat belongs to — the link
+              // back to it — and the connection the ticket was opened from.
+              <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                <CopyId
+                  kind="thread"
+                  value={data.source_chat_id}
+                  href={`/app/inbox?chat=${encodeURIComponent(data.source_chat_id)}`}
+                />
+                {data.source_thread_id && <CopyId kind="chat" value={data.source_thread_id} />}
+              </span>
             ) : (
               <span className="text-content-tertiary">{t('inbox.ticket.createdDirectly')}</span>
             )}

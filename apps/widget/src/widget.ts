@@ -670,6 +670,55 @@ export function mount(doc: Document = document, win: Window = window): void {
   function renderMenu(): void {
     ui.menu.hidden = !menuOpen;
     ui.menuButton.setAttribute('aria-expanded', String(menuOpen));
+    renderSupportNumber();
+  }
+
+  /**
+   * The player's own number (ID-05): the Chat ID of the connection the agent
+   * has open, read from the same snapshot that tells the panel — never worked
+   * out here. Absent until a connection exists. Read from `state` each time the
+   * menu is drawn, so a new connection the same day shows its own number.
+   */
+  function renderSupportNumber(): void {
+    const id = state.threadId;
+    ui.menuSupport.hidden = id === null;
+    ui.menuCopy.hidden = id === null;
+    ui.menuSupportId.textContent = id ?? '';
+    // A fresh number is not "Copied" yet.
+    if (supportCopiedTimer === null) ui.menuCopy.textContent = t('support.copy');
+  }
+
+  /** The "Copied" confirmation's timer; null while the item shows its own name. */
+  let supportCopiedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Copies only the number. The iframe needs `allow="clipboard-write"` from the
+   * loader to write to the clipboard from a cross-origin frame; where it is
+   * missing, or the browser refuses, the number is selected instead so a
+   * long-press or Ctrl+C finishes the job.
+   */
+  async function copySupportNumber(): Promise<void> {
+    const id = state.threadId;
+    if (!id) return;
+    const confirm = (): void => {
+      ui.menuCopy.textContent = t('support.copied');
+      if (supportCopiedTimer !== null) clearTimeout(supportCopiedTimer);
+      supportCopiedTimer = setTimeout(() => {
+        supportCopiedTimer = null;
+        renderSupportNumber();
+      }, 1_500);
+    };
+    try {
+      await win.navigator.clipboard.writeText(id);
+      confirm();
+    } catch {
+      const selection = win.getSelection();
+      if (!selection) return;
+      const range = doc.createRange();
+      range.selectNodeContents(ui.menuSupportId);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
   }
 
   /**
@@ -2195,6 +2244,10 @@ export function mount(doc: Document = document, win: Window = window): void {
       menuOpen = !menuOpen;
       renderMenu();
     });
+    // Stays open after copying: the confirmation is the item's own label.
+    ui.menuCopy.addEventListener('click', () => {
+      void copySupportNumber();
+    });
     ui.menuRate.addEventListener('click', () => {
       menuOpen = false;
       renderMenu();
@@ -2479,6 +2532,10 @@ interface Ui {
   menuButton: HTMLButtonElement;
   menu: HTMLElement;
   menuRate: HTMLButtonElement;
+  /** Header "⋮" → the player's own number (ID-05): the Chat ID, named and copyable. */
+  menuSupport: HTMLElement;
+  menuSupportId: HTMLElement;
+  menuCopy: HTMLButtonElement;
   /** Header "⋮" → "End chat" (FR-MOD-11.4-b). */
   menuEnd: HTMLButtonElement;
   /** The "End chat" confirmation dialog — `role=dialog`, focused on open. */
@@ -2612,12 +2669,31 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   menuRate.className = 'nx-menu-rate';
   menuRate.setAttribute('role', 'menuitem');
   menuRate.textContent = t('rating.menuItem');
+  // "Your support number" (ID-05 · ID-05-S1: the player sees the Chat ID only).
+  // It is the number of the connection the agent has open — the one the panel
+  // calls Chat ID — so what the player reads out is what the team searches for.
+  const menuSupport = doc.createElement('div');
+  menuSupport.className = 'nx-menu-support';
+  menuSupport.setAttribute('role', 'none');
+  menuSupport.hidden = true;
+  const menuSupportLabel = doc.createElement('span');
+  menuSupportLabel.className = 'nx-menu-support-label';
+  menuSupportLabel.textContent = t('support.label');
+  const menuSupportId = doc.createElement('span');
+  menuSupportId.className = 'nx-menu-support-id';
+  menuSupport.append(menuSupportLabel, menuSupportId);
+  const menuCopy = doc.createElement('button');
+  menuCopy.type = 'button';
+  menuCopy.className = 'nx-menu-copy';
+  menuCopy.setAttribute('role', 'menuitem');
+  menuCopy.hidden = true;
+  menuCopy.textContent = t('support.copy');
   const menuEnd = doc.createElement('button');
   menuEnd.type = 'button';
   menuEnd.className = 'nx-menu-end';
   menuEnd.setAttribute('role', 'menuitem');
   menuEnd.textContent = t('chat.end.menuItem');
-  menu.append(menuRate, menuEnd);
+  menu.append(menuSupport, menuCopy, menuRate, menuEnd);
   menuWrap.append(menuButton, menu);
 
   // "End chat" confirmation (FR-MOD-11.4-b): a modal card over the panel,
@@ -3115,6 +3191,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     menuButton,
     menu,
     menuRate,
+    menuSupport,
+    menuSupportId,
+    menuCopy,
     menuEnd,
     endConfirm,
     endConfirmCancel,
@@ -4157,13 +4236,21 @@ button { -webkit-tap-highlight-color: transparent; }
   box-shadow: var(--nx-shadow-card);
   animation: nx-pop .14s ease-out both;
 }
-.nx-menu-rate, .nx-menu-end {
+.nx-menu-support {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 12px 4px;
+}
+.nx-menu-support-label { font-size: 12px; color: var(--nx-muted); }
+.nx-menu-support-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px; letter-spacing: normal; user-select: all; -webkit-user-select: all;
+}
+.nx-menu-rate, .nx-menu-copy, .nx-menu-end {
   display: block; width: 100%; min-height: 44px; text-align: start;
   border: 0; border-radius: 10px; background: transparent; color: inherit;
   font: inherit; font-size: 14px; padding: 0 12px; cursor: pointer;
 }
 .nx-menu-end { color: var(--nx-danger); }
-.nx-menu-rate:hover, .nx-menu-end:hover { background: var(--nx-field); }
+.nx-menu-rate:hover, .nx-menu-copy:hover, .nx-menu-end:hover { background: var(--nx-field); }
 .nx-end-confirm {
   position: absolute; inset: 90px 16px auto; z-index: 2;
   background: var(--nx-surface); color: var(--nx-text);

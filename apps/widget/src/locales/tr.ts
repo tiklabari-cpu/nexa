@@ -71,6 +71,10 @@ export const tr: Record<string, string> = {
   'offline.thanks': 'Teşekkürler — mesajınızı aldık, e-posta ile yanıtlayacağız.',
   'offline.error': 'Mesajınız gönderilemedi. Lütfen tekrar deneyin.',
   'chat.end.menuItem': 'Sohbeti bitir',
+  // The player's own number (ID-05): the conversation's Chat ID, which they quote to the operator.
+  'support.label': 'Destek numaranız',
+  'support.copy': 'Destek numarasını kopyala',
+  'support.copied': 'Kopyalandı',
   'chat.end.confirmLabel': 'Bu sohbeti bitir?',
   'chat.end.confirmMessage': 'Bu sohbeti bitirmek istediğinizden emin misiniz?',
   'chat.end.confirmButton': 'Sohbeti bitir',

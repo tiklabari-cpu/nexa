@@ -75,6 +75,8 @@ export interface TicketSummary {
    */
   customer_has_email: boolean;
   source_chat_id: string | null;
+  /** The connection it was opened from (`threads.id`, "Chat ID"); null off a chat. */
+  source_thread_id: string | null;
   /** The primary this ticket is folded into, or null when it stands alone. */
   merged_into_id: string | null;
   last_message_at: string | null;
@@ -219,6 +221,7 @@ export class TicketService {
 
     let customerId = input.customer_id ?? null;
     let groupId = input.group_id ?? null;
+    let sourceThreadId: string | null = null;
 
     // Creating from a chat carries the customer across, so the follow-up is
     // attached to the same person without the caller having to look it up — and
@@ -236,6 +239,7 @@ export class TicketService {
       if (!chat || !canSeeChat(visibility, chat)) throw ApiError.notFound('Chat not found.');
       customerId ??= chat.customerId;
       groupId ??= chat.access[0]?.groupId != null ? Number(chat.access[0].groupId) : null;
+      sourceThreadId = await newestThreadId(tx, input.source_chat_id);
     }
 
     await assertAssignable(tx, tenant, input.assignee_id ?? null, groupId);
@@ -246,6 +250,7 @@ export class TicketService {
       status: input.status ?? 'open',
       customerId,
       sourceChatId: input.source_chat_id ?? null,
+      sourceThreadId,
       assigneeId: input.assignee_id ?? null,
       groupId: groupId != null ? BigInt(groupId) : null,
       // Set on creation so ordering is stable from the first moment. A ticket
@@ -375,6 +380,7 @@ export class TicketService {
         customerId: input.customerId,
         // The conversation it was left from (AI-12 §4: an after-hours hand-over).
         sourceChatId: input.sourceChatId ?? null,
+        sourceThreadId: input.sourceChatId ? await newestThreadId(tx, input.sourceChatId) : null,
         // Set on creation so the ticket sorts from its first moment, matching
         // both other creation paths.
         lastMessageAt: new Date(),
@@ -1102,6 +1108,7 @@ function serialise(row: TicketRow, names: Map<string, string>): TicketSummary {
     customer_email: row.customer?.email ?? null,
     customer_has_email: Boolean(row.customer?.email?.trim()),
     source_chat_id: row.sourceChatId,
+    source_thread_id: row.sourceThreadId,
     merged_into_id: row.mergedIntoId,
     last_message_at: row.lastMessageAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
@@ -1130,6 +1137,19 @@ function serialiseDetail(
     tags,
     custom_fields: customFields,
   };
+}
+
+/**
+ * The chat's newest connection (`threads.id`, "Chat ID" in the panel) — the one a
+ * ticket opened from the chat is about (ID-05). Null when the chat has none.
+ */
+async function newestThreadId(tx: TenantClient, chatId: string): Promise<string | null> {
+  const thread = await tx.thread.findFirst({
+    where: { chatId },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  });
+  return thread?.id ?? null;
 }
 
 /**

@@ -122,4 +122,8 @@ export const common: Messages = {
   'common.limits.signupRate':
     'Bu ağdan kısa süre içinde çok fazla çalışma alanı oluşturuldu. Bir saat sonra yeniden deneyin.',
   'common.pilot.licenseExpired': 'Pilot denemeniz bitti — iletişim adresi üstteki şeritte.',
+  // CopyId.tsx (ID-05): düğmenin adı numaranın kendi etiketini taşır; ekran okuyucu
+  // hangi numarayı kopyaladığını duyar. Etiket ids katalogundan gelir.
+  'common.copyId.copy': '{label} numarasını kopyala',
+  'common.copyId.copied': 'Kopyalandı',
 };

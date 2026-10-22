@@ -724,6 +724,25 @@ describe('SkillEditor — run log (FR-MOD-06.2.1)', () => {
     expect(within(log).getAllByRole('link')[0]).toHaveAttribute('href', '/app/inbox?chat=chat-1');
   });
 
+  // ID-05 (tm 329): the record carries the day and the connection a run belongs to.
+  it("shows each run's day and connection numbers, and none where the run has none", async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue({
+      items: [
+        makeRun({ id: 'run-1', chat_id: 'TJ1H8CFKRV', thread_id: 'K3M9Q2XW7B' }),
+        makeRun({ id: 'run-2', chat_id: null, thread_id: null }),
+      ],
+    });
+    renderEditor(makeSkill([], { runs_count: 2 }));
+
+    await user.click(screen.getByRole('button', { name: '2 runs' }));
+    const log = await screen.findByRole('region', { name: 'Run log' });
+
+    expect(within(log).getByText('TJ1H8CFKRV')).toBeInTheDocument();
+    expect(within(log).getByText('K3M9Q2XW7B')).toBeInTheDocument();
+    expect(within(log).getAllByRole('button', { name: /^Copy / })).toHaveLength(2);
+  });
+
   it('says the skill has never run rather than showing an empty panel', async () => {
     const user = userEvent.setup();
     api.get.mockResolvedValue({ items: [] });

@@ -29,6 +29,7 @@ function makeSummary(overrides: Partial<Ticket> = {}): Ticket {
     customer_name: 'Mira Haddad',
     customer_email: null,
     source_chat_id: null,
+    source_thread_id: null,
     merged_into_id: null,
     last_message_at: null,
     created_at: '2026-01-01T00:00:00.000Z',
@@ -250,6 +251,32 @@ describe('TicketDetailPane HelpDesk actions', () => {
     const link = await screen.findByRole('link', { name: 'CHAT0000001' });
 
     expect(link).toHaveAttribute('href', '/app/inbox?chat=CHAT0000001');
+  });
+
+  // ID-05 (tm 329): a ticket opened from a chat names both numbers — the day it
+  // belongs to and the connection it was opened from — each copyable.
+  it('shows the day and the connection a ticket was opened from, and copies each alone', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderPane(makeDetail({ source_chat_id: 'TJ1H8CFKRV', source_thread_id: 'K3M9Q2XW7B' }));
+
+    await screen.findByRole('link', { name: 'TJ1H8CFKRV' });
+    expect(screen.getByText('Thread ID')).toBeInTheDocument();
+    expect(screen.getByText('Chat ID')).toBeInTheDocument();
+    expect(screen.getByText('K3M9Q2XW7B')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Chat ID' }));
+    expect(writeText).toHaveBeenLastCalledWith('K3M9Q2XW7B');
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Thread ID' }));
+    expect(writeText).toHaveBeenLastCalledWith('TJ1H8CFKRV');
+    Reflect.deleteProperty(navigator, 'clipboard');
+  });
+
+  it('shows only the day for a ticket that predates the connection being recorded', async () => {
+    renderPane(makeDetail({ source_chat_id: 'TJ1H8CFKRV', source_thread_id: null }));
+
+    await screen.findByRole('link', { name: 'TJ1H8CFKRV' });
+    expect(screen.queryByText('Chat ID')).toBeNull();
   });
 
   it('shows a merged ticket read-only and unmerges it', async () => {

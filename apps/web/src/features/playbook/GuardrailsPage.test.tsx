@@ -828,7 +828,10 @@ describe('what the guardrails caught', () => {
 
     const link = await screen.findByRole('link', { name: 'Open the conversation' });
     expect(link).toHaveAttribute('href', '/app/inbox?chat=CHAT0042');
-    expect(screen.getByText(/CHAT0042 ·/)).toBeInTheDocument();
+    // Both numbers sit beside it, each copyable (ID-05).
+    expect(screen.getByText('CHAT0042')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Thread ID' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Chat ID' })).toBeInTheDocument();
   });
 
   it('asks for the last 30 days a page at a time and loads the next page on request', async () => {

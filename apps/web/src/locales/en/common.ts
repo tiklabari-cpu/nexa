@@ -145,4 +145,8 @@ export const common: Messages = {
   // at the strip that does.
   'common.pilot.licenseExpired':
     'Your pilot trial has ended — the contact address is in the bar at the top.',
+  // CopyId.tsx (ID-05): the button's name carries the number's own label, so a screen
+  // reader hears which number it copies; the label is the ids catalogue's.
+  'common.copyId.copy': 'Copy {label}',
+  'common.copyId.copied': 'Copied',
 };

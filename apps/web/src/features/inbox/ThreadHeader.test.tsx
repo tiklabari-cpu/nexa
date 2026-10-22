@@ -18,6 +18,7 @@ const { api } = vi.hoisted(() => ({ api: { get: vi.fn(), post: vi.fn() } }));
 vi.mock('../../lib/auth-store.js', () => ({ useApiClient: () => api }));
 
 const CHAT_ID = 'TJ1H8CFKRV';
+const THREAD_ID = 'K3M9Q2XW7B';
 
 /** What `clientWidth` answers for every element — jsdom's own answer is 0. */
 let width = 0;
@@ -48,12 +49,13 @@ afterEach(() => {
   delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
 });
 
-function header(showDetails: (() => void) | null = null) {
+function header(showDetails: (() => void) | null = null, threadId: string | null = THREAD_ID) {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   const element = (
     <QueryClientProvider client={client}>
       <ThreadHeader
         chatId={CHAT_ID}
+        threadId={threadId}
         customerName="Alexandria Montgomery-Fitzro"
         active
         onOpenTicket={vi.fn()}
@@ -86,8 +88,7 @@ describe('ThreadHeader', () => {
       expect(button).toHaveAttribute('title', name);
       expect(button).toHaveTextContent(/^.?$/);
     }
-    // The id is in the Details panel already; the status keeps its word for a reader.
-    expect(screen.queryByText(CHAT_ID)).not.toBeInTheDocument();
+    // The status keeps its word for a reader.
     expect(screen.getByText('Active')).toHaveClass('sr-only');
     // The name is what is left, whole in the DOM and in full on hover.
     expect(screen.getByRole('heading', { name: 'Alexandria Montgomery-Fitzro' })).toHaveAttribute(
@@ -105,6 +106,45 @@ describe('ThreadHeader', () => {
     act(() => notify?.());
     expect(screen.getByRole('button', { name: 'Copilot' })).toHaveTextContent('Copilot');
     expect(screen.getByText(CHAT_ID)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Conversation numbers' })).toBeNull();
+  });
+
+  // ID-05 (tm 329): the numbers are never hidden — wide, they sit in the header;
+  // narrow, they fold into a menu that is one click away.
+  it('draws both numbers in the header when it is wide, each with its own copy button', () => {
+    width = 1024;
+    render(header());
+
+    expect(screen.getByText('Thread ID')).toBeInTheDocument();
+    expect(screen.getByText('Chat ID')).toBeInTheDocument();
+    expect(screen.getByText(CHAT_ID)).toBeInTheDocument();
+    expect(screen.getByText(THREAD_ID)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Thread ID' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Chat ID' })).toBeInTheDocument();
+  });
+
+  it('folds the numbers into a menu — still copyable — when the header is narrow', () => {
+    width = 284;
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(header(() => {}));
+
+    // The trigger is named; the panel's items are in the page (a closed
+    // `<details>` hides them with CSS, which jsdom does not load).
+    expect(screen.getByRole('button', { name: 'Conversation numbers' })).toBeInTheDocument();
+    expect(screen.getByText(CHAT_ID)).toBeInTheDocument();
+    expect(screen.getByText(THREAD_ID)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Chat ID' }));
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(THREAD_ID);
+    Reflect.deleteProperty(navigator, 'clipboard');
+  });
+
+  it('draws only the day while the chat has no connection', () => {
+    width = 1024;
+    render(header(null, null));
+
+    expect(screen.getByText(CHAT_ID)).toBeInTheDocument();
+    expect(screen.queryByText('Chat ID')).toBeNull();
   });
 
   it('names the actions in Turkish, narrow too', () => {

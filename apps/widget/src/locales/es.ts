@@ -72,6 +72,10 @@ export const es: Record<string, string> = {
   'offline.thanks': 'Gracias — tenemos tu mensaje y te responderemos por correo.',
   'offline.error': 'No se pudo enviar tu mensaje. Inténtalo de nuevo.',
   'chat.end.menuItem': 'Finalizar chat',
+  // The player's own number (ID-05): the conversation's Chat ID, which they quote to the operator.
+  'support.label': 'Su número de soporte',
+  'support.copy': 'Copiar número de soporte',
+  'support.copied': 'Copiado',
   'chat.end.confirmLabel': '¿Finalizar este chat?',
   'chat.end.confirmMessage': '¿Seguro que quieres finalizar este chat?',
   'chat.end.confirmButton': 'Finalizar chat',

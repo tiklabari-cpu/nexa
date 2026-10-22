@@ -1081,6 +1081,48 @@ describe('customers', () => {
       expect(body.visits[0]?.pages[0]?.url).toBe('https://shop.example/pricing');
     });
 
+    it("lists each day's connections under it, oldest first (ID-05)", async () => {
+      await owner.chat.create({
+        data: { id: 'CUSTCONN01', licenseId: fx.a.licenseId, customerId: fx.a.customerId },
+      });
+      for (const [id, at, active] of [
+        ['CONNSECOND', '2026-10-20T14:02:00.000Z', true],
+        ['CONNFIRST1', '2026-10-20T10:05:00.000Z', false],
+      ] as const) {
+        await owner.thread.create({
+          data: {
+            id,
+            chatId: 'CUSTCONN01',
+            licenseId: fx.a.licenseId,
+            active,
+            createdAt: new Date(at),
+            // A closed connection says when (`threads_closed_consistency_check`).
+            ...(active ? {} : { closedAt: new Date('2026-10-20T11:00:00.000Z') }),
+          },
+        });
+      }
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      const day = (
+        response.json() as {
+          chats: Array<{
+            id: string;
+            last_event_at: string | null;
+            connections: Array<{ id: string; active: boolean }>;
+          }>;
+        }
+      ).chats.find((chat) => chat.id === 'CUSTCONN01');
+
+      expect(day?.connections.map((connection) => connection.id)).toEqual([
+        'CONNFIRST1',
+        'CONNSECOND',
+      ]);
+      expect(day?.connections.map((connection) => connection.active)).toEqual([false, true]);
+      // The newest connection still dates the day.
+      expect(day?.last_event_at).toBe('2026-10-20T14:02:00.000Z');
+    });
+
     // --- Visited pages (FR-MOD-13.2) ------------------------------------------
 
     it("sanitizes a visit's malformed pages jsonb instead of erroring (a manually edited row is an empty result, not a 500)", async () => {

@@ -186,6 +186,8 @@ export interface Ticket {
   /** The customer left an address; true when `customer_email` is masked (tm 325.6). */
   customer_has_email?: boolean;
   source_chat_id: string | null;
+  /** The connection it was opened from (`threads.id`); null off a chat and on older tickets. */
+  source_thread_id?: string | null;
   merged_into_id: string | null;
   last_message_at: string | null;
   created_at: string;

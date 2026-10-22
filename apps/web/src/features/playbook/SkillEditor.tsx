@@ -36,6 +36,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
+import { CopyId } from '../../components/CopyId.js';
 import { Card, ErrorNotice } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
@@ -1458,6 +1459,9 @@ function RunLog({
                     {t('playbook.editor.runLogOpenChat')}
                   </Link>
                 )}
+                {/* The numbers a complaint quotes (ID-05): the day, and the connection. */}
+                {run.chat_id && <CopyId kind="thread" value={run.chat_id} className="text-2xs" />}
+                {run.thread_id && <CopyId kind="chat" value={run.thread_id} className="text-2xs" />}
               </li>
             ))}
           </ol>

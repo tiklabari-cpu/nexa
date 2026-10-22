@@ -317,6 +317,53 @@ describe('CustomerDetailPanel — regression: existing cards still render', () =
   });
 });
 
+// ID-05 (tm 329): the profile reads day → connection, every number copyable.
+describe('CustomerDetailPanel conversation numbers (ID-05)', () => {
+  it('lists the connections under their day, oldest first, each with its number', async () => {
+    renderPanel(
+      baseCustomer({
+        chats: [
+          {
+            id: 'TJ1H8CFKRV',
+            active: true,
+            created_at: '2026-07-20T10:05:00.000Z',
+            last_event_at: '2026-07-20T14:02:00.000Z',
+            connections: [
+              { id: 'K3M9Q2XW7B', active: false, created_at: '2026-07-20T10:05:00.000Z' },
+              { id: 'P4R6T8V0ZZ', active: true, created_at: '2026-07-20T14:02:00.000Z' },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const day = await screen.findByText('TJ1H8CFKRV');
+    expect(day).toBeInTheDocument();
+    const connections = screen.getAllByText(/^(K3M9Q2XW7B|P4R6T8V0ZZ)$/);
+    expect(connections.map((node) => node.textContent)).toEqual(['K3M9Q2XW7B', 'P4R6T8V0ZZ']);
+    expect(screen.getByRole('button', { name: 'Copy Thread ID' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Copy Chat ID' })).toHaveLength(2);
+  });
+
+  it('shows just the day for a server that does not list connections', async () => {
+    renderPanel(
+      baseCustomer({
+        chats: [
+          {
+            id: 'TJ1H8CFKRV',
+            active: false,
+            created_at: '2026-07-20T10:05:00.000Z',
+            last_event_at: null,
+          },
+        ],
+      }),
+    );
+
+    expect(await screen.findByText('TJ1H8CFKRV')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy Chat ID' })).toBeNull();
+  });
+});
+
 describe('CustomerDetailPanel localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();

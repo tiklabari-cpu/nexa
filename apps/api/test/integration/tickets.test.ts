@@ -164,6 +164,52 @@ describe('tickets', () => {
   // One unresolved ticket per chat
   // =========================================================================
 
+  // =========================================================================
+  // The connection a ticket came from (ID-05 · tm 329)
+  // =========================================================================
+
+  describe('the connection a ticket was opened from', () => {
+    it("records the chat's newest connection beside its day, on create and on read", async () => {
+      const chat = await startChat(adminToken);
+      const detail = await server.get(`/chats/${chat.id}`, auth(adminToken));
+      const threadId = (detail.json() as { thread: { id: string } }).thread.id;
+
+      const created = await createTicket(adminToken, {
+        subject: 'Refund not received',
+        source_chat_id: chat.id,
+      });
+      expect(created.statusCode).toBe(201);
+      const ticket = created.json() as {
+        id: string;
+        source_chat_id: string;
+        source_thread_id: string | null;
+      };
+      // The day ("Thread ID" on screen) and the connection ("Chat ID") are two numbers.
+      expect(ticket.source_chat_id).toBe(chat.id);
+      expect(ticket.source_thread_id).toBe(threadId);
+      expect(ticket.source_thread_id).not.toBe(ticket.source_chat_id);
+
+      const read = await server.get(`/tickets/${ticket.id}`, auth(adminToken));
+      expect((read.json() as { source_thread_id: string | null }).source_thread_id).toBe(threadId);
+      const listed = await server.get('/tickets', auth(adminToken));
+      const row = (
+        listed.json() as { items: Array<{ id: string; source_thread_id: string | null }> }
+      ).items.find((item) => item.id === ticket.id);
+      expect(row?.source_thread_id).toBe(threadId);
+    });
+
+    it('is null for a ticket that was not opened from a chat', async () => {
+      const created = await createTicket(adminToken, {
+        subject: 'Called us',
+        customer_id: fx.a.customerId,
+      });
+      expect(created.statusCode).toBe(201);
+      const ticket = created.json() as { source_chat_id: string | null; source_thread_id: unknown };
+      expect(ticket.source_chat_id).toBeNull();
+      expect(ticket.source_thread_id).toBeNull();
+    });
+  });
+
   describe('one unresolved ticket per chat', () => {
     it('refuses a second ticket and points at the first', async () => {
       const chat = await startChat(adminToken);

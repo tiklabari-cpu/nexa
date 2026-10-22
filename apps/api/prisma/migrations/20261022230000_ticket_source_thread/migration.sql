@@ -1,0 +1,21 @@
+-- The connection a ticket was opened from (tm 329 · SiyahTuş analysis ID-05,
+-- owner decision K1 = A).
+--
+-- `tickets.source_chat_id` names the member's day ("Thread ID" in the panel);
+-- a day holds several connections (`threads`, "Chat ID"), and a ticket opened
+-- from the chat is about one of them — the newest when the button is pressed.
+-- The ticket panel draws "Source: Thread T · Chat C" so the team can say which
+-- connection a follow-up came from.
+--
+-- Expand-only (CONVENTIONS §6.3): one nullable column the previous release
+-- neither reads nor writes. NULL = no connection recorded: a ticket that was
+-- not opened from a chat, a chat with no connection, and every ticket created
+-- before this migration — not backfilled, because the chat's newest thread today
+-- is not the one that was newest then, and picking it would invent a fact.
+--
+-- No foreign key, on `threads.group_id`'s terms: the column records where a
+-- ticket came from, and must outlive the thread it names. No index: it is read
+-- with its ticket, never searched. No RLS change: `tickets` carries its tenant
+-- policy and a new column inherits it.
+
+ALTER TABLE tickets ADD COLUMN source_thread_id VARCHAR(12);

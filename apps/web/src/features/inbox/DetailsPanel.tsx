@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { CopyId } from '../../components/CopyId.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, Modal, Panel, PanelSection } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
@@ -209,7 +210,7 @@ export function DetailsPanel({
           </Row>
           {/* The code's `chat_id` is the day container, named by the ids catalogue (ID-01, K1 = A). */}
           <Row label={t('ids.thread.label')} hint={t('ids.thread.hint')}>
-            <span className="select-all font-mono text-2xs">{chat.id}</span>
+            <CopyId kind="thread" value={chat.id} showLabel={false} className="text-2xs" />
           </Row>
           <Row label={t('inbox.details.row.assignee')}>
             <div className="flex min-w-0 items-center gap-2">
@@ -286,9 +287,12 @@ export function DetailsPanel({
               {chat.connections!.map((connection) => (
                 <li key={connection.id} className="flex flex-col gap-0.5 text-xs">
                   <span className="flex items-center gap-2">
-                    <span title={t('ids.chat.hint')} className="select-all font-mono text-2xs">
-                      {connection.id}
-                    </span>
+                    <CopyId
+                      kind="chat"
+                      value={connection.id}
+                      showLabel={false}
+                      className="text-2xs"
+                    />
                     <span className="tabular text-content-secondary">
                       {formatTime(connection.created_at)}
                     </span>

@@ -9,6 +9,7 @@
  */
 import type { APIRequestContext } from '@playwright/test';
 import {
+  ACME_TEAM_LEAD,
   API_BASE,
   DEMO,
   expect,
@@ -360,6 +361,112 @@ test.describe('Team — changing a teammate’s role (NFR-S12)', () => {
         data: { role: 'admin' },
       });
       expect(restored.ok(), `could not restore Sam Rivera's role: ${restored.status()}`).toBe(true);
+    }
+  });
+});
+
+test.describe('Team — the Team Lead role (RL-01 · RL-04 · tm 324.2)', () => {
+  /**
+   * The seeded Team Lead signs in to the console a Team Member has: the role
+   * ranks under admin, so every admin surface stays shut without a single gate
+   * having changed — billing and reports off the rail, a security section's
+   * address sent back to the landing section, its link absent.
+   */
+  test('the seeded Team Lead sees no billing, reports or security settings (FR-MOD-04.RBAC)', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      await page.goto('/');
+      await page.getByLabel('Email').fill(ACME_TEAM_LEAD.email);
+      await page.getByLabel('Password').fill(ACME_TEAM_LEAD.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
+
+      await expect(page.getByRole('link', { name: 'Billing' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Reports' })).toHaveCount(0);
+      // What the same session does reach, so this is a hide, not a broken rail.
+      await expect(page.getByRole('link', { name: 'Team' })).toBeVisible();
+
+      await page.goto('/app/settings/trusted-domains');
+      await expect(page).toHaveURL(/\/app\/settings\/notifications$/);
+      await expect(page.getByRole('region', { name: 'Notifications' })).toBeVisible();
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Settings navigation' })
+          .getByRole('link', { name: 'Trusted domains' }),
+      ).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+
+  /**
+   * The invitation half (RL-04-S1) on the running stack: a Team Lead invited
+   * without a team to lead is refused and nothing is written; invited to lead
+   * the seeded Sales team, the invitation carries it and the list shows it.
+   * The invitation is revoked at the end — the suite shares one tenant, and
+   * its seat ceiling counts outstanding invitations.
+   */
+  test('an owner invites a Team Lead only with a team to lead, and the list carries it (FR-MOD-04.4)', async ({
+    request,
+  }) => {
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const groups = await request.get(`${API_BASE}/groups`, { headers: auth });
+    expect(groups.ok(), `groups read failed: ${groups.status()}`).toBe(true);
+    const sales = (
+      (await groups.json()) as {
+        items: Array<{
+          id: number;
+          name: string;
+          agents: Array<{ agent_id: string; lead: boolean }>;
+        }>;
+      }
+    ).items.find((team) => team.name === 'Sales');
+    expect(sales, 'seeded Sales team not found').toBeTruthy();
+    // The seed's Team Lead leads it (seed.ts).
+    expect(sales!.agents.filter((member) => member.lead)).toHaveLength(1);
+
+    const email = `lead-${Date.now()}@invite-lead.test`;
+    const leaderless = await request.post(`${API_BASE}/invitations`, {
+      headers: auth,
+      data: { emails: [email], role: 'team_lead', groups: [{ group_id: sales!.id }] },
+    });
+    expect(leaderless.status()).toBe(400);
+    expect(
+      ((await leaderless.json()) as { error: { details: { reason: string } } }).error.details,
+    ).toMatchObject({ reason: 'lead_team_required' });
+
+    const invited = await request.post(`${API_BASE}/invitations`, {
+      headers: auth,
+      data: { emails: [email], role: 'team_lead', groups: [{ group_id: sales!.id, lead: true }] },
+    });
+    expect(invited.status(), await invited.text()).toBe(201);
+    const [item] = (
+      (await invited.json()) as {
+        items: Array<{ id: string; role: string; groups: unknown[] }>;
+      }
+    ).items;
+    try {
+      expect(item).toMatchObject({
+        role: 'team_lead',
+        groups: [{ group_id: sales!.id, lead: true }],
+      });
+
+      const listed = await request.get(`${API_BASE}/invitations`, { headers: auth });
+      expect(listed.ok()).toBe(true);
+      const row = (
+        (await listed.json()) as {
+          items: Array<{ id: string; groups: unknown[] }>;
+        }
+      ).items.find((invite) => invite.id === item!.id);
+      expect(row?.groups).toEqual([{ group_id: sales!.id, lead: true }]);
+    } finally {
+      const revoked = await request.delete(`${API_BASE}/invitations/${item!.id}`, {
+        headers: auth,
+      });
+      expect(revoked.status(), 'could not revoke the test invitation').toBe(204);
     }
   });
 });

@@ -94,7 +94,7 @@ describe('risk flag types (AI-27 · tm 302.1)', () => {
 });
 
 describe('who may clear a flag (AI-27-S2 · tm 302.1)', () => {
-  it('is a Manager (admin) and up for every type until RL-01 adds the Team Lead', () => {
+  it('is a Manager (admin) and up for every type until RL-03 bounds the Team Lead', () => {
     expect(RISK_FLAG_CLEAR_MIN_ROLE).toEqual({ manager: 'admin', team_lead: 'admin' });
     const allowed = (type: RiskFlagType): AgentRole[] =>
       AGENT_ROLES.filter((role) => canClearRiskFlag(type, role));
@@ -209,7 +209,7 @@ describe('riskPolicy (AI-27 §3 · tm 302.1)', () => {
 });
 
 describe('who reads a flag’s note and evidence (AI-27 “Görünürlük” · tm 302.2)', () => {
-  it('the Responsible Gaming team and a Team Lead and up (admin until RL-01); a Team Member reads the type only', () => {
+  it('the Responsible Gaming team and a Team Lead and up (admin until RL-03); a Team Member reads the type only', () => {
     const read = (role: AgentRole, team: boolean) => canSeeRiskFlagDetails(role, team);
     // `team_lead` exists since tm 324.1 but still reads as a member here:
     // `RISK_FLAG_CLEAR_MIN_ROLE.team_lead` stays `admin` until it moves down.

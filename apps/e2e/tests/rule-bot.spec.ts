@@ -101,6 +101,11 @@ test.describe('rule bot (FR-MOD-06.6)', () => {
         await expect
           .poll(async () => (await bots(request, auth)).find((b) => b.id === botId)?.groups.length)
           .toBe(index + 1);
+        // And the console has finished with it: `attach` clears the picker only
+        // after its write resolves, so picking the next team before that clear
+        // lands has it wiped and Attach stays disabled (a race the API poll
+        // above cannot see; it bit once the shared workspace held more teams).
+        await expect(teamPicker).toHaveValue('');
       }
 
       // --- 2. …and the rule, as one condition and one action ---------------

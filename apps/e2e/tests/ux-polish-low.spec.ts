@@ -117,8 +117,14 @@ test.describe('unknown addresses (D11)', () => {
       agentPage.getByRole('heading', { name: 'Page not found', level: 1 }),
     ).toBeVisible();
     expect(new URL(agentPage.url()).pathname).toBe('/app/no-such-page');
-    // The rail is still there to leave from.
-    await expect(agentPage.getByRole('link', { name: 'Inbox', exact: true })).toBeVisible();
+    // The rail is still there to leave from. Matched with or without the unread
+    // badge ("Inbox, 1 unread"): the workspace is shared, and a spec earlier in
+    // the same shard may leave a conversation unassigned (tm 324.2).
+    await expect(
+      agentPage
+        .getByRole('navigation', { name: 'Modules' })
+        .getByRole('link', { name: /^Inbox(, \d+ unread)?$/ }),
+    ).toBeVisible();
 
     await agentPage.getByRole('link', { name: 'Go to the inbox' }).click();
     await expect(agentPage).toHaveURL(/\/app\/inbox$/);

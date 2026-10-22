@@ -35,6 +35,17 @@ export const DEMO = {
   agentName: 'Dana Okonkwo',
 } as const;
 
+/**
+ * The seeded Team Lead (Ekip Lideri, RL-01 · tm 324.2): Acme's lead of the
+ * Sales team, which is the one team they are on. A Team Member's powers until
+ * RL-03 bounds what leading adds to their teams.
+ */
+export const ACME_TEAM_LEAD = {
+  email: 'agent3@acme.localhost',
+  password: DEMO.password,
+  name: 'Alex Morgan',
+} as const;
+
 interface Fixtures {
   /** An agent already signed in, sitting on the inbox. */
   agentPage: Page;

@@ -635,6 +635,37 @@ describe('rtm gateway', () => {
       expect(asAgent.pushes('incoming_event')).toHaveLength(0);
     });
 
+    it('logs a Team Lead in, held to their teams as a Team Member is (RL-01 · tm 324.2)', async () => {
+      // `team_lead` ranks under admin (`ROLE_RANK`), so a session minted while
+      // its holder was an admin narrows to the Team Lead set at the next login —
+      // the same `scopesWithinRole` ceiling, now with a role between the two.
+      await db.agentMembership.update({
+        where: {
+          licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.outsiderAccountId },
+        },
+        data: { role: 'team_lead' },
+      });
+      const token = await grantToken(db, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.outsiderAccountId,
+        scopes: ['chats--all:rw', 'chats--access:rw'],
+        kind: 'oauth',
+      });
+      const lead = await connect(fx.a);
+      const response = await lead.request('login', {
+        token: `Bearer ${token}`,
+        pushes: { '3.6': AGENT_PUSHES },
+      });
+      expect(response.success).toBe(true);
+
+      const insider = await loginAgent(fx.a, fx.a.agentAccountId);
+      await publish(fx.a, 'incoming_event', { groupIds: [Number(fx.a.supportGroupId)] }, {});
+      await insider.waitForPush('incoming_event');
+      await settle();
+      expect(lead.pushes('incoming_event')).toHaveLength(0);
+    });
+
     it('leaves a personal access token as broad as it was granted', async () => {
       // The other half of the same rule: a named credential keeps the list
       // somebody deliberately gave it, and what binds an over-broad one is the

@@ -44,8 +44,13 @@ const DEMO_PASSWORD = 'siyahtus-demo-password';
 
 interface AgentSpec {
   name: string;
-  role: 'admin' | 'agent';
+  role: 'admin' | 'team_lead' | 'agent';
   priority: 'primary' | 'first' | 'normal' | 'last';
+  /**
+   * The team they lead instead of joining the first one (RL-01): a Team Lead
+   * is a member of the team they lead, marked `is_lead`.
+   */
+  leads?: string;
 }
 
 /**
@@ -131,6 +136,9 @@ const TENANTS: TenantSpec[] = [
     agents: [
       { name: 'Sam Rivera', role: 'admin', priority: 'primary' },
       { name: 'Priya Nair', role: 'agent', priority: 'normal' },
+      // The Team Lead (Ekip Lideri, RL-01 · tm 324.2), leading Sales only — so
+      // Support, where every demo conversation lands, is staffed as before.
+      { name: 'Alex Morgan', role: 'team_lead', priority: 'normal', leads: 'Sales' },
     ],
     widgetDomain: 'acme-bikes.localhost',
     teams: ['Support', 'Sales'],
@@ -402,12 +410,15 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     data: { licenseId, groupId: supportTeam.id, agentId: owner.id, priority: 'last' },
   });
   for (const agent of agents) {
+    const led = agent.spec.leads ? teams.find((team) => team.name === agent.spec.leads) : undefined;
+    if (agent.spec.leads && !led) throw new Error(`seed: no team named ${agent.spec.leads}`);
     await prisma.groupAgent.create({
       data: {
         licenseId,
-        groupId: supportTeam.id,
+        groupId: led?.id ?? supportTeam.id,
         agentId: agent.id,
         priority: agent.spec.priority,
+        isLead: led !== undefined,
       },
     });
   }

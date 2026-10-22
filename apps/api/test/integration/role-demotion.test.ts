@@ -128,7 +128,7 @@ describe('role change and credential authority', () => {
     return granted.json() as Grant;
   }
 
-  async function setRole(accountId: string, role: 'admin' | 'agent'): Promise<void> {
+  async function setRole(accountId: string, role: 'admin' | 'team_lead' | 'agent'): Promise<void> {
     const res = await server.put(`/agents/${accountId}/role`, { role }, bearer(ownerToken));
     expect(res.statusCode).toBe(200);
   }
@@ -196,6 +196,25 @@ describe('role change and credential authority', () => {
       // than derives — so what survives is the string the session was minted
       // with, never the narrower spelling that string happens to imply.
       expect(scopes).toContain('accounts--my:rw');
+    });
+
+    it('treats a move to Team Lead as a demotion: the open session loses the admin surface at once (FR-MOD-04.RBAC)', async () => {
+      // RL-01 put the Team Lead under admin; the ceiling is what makes that
+      // rank real for a session minted when its holder was an admin.
+      const session = await signIn(adminEmail);
+      expect((await disableIpAllowlist(bearer(session.access_token))).statusCode).toBe(200);
+      await owner.securitySettings.updateMany({
+        where: { licenseId: fx.a.licenseId },
+        data: { ipAllowlistEnforced: true },
+      });
+
+      await setRole(adminId, 'team_lead');
+
+      const scopes = await scopesOf(session.access_token);
+      expect(scopes).not.toContain('access_rules:rw');
+      expect(scopes).toContain('chats--access:rw');
+      expect((await disableIpAllowlist(bearer(session.access_token))).statusCode).toBe(403);
+      expect(await enforcementFlag()).toBe(true);
     });
 
     it('closes every door that scope opened, not only the one that was reported', async () => {

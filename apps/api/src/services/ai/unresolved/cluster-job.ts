@@ -33,7 +33,8 @@
  *      however many processes look.
  *
  * The notices (`ai_unresolved_alert`) go to the workspace's Team Leads and up —
- * admin and up until RL-01, as for a risk flag — in the console: a title and
+ * admin and up until RL-03 bounds a Team Lead to their teams, as for a risk
+ * flag — in the console: a title and
  * numbers, never an item's words.
  *
  * The nightly pass merges the clusters the greedy pass split
@@ -83,7 +84,11 @@ import {
   type UnresolvedClusterTitle,
 } from './label.js';
 
-/** The roles told of a surge (AI-22's Team Lead and up: admin and up until RL-01). */
+/**
+ * The roles told of a surge (AI-22's Team Lead and up). Admin and up until
+ * RL-03: the Team Lead role exists (tm 324.1), but nothing yet bounds what one
+ * hears to their teams, and the report the notice points at is admin's.
+ */
 export const UNRESOLVED_ALERT_ROLES = ['owner', 'viceowner', 'admin'] as const;
 
 /** Clusters titled per workspace and pass — the model is asked at most this often. */

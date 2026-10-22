@@ -26,7 +26,15 @@ import { assertInviteSeatCeiling } from '../../lib/entitlements.js';
 import { ensureSeatsCoverHeadcount } from '../billing/subscription-service.js';
 import { secondsUntilUtcMidnight } from '../ai/ai-daily-budget.js';
 import { hashPassword, verifyPassword } from '../../lib/crypto.js';
-import { type AgentRole, type Region } from '@siyahtus/types';
+import {
+  MAX_INVITATION_GROUPS,
+  invitationGroupsProblem,
+  type AgentRole,
+  type InvitationGroupChoice,
+  type InvitationGroupProblem,
+  type InvitationRole,
+  type Region,
+} from '@siyahtus/types';
 import { ROLE_RANK } from './principal.js';
 
 /** The default trial length; the deployment's `TRIAL_DAYS` overrides it (tm 256.1). */
@@ -35,8 +43,6 @@ export const TRIAL_DAYS = 14;
 export const VERIFICATION_TTL_HOURS = 24;
 const RESET_TTL_MS = 60 * 60 * 1000; // one hour
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-export type InvitableRole = 'admin' | 'agent';
 
 export interface Membership {
   license_id: string;
@@ -104,7 +110,7 @@ export type AcceptedInvitation =
 export interface InvitationRecord {
   id: string;
   email: string;
-  role: InvitableRole;
+  role: InvitationRole;
   /** The teams the invitee joins on accepting, and which they lead (RL-04). */
   groups: Array<{ group_id: number; lead: boolean }>;
   invited_by_name: string | null;
@@ -467,13 +473,23 @@ export class LifecycleService {
     tenant: { licenseId: bigint; organizationId: string },
     inviter: { accountId: string; role: AgentRole },
     emails: string[],
-    role: InvitableRole,
+    role: InvitationRole,
+    groups: readonly InvitationGroupChoice[] = [],
   ): Promise<InvitationRecord[]> {
     // An agent minting an owner or admin invitation would be promoting
     // themselves through the side door.
     if (ROLE_RANK[role] > ROLE_RANK[inviter.role]) {
       throw ApiError.authorization('You cannot invite someone above your own role.');
     }
+
+    // --- The teams, before a single row is written (RL-04-S1) ---------------
+    const problem = invitationGroupsProblem(role, groups);
+    if (problem) {
+      throw ApiError.validation(`groups: ${INVITATION_GROUP_MESSAGES[problem]}`, {
+        reason: problem,
+      });
+    }
+    await assertInvitableGroups(tx, groups);
 
     const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
     const unique = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
@@ -504,6 +520,8 @@ export class LifecycleService {
 
     await assertInviteDailyCap(tx, tenant.licenseId, unique.length);
 
+    // In team id order, as `GET /invitations` lists them.
+    const named = [...groups].sort((a, b) => a.group_id - b.group_id);
     const records: InvitationRecord[] = [];
     for (const email of unique) {
       const { token, hash } = newToken();
@@ -524,13 +542,28 @@ export class LifecycleService {
         RETURNING id, created_at, expires_at`;
 
       if (!row) continue;
+
+      // A re-invite replaces the set along with the link: the teams are the
+      // latest invitation's, not a union of every one sent. Delete and insert
+      // rather than update — `siyahtus_app` holds no UPDATE on the table, and
+      // a set has no row to update in place.
+      await tx.invitationGroup.deleteMany({ where: { invitationId: row.id } });
+      if (named.length > 0) {
+        await tx.invitationGroup.createMany({
+          data: named.map((g) => ({
+            invitationId: row.id,
+            licenseId: tenant.licenseId,
+            groupId: BigInt(g.group_id),
+            isLead: g.lead,
+          })),
+        });
+      }
+
       records.push({
         id: row.id,
         email,
         role,
-        // Nothing writes `invitation_groups` yet — the body that names teams
-        // is tm 324.2 — so every invitation names none.
-        groups: [],
+        groups: named.map((g) => ({ group_id: g.group_id, lead: g.lead })),
         invited_by_name: null,
         expires_at: row.expires_at.toISOString(),
         created_at: row.created_at.toISOString(),
@@ -549,14 +582,14 @@ export class LifecycleService {
   async previewInvitation(token: string): Promise<{
     organization_name: string;
     email: string;
-    role: InvitableRole;
+    role: InvitationRole;
     needs_password: boolean;
   }> {
     const rows = await this.#db.$queryRaw<
       Array<{
         organization_name: string;
         email: string;
-        role: InvitableRole;
+        role: InvitationRole;
         needs_password: boolean;
       }>
     >`SELECT * FROM auth_preview_invitation(${hashToken(token)})`;
@@ -785,6 +818,59 @@ export class LifecycleService {
              license_status,
              client_id
       FROM auth_list_memberships(${accountId}::uuid)`;
+  }
+}
+
+/** The 400's wording for each {@link invitationGroupsProblem} answer. */
+const INVITATION_GROUP_MESSAGES: Record<InvitationGroupProblem, string> = {
+  lead_team_required: 'A Team Lead invitation must name at least one team to lead.',
+  lead_requires_team_lead: 'Only a Team Lead invitation may lead a team.',
+  duplicate_group: 'Each team may be named once.',
+  too_many_groups: `An invitation names at most ${MAX_INVITATION_GROUPS} teams.`,
+};
+
+/**
+ * Refuse, before anything is written, an invitation naming a team this
+ * workspace does not have (404 `group_not_found`, RLS scoping the read), or
+ * one that requires areas of expertise (409 `group_expertise_missing`, AU-01
+ * · K14). A newcomer holds no areas in this workspace, so such a team could
+ * only be skipped at the join; the admin is told now and adds the person once
+ * trained, the way `setGroupMember` asks of any new member.
+ */
+async function assertInvitableGroups(
+  tx: TenantClient,
+  groups: readonly InvitationGroupChoice[],
+): Promise<void> {
+  if (groups.length === 0) return;
+  const ids = groups.map((g) => BigInt(g.group_id));
+  const found = await tx.group.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      requiredExpertise: { select: { expertiseId: true }, orderBy: { expertiseId: 'asc' } },
+    },
+  });
+  const byId = new Map(found.map((g) => [g.id, g]));
+  const missing = ids.filter((id) => !byId.has(id));
+  if (missing.length > 0) {
+    throw new ApiError('group_not_found', 'Team not found.', {
+      details: { group_ids: missing.map(Number) },
+    });
+  }
+  for (const id of ids) {
+    const required = byId.get(id)!.requiredExpertise;
+    if (required.length === 0) continue;
+    throw new ApiError(
+      'group_expertise_missing',
+      'This team requires areas of expertise a new teammate does not hold yet. ' +
+        'Invite them without it, and add them to the team once they have the areas.',
+      {
+        details: {
+          group_id: Number(id),
+          expertise_ids: required.map((row) => Number(row.expertiseId)),
+        },
+      },
+    );
   }
 }
 

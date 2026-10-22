@@ -57,7 +57,7 @@ describe('agent role change (NFR-S12)', () => {
 
   /** A second teammate, distinct from the owner, for the guard cases. */
   let seq = 0;
-  async function seedTeammate(role: 'admin' | 'agent' | 'viceowner') {
+  async function seedTeammate(role: 'admin' | 'team_lead' | 'agent' | 'viceowner') {
     const account = await owner.account.create({
       data: { email: `${role}-${(seq += 1)}-${Date.now()}@example.test`, name: role },
       select: { id: true },
@@ -183,11 +183,99 @@ describe('agent role change (NFR-S12)', () => {
       expect(await roleChanges(admin.accountId)).toBe(1);
     });
 
-    it('lets the owner grant a role below their own — agent → viceowner', async () => {
+    it('offers the vice owner to nobody new, the owner included — 400 role_retired (K6)', async () => {
+      // It used to be the owner's to grant; its powers are an admin's, and its
+      // holders become admins (tm 324.3).
       const res = await setRole(fx.a.agentAccountId, 'viceowner');
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: { details: unknown } }).error.details).toEqual({
+        reason: 'role_retired',
+      });
+      expect(await roleOf(fx.a.agentAccountId)).toBe('agent');
+      expect(await roleChanges(fx.a.agentAccountId)).toBe(0);
+
+      // A vice owner who stays one is still a no-op, not a refusal.
+      const vice = await seedTeammate('viceowner');
+      expect((await setRole(vice.accountId, 'viceowner')).statusCode).toBe(200);
+      expect((await setRole(vice.accountId, 'admin')).statusCode).toBe(200);
+      expect(await roleOf(vice.accountId)).toBe('admin');
+    });
+  });
+
+  // ==========================================================================
+  // The Team Lead (RL-01 · tm 324.2) — ranked under admin
+  // ==========================================================================
+
+  describe('the Team Lead', () => {
+    it('is a role an admin assigns and takes back (FR-MOD-04.RBAC)', async () => {
+      const admin = await seedTeammate('admin');
+      const promoted = await setRole(fx.a.agentAccountId, 'team_lead', admin.token);
+      expect(promoted.statusCode, promoted.payload).toBe(200);
+      expect(promoted.json()).toMatchObject({ id: fx.a.agentAccountId, role: 'team_lead' });
+      expect(await roleOf(fx.a.agentAccountId)).toBe('team_lead');
+
+      const entry = await owner.auditLogEntry.findFirst({
+        where: { licenseId: fx.a.licenseId, action: 'member.role_changed' },
+      });
+      expect(entry?.metadata).toMatchObject({ from: 'agent', to: 'team_lead' });
+      expect(entry?.metadata).not.toHaveProperty('lead_cleared_group_ids');
+
+      expect((await setRole(fx.a.agentAccountId, 'agent', admin.token)).statusCode).toBe(200);
+      expect(await roleChanges(fx.a.agentAccountId)).toBe(2);
+    });
+
+    it("changes nobody's role, holding the scope or not (FR-MOD-04.RBAC)", async () => {
+      const lead = await seedTeammate('team_lead');
+      for (const [target, role] of [
+        [fx.a.agentAccountId, 'team_lead'],
+        [fx.a.agentAccountId, 'admin'],
+        [lead.accountId, 'admin'],
+      ] as const) {
+        const res = await setRole(target, role, lead.token);
+        expect(res.statusCode).toBe(403);
+      }
+      expect(await roleOf(fx.a.agentAccountId)).toBe('agent');
+      expect(await roleOf(lead.accountId)).toBe('team_lead');
+      expect(await roleChanges(fx.a.agentAccountId)).toBe(0);
+    });
+
+    it('loses every lead mark with the role, in the same change and its one entry', async () => {
+      const lead = await seedTeammate('team_lead');
+      const sales = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Sales' },
+        select: { id: true },
+      });
+      const support = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Support' },
+        select: { id: true },
+      });
+      await owner.groupAgent.createMany({
+        data: [
+          { licenseId: fx.a.licenseId, groupId: sales.id, agentId: lead.accountId, isLead: true },
+          { licenseId: fx.a.licenseId, groupId: support.id, agentId: lead.accountId },
+        ],
+      });
+
+      const res = await setRole(lead.accountId, 'agent');
       expect(res.statusCode).toBe(200);
-      expect(await roleOf(fx.a.agentAccountId)).toBe('viceowner');
-      expect(await roleChanges(fx.a.agentAccountId)).toBe(1);
+      // Still on both teams — a Team Member who no longer leads either.
+      const rows = await owner.groupAgent.findMany({
+        where: { agentId: lead.accountId },
+        select: { groupId: true, isLead: true },
+        orderBy: { groupId: 'asc' },
+      });
+      expect(rows).toEqual([
+        { groupId: sales.id, isLead: false },
+        { groupId: support.id, isLead: false },
+      ]);
+      const entry = await owner.auditLogEntry.findFirst({
+        where: { licenseId: fx.a.licenseId, action: 'member.role_changed' },
+      });
+      expect(entry?.metadata).toMatchObject({
+        from: 'team_lead',
+        to: 'agent',
+        lead_cleared_group_ids: [Number(sales.id)],
+      });
     });
   });
 });

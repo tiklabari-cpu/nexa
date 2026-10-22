@@ -24,7 +24,13 @@ import {
 } from '../services/auth/lifecycle-service.js';
 import { SEAT_CEILING } from '../lib/entitlements.js';
 import { pricingForPlan } from '../services/billing/subscription-service.js';
-import { REGIONS, servesRegion, type AgentRole } from '@siyahtus/types';
+import {
+  INVITATION_ROLES,
+  MAX_INVITATION_GROUPS,
+  REGIONS,
+  servesRegion,
+  type AgentRole,
+} from '@siyahtus/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
@@ -98,7 +104,19 @@ const inviteBody = z.object({
   emails: z.array(z.string().trim().max(320)).min(1).max(50),
   // The lowest role is the default: an API caller who names none must not mint an
   // administrator by omission (RL-04).
-  role: z.enum(['admin', 'agent']).default('agent'),
+  role: z.enum(INVITATION_ROLES).default('agent'),
+  // The teams the invitees join on accepting, and which they lead (RL-04-S1).
+  // The shape here; the rules (`invitationGroupsProblem`) and whether each
+  // team exists in the service, before anything is written.
+  groups: z
+    .array(
+      z.object({
+        group_id: z.number().int().safe(),
+        lead: z.boolean().default(false),
+      }),
+    )
+    .max(MAX_INVITATION_GROUPS)
+    .default([]),
 });
 
 const acceptBody = z.object({
@@ -874,6 +892,7 @@ export default async function accountLifecycleRoutes(
         { accountId: principal.accountId, role: principal.role as AgentRole },
         body.emails,
         body.role,
+        body.groups,
       );
       // One entry per invitation, in the same transaction the invitations are
       // written. The invitee's address is *not* recorded — the invitation row
@@ -883,7 +902,16 @@ export default async function accountLifecycleRoutes(
         await writeAuditEntry(tx, request.auditContext(), {
           action: 'member.invited',
           target: `invitation:${invite.id}`,
-          metadata: { role: invite.role },
+          metadata: {
+            role: invite.role,
+            // Team ids, which name nobody — what the join will do (RL-04).
+            ...(invite.groups.length > 0
+              ? {
+                  group_ids: invite.groups.map((g) => g.group_id),
+                  lead_group_ids: invite.groups.filter((g) => g.lead).map((g) => g.group_id),
+                }
+              : {}),
+          },
         });
       }
       // Who is asking, and to join what (tm 265): an invitation that names

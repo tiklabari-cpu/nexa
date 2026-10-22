@@ -272,7 +272,7 @@ export type UnresolvedAlertKind = (typeof UNRESOLVED_ALERT_KINDS)[number];
 
 /**
  * The in-app notice (`RTM_PUSH_ACTIONS` `ai_unresolved_alert`) to the
- * workspace's Team Leads and up (admin and up until RL-01): a cluster surged
+ * workspace's Team Leads and up (admin and up until RL-03): a cluster surged
  * past the threshold in the last hour, or came back after its fix. Carries
  * the cluster's title — what the report shows the same people — and numbers;
  * never an item's words.

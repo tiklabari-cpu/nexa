@@ -491,8 +491,17 @@ invitations:
                   must lead at least one team (RL-04-S1), and only a
                   `team_lead` invitation may lead one; other roles may name
                   teams to join or none. Breaking either rule, or naming a team
-                  twice, is a 400; a team this workspace does not have is a 404
-                  `group_not_found`. Either way nothing is written.
+                  twice, is a 400 whose `error.details.reason` is one of
+                  `lead_team_required`, `lead_requires_team_lead`,
+                  `duplicate_group`, `too_many_groups` (`@siyahtus/types`
+                  `invitationGroupsProblem`); a team this workspace does not
+                  have is a 404 `group_not_found` (`details.group_ids`); a
+                  team that requires areas of expertise is a 409
+                  `group_expertise_missing` (`details.group_id`,
+                  `details.expertise_ids`) — a newcomer holds none, so they are
+                  added to it once trained (AU-01). Either way nothing is
+                  written. Inviting an address again replaces its teams with
+                  this call's.
     responses:
       "201":
         description: |
@@ -548,6 +557,7 @@ invitations:
       "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429":
         description: |
           The rate limit (`too_many_requests`, as everywhere); the seat ceiling
@@ -659,6 +669,15 @@ invitationAccept:
       Accepting the same invitation twice cannot charge twice: the token is
       spent by the join (401 afterwards), and the raise sets seats *to* the
       headcount rather than incrementing them.
+
+      **The join puts the member on the invitation's teams** (`groups`, RL-04),
+      marked lead of the ones it says they lead, in the same transaction — here
+      for a verified account, at `POST /auth/verify-email` (or a password
+      reset) for any other. Only a membership the join creates gets them: an
+      invitation that finds the person already a member changes neither their
+      role nor their teams. A team deleted meanwhile is simply not joined, and
+      one that has since come to require areas of expertise the newcomer does
+      not hold (AU-01) is skipped — an admin adds them once trained.
 
       This call is never refused for a seat ceiling. The person holding the link
       cannot buy seats or revoke anybody, and the check at `POST /invitations`

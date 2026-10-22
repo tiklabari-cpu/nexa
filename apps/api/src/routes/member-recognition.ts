@@ -16,7 +16,7 @@
  *   - The other records a customer may be (tm 287.4): the unverified possible
  *     matches every agent sees (`customers:ro`), and the links a team lead or
  *     above confirms and undoes (`customers:rw` plus `minimumRole: admin` until
- *     RL-01 adds the team lead — ID-03-S4). A link joins the agent's history
+ *     RL-03 bounds the team lead to their teams — ID-03-S4). A link joins the agent's history
  *     view only; see `services/customers/customer-identity.ts`.
  *
  * Licence-scoped, not brand-scoped: the member token and the key that signs it

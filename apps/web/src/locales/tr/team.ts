@@ -197,6 +197,9 @@ export const team: Messages = {
   'team.teams.members.description':
     'Birden fazla üye müsaitken bir sohbetin önce kime gideceğini öncelik belirler.',
   'team.teams.members.priorityAriaLabel': 'Öncelik — {name}',
+  'team.teams.members.leadBadge': 'Ekip lideri',
+  'team.teams.members.leadToggle': 'Ekip lideri',
+  'team.teams.members.leadAriaLabel': '{name} bu ekibin lideri',
   'team.teams.members.removeButton': 'Çıkar',
   'team.teams.members.removeAriaLabel': '{name} adlı kişiyi bu ekipten çıkar',
   'team.teams.members.addLabel': 'Bir ekip arkadaşı ekle',
@@ -216,10 +219,11 @@ export const team: Messages = {
   'team.status.off': 'Kapalı',
 
   // Role names — TeamPage's roster, InviteTeammates' role picker and pending list
-  'team.role.owner': 'Sahip',
-  'team.role.viceowner': 'Sahip yardımcısı',
+  'team.role.owner': 'Kurucu',
+  'team.role.viceowner': 'Yönetici (eski: Kurucu yardımcısı)',
   'team.role.admin': 'Yönetici',
-  'team.role.agent': 'Temsilci',
+  'team.role.team_lead': 'Ekip Lideri',
+  'team.role.agent': 'Ekip Üyesi',
 
   // Team assignment priority — TeamPage.tsx's group member list
   'team.priority.primary': 'Öncelikli',
@@ -261,7 +265,19 @@ export const team: Messages = {
   'team.invite.roleHint.agent':
     'Sohbetleri yanıtlar, gelen kutusunda çalışır. Faturalama ve güvenlik ayarlarına erişemez.',
   'team.invite.roleHint.admin': 'Ekibi, ayarları ve verileri yönetir; oyuncu verisini silebilir.',
+  'team.invite.roleHint.team_lead':
+    'Aşağıda seçtiğiniz ekiplerin lideri olur: sohbetleri bir ekip üyesi gibi alır ve ekibin lideri olarak işaretlenir. Faturalama ve güvenlik ayarlarına erişemez.',
   'team.invite.roleWarning.admin': 'Bu rol faturalama ve güvenlik ayarlarına erişir.',
+  'team.invite.groups.legend.member': 'Katılacağı ekipler (isteğe bağlı)',
+  'team.invite.groups.legend.lead': 'Lideri olacağı ekipler',
+  'team.invite.groups.hint.lead': 'Ekip Lideri için en az bir ekip seçilmelidir.',
+  'team.invite.groups.loading': 'Ekipler yükleniyor…',
+  'team.invite.groups.error': 'Ekipler yüklenemedi.',
+  'team.invite.groups.empty': 'Henüz ekip yok. Önce bir ekip oluşturun.',
+  'team.invite.groups.problem.lead_team_required': 'Ekip Lideri için en az bir ekip seçin.',
+  'team.invite.groups.problem.lead_requires_team_lead': 'Yalnızca bir Ekip Lideri ekip yönetir.',
+  'team.invite.groups.problem.duplicate_group': 'Bir ekip iki kez seçilmiş.',
+  'team.invite.groups.problem.too_many_groups': 'Çok fazla ekip seçildi.',
   'team.invite.linkSentNotice':
     'Davetler gönderildi. Bu bağlantı yalnızca bir kez çalışır ve yedi gün geçerlidir — bir daha gösterilmez.',
   'team.invite.copyLink': 'Davet bağlantısını kopyala',
@@ -359,7 +375,9 @@ export const team: Messages = {
     'Rol, bu ekip arkadaşının neler yapabileceğini belirler. Değişiklik bir sonraki isteğinde geçerli olur ve denetim kaydına yazılır.',
   'team.roleChange.roleLabel': 'Rol',
   'team.roleChange.ceilingHint':
-    'Yalnızca kendi rolünüz ya da altındaki bir rolü atayabilirsiniz. Çalışma alanının devri ayrı bir işlem olduğu için Sahip burada hiç sunulmaz.',
+    'Yalnızca kendi rolünüz ya da altındaki bir rolü atayabilirsiniz. Çalışma alanının devri ayrı bir işlem olduğu için Kurucu burada hiç sunulmaz.',
+  'team.roleChange.teamLeadHint':
+    'Ekip Lideri olarak atanan kişiyi, Ekipler bölümündeki Üyeler penceresinden bir ekibin lideri olarak işaretleyin.',
   'team.roleChange.cancel': 'İptal',
   'team.roleChange.saveButton': 'Kaydet',
   'team.roleChange.saving': 'Kaydediliyor…',

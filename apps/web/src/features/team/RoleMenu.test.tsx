@@ -76,16 +76,34 @@ describe('RoleMenu — the picker', () => {
     renderMenu(<RoleMenu agent={SAM} actorRole="admin" isSelf={false} />);
     openMenu();
 
-    // Never Owner (that is an ownership transfer), never Vice owner (above an
-    // admin's own rank) — both would come back as a 403.
-    expect(optionLabels()).toEqual(['Admin', 'Agent']);
+    // Never Owner (an ownership transfer), never Vice owner (above an admin's
+    // own rank, and retired): both would come back as a refusal.
+    expect(optionLabels()).toEqual(['Admin', 'Team Lead', 'Agent']);
   });
 
-  it('offers an owner every role below ownership, and never ownership itself', () => {
+  it('offers an owner every role an assignment may carry, never ownership and never Vice owner', () => {
     renderMenu(<RoleMenu agent={SAM} actorRole="owner" isSelf={false} />);
     openMenu();
 
-    expect(optionLabels()).toEqual(['Vice owner', 'Admin', 'Agent']);
+    // Vice owner is retired (K6): the server answers 400 `role_retired`.
+    expect(optionLabels()).toEqual(['Admin', 'Team Lead', 'Agent']);
+  });
+
+  it('starts a leftover Vice owner on Admin, with saving enabled', () => {
+    renderMenu(<RoleMenu agent={{ ...SAM, role: 'viceowner' }} actorRole="owner" isSelf={false} />);
+    openMenu();
+
+    expect(screen.getByLabelText('Role')).toHaveValue('admin');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
+  it('tells whoever makes a Team Lead where the team is chosen', () => {
+    renderMenu(<RoleMenu agent={SAM} actorRole="owner" isSelf={false} />);
+    openMenu();
+
+    expect(screen.queryByText(/Mark a Team Lead as the lead/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'team_lead' } });
+    expect(screen.getByText(/Mark a Team Lead as the lead/)).toBeInTheDocument();
   });
 
   it('opens on the role the teammate already holds, with saving disabled until it changes', () => {

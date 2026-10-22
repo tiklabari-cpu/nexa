@@ -14152,7 +14152,7 @@
           "281"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T09:28:00.999Z",
+        "updatedAt": "2026-10-22T09:28:58.033Z",
         "subtasks": [
           {
             "id": 1,
@@ -14200,13 +14200,13 @@
             "description": "RoleMenu (ROLE_RANK @siyahtus/types'tan), Türkçe rol etiketleri, TeamEditor lider anahtarı, InviteTeammates ekip seçimi, mobil etiketler",
             "details": "Üst görev \"web:\" maddesi + mobil etiketler; i18n (TRANSLATED_FILES). Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #324 details (tek kaynak).",
             "testStrategy": "Birim + e2e (team_lead daveti ekip zorunlu, liderlik anahtarı); `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "324.2"
             ],
             "parentId": "324",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-22T09:28:58.033Z"
           }
         ]
       },
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T09:28:01.001Z",
+      "lastModified": "2026-10-22T09:28:58.034Z",
       "taskCount": 390,
       "completedCount": 312,
       "tags": [

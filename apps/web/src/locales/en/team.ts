@@ -204,6 +204,9 @@ export const team: Messages = {
   'team.teams.members.description':
     'Priority decides who gets a conversation first when more than one member is free.',
   'team.teams.members.priorityAriaLabel': 'Priority — {name}',
+  'team.teams.members.leadBadge': 'Team lead',
+  'team.teams.members.leadToggle': 'Team lead',
+  'team.teams.members.leadAriaLabel': '{name} leads this team',
   'team.teams.members.removeButton': 'Remove',
   'team.teams.members.removeAriaLabel': 'Remove {name} from this team',
   'team.teams.members.addLabel': 'Add a teammate',
@@ -224,8 +227,9 @@ export const team: Messages = {
 
   // Role names — TeamPage's roster, InviteTeammates' role picker and pending list
   'team.role.owner': 'Owner',
-  'team.role.viceowner': 'Vice owner',
+  'team.role.viceowner': 'Admin (formerly Vice owner)',
   'team.role.admin': 'Admin',
+  'team.role.team_lead': 'Team Lead',
   'team.role.agent': 'Agent',
 
   // Team assignment priority — TeamPage.tsx's group member list
@@ -266,7 +270,19 @@ export const team: Messages = {
   'team.invite.roleLabel': 'Role',
   'team.invite.roleHint.agent': 'Answers chats and works the inbox. No billing or security access.',
   'team.invite.roleHint.admin': 'Manages the team, settings and data, and can delete visitor data.',
+  'team.invite.roleHint.team_lead':
+    'Leads the teams you pick below: takes their chats like a team member, and is marked as their lead. Billing and security settings stay closed.',
   'team.invite.roleWarning.admin': 'This role has access to billing and security settings.',
+  'team.invite.groups.legend.member': 'Teams to join (optional)',
+  'team.invite.groups.legend.lead': 'Teams to lead',
+  'team.invite.groups.hint.lead': 'A Team Lead needs at least one team to lead.',
+  'team.invite.groups.loading': 'Loading teams…',
+  'team.invite.groups.error': 'Teams could not be loaded.',
+  'team.invite.groups.empty': 'There are no teams yet. Create a team first.',
+  'team.invite.groups.problem.lead_team_required': 'Pick at least one team for the Team Lead.',
+  'team.invite.groups.problem.lead_requires_team_lead': 'Only a Team Lead leads a team.',
+  'team.invite.groups.problem.duplicate_group': 'A team is picked twice.',
+  'team.invite.groups.problem.too_many_groups': 'Too many teams picked.',
   'team.invite.linkSentNotice':
     'Invitations sent. This link works once and lasts seven days — it is not shown again.',
   'team.invite.copyLink': 'Copy invite link',
@@ -368,6 +384,8 @@ export const team: Messages = {
   'team.roleChange.roleLabel': 'Role',
   'team.roleChange.ceilingHint':
     'You can only assign a role at or below your own. Handing over the workspace is a separate operation, so Owner is never offered here.',
+  'team.roleChange.teamLeadHint':
+    'Mark a Team Lead as the lead of a team from the Members window under Teams.',
   'team.roleChange.cancel': 'Cancel',
   'team.roleChange.saveButton': 'Save',
   'team.roleChange.saving': 'Saving…',

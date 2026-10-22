@@ -33,6 +33,19 @@ function stubInvitations(seats: SeatFixture = SEATS, outstanding = 0): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
+      if (url.includes('/groups')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({
+            items: [
+              { id: 7, name: 'Billing', agents: [] },
+              { id: 9, name: 'Support', agents: [] },
+            ],
+          }),
+        } as unknown as Response;
+      }
       if (!url.includes('/invitations')) throw new Error(`unexpected fetch: ${url}`);
       return {
         ok: true,
@@ -116,6 +129,62 @@ describe('InviteTeammates role (RL-04)', () => {
     );
     expect(post).toBeDefined();
     expect(JSON.parse(String((post![1] as RequestInit).body))).toMatchObject({ role: 'agent' });
+  });
+});
+
+/** The body of the one POST the modal sent. */
+function postedBody(): Record<string, unknown> {
+  const post = vi
+    .mocked(fetch)
+    .mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST');
+  expect(post).toBeDefined();
+  return JSON.parse(String((post![1] as RequestInit).body)) as Record<string, unknown>;
+}
+
+describe('InviteTeammates Team Lead (RL-01 · RL-04-S1)', () => {
+  it('offers Team Lead between Team Member and Admin, and describes it', async () => {
+    renderInvite();
+    await openModal();
+
+    expect(
+      within(screen.getByLabelText('Role'))
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Agent', 'Team Lead', 'Admin']);
+    expect(screen.getByText(/Leads the teams you pick below/)).toBeInTheDocument();
+  });
+
+  it('keeps Send disabled for a Team Lead until a team is picked, then sends it as led', async () => {
+    renderInvite();
+    await openModal();
+    await userEvent.type(screen.getByLabelText('Email addresses'), 'lena@example.com');
+    await userEvent.selectOptions(screen.getByLabelText('Role'), 'team_lead');
+
+    expect(screen.getByText('Pick at least one team for the Team Lead.')).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Support' }));
+    expect(submitButton()).toBeEnabled();
+    await userEvent.click(submitButton());
+
+    expect(postedBody()).toMatchObject({
+      role: 'team_lead',
+      groups: [{ group_id: 9, lead: true }],
+    });
+  });
+
+  it('lets a Team Member join teams without leading them, and does not require one', async () => {
+    renderInvite();
+    await openModal();
+    await userEvent.type(screen.getByLabelText('Email addresses'), 'robin@example.com');
+
+    expect(screen.getByText('Teams to join (optional)')).toBeInTheDocument();
+    expect(submitButton()).toBeEnabled();
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Billing' }));
+    await userEvent.click(submitButton());
+
+    expect(postedBody()).toMatchObject({ role: 'agent', groups: [{ group_id: 7, lead: false }] });
   });
 });
 

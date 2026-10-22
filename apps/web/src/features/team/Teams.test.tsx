@@ -279,6 +279,91 @@ describe('Teams — membership', () => {
   });
 });
 
+describe('Teams — team lead (RL-01)', () => {
+  const LEADERS = [
+    { id: 'agent-1', name: 'Sam Rivera', role: 'team_lead' },
+    { id: 'agent-2', name: 'Mira Haddad', role: 'agent' },
+  ];
+
+  function renderLeadTeams(canMarkLead: boolean): void {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Teams agents={LEADERS} canManage canMarkLead={canMarkLead} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('lets an admin mark a Team Lead as the lead, sending the mark with the tier', async () => {
+    renderLeadTeams(true);
+    await screen.findByText('Support');
+    api.put.mockResolvedValue({
+      ...SUPPORT,
+      agents: [{ agent_id: 'agent-1', priority: 'primary', lead: true }],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage members — Support' }));
+    const dialog = screen.getByRole('dialog', { name: 'Members — Support' });
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Sam Rivera leads this team' }));
+
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith('/groups/1/agents/agent-1', {
+        priority: 'primary',
+        lead: true,
+      }),
+    );
+  });
+
+  it('offers the switch only on a Team Lead row — never on a Team Member', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        {
+          ...SUPPORT,
+          agents: [
+            { agent_id: 'agent-1', priority: 'primary' },
+            { agent_id: 'agent-2', priority: 'normal' },
+          ],
+        },
+      ],
+    });
+    renderLeadTeams(true);
+    await screen.findByText('Support');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage members — Support' }));
+    const dialog = screen.getByRole('dialog', { name: 'Members — Support' });
+
+    expect(
+      within(dialog).getByRole('checkbox', { name: 'Sam Rivera leads this team' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('checkbox', { name: 'Mira Haddad leads this team' }),
+    ).toBeNull();
+  });
+
+  it('shows a non-admin the badge but no switch, and a priority change keeps the mark', async () => {
+    api.get.mockResolvedValue({
+      items: [{ ...SUPPORT, agents: [{ agent_id: 'agent-1', priority: 'primary', lead: true }] }],
+    });
+    renderLeadTeams(false);
+    await screen.findByText('Support');
+    // On the card behind the dialog as well as in it.
+    expect(screen.getByText('Team lead')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage members — Support' }));
+    const dialog = screen.getByRole('dialog', { name: 'Members — Support' });
+    expect(within(dialog).queryByRole('checkbox')).toBeNull();
+
+    api.put.mockResolvedValue(SUPPORT);
+    fireEvent.change(within(dialog).getByLabelText('Priority — Sam Rivera'), {
+      target: { value: 'last' },
+    });
+    // No `lead` in the body: naming it is an admin-only call and omitting it keeps the mark.
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith('/groups/1/agents/agent-1', { priority: 'last' }),
+    );
+  });
+});
+
 describe('Teams localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();

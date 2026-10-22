@@ -13865,7 +13865,7 @@
           "303"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-22T00:00:35.084Z",
+        "updatedAt": "2026-10-22T01:32:16.851Z",
         "subtasks": [
           {
             "id": 1,
@@ -13885,13 +13885,13 @@
             "description": "Kümeleme işi + gece birleştirme + başlık + alarm",
             "details": "Üst görev 317 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Fixture kümeleme; alarm tekrarı.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "317.1"
             ],
             "parentId": "317",
             "priority": "high",
-            "updatedAt": "2026-10-22T00:00:35.084Z"
+            "updatedAt": "2026-10-22T01:32:16.851Z"
           },
           {
             "id": 3,
@@ -16132,7 +16132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-22T00:00:35.085Z",
+      "lastModified": "2026-10-22T01:32:16.852Z",
       "taskCount": 390,
       "completedCount": 310,
       "tags": [

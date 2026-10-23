@@ -953,6 +953,12 @@ securitySettings:
                 nullable: true
                 minimum: 1
                 maximum: 25
+              ai_turns_per_customer_day:
+                type: integer
+                minimum: 0
+                maximum: 10000
+                description: >-
+                  The per-member daily AI allowance (GV-01); 0 turns it off.
     responses:
       "200":
         description: Updated

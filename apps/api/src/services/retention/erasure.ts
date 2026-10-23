@@ -26,7 +26,8 @@
  * chat (`chat_id` is SET NULL), not its subject — and the unresolved
  * questions (`ai_unresolved_items`, tm 317.1), whose text is the subject's
  * own words, through `chat_id`; the clusters they were counted into keep
- * only a title and numbers (AI-22-S1).
+ * only a title and numbers (AI-22-S1). The member's daily AI turn counters
+ * (`ai_customer_daily_usage`, tm 339.1) go through `customer_id` too.
  *
  * Two relations are `ON DELETE SET NULL`, and they are the interesting ones:
  *

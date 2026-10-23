@@ -38,7 +38,12 @@ import {
   WIDGET_THEMES,
   WIDGET_UI_LOCALES,
 } from '@siyahtus/types';
-import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@siyahtus/types';
+import {
+  AI_TURNS_PER_CUSTOMER_DAY_DEFAULT,
+  AI_TURNS_PER_CUSTOMER_DAY_MAX,
+  SIEM_EXPORT_TARGETS,
+  SLA_MAX_TARGET_MINUTES,
+} from '@siyahtus/types';
 import type {
   CompanySector,
   CompanySize,
@@ -497,6 +502,7 @@ const SECURITY_DEFAULTS = {
   ipAllowlistEnforced: false,
   sessionIdleTimeoutSeconds: null as number | null,
   maxConcurrentSessions: null as number | null,
+  aiTurnsPerCustomerDay: AI_TURNS_PER_CUSTOMER_DAY_DEFAULT as number,
 } as const;
 
 /**
@@ -691,6 +697,14 @@ const updateSecurityBody = z
       .positive()
       .max(MAX_ACTIVE_TOKENS_PER_OWNER)
       .nullable()
+      .optional(),
+    // The per-member daily AI allowance (tm 339.1 · GV-01). 0 is "off" here —
+    // unlike the session limits, the counter reads it as no allowance at all.
+    ai_turns_per_customer_day: z
+      .number()
+      .int()
+      .min(0)
+      .max(AI_TURNS_PER_CUSTOMER_DAY_MAX)
       .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
@@ -2102,6 +2116,9 @@ export default async function settingsRoutes(
           : {}),
         ...(body.max_concurrent_sessions !== undefined
           ? { maxConcurrentSessions: body.max_concurrent_sessions }
+          : {}),
+        ...(body.ai_turns_per_customer_day !== undefined
+          ? { aiTurnsPerCustomerDay: body.ai_turns_per_customer_day }
           : {}),
       };
 
@@ -3538,6 +3555,7 @@ function serialiseSecurity(
     ipAllowlistEnforced: boolean;
     sessionIdleTimeoutSeconds: number | null;
     maxConcurrentSessions: number | null;
+    aiTurnsPerCustomerDay: number;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3554,6 +3572,7 @@ function serialiseSecurity(
     ip_allowlist_enforced: value.ipAllowlistEnforced,
     session_idle_timeout_seconds: value.sessionIdleTimeoutSeconds,
     max_concurrent_sessions: value.maxConcurrentSessions,
+    ai_turns_per_customer_day: value.aiTurnsPerCustomerDay,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

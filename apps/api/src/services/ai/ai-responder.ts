@@ -89,11 +89,13 @@ import { randomUUID } from 'node:crypto';
 import type { RiskFlag } from '@prisma/client';
 import {
   AI_BOT_ID,
+  AI_CAP_REACHED_SYSTEM_EVENT,
   DEFAULT_DAILY_MEMORY,
   parseEventId,
   readNoAnswerSettings,
   readPersona,
   type AiConversationMode,
+  type AiCapReachedScope,
   type AiNoAnswerSettings,
   type IdentityTrust,
   type RiskFlagType,
@@ -104,6 +106,11 @@ import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
 import { awaitBatchWindow } from './conversation/batch-window.js';
+import {
+  addCustomerAiTokens,
+  claimCustomerAiTurn,
+  type CustomerAiTurnClaim,
+} from './customer-ai-quota.js';
 import {
   DEFAULT_HISTORY_BUDGET,
   loadConnectionContext,
@@ -173,6 +180,16 @@ import { turnRiskFlagRaises } from './turn-risk-flags.js';
 
 /** How many drafts one turn may write: the first, and one after the visitor wrote again. */
 const DRAFTS_PER_TURN = 2;
+
+/** The agents' note when a daily allowance hands the conversation over (tm 339.1 · GV-01). */
+export const CAP_NOTE_TEXT: Readonly<Record<AiCapReachedScope, string>> = {
+  customer:
+    "This visitor has used today's AI allowance, so the AI stopped answering and a person takes it from here.",
+  workspace:
+    "This workspace has used today's AI allowance, so the AI stopped answering and a person takes it from here.",
+  global:
+    "The service's AI allowance for today is used up, so the AI stopped answering and a person takes it from here.",
+};
 
 export interface AiResponderOptions {
   /**
@@ -332,6 +349,7 @@ export class AiResponder {
         const handedOver = capConfig
           ? await this.#capHandOver(turn, ref, message, capConfig)
           : null;
+        if (handedOver) await this.#capNote(turn, ref, error.scope);
         await record({
           decision: 'cap_reached',
           details: {
@@ -348,6 +366,55 @@ export class AiResponder {
         );
       }
       return null;
+    }
+
+    // The member's own share of the day (tm 339.1 · GV-01), after the
+    // workspace's — a turn the workspace's cap refuses is not the member's —
+    // and before the model is asked. Counted only where the AI would take a
+    // turn: an AI with nothing it could run takes none. Over the allowance the
+    // turn goes as a capped one does: on the AI's connection the player is
+    // told and a person sent, with a note for the agents; elsewhere routing's
+    // person has it. A counter that could not be read is not one that let the
+    // turn through: the message waits for a person.
+    let quota: CustomerAiTurnClaim | null = null;
+    if (runnable) {
+      try {
+        quota = await turn.withTenant((tx) =>
+          claimCustomerAiTurn(tx, {
+            licenseId: tenant.licenseId,
+            customerId: turn.customerId,
+            chatId,
+          }),
+        );
+      } catch (error) {
+        log.error(
+          { err: error },
+          "member's daily AI allowance could not be checked; leaving the message for a human",
+        );
+        return null;
+      }
+      if (!quota.allowed) {
+        log.warn(
+          { event: 'ai.cap_reached', scope: 'customer', turns: quota.turns, cap: quota.cap },
+          "member's daily AI allowance reached; the provider was not called",
+        );
+        const handedOver = capConfig
+          ? await this.#capHandOver(turn, ref, message, capConfig)
+          : null;
+        if (handedOver) await this.#capNote(turn, ref, 'customer');
+        await record({
+          decision: 'cap_reached',
+          details: {
+            cap_scope: 'customer',
+            turns: quota.turns,
+            cap: quota.cap,
+            ...(handedOver
+              ? { handoff_id: handedOver.handoffId, reason_codes: ['ai_failure'] }
+              : {}),
+          },
+        });
+        return null;
+      }
     }
 
     const startedAt = performance.now();
@@ -369,6 +436,8 @@ export class AiResponder {
      * second draft is a turn of its own.
      */
     let turnId = randomUUID();
+    /** What the turn's model calls cost, every draft's — the member's row keeps it (tm 339.1). */
+    let llmTokens = 0;
     /** The turn's hand-over, once it has one (tm 303.2): its id goes on the record. */
     let planned: PlannedHandoff | null = null;
     /** Where it goes and whether anyone there takes chats now (tm 307.2): on the record too. */
@@ -439,6 +508,7 @@ export class AiResponder {
           },
         );
         const { decisions } = result;
+        llmTokens += decisions.usage.llmInputTokens + decisions.usage.llmOutputTokens;
         if (decisions.failure) {
           // The provider's own lines (component `llm` or `embedding`) carry the
           // status and the code but not the conversation; this one, on the
@@ -642,6 +712,21 @@ export class AiResponder {
       applyFailed = result !== null;
       return null;
     } finally {
+      if (quota?.cap != null && llmTokens > 0) {
+        const claim = quota;
+        await turn
+          .withTenant((tx) =>
+            addCustomerAiTokens(tx, {
+              licenseId: tenant.licenseId,
+              customerId: turn.customerId,
+              day: claim.day,
+              tokens: llmTokens,
+            }),
+          )
+          .catch((error: unknown) =>
+            log.warn({ err: error }, "the member's AI token count could not be added"),
+          );
+      }
       // Recorded once the turn is applied (or failed to apply), so the row can
       // name the reply it wrote. An engine that threw before deciding anything
       // leaves no result and no row — its log line above is the record.
@@ -912,6 +997,23 @@ export class AiResponder {
       result: reply === result.reply ? result : { ...result, reply },
       aimed: { target, afterHours: !accepting },
     };
+  }
+
+  /**
+   * The agents' note beside a hand-over a daily allowance caused (tm 339.1 ·
+   * GV-01): which allowance ran out, so the person taking it knows why the AI
+   * stopped. Agents only and untranslated, like every system line. A note that
+   * cannot be written is one log line — the hand-over already happened.
+   */
+  async #capNote(turn: VisitorTurn, ref: ConnectionRef, scope: AiCapReachedScope): Promise<void> {
+    try {
+      await this.chats.addSystemNote(turn.tenant, ref, {
+        text: CAP_NOTE_TEXT[scope],
+        properties: { system_event: AI_CAP_REACHED_SYSTEM_EVENT, cap_scope: scope },
+      });
+    } catch (error) {
+      turn.log.warn({ err: error }, 'the ai allowance note could not be written');
+    }
   }
 
   /**

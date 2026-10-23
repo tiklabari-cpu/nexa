@@ -186,6 +186,7 @@ model License {
   subscriptions          Subscription[]
   usageRecords           UsageRecord[]
   aiDailyUsage           AiDailyUsage[]
+  aiCustomerDailyUsage   AiCustomerDailyUsage[]
   aiUsageEvents          AiUsageEvent[]
   aiUsageAlerts          AiUsageAlert[]
   aiUsageAlertRecipients AiUsageAlertRecipient[]
@@ -483,6 +484,7 @@ model Customer {
   trackedSales      TrackedSale[]
   aiDecisionLogs    AiDecisionLog[]
   riskFlags         RiskFlag[]
+  aiCustomerDailyUsage AiCustomerDailyUsage[]
 
   memberTokenRevocations MemberTokenRevocation[]
   identityLinksAsA       CustomerIdentityLink[]  @relation("IdentityLinkA")
@@ -3454,6 +3456,9 @@ model SecuritySettings {
   /// fixed `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) — nothing reads this
   /// column to enforce it yet.
   maxConcurrentSessions     Int?     @map("max_concurrent_sessions")
+  /// How many AI turns one member may have answered per conversation day
+  /// (tm 339.1 · GV-01); 0 turns the per-member allowance off. CHECK 0-10000.
+  aiTurnsPerCustomerDay     Int      @default(40) @map("ai_turns_per_customer_day")
   updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
@@ -3636,6 +3641,28 @@ model AiDailyUsage {
 
   @@unique([licenseId, day, meter])
   @@map("ai_daily_usage")
+}
+
+/// One member's AI turns on one conversation day (tm 339.1 · GV-01): the
+/// per-member daily allowance's counter. `day` is the workspace's conversation
+/// day (ID-04), the one the member's daily chat is filed under. `ai_turns` is
+/// raised by one statement that also checks the cap
+/// (`services/ai/customer-ai-quota.ts`); `llm_tokens` is what those turns
+/// cost, for the record — it decides nothing.
+model AiCustomerDailyUsage {
+  licenseId  BigInt   @map("license_id")
+  customerId String   @map("customer_id") @db.Uuid
+  day        DateTime @db.Date
+  aiTurns    Int      @default(0) @map("ai_turns")
+  llmTokens  BigInt   @default(0) @map("llm_tokens")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license  License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, customerId, day])
+  @@index([customerId])
+  @@map("ai_customer_daily_usage")
 }
 
 /// The AI usage ledger (tm 283.2 · AI-16): one row per settled call that cost

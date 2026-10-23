@@ -15144,6 +15144,11 @@ export interface components {
      *     defaults — `false`, and null for both limits, meaning the existing
      *     `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs concurrent
      *     sessions.
+     *
+     *     `ai_turns_per_customer_day` is the per-member daily AI allowance
+     *     (tm 339.1 · GV-01): how many AI turns one member may have answered on
+     *     one conversation day (the workspace's day boundary) before the
+     *     conversation goes to a person. 40 unless saved; 0 turns it off.
      */
     SecuritySettings: {
       /**
@@ -15176,6 +15181,11 @@ export interface components {
        * @description Per-owner cap on simultaneous active sessions, or null to fall back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).
        */
       max_concurrent_sessions: number | null;
+      /**
+       * Format: int32
+       * @description AI turns one member may have answered per conversation day; the next one is left to a person, with a note for the agents. 0 = no per-member allowance. Defaults to 40.
+       */
+      ai_turns_per_customer_day: number;
       /** Format: date-time */
       updated_at?: string | null;
     };
@@ -30023,6 +30033,8 @@ export interface operations {
           ip_allowlist_enforced?: boolean;
           session_idle_timeout_seconds?: number | null;
           max_concurrent_sessions?: number | null;
+          /** @description The per-member daily AI allowance (GV-01); 0 turns it off. */
+          ai_turns_per_customer_day?: number;
         };
       };
     };

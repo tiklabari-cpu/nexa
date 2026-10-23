@@ -5,6 +5,7 @@ export * from './apps.js';
 export * from './api-packages.js';
 export * from './ai-packages.js';
 export * from './ai-usage.js';
+export * from './ai-customer-quota.js';
 export * from './ai-decision.js';
 export * from './ai-conversation.js';
 export * from './ai-daily-memory.js';

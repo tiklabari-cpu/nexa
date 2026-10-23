@@ -280,6 +280,23 @@ describe('Transcript — opening at a searched number (ID-06 · tm 332)', () => 
     scrolled.mockRestore();
   });
 
+  it('takes the reader back when the same message is asked for again (a fresh nonce)', () => {
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const events = thread(14, 14);
+    const first = { eventId: 'TJ1H8CFKRV_3', nonce: 1 };
+    const { update } = setup({ events, hasOlder: false, focus: first });
+    expect(scrolled).toHaveBeenCalledTimes(1);
+
+    // The same target again — a re-render of the page, not a new request.
+    update({ events, hasOlder: false, focus: { ...first } });
+    expect(scrolled).toHaveBeenCalledTimes(1);
+
+    // Picking "go to this message" once more is a new request for it.
+    update({ events, hasOlder: false, focus: { eventId: 'TJ1H8CFKRV_3', nonce: 2 } });
+    expect(scrolled).toHaveBeenCalledTimes(2);
+    scrolled.mockRestore();
+  });
+
   it("scrolls to a connection's first message without highlighting it", () => {
     const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
     const later = { ...message(12), id: 'K3M9Q2XW7B_1', thread_id: 'K3M9Q2XW7B', text: 'later' };

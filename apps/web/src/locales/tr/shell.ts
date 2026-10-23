@@ -133,5 +133,12 @@ export const shell: Messages = {
   'palette.ai.source': 'Kaynak: {source}',
   'palette.ai.noData.title': 'Henüz veri yok',
   'palette.ai.notUnderstood.title': 'Ne demek istediğinizden emin değilim',
+  // Arşiv modu (ID-07 · tm 333.4)
+  'palette.archive.group': 'Arşiv',
+  'palette.archive.enter': 'Arşivde ara',
+  'palette.archive.enterFor': 'Arşivde ara: "{query}"',
+  'palette.archive.placeholder': 'Arşivde mesaj metni ara…',
+  'palette.archive.leave': 'Arşiv aramasından çık',
+  'palette.archive.error': 'Arşiv araması başarısız oldu — yeniden deneyin.',
   'palette.ai.error': 'Cevap alınamadı — yeniden deneyin.',
 };

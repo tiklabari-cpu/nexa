@@ -120,6 +120,8 @@ export interface PaletteResult {
   group: string;
   label: string;
   sub?: string;
+  /** Where the query's words sit in `sub`, to be marked (a message-text match). */
+  subHighlights?: ReadonlyArray<{ start: number; end: number }>;
   /** Which number a record matched on — the identifier glossary's own label. */
   badge?: string;
   icon: string;

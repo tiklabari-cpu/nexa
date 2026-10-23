@@ -871,3 +871,174 @@ describe('command palette — mixed-kind keyboard navigation', () => {
     expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-0');
   });
 });
+
+/**
+ * "Search the archive" (ID-07 · tm 333.4): the palette as a message text
+ * search. Entered from a row, it shows the matches — the matched words marked —
+ * and nothing else, and a match opens the conversation at that message.
+ */
+describe('command palette — archive search mode', () => {
+  const MATCH: SearchResult = {
+    kind: 'message',
+    chat_id: 'CHATMATCH1',
+    thread_id: 'THREADMATC',
+    event_id: 'CHATMATCH1_7',
+    title: 'Mira Haddad',
+    subtitle: 'Papara ile 5000 TL yatırdım',
+    highlights: [
+      { start: 0, end: 6 },
+      { start: 11, end: 15 },
+    ],
+    at: '2026-09-04T09:30:00.000Z',
+    matched_on: 'text',
+  };
+
+  /** `GET /search` answers `types=message` with `matches` and anything else with a customer. */
+  function stubSearch(matches: SearchResult[] = [MATCH]): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.includes('types=message')) return jsonResponse({ items: matches });
+      if (input.includes('/search')) return jsonResponse({ items: [CUSTOMER] });
+      return jsonResponse({ items: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  const searchCalls = (fetchMock: ReturnType<typeof vi.fn>): string[] =>
+    fetchMock.mock.calls
+      .map(([url]) => url as string)
+      .filter((url) => url.includes('types=message'));
+
+  it('offers "Search the archive" to a caller who can read chats, and to no one else', async () => {
+    stubSearch();
+    const user = userEvent.setup();
+    const { unmount } = renderPalette(['chats--access:ro']);
+    await openPalette(user);
+    expect(screen.getByRole('option', { name: /Search the archive/ })).toBeInTheDocument();
+    unmount();
+
+    renderPalette(['customers:ro']);
+    await openPalette(user);
+    expect(screen.queryByRole('option', { name: /Search the archive/ })).toBeNull();
+  });
+
+  it('offers it to a holder of the write scope alone, as an owner is (the server reads it as read)', async () => {
+    stubSearch();
+    const user = userEvent.setup();
+    renderPalette(['chats--all:rw']);
+    await openPalette(user);
+    expect(screen.getByRole('option', { name: /Search the archive/ })).toBeInTheDocument();
+  });
+
+  it('finds the row by the word "archive", and asks nothing until a query is typed', async () => {
+    const fetchMock = stubSearch();
+    const user = userEvent.setup();
+    renderPalette(['chats--access:ro']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'archi');
+    expect(screen.getByRole('option', { name: /Search the archive/ })).toBeInTheDocument();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('combobox')).toHaveAttribute(
+      'placeholder',
+      'Search message text in the archive…',
+    );
+    // The word that found the row is not the query: the box starts empty.
+    expect(screen.getByRole('combobox')).toHaveValue('');
+    expect(screen.getByText('Type at least 3 characters.')).toBeInTheDocument();
+    expect(searchCalls(fetchMock)).toEqual([]);
+  });
+
+  it('shows the matches with the matched words marked, and opens the message from one', async () => {
+    const fetchMock = stubSearch();
+    const user = userEvent.setup();
+    renderPalette(['chats--access:ro']);
+    await openPalette(user);
+
+    const input = screen.getByRole('combobox', { name: 'Search or jump to' });
+    await user.type(input, 'archi');
+    await user.keyboard('{Enter}');
+    await user.type(screen.getByRole('combobox'), 'papara 5000');
+
+    const row = await screen.findByRole('option', { name: /Mira Haddad/ });
+    expect(Array.from(row.querySelectorAll('mark')).map((mark) => mark.textContent)).toEqual([
+      'Papara',
+      '5000',
+    ]);
+    // Only the message matches: no customer, action or destination rows.
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+
+    const url = new URL(searchCalls(fetchMock)[0]!, 'http://x');
+    expect(url.searchParams.get('query')).toBe('papara 5000');
+    expect(url.searchParams.get('types')).toBe('message');
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/app/inbox?chat=CHATMATCH1&thread=THREADMATC&event=CHATMATCH1_7',
+    );
+    // GV-05: ids only — what was searched for never reaches the address.
+    expect(screen.getByTestId('location')).not.toHaveTextContent(/papara|5000/i);
+  });
+
+  it('enters the mode with the typed query from its own row', async () => {
+    const fetchMock = stubSearch();
+    const user = userEvent.setup();
+    renderPalette(['chats--access:ro']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'papara 5000');
+    const enter = await screen.findByRole('option', { name: /Search the archive: "papara 5000"/ });
+    await user.click(enter);
+
+    expect(await screen.findByRole('option', { name: /Mira Haddad/ })).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveValue('papara 5000');
+    expect(searchCalls(fetchMock)).toHaveLength(1);
+  });
+
+  it('does not offer it for a pasted message number, which is looked up by number', async () => {
+    stubSearch();
+    const user = userEvent.setup();
+    renderPalette(['chats--access:ro']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'K3M9Q2XW7B_7');
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(0));
+    expect(screen.queryByRole('option', { name: /Search the archive/ })).toBeNull();
+  });
+
+  it('explains a query the search would refuse instead of sending it', async () => {
+    const fetchMock = stubSearch();
+    const user = userEvent.setup();
+    renderPalette(['chats--access:ro']);
+    await openPalette(user);
+    await user.keyboard('{Escape}');
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'archi');
+    await user.keyboard('{Enter}');
+    await user.type(screen.getByRole('combobox'), '12 34');
+
+    expect(
+      await screen.findByText('Include a word with at least 3 letters or digits in a row.'),
+    ).toBeInTheDocument();
+    expect(searchCalls(fetchMock)).toEqual([]);
+  });
+
+  it('says when nothing matches, and leaves the mode with Backspace on an empty box', async () => {
+    stubSearch([]);
+    const user = userEvent.setup();
+    renderPalette(['chats--access:ro']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'archi');
+    await user.keyboard('{Enter}');
+    await user.type(screen.getByRole('combobox'), 'olmayan');
+    expect(await screen.findByText('No messages match')).toBeInTheDocument();
+
+    await user.clear(screen.getByRole('combobox'));
+    await user.keyboard('{Backspace}');
+    expect(screen.getByRole('combobox')).toHaveAttribute('placeholder', 'Search Text or go to…');
+    expect(screen.queryByRole('button', { name: 'Leave archive search' })).toBeNull();
+  });
+});

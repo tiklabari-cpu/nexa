@@ -22,6 +22,12 @@ import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
+import { ArchiveSearchBar, ArchiveSearchResults } from './ArchiveSearch.js';
+import {
+  useArchiveSearch,
+  type ArchiveSearchHit,
+  type ArchiveSearchRequest,
+} from './archive-search.js';
 import type { TranscriptFocus } from './dayConnections.js';
 import { TypingIndicator } from './TypingIndicator.js';
 import { ConflictBanner } from './ConflictBanner.js';
@@ -174,6 +180,12 @@ export function InboxPage(): ReactElement {
    * opens. Tied to that chat — opening another one leaves it behind.
    */
   const [focus, setFocus] = useState<(TranscriptFocus & { chatId: string }) | null>(null);
+  /**
+   * The message search in force in the Archive view (ID-07 · tm 333.4), or null.
+   * Component state on purpose: the words are never written to the address bar
+   * (GV-05), and a reload is a fresh, unsearched archive.
+   */
+  const [archiveSearch, setArchiveSearch] = useState<ArchiveSearchRequest | null>(null);
   // What the last hand-off came to (IN-04), until dismissed or the next one.
   const [transferNotice, setTransferNotice] = useState<TransferNotice | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -318,6 +330,23 @@ export function InboxPage(): ReactElement {
     view === 'queued' ? queueTeam : null,
     priorityFilter,
   );
+  // The Archive's search replaces the list while it is asked for; leaving the
+  // view leaves the list alone and the words in the bar for the way back.
+  const searchActive = view === 'archived' && archiveSearch !== null;
+  const search = useArchiveSearch(searchActive ? archiveSearch : null);
+  const openFound = (hit: ArchiveSearchHit, atMessage: boolean): void => {
+    setSelectedId(hit.id);
+    setFocus(
+      atMessage
+        ? {
+            chatId: hit.id,
+            threadId: hit.match.thread_id,
+            eventId: hit.match.event_id,
+            nonce: Date.now(),
+          }
+        : null,
+    );
+  };
   const chat = useChat(selectedId);
   // The day's earlier connections join the transcript only while the chat read
   // is the selected one's — a stale detail from the chat before would walk the
@@ -412,13 +441,15 @@ export function InboxPage(): ReactElement {
   // look "gone" here, so the reset waits until the list has stopped growing:
   // while another page is still coming, absence proves nothing.
   useEffect(() => {
-    if (onTickets || !chatsLoaded) return;
+    // A search shows other rows than `chats`: its hits may be open, or older
+    // than what is loaded, and none of that makes the open chat "gone".
+    if (onTickets || !chatsLoaded || searchActive) return;
     if (!selectedId) {
       if (chats.length > 0) setSelectedId(chats[0]!.id);
     } else if (!list.hasNext && !chats.some((c) => c.id === selectedId)) {
       setSelectedId(chats[0]?.id ?? null);
     }
-  }, [chats, selectedId, onTickets, chatsLoaded, list.hasNext]);
+  }, [chats, selectedId, onTickets, chatsLoaded, list.hasNext, searchActive]);
 
   // A hand-off (IN-04) says what it came to. One that took the chat out of the
   // agent's sight moves the console on — the list is already re-read without
@@ -695,15 +726,17 @@ export function InboxPage(): ReactElement {
                 {/* Sort control (FR-MOD-02.2.1): the server's own `sort` param
                     (`chat-sort.ts`), not a client-side re-order — see there for
                     why that has to be true for a list that keeps paging. */}
-                <select
-                  aria-label={t('inbox.list.sort.ariaLabel')}
-                  value={chatSort}
-                  onChange={(event) => changeChatSort(event.target.value as ChatSort)}
-                  className="shrink-0 rounded-md border border-border bg-inset px-1.5 py-1 text-2xs text-content-secondary"
-                >
-                  <option value="newest">{t('inbox.list.sort.newest')}</option>
-                  <option value="oldest">{t('inbox.list.sort.oldest')}</option>
-                </select>
+                {!searchActive && (
+                  <select
+                    aria-label={t('inbox.list.sort.ariaLabel')}
+                    value={chatSort}
+                    onChange={(event) => changeChatSort(event.target.value as ChatSort)}
+                    className="shrink-0 rounded-md border border-border bg-inset px-1.5 py-1 text-2xs text-content-secondary"
+                  >
+                    <option value="newest">{t('inbox.list.sort.newest')}</option>
+                    <option value="oldest">{t('inbox.list.sort.oldest')}</option>
+                  </select>
+                )}
                 {/* Priority filter (AI-12): the server's `priority` param. */}
                 {view !== 'archived' && (
                   <select
@@ -722,10 +755,22 @@ export function InboxPage(): ReactElement {
                     ))}
                   </select>
                 )}
-                <span className="tabular shrink-0 text-2xs text-content-tertiary">
-                  {list.isError ? <CountUnavailable /> : visibleChats.length}
-                </span>
+                {!searchActive && (
+                  <span className="tabular shrink-0 text-2xs text-content-tertiary">
+                    {list.isError ? <CountUnavailable /> : visibleChats.length}
+                  </span>
+                )}
               </header>
+
+              {/* Message text search (ID-07 · tm 333.4): always on show in the
+                  Archive, where the conversations worth searching for end up. */}
+              {view === 'archived' && (
+                <ArchiveSearchBar
+                  active={archiveSearch}
+                  onSearch={setArchiveSearch}
+                  onClear={() => setArchiveSearch(null)}
+                />
+              )}
 
               {/* The Queued view split by team (AU-01): each team's own queue. */}
               {view === 'queued' && (
@@ -738,189 +783,200 @@ export function InboxPage(): ReactElement {
                 />
               )}
 
-              {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list. */}
-              <div
-                role="tablist"
-                aria-label={t('inbox.list.trafficAriaLabel')}
-                className="flex gap-1 border-b border-border px-2 py-1.5"
-              >
-                {TRAFFIC_TABS.map((tab) => {
-                  const active = trafficTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setTrafficTab(tab.id)}
-                      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
-                        active
-                          ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
-                          : 'text-content-secondary hover:bg-surface-2'
-                      }`}
-                    >
-                      <span>{t(TRAFFIC_TAB_LABEL_KEY[tab.id])}</span>
-                      <span
-                        aria-hidden="true"
-                        className={`tabular rounded-sm px-1 text-2xs ${
-                          active
-                            ? 'bg-brand-200 dark:bg-brand-900'
-                            : 'bg-inset text-content-tertiary'
-                        }`}
-                      >
-                        {list.isError ? <CountUnavailable /> : trafficCounts[tab.id]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div
-                className="flex-1 overflow-y-auto"
-                role="tabpanel"
-                // Reaching the end of what is loaded asks for the next page
-                // (NFR-P5). `fetchNext` is a no-op once the list has ended, so
-                // the last screenful can keep firing this harmlessly.
-                onScroll={(event) => {
-                  const el = event.currentTarget;
-                  if (el.scrollHeight - el.scrollTop - el.clientHeight < END_OF_LIST_PX) {
-                    list.fetchNext();
-                  }
-                }}
-              >
-                {/* A failed read is not an empty inbox (tm 259.5): the alert
-                    takes the empty state's place when nothing ever loaded, and
-                    sits above the rows when a later page or refresh failed. */}
-                {list.isError && (
-                  <LoadError
-                    title={t('inbox.list.error.title')}
-                    error={list.error}
-                    retryLabel={t('inbox.list.error.retry')}
-                    onRetry={list.refetch}
-                  />
-                )}
-                {list.isPending ? (
-                  <ListSkeleton />
-                ) : list.isError && !chatsLoaded ? null : visibleChats.length === 0 ? (
-                  <EmptyState
-                    title={
-                      chats.length > 0 && trafficTab !== 'all'
-                        ? t('inbox.list.empty.tabTitle')
-                        : t('inbox.list.empty.title')
-                    }
-                    description={
-                      chats.length > 0 && trafficTab !== 'all'
-                        ? t('inbox.list.empty.tabDescription')
-                        : // A channel view that is empty is empty for a reason
-                          // the view's own copy cannot state: "new conversations
-                          // land here" is true of the inbox and misleading of a
-                          // channel nobody has written in on. It is checked
-                          // ahead of the per-view text because the channel is
-                          // the narrower statement of the two.
-                          activeChannel
-                          ? t('inbox.list.empty.channel')
-                          : view === 'archived'
-                            ? t('inbox.list.empty.archived')
-                            : view === 'supervised'
-                              ? t('inbox.list.empty.supervised')
-                              : view === 'ai'
-                                ? t('inbox.list.empty.ai')
-                                : view === 'ai_solved'
-                                  ? t('inbox.list.empty.aiSolved')
-                                  : t('inbox.list.empty.description')
-                    }
-                  />
-                ) : (
-                  <ul>
-                    {visibleChats.map((item) => (
-                      <li key={item.id}>
+              {searchActive ? (
+                <ArchiveSearchResults
+                  search={search}
+                  selectedId={selectedId}
+                  onOpen={(hit) => openFound(hit, false)}
+                  onGoToMessage={(hit) => openFound(hit, true)}
+                />
+              ) : (
+                <>
+                  {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list. */}
+                  <div
+                    role="tablist"
+                    aria-label={t('inbox.list.trafficAriaLabel')}
+                    className="flex gap-1 border-b border-border px-2 py-1.5"
+                  >
+                    {TRAFFIC_TABS.map((tab) => {
+                      const active = trafficTab === tab.id;
+                      return (
                         <button
+                          key={tab.id}
                           type="button"
-                          onClick={() => setSelectedId(item.id)}
-                          aria-current={selectedId === item.id ? 'true' : undefined}
-                          className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${
-                            selectedId === item.id
-                              ? 'bg-brand-100 dark:bg-brand-950'
-                              : 'hover:bg-surface-2'
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setTrafficTab(tab.id)}
+                          className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
+                            active
+                              ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                              : 'text-content-secondary hover:bg-surface-2'
                           }`}
                         >
-                          <span className="flex items-center gap-2">
-                            <span className="flex-1 truncate text-sm font-medium">
-                              {item.customer_name ?? t('inbox.list.item.visitorFallback')}
-                            </span>
-                            {/* How pressing it is (ADR-08a): an urgent chat is
-                              first in its team's queue, and should say why. */}
-                            {(item.priority === 'urgent' || item.priority === 'high') && (
-                              <span
-                                className={`shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-medium ${
-                                  item.priority === 'urgent' ? 'text-danger' : 'text-warning'
-                                }`}
-                              >
-                                {t(`inbox.priority.${item.priority}`)}
-                              </span>
-                            )}
-                            {item.queue_position !== null && (
-                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
-                                {t('inbox.list.item.queuePosition', {
-                                  position: item.queue_position,
-                                })}
-                              </span>
-                            )}
-                            {/* The member's connections today (ID-02 · tm 286.4);
-                              one is every chat, so only a return is marked. */}
-                            {(item.connection_count ?? 0) > 1 && (
-                              <span className="tabular shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
-                                {t('inbox.list.item.connections', {
-                                  count: item.connection_count ?? 0,
-                                })}
-                              </span>
-                            )}
-                            {item.unread_count > 0 && (
-                              <span
-                                role="img"
-                                aria-label={t('inbox.list.item.unreadAria', {
-                                  count: item.unread_count,
-                                })}
-                                className="h-2 w-2 rounded-full bg-brand-500"
-                              />
-                            )}
+                          <span>{t(TRAFFIC_TAB_LABEL_KEY[tab.id])}</span>
+                          <span
+                            aria-hidden="true"
+                            className={`tabular rounded-sm px-1 text-2xs ${
+                              active
+                                ? 'bg-brand-200 dark:bg-brand-900'
+                                : 'bg-inset text-content-tertiary'
+                            }`}
+                          >
+                            {list.isError ? <CountUnavailable /> : trafficCounts[tab.id]}
                           </span>
-                          <span className="truncate text-xs text-content-secondary">
-                            {item.last_event?.text ?? t('inbox.list.item.noMessages')}
-                          </span>
-                          {item.tags.length > 0 && (
-                            <span className="flex flex-wrap gap-1">
-                              {item.tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-tertiary"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </span>
-                          )}
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {/* Scrolling is the normal way to reach the next page; this is
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    className="flex-1 overflow-y-auto"
+                    role="tabpanel"
+                    // Reaching the end of what is loaded asks for the next page
+                    // (NFR-P5). `fetchNext` is a no-op once the list has ended, so
+                    // the last screenful can keep firing this harmlessly.
+                    onScroll={(event) => {
+                      const el = event.currentTarget;
+                      if (el.scrollHeight - el.scrollTop - el.clientHeight < END_OF_LIST_PX) {
+                        list.fetchNext();
+                      }
+                    }}
+                  >
+                    {/* A failed read is not an empty inbox (tm 259.5): the alert
+                    takes the empty state's place when nothing ever loaded, and
+                    sits above the rows when a later page or refresh failed. */}
+                    {list.isError && (
+                      <LoadError
+                        title={t('inbox.list.error.title')}
+                        error={list.error}
+                        retryLabel={t('inbox.list.error.retry')}
+                        onRetry={list.refetch}
+                      />
+                    )}
+                    {list.isPending ? (
+                      <ListSkeleton />
+                    ) : list.isError && !chatsLoaded ? null : visibleChats.length === 0 ? (
+                      <EmptyState
+                        title={
+                          chats.length > 0 && trafficTab !== 'all'
+                            ? t('inbox.list.empty.tabTitle')
+                            : t('inbox.list.empty.title')
+                        }
+                        description={
+                          chats.length > 0 && trafficTab !== 'all'
+                            ? t('inbox.list.empty.tabDescription')
+                            : // A channel view that is empty is empty for a reason
+                              // the view's own copy cannot state: "new conversations
+                              // land here" is true of the inbox and misleading of a
+                              // channel nobody has written in on. It is checked
+                              // ahead of the per-view text because the channel is
+                              // the narrower statement of the two.
+                              activeChannel
+                              ? t('inbox.list.empty.channel')
+                              : view === 'archived'
+                                ? t('inbox.list.empty.archived')
+                                : view === 'supervised'
+                                  ? t('inbox.list.empty.supervised')
+                                  : view === 'ai'
+                                    ? t('inbox.list.empty.ai')
+                                    : view === 'ai_solved'
+                                      ? t('inbox.list.empty.aiSolved')
+                                      : t('inbox.list.empty.description')
+                        }
+                      />
+                    ) : (
+                      <ul>
+                        {visibleChats.map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedId(item.id)}
+                              aria-current={selectedId === item.id ? 'true' : undefined}
+                              className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${
+                                selectedId === item.id
+                                  ? 'bg-brand-100 dark:bg-brand-950'
+                                  : 'hover:bg-surface-2'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="flex-1 truncate text-sm font-medium">
+                                  {item.customer_name ?? t('inbox.list.item.visitorFallback')}
+                                </span>
+                                {/* How pressing it is (ADR-08a): an urgent chat is
+                              first in its team's queue, and should say why. */}
+                                {(item.priority === 'urgent' || item.priority === 'high') && (
+                                  <span
+                                    className={`shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-medium ${
+                                      item.priority === 'urgent' ? 'text-danger' : 'text-warning'
+                                    }`}
+                                  >
+                                    {t(`inbox.priority.${item.priority}`)}
+                                  </span>
+                                )}
+                                {item.queue_position !== null && (
+                                  <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
+                                    {t('inbox.list.item.queuePosition', {
+                                      position: item.queue_position,
+                                    })}
+                                  </span>
+                                )}
+                                {/* The member's connections today (ID-02 · tm 286.4);
+                              one is every chat, so only a return is marked. */}
+                                {(item.connection_count ?? 0) > 1 && (
+                                  <span className="tabular shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
+                                    {t('inbox.list.item.connections', {
+                                      count: item.connection_count ?? 0,
+                                    })}
+                                  </span>
+                                )}
+                                {item.unread_count > 0 && (
+                                  <span
+                                    role="img"
+                                    aria-label={t('inbox.list.item.unreadAria', {
+                                      count: item.unread_count,
+                                    })}
+                                    className="h-2 w-2 rounded-full bg-brand-500"
+                                  />
+                                )}
+                              </span>
+                              <span className="truncate text-xs text-content-secondary">
+                                {item.last_event?.text ?? t('inbox.list.item.noMessages')}
+                              </span>
+                              {item.tags.length > 0 && (
+                                <span className="flex flex-wrap gap-1">
+                                  {item.tags.map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-tertiary"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {/* Scrolling is the normal way to reach the next page; this is
                     the same offer for a keyboard, and the only way out when a
                     real-time tab filters the loaded page down to nothing. */}
-                {!list.isPending && list.hasNext && (
-                  <div className="flex justify-center border-t border-border p-3">
-                    <button
-                      type="button"
-                      onClick={list.fetchNext}
-                      disabled={list.isFetchingNext}
-                      className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content disabled:opacity-60"
-                    >
-                      {list.isFetchingNext ? t('inbox.list.loading') : t('inbox.list.loadMore')}
-                    </button>
+                    {!list.isPending && list.hasNext && (
+                      <div className="flex justify-center border-t border-border p-3">
+                        <button
+                          type="button"
+                          onClick={list.fetchNext}
+                          disabled={list.isFetchingNext}
+                          className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content disabled:opacity-60"
+                        >
+                          {list.isFetchingNext ? t('inbox.list.loading') : t('inbox.list.loadMore')}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </section>
 
             {/* Transcript */}

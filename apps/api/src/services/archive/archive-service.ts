@@ -34,10 +34,10 @@
  * ## The first message
  *
  * `events` is partitioned by month, so the lookup is bounded in time — from
- * the connection's start to a minute past its end — which lets the executor
- * prune partitions per row instead of probing every month's index. The text
- * was masked when it was written; it is masked again here (the AI's second
- * line, `maskDeep`'s argument) and shortened.
+ * a minute before the connection's start to a minute past its end — which lets
+ * the executor prune partitions per row instead of probing every month's index.
+ * The text was masked when it was written; it is masked again here (the AI's
+ * second line, `maskDeep`'s argument) and shortened.
  *
  * ## Retention and erasure
  *
@@ -92,6 +92,15 @@ export interface ArchiveListInput {
 
 /** How long past its close a connection's events are still looked for. */
 const CLOSE_SLACK = Prisma.sql`interval '1 minute'`;
+
+/**
+ * How long before its own `created_at` a connection's events are still looked
+ * for. A same-day return writes its first message with the application's clock
+ * a few milliseconds before the thread row's `created_at` (measured in the e2e
+ * stack, tm 335.2: 41 ms), so a bound at the row's own start dropped the very
+ * message the connection was opened for.
+ */
+const OPEN_SLACK = Prisma.sql`interval '1 minute'`;
 
 /** What the cursor holds: the row's `closed_at` in microseconds (null = open) and its id. */
 interface Cursor {
@@ -344,7 +353,7 @@ function pageSql(licenseId: bigint, where: Prisma.Sql, limit: number): Prisma.Sq
            fm.text AS first_message,
            (SELECT count(*)::int FROM events e
              WHERE e.thread_id = p.id AND e.type = 'message'
-               AND e.created_at >= p.created_at
+               AND e.created_at >= p.created_at - ${OPEN_SLACK}
                AND e.created_at <= COALESCE(p.closed_at, now()) + ${CLOSE_SLACK}) AS message_count
     FROM page p
     JOIN customers cu ON cu.id = p.customer_id
@@ -358,7 +367,7 @@ function pageSql(licenseId: bigint, where: Prisma.Sql, limit: number): Prisma.Sq
     LEFT JOIN LATERAL (
       SELECT left(e.text, 400) AS text FROM events e
       WHERE e.thread_id = p.id AND e.type = 'message' AND e.author_type = 'customer'
-        AND e.created_at >= p.created_at
+        AND e.created_at >= p.created_at - ${OPEN_SLACK}
         AND e.created_at <= COALESCE(p.closed_at, now()) + ${CLOSE_SLACK}
       ORDER BY e.created_at, e.id
       LIMIT 1

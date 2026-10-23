@@ -24,6 +24,7 @@ import { SettingsIndex, SettingsLayout, SettingsPage } from './features/settings
 import { AuditLogPage } from './features/audit/AuditLogPage.js';
 import { AppsMarketplacePage } from './features/apps/AppsMarketplace.js';
 import { DeveloperPortalPage } from './features/developers/DeveloperPortal.js';
+import { ArchivePage } from './features/archive/ArchivePage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { HomePage } from './features/home/HomePage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
@@ -129,6 +130,7 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
         <Route index element={<Navigate to="/app/inbox" replace />} />
         <Route path="home" element={<HomePage />} />
         <Route path="inbox" element={<InboxPage />} />
+        <Route path="archive" element={<ArchivePage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/real-time" element={<TrafficPage />} />
         <Route path="customers/campaigns" element={<CampaignsPage />} />

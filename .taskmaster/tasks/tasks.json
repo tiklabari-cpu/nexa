@@ -14589,7 +14589,7 @@
           "331"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T13:03:38.537Z",
+        "updatedAt": "2026-10-23T13:04:41.731Z",
         "subtasks": [
           {
             "id": 1,
@@ -14609,13 +14609,13 @@
             "description": "Arşiv ekranı: /app/archive, salt okunur transkript, oyuncu paneli, \"Inbox'ta aç\"",
             "details": "features/archive/ ArchivePage + gezinme girişi + salt okunur transkript + oyuncu paneli + \"Inbox'ta aç / yeniden aç\" + \"Aynı günü grupla\" anahtarı + i18n. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #335 details (tek kaynak).",
             "testStrategy": "e2e; `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "335.1"
             ],
             "parentId": "335",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-23T13:04:41.731Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T13:03:38.537Z",
+      "lastModified": "2026-10-23T13:04:41.732Z",
       "taskCount": 390,
       "completedCount": 319,
       "tags": [

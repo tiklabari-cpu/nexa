@@ -85,6 +85,16 @@ export const MODULES: NavDestination[] = [
     scope: ['chats--all:ro', 'chats--access:ro'],
   },
   {
+    to: '/app/archive',
+    labelKey: 'nav.archive',
+    icon: '▣',
+    keywords: ['history', 'past conversations', 'closed', 'transcripts', 'complaints'],
+    // `GET /archive/conversations` (routes/archive.ts, AR-01 · tm 335.1) — the
+    // same pair as the inbox: tenant-wide or the caller's own teams, the
+    // server narrows the rows to what the caller may see.
+    scope: ['chats--all:ro', 'chats--access:ro'],
+  },
+  {
     to: '/app/customers',
     labelKey: 'nav.customers',
     icon: '◫',

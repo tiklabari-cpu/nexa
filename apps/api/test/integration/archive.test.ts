@@ -356,6 +356,46 @@ describe('the archive: one row per connection (AR-01 · tm 335.1)', () => {
     expect((await detail(founder, second)).body.rating).toBeNull();
   });
 
+  it('still finds the message a same-day return opened with, which the application stamps a few milliseconds before the thread row (FR-MOD-02.8)', async () => {
+    const now = Date.now();
+    const id = await player(fx.a, { name: 'Geri Dönen' });
+    const chatId = await day(fx.a, id, { at: new Date(now - HOUR), groupIds: [finance] });
+    const startedAt = new Date(now - 30 * MINUTE);
+    const threadId = generateShortId();
+    await owner.thread.create({
+      data: {
+        id: threadId,
+        chatId,
+        licenseId: fx.a.licenseId,
+        active: false,
+        createdAt: startedAt,
+        closedAt: new Date(startedAt.getTime() + 5 * MINUTE),
+        groupId: finance,
+      },
+    });
+    // 41 ms before the row's own `created_at`, as measured on the e2e stack.
+    await owner.event.create({
+      data: {
+        id: `${threadId}_1`,
+        threadId,
+        chatId,
+        licenseId: fx.a.licenseId,
+        type: 'message',
+        text: 'Yine ben, hesabımı kapatmak istiyorum',
+        authorType: 'customer',
+        recipients: 'all',
+        createdAt: new Date(startedAt.getTime() - 41),
+      },
+    });
+
+    const row = (await list(founder)).body.items.find((item) => item.thread_id === threadId);
+    expect(row).toMatchObject({
+      first_customer_message: 'Yine ben, hesabımı kapatmak istiyorum',
+      message_count: 1,
+    });
+    expect((await detail(founder, threadId)).body).toMatchObject({ message_count: 1 });
+  });
+
   it('keeps the connection a resume ended, writes handled_by as it closes, and lists open ones only when asked (FR-MOD-02.8)', async () => {
     const opened = await server.post(
       '/chats',

@@ -13,6 +13,7 @@ import { expect, test } from './fixtures.js';
 /** Every module address, with the h1 it opens on and so the tab title it earns. */
 const SCREENS = [
   { path: '/app/inbox', heading: 'Inbox' },
+  { path: '/app/archive', heading: 'Archive' },
   { path: '/app/home', heading: 'Home' },
   { path: '/app/customers', heading: 'Customers' },
   { path: '/app/customers/real-time', heading: 'Real-time traffic' },

@@ -561,7 +561,7 @@ export type TranscriptCache = InfiniteData<PagedResponse<ChatEvent>, string | un
  * particular event", which stays true however many messages arrive while the
  * agent reads.
  */
-function flattenTranscriptPages(pages: PagedResponse<ChatEvent>[]): ChatEvent[] {
+export function flattenTranscriptPages(pages: PagedResponse<ChatEvent>[]): ChatEvent[] {
   const events: ChatEvent[] = [];
   for (let i = pages.length - 1; i >= 0; i -= 1) {
     const items = pages[i]!.items;

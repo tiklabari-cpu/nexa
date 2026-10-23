@@ -362,20 +362,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  {
-    op: 'GET /archive/conversations',
-    owner: 'tm 335.2',
-    reason:
-      'the archive list, one row per connection (AR-01 · tm 335.1) — the archive screen ' +
-      '(/app/archive, tm 335.2) draws it.',
-  },
-  {
-    op: 'GET /archive/conversations/{threadId}',
-    owner: 'tm 335.2',
-    reason:
-      "one past connection in full (AR-01 · tm 335.1) — the archive screen's detail " +
-      '(tm 335.2) reads it beside the transcript.',
-  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

@@ -667,6 +667,17 @@ export const envSchema = z.object({
   TERMS_VERSION: z.string().min(1).max(64).regex(/^\S+$/, 'must not contain whitespace').optional(),
 
   /**
+   * The offline IP → country database (GEOIP-COUNTRY · tm 330): a MaxMind DB
+   * file (DB-IP Lite or GeoLite2), read once at boot. A visitor's address is
+   * looked up inside the process and never stored by the lookup; only the
+   * country code and city reach the visit and the contact. Unset, countries
+   * stay empty; a file that cannot be read logs a warning and does the same —
+   * never a failed boot. Licence and monthly update:
+   * `docs/runbooks/geoip-database.md`.
+   */
+  GEOIP_DB_PATH: z.string().min(1).optional(),
+
+  /**
    * Length of a new workspace's trial, in days (FR-MOD-10.2). Read at sign-up
    * (`LifecycleService`) — until tm 256.1 this key was parsed and then ignored,
    * and every trial was the hard-coded 14. It only shapes workspaces created

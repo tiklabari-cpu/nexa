@@ -34,6 +34,7 @@ import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { visitedPagesOf, visitorPageUrls } from '../campaigns/campaign-matching.js';
+import type { GeoLocation } from '../geo/geo-locator.js';
 import { maskPlayerContact } from './player-contact.js';
 
 export type CustomerSegment = 'all' | 'leads' | 'recent' | 'banned';
@@ -274,6 +275,13 @@ export class CustomerService {
    * (`visitorPageUrls` of the visit this call just wrote). Handed back rather
    * than left to be re-read, so the caller that has to evaluate against it does
    * not pay a second query for a row this method already had in hand (tm 176.5).
+   *
+   * Where the visitor is (GEOIP-COUNTRY · tm 330) is asked once, when a visit
+   * is *created* — `locate` is not called for a page that continues one, so a
+   * visitor clicking through a site costs one lookup, not one per page. The
+   * answer is kept on the visit, and fills the contact's country only while it
+   * is empty: a country an agent typed, or one an earlier visit found, is not
+   * overwritten by where somebody happens to be today.
    */
   async recordPageView(
     tx: TenantClient,
@@ -284,6 +292,8 @@ export class CustomerService {
       referrer?: string | undefined;
       userAgent?: string | undefined;
       ip?: string | undefined;
+      /** Where the visitor is; called only when this page starts a visit. */
+      locate?: (() => GeoLocation | null) | undefined;
     },
   ): Promise<string[]> {
     const since = new Date(Date.now() - 30 * 60_000);
@@ -318,6 +328,7 @@ export class CustomerService {
       return visitorPageUrls(updated);
     }
 
+    const location = input.locate?.() ?? null;
     await tx.visit.create({
       data: {
         customerId: input.customerId,
@@ -332,8 +343,13 @@ export class CustomerService {
         os: detectOs(input.userAgent),
         browser: detectBrowser(input.userAgent),
         ip: input.ip ?? null,
+        countryCode: location?.countryCode ?? null,
+        city: location?.city ?? null,
       },
     });
+    if (location?.countryCode) {
+      await fillEmptyCountry(tx, input.customerId, location.countryCode);
+    }
     return visitorPageUrls([entry]);
   }
 
@@ -704,6 +720,24 @@ function decodeCursor(
 
   if (v !== null && sort === 'last_activity' && Number.isNaN(Date.parse(v))) return null;
   return { value: v, id: i };
+}
+
+/**
+ * Give a contact the country their address placed them in (GEOIP-COUNTRY ·
+ * tm 330) — only while they have none. One guarded `UPDATE`: a contact whose
+ * country is already known (typed by an agent, sent by an integration, found
+ * on an earlier visit) matches no row, so there is no read-then-write for two
+ * requests to race over.
+ */
+export async function fillEmptyCountry(
+  tx: TenantClient,
+  customerId: string,
+  countryCode: string,
+): Promise<void> {
+  await tx.customer.updateMany({
+    where: { id: customerId, countryCode: null },
+    data: { countryCode },
+  });
 }
 
 function detectOs(userAgent: string | undefined): string | null {

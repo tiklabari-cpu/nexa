@@ -340,6 +340,7 @@ export const inbox: Messages = {
   'inbox.details.visitInfo.direct': 'Direct',
   'inbox.details.row.duration': 'Duration',
   'inbox.details.row.ip': 'IP',
+  'inbox.details.row.location': 'Location',
   'inbox.details.archive.cta': 'Archive conversation',
   'inbox.details.archive.pending': 'Archiving…',
   'inbox.details.reopen.cta': 'Reopen conversation',

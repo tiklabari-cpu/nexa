@@ -244,6 +244,8 @@ describe('DetailsPanel — the live visit duration (FR-MOD-02.4.1–.6)', () => 
             referrer: null,
             duration_seconds: 200,
             ip: null,
+            country_code: null,
+            city: null,
             ongoing: true,
           },
         },

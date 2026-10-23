@@ -322,6 +322,7 @@ export const inbox: Messages = {
   'inbox.details.visitInfo.direct': 'Doğrudan',
   'inbox.details.row.duration': 'Süre',
   'inbox.details.row.ip': 'IP',
+  'inbox.details.row.location': 'Konum',
   'inbox.details.archive.cta': 'Sohbeti arşivle',
   'inbox.details.archive.pending': 'Arşivleniyor…',
   'inbox.details.reopen.cta': 'Sohbeti yeniden aç',

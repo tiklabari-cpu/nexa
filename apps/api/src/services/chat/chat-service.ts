@@ -4110,6 +4110,8 @@ export class ChatService {
         os: true,
         browser: true,
         ip: true,
+        countryCode: true,
+        city: true,
         startedAt: true,
         endedAt: true,
       },
@@ -4123,6 +4125,8 @@ export class ChatService {
         referrer: visit.cameFrom,
         duration_seconds: visitDurationSeconds(visit.startedAt, visit.endedAt),
         ip: visit.ip,
+        country_code: visit.countryCode,
+        city: visit.city,
         ongoing: visit.endedAt === null,
       },
     };
@@ -5130,6 +5134,9 @@ export interface ChatVisitor {
     referrer: string | null;
     duration_seconds: number | null;
     ip: string | null;
+    /** Where the visit came from (tm 330) — resolved once, at its start. */
+    country_code: string | null;
+    city: string | null;
     /**
      * Whether the visit is still open, and therefore whether `duration_seconds`
      * is a running total or a final one. The console shows a live counter

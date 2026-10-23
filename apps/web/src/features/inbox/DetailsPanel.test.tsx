@@ -96,6 +96,8 @@ describe('DetailsPanel visitor context', () => {
           referrer: 'https://google.com/search',
           duration_seconds: 200,
           ip: '203.0.113.7',
+          country_code: 'TR',
+          city: 'Istanbul',
           ongoing: false,
         },
       }),
@@ -111,6 +113,8 @@ describe('DetailsPanel visitor context', () => {
     expect(within(rowValue('IP')).getByText('203.0.113.7')).toBeInTheDocument();
     // 200s renders as minutes and seconds, not a raw count.
     expect(within(rowValue('Duration')).getByText('3m 20s')).toBeInTheDocument();
+    // Where the visit came from: city and country, no map (tm 330).
+    expect(within(rowValue('Location')).getByText('Istanbul, TR')).toBeInTheDocument();
   });
 
   it('shows the day thread id as a quiet "Thread ID" row that selects whole on one click (D14)', () => {
@@ -137,6 +141,8 @@ describe('DetailsPanel visitor context', () => {
           referrer: null,
           duration_seconds: null,
           ip: null,
+          country_code: null,
+          city: null,
           ongoing: false,
         },
       }),
@@ -145,6 +151,7 @@ describe('DetailsPanel visitor context', () => {
     // A visit exists, so the info rows render — with sensible placeholders.
     expect(within(rowValue('Referring')).getByText('Direct')).toBeInTheDocument();
     expect(within(rowValue('Duration')).getByText('—')).toBeInTheDocument();
+    expect(within(rowValue('Location')).getByText('—')).toBeInTheDocument();
     // …but with no pages, the pages section still shows its empty state.
     expect(screen.getByText('No pages recorded for this visitor.')).toBeInTheDocument();
   });

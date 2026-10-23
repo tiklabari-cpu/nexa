@@ -484,6 +484,9 @@ export function DetailsPanel({
               <Row label={t('inbox.details.row.ip')}>
                 <span className="font-mono text-2xs">{visitInfo.ip ?? '—'}</span>
               </Row>
+              <Row label={t('inbox.details.row.location')}>
+                <span className="text-xs">{visitLocation(visitInfo)}</span>
+              </Row>
             </>
           )}
         </PanelSection>
@@ -871,4 +874,10 @@ function prettyPath(url: string): string {
     // Already a bare path, or something we cannot parse — show it verbatim.
     return url;
   }
+}
+
+/** "Istanbul, TR", "TR", or "—" — country and city only, never a map (tm 330). */
+function visitLocation(info: { country_code: string | null; city: string | null }): string {
+  const parts = [info.city, info.country_code].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(', ') : '—';
 }

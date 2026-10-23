@@ -31,6 +31,7 @@ import type { Mailer } from '../services/mail/mailer.js';
 import { isMailCapError } from '../services/mail/mail-error.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
+import { fillEmptyCountry } from '../services/customers/customer-service.js';
 import {
   writeAuditEntry,
   type AuditContext,
@@ -1771,6 +1772,24 @@ export default async function authRoutes(
       );
     }
     const customerId = member.customerId;
+
+    // Where this visitor is (GEOIP-COUNTRY · tm 330 · EN-03): looked up here,
+    // at mint, so a campaign or a routing rule can read the contact's country
+    // before they have written a word — a visit row only exists once they
+    // have. In-process against the offline database; the address is neither
+    // stored nor sent anywhere by it. Fills the contact's country only while
+    // it is empty, so a returning visitor's mint matches no row. Best-effort:
+    // an unknown country must never cost a visitor their token.
+    const location = app.geo.locate(request.ip);
+    if (location?.countryCode) {
+      try {
+        await withTenant(app.db, tenant, (tx) =>
+          fillEmptyCountry(tx, customerId, location.countryCode!),
+        );
+      } catch (error) {
+        request.log.warn({ err: error }, 'could not record the visitor country');
+      }
+    }
 
     // Which brand this widget speaks for (WG-01): the website registered for
     // the embedding host, else the licence default. Signed into the token so

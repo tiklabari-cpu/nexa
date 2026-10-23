@@ -1481,7 +1481,7 @@ components:
               at: { type: string, format: date-time }
         visit_info:
           type: object
-          required: [device, referrer, duration_seconds, ip, ongoing]
+          required: [device, referrer, duration_seconds, ip, country_code, city, ongoing]
           properties:
             device:
               type: string
@@ -1499,6 +1499,18 @@ components:
               type: string
               nullable: true
               description: Visitor IP (NFR-S9 personal data; agents only).
+            country_code:
+              type: string
+              nullable: true
+              description: |
+                ISO 3166-1 alpha-2 country the visit came from (GEOIP-COUNTRY ·
+                tm 330), resolved once at the visit's start from the address,
+                inside the API against an offline database. Null when no
+                database is configured or the address is not in it.
+            city:
+              type: string
+              nullable: true
+              description: City the visit came from, on the same terms as `country_code`. No coordinates are kept.
             ongoing:
               type: boolean
               description: |

@@ -14703,7 +14703,7 @@
           "287"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T22:14:44.748Z",
+        "updatedAt": "2026-10-23T23:13:54.663Z",
         "subtasks": [
           {
             "id": 1,
@@ -14711,11 +14711,11 @@
             "description": "Üye başına günlük AI turu + cap_reached + %80 bildirimi + ayarlar",
             "details": "Üst görev 339 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon (41. tur, bildirim).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "339",
             "priority": "high",
-            "updatedAt": "2026-10-23T22:14:44.748Z"
+            "updatedAt": "2026-10-23T23:13:54.663Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T22:14:44.749Z",
+      "lastModified": "2026-10-23T23:13:54.664Z",
       "taskCount": 390,
       "completedCount": 321,
       "tags": [

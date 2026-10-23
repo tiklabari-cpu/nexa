@@ -1186,6 +1186,7 @@ describe('settings', () => {
         ip_allowlist_enforced: fromSchema.ipAllowlistEnforced,
         session_idle_timeout_seconds: fromSchema.sessionIdleTimeoutSeconds,
         max_concurrent_sessions: fromSchema.maxConcurrentSessions,
+        ai_turns_per_customer_day: fromSchema.aiTurnsPerCustomerDay,
       });
       // Session policy is off until something writes it: the allowlist flag
       // is false, both limits are null.

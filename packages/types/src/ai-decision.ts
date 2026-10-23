@@ -20,7 +20,9 @@
  *   - `blocked`     — a guardrail or policy stopped the reply.
  *   - `expired`     — the turn was overtaken (a newer message, a closed chat)
  *                     before the reply went out.
- *   - `cap_reached` — the workspace's daily AI allowance refused the turn.
+ *   - `cap_reached` — a daily AI allowance refused the turn: the member's
+ *                     (tm 339.1), the workspace's or the deployment's —
+ *                     `details.cap_scope` (`AI_CAP_SCOPES`) says which.
  */
 export const AI_DECISIONS = [
   'answered',

@@ -7013,6 +7013,11 @@ components:
         defaults — `false`, and null for both limits, meaning the existing
         `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs concurrent
         sessions.
+
+        `ai_turns_per_customer_day` is the per-member daily AI allowance
+        (tm 339.1 · GV-01): how many AI turns one member may have answered on
+        one conversation day (the workspace's day boundary) before the
+        conversation goes to a person. 40 unless saved; 0 turns it off.
       required:
         [
           banned_customer_ips,
@@ -7024,6 +7029,7 @@ components:
           ip_allowlist_enforced,
           session_idle_timeout_seconds,
           max_concurrent_sessions,
+          ai_turns_per_customer_day,
         ]
       properties:
         brand_id:
@@ -7075,6 +7081,15 @@ components:
           description: >-
             Per-owner cap on simultaneous active sessions, or null to fall
             back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).
+        ai_turns_per_customer_day:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: >-
+            AI turns one member may have answered per conversation day; the
+            next one is left to a person, with a note for the agents. 0 = no
+            per-member allowance. Defaults to 40.
         updated_at: { type: string, format: date-time, nullable: true }
 
     # --- Member recognition (ID-03 · decision K4 · tm 287) ---------------------

@@ -1006,7 +1006,10 @@ describe('module parity matrix — what is still owed', () => {
       // player card beside a chat (IN-02), drawn in the web inbox's right pane
       // (tm 331.2). The app's chat screen shows no player card; nothing here
       // re-scopes.
-      contractEndpoints: 295,
+      // 295 -> 296 with `/search` (tm 332) — the direct lookup by number,
+      // e-mail or username (ID-06) behind the web panel's ⌘K palette. The app
+      // has no palette; nothing here re-scopes.
+      contractEndpoints: 296,
       scopeBoundaries: 1,
     });
   });

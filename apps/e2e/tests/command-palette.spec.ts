@@ -11,7 +11,17 @@
  */
 import { request as newApiContext, type APIRequestContext, type Page } from '@playwright/test';
 
-import { API_BASE, DEMO, expect, ownerAccessToken, test } from './fixtures.js';
+import {
+  allChats,
+  API_BASE,
+  DEMO,
+  expect,
+  ownerAccessToken,
+  ownerAccessTokenFor,
+  PAGING_OWNER,
+  signInAs,
+  test,
+} from './fixtures.js';
 
 /**
  * The demo agent's own row on the Team screen, and nothing else (tm 147).
@@ -89,8 +99,8 @@ test.describe('command palette', () => {
     const input = palette.getByRole('combobox', { name: 'Search or jump to' });
     await input.fill('Alex');
 
-    // A single query reaches across resources: Alex is a seeded customer with a
-    // conversation, so both the person and the chat surface under their groups.
+    // The server's search (`GET /search`, ID-06) finds the seeded customer by
+    // name; conversations are found by their numbers (the next test).
     await expect(palette.getByRole('option', { name: /Alex Moreau/ }).first()).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/18-command-palette.png', fullPage: true });
 
@@ -100,6 +110,72 @@ test.describe('command palette', () => {
     await expect(agentPage.getByRole('heading', { name: 'Customers', level: 1 })).toBeVisible();
     await expect(agentPage.getByRole('heading', { name: 'Alex Moreau', level: 2 })).toBeVisible();
     await expect(palette).toBeHidden();
+  });
+
+  /**
+   * Direct lookup by number (ID-06 · tm 332), against the paging workspace —
+   * sixty conversations, so the oldest is not among the fifty newest the inbox
+   * (and the palette, before this) ever fetched, and one conversation of 250
+   * messages, so its first message is not on the transcript's first page.
+   *
+   * A day number opens the day; a message number opens its conversation read
+   * back to that message, in view and highlighted. The typed number never
+   * reaches the address bar — only the ids the target screen consumes.
+   */
+  test('finds a conversation by its number beyond the newest fifty, and opens a message at itself', async ({
+    page,
+  }) => {
+    const auth = { authorization: `Bearer ${await ownerAccessTokenFor(apiCtx, PAGING_OWNER)}` };
+    const chats = (await allChats(apiCtx, auth)) as Array<{ id: string; customer_name?: string }>;
+    const oldest = chats.find((chat) => chat.customer_name === 'Paging Visitor 60');
+    const long = chats.find((chat) => chat.customer_name === 'Paging Visitor 01');
+    expect(oldest, 'the paging seed is missing its sixtieth conversation').toBeTruthy();
+    expect(long, 'the paging seed is missing its long conversation').toBeTruthy();
+    const firstPage = await apiCtx.get(`${API_BASE}/chats?view=all&limit=50`, { headers: auth });
+    const firstIds = ((await firstPage.json()) as { items: Array<{ id: string }> }).items.map(
+      (chat) => chat.id,
+    );
+    expect(firstIds).not.toContain(oldest!.id);
+
+    const opening = await apiCtx.get(`${API_BASE}/chats/${long!.id}/events?sort=oldest&limit=5`, {
+      headers: auth,
+    });
+    const events = ((await opening.json()) as { items: Array<{ id: string; text: string | null }> })
+      .items;
+    const firstMessage = events.find((event) => event.text?.startsWith('paging-msg-001 '));
+    expect(firstMessage, 'the long conversation has no first marker').toBeTruthy();
+
+    await signInAs(page, PAGING_OWNER.email, PAGING_OWNER.password);
+    await page.goto('/app/inbox');
+    await expect(page.getByRole('region', { name: 'Conversations' })).toBeVisible();
+
+    // The day number of the sixtieth conversation.
+    await page.keyboard.press('ControlOrMeta+k');
+    const palette = page.getByRole('dialog', { name: 'Command palette' });
+    const input = palette.getByRole('combobox', { name: 'Search or jump to' });
+    await input.fill(oldest!.id);
+    const day = palette.getByRole('option', { name: new RegExp(`Thread ID ${oldest!.id}`) });
+    await expect(day).toContainText('Paging Visitor 60');
+    await input.press('Enter');
+    await expect(palette).toBeHidden();
+    await expect(page.getByRole('log')).toBeVisible();
+    await expect(page.getByText('Paging Visitor 60', { exact: true }).first()).toBeVisible();
+    expect(page.url()).not.toContain('query');
+
+    // A message number: its conversation, read back past the first page to it.
+    await page.keyboard.press('ControlOrMeta+k');
+    await input.fill(firstMessage!.id);
+    await expect(palette.getByRole('option', { name: /Message ID/ })).toContainText(
+      firstMessage!.id,
+    );
+    await input.press('Enter');
+    await expect(palette).toBeHidden();
+    const target = page.locator(`[data-event-id="${firstMessage!.id}"]`);
+    await expect(target).toHaveAttribute('data-highlighted', 'true', { timeout: 15_000 });
+    await expect(target).toBeInViewport();
+    await expect(target).toContainText('paging-msg-001 ');
+    expect(page.url()).not.toContain(firstMessage!.id);
+    await page.screenshot({ path: 'kanit/ID-06-search-by-number.png', fullPage: true });
   });
 
   test('jumps straight to a module by name', async ({ agentPage }) => {

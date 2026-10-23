@@ -98,6 +98,7 @@ import publicKbHtmlRoutes from './routes/public-kb-html.js';
 import publicKbSitemapRoutes from './routes/public-kb-sitemap.js';
 import copilotRoutes from './routes/copilot.js';
 import commandPaletteRoutes from './routes/command-palette.js';
+import searchRoutes from './routes/search.js';
 import appRoutes from './routes/apps.js';
 import auditLogRoutes from './routes/audit-log.js';
 import aiUsageRoutes from './routes/ai-usage.js';
@@ -730,6 +731,7 @@ export async function buildServer({
       });
       await api.register(copilotRoutes, { env, automations, knowledge, llm: meteredCopilotLlm });
       await api.register(commandPaletteRoutes);
+      await api.register(searchRoutes);
       await api.register(appRoutes, {
         env,
         ...(appsHttp ? { appsHttp } : {}),

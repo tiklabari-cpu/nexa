@@ -2,7 +2,7 @@
  * The command palette: opening, route jumping, and content search.
  *
  * Route jumping needs no network and is asserted against a real router. Content
- * search is gated on the caller's scopes and hits three endpoints, so `fetch`
+ * search is gated on the caller's scopes and asks `GET /search`, so `fetch`
  * is stubbed: the point is that a query becomes the right requests and that
  * picking a result navigates to that record's deep link — not the wire format,
  * which the API's own suites own.
@@ -12,7 +12,7 @@ import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { defaultScopesForRole } from '@siyahtus/types';
+import { defaultScopesForRole, type SearchResult } from '@siyahtus/types';
 import { CommandPalette } from './CommandPalette.js';
 import { useAuth } from '../lib/auth-store.js';
 import { useLeaveGuard } from '../lib/dirty-guard.js';
@@ -32,41 +32,29 @@ function jsonResponse(body: unknown): Response {
   } as unknown as Response;
 }
 
-const CUSTOMER = {
-  id: 'cust-mira',
-  name: 'Mira Haddad',
-  email: 'mira@acme-customer.localhost',
-  phone: null,
-  country_code: null,
-  country: null,
-  is_lead: false,
-  banned: false,
-  chats_count: 0,
-  tickets_count: 0,
-  last_activity_at: null,
-  created_at: '2026-01-01T00:00:00.000Z',
-};
-
-const TICKET = {
-  id: 'TCK123',
-  subject: 'Refund for order 42',
-  status: 'open',
-  assignee_id: null,
-  assignee_name: null,
-  group_id: null,
+const CUSTOMER: SearchResult = {
+  kind: 'customer',
   customer_id: 'cust-mira',
-  customer_name: 'Mira Haddad',
-  customer_email: null,
-  source_chat_id: null,
-  last_message_at: null,
-  created_at: '2026-01-01T00:00:00.000Z',
+  title: 'Mira Haddad',
+  subtitle: 'mira@acme-customer.localhost',
+  at: null,
+  matched_on: 'email',
 };
 
-function stubFetch(): ReturnType<typeof vi.fn> {
+const TICKET: SearchResult = {
+  kind: 'ticket',
+  ticket_id: 'TCK123',
+  customer_id: 'cust-mira',
+  title: 'Refund for order 42',
+  subtitle: 'Mira Haddad',
+  at: '2026-01-01T00:00:00.000Z',
+  matched_on: 'subject',
+};
+
+/** `GET /search` answering with `items` — a customer then a ticket by default. */
+function stubFetch(items: SearchResult[] = [CUSTOMER, TICKET]): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: string) => {
-    if (input.includes('/customers')) return jsonResponse({ items: [CUSTOMER] });
-    if (input.includes('/tickets')) return jsonResponse({ items: [TICKET] });
-    if (input.includes('/chats')) return jsonResponse({ items: [] });
+    if (input.includes('/search')) return jsonResponse({ items });
     return jsonResponse({ items: [] });
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -229,21 +217,90 @@ describe('command palette', () => {
     expect(screen.getByText('Customers module')).toBeInTheDocument();
   });
 
-  it('does not query a resource the caller has no scope to read', async () => {
+  it('does not search for a caller who can read none of the three record kinds', async () => {
     const fetchMock = stubFetch();
     const user = userEvent.setup();
-    // Chats scope only: customers and tickets must never be requested.
-    renderPalette(['chats--all:ro']);
+    renderPalette(['agents--my:rw']);
     await openPalette(user);
 
     await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'mira');
-    await screen.findByRole('combobox', { name: 'Search or jump to' });
     // Give the debounce and any queries time to fire before asserting silence.
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     const requested = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(requested.some((url) => url.includes('/customers'))).toBe(false);
-    expect(requested.some((url) => url.includes('/tickets'))).toBe(false);
+    expect(requested.some((url) => url.includes('/search'))).toBe(false);
+  });
+
+  it('asks the server once per pause, as query=, and never puts the text in the address (FR-MOD-01.1.3)', async () => {
+    const fetchMock = stubFetch([]);
+    const user = userEvent.setup();
+    renderPalette(['chats--access:ro']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'TJ1H8CFKRV');
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.map((call) => String(call[0]))).toContainEqual(
+        expect.stringContaining('/search?query=TJ1H8CFKRV&limit='),
+      ),
+    );
+    const searches = fetchMock.mock.calls.filter((call) => String(call[0]).includes('/search'));
+    expect(searches).toHaveLength(1);
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/app\/inbox$/);
+  });
+
+  it('opens a day at its start, a connection scrolled to it, a message highlighted — by number', async () => {
+    stubFetch([
+      {
+        kind: 'event',
+        chat_id: 'TJ1H8CFKRV',
+        thread_id: 'K3M9Q2XW7B',
+        event_id: 'K3M9Q2XW7B_7',
+        title: 'Ada Oyuncu',
+        subtitle: null,
+        at: '2026-09-01T10:00:00.000Z',
+        matched_on: 'event_id',
+      },
+      {
+        kind: 'connection',
+        chat_id: 'TJ1H8CFKRV',
+        thread_id: 'K3M9Q2XW7B',
+        title: null,
+        subtitle: null,
+        at: '2026-09-01T09:58:00.000Z',
+        matched_on: 'thread_id',
+      },
+      {
+        kind: 'chat',
+        chat_id: 'TJ1H8CFKRV',
+        title: 'Ada Oyuncu',
+        subtitle: null,
+        at: '2026-09-01T09:00:00.000Z',
+        matched_on: 'chat_id',
+      },
+    ]);
+    const user = userEvent.setup();
+    renderPalette(['chats--all:ro']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'K3M9Q2XW7B_7');
+    const message = await screen.findByRole('option', { name: /K3M9Q2XW7B_7/ });
+    // Each row names the number it matched with the glossary's own label.
+    expect(message).toHaveTextContent('Message ID');
+    const connection = screen.getByRole('option', { name: /Chat ID/ });
+    expect(connection).toHaveTextContent('Visitor');
+    expect(connection).toHaveTextContent('Thread ID TJ1H8CFKRV');
+    // In the server's order: the message, the connection, the day.
+    const rows = screen
+      .getAllByRole('option')
+      .filter((row) => /TJ1H8CFKRV|K3M9/.test(row.textContent ?? ''));
+    expect(rows).toHaveLength(3);
+    expect(rows[2]).toHaveTextContent(/^▤Ada OyuncuThread IDTJ1H8CFKRV · /);
+
+    await user.click(message);
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/app/inbox?chat=TJ1H8CFKRV&thread=K3M9Q2XW7B&event=K3M9Q2XW7B_7',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 

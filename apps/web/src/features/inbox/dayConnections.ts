@@ -118,3 +118,42 @@ export function connectionBreaks(
   });
   return breaks;
 }
+
+/**
+ * What a deep link asks the transcript to show (ID-06 · tm 332): a connection
+ * of the day (`?thread=`) or one message (`?event=`), opened from a search.
+ */
+export interface TranscriptFocus {
+  threadId?: string | null;
+  eventId?: string | null;
+}
+
+/**
+ * The next step towards a focus target, over the events loaded so far:
+ *
+ *   { eventId, highlight } — it is on screen: scroll to that event (a
+ *                            connection's first one, or the message itself,
+ *                            which is also highlighted);
+ *   'older'                — not loaded yet, and more history exists above;
+ *   null                   — not in this conversation: stay where it opened.
+ *
+ * A connection's first event is only known once the event before it belongs
+ * to another connection — or once nothing older is left.
+ */
+export function focusStep(
+  events: readonly ChatEvent[],
+  focus: TranscriptFocus,
+  hasOlder: boolean,
+): { eventId: string; highlight: boolean } | 'older' | null {
+  if (focus.eventId) {
+    if (events.some((event) => event.id === focus.eventId)) {
+      return { eventId: focus.eventId, highlight: true };
+    }
+  } else if (focus.threadId) {
+    const at = events.findIndex((event) => event.thread_id === focus.threadId);
+    if (at > 0 || (at === 0 && !hasOlder)) return { eventId: events[at]!.id, highlight: false };
+  } else {
+    return null;
+  }
+  return hasOlder ? 'older' : null;
+}

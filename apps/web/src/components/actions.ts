@@ -120,6 +120,8 @@ export interface PaletteResult {
   group: string;
   label: string;
   sub?: string;
+  /** Which number a record matched on — the identifier glossary's own label. */
+  badge?: string;
   icon: string;
   run: () => void;
 }

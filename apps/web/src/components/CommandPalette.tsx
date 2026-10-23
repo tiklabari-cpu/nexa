@@ -55,14 +55,16 @@ import { useTranslate, type TFunction } from '../lib/i18n.js';
 import { Banner } from './ui/index.js';
 import { EmptyState } from './EmptyState.js';
 import { Skeleton } from './Skeleton.js';
-import type { CustomerSummary } from '../features/customers/types.js';
-import type { ChatSummary, Ticket } from '../features/inbox/types.js';
+import type { SearchKind, SearchResult } from '@siyahtus/types';
+import { formatDateTime } from '../lib/format.js';
 import { NAV_DESTINATIONS, isNavVisible } from './navigation.js';
 import { ACTIONS, type ActionDeps, type PaletteResult } from './actions.js';
 
 const CUSTOMER_READ = ['customers:ro', 'customers:rw'];
 const TICKET_READ = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
 const CHAT_READ = ['chats--all:ro', 'chats--access:ro'];
+/** `GET /search` answers a caller holding any of the three; it gates each kind itself. */
+const RECORD_READ = [...CUSTOMER_READ, ...CHAT_READ, ...TICKET_READ];
 // Same scope the endpoint itself requires (`routes/command-palette.ts`) — the
 // same courtesy the other groups get: an entry whose request would 403 is not
 // offered at all.
@@ -71,6 +73,10 @@ const AI_QUERY_SCOPE = ['reports_read'];
 const ACTION_ICON = '⏻';
 /** Echoes Copilot's own glyph — both surfaces are "ask the assistant". */
 const AI_ICON = '✧';
+/** A pause this long sends the query; typing on cancels it. */
+const SEARCH_DEBOUNCE_MS = 250;
+/** Matches the palette shows — the server's best, exact numbers first. */
+const SEARCH_LIMIT = 12;
 
 interface PaletteAiAnswer {
   answer: string;
@@ -172,68 +178,36 @@ export function CommandPalette(): ReactElement | null {
   }, [open]);
 
   // Debounced so a query fires per pause, not per keystroke — each request
-  // counts against the caller's rate limit, as the customer search learned.
+  // counts against the caller's rate limit (180 a minute for an agent), as the
+  // customer search learned.
   useEffect(() => {
-    const timer = setTimeout(() => setQuery(rawQuery.trim()), 180);
+    const timer = setTimeout(() => setQuery(rawQuery.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [rawQuery]);
 
   const searching = open && query.length > 0;
 
-  const customers = useQuery({
-    queryKey: ['palette', 'customers', query],
-    // paging-exempt: a type-ahead, so six is the whole answer — the server does
-    // the searching and the palette shows the top of it. Narrowing the query is
-    // the way to the seventh match, not a second page.
-    queryFn: () =>
-      api.get<{ items: CustomerSummary[] }>(
-        `/customers?query=${encodeURIComponent(query)}&limit=6`,
-      ),
-    enabled: searching && has(CUSTOMER_READ),
-    retry: false,
-    staleTime: 10_000,
-  });
-
-  const tickets = useQuery({
-    queryKey: ['palette', 'tickets', query],
-    // paging-exempt: the same type-ahead as the customer search above — six
-    // server-side matches, not the first page of a list.
-    queryFn: () =>
-      api.get<{ items: Ticket[] }>(`/tickets?query=${encodeURIComponent(query)}&limit=6`),
-    enabled: searching && has(TICKET_READ),
-    retry: false,
-    staleTime: 10_000,
-  });
-
-  // Chats have no free-text endpoint, so unlike the two searches above this one
-  // fetches rows and matches them here. That puts a real bound on it: the fifty
-  // most recent conversations are searchable and older ones are not, whatever
-  // the workspace holds.
+  // One server lookup for every record kind (ID-06): a pasted day, connection
+  // or message number, a member's number, e-mail or username, a ticket's
+  // number or subject. The server looks the value up — a conversation from
+  // last month is found like one from this morning — and answers only what
+  // the caller may open, each kind behind its own scope.
   //
-  // paging-exempt: chaining pages here would not lift the bound, it would move
-  // it — a palette cannot download an entire inbox to grep it. The fix is a
-  // `query` parameter on `GET /chats`, which is a contract change and its own
-  // task; recorded rather than papered over.
-  const chats = useQuery({
-    queryKey: ['palette', 'chats'],
-    queryFn: () => api.get<{ items: ChatSummary[] }>('/chats?view=all&limit=50'),
-    enabled: searching && has(CHAT_READ),
+  // The query travels as `query=`, which the request log masks, and lives in
+  // this component's state only: it is never written to the address bar.
+  //
+  // paging-exempt: a type-ahead, so the top matches are the whole answer.
+  // Narrowing the query is the way to the next one, not a second page.
+  const records = useQuery({
+    queryKey: ['palette', 'search', query],
+    queryFn: () =>
+      api.get<{ items: SearchResult[] }>(
+        `/search?query=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`,
+      ),
+    enabled: searching && has(RECORD_READ),
     retry: false,
     staleTime: 10_000,
   });
-
-  const chatMatches = useMemo(() => {
-    if (!searching) return [];
-    const needle = query.toLowerCase();
-    return (chats.data?.items ?? [])
-      .filter(
-        (chat) =>
-          (chat.customer_name ?? '').toLowerCase().includes(needle) ||
-          (chat.last_event?.text ?? '').toLowerCase().includes(needle) ||
-          chat.id.toLowerCase().includes(needle),
-      )
-      .slice(0, 6);
-  }, [chats.data, query, searching]);
 
   const commands = useMemo<PaletteResult[]>(() => {
     // Route filtering needs no network, so it tracks the raw input for an
@@ -312,52 +286,21 @@ export function CommandPalette(): ReactElement | null {
     }
 
     if (searching) {
-      for (const customer of customers.data?.items ?? []) {
-        list.push({
-          kind: 'content',
-          id: `customer:${customer.id}`,
-          group: t('palette.group.customers'),
-          label: customer.name ?? customer.email ?? customer.phone ?? t('palette.unnamedVisitor'),
-          sub: customer.email ?? customer.phone ?? undefined,
-          icon: '◫',
-          run: () => {
-            if (!confirmLeave()) return;
-            navigate(`/app/customers?customer=${customer.id}`);
-            close();
-          },
-        });
-      }
-
-      for (const chat of chatMatches) {
-        list.push({
-          kind: 'content',
-          id: `chat:${chat.id}`,
-          group: t('palette.group.conversations'),
-          label: chat.customer_name ?? t('palette.visitor'),
-          sub: chat.last_event?.text ?? chat.id,
-          icon: '▤',
-          run: () => {
-            if (!confirmLeave()) return;
-            navigate(`/app/inbox?chat=${chat.id}`);
-            close();
-          },
-        });
-      }
-
-      for (const ticket of tickets.data?.items ?? []) {
-        list.push({
-          kind: 'content',
-          id: `ticket:${ticket.id}`,
-          group: t('palette.group.tickets'),
-          label: ticket.subject,
-          sub: `#${ticket.id}${ticket.customer_name ? ` · ${ticket.customer_name}` : ''}`,
-          icon: '▦',
-          run: () => {
-            if (!confirmLeave()) return;
-            navigate(`/app/inbox?ticket=${ticket.id}`);
-            close();
-          },
-        });
+      // Grouped by what the agent would open — members, conversations,
+      // tickets — in the server's order within each group, so an exact number
+      // stays on top of its group.
+      const found = records.data?.items ?? [];
+      for (const group of RECORD_GROUPS) {
+        for (const record of found) {
+          if (!group.kinds.includes(record.kind)) continue;
+          list.push(
+            recordResult(record, t(group.labelKey), t, (to) => {
+              if (!confirmLeave()) return;
+              navigate(to);
+              close();
+            }),
+          );
+        }
       }
     }
 
@@ -384,9 +327,7 @@ export function CommandPalette(): ReactElement | null {
     rawQuery,
     searching,
     query,
-    customers.data,
-    chatMatches,
-    tickets.data,
+    records.data,
     navigate,
     close,
     t,
@@ -445,7 +386,7 @@ export function CommandPalette(): ReactElement | null {
   // next ⌘K. A pending failure notice is the one reason to stay on screen.
   if (!open && !actionError) return null;
 
-  const busy = searching && (customers.isFetching || tickets.isFetching || chats.isFetching);
+  const busy = searching && records.isFetching;
 
   // Sits above the palette's own layer so a notice raised by one run is still
   // readable if the agent has already reopened the palette to try again.
@@ -566,7 +507,14 @@ export function CommandPalette(): ReactElement | null {
                         {command.icon}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{command.label}</span>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-medium">{command.label}</span>
+                          {command.badge && (
+                            <span className="shrink-0 rounded-sm border border-border px-1.5 text-2xs text-content-secondary">
+                              {command.badge}
+                            </span>
+                          )}
+                        </span>
                         {command.sub && (
                           <span className="block truncate text-2xs text-content-tertiary">
                             {command.sub}
@@ -644,4 +592,90 @@ function AiAnswerCard({
       description={answer}
     />
   );
+}
+
+/** The palette's record groups, in the order they are drawn. */
+const RECORD_GROUPS: ReadonlyArray<{ kinds: readonly SearchKind[]; labelKey: string }> = [
+  { kinds: ['customer'], labelKey: 'palette.group.customers' },
+  { kinds: ['chat', 'connection', 'event'], labelKey: 'palette.group.conversations' },
+  { kinds: ['ticket'], labelKey: 'palette.group.tickets' },
+];
+
+/**
+ * Where a match opens. A conversation opens at its day (`chat`), scrolled to
+ * the connection (`thread`) or the message (`event`) that was searched for —
+ * ids only, never the searched text (GV-05).
+ */
+function recordTarget(record: SearchResult): string {
+  if (record.kind === 'customer') return `/app/customers?customer=${record.customer_id ?? ''}`;
+  if (record.kind === 'ticket') return `/app/inbox?ticket=${record.ticket_id ?? ''}`;
+  const params = new URLSearchParams({ chat: record.chat_id ?? '' });
+  if (record.thread_id) params.set('thread', record.thread_id);
+  if (record.event_id) params.set('event', record.event_id);
+  return `/app/inbox?${params.toString()}`;
+}
+
+/**
+ * One match as a palette row. A conversation row carries a badge naming the
+ * number it matched (the glossary label, ID-01) and the number itself, so the
+ * agent can see the paste landed on the right record before opening it.
+ */
+function recordResult(
+  record: SearchResult,
+  group: string,
+  t: TFunction,
+  open: (to: string) => void,
+): PaletteResult {
+  const at = formatDateTime(record.at);
+  const line = (...parts: Array<string | null | undefined>): string =>
+    parts.filter((part): part is string => Boolean(part)).join(' · ');
+  const base = { kind: 'content' as const, group, run: () => open(recordTarget(record)) };
+
+  switch (record.kind) {
+    case 'customer':
+      return {
+        ...base,
+        id: `customer:${record.customer_id}`,
+        label: record.title ?? t('palette.unnamedVisitor'),
+        sub: record.subtitle ?? undefined,
+        ...(record.matched_on === 'customer_id' ? { badge: t('ids.customer.label') } : {}),
+        icon: '◫',
+      };
+    case 'ticket':
+      return {
+        ...base,
+        id: `ticket:${record.ticket_id}`,
+        label: record.title ?? '',
+        sub: line(`#${record.ticket_id}`, record.subtitle),
+        ...(record.matched_on === 'ticket_id' ? { badge: t('ids.ticket.label') } : {}),
+        icon: '▦',
+      };
+    case 'chat':
+      return {
+        ...base,
+        id: `chat:${record.chat_id}`,
+        label: record.title ?? t('palette.visitor'),
+        sub: line(record.chat_id, at),
+        badge: t('ids.thread.label'),
+        icon: '▤',
+      };
+    case 'connection':
+      return {
+        ...base,
+        id: `connection:${record.thread_id}`,
+        label: record.title ?? t('palette.visitor'),
+        sub: line(record.thread_id, `${t('ids.thread.label')} ${record.chat_id}`, at),
+        badge: t('ids.chat.label'),
+        icon: '▤',
+      };
+    case 'event':
+      return {
+        ...base,
+        id: `event:${record.event_id}`,
+        label: record.title ?? t('palette.visitor'),
+        sub: line(record.event_id, at),
+        badge: t('ids.event.label'),
+        icon: '▤',
+      };
+  }
 }

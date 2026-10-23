@@ -87,6 +87,8 @@ tags:
     description: Agent-assist — a separate knowledge base and in-chat help (summary, reply draft, rewrite).
   - name: Command Palette
     description: ⌘K palette — the account/team-wide natural-language query result type.
+  - name: Search
+    description: Direct lookup by number, e-mail or username — conversations, members, tickets (ID-06).
   - name: Settings
     description: Workspace configuration — trusted domains, saved replies, routing.
   - name: Onboarding
@@ -472,6 +474,9 @@ paths:
 
   /palette/ai-query:
     $ref: "./paths/command-palette.yaml#/aiQuery"
+
+  /search:
+    $ref: "./paths/search.yaml#/search"
 
   /settings/trusted-domains:
     $ref: "./paths/settings.yaml#/trustedDomains"
@@ -2505,6 +2510,53 @@ components:
           type: integer
           minimum: 0
           description: Restricted days in the whole 90-day window.
+
+    SearchResult:
+      type: object
+      required: [kind, title, subtitle, at, matched_on]
+      description: |
+        One match of `GET /search`. The ids present depend on `kind`: a `chat`
+        carries `chat_id`; a `connection` also `thread_id`; an `event` also
+        `event_id`; a `customer` carries `customer_id`; a `ticket` carries
+        `ticket_id` (and `customer_id` when it has a member).
+      properties:
+        kind: { type: string, enum: [chat, connection, event, customer, ticket] }
+        chat_id: { type: string, description: The day (panel "Thread ID"). }
+        thread_id: { type: string, description: The connection (panel "Chat ID"). }
+        event_id: { type: string, description: The message. }
+        customer_id: { type: string, format: uuid }
+        ticket_id: { type: string }
+        title:
+          type: string
+          nullable: true
+          description: The member's name, or the ticket's subject; null when the member left no name.
+        subtitle:
+          type: string
+          nullable: true
+          description: |
+            A member's e-mail (else phone), or a ticket's member name. Null when
+            there is none or the caller may not see it.
+        at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the day, connection or message started, or the member was last active.
+        matched_on:
+          type: string
+          enum:
+            [
+              chat_id,
+              thread_id,
+              event_id,
+              customer_id,
+              ticket_id,
+              email,
+              username,
+              name,
+              phone,
+              subject,
+            ]
+          description: Which field the query matched.
 
     ConversationRef:
       type: object

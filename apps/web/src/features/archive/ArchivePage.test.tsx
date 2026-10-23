@@ -316,8 +316,12 @@ describe('Archive conversation', () => {
     expect(within(facts).getByText('Took too long')).toBeInTheDocument();
     expect(within(facts).getByText('Handled by the AI')).toBeInTheDocument();
 
-    // Read-only: nothing here edits or sends.
-    expect(screen.queryByRole('textbox')).toBeNull();
+    // Read-only: nothing here edits or sends. (The filter bar's own panels hold inputs; the
+    // conversation and the player do not.)
+    const inputs = screen
+      .queryAllByRole('textbox')
+      .filter((input) => !input.closest('[role="group"][aria-label="Filters"]'));
+    expect(inputs).toEqual([]);
     expect(screen.queryByRole('button', { name: /edit/i })).toBeNull();
   });
 

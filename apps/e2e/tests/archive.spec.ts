@@ -109,10 +109,21 @@ test('a player who came back twice is three rows, each opening its own conversat
     );
 
     // "Open in Inbox" leaves the archive for the live console, at this conversation.
+    // The console takes the one-shot parameters and clears them, and under load that
+    // happens before a poll of the address can see them (tm 336.2: "Received
+    // /app/inbox" 22 times) — so the navigation is recorded, not polled for.
+    const visited: string[] = [];
+    agentPage.on('framenavigated', (frame) => {
+      if (frame === agentPage.mainFrame()) visited.push(frame.url());
+    });
     await agentPage.getByRole('button', { name: 'Open in Inbox' }).click();
-    await expect(agentPage).toHaveURL(
-      new RegExp(`/app/inbox\\?chat=${chatId}&thread=${secondConnection}`),
-    );
+    await expect
+      .poll(() =>
+        visited.some((url) =>
+          new RegExp(`/app/inbox\\?chat=${chatId}&thread=${secondConnection}`).test(url),
+        ),
+      )
+      .toBe(true);
 
     // The console consumes the one-shot parameters (replacing the entry); only then is
     // "Back" the archive again.
@@ -143,4 +154,120 @@ test('opens a conversation the caller cannot see as "not found", not as a blank 
   await agentPage.goto('/app/archive?c=NOSUCHCONN');
   await expect(agentPage.getByText('Conversation not found')).toBeVisible({ timeout: 20_000 });
   await expect(agentPage.getByRole('log', { name: 'Conversation transcript' })).toHaveCount(0);
+});
+
+test('a filtered address gives the same list after a reload and in another tab, and holds ids only (AR-02)', async ({
+  agentPage,
+  browser,
+  organizationId,
+  request,
+}) => {
+  const visitorContext = await browser.newContext();
+  const visitor = await visitorContext.newPage();
+  const stamp = Date.now().toString().slice(-6);
+  const tagName = `e2etag${stamp}`;
+  const words = [`Tagged question — ${stamp}`, `Untagged question — ${stamp}`];
+
+  try {
+    const auth = { Authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    await openWidget(visitor, organizationId);
+    await visitorSends(visitor, words[0]!);
+    let chatId = '';
+    await expect
+      .poll(
+        async () => {
+          chatId =
+            (await allChats(request, auth)).find((chat) => chat.last_event?.text === words[0])
+              ?.id ?? '';
+          return chatId;
+        },
+        { timeout: 20_000 },
+      )
+      .not.toBe('');
+    const tagged = await request.post(`${API_BASE}/chats/${chatId}/tags`, {
+      headers: auth,
+      data: { tag: tagName },
+    });
+    expect(tagged.ok(), `tagging failed: ${tagged.status()}`).toBe(true);
+    const close = async (): Promise<void> => {
+      const closed = await request.post(`${API_BASE}/chats/${chatId}/deactivate`, {
+        headers: auth,
+      });
+      expect(closed.ok(), `deactivate failed: ${closed.status()}`).toBe(true);
+    };
+    await close();
+    await widgetFrame(visitor).getByRole('button', { name: 'Start a new chat' }).click();
+    await visitorSends(visitor, words[1]!);
+    await close();
+
+    await agentPage.goto('/app/archive');
+    const rows = agentPage
+      .getByRole('list', { name: 'Conversations' })
+      .getByRole('listitem')
+      .filter({ hasText: stamp });
+    await expect(rows).toHaveCount(2, { timeout: 20_000 });
+
+    // Pick the tag: one row, and the address holds the tag's id — not its name, not the words.
+    await agentPage.getByRole('button', { name: 'Tags', exact: true }).click();
+    // `click`, not `check`: the address is the state, so the box settles a render later.
+    await agentPage.getByLabel(tagName, { exact: true }).click();
+    await expect(agentPage.getByLabel(tagName, { exact: true })).toBeChecked();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(words[0]!);
+    await expect(agentPage).toHaveURL(/[?&]tag=[0-9a-f-]{36}(&|$)/);
+    expect(agentPage.url()).not.toContain(tagName);
+    expect(agentPage.url()).not.toContain(stamp);
+
+    // The same address is the same list: after a reload, and in another tab.
+    const filteredUrl = agentPage.url();
+    await agentPage.reload();
+    await expect(rows).toHaveCount(1, { timeout: 20_000 });
+    await expect(rows.first()).toContainText(words[0]!);
+    await expect(agentPage.getByRole('button', { name: `Tags: ${tagName}` })).toBeVisible();
+
+    const other = await agentPage.context().newPage();
+    try {
+      await other.goto(filteredUrl);
+      const otherRows = other
+        .getByRole('list', { name: 'Conversations' })
+        .getByRole('listitem')
+        .filter({ hasText: stamp });
+      await expect(otherRows).toHaveCount(1, { timeout: 20_000 });
+      await expect(otherRows.first()).toContainText(words[0]!);
+    } finally {
+      await other.close();
+    }
+
+    // "Exclude" turns the same tag into "everything but".
+    await agentPage.getByRole('button', { name: `Tags: ${tagName}` }).click();
+    await agentPage.getByLabel('None of them (exclude)').click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(words[1]!);
+    await expect(agentPage).toHaveURL(/[?&]tag_mode=exclude(&|$)/);
+
+    // The date is the workspace's own day: they started today, not yesterday.
+    await agentPage.getByRole('button', { name: 'Clear Tags filter' }).click();
+    await agentPage.getByRole('button', { name: 'Date', exact: true }).click();
+    // (Other specs leave conversations from earlier days in the same workspace, so the
+    // list is not necessarily empty: read the answer the server gave for that day.)
+    const yesterday = agentPage.waitForResponse(
+      (response) =>
+        response.url().includes('/archive/conversations?') &&
+        response.url().includes('date_from=') &&
+        response.ok(),
+    );
+    await agentPage.getByRole('button', { name: 'Yesterday' }).click();
+    const answer = (await (await yesterday).json()) as {
+      items: Array<{ first_customer_message: string | null }>;
+    };
+    expect(answer.items.some((item) => item.first_customer_message?.includes(stamp))).toBe(false);
+    await expect(agentPage.getByRole('button', { name: 'Date: Yesterday' })).toBeVisible();
+    await expect(rows).toHaveCount(0);
+    await agentPage.getByRole('button', { name: 'Today' }).click();
+    await expect(rows).toHaveCount(2, { timeout: 20_000 });
+    await expect(agentPage.getByRole('button', { name: 'Later' })).toBeDisabled();
+  } finally {
+    await visitorContext.close();
+  }
 });

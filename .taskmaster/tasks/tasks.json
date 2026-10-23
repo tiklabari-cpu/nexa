@@ -14633,7 +14633,7 @@
           "335"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T19:24:12.212Z",
+        "updatedAt": "2026-10-23T19:25:35.933Z",
         "subtasks": [
           {
             "id": 1,
@@ -14653,13 +14653,13 @@
             "description": "Arşiv filtre çubuğu: çipler, popover'lar, tarih kaydırma, URL ↔ filtre (yalnız kimlik)",
             "details": "ArchiveFilters.tsx; URL ↔ filtre dönüştürücüsü yalnız kimlikler (GV-05); çelişen filtre uyarısı; EÜ için ajan filtresi \"ben\"; kayıtlı filtreler kişisel. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #336 details (tek kaynak).",
             "testStrategy": "Birim (URL dönüştürücü) + e2e; `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "336.1"
             ],
             "parentId": "336",
             "priority": "high",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-23T19:25:35.933Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T19:24:12.213Z",
+      "lastModified": "2026-10-23T19:25:35.934Z",
       "taskCount": 390,
       "completedCount": 320,
       "tags": [

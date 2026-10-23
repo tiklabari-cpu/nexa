@@ -79,6 +79,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/inbox/DetailsPanel.tsx',
   'src/features/inbox/PlayerCard.tsx',
   'src/features/archive/ArchiveDetail.tsx',
+  'src/features/archive/ArchiveFilters.tsx',
   'src/features/archive/ArchiveList.tsx',
   'src/features/archive/ArchivePage.tsx',
   'src/features/inbox/ArchiveSearch.tsx',

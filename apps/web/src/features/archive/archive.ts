@@ -5,12 +5,14 @@
  *
  * The address carries the screen's state and nothing personal (GV-05): the
  * selected connection (`?c=`), whether open connections are listed too
- * (`?status=all`) and whether a day's connections are folded together
- * (`?group=day`). The searched words are not in it.
+ * (`?status=all`), whether a day's connections are folded together
+ * (`?group=day`) and the filters (AR-02 · `archive-filters.ts`, ids only). The
+ * searched words are not in it.
  */
 import type { ArchiveConversation, ArchiveStatus } from '@siyahtus/types';
 import { ARCHIVE_DEFAULT_LIMIT } from '@siyahtus/types';
 import { ApiClientError } from '../../lib/api-client.js';
+import { NO_FILTERS, filterParams, type ArchiveFilters } from './archive-filters.js';
 
 /** The query parameter that names the open connection (its number, `thread_id` in the API). */
 export const CONNECTION_PARAM = 'c';
@@ -43,9 +45,17 @@ export function writeFlag(
   return next;
 }
 
-/** One page of the list. The server's keyset cursor is opaque; it is passed back as is. */
-export function archiveListUrl(scope: ArchiveScope, pageId: string | undefined): string {
+/**
+ * One page of the list. The filters are the API's own parameters (ids only); the
+ * server's keyset cursor is opaque and passed back as is.
+ */
+export function archiveListUrl(
+  scope: ArchiveScope,
+  pageId: string | undefined,
+  filters: ArchiveFilters = NO_FILTERS,
+): string {
   const params = new URLSearchParams({ status: scope, limit: String(ARCHIVE_DEFAULT_LIMIT) });
+  for (const [key, value] of filterParams(filters)) params.append(key, value);
   if (pageId) params.set('page_id', pageId);
   return `/archive/conversations?${params.toString()}`;
 }

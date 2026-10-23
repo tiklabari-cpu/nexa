@@ -14589,7 +14589,7 @@
           "331"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T11:49:12.067Z",
+        "updatedAt": "2026-10-23T13:03:38.537Z",
         "subtasks": [
           {
             "id": 1,
@@ -14597,11 +14597,11 @@
             "description": "Arşiv API: archive.yaml + iki CONCURRENTLY migration + threads.handled_by + archive-service (görünürlük WHERE'de, N+1 yok)",
             "details": "contract paths/archive.yaml (liste + detay) + iki ayrı CONCURRENTLY migration + threads.handled_by (kapanışta; #293 yüklemiyle) + services/archive/archive-service.ts + routes/archive.ts (withTenant + resolveVisibility WHERE içinde, ilk mesaj tek sorguda, keyset, total_capped) + KURALLAR'ın sunucu tarafı. Ayrıntı ve kabul maddeleri: üst görev #335 details (tek kaynak).",
             "testStrategy": "Entegrasyon (satır = bağlantı, 3 bağlantılı oyuncu 3 satır, görünürlük, saklama süresi dolmuş satır); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "335",
             "priority": "high",
-            "updatedAt": "2026-10-23T11:49:12.067Z"
+            "updatedAt": "2026-10-23T13:03:38.537Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T11:49:12.069Z",
+      "lastModified": "2026-10-23T13:03:38.537Z",
       "taskCount": 390,
       "completedCount": 319,
       "tags": [

@@ -85,12 +85,20 @@ spec:
           # A deployment's database is not a demo: the seed writes fixture
           # organisations, agents and chats, and running it against real data is
           # a data-integrity incident, not a convenience.
+          #
+          # Then the partitions of `events` that held rows when a partitioned
+          # index was added get their half of it, CONCURRENTLY, while the old
+          # pods keep writing (tm 333.1; migration 20261023100000). Its failure
+          # does not fail the Job: search reads the months still waiting
+          # without the index — slower, never wrong — and the next release's
+          # Job tries again (docs/runbooks/event-partitions.md).
           command:
-            - npx
-            - prisma
-            - migrate
-            - deploy
-            - --schema=./prisma/schema.prisma
+            - sh
+            - -c
+            - >-
+              npx prisma migrate deploy --schema=./prisma/schema.prisma &&
+              { node dist/scripts/partition-indexes.js ||
+              echo "migrate: WARNING partition indexes incomplete"; }
           envFrom:
             - configMapRef:
                 name: {{ .Release.Name }}-config

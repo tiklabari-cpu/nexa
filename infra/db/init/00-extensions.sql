@@ -4,6 +4,7 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";   -- gen_random_uuid()
 CREATE EXTENSION IF NOT EXISTS "citext";     -- case-insensitive email columns
 CREATE EXTENSION IF NOT EXISTS "vector";     -- pgvector (knowledge_chunks.embedding)
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";    -- trigram GIN, message text search (events_text_search_idx)
 
 -- Dedicated application role used by the API. RLS policies are enforced against
 -- this role; it is intentionally NOT a superuser and NOT the table owner, because

@@ -27,6 +27,14 @@ if [ "${SIYAHTUS_MIGRATE_ON_START:-true}" = "false" ]; then
 else
     echo "docker-entrypoint: prisma migrate deploy"
     npx prisma migrate deploy --schema=./prisma/schema.prisma
+    # The partitions of `events` that held rows when a partitioned index was
+    # added get their half of it here, CONCURRENTLY (tm 333.1; migration
+    # 20261023100000). A failure is a warning, not a reason to stay down: until
+    # it succeeds, message search reads those months without the index —
+    # slower, never wrong — and the next start tries again.
+    echo "docker-entrypoint: partition indexes"
+    node dist/scripts/partition-indexes.js \
+        || echo "docker-entrypoint: WARNING partition indexes incomplete — see docs/runbooks/event-partitions.md"
 fi
 
 echo "docker-entrypoint: starting @siyahtus/api"

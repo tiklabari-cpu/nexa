@@ -22,7 +22,7 @@ datasource db {
   url        = env("DATABASE_URL")
   // plpgsql is a Postgres built-in and always present; declaring it keeps
   // `prisma migrate diff` clean so a real drift is never lost in the noise.
-  extensions = [pgcrypto, citext, vector, plpgsql(schema: "pg_catalog")]
+  extensions = [pgcrypto, citext, vector, pg_trgm, plpgsql(schema: "pg_catalog")]
 }
 
 /// Tenant root.
@@ -1208,6 +1208,13 @@ model Event {
   /// generated column nor an index over one, so it is allowed by name in
   /// `scripts/check-drift.ts` rather than modelled here; nothing reads or writes
   /// it through the client, only the two raw paging queries.
+  ///
+  /// Also not modelled: `events_text_search_idx`, a trigram GIN over
+  /// `siyahtus_search_fold(text)` `WHERE type = 'message'` — message text
+  /// search (ID-07). Created `ON ONLY` the parent; each partition's index is
+  /// built `CONCURRENTLY` and attached by `scripts/partition-indexes.ts`.
+  /// Prisma has no syntax for an expression or a partial index. Migration
+  /// 20261023100000_event_text_search_index.
   @@map("events")
 }
 

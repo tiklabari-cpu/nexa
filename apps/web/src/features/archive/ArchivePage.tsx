@@ -8,7 +8,7 @@
  * the open connection (`?c=`), so a pasted link opens the same conversation; the
  * searched words never go in it (GV-05).
  */
-import { useState, type ReactElement } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { hasAnyScope } from '@siyahtus/types';
 import type { ArchiveConversation } from '@siyahtus/types';
@@ -22,6 +22,15 @@ import {
 } from '../inbox/archive-search.js';
 import { ArchiveSearchBar, ArchiveSearchResults } from '../inbox/ArchiveSearch.js';
 import { CONNECTION_PARAM, readGrouped, readScope, writeFlag } from './archive.js';
+import {
+  NO_FILTERS,
+  findConflicts,
+  isFiltered,
+  readFilters,
+  writeFilters,
+  type ArchiveFilters as Filters,
+} from './archive-filters.js';
+import { ArchiveFilters } from './ArchiveFilters.js';
 import { ArchivePlayer, ArchiveTranscript } from './ArchiveDetail.js';
 import { ArchiveList } from './ArchiveList.js';
 import { useArchiveDetail, useArchiveList, useTeamNames } from './useArchive.js';
@@ -40,8 +49,11 @@ export function ArchivePage(): ReactElement {
   const threadId = params.get(CONNECTION_PARAM) || null;
   const scope = readScope(params);
   const grouped = readGrouped(params);
+  const filters = useMemo(() => readFilters(params), [params]);
+  // Dates that run backwards are refused by the server (400); the bar says so instead.
+  const datesBackwards = findConflicts(filters).includes('date_order');
 
-  const list = useArchiveList(scope);
+  const list = useArchiveList(scope, filters, !datesBackwards);
   const detail = useArchiveDetail(threadId);
   const teams = useTeamNames();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
@@ -63,6 +75,8 @@ export function ArchivePage(): ReactElement {
     setFocus(at ? { threadId: id, eventId: at.eventId, nonce: Date.now() } : null);
     setPane('transcript');
   };
+  const changeFilters = (next: Filters): void =>
+    setParams(writeFilters(params, next), { replace: true });
   const openRow = (row: ArchiveConversation): void => open(row.thread_id, null);
   const openHit = (hit: ArchiveSearchHit, atMessage: boolean): void =>
     open(hit.match.thread_id, atMessage ? { eventId: hit.match.event_id } : null);
@@ -121,6 +135,7 @@ export function ArchivePage(): ReactElement {
             />
           ) : (
             <>
+              <ArchiveFilters filters={filters} onChange={changeFilters} teams={teams} />
               <div className="flex flex-col gap-1 border-b border-border px-4 py-2 text-xs">
                 <label className="flex items-center gap-2">
                   <input
@@ -149,6 +164,9 @@ export function ArchivePage(): ReactElement {
                 onSelect={openRow}
                 grouped={grouped}
                 teams={teams}
+                filtered={isFiltered(filters)}
+                blocked={datesBackwards}
+                onClearFilters={() => changeFilters(NO_FILTERS)}
               />
             </>
           )}

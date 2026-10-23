@@ -26,6 +26,9 @@ export function ArchiveList({
   onSelect,
   grouped,
   teams,
+  filtered,
+  blocked,
+  onClearFilters,
 }: {
   list: ArchiveListResult;
   /** The open connection's number, from the address. */
@@ -34,6 +37,11 @@ export function ArchiveList({
   /** Fold the connections of one day under a heading (AR-01-S1). */
   grouped: boolean;
   teams: ReadonlyMap<number, string>;
+  /** A filter narrows the list: an empty page is "nothing matches", not "no archive yet". */
+  filtered: boolean;
+  /** The filters cannot be asked for as they are (dates run backwards); no list was requested. */
+  blocked: boolean;
+  onClearFilters: () => void;
 }): ReactElement {
   const t = useTranslate();
   const loaded = list.pages.length > 0;
@@ -47,7 +55,12 @@ export function ArchiveList({
         if (el.scrollHeight - el.scrollTop - el.clientHeight < END_OF_LIST_PX) list.fetchNext();
       }}
     >
-      {list.isError && !loaded ? (
+      {blocked ? (
+        <EmptyState
+          title={t('archive.filter.blocked.title')}
+          description={t('archive.filter.blocked.description')}
+        />
+      ) : list.isError && !loaded ? (
         <LoadError
           title={t('archive.list.error.title')}
           error={list.error}
@@ -55,6 +68,20 @@ export function ArchiveList({
         />
       ) : list.isPending ? (
         <ListSkeleton />
+      ) : list.items.length === 0 && filtered ? (
+        <EmptyState
+          title={t('archive.filter.empty.title')}
+          description={t('archive.filter.empty.description')}
+          action={
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content"
+            >
+              {t('archive.filter.clearAll')}
+            </button>
+          }
+        />
       ) : list.items.length === 0 ? (
         <EmptyState title={t('archive.empty.title')} description={t('archive.empty.description')} />
       ) : (

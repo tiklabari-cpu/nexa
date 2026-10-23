@@ -1439,6 +1439,47 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/customer-context': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The player card beside a chat
+     * @description Who the chat's player is, what they answered before the chat started,
+     *     the day's other connections and the days before it (IN-02) — what the
+     *     inbox's player card reads in one call.
+     *
+     *     - `customer`: the record's name, username, email, country, the city of
+     *       the newest visit. Email and username are null for a caller without
+     *       `customers.contact.view` (RL-02-S2), and `contact_visible` says so.
+     *     - `pre_chat`: the connection's `filled_form` answers, else the contact
+     *       fields of the pre-chat form the player filled in.
+     *     - `today`: the chat's other connections, the newest 20, newest first
+     *       (the open or newest one is the chat itself). Empty for a chat filed
+     *       under no day.
+     *     - `history`: the player's other chats of the last 90 days, one row per
+     *       day, newest first, 20 a page (`page_id`). A day the caller may not
+     *       open — no team of theirs and not theirs — is a restricted row
+     *       (`accessible: false`): when it started and its teams' queue topics
+     *       only; id, end, assignee, teams, tags, summary, rating and card are
+     *       empty.
+     *       `restricted_count` counts them over the whole window.
+     *
+     *     Agents and bots only, behind the chat's visibility like its transcript:
+     *     a chat the caller may not see, or another workspace's, is `404`.
+     */
+    get: operations['getChatCustomerContext'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/supervise': {
     parameters: {
       query?: never;
@@ -11542,6 +11583,82 @@ export interface components {
       risk_flags: string[];
       last_ai_excerpt: string | null;
     };
+    /** @description The player card (IN-02): `GET /chats/{chatId}/customer-context`. */
+    CustomerContext: {
+      /** @description The day it was read for (panel "Thread ID"). */
+      chat_id: string;
+      customer: {
+        /** Format: uuid */
+        id: string;
+        name: string | null;
+        /** @description Typed by the player, unverified. Null when not given or not visible. */
+        username: string | null;
+        /** @description Null when not given or not visible. */
+        email: string | null;
+        country_code: string | null;
+        country: string | null;
+        /** @description The newest visit's. */
+        city: string | null;
+        banned: boolean;
+      };
+      /**
+       * @description Whether the caller may see the player's email and username
+       *     (`customers.contact.view`). False: both are null whatever the
+       *     player gave.
+       */
+      contact_visible: boolean;
+      pre_chat: {
+        label: string;
+        value: string;
+      }[];
+      /** @description The day's other connections, the newest 20, newest first. */
+      today: components['schemas']['ConversationRef'][];
+      history: {
+        /** @description Earlier days of the last 90, newest first, one row each. */
+        items: components['schemas']['ConversationRef'][];
+        next_page_id?: string;
+      };
+      /** @description Restricted days in the whole 90-day window. */
+      restricted_count: number;
+    };
+    /**
+     * @description One connection of the day (`today`) or one earlier day (`history`) on
+     *     the player card. `accessible: false` — another team's conversation —
+     *     carries `started_at` and `topics` and nothing else: every other field
+     *     is null or empty.
+     */
+    ConversationRef: {
+      accessible: boolean;
+      /** @description The day (panel "Thread ID"). */
+      chat_id: string | null;
+      /** @description The connection (panel "Chat ID") — a day's newest on a history row. */
+      thread_id: string | null;
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      ended_at: string | null;
+      connections_count: number | null;
+      assignee: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+      } | null;
+      teams: {
+        id: number;
+        name: string;
+      }[];
+      /** @description The teams' queue topics (`QUEUE_TOPIC_ROLES`). */
+      topics: (
+        'finance' | 'kyc_risk' | 'bonus' | 'responsible_gambling' | 'technical' | 'complaint'
+      )[];
+      tags: string[];
+      summary: string | null;
+      /** @enum {string|null} */
+      outcome: 'resolved' | 'resolved_waiting' | 'handed_off' | 'abandoned' | 'no_ai' | null;
+      /** @enum {string|null} */
+      rating: 'good' | 'bad' | null;
+      ai_handoff: components['schemas']['AiHandoffCard'] | null;
+    };
     AiHandoffSettings: {
       /** Format: uuid */
       ai_agent_id: string;
@@ -21426,6 +21543,36 @@ export interface operations {
             thread_id: string | null;
             conversation: components['schemas']['AiConversationState'] | null;
           };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getChatCustomerContext: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+      };
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The player card */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerContext'];
         };
       };
       400: components['responses']['BadRequest'];

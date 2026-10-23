@@ -33,10 +33,17 @@ import { maskPlayerContact, redactPlayerContact } from '../customers/player-cont
  * free-text field of the card: `card_text` was written with them, and the
  * summary, the question, a collected slot, a decision fact, what the AI said
  * and the next step can quote them. No default — every caller decides.
+ * `alsoRedact`: further values to blank with them — the player's record as it
+ * stands now, for a reader that has it (the player card, tm 331.1): a card
+ * written before the player gave either holds none on its own.
  */
-export function serialiseAiHandoff(row: AiHandoff, contactVisible: boolean): AiHandoffCardView {
+export function serialiseAiHandoff(
+  row: AiHandoff,
+  contactVisible: boolean,
+  alsoRedact: ReadonlyArray<string | null> = [],
+): AiHandoffCardView {
   const player = playerOf(row.player);
-  const needles = [player.username, player.email];
+  const needles = [player.username, player.email, ...alsoRedact];
   const text = (value: string) => redactPlayerContact(value, needles, contactVisible);
   const textOrNull = (value: string | null) => (value === null ? null : text(value));
   return {

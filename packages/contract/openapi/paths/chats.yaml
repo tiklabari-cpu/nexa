@@ -721,6 +721,48 @@ aiConversation:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
 
+customerContext:
+  get:
+    tags: [Chats]
+    operationId: getChatCustomerContext
+    summary: The player card beside a chat
+    description: |
+      Who the chat's player is, what they answered before the chat started,
+      the day's other connections and the days before it (IN-02) — what the
+      inbox's player card reads in one call.
+
+      - `customer`: the record's name, username, email, country, the city of
+        the newest visit. Email and username are null for a caller without
+        `customers.contact.view` (RL-02-S2), and `contact_visible` says so.
+      - `pre_chat`: the connection's `filled_form` answers, else the contact
+        fields of the pre-chat form the player filled in.
+      - `today`: the chat's other connections, the newest 20, newest first
+        (the open or newest one is the chat itself). Empty for a chat filed
+        under no day.
+      - `history`: the player's other chats of the last 90 days, one row per
+        day, newest first, 20 a page (`page_id`). A day the caller may not
+        open — no team of theirs and not theirs — is a restricted row
+        (`accessible: false`): when it started and its teams' queue topics
+        only; id, end, assignee, teams, tags, summary, rating and card are
+        empty.
+        `restricted_count` counts them over the whole window.
+
+      Agents and bots only, behind the chat's visibility like its transcript:
+      a chat the caller may not see, or another workspace's, is `404`.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+    responses:
+      "200":
+        description: The player card
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerContext" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
 supervise:
   post:
     tags: [Chats]

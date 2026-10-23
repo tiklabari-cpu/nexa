@@ -16,6 +16,7 @@ export * from './risk-flags.js';
 export * from './handoff.js';
 export * from './handoff-rules.js';
 export * from './ai-handoff-card.js';
+export * from './customer-context.js';
 export * from './sensitive-data.js';
 export * from './slots.js';
 export * from './procedure.js';

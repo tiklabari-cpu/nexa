@@ -278,6 +278,7 @@ describe("a player's contact details under the permission matrix (RL-02-S2 · tm
     '/traffic',
     `/chats/${w.chatId}`,
     `/chats/${w.chatId}/ai-handoffs`,
+    `/chats/${w.chatId}/customer-context`,
     '/risk-flags',
     `/customers/${w.customerId}/risk-flags`,
   ];

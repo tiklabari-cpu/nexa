@@ -22,6 +22,7 @@ import {
   type ProviderEndpoints,
 } from '../services/apps/verifiers/types.js';
 import { hasChatScope } from '../services/chat/access.js';
+import { readCustomerContext } from '../services/customers/customer-context.js';
 import { conversationView } from '../services/ai/conversation/conversation-view.js';
 import { loadConversation } from '../services/ai/conversation/state-store.js';
 import { toTurnState } from '../services/ai/conversation/turn.js';
@@ -129,6 +130,7 @@ const eventsQuery = z.object({
 });
 
 const aiConversationQuery = z.object({ thread_id: z.string().min(1).max(64).optional() });
+const customerContextQuery = z.object({ page_id: z.string().max(512).optional() });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -391,6 +393,33 @@ export default async function chatRoutes(
             }
           : null,
       });
+    },
+  );
+
+  // --- GET /chats/:chatId/customer-context ---------------------------------
+  // The player card beside the chat (tm 331.1 · IN-02): who the player is,
+  // their pre-chat answers, the day's other connections and 90 days of earlier
+  // days, each judged by the caller's visibility. Agents and bots only.
+
+  app.get<{ Params: { chatId: string } }>(
+    '/chats/:chatId/customer-context',
+    {
+      config: {
+        scopes: ['chats--all:ro', 'chats--access:ro'],
+        principals: ['agent', 'bot'],
+      },
+    },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const query = parse(customerContextQuery, request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const context = await request.withTenant((tx) =>
+        readCustomerContext(tx, tenant, principal, chatId, {
+          ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),
+        }),
+      );
+      return reply.send(context);
     },
   );
 

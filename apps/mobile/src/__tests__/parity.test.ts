@@ -1002,7 +1002,11 @@ describe('module parity matrix — what is still owed', () => {
       // web panel's security settings (tm 325.4). The app configures no
       // permissions; a member's own capabilities ride on `/auth/me`, which the
       // app already reads. Nothing here re-scopes.
-      contractEndpoints: 294,
+      // 294 -> 295 with `/chats/{chatId}/customer-context` (tm 331.1) — the
+      // player card beside a chat (IN-02), drawn in the web inbox's right pane
+      // (tm 331.2). The app's chat screen shows no player card; nothing here
+      // re-scopes.
+      contractEndpoints: 295,
       scopeBoundaries: 1,
     });
   });

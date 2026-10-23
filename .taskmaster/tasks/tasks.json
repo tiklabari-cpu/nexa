@@ -14633,7 +14633,7 @@
           "335"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T14:36:14.430Z",
+        "updatedAt": "2026-10-23T19:24:12.212Z",
         "subtasks": [
           {
             "id": 1,
@@ -14641,11 +14641,11 @@
             "description": "Arşiv filtreleri API: parametreler + dizi kolonları/GIN + geri doldurma + filtre derleyicisi",
             "details": "contract parametreleri + prisma (threads.agent_ids, threads.risk_flags GIN, ratings indeksi) + sayfalı geri doldurma (ayrı migration) + archive-service filtre derleyicisi (kiracı TZ gün sınırı, etiket any/all/exclude, LATERAL puan, görünürlük WHERE'de, handled_by #293 yüklemi) + PERFORMANS (EXPLAIN kanıtı). Ayrıntı ve kabul maddeleri: üst görev #336 details (tek kaynak).",
             "testStrategy": "Entegrasyon (her filtre ve birleşimleri) + EXPLAIN; `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "336",
             "priority": "high",
-            "updatedAt": "2026-10-23T14:36:14.430Z"
+            "updatedAt": "2026-10-23T19:24:12.212Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T14:36:14.431Z",
+      "lastModified": "2026-10-23T19:24:12.213Z",
       "taskCount": 390,
       "completedCount": 320,
       "tags": [

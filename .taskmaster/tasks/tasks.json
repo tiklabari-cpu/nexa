@@ -14409,7 +14409,7 @@
         "description": "Ajan oyuncunun kim olduğunu, bugün ne konuşulduğunu ve AI'ın ne topladığını görmek için Müşteriler sayfasına geçmek zorunda. Mevcut müşteri detay ucu ekip ayrımı yapmıyor (customer-service.ts:176-187) — aynı açık Inbox'a taşınmamalı. Kaynak: IN-02.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: IN-02. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 5 — ajan deneyimi, arama, arşiv.\n\ncontract: GET /chats/{chatId}/customer-context (chats.yaml + CustomerContext): customer {id, name, username, email (gerekirse maskeli), country_code, city, banned}, pre_chat [{label, value}], today [ConversationRef], history {items, next_page_id}, restricted_count; ConversationRef: Chat ID (thread_id), Thread ID (chat_id) — ID-01 adlarıyla, başlangıç/bitiş, atanan, ekipler, etiketler, AI devir kartı özeti (#304), puan (AR-03), accessible.\napi: services/customers/customer-context.ts — her konuşma için resolveVisibility(tx, principal, 'read') ile accessible; accessible:false satırlarda yalnız tarih + konu etiketi (IN-02-S2), özet/etiket DÖNMEZ; e-posta \"kişisel veri görür\" yeteneği yoksa sunucuda maskeli (a***@gmail.com); route chats.ts.\n\"Bugün\": ID-02 günlük grubunun önceki bağlantıları (K1=A: aynı chat'in thread'leri) — saat, süre, sonuç, devir kartı özeti; tıklayınca salt okunur transkript (aktif composer etkilenmez). \"Geçmiş\": gün başına bir satır, son 90 gün (S3), keyset (created_at, id), 20/sayfa; \"Tümü\" → Arşiv (AR-01) oyuncuya filtreli.\nPre-chat: önce bağlantının filled_form olayı, yoksa müşteri özel alanlarındaki pre_chat değerleri (VisitorPanel kuralı).\nRisk bayrakları başlıkta rozet (ikon + metin). Kullanıcı adı \"oyuncunun beyanı, doğrulanmadı\" rozeti; geçerli üye tokenıyla \"tanınan cihaz\"; ID-03 olası eşleşmeler listesi (#287) burada.\nRTM: yeni olay yok; incoming_chat / chat_transferred'da ['customer-context', chatId] tazelenir.\nweb: features/inbox/PlayerCard.tsx, useCustomerContext.ts; DetailsPanel en üstü; AI-10 kart ve ID-05 kopyala bileşenleri; locales. Hedef p95 < 300 ms.\n\nKABUL KRİTERLERİ:\n- Kartta ad, kullanıcı adı, e-posta (yetkiye göre maskeli), ülke ve pre-chat cevapları; olmayan alan \"—\".\n- Aynı gün ikinci gelişte ilk bağlantı (saat, sonuç, devir kartı) \"Bugün\"de.\n- Ertesi gün \"Bugün\" boş, önceki gün \"Geçmiş\"te tek satır.\n- Ekip dışı geçmiş konuşmanın içeriği açılmaz; API özet/etiket döndürmez.\n- Chat ID ve Thread ID kopyalanabilir.\n- AI'dan devralınan sohbette devir kartı en üstte; \"Profili aç\" bağlantısı var.\n\nKULLANILAN VARSAYIMLAR:\n- IN-02-S1/S2/S3 varsayılanları.",
         "testStrategy": "customer-context.test.ts (ekip A ajanı B konuşmasının özetini alamaz; kiracılar arası 404), PlayerCard.test.tsx, e2e inbox-player-card.spec.ts; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "286",
           "287",
@@ -14418,7 +14418,7 @@
           "330"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-14T16:10:56.526Z",
+        "updatedAt": "2026-10-23T01:14:15.426Z",
         "subtasks": [
           {
             "id": 1,
@@ -14426,11 +14426,11 @@
             "description": "customer-context ucu + görünürlük + sunucu maskesi + sayfalı geçmiş",
             "details": "XHIGH GEREKÇESİ: (1) görünürlük/kişisel veri sızıntısı riski (mevcut müşteri ucu ekip ayrımı yapmıyor).",
             "testStrategy": "customer-context.test.ts.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "331",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-23T01:14:15.426Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T01:13:15.945Z",
+      "lastModified": "2026-10-23T01:14:15.427Z",
       "taskCount": 390,
       "completedCount": 316,
       "tags": [

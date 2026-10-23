@@ -219,6 +219,8 @@ paths:
     $ref: "./paths/chats.yaml#/aiDigests"
   /chats/{chatId}/ai-conversation:
     $ref: "./paths/chats.yaml#/aiConversation"
+  /chats/{chatId}/customer-context:
+    $ref: "./paths/chats.yaml#/customerContext"
   /chats/{chatId}/supervise:
     $ref: "./paths/chats.yaml#/supervise"
   /chats/{chatId}/tags:
@@ -2448,6 +2450,130 @@ components:
           type: string
           nullable: true
           maxLength: 200
+
+    CustomerContext:
+      type: object
+      required: [chat_id, customer, contact_visible, pre_chat, today, history, restricted_count]
+      description: |
+        The player card (IN-02): `GET /chats/{chatId}/customer-context`.
+      properties:
+        chat_id: { type: string, description: The day it was read for (panel "Thread ID"). }
+        customer:
+          type: object
+          required: [id, name, username, email, country_code, country, city, banned]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, nullable: true }
+            username:
+              type: string
+              nullable: true
+              description: Typed by the player, unverified. Null when not given or not visible.
+            email:
+              { type: string, nullable: true, description: Null when not given or not visible. }
+            country_code: { type: string, nullable: true, minLength: 2, maxLength: 2 }
+            country: { type: string, nullable: true }
+            city: { type: string, nullable: true, description: The newest visit's. }
+            banned: { type: boolean }
+        contact_visible:
+          type: boolean
+          description: |
+            Whether the caller may see the player's email and username
+            (`customers.contact.view`). False: both are null whatever the
+            player gave.
+        pre_chat:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: string }
+        today:
+          type: array
+          description: The day's other connections, the newest 20, newest first.
+          items: { $ref: "#/components/schemas/ConversationRef" }
+        history:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              description: Earlier days of the last 90, newest first, one row each.
+              items: { $ref: "#/components/schemas/ConversationRef" }
+            next_page_id: { type: string }
+        restricted_count:
+          type: integer
+          minimum: 0
+          description: Restricted days in the whole 90-day window.
+
+    ConversationRef:
+      type: object
+      required:
+        [
+          accessible,
+          chat_id,
+          thread_id,
+          started_at,
+          ended_at,
+          connections_count,
+          assignee,
+          teams,
+          topics,
+          tags,
+          summary,
+          outcome,
+          rating,
+          ai_handoff,
+        ]
+      description: |
+        One connection of the day (`today`) or one earlier day (`history`) on
+        the player card. `accessible: false` — another team's conversation —
+        carries `started_at` and `topics` and nothing else: every other field
+        is null or empty.
+      properties:
+        accessible: { type: boolean }
+        chat_id: { type: string, nullable: true, description: The day (panel "Thread ID"). }
+        thread_id:
+          type: string
+          nullable: true
+          description: The connection (panel "Chat ID") — a day's newest on a history row.
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+        connections_count: { type: integer, nullable: true, minimum: 1 }
+        assignee:
+          type: object
+          nullable: true
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        teams:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+        topics:
+          type: array
+          description: The teams' queue topics (`QUEUE_TOPIC_ROLES`).
+          items:
+            type: string
+            enum: [finance, kyc_risk, bonus, responsible_gambling, technical, complaint]
+        tags:
+          type: array
+          items: { type: string }
+        summary: { type: string, nullable: true }
+        outcome:
+          type: string
+          nullable: true
+          enum: [resolved, resolved_waiting, handed_off, abandoned, no_ai, null]
+        rating: { type: string, nullable: true, enum: [good, bad, null] }
+        ai_handoff:
+          allOf:
+            - $ref: "#/components/schemas/AiHandoffCard"
+          nullable: true
 
     AiHandoffSettings:
       type: object

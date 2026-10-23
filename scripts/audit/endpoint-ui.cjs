@@ -362,6 +362,13 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  {
+    op: 'GET /chats/{chatId}/customer-context',
+    owner: 'tm 331',
+    reason:
+      "the inbox's player card (tm 331.1 · IN-02): who the player is, pre-chat answers, the day's " +
+      'other connections and 90 days of history behind team visibility — drawn by PlayerCard (tm 331.2).',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

@@ -1122,6 +1122,15 @@ model Thread {
   /// exactly the invoice's AI resolution. Null while open, and on a thread
   /// closed before the column existed.
   handledBy        String?   @map("handled_by")
+  /// The agents who wrote to the player in the connection (AR-02 · tm 336.1),
+  /// internal notes not counted — the archive's agent filter. Written once,
+  /// with `handledBy`, in the transaction that closes the thread
+  /// (`services/archive/archive-filters.ts` `agentIdsSql`); null while open.
+  agentIds         String[]  @map("agent_ids") @db.Uuid
+  /// The risk flag types raised in the connection, cleared ones included
+  /// (AR-02 · tm 336.1) — the archive's risk filter. Kept by the trigger
+  /// `risk_flags_after_insert` as a flag is raised.
+  riskFlagTypes    String[]  @default([]) @map("risk_flags")
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]
@@ -1145,6 +1154,9 @@ model Thread {
   /// built CONCURRENTLY in its own migration.
   @@index([licenseId, createdAt(sort: Desc), id(sort: Desc)])
   @@index([licenseId, closedAt(sort: Desc), id(sort: Desc)])
+  /// No GIN index on `agent_ids` / `risk_flags` (AR-02 · tm 336.1, PLAN §D350):
+  /// `&&` is not leakproof, so under row level security it is never an index
+  /// condition — the filters narrow the rows the date and team indexes read.
   @@map("threads")
 }
 

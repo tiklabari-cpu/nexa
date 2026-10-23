@@ -72,6 +72,7 @@ import { withTenant, type TenantClient, type TenantContext } from '../../lib/ten
 import { roleAtLeast, type Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { recordAiResolution } from '../billing/metering.js';
+import { recordAgentIds } from '../archive/archive-filters.js';
 import { aiResolvedThreadWhere, recordHandledBy } from '../billing/ai-resolution.js';
 import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
@@ -2662,6 +2663,9 @@ export class ChatService {
     if ((await recordHandledBy(tx, thread.id, this.billing.adr09aEffectiveAt)) === 'ai') {
       await recordAiResolution(tx, tenant, this.billing.aiOverageCents, this.billing.aiIncluded);
     }
+    // Who wrote to the player, for the archive's agent filter (AR-02): read
+    // once, here, after the last event the connection will ever have.
+    await recordAgentIds(tx, thread.id);
 
     // The agent's freed slot goes to their teams' queues; a close of a waiting
     // connection renumbers the queue it left (ADR-08a §2.2).

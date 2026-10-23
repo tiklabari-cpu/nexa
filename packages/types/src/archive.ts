@@ -28,6 +28,34 @@ export type ThreadHandledBy = (typeof THREAD_HANDLED_BY)[number];
 export const ARCHIVE_STATUSES = ['closed', 'open', 'all'] as const;
 export type ArchiveStatus = (typeof ARCHIVE_STATUSES)[number];
 
+/**
+ * The rating filter (AR-02), read on a connection's newest rating — the one
+ * the row shows. `any` is rated at all, `commented` any rating with a comment.
+ */
+export const ARCHIVE_RATING_FILTERS = [
+  'any',
+  'not_rated',
+  'good',
+  'bad',
+  'commented',
+  'good_commented',
+  'bad_commented',
+] as const;
+export type ArchiveRatingFilter = (typeof ARCHIVE_RATING_FILTERS)[number];
+
+/**
+ * How the chosen tags combine (AR-02): `any` — at least one of them, `all` —
+ * every one, `exclude` — none of them.
+ */
+export const ARCHIVE_TAG_MODES = ['any', 'all', 'exclude'] as const;
+export type ArchiveTagMode = (typeof ARCHIVE_TAG_MODES)[number];
+
+/** At most this many tags in one filter (AR-02, LiveChat's limit). */
+export const ARCHIVE_MAX_TAGS = 20;
+
+/** At most this many agents, or teams, in one filter — the address stays an address. */
+export const ARCHIVE_MAX_FILTER_IDS = 50;
+
 export const ARCHIVE_DEFAULT_LIMIT = 50;
 export const ARCHIVE_MAX_LIMIT = 100;
 

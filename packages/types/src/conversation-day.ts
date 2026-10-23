@@ -157,3 +157,56 @@ export function localDayKey(
   if (hour < boundaryHour) date.setUTCDate(date.getUTCDate() - 1);
   return date.toISOString().slice(0, 10);
 }
+
+/** True for a `YYYY-MM-DD` that names a real calendar day (no 30 February). */
+export function isDayKey(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+/** The day key `days` calendar days after `key` (before, when negative). */
+export function shiftDayKey(key: string, days: number): string {
+  if (!isDayKey(key)) throw new RangeError(`Not a day key: ${key}.`);
+  const date = new Date(`${key}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The first instant of the conversation day `key` — the inverse of
+ * {@link localDayKey}: the earliest moment `localDayKey` files under `key`.
+ * A day filter is `[localDayStart(from), localDayStart(to + 1))`, so a day of
+ * 23 or 25 hours is still whole and the boundary hour is the workspace's.
+ *
+ * Found by bisection over `localDayKey` itself rather than by subtracting an
+ * offset: the offset is a property of the instant being solved for, and on a
+ * daylight-saving day the boundary hour may not exist on the wall clock (the
+ * day then starts at the first instant past it) or exist twice (it starts at
+ * the first). Asking the one function that files conversations keeps the two
+ * from disagreeing on those days. Every zone's offset is within ±14 hours, so
+ * the answer lies within a day and a half of the boundary read as UTC; about
+ * thirty `localDayKey` calls.
+ */
+export function localDayStart(
+  key: string,
+  timezone: string = DEFAULT_DAY_BOUNDARY.timezone,
+  boundaryHour: number = DEFAULT_DAY_BOUNDARY.hour,
+): Date {
+  if (!isDayKey(key)) throw new RangeError(`Not a day key: ${key}.`);
+  const wall = new Date(`${key}T00:00:00.000Z`).getTime() + boundaryHour * 3_600_000;
+  let before = wall - 36 * 3_600_000; // filed under an earlier day
+  let from = wall + 36 * 3_600_000; // filed under `key` or later
+  if (
+    localDayKey(new Date(before), timezone, boundaryHour) >= key ||
+    localDayKey(new Date(from), timezone, boundaryHour) < key
+  ) {
+    throw new RangeError(`Cannot place the start of ${key} in ${timezone}.`);
+  }
+  while (from - before > 1) {
+    const middle = Math.floor((before + from) / 2);
+    if (localDayKey(new Date(middle), timezone, boundaryHour) >= key) from = middle;
+    else before = middle;
+  }
+  return new Date(from);
+}

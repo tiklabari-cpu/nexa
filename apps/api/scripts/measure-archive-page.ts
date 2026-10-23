@@ -15,7 +15,11 @@
  *   - a Team Member's first page (one team of five, the EXISTS on
  *     `chat_access` doing the work);
  *   - a page deep in the list (the cursor doing the work);
- *   - one player's connections (`customer_id`).
+ *   - one player's connections (`customer_id`);
+ *   - AR-02's filters (tm 336.1): yesterday on the workspace's calendar, the
+ *     last 30 days of one team (the most common pair), a Team Member's last
+ *     week, and an agent, a tag exclusion, a rating, "AI solved" and a rare
+ *     risk flag over the same month.
  *
  * Each is run `REPEATS` times after a warm-up; p50 and p95 are reported, and
  * the first page's plan is printed (EXPLAIN ANALYZE, BUFFERS) as the evidence
@@ -30,7 +34,7 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { capabilitiesForRole } from '@siyahtus/types';
+import { capabilitiesForRole, localDayKey, shiftDayKey } from '@siyahtus/types';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { withTenantRead, type TenantContext } from '../src/lib/tenant.js';
 import { ArchiveService } from '../src/services/archive/archive-service.js';
@@ -92,7 +96,7 @@ function principal(
 async function seed(
   owner: PrismaClient,
   connections: number,
-): Promise<{ licenseId: bigint; customerId: string; memberGroup: bigint }> {
+): Promise<{ licenseId: bigint; customerId: string; memberGroup: bigint; tagId: string }> {
   const days = Math.round(connections * 0.7);
   const players = Math.round(connections * 0.3);
   await owner.$executeRaw`INSERT INTO organizations (id, name) VALUES (${ORGANIZATION_ID}::uuid, 'Archive measurement')`;
@@ -137,14 +141,22 @@ async function seed(
     SELECT 'H' || lpad(g::text, 9, '0'), (${groupArray}::bigint[])[1 + g % 5]
     FROM generate_series(0, ${days - 1}::int) g`;
   // Connection g sits on day (g * 7) % days; it started 30 s × g ago, lasted ten minutes.
+  // Every other one records its team (ID-02); the rest fall back to the day's
+  // `chat_access`, as connections opened before ID-02 do. A connection the AI
+  // answered has no agent; the others list their assignee.
   await owner.$executeRaw`
-    INSERT INTO threads (id, chat_id, license_id, active, created_at, closed_at, assignee_id, handled_by)
+    INSERT INTO threads (id, chat_id, license_id, active, created_at, closed_at, assignee_id, handled_by,
+                         group_id, agent_ids)
     SELECT 'T' || lpad(g::text, 9, '0'), 'H' || lpad(((g::bigint * 7) % ${days}::int)::text, 9, '0'),
            ${licenseId}, false,
            now() - make_interval(secs => g * 30.0),
            now() - make_interval(secs => g * 30.0) + interval '10 minutes',
            CASE WHEN g % 2 = 0 THEN ${MEMBER_ID}::uuid ELSE ${FOUNDER_ID}::uuid END,
-           (ARRAY['ai', 'human', 'mixed'])[1 + g % 3]
+           (ARRAY['ai', 'human', 'mixed'])[1 + g % 3],
+           CASE WHEN g % 2 = 0
+                THEN (${groupArray}::bigint[])[1 + ((g::bigint * 7) % ${days}::int) % 5] END,
+           CASE WHEN g % 3 = 0 THEN '{}'::uuid[]
+                WHEN g % 2 = 0 THEN ARRAY[${MEMBER_ID}::uuid] ELSE ARRAY[${FOUNDER_ID}::uuid] END
     FROM generate_series(0, ${connections - 1}::int) g`;
   await owner.$executeRaw`
     INSERT INTO events (id, thread_id, chat_id, license_id, type, text, author_type, recipients, created_at)
@@ -177,6 +189,7 @@ async function seed(
   return {
     licenseId,
     memberGroup: groups[0]!,
+    tagId: tag.id,
     customerId: (
       await owner.$queryRaw<Array<{ id: string }>>`SELECT md5('player0')::uuid::text AS id`
     )[0]!.id,
@@ -222,7 +235,7 @@ async function main(): Promise<number> {
   try {
     const migrated = await migrate(scratchOwnerUrl);
     if (migrated !== 0) throw new Error(`migrate deploy failed with exit ${migrated}`);
-    const { licenseId, customerId, memberGroup } = await seed(owner, connections);
+    const { licenseId, customerId, memberGroup, tagId } = await seed(owner, connections);
     const tenant: TenantContext = { licenseId, organizationId: ORGANIZATION_ID };
     const archive = new ArchiveService(RETENTION);
     const founder = principal(FOUNDER_ID, licenseId, 'owner', ['chats--all:ro']);
@@ -252,6 +265,45 @@ async function main(): Promise<number> {
       listAs(founder, { status: 'closed', limit: 50, customerId }),
     );
 
+    // AR-02 (tm 336.1). Days on the default workspace calendar (Istanbul).
+    const today = localDayKey(new Date());
+    const yesterday = shiftDayKey(today, -1);
+    const month = { status: 'closed' as const, limit: 50 };
+    const lastDays = (n: number) => ({ dateFrom: shiftDayKey(today, -n), dateTo: today });
+    await time('Founder · yesterday', () =>
+      listAs(founder, { ...month, filters: { dateFrom: yesterday, dateTo: yesterday } }),
+    );
+    await time('Founder · 30 days + one team', () =>
+      listAs(founder, { ...month, filters: { ...lastDays(30), groupIds: [memberGroup] } }),
+    );
+    await time('Team Member · last 7 days', () =>
+      listAs(member, { ...month, filters: lastDays(7) }),
+    );
+    await time('Founder · 30 days + agent', () =>
+      listAs(founder, { ...month, filters: { ...lastDays(30), agentIds: [MEMBER_ID] } }),
+    );
+    await time('Founder · 30 days, not tagged bonus', () =>
+      listAs(founder, {
+        ...month,
+        filters: { ...lastDays(30), tags: [tagId], tagMode: 'exclude' },
+      }),
+    );
+    await time('Founder · 30 days + bad rating', () =>
+      listAs(founder, { ...month, filters: { ...lastDays(30), rating: 'bad' } }),
+    );
+    await time('Founder · 30 days + AI solved', () =>
+      listAs(founder, { ...month, filters: { ...lastDays(30), handledBy: ['ai'] } }),
+    );
+    await time('Founder · risk flag (1 %)', () =>
+      listAs(founder, { ...month, filters: { riskFlags: ['fraud_suspected'] } }),
+    );
+    await time('Founder · tag all (20 %)', () =>
+      listAs(founder, { ...month, filters: { tags: [tagId], tagMode: 'all' } }),
+    );
+    await time('Founder · tag any (20 %)', () =>
+      listAs(founder, { ...month, filters: { tags: [tagId], tagMode: 'any' } }),
+    );
+
     // The statements measured, written out (the service builds them): the
     // page CTE for each kind of caller, and the member's capped count. The
     // member's team probe twice: as shipped (`OFFSET 0`) and without it — the
@@ -273,11 +325,62 @@ async function main(): Promise<number> {
       LIMIT 1001) capped`;
     const statements: Array<[string, Prisma.Sql]> = [
       [
+        'Founder · 30 days + one team, the page CTE (tm 336.1)',
+        Prisma.sql`SELECT t.id FROM threads t
+          JOIN chats c ON c.id = t.chat_id JOIN customers cu ON cu.id = c.customer_id
+          WHERE t.license_id = ${licenseId} AND t.closed_at IS NOT NULL
+            AND t.created_at >= now() - interval '30 days'
+            AND (t.group_id = ANY(${[String(memberGroup)]}::bigint[])
+                 OR (t.group_id IS NULL AND EXISTS (
+                   SELECT 1 FROM chat_access ca WHERE ca.chat_id = t.chat_id
+                     AND ca.group_id = ANY(${[String(memberGroup)]}::bigint[]) OFFSET 0)))
+          ORDER BY t.closed_at DESC, t.id DESC LIMIT 51`,
+      ],
+      [
+        'Founder · one day a month ago + one team, the page CTE (tm 336.1)',
+        Prisma.sql`SELECT t.id FROM threads t
+          JOIN chats c ON c.id = t.chat_id JOIN customers cu ON cu.id = c.customer_id
+          WHERE t.license_id = ${licenseId} AND t.closed_at IS NOT NULL
+            AND t.created_at >= now() - interval '31 days' AND t.created_at < now() - interval '30 days'
+            AND (t.group_id = ANY(${[String(memberGroup)]}::bigint[])
+                 OR (t.group_id IS NULL AND EXISTS (
+                   SELECT 1 FROM chat_access ca WHERE ca.chat_id = t.chat_id
+                     AND ca.group_id = ANY(${[String(memberGroup)]}::bigint[]) OFFSET 0)))
+          ORDER BY t.closed_at DESC, t.id DESC LIMIT 51`,
+      ],
+      [
+        'Founder · agent filter, the page CTE (tm 336.1)',
+        Prisma.sql`SELECT t.id FROM threads t
+          JOIN chats c ON c.id = t.chat_id JOIN customers cu ON cu.id = c.customer_id
+          WHERE t.license_id = ${licenseId} AND t.closed_at IS NOT NULL
+            AND t.agent_ids && ${[MEMBER_ID]}::uuid[]
+          ORDER BY t.closed_at DESC, t.id DESC LIMIT 51`,
+      ],
+      [
         'Founder · the page CTE',
         Prisma.sql`SELECT t.id FROM threads t
           JOIN chats c ON c.id = t.chat_id JOIN customers cu ON cu.id = c.customer_id
           WHERE t.license_id = ${licenseId} AND t.closed_at IS NOT NULL
           ORDER BY t.closed_at DESC, t.id DESC LIMIT 51`,
+      ],
+      [
+        'Team Member · last 7 days, the page CTE (tm 336.1)',
+        Prisma.sql`SELECT t.id FROM threads t
+          JOIN chats c ON c.id = t.chat_id JOIN customers cu ON cu.id = c.customer_id
+          WHERE t.license_id = ${licenseId} AND t.closed_at IS NOT NULL
+            AND t.created_at >= now() - interval '7 days'
+            AND t.closed_at >= now() - interval '7 days' - interval '1 minute'
+            AND ${memberSees(true)}
+          ORDER BY t.closed_at DESC, t.id DESC LIMIT 51`,
+      ],
+      [
+        'Founder · tag all, the capped count (tm 336.1)',
+        Prisma.sql`SELECT count(*) FROM (SELECT 1 FROM threads t
+          JOIN chats c ON c.id = t.chat_id JOIN customers cu ON cu.id = c.customer_id
+          WHERE t.license_id = ${licenseId} AND t.closed_at IS NOT NULL
+            AND EXISTS (SELECT 1 FROM thread_tags tt
+                  WHERE tt.thread_id = t.id AND tt.tag_id = ${tagId}::uuid)
+          LIMIT 1001) capped`,
       ],
       ['Team Member · the page CTE (OFFSET 0, shipped)', memberPage(true)],
       ['Team Member · the capped count (OFFSET 0, shipped)', memberCount(true)],

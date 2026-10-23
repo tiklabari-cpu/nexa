@@ -5,7 +5,10 @@ import {
   isConnectionOpenedVia,
   isDayBoundaryHour,
   isDayBoundaryTimeZone,
+  isDayKey,
   localDayKey,
+  localDayStart,
+  shiftDayKey,
 } from './conversation-day.js';
 
 const at = (iso: string): Date => new Date(iso);
@@ -107,6 +110,58 @@ describe('localDayKey (ID-04)', () => {
     );
     expect(() => localDayKey(at('2026-10-14T12:00:00Z'), 'Mars/Olympus', 0)).toThrow(RangeError);
     expect(() => localDayKey(new Date('nope'), 'UTC', 0)).toThrow(RangeError);
+  });
+});
+
+describe('localDayStart — the first instant of a conversation day (ID-04 · AR-02)', () => {
+  it('starts an Istanbul day at 21:00 UTC the evening before, so 23:30 local falls on that day', () => {
+    const start = localDayStart('2026-10-15', 'Europe/Istanbul', 0);
+    expect(start.toISOString()).toBe('2026-10-14T21:00:00.000Z');
+    // 23:30 on the 15th, Istanbul time, is inside [start of 15th, start of 16th).
+    const lateEvening = at('2026-10-15T20:30:00Z');
+    expect(lateEvening.getTime()).toBeGreaterThanOrEqual(start.getTime());
+    expect(lateEvening.getTime()).toBeLessThan(
+      localDayStart('2026-10-16', 'Europe/Istanbul', 0).getTime(),
+    );
+  });
+
+  it('is the inverse of localDayKey: its instant is the day, the millisecond before is the day before', () => {
+    const cases: Array<[string, string, number]> = [
+      ['2026-10-15', 'Europe/Istanbul', 0],
+      ['2026-10-15', 'Europe/Istanbul', 6],
+      ['2026-01-01', 'UTC', 0],
+      ['2026-01-10', 'Asia/Kathmandu', 0],
+      ['2026-03-29', 'Europe/Berlin', 2],
+      ['2026-10-25', 'Europe/Berlin', 2],
+      ['2026-03-08', 'America/New_York', 23],
+    ];
+    for (const [key, zone, hour] of cases) {
+      const start = localDayStart(key, zone, hour);
+      expect(localDayKey(start, zone, hour), `${key} ${zone} ${hour}`).toBe(key);
+      expect(localDayKey(new Date(start.getTime() - 1), zone, hour)).toBe(shiftDayKey(key, -1));
+    }
+  });
+
+  it('on daylight-saving days starts at the first instant past a missing boundary hour, and at the first of a doubled one', () => {
+    // 29 March 2026: Berlin's 02:00 does not exist (01:59 CET → 03:00 CEST).
+    expect(localDayStart('2026-03-29', 'Europe/Berlin', 2).toISOString()).toBe(
+      '2026-03-29T01:00:00.000Z',
+    );
+    // 25 October 2026: 02:00 happens twice; the day starts at the first (CEST)
+    // and is 25 hours long.
+    const start = localDayStart('2026-10-25', 'Europe/Berlin', 2);
+    expect(start.toISOString()).toBe('2026-10-25T00:00:00.000Z');
+    const next = localDayStart('2026-10-26', 'Europe/Berlin', 2);
+    expect(next.getTime() - start.getTime()).toBe(25 * 3_600_000);
+  });
+
+  it('refuses a key that is not a calendar day', () => {
+    expect(() => localDayStart('2026-02-30', 'UTC', 0)).toThrow(RangeError);
+    expect(() => localDayStart('15.10.2026', 'UTC', 0)).toThrow(RangeError);
+    expect(isDayKey('2028-02-29')).toBe(true);
+    expect(isDayKey('2026-02-29')).toBe(false);
+    expect(shiftDayKey('2026-12-31', 1)).toBe('2027-01-01');
+    expect(shiftDayKey('2026-03-01', -1)).toBe('2026-02-28');
   });
 });
 

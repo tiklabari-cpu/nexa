@@ -14418,7 +14418,7 @@
           "330"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T01:14:15.426Z",
+        "updatedAt": "2026-10-23T02:28:24.420Z",
         "subtasks": [
           {
             "id": 1,
@@ -14426,11 +14426,11 @@
             "description": "customer-context ucu + görünürlük + sunucu maskesi + sayfalı geçmiş",
             "details": "XHIGH GEREKÇESİ: (1) görünürlük/kişisel veri sızıntısı riski (mevcut müşteri ucu ekip ayrımı yapmıyor).",
             "testStrategy": "customer-context.test.ts.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "331",
             "priority": "high",
-            "updatedAt": "2026-10-23T01:14:15.426Z"
+            "updatedAt": "2026-10-23T02:28:24.420Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T01:14:15.427Z",
+      "lastModified": "2026-10-23T02:28:24.420Z",
       "taskCount": 390,
       "completedCount": 316,
       "tags": [

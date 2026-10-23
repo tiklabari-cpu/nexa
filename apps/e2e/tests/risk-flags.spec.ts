@@ -42,7 +42,8 @@ test.describe('risk flags (AI-27)', () => {
       await agentPage.goto(`/app/inbox?chat=${chatId}`);
       // The header's chips: whole chips when there is room, one counted flag that
       // still carries every type's name when the panel leaves the header narrow.
-      const header = agentPage.locator('[data-risk-chips]');
+      // Scoped to the header: the Details panel's player card draws the same chips (tm 331.2).
+      const header = agentPage.locator('header [data-risk-chips]');
       await expect(
         agentPage.getByText('No active risk flags on this conversation or this player.'),
       ).toBeVisible({

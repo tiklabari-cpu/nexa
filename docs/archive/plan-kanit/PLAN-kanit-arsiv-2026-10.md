@@ -10,3 +10,5 @@
 #### K02.4.1-.6 — 02.4.1–.6 · Details paneli (info/tags/visited pages/visit info)
 
 - ✅ tm 284 · ID-01 (kimlik sözlüğü, K1 = A): Ayrıntılar paneli günlük kapsayıcı numarasını artık "Thread ID" (`chat_id`) diye gösterir, ipucu tooltip'te; Inbox başlığındaki numaraya aynı tooltip · `DetailsPanel.tsx:182-185`, `ThreadHeader.tsx:53-60`, `locales/{en,tr}/ids.ts` · `DetailsPanel.test.tsx`, `ids-glossary.test.ts` (9), `id-glossary.test.ts` (12) · §D234
+
+- ✅ **Teams bölümü ekip adını gösteriyor (UX bulgusu O5, damga değişmedi — §D207):** Details panelinin "Ekipler" bölümü `access.group_ids`'i çıplak numara olarak basıyordu ("Support" yerine "1"); artık `['team','groups']` önbelleğinden adı okuyor, adla sıralıyor, liste yüklenirken "…", bilinmeyen/silinmiş ekip için "Ekip #7" (en: "Team #7") — `apps/web/src/features/inbox/DetailsPanel.tsx` · test `DetailsPanel.test.tsx` (6) · tm 259.13

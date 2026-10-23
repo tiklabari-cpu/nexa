@@ -142,4 +142,11 @@ export const shell: Messages = {
   'palette.ai.noData.title': 'No data yet',
   'palette.ai.notUnderstood.title': 'Not sure what you mean',
   'palette.ai.error': 'Could not get an answer — try again.',
+  // Archive mode (ID-07 · tm 333.4)
+  'palette.archive.group': 'Archive',
+  'palette.archive.enter': 'Search the archive',
+  'palette.archive.enterFor': 'Search the archive: "{query}"',
+  'palette.archive.placeholder': 'Search message text in the archive…',
+  'palette.archive.leave': 'Leave archive search',
+  'palette.archive.error': 'The archive search failed — try again.',
 };

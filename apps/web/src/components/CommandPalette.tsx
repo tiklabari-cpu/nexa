@@ -55,20 +55,33 @@ import { useTranslate, type TFunction } from '../lib/i18n.js';
 import { Banner } from './ui/index.js';
 import { EmptyState } from './EmptyState.js';
 import { Skeleton } from './Skeleton.js';
-import type { SearchKind, SearchResult } from '@siyahtus/types';
+import {
+  messageSearchWords,
+  searchShape,
+  type SearchKind,
+  type SearchResult,
+} from '@siyahtus/types';
 import { formatDateTime } from '../lib/format.js';
 import { NAV_DESTINATIONS, isNavVisible } from './navigation.js';
 import { ACTIONS, type ActionDeps, type PaletteResult } from './actions.js';
+import { archiveSearchReason } from '../features/inbox/archive-search.js';
+import { HighlightedSnippet, refusalText } from '../features/inbox/ArchiveSearch.js';
 
 const CUSTOMER_READ = ['customers:ro', 'customers:rw'];
 const TICKET_READ = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
-const CHAT_READ = ['chats--all:ro', 'chats--access:ro'];
+// A write scope satisfies the read one on the server (role-scopes.ts), and an
+// owner or admin holds only `chats--all:rw` — so the list names both, as the
+// ticket one beside it does.
+const CHAT_READ = ['chats--all:ro', 'chats--access:ro', 'chats--all:rw', 'chats--access:rw'];
 /** `GET /search` answers a caller holding any of the three; it gates each kind itself. */
 const RECORD_READ = [...CUSTOMER_READ, ...CHAT_READ, ...TICKET_READ];
 // Same scope the endpoint itself requires (`routes/command-palette.ts`) — the
 // same courtesy the other groups get: an entry whose request would 403 is not
 // offered at all.
 const AI_QUERY_SCOPE = ['reports_read'];
+/** Words that find the "Search the archive" row besides its label. */
+const ARCHIVE_KEYWORDS = ['archive', 'arşiv', 'arsiv', 'message', 'mesaj'];
+const ARCHIVE_ICON = '⌕';
 /** One glyph for the whole group — an action is a switch, not a place. */
 const ACTION_ICON = '⏻';
 /** Echoes Copilot's own glyph — both surfaces are "ask the assistant". */
@@ -100,6 +113,10 @@ export function CommandPalette(): ReactElement | null {
   // again, so editing the query always returns to search rather than leaving
   // a stale answer sitting over a new one it no longer belongs to.
   const [aiAsked, setAiAsked] = useState<string | null>(null);
+  // "Search the archive" (ID-07 · tm 333.4): while on, the palette is a message
+  // text search and nothing else — the actions, destinations and record lookups
+  // would only crowd out what the agent switched it on to find.
+  const [archiveMode, setArchiveMode] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -151,6 +168,7 @@ export function CommandPalette(): ReactElement | null {
     setQuery('');
     setActiveIndex(0);
     setAiAsked(null);
+    setArchiveMode(false);
     aiAnswer.reset();
   }, [aiAnswer.reset]);
 
@@ -204,16 +222,58 @@ export function CommandPalette(): ReactElement | null {
       api.get<{ items: SearchResult[] }>(
         `/search?query=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`,
       ),
-    enabled: searching && has(RECORD_READ),
+    enabled: searching && !archiveMode && has(RECORD_READ),
+    retry: false,
+    staleTime: 10_000,
+  });
+
+  // The archive search proper: the same endpoint asked for `types=message`,
+  // which has its own rules (three letters in a row, at most eight words) — a
+  // query that breaks one is explained here instead of sent.
+  //
+  // paging-exempt: a type-ahead like the lookup above — the best matches are
+  // the whole answer, and the Archive view's own search pages the rest.
+  const archiveWords = useMemo(() => messageSearchWords(query), [query]);
+  const archive = useQuery({
+    queryKey: ['palette', 'archive', query],
+    queryFn: () =>
+      api.get<{ items: SearchResult[] }>(
+        `/search?query=${encodeURIComponent(query)}&types=message&limit=${SEARCH_LIMIT}`,
+      ),
+    enabled: open && archiveMode && archiveWords.ok && has(CHAT_READ),
     retry: false,
     staleTime: 10_000,
   });
 
   const commands = useMemo<PaletteResult[]>(() => {
+    // Opening a record is the same step wherever the row came from: ask before
+    // leaving a screen with unsaved work, go there, put the palette away.
+    const openTo = (to: string): void => {
+      if (!confirmLeave()) return;
+      navigate(to);
+      close();
+    };
+
+    // Archive mode shows the message matches and nothing else.
+    if (archiveMode) {
+      return (archive.data?.items ?? [])
+        .filter((record) => record.kind === 'message')
+        .map((record) => recordResult(record, t('palette.archive.group'), t, openTo));
+    }
+
     // Route filtering needs no network, so it tracks the raw input for an
     // instant response; only the record searches wait for the debounce.
     const routeNeedle = rawQuery.trim().toLowerCase();
     const list: PaletteResult[] = [];
+    const canArchive = has(CHAT_READ);
+    const archiveRow = (id: string, label: string, run: () => void): PaletteResult => ({
+      kind: 'action',
+      id,
+      group: t('palette.archive.group'),
+      label,
+      icon: ARCHIVE_ICON,
+      run,
+    });
 
     // Actions lead: "do it from here" is the reason to reach for the palette
     // over the rail, and the rail cannot offer it at all. Group members must
@@ -256,6 +316,28 @@ export function CommandPalette(): ReactElement | null {
       });
     }
 
+    // "Search the archive", offered where the agent is looking for a thing to
+    // do. A typed query that could be a message search gets its own row at the
+    // end instead, so the record lookups above it keep the top.
+    // A pasted message or member number is looked up by number, not read as words.
+    const shape = searchShape(query);
+    const archiveTyped = searching && archiveWords.ok && shape !== 'event' && shape !== 'uuid';
+    if (
+      canArchive &&
+      !archiveTyped &&
+      (!routeNeedle ||
+        t('palette.archive.enter').toLowerCase().includes(routeNeedle) ||
+        ARCHIVE_KEYWORDS.some((keyword) => keyword.includes(routeNeedle)))
+    ) {
+      list.push(
+        archiveRow('archive:enter', t('palette.archive.enter'), () => {
+          setArchiveMode(true);
+          setRawQuery('');
+          setQuery('');
+        }),
+      );
+    }
+
     for (const dest of NAV_DESTINATIONS) {
       // Same courtesy as the actions loop above: a destination that only 403s
       // for this caller is not offered as a result — nor one the public pilot
@@ -293,13 +375,7 @@ export function CommandPalette(): ReactElement | null {
       for (const group of RECORD_GROUPS) {
         for (const record of found) {
           if (!group.kinds.includes(record.kind)) continue;
-          list.push(
-            recordResult(record, t(group.labelKey), t, (to) => {
-              if (!confirmLeave()) return;
-              navigate(to);
-              close();
-            }),
-          );
+          list.push(recordResult(record, t(group.labelKey), t, openTo));
         }
       }
     }
@@ -322,11 +398,24 @@ export function CommandPalette(): ReactElement | null {
       });
     }
 
+    // Judged after the Ask-AI fallback on purpose: this row is not a match for
+    // the query, and must not stop "nothing matched" from offering to ask.
+    if (canArchive && archiveTyped) {
+      list.push(
+        archiveRow('archive:enterFor', t('palette.archive.enterFor', { query }), () =>
+          setArchiveMode(true),
+        ),
+      );
+    }
+
     return list;
   }, [
     rawQuery,
     searching,
     query,
+    archiveMode,
+    archive.data,
+    archiveWords.ok,
     records.data,
     navigate,
     close,
@@ -379,6 +468,10 @@ export function CommandPalette(): ReactElement | null {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       commands[activeIndex]?.run();
+    } else if (event.key === 'Backspace' && archiveMode && rawQuery === '') {
+      // The chip is deleted like a character: one more Backspace at the start.
+      event.preventDefault();
+      setArchiveMode(false);
     }
   };
 
@@ -386,7 +479,19 @@ export function CommandPalette(): ReactElement | null {
   // next ⌘K. A pending failure notice is the one reason to stay on screen.
   if (!open && !actionError) return null;
 
-  const busy = searching && records.isFetching;
+  const busy = archiveMode ? archive.isFetching : searching && records.isFetching;
+  // What an empty archive result list says — each case is a different reason
+  // there is nothing to show, and "No matches" is the wrong one for most.
+  const archiveReason = archive.isError ? archiveSearchReason(archive.error) : null;
+  const archiveStatus = !archiveWords.ok
+    ? refusalText(t, rawQuery.trim() === '' ? 'too_short' : archiveWords.reason)
+    : busy
+      ? t('palette.searching')
+      : archive.isError
+        ? archiveReason
+          ? refusalText(t, archiveReason)
+          : t('palette.archive.error')
+        : t('inbox.archiveSearch.empty.title');
 
   // Sits above the palette's own layer so a notice raised by one run is still
   // readable if the agent has already reopened the palette to try again.
@@ -427,6 +532,17 @@ export function CommandPalette(): ReactElement | null {
             <span aria-hidden="true" className="text-content-tertiary">
               ⌕
             </span>
+            {archiveMode && (
+              <button
+                type="button"
+                aria-label={t('palette.archive.leave')}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setArchiveMode(false)}
+                className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs text-content-secondary hover:text-content"
+              >
+                {t('palette.archive.group')} ✕
+              </button>
+            )}
             <input
               ref={inputRef}
               type="text"
@@ -439,7 +555,7 @@ export function CommandPalette(): ReactElement | null {
                   : undefined
               }
               aria-label={t('palette.search')}
-              placeholder={t('palette.placeholder')}
+              placeholder={t(archiveMode ? 'palette.archive.placeholder' : 'palette.placeholder')}
               value={rawQuery}
               onChange={(event) => {
                 setRawQuery(event.target.value);
@@ -471,7 +587,11 @@ export function CommandPalette(): ReactElement | null {
                 role="presentation"
                 className="px-4 py-6 text-center text-sm text-content-secondary"
               >
-                {busy ? t('palette.searching') : t('palette.noMatches')}
+                {archiveMode
+                  ? archiveStatus
+                  : busy
+                    ? t('palette.searching')
+                    : t('palette.noMatches')}
               </li>
             ) : (
               commands.map((command, index) => {
@@ -515,11 +635,20 @@ export function CommandPalette(): ReactElement | null {
                             </span>
                           )}
                         </span>
-                        {command.sub && (
-                          <span className="block truncate text-2xs text-content-tertiary">
-                            {command.sub}
-                          </span>
-                        )}
+                        {command.sub &&
+                          (command.subHighlights ? (
+                            // A message snippet wraps: cut to one line it can lose the very words it matched.
+                            <span className="line-clamp-2 break-words text-2xs text-content-tertiary">
+                              <HighlightedSnippet
+                                snippet={command.sub}
+                                highlights={command.subHighlights}
+                              />
+                            </span>
+                          ) : (
+                            <span className="block truncate text-2xs text-content-tertiary">
+                              {command.sub}
+                            </span>
+                          ))}
                       </span>
                     </button>
                   </li>
@@ -679,12 +808,17 @@ function recordResult(
       };
     case 'message':
       // The text search (ID-07) answers only when asked for by `types`, which
-      // this palette does not yet do; a row opens at the message it matched.
+      // archive mode does; a row opens at the message it matched. The snippet
+      // stands alone as `sub` so the server's highlight ranges still fit it,
+      // and the day moves to the badge.
       return {
         ...base,
         id: `message:${record.event_id}`,
         label: record.title ?? t('palette.visitor'),
-        sub: line(record.subtitle, at),
+        ...(record.subtitle
+          ? { sub: record.subtitle, subHighlights: record.highlights ?? [] }
+          : {}),
+        ...(at ? { badge: at } : {}),
         icon: '▤',
       };
   }

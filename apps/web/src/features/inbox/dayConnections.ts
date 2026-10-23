@@ -126,6 +126,12 @@ export function connectionBreaks(
 export interface TranscriptFocus {
   threadId?: string | null;
   eventId?: string | null;
+  /**
+   * Changes when the same target is asked for again: a reader who has scrolled
+   * away from a message and picks "go to this message" once more expects to be
+   * taken back, which the target alone — already settled — would not do.
+   */
+  nonce?: number;
 }
 
 /**

@@ -215,7 +215,7 @@ export function Transcript({
   const [focusRetry, setFocusRetry] = useState(0);
   const focusKey =
     focus && (focus.threadId || focus.eventId)
-      ? `${chatId}|${focus.threadId ?? ''}|${focus.eventId ?? ''}`
+      ? `${chatId}|${focus.threadId ?? ''}|${focus.eventId ?? ''}|${focus.nonce ?? 0}`
       : null;
   useEffect(() => {
     if (!focus || focusKey === null || loading || isLoadingOlder) return;

@@ -8,6 +8,8 @@ import {
   THREAD_PRIORITIES,
   TRANSFER_REASONS,
   isShortId,
+  MESSAGE_SEARCH_MAX_QUERY_BYTES,
+  MESSAGE_SEARCH_PAGE_SIZE,
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -22,6 +24,7 @@ import {
   type ProviderEndpoints,
 } from '../services/apps/verifiers/types.js';
 import { hasChatScope } from '../services/chat/access.js';
+import { messageSearchWordsOrThrow, spendMessageSearch } from '../services/chat/event-search.js';
 import { readCustomerContext } from '../services/customers/customer-context.js';
 import { conversationView } from '../services/ai/conversation/conversation-view.js';
 import { loadConversation } from '../services/ai/conversation/state-store.js';
@@ -57,9 +60,31 @@ const listQuery = z.object({
   /** How pressing (AI-12): the open connection's priority. */
   priority: z.enum(THREAD_PRIORITIES).optional(),
   sort: z.enum(['newest', 'oldest']).default('newest'),
-  limit: z.coerce.number().int().min(1).max(100).default(25),
+  /** The page size; 25 for the list, `MESSAGE_SEARCH_PAGE_SIZE` for a text search. */
+  limit: z.coerce.number().int().min(1).max(100).optional(),
   page_id: z.string().max(512).optional(),
+  /**
+   * A message text search (ID-07 · tm 333.3). The rules past the length are
+   * `messageSearchWords`'s, checked in `event-search.ts` so each refusal names
+   * its rule.
+   */
+  query: z.string().max(MESSAGE_SEARCH_MAX_QUERY_BYTES).optional(),
+  date_from: z.string().datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+  date_to: z.string().datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
+
+/**
+ * What a text search composes with. Anything else narrows a list the search
+ * does not read — the function decides membership, order and the total — so it
+ * is refused rather than quietly ignored.
+ */
+const SEARCH_INCOMPATIBLE = [
+  'channel',
+  'customer_id',
+  'group_id',
+  'queue_group_id',
+  'priority',
+] as const;
 
 const newEventSchema = z.object({
   type: z.enum(EVENT_TYPES).default('message'),
@@ -259,10 +284,46 @@ export default async function chatRoutes(
       const query = parse(listQuery, request.query);
       const principal = request.requirePrincipal();
 
+      // A blank search box sends `query=`; that is the list, not a search.
+      const text = query.query?.trim() ? query.query : undefined;
+      if (text !== undefined) {
+        const raw = request.query as Record<string, unknown>;
+        const extra = SEARCH_INCOMPATIBLE.find((key) => raw[key] !== undefined);
+        if (extra !== undefined || query.view !== 'all' || query.sort !== 'newest') {
+          throw ApiError.validation(
+            `${extra ?? (query.view !== 'all' ? 'view' : 'sort')}: a text search composes only with date_from, date_to, limit and page_id.`,
+            { reason: 'not_with_query' },
+          );
+        }
+        // The rules first, then the budget: a malformed query costs nothing.
+        messageSearchWordsOrThrow(text);
+        await spendMessageSearch(app.rateLimiter, principal, (error) =>
+          request.log.error({ err: error, bucket: 'msgsearch' }, 'budget unavailable — allowing'),
+        );
+        const result = await chats.search(request.tenant(), principal, {
+          query: text,
+          limit: query.limit ?? MESSAGE_SEARCH_PAGE_SIZE,
+          ...(query.date_from !== undefined ? { from: query.date_from } : {}),
+          ...(query.date_to !== undefined ? { to: query.date_to } : {}),
+          ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),
+        });
+        return reply.send({
+          items: result.items,
+          total: result.total,
+          ...(result.nextPageId ? { next_page_id: result.nextPageId } : {}),
+        });
+      }
+      if (query.date_from !== undefined || query.date_to !== undefined) {
+        throw ApiError.validation(
+          `${query.date_from !== undefined ? 'date_from' : 'date_to'}: narrows a text search; give query.`,
+          { reason: 'needs_query' },
+        );
+      }
+
       const result = await chats.list(request.tenant(), principal, {
         view: query.view,
         sort: query.sort,
-        limit: query.limit,
+        limit: query.limit ?? 25,
         ...(query.channel !== undefined ? { channel: query.channel } : {}),
         ...(query.customer_id !== undefined ? { customerId: query.customer_id } : {}),
         ...(query.group_id !== undefined ? { groupId: query.group_id } : {}),

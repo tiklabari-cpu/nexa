@@ -14475,7 +14475,7 @@
           "332"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T08:48:12.952Z",
+        "updatedAt": "2026-10-23T08:50:56.748Z",
         "subtasks": [
           {
             "id": 1,
@@ -14509,13 +14509,13 @@
             "description": "event-search.ts + listChats query/date + /search message türü",
             "details": "Üst görev 333 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "333.2"
             ],
             "parentId": "333",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-23T08:50:56.748Z"
           },
           {
             "id": 4,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T08:48:12.953Z",
+      "lastModified": "2026-10-23T08:50:56.749Z",
       "taskCount": 390,
       "completedCount": 318,
       "tags": [

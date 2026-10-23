@@ -28,6 +28,28 @@ chats:
       Paginated by opaque keyset cursor rather than offset: an offset page shifts
       under you every time a new message arrives, which in an active inbox means
       silently skipped conversations.
+
+      **Text search (ID-07).** With `query` the list is a search of message
+      text: the conversations the caller may see — open and archived — that
+      hold a message containing every word of the query, newest match first,
+      each item carrying `match` (its newest matching message, cut to a
+      snippet). Case and Turkish letters are folded ("İSTANBUL" finds
+      "istanbul", "cagri" finds "çağrı"), words match anywhere and in any order
+      ("papara 5000" finds "Papara ile 5000 TL"), `%` and `_` mean
+      themselves, and there is no stemming. Visitor and agent messages, AI
+      replies and internal notes are searched; system lines are not. A card
+      number was masked when it was written, so its digits find nothing.
+
+      A search reads messages from `date_from` (default: 90 days before
+      `date_to`) up to but not including `date_to` (default: now), at most
+      400 days. It composes with `date_from`, `date_to`, `limit` (default
+      50) and `page_id` only — any other filter, or `sort=oldest`, is a 400 —
+      and `total` is the number of matching conversations across all pages.
+      A query needs three letters or digits in a row in one of its words, at
+      most eight words and 1000 bytes; one that matches more than 20 000
+      messages is refused as too broad (400, `details.reason: too_broad`) —
+      add a word or narrow the dates. A search that runs out of time is a 503.
+      The request log masks `query`; it is never put in a browser address.
     parameters:
       - name: view
         in: query
@@ -93,6 +115,20 @@ chats:
       - name: sort
         in: query
         schema: { type: string, enum: [newest, oldest], default: newest }
+      - name: query
+        in: query
+        description: |
+          Words to find in message text (see above). Surrounding and repeated
+          whitespace is ignored.
+        schema: { type: string, minLength: 3, maxLength: 1000 }
+      - name: date_from
+        in: query
+        description: With `query`, the earliest message time searched (inclusive).
+        schema: { type: string, format: date-time }
+      - name: date_to
+        in: query
+        description: With `query`, the end of the searched range (exclusive).
+        schema: { type: string, format: date-time }
       - $ref: "../openapi.yaml#/components/parameters/PageId"
       - $ref: "../openapi.yaml#/components/parameters/Limit"
     responses:
@@ -127,9 +163,11 @@ chats:
                     up to `limit` — is silently wrong from the 51st resolution
                     on, and gets quieter the larger the workspace.
                 next_page_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/MessageSearchTimedOut" }
 
   post:
     tags: [Chats]

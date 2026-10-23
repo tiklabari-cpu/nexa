@@ -11,11 +11,34 @@
  * Names follow the glossary (K1 = A): `chat` is the member's day (panel
  * "Thread ID", `chat_id`), `connection` one connection inside it (panel
  * "Chat ID", `thread_id`), `event` one message.
+ *
+ * `message` is the text search (ID-07 · tm 333.3): conversations whose messages
+ * contain every word of the query, one result per conversation (its newest
+ * matching message). It has its own rules — at least three letters or digits
+ * in a row, at most eight words, a cap on how many messages it may match — and
+ * answers a query that breaks one with a 400, so it runs only when `types`
+ * names it: `SEARCH_DEFAULT_KINDS` leaves it out.
  */
 import { classifyIdentifier } from './id-glossary.js';
 
-export const SEARCH_KINDS = ['chat', 'connection', 'event', 'customer', 'ticket'] as const;
+export const SEARCH_KINDS = [
+  'chat',
+  'connection',
+  'event',
+  'customer',
+  'ticket',
+  'message',
+] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
+
+/** The kinds looked for when `types` is absent — every one but the text search. */
+export const SEARCH_DEFAULT_KINDS: readonly SearchKind[] = [
+  'chat',
+  'connection',
+  'event',
+  'customer',
+  'ticket',
+];
 
 export const SEARCH_MATCHED_ON = [
   'chat_id',
@@ -28,6 +51,7 @@ export const SEARCH_MATCHED_ON = [
   'name',
   'phone',
   'subject',
+  'text',
 ] as const;
 export type SearchMatchedOn = (typeof SEARCH_MATCHED_ON)[number];
 
@@ -46,8 +70,13 @@ export interface SearchResult {
   ticket_id?: string;
   /** The member's name or the ticket's subject; null when the member left no name. */
   title: string | null;
-  /** A member's e-mail (else phone), a ticket's member name; null when hidden or absent. */
+  /**
+   * A member's e-mail (else phone), a ticket's member name, a message's
+   * snippet; null when hidden or absent.
+   */
   subtitle: string | null;
+  /** `message` only: where the query's words sit in `subtitle` (`[start, end)`). */
+  highlights?: Array<{ start: number; end: number }>;
   /** When the day, connection or message started, or the member was last active. */
   at: string | null;
   matched_on: SearchMatchedOn;

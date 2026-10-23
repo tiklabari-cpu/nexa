@@ -57,6 +57,7 @@ import {
   type ThreadPriority,
   type TransferReason,
   type AiHandoffCardView,
+  type MessageSearchMatch,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { maskForWrite, sensitiveAuthorOf, type MaskedForWrite } from '../../lib/sensitive-mask.js';
@@ -122,6 +123,7 @@ import {
   visitorOpenedVia,
   type ConversationDay,
 } from './conversation-day.js';
+import { searchMessages, type MessageSearchInput } from './event-search.js';
 
 /** How long a completed request stays replayable by idempotency key. */
 const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
@@ -554,6 +556,15 @@ export class ChatService {
     options: ChatListOptions,
   ): Promise<{ items: ChatSummary[]; total: number; nextPageId?: string }> {
     return withTenant(this.db, tenant, (tx) => listChatsInTenant(tx, principal, options));
+  }
+
+  /** `GET /chats?query=` — the list as a message text search (ID-07). */
+  async search(
+    tenant: TenantContext,
+    principal: Principal,
+    options: MessageSearchInput,
+  ): Promise<{ items: ChatSummary[]; total: number; nextPageId?: string }> {
+    return withTenant(this.db, tenant, (tx) => searchChatsInTenant(tx, principal, options));
   }
 
   async get(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {
@@ -4558,22 +4569,81 @@ export async function listChatsInTenant(
       // non-unique column silently skips or repeats rows.
       orderBy: [{ lastEventAt: direction }, { id: direction }],
       take: options.limit + 1,
-      include: {
-        customer: { select: { name: true, email: true } },
-        access: { select: { groupId: true } },
-        users: true,
-        threads: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          include: { tags: { include: { tag: { select: { name: true } } } } },
-        },
-      },
+      include: CHAT_SUMMARY_INCLUDE,
     }),
     tx.chat.count({ where }),
   ]);
 
   const hasMore = rows.length > options.limit;
   const page = hasMore ? rows.slice(0, options.limit) : rows;
+  const items = await summariseChats(tx, visibility, page);
+
+  const last = page.at(-1);
+  return {
+    items,
+    total,
+    ...(hasMore && last
+      ? { nextPageId: encodeCursor({ activityAt: last.lastEventAt, id: last.id }) }
+      : {}),
+  };
+}
+
+/**
+ * `GET /chats?query=` (ID-07 · tm 333.3): the conversations whose messages
+ * contain the query, newest match first, each summarised as the list
+ * summarises it and carrying the match. The search decides membership, order,
+ * `total` and the cursor (`event-search.ts`, `search_events` inside); the
+ * summaries are read afterwards for exactly the conversations it returned,
+ * under row level security as the list reads them, so a conversation that
+ * vanished in between drops out rather than appearing empty.
+ */
+export async function searchChatsInTenant(
+  tx: TenantClient,
+  principal: Principal,
+  options: MessageSearchInput,
+): Promise<{ items: ChatSummary[]; total: number; nextPageId?: string }> {
+  const result = await searchMessages(tx, principal, options);
+  if (result.hits.length === 0) return { items: [], total: result.total };
+
+  const visibility = await resolveVisibility(tx, principal, 'read');
+  const rows = await tx.chat.findMany({
+    where: { id: { in: result.hits.map((hit) => hit.chatId) } },
+    include: CHAT_SUMMARY_INCLUDE,
+  });
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const ordered = result.hits.flatMap((hit) => byId.get(hit.chatId) ?? []);
+  const summaries = await summariseChats(tx, visibility, ordered);
+  const matches = new Map(result.hits.map((hit) => [hit.chatId, hit.match]));
+  return {
+    items: summaries.map((summary) => {
+      const match = matches.get(summary.id);
+      return match ? { ...summary, match } : summary;
+    }),
+    total: result.total,
+    ...(result.nextPageId ? { nextPageId: result.nextPageId } : {}),
+  };
+}
+
+/** What a list row needs from `chats`, shared by the list and the text search. */
+const CHAT_SUMMARY_INCLUDE = {
+  customer: { select: { name: true, email: true } },
+  access: { select: { groupId: true } },
+  users: true,
+  threads: {
+    orderBy: { createdAt: 'desc' },
+    take: 1,
+    include: { tags: { include: { tag: { select: { name: true } } } } },
+  },
+} satisfies Prisma.ChatInclude;
+
+type ChatSummaryRow = Prisma.ChatGetPayload<{ include: typeof CHAT_SUMMARY_INCLUDE }>;
+
+/** List rows for `page`, in its order. */
+async function summariseChats(
+  tx: TenantClient,
+  visibility: ChatVisibility,
+  page: ChatSummaryRow[],
+): Promise<ChatSummary[]> {
   const lastEvents = await lastEventPerChat(
     tx,
     page.map((c) => c.id),
@@ -4586,7 +4656,7 @@ export async function listChatsInTenant(
     page.filter((c) => c.localDay !== null).map((c) => c.id),
   );
 
-  const items = page.map((chat) => {
+  return page.map((chat) => {
     const thread = chat.threads[0];
     const seenUpTo = chat.users.find(
       (u) => u.userId === visibility.actorId && u.userType === 'agent',
@@ -4617,15 +4687,6 @@ export async function listChatsInTenant(
       tags: thread?.tags.map((t) => t.tag.name) ?? [],
     } satisfies ChatSummary;
   });
-
-  const last = page.at(-1);
-  return {
-    items,
-    total,
-    ...(hasMore && last
-      ? { nextPageId: encodeCursor({ activityAt: last.lastEventAt, id: last.id }) }
-      : {}),
-  };
 }
 
 /**
@@ -5108,6 +5169,8 @@ export interface ChatSummary {
   connection_count: number;
   last_event: SerialisedEvent | null;
   tags: string[];
+  /** Only on a text search (`searchChatsInTenant`): the message the chat was found by. */
+  match?: MessageSearchMatch;
 }
 
 /**

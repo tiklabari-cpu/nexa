@@ -68,6 +68,7 @@ interface Hit {
   recipients: string;
   text: string;
   match_count: number;
+  chat_count: number;
 }
 
 interface Caller {
@@ -451,6 +452,8 @@ describe('search_events — message text search (ID-07 · tm 333.2)', () => {
           text: 'Not: Papara 5000 TL dekontu istendi',
           // The player's line, the reversed one and the note — not the system line.
           match_count: 3,
+          // fin, rgOnly, joined, players (tm 333.3).
+          chat_count: 4,
         });
 
         const [withoutNotes] = await search(
@@ -467,6 +470,28 @@ describe('search_events — message text search (ID-07 · tm 333.2)', () => {
 
         const everything = await search(fx.a, founder, { query: 'sistem satırı' });
         expect(everything).toEqual([]);
+      });
+
+      it('counts the conversations of every page, among those the caller may see (tm 333.3)', async () => {
+        for (const caller of [founder, member, { ...founder, includeNotes: false }]) {
+          const all = await search(fx.a, caller, { query: 'papara 5000' });
+          expect(all.length).toBeGreaterThan(0);
+          const first = await search(fx.a, caller, { query: 'papara 5000', limit: 1 });
+          const last = all.at(-1)!;
+          const tail = await search(fx.a, caller, {
+            query: 'papara 5000',
+            limit: 1,
+            cursor: {
+              at: all.at(-2)?.created_at ?? last.created_at,
+              id: all.at(-2)?.event_id ?? '',
+            },
+          });
+          for (const row of [...all, ...first, ...tail]) expect(row.chat_count).toBe(all.length);
+        }
+        // The team member's count leaves out the conversation of another team.
+        const founderCount = (await search(fx.a, founder, { query: 'papara 5000' }))[0]?.chat_count;
+        const memberCount = (await search(fx.a, member, { query: 'papara 5000' }))[0]?.chat_count;
+        expect(memberCount).toBeLessThan(founderCount ?? 0);
       });
 
       it('orders conversations by their newest match', async () => {
@@ -902,7 +927,7 @@ describe('search_events — message text search (ID-07 · tm 333.2)', () => {
           appCan: true,
           // Only what a result needs — no author, no properties, no customer.
           result:
-            'TABLE(chat_id text, thread_id text, event_id text, created_at timestamp with time zone, recipients text, text text, match_count integer)',
+            'TABLE(chat_id text, thread_id text, event_id text, created_at timestamp with time zone, recipients text, text text, match_count integer, chat_count integer)',
           // Nothing the runtime role creates can shadow a name the definer resolves.
           appCreatesInPublic: false,
         },

@@ -1,0 +1,97 @@
+conversations:
+  get:
+    tags: [Archive]
+    operationId: listArchiveConversations
+    summary: List past conversations, one row per connection
+    description: |
+      The archive screen's list (AR-01). A row is one **connection** — panel
+      "Chat ID", `thread_id` — not a day: a player who wrote three times is
+      three rows, each with its own tags, assignee and rating. `chat_id` is the
+      day the connection belongs to (panel "Thread ID"); a reopened
+      conversation is a new connection and leaves the earlier one here as it
+      was.
+
+      Closed connections by default, the most recently ended first
+      (`status=closed`). `status=all` puts the connections still open first,
+      then the closed ones; `status=open` lists only those.
+
+      What the caller may see is part of the query, not a filter applied to a
+      page afterwards: a Team Member and a Team Lead see the conversations of
+      their teams and the ones they took part in, a Manager and the Founder
+      every one (RL-02). A connection past the workspace's retention window is
+      not listed — the sweep deletes it — and a member who was erased has no
+      rows at all.
+
+      Not live: no push keeps the list current, and nothing here writes.
+      Searching by number or by message text is `GET /search` and
+      `GET /chats?query=`; their results carry the `thread_id` that is a row
+      here.
+    parameters:
+      - name: status
+        in: query
+        required: false
+        schema: { type: string, enum: [closed, open, all], default: closed }
+      - name: customer_id
+        in: query
+        required: false
+        description: One member's connections — the player card's "All".
+        schema: { type: string, format: uuid }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+    responses:
+      "200":
+        description: |
+          One page. `total` counts the whole list up to 1 000; past that
+          `total_capped` is true and the count stops there.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total, total_capped]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ArchiveConversation" }
+                total: { type: integer, minimum: 0, maximum: 1000 }
+                total_capped: { type: boolean }
+                next_page_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+conversation:
+  get:
+    tags: [Archive]
+    operationId: getArchiveConversation
+    summary: One past connection
+    description: |
+      The archive's detail for one connection: its row, the rating with its
+      comment, and its summary. The tags, the assignee and the rating are
+      this connection's — never the day's newest connection's. The transcript
+      is `GET /chats/{chat_id}/events?thread_id=`.
+
+      A connection the caller may not see, of another workspace, or erased is
+      a 404. So is one past the workspace's retention window, with
+      `error.details.reason: retention_expired` — its transcript is deleted
+      or about to be.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        description: "The connection. Panelde: Chat ID."
+        schema: { type: string, minLength: 10, maxLength: 12 }
+    responses:
+      "200":
+        description: The connection.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ArchiveConversationDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

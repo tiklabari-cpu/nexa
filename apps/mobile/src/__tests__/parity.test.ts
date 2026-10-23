@@ -1009,7 +1009,10 @@ describe('module parity matrix — what is still owed', () => {
       // 295 -> 296 with `/search` (tm 332) — the direct lookup by number,
       // e-mail or username (ID-06) behind the web panel's ⌘K palette. The app
       // has no palette; nothing here re-scopes.
-      contractEndpoints: 296,
+      // 296 -> 298 with `/archive/conversations` and its item (tm 335.1) — the
+      // archive, one row per connection (AR-01), drawn by the web panel's archive
+      // screen (tm 335.2). The app has no archive screen; nothing here re-scopes.
+      contractEndpoints: 298,
       scopeBoundaries: 1,
     });
   });

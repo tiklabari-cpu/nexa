@@ -387,6 +387,30 @@ describe('a thread handed off automatically is not an AI resolution (ADR-09a · 
 
   // --- One definition ---------------------------------------------------------
 
+  it('writes handled_by = ai at close for exactly the threads the counter bills (AR-01 · tm 335.1)', async () => {
+    for (const [effectiveAt, billed] of [
+      [LONG_AGO, ADR_09A],
+      [FAR_AHEAD, ADR_09],
+    ] as const) {
+      const made = await corpus(effectiveAt);
+      const handled = new Map<Kind, string | null>();
+      for (const [kind, ref] of made) {
+        const row = await owner.thread.findUniqueOrThrow({
+          where: { id: ref.threadId },
+          select: { handledBy: true },
+        });
+        handled.set(kind, row.handledBy);
+      }
+      const ai = [...handled].filter(([, value]) => value === 'ai').map(([kind]) => kind);
+      expect(ai.sort()).toEqual([...billed].sort());
+      // Every thread here heard from the AI, so the rest are `mixed`, never `human`.
+      for (const [kind, value] of handled) {
+        if (!billed.includes(kind)) expect(value, kind).toBe('mixed');
+      }
+      await owner.thread.deleteMany({ where: { licenseId: fx.a.licenseId } });
+    }
+  });
+
   it('picks the same threads in all three spellings, on both sides of the effective moment', async () => {
     const made = await corpus(FAR_AHEAD, [...KINDS, 'forged']);
     const kindOf = new Map([...made].map(([kind, ref]) => [ref.threadId, kind]));

@@ -72,7 +72,7 @@ import { withTenant, type TenantClient, type TenantContext } from '../../lib/ten
 import { roleAtLeast, type Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { recordAiResolution } from '../billing/metering.js';
-import { aiResolvedThreadWhere, threadWasAiResolved } from '../billing/ai-resolution.js';
+import { aiResolvedThreadWhere, recordHandledBy } from '../billing/ai-resolution.js';
 import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import {
@@ -2657,8 +2657,9 @@ export class ChatService {
     // ADR-09 / ADR-09a: a thread that closes with no agent-authored event and
     // no automatic hand-off resolved without a human. Counted here, in the same
     // transaction that closes it, so the billing figure and the conversation can
-    // never disagree.
-    if (await threadWasAiResolved(tx, thread.id, this.billing.adr09aEffectiveAt)) {
+    // never disagree — and the archive's `handled_by` (AR-01) is the same
+    // answer, written by the one statement the counter reads.
+    if ((await recordHandledBy(tx, thread.id, this.billing.adr09aEffectiveAt)) === 'ai') {
       await recordAiResolution(tx, tenant, this.billing.aiOverageCents, this.billing.aiIncluded);
     }
 

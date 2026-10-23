@@ -1,0 +1,15 @@
+-- The archive list's own order (AR-01 · tm 335.1): the most recently ended
+-- connection first, the id as the keyset tie-break. `DESC` puts NULL -- an
+-- open connection -- first, which is where "show the ongoing ones too"
+-- lists them, so one index serves both `status=closed` and `status=all`.
+-- `schema.prisma` models it.
+--
+-- Alone in this file on purpose: `CREATE INDEX CONCURRENTLY` cannot run
+-- inside a transaction block (CONVENTIONS 6.3), and a plain build would hold
+-- writes on `threads` for the length of the scan.
+--
+-- NO `IF NOT EXISTS`, for 20261018180100's reason: a failed concurrent build
+-- leaves an INVALID index of this name behind, which the retry must not keep.
+-- Recover by `DROP INDEX CONCURRENTLY threads_license_id_closed_at_id_idx`,
+-- then `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE INDEX CONCURRENTLY "threads_license_id_closed_at_id_idx" ON "threads"("license_id", "closed_at" DESC, "id" DESC);

@@ -89,6 +89,8 @@ tags:
     description: ⌘K palette — the account/team-wide natural-language query result type.
   - name: Search
     description: Direct lookup by number, e-mail or username — conversations, members, tickets (ID-06).
+  - name: Archive
+    description: Past conversations, one row per connection, read-only (AR-01).
   - name: Settings
     description: Workspace configuration — trusted domains, saved replies, routing.
   - name: Onboarding
@@ -477,6 +479,11 @@ paths:
 
   /search:
     $ref: "./paths/search.yaml#/search"
+
+  /archive/conversations:
+    $ref: "./paths/archive.yaml#/conversations"
+  /archive/conversations/{threadId}:
+    $ref: "./paths/archive.yaml#/conversation"
 
   /settings/trusted-domains:
     $ref: "./paths/settings.yaml#/trustedDomains"
@@ -2675,6 +2682,116 @@ components:
           allOf:
             - $ref: "#/components/schemas/AiHandoffCard"
           nullable: true
+
+    ArchiveConversation:
+      type: object
+      required:
+        [
+          thread_id,
+          chat_id,
+          customer,
+          started_at,
+          ended_at,
+          assignee,
+          group_ids,
+          tags,
+          rating,
+          handled_by,
+          risk_flags,
+          first_customer_message,
+          message_count,
+        ]
+      description: |
+        One archive row (AR-01): one connection. `thread_id` is the row's id
+        (panel "Chat ID"), `chat_id` the day it belongs to (panel "Thread ID").
+      properties:
+        thread_id: { type: string, description: The connection (panel "Chat ID"). }
+        chat_id: { type: string, description: The day (panel "Thread ID"). }
+        customer:
+          type: object
+          required: [id, name, username]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, nullable: true }
+            username:
+              type: string
+              nullable: true
+              description: |
+                Typed by the player, unverified. Null when not given or the
+                caller may not see it (`customers.contact.view`).
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true, description: Null while open. }
+        assignee:
+          type: object
+          nullable: true
+          description: Who had the connection — at the close, for a closed one.
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        group_ids:
+          type: array
+          description: |
+            The team the connection went to; for one opened before that was
+            recorded, the day's teams.
+          items: { type: integer }
+        tags:
+          type: array
+          description: This connection's tags.
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+        rating:
+          type: object
+          nullable: true
+          description: The player's newest rating of this connection (AR-03).
+          required: [value, has_comment]
+          properties:
+            value: { type: string, enum: [good, bad] }
+            has_comment: { type: boolean }
+        handled_by:
+          type: string
+          nullable: true
+          enum: [ai, human, mixed, null]
+          description: |
+            Who answered it, written as it closed. `ai` is ADR-09a's AI
+            resolution (the one the invoice counts); `human` a person and no
+            bot; `mixed` the rest. Null while open and for a connection closed
+            before this was recorded.
+        risk_flags:
+          type: array
+          description: The kinds of risk flag raised in this connection, cleared ones included.
+          items: { $ref: "#/components/schemas/RiskFlagType" }
+        first_customer_message:
+          type: string
+          nullable: true
+          maxLength: 140
+          description: The player's first message, shortened, sensitive values masked.
+        message_count:
+          { type: integer, minimum: 0, description: Messages in it, internal notes included. }
+
+    ArchiveConversationDetail:
+      description: |
+        One connection in the archive (AR-01): its row, with the rating in
+        full and the connection's summary.
+      allOf:
+        - $ref: "#/components/schemas/ArchiveConversation"
+        - type: object
+          required: [rating, summary]
+          properties:
+            rating:
+              type: object
+              nullable: true
+              required: [value, has_comment, comment, rated_at]
+              properties:
+                value: { type: string, enum: [good, bad] }
+                has_comment: { type: boolean }
+                comment: { type: string, nullable: true }
+                rated_at: { type: string, format: date-time }
+            summary: { type: string, nullable: true }
 
     AiHandoffSettings:
       type: object

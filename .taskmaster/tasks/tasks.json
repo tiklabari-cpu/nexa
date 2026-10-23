@@ -14475,7 +14475,7 @@
           "332"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T06:27:21.592Z",
+        "updatedAt": "2026-10-23T08:48:12.952Z",
         "subtasks": [
           {
             "id": 1,
@@ -14495,13 +14495,13 @@
             "description": "search_events SECURITY DEFINER (kiracı + görünürlük içeride) + güvenlik testleri",
             "details": "Üst görev 333 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Kiracılar arası ve görünürlük negatif testleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "333.1"
             ],
             "parentId": "333",
             "priority": "high",
-            "updatedAt": "2026-10-23T06:27:21.592Z"
+            "updatedAt": "2026-10-23T08:48:12.952Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T06:27:21.593Z",
+      "lastModified": "2026-10-23T08:48:12.953Z",
       "taskCount": 390,
       "completedCount": 318,
       "tags": [

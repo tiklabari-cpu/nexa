@@ -14418,7 +14418,7 @@
           "330"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T02:28:24.420Z",
+        "updatedAt": "2026-10-23T02:29:38.183Z",
         "subtasks": [
           {
             "id": 1,
@@ -14438,13 +14438,13 @@
             "description": "PlayerCard.tsx + useCustomerContext + DetailsPanel yerleşimi + RTM tazeleme",
             "details": "Üst görev 331 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "331.1"
             ],
             "parentId": "331",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-23T02:29:38.183Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T02:28:24.420Z",
+      "lastModified": "2026-10-23T02:29:38.183Z",
       "taskCount": 390,
       "completedCount": 316,
       "tags": [

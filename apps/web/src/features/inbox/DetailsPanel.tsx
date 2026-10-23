@@ -17,6 +17,7 @@ import {
 } from '../customers/MemberIdentity.js';
 import { RiskSection } from '../risk/RiskSection.js';
 import { AiHandoffSection, JUDGE_SCOPES } from './AiHandoffCard.js';
+import { PlayerCard } from './PlayerCard.js';
 import { SUPERVISOR_ROLES } from './roles.js';
 import { TransferDialog } from './TransferDialog.js';
 import { TEAMS_KEY, transferTeams, type TransferNotice, type TransferTeam } from './transfer.js';
@@ -198,6 +199,13 @@ export function DetailsPanel({
             canJudge={hasAnyScope(scopes, JUDGE_SCOPES)}
           />
         )}
+
+        {/* Who the player is, earlier today and the 90 days before (IN-02 · tm 331.2). */}
+        <PlayerCard
+          chatId={chatId}
+          customerId={chat.customer_id}
+          recognizedDevice={chat.latest_ai_handoff?.player.recognized_device === true}
+        />
 
         <PanelSection title={t('inbox.details.section.conversation')}>
           <Row label={t('inbox.details.row.status')}>

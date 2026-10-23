@@ -29,6 +29,7 @@ import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
 import { RISK_FLAGS_KEY } from '../risk/riskFlags.js';
 import { chatAiHandoffsKey } from './handoffCard.js';
+import { customerContextKey } from './useCustomerContext.js';
 import { withAiModeChange, type AiReturnInput, type ChatAiModeResult } from './aiMode.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
 import {
@@ -1511,6 +1512,8 @@ export function applyPush(
       const chat = payload['chat'] as { id?: unknown } | undefined;
       if (typeof chat?.id === 'string') {
         void queryClient.invalidateQueries({ queryKey: ['chat', chat.id] });
+        // The player card's "Earlier today" gained the connection before it (IN-02).
+        void queryClient.invalidateQueries({ queryKey: customerContextKey(chat.id) });
       }
       return;
     }
@@ -1524,6 +1527,10 @@ export function applyPush(
       const me = useAuth.getState().agent?.account_id;
       const toMe = Array.isArray(to?.agent_ids) && me !== undefined && to.agent_ids.includes(me);
       if (typeof chatId === 'string' && !toMe) retireDraft(currentDraftScope(), chatId);
+      // The card's rows name the teams and the assignee, and a hand-off moves both (IN-02).
+      if (typeof chatId === 'string') {
+        void queryClient.invalidateQueries({ queryKey: customerContextKey(chatId) });
+      }
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;
     }

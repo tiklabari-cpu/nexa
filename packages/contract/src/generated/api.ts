@@ -10837,6 +10837,15 @@ export interface components {
         /** @description Visitor IP (NFR-S9 personal data; agents only). */
         ip: string | null;
         /**
+         * @description ISO 3166-1 alpha-2 country the visit came from (GEOIP-COUNTRY ·
+         *     tm 330), resolved once at the visit's start from the address,
+         *     inside the API against an offline database. Null when no
+         *     database is configured or the address is not in it.
+         */
+        country_code: string | null;
+        /** @description City the visit came from, on the same terms as `country_code`. No coordinates are kept. */
+        city: string | null;
+        /**
          * @description True while the visit is still open (no recorded end). The PRD
          *     asks for a live duration, and `duration_seconds` is only a
          *     measurement taken when the response was written: a client may

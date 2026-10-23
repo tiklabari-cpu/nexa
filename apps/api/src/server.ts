@@ -52,6 +52,7 @@ import ticketEmailTemplateRoutes from './routes/ticket-email-templates.js';
 import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
+import { createGeoLocator, type GeoLocator } from './services/geo/geo-locator.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
@@ -200,6 +201,12 @@ export interface BuildServerOptions {
    * `in_process`, so one suite's two servers never answer each other's.
    */
   aiJobDiscovery?: AiJobDiscovery;
+  /**
+   * Where a visitor's address is (GEOIP-COUNTRY · tm 330). Omitted, the file
+   * `GEOIP_DB_PATH` names — or off without one. Tests pass a
+   * `StaticGeoLocator`: no file, no network.
+   */
+  geo?: GeoLocator;
 }
 
 export async function buildServer({
@@ -219,6 +226,7 @@ export async function buildServer({
   appsEndpoints,
   accessInfoHttp,
   aiJobDiscovery,
+  geo: injectedGeo,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -363,6 +371,16 @@ export async function buildServer({
   // 2026-10-10): the live cards stay demos and the reason is logged here.
   for (const warning of env.appsLiveWarnings)
     app.log.warn({ event: 'apps.live_disabled' }, warning);
+
+  // The visitor-country database (tm 330) follows the same rule: a missing or
+  // unreadable file leaves countries empty and says so, the boot goes on.
+  let geo = injectedGeo;
+  if (!geo) {
+    const created = createGeoLocator(env.GEOIP_DB_PATH);
+    if (created.warning) app.log.warn({ event: 'geoip.disabled' }, created.warning);
+    geo = created.locator;
+  }
+  app.decorate('geo', geo);
 
   // The provider is chosen by the setting that names it, not by `NODE_ENV`
   // (M-PROV-a · §D113/K3). The branch that used to be here meant `MAIL_PROVIDER`

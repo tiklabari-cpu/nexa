@@ -935,6 +935,8 @@ export default async function customerRoutes(
               referrer: body.referrer,
               userAgent: request.headers['user-agent'],
               ip: request.ip,
+              // In-process and offline (tm 330): the address goes nowhere.
+              locate: () => app.geo.locate(request.ip),
             });
 
             // Does this visitor now match a campaign that is already running

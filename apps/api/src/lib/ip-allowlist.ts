@@ -46,7 +46,7 @@ export interface AllowlistEntry {
   prefixLength: number;
 }
 
-interface AddressBytes {
+export interface AddressBytes {
   version: 4 | 6;
   bytes: Uint8Array;
 }
@@ -221,7 +221,7 @@ export function wouldLockOut(callerIp: string | null | undefined, nextEntries: s
  * case/whitespace is settled before `isIP` classifies it — the same normalisation
  * the ban check uses, so both surfaces agree on what an address *is*.
  */
-function parseAddress(value: string): AddressBytes | null {
+export function parseAddress(value: string): AddressBytes | null {
   const canonical = normaliseIp(value);
   const kind = isIP(canonical);
   if (kind === 4) {

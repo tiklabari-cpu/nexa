@@ -1882,19 +1882,23 @@ model TrackedSale {
 
 /// Browsing telemetry behind the real-time visitor list.
 model Visit {
-  id         String    @id @default(uuid()) @db.Uuid
-  customerId String    @map("customer_id") @db.Uuid
-  licenseId  BigInt    @map("license_id")
-  cameFrom   String?   @map("came_from")
-  pages      Json      @default("[]")
+  id          String    @id @default(uuid()) @db.Uuid
+  customerId  String    @map("customer_id") @db.Uuid
+  licenseId   BigInt    @map("license_id")
+  cameFrom    String?   @map("came_from")
+  pages       Json      @default("[]")
   /// Personal data (NFR-S9): subject to the retention policy, and never
   /// returned to the widget.
-  ip         String?
-  os         String?
-  browser    String?
-  userAgent  String?   @map("user_agent")
-  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
-  endedAt    DateTime? @map("ended_at") @db.Timestamptz(6)
+  ip          String?
+  os          String?
+  browser     String?
+  userAgent   String?   @map("user_agent")
+  /// Where the visit came from (tm 330): resolved once from the address at the
+  /// visit's start, in-process (`services/geo/`). Country and city only.
+  countryCode String?   @map("country_code") @db.Char(2)
+  city        String?
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt     DateTime? @map("ended_at") @db.Timestamptz(6)
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 

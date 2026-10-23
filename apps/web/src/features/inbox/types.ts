@@ -79,6 +79,9 @@ export interface ChatVisitor {
     referrer: string | null;
     duration_seconds: number | null;
     ip: string | null;
+    /** Where the visit came from (tm 330): resolved once at its start, no map. */
+    country_code: string | null;
+    city: string | null;
     /** Still open, so `duration_seconds` may be ticked forward (`visitDuration.ts`). */
     ongoing: boolean;
   };

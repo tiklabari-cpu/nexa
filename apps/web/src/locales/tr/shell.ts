@@ -104,6 +104,7 @@ export const shell: Messages = {
   // Navigation
   'nav.home': 'Ana Sayfa',
   'nav.inbox': 'Gelen Kutusu',
+  'nav.archive': 'Arşiv',
   'nav.customers': 'Müşteriler',
   'nav.team': 'Ekip',
   'nav.playbook': 'Senaryolar',

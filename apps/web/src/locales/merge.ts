@@ -35,6 +35,7 @@ export type Messages = Readonly<Record<string, string>>;
  */
 export const NAMESPACES = [
   'apps',
+  'archive',
   'audit',
   'auth',
   'billing',
@@ -66,6 +67,7 @@ export type Namespace = (typeof NAMESPACES)[number];
  */
 export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   apps: ['apps.'],
+  archive: ['archive.'],
   audit: ['audit.'],
   auth: ['auth.'],
   billing: ['billing.'],

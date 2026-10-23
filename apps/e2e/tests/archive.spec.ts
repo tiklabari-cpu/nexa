@@ -1,0 +1,141 @@
+/**
+ * The Archive screen (AR-01 · tm 335.2).
+ *
+ * The web unit suite pins the rows, the panes and the refusals against a stubbed
+ * API, and the API suite pins the list against the real database. What only a
+ * browser over both proves: a player who came back twice the same day is three
+ * rows in the Archive's own screen — each opening its own words and nothing of
+ * the others' — that the address alone reopens the same conversation after a
+ * reload, and that the two ways back to work ("Open in Inbox", "Reopen") leave
+ * the archive as it was and land on the right chat.
+ */
+import {
+  API_BASE,
+  allChats,
+  expect,
+  openWidget,
+  ownerAccessToken,
+  test,
+  visitorSends,
+  widgetFrame,
+} from './fixtures.js';
+
+test('a player who came back twice is three rows, each opening its own conversation', async ({
+  agentPage,
+  browser,
+  organizationId,
+  request,
+}) => {
+  const visitorContext = await browser.newContext();
+  const visitor = await visitorContext.newPage();
+  const stamp = Date.now().toString().slice(-6);
+  const words = [
+    `Withdrawal pending since morning — ${stamp}`,
+    `Bonus never arrived — ${stamp}`,
+    `Closing my account — ${stamp}`,
+  ];
+
+  try {
+    const auth = { Authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    await openWidget(visitor, organizationId);
+    await visitorSends(visitor, words[0]!);
+    let chatId = '';
+    await expect
+      .poll(
+        async () => {
+          chatId =
+            (await allChats(request, auth)).find((chat) => chat.last_event?.text === words[0])
+              ?.id ?? '';
+          return chatId;
+        },
+        { timeout: 20_000 },
+      )
+      .not.toBe('');
+
+    const close = async (): Promise<void> => {
+      const closed = await request.post(`${API_BASE}/chats/${chatId}/deactivate`, {
+        headers: auth,
+      });
+      expect(closed.ok(), `deactivate failed: ${closed.status()}`).toBe(true);
+    };
+    await close();
+    for (const text of words.slice(1)) {
+      await widgetFrame(visitor).getByRole('button', { name: 'Start a new chat' }).click();
+      await visitorSends(visitor, text);
+      await close();
+    }
+
+    const detail = await request.get(`${API_BASE}/chats/${chatId}`, { headers: auth });
+    const day = (await detail.json()) as { connections: Array<{ id: string }> };
+    expect(day.connections).toHaveLength(3);
+    const [, secondConnection] = day.connections.map((connection) => connection.id);
+
+    // The module is on the rail, and opens on the list.
+    await agentPage.goto('/app/inbox');
+    await agentPage.getByRole('link', { name: 'Archive' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/archive$/);
+    await expect(agentPage.getByRole('heading', { name: 'Archive', level: 1 })).toBeVisible();
+
+    const list = agentPage.getByRole('list', { name: 'Conversations' });
+    const rows = list.getByRole('listitem').filter({ hasText: stamp });
+    await expect(rows).toHaveCount(3, { timeout: 20_000 });
+    for (const text of words) await expect(rows.filter({ hasText: text })).toHaveCount(1);
+
+    // Pick the middle one: its own words, none of the others', and only its number in the address.
+    await rows.filter({ hasText: words[1]! }).getByRole('button').click();
+    const transcript = agentPage.getByRole('log', { name: 'Conversation transcript' });
+    await expect(transcript).toContainText(words[1]!, { timeout: 20_000 });
+    await expect(transcript).not.toContainText(words[0]!);
+    await expect(transcript).not.toContainText(words[2]!);
+    await expect(agentPage).toHaveURL(new RegExp(`[?&]c=${secondConnection}(&|$)`));
+    expect(agentPage.url()).not.toContain(stamp);
+
+    const player = agentPage.getByRole('complementary', {
+      name: 'Player and conversation details',
+    });
+    await expect(player.getByTestId('player-card')).toBeVisible();
+    await expect(player.getByTestId('archive-facts')).toBeVisible();
+    // Read-only: no composer, no edit.
+    await expect(agentPage.getByRole('textbox', { name: /message/i })).toHaveCount(0);
+
+    await agentPage.screenshot({ path: 'kanit/AR-01-archive.png', fullPage: true });
+
+    // The pasted address opens the same conversation.
+    await agentPage.reload();
+    await expect(agentPage.getByRole('log', { name: 'Conversation transcript' })).toContainText(
+      words[1]!,
+      { timeout: 20_000 },
+    );
+
+    // "Open in Inbox" leaves the archive for the live console, at this conversation.
+    await agentPage.getByRole('button', { name: 'Open in Inbox' }).click();
+    await expect(agentPage).toHaveURL(
+      new RegExp(`/app/inbox\\?chat=${chatId}&thread=${secondConnection}`),
+    );
+
+    // The console consumes the one-shot parameters (replacing the entry); only then is
+    // "Back" the archive again.
+    await expect(agentPage).toHaveURL(/\/app\/inbox$/);
+    await agentPage.goBack();
+    await expect(agentPage).toHaveURL(/\/app\/archive/);
+
+    // "Reopen" starts a new connection on it and follows the chat the server names.
+    await agentPage.getByRole('button', { name: 'Reopen' }).click();
+    // The console takes the one-shot `?chat=` and clears it, so the settled address is bare.
+    await expect(agentPage).toHaveURL(/\/app\/inbox$/, { timeout: 20_000 });
+    await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+    const reopened = await request.get(`${API_BASE}/chats/${chatId}`, { headers: auth });
+    expect(((await reopened.json()) as { active: boolean }).active).toBe(true);
+  } finally {
+    await visitorContext.close();
+  }
+});
+
+test('opens a conversation the caller cannot see as "not found", not as a blank page', async ({
+  agentPage,
+}) => {
+  await agentPage.goto('/app/archive?c=NOSUCHCONN');
+  await expect(agentPage.getByText('Conversation not found')).toBeVisible({ timeout: 20_000 });
+  await expect(agentPage.getByRole('log', { name: 'Conversation transcript' })).toHaveCount(0);
+});

@@ -505,6 +505,32 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The Archive (AR-01 · tm 335.2): the list past its loading state, with a
+       * conversation open when the workspace has one — three panes, a search
+       * form, two switches and a read-only transcript in one tree.
+       */
+      test('archive has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/archive');
+        await scanPanel(agentPage, 'Archive', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Archive', level: 1 })).toBeVisible();
+          // Past the skeleton: either the rows or the empty archive's own message.
+          await expect(
+            agentPage
+              .getByRole('list', { name: 'Conversations' })
+              .or(agentPage.getByText('No archive yet')),
+          ).toBeVisible();
+          const first = agentPage.getByRole('list', { name: 'Conversations' }).getByRole('button');
+          if ((await first.count()) > 0) {
+            await first.first().click();
+            await expect(
+              agentPage.getByRole('log', { name: 'Conversation transcript' }),
+            ).toBeVisible();
+          }
+        });
+      });
+
+      /**
        * The logo's app menu, open (FR-MOD-01.1.1).
        *
        * Closed by default, so the inbox scan above never renders its panel —
@@ -1533,6 +1559,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
     const SCANNED_APP_ROUTES = [
       '/app/home',
       '/app/inbox',
+      '/app/archive',
       '/app/customers',
       '/app/customers/campaigns',
       '/app/customers/goals',

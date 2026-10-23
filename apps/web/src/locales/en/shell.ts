@@ -107,6 +107,7 @@ export const shell: Messages = {
   // Navigation (rail + command palette)
   'nav.home': 'Home',
   'nav.inbox': 'Inbox',
+  'nav.archive': 'Archive',
   'nav.customers': 'Customers',
   'nav.team': 'Team',
   'nav.playbook': 'Playbook',

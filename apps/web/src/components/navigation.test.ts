@@ -19,6 +19,7 @@ describe('isNavVisible (FR-MOD-01.2)', () => {
   const EXPECTED_FOR_AGENT: Record<string, boolean> = {
     '/app/home': false, // routes/home.ts: reports_read, admin-only
     '/app/inbox': true, // chats--access:rw implies chats--access:ro
+    '/app/archive': true, // routes/archive.ts: the same pair as the inbox
     '/app/customers': true, // customers:ro is in DEFAULT_AGENT_SCOPES directly
     '/app/team': true, // agents--my:rw implies agents--my:ro
     '/app/playbook': false, // agents-bot--all:*, admin-only

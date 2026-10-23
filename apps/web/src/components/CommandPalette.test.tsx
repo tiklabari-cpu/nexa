@@ -794,12 +794,12 @@ describe('command palette — mixed-kind keyboard navigation', () => {
     const combobox = screen.getByRole('combobox', { name: 'Search or jump to' });
 
     // "o" is a deliberately broad needle: it lands the routing-status action
-    // (via its "routing status" keyword), all eight nav destinations (by
+    // (via its "routing status" keyword), all nine nav destinations (by
     // label or keyword), and both stubbed content records (customer via its
     // e-mail, ticket via "order") in one list — action, nav and content all
     // contributing rows at once, with nothing left to the "ai" result to add.
     await user.type(combobox, 'o');
-    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(11));
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(12));
     const options = screen.getAllByRole('option');
 
     // Starts on the action (index 0, group "Actions") — its heading is drawn
@@ -808,12 +808,12 @@ describe('command palette — mixed-kind keyboard navigation', () => {
     expect(options[0]).toHaveAttribute('aria-selected', 'true');
     expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-0');
 
-    // Ten steps crosses the action → nav → content group boundaries (indices
-    // 1 and 9) without stalling on either heading and lands on the last row.
-    await user.keyboard('{ArrowDown}'.repeat(10));
-    expect(options[10]).toHaveTextContent('Refund for order 42');
-    expect(options[10]).toHaveAttribute('aria-selected', 'true');
-    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-10');
+    // Eleven steps crosses the action → nav → content group boundaries (indices
+    // 1 and 10) without stalling on either heading and lands on the last row.
+    await user.keyboard('{ArrowDown}'.repeat(11));
+    expect(options[11]).toHaveTextContent('Refund for order 42');
+    expect(options[11]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-11');
     // Exactly one row is ever marked current.
     expect(
       options.filter((option) => option.getAttribute('aria-selected') === 'true'),
@@ -827,8 +827,8 @@ describe('command palette — mixed-kind keyboard navigation', () => {
 
     // And the same in reverse: ArrowUp from the first row wraps to the last.
     await user.keyboard('{ArrowUp}');
-    expect(options[10]).toHaveAttribute('aria-selected', 'true');
-    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-10');
+    expect(options[11]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-11');
   });
 
   it('lets Enter act on whichever kind the arrow keys landed on, not only the first result', async () => {

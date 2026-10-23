@@ -5480,6 +5480,75 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/archive/conversations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List past conversations, one row per connection
+     * @description The archive screen's list (AR-01). A row is one **connection** — panel
+     *     "Chat ID", `thread_id` — not a day: a player who wrote three times is
+     *     three rows, each with its own tags, assignee and rating. `chat_id` is the
+     *     day the connection belongs to (panel "Thread ID"); a reopened
+     *     conversation is a new connection and leaves the earlier one here as it
+     *     was.
+     *
+     *     Closed connections by default, the most recently ended first
+     *     (`status=closed`). `status=all` puts the connections still open first,
+     *     then the closed ones; `status=open` lists only those.
+     *
+     *     What the caller may see is part of the query, not a filter applied to a
+     *     page afterwards: a Team Member and a Team Lead see the conversations of
+     *     their teams and the ones they took part in, a Manager and the Founder
+     *     every one (RL-02). A connection past the workspace's retention window is
+     *     not listed — the sweep deletes it — and a member who was erased has no
+     *     rows at all.
+     *
+     *     Not live: no push keeps the list current, and nothing here writes.
+     *     Searching by number or by message text is `GET /search` and
+     *     `GET /chats?query=`; their results carry the `thread_id` that is a row
+     *     here.
+     */
+    get: operations['listArchiveConversations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/archive/conversations/{threadId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One past connection
+     * @description The archive's detail for one connection: its row, the rating with its
+     *     comment, and its summary. The tags, the assignee and the rating are
+     *     this connection's — never the day's newest connection's. The transcript
+     *     is `GET /chats/{chat_id}/events?thread_id=`.
+     *
+     *     A connection the caller may not see, of another workspace, or erased is
+     *     a 404. So is one past the workspace's retention window, with
+     *     `error.details.reason: retention_expired` — its transcript is deleted
+     *     or about to be.
+     */
+    get: operations['getArchiveConversation'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/trusted-domains': {
     parameters: {
       query?: never;
@@ -11819,6 +11888,85 @@ export interface components {
       /** @enum {string|null} */
       rating: 'good' | 'bad' | null;
       ai_handoff: components['schemas']['AiHandoffCard'] | null;
+    };
+    /**
+     * @description One archive row (AR-01): one connection. `thread_id` is the row's id
+     *     (panel "Chat ID"), `chat_id` the day it belongs to (panel "Thread ID").
+     */
+    ArchiveConversation: {
+      /** @description The connection (panel "Chat ID"). */
+      thread_id: string;
+      /** @description The day (panel "Thread ID"). */
+      chat_id: string;
+      customer: {
+        /** Format: uuid */
+        id: string;
+        name: string | null;
+        /**
+         * @description Typed by the player, unverified. Null when not given or the
+         *     caller may not see it (`customers.contact.view`).
+         */
+        username: string | null;
+      };
+      /** Format: date-time */
+      started_at: string;
+      /**
+       * Format: date-time
+       * @description Null while open.
+       */
+      ended_at: string | null;
+      /** @description Who had the connection — at the close, for a closed one. */
+      assignee: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+      } | null;
+      /**
+       * @description The team the connection went to; for one opened before that was
+       *     recorded, the day's teams.
+       */
+      group_ids: number[];
+      /** @description This connection's tags. */
+      tags: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+      }[];
+      /** @description The player's newest rating of this connection (AR-03). */
+      rating: {
+        /** @enum {string} */
+        value: 'good' | 'bad';
+        has_comment: boolean;
+      } | null;
+      /**
+       * @description Who answered it, written as it closed. `ai` is ADR-09a's AI
+       *     resolution (the one the invoice counts); `human` a person and no
+       *     bot; `mixed` the rest. Null while open and for a connection closed
+       *     before this was recorded.
+       * @enum {string|null}
+       */
+      handled_by: 'ai' | 'human' | 'mixed' | null;
+      /** @description The kinds of risk flag raised in this connection, cleared ones included. */
+      risk_flags: components['schemas']['RiskFlagType'][];
+      /** @description The player's first message, shortened, sensitive values masked. */
+      first_customer_message: string | null;
+      /** @description Messages in it */
+      message_count: number;
+    };
+    /**
+     * @description One connection in the archive (AR-01): its row, with the rating in
+     *     full and the connection's summary.
+     */
+    ArchiveConversationDetail: components['schemas']['ArchiveConversation'] & {
+      rating: {
+        /** @enum {string} */
+        value: 'good' | 'bad';
+        has_comment: boolean;
+        comment: string | null;
+        /** Format: date-time */
+        rated_at: string;
+      } | null;
+      summary: string | null;
     };
     AiHandoffSettings: {
       /** Format: uuid */
@@ -27635,6 +27783,73 @@ export interface operations {
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
       503: components['responses']['MessageSearchTimedOut'];
+    };
+  };
+  listArchiveConversations: {
+    parameters: {
+      query?: {
+        status?: 'closed' | 'open' | 'all';
+        /** @description One member's connections — the player card's "All". */
+        customer_id?: string;
+        limit?: number;
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /**
+       * @description One page. `total` counts the whole list up to 1 000; past that
+       *     `total_capped` is true and the count stops there.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ArchiveConversation'][];
+            total: number;
+            total_capped: boolean;
+            next_page_id?: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getArchiveConversation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The connection. Panelde: Chat ID. */
+        threadId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The connection. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ArchiveConversationDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   listTrustedDomains: {

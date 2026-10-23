@@ -1,0 +1,14 @@
+-- The archive's connections by when they started (AR-01 · tm 335.1), with
+-- the id as the keyset tie-break: the order the date filter (AR-02, by start
+-- time) reads. `schema.prisma` models it.
+--
+-- Alone in this file on purpose: `CREATE INDEX CONCURRENTLY` cannot run
+-- inside a transaction block (CONVENTIONS 6.3), and a plain build would hold
+-- writes on `threads` -- every new connection, every close -- for the length
+-- of the scan.
+--
+-- NO `IF NOT EXISTS`, for 20261018180100's reason: a failed concurrent build
+-- leaves an INVALID index of this name behind, which the retry must not keep.
+-- Recover by `DROP INDEX CONCURRENTLY threads_license_id_created_at_id_idx`,
+-- then `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE INDEX CONCURRENTLY "threads_license_id_created_at_id_idx" ON "threads"("license_id", "created_at" DESC, "id" DESC);

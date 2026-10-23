@@ -16,7 +16,9 @@
  * `ai_solved` view (and MCP `list_chats` through it), and Reports "Automated"
  * — Overview, Breakdown, the AI Agent report's `resolutions`, CSV and the
  * scheduled reports, which Home, Copilot BI and the command palette read in
- * turn. The predicate has two spellings because Prisma cannot take raw SQL
+ * turn — and the archive's `threads.handled_by = 'ai'` (AR-01 · tm 335.1),
+ * written at close by the same statement the counter reads
+ * ({@link recordHandledBy}). The predicate has two spellings because Prisma cannot take raw SQL
  * inside a `where`: {@link aiResolvedSql} for every aggregate and for the
  * close-time check, {@link aiResolvedThreadWhere} for the view. They sit next to
  * each other and one test (`ai-resolution-handoff.test.ts`) holds them to the
@@ -24,7 +26,7 @@
  * invoice start to disagree.
  */
 import { Prisma } from '@prisma/client';
-import type { AiModeReason, TransferReason } from '@siyahtus/types';
+import type { AiModeReason, ThreadHandledBy, TransferReason } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 /**
@@ -170,4 +172,49 @@ export async function threadWasAiResolved(
     SELECT ${aiResolvedSql(effectiveAt)} AS resolved FROM threads t WHERE t.id = ${threadId}
   `;
   return rows[0]?.resolved === true;
+}
+
+/** A bot wrote in the thread — the AI's line or a rule bot's. */
+const BOT_WROTE = Prisma.sql`EXISTS (
+  SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'bot'
+)`;
+
+/**
+ * Who answered a closed thread (`threads.handled_by`, AR-01 / AR-02 · tm 335.1),
+ * over a `threads` row aliased `t`:
+ *
+ *   - `ai` — {@link aiResolvedSql}, nothing else (ADR-09a §2.2): the archive's
+ *     "AI solved" is the invoice's AI resolution, so a thread nobody answered
+ *     at all is `ai` here exactly when the counter bills it (ADR-09a §3, the
+ *     open question it leaves to the owner);
+ *   - `human` — a person wrote and no bot did;
+ *   - `mixed` — the rest: a bot and a person, or a hand-off nobody answered.
+ */
+export function handledBySql(effectiveAt: Date = ADR_09A_EFFECTIVE_AT): Prisma.Sql {
+  return Prisma.sql`(CASE
+    WHEN ${aiResolvedSql(effectiveAt)} THEN 'ai'
+    WHEN ${AGENT_WROTE} AND NOT ${BOT_WROTE} THEN 'human'
+    ELSE 'mixed'
+  END)`;
+}
+
+/**
+ * Write `handled_by` on a thread that has just closed, in the transaction that
+ * closes it, and return it. `'ai'` is {@link threadWasAiResolved}'s `true` —
+ * the close reads this one answer for both the column and the billing counter,
+ * so the two are one evaluation, not two that happen to agree.
+ */
+export async function recordHandledBy(
+  tx: TenantClient,
+  threadId: string,
+  effectiveAt: Date = ADR_09A_EFFECTIVE_AT,
+): Promise<ThreadHandledBy> {
+  const rows = await tx.$queryRaw<Array<{ handled_by: ThreadHandledBy }>>`
+    UPDATE threads t SET handled_by = ${handledBySql(effectiveAt)}
+    WHERE t.id = ${threadId} AND NOT t.active
+    RETURNING t.handled_by
+  `;
+  const handledBy = rows[0]?.handled_by;
+  if (!handledBy) throw new Error(`thread ${threadId} is not closed`);
+  return handledBy;
 }

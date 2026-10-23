@@ -1115,6 +1115,13 @@ model Thread {
   /// connection waits rather than reach an untrained agent. Null: the team's
   /// own requirement alone (`group_expertise`).
   requiredExpertiseId BigInt? @map("required_expertise_id")
+  /// Who answered the connection (AR-01 · tm 335.1): one of `THREAD_HANDLED_BY`
+  /// (`@siyahtus/types`), enforced by the CHECK `threads_handled_by_check`.
+  /// Written once, in the transaction that closes the thread, from ADR-09a's
+  /// predicate (`services/billing/ai-resolution.ts` `handledBySql`) — `ai` is
+  /// exactly the invoice's AI resolution. Null while open, and on a thread
+  /// closed before the column existed.
+  handledBy        String?   @map("handled_by")
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]
@@ -1133,6 +1140,11 @@ model Thread {
   @@index([licenseId, active, createdAt(sort: Desc)])
   @@index([assigneeId])
   @@index([licenseId, active, aiMode])
+  /// The archive (AR-01 · tm 335.1): connections by when they started, and by
+  /// when they ended — the list's default order, open ones (NULL) first. Each
+  /// built CONCURRENTLY in its own migration.
+  @@index([licenseId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([licenseId, closedAt(sort: Desc), id(sort: Desc)])
   @@map("threads")
 }
 
@@ -1652,6 +1664,8 @@ model Rating {
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@index([licenseId, createdAt])
+  /// A connection's newest rating (AR-01 / AR-03 · tm 335.1), read per archive page.
+  @@index([licenseId, threadId, createdAt(sort: Desc)])
   @@map("ratings")
 }
 

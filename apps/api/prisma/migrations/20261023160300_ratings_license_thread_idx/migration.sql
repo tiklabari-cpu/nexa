@@ -1,0 +1,14 @@
+-- A connection's newest rating (AR-01 / AR-03 · tm 335.1): every archive page
+-- reads it for each of its rows, and `ratings` had only `(license_id,
+-- created_at)` -- each lookup by `thread_id` was a scan of the workspace's
+-- ratings. `schema.prisma` models it.
+--
+-- Alone in this file on purpose: `CREATE INDEX CONCURRENTLY` cannot run
+-- inside a transaction block (CONVENTIONS 6.3), and a plain build would hold
+-- the widget's rating writes for the length of the scan.
+--
+-- NO `IF NOT EXISTS`, for 20261018180100's reason: a failed concurrent build
+-- leaves an INVALID index of this name behind, which the retry must not keep.
+-- Recover by `DROP INDEX CONCURRENTLY ratings_license_id_thread_id_created_at_idx`,
+-- then `prisma migrate resolve --rolled-back` this migration and deploy again.
+CREATE INDEX CONCURRENTLY "ratings_license_id_thread_id_created_at_idx" ON "ratings"("license_id", "thread_id", "created_at" DESC);

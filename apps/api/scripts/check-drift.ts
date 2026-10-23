@@ -138,6 +138,19 @@ const KNOWN_UNMODELLABLE = [
     reason:
       "partial index (a player's active risk flags) — Prisma cannot express a WHERE predicate",
   },
+  {
+    // Created as `ON ONLY events USING gin (siyahtus_search_fold(text)
+    // gin_trgm_ops) WHERE type = 'message'` in
+    // 20261023100000_event_text_search_index, each partition's half by
+    // `scripts/partition-indexes.ts` — message text search (ID-07). Prisma 6
+    // does not report it today; named so a Prisma that starts to cannot turn it
+    // into unexplained drift. Its validity is asserted in
+    // `test/integration/event-text-search-index.test.ts`, which this diff
+    // cannot see.
+    pattern: /CREATE INDEX "events_text_search_idx" ON "public"\."events"/,
+    reason:
+      'partial expression trigram index on a partitioned table — Prisma cannot express an expression index or a WHERE predicate',
+  },
 ];
 
 async function main(): Promise<void> {

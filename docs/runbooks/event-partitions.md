@@ -155,3 +155,58 @@ counting there as `siyahtus_app` always says 0.
   closing: that is a migration defect, and
   `apps/api/test/integration/event-partition-maintenance.test.ts` is the suite
   that should have gone red.
+
+## Message search index
+
+`events_text_search_idx` (tm 333.1, migration
+`20261023100000_event_text_search_index`) is a trigram GIN over
+`siyahtus_search_fold(text)` on messages — what message text search reads. It is
+partitioned like the table: the parent was created `ON ONLY` and each partition
+has its own half, attached to it. The migration indexes the partitions that were
+empty; those that already held rows are built `CONCURRENTLY` by
+`scripts/partition-indexes.ts`, which `apps/api/docker-entrypoint.sh` and the Helm
+migrate Job run right after `prisma migrate deploy`. Partitions opened later are
+born with their half.
+
+**Symptom.** Message search is slow for some months, or the entrypoint/Job log
+shows `WARNING partition indexes incomplete`. Results are still correct: a month
+without its half is read without the index.
+
+**Diagnosis** (as the owner):
+
+```sql
+SELECT indisvalid FROM pg_index WHERE indexrelid = 'events_text_search_idx'::regclass;
+
+SELECT c.relname AS partition, ci.relname AS child, x.indisvalid
+FROM pg_inherits h
+JOIN pg_class c ON c.oid = h.inhrelid
+LEFT JOIN pg_index x ON x.indrelid = c.oid
+  AND x.indexrelid IN (SELECT inhrelid FROM pg_inherits
+                       WHERE inhparent = 'events_text_search_idx'::regclass)
+LEFT JOIN pg_class ci ON ci.oid = x.indexrelid
+WHERE h.inhparent = 'events'::regclass
+ORDER BY 1;
+```
+
+The parent is `t` once every partition has a non-null `child`. A row with
+`child` null is a month still waiting.
+
+**Response.** Run the builder again — it is idempotent, takes an advisory lock
+(exit 2 = another run holds it) and only touches what is missing:
+
+```bash
+pnpm --filter @siyahtus/api db:partition-indexes                    # development
+docker compose exec api node dist/scripts/partition-indexes.js      # an image
+```
+
+It prints each statement and one JSON line per index
+(`steps[].action`: `built`, `rebuilt` — an INVALID leftover of a failed build
+was dropped first — `attached`, or `failed` with the SQLSTATE). Each statement
+waits at most 60 s for locks: `CREATE INDEX CONCURRENTLY` waits for every
+transaction already open on the partition, so a `55P03` / lock-timeout failure
+means a long transaction — find it with the `pg_stat_activity` query under
+Diagnosis step 2 (`55P03`) and run the builder again once it has ended.
+
+Do not `CREATE OR REPLACE` `siyahtus_search_fold`: every index built on it stores
+its output, and a different body would leave them answering for the old fold.
+A different fold is a new function and a new index.

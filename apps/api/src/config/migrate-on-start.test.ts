@@ -75,4 +75,25 @@ describe(`migration strategy: ${ENTRYPOINT} ↔ Helm chart (tm 164.3, CONVENTION
       .join('\n');
     expect(uncommented).not.toMatch(/seed/i);
   });
+
+  it('both migrate paths finish partitioned indexes after deploy, and a failure only warns', () => {
+    // tm 333.1: the partitions of `events` that held rows get their half of
+    // `events_text_search_idx` CONCURRENTLY here. Before `migrate deploy` the
+    // parent index does not exist yet; and a non-zero exit must not keep the
+    // api down (entrypoint) or fail the release (Job) — search is slower
+    // without it, never wrong.
+    for (const path of [ENTRYPOINT, MIGRATE_JOB]) {
+      const uncommented = read(path)
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('#'))
+        .join('\n');
+      const deploy = uncommented.indexOf('npx prisma migrate deploy');
+      const build = uncommented.indexOf('node dist/scripts/partition-indexes.js');
+      expect(build, `${path} must run partition-indexes.js`).toBeGreaterThan(deploy);
+      expect(deploy).toBeGreaterThanOrEqual(0);
+      expect(uncommented.slice(build), `${path} must not fail on it`).toMatch(
+        /^node dist\/scripts\/partition-indexes\.js\s*(\\\s*)?\|\|\s*echo/,
+      );
+    }
+  });
 });

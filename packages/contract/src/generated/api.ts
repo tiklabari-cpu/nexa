@@ -5511,6 +5511,14 @@ export interface paths {
      *     Searching by number or by message text is `GET /search` and
      *     `GET /chats?query=`; their results carry the `thread_id` that is a row
      *     here.
+     *
+     *     **Filters (AR-02).** Different filters combine with AND, the values of
+     *     one filter with OR (`agent_id=a&agent_id=b` is "a or b"); tags combine
+     *     as `tag_mode` says. `total` counts the filtered list. Every filter
+     *     carries ids, never a name or an e-mail address, so a filtered address
+     *     can be shared without carrying anyone's personal data. Filters that
+     *     cannot both hold (`untagged` with `tag_mode=any`, `handled_by=ai` with
+     *     an agent) are applied as asked and give an empty list; the screen warns.
      */
     get: operations['listArchiveConversations'];
     put?: never;
@@ -27791,6 +27799,67 @@ export interface operations {
         status?: 'closed' | 'open' | 'all';
         /** @description One member's connections — the player card's "All". */
         customer_id?: string;
+        /**
+         * @description The first conversation day, `YYYY-MM-DD`, on the workspace's own
+         *     calendar — the zone and start hour of its conversation day (ID-04),
+         *     not UTC. A connection is in the range by when it **started**
+         *     (AR-02-S1): at or after the first instant of `date_from`, before the
+         *     first instant of the day after `date_to`. Either end may be left
+         *     open. Not together with `from`/`to` (400 `reason: date_mixed`); a
+         *     `date_to` before `date_from` is 400 `reason: range_order`.
+         */
+        date_from?: string;
+        /** @description The last conversation day, `YYYY-MM-DD`, included. See `date_from`. */
+        date_to?: string;
+        /**
+         * @description Connections that started at or after this instant — the exact-time
+         *     form of `date_from`, for a range that is not whole days.
+         */
+        from?: string;
+        /** @description Connections that started before this instant (excluded). */
+        to?: string;
+        /**
+         * @description Connections one of these agents wrote in to the player — internal
+         *     notes do not count — repeated once per agent. Recorded as the
+         *     connection closes (`threads.agent_ids`); an open one is read live.
+         */
+        agent_id?: string[];
+        /**
+         * @description Connections of these teams — the team a connection went to, and for
+         *     one opened before that was recorded, the teams its day was given:
+         *     the same teams the row's `group_ids` lists.
+         */
+        group_id?: number[];
+        /**
+         * @description The connection's **newest** rating — the one the row shows. `any`:
+         *     rated; `not_rated`: never rated; `commented`: a rating with a
+         *     comment, either value.
+         */
+        rating?:
+          'any' | 'not_rated' | 'good' | 'bad' | 'commented' | 'good_commented' | 'bad_commented';
+        /** @description Tags, repeated once per tag, at most 20. How they combine is `tag_mode`. */
+        tag?: string[];
+        /**
+         * @description `any` — at least one of the tags; `all` — every one of them;
+         *     `exclude` — none of them (an untagged connection is kept).
+         */
+        tag_mode?: 'any' | 'all' | 'exclude';
+        /** @description `true`: only connections with no tag at all. */
+        untagged?: boolean;
+        /**
+         * @description Who answered it (`ArchiveConversation.handled_by`). `ai` is "AI
+         *     solved": the invoice's AI resolution (ADR-09a), so its count over a
+         *     range is the AI report's `resolutions` for the same range.
+         */
+        handled_by?: ('ai' | 'human' | 'mixed')[];
+        /** @description Connections where one of these risk flags was raised, cleared ones included (AI-27). */
+        risk_flag?: components['schemas']['RiskFlagType'][];
+        /**
+         * @description Connections of the days that arrived over one messaging channel — the
+         *     inbox's definition (`GET /chats?channel=`): the channel of the day's
+         *     oldest inbound adapter message.
+         */
+        channel?: components['schemas']['ChannelType'];
         limit?: number;
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];

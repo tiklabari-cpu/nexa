@@ -10,7 +10,8 @@
  * ## One query a page
  *
  * The page is chosen and described in one statement: a CTE picks the rows —
- * tenant, visibility, status, retention and the keyset all in its WHERE — and
+ * tenant, visibility, status, retention, AR-02's filters (`archive-filters.ts`)
+ * and the keyset all in its WHERE — and
  * the outer SELECT reads each row's name, assignee, teams, tags, newest
  * rating, risk flags, first player message and message count beside it. No
  * read per row (N+1), and nothing filtered after the page is cut, which is
@@ -51,6 +52,7 @@ import { Prisma } from '@prisma/client';
 import {
   ARCHIVE_FIRST_MESSAGE_MAX,
   ARCHIVE_TOTAL_CAP,
+  DEFAULT_DAY_BOUNDARY,
   RATING_VALUES,
   RISK_FLAG_TYPES,
   THREAD_HANDLED_BY,
@@ -69,6 +71,7 @@ import { maskSensitive } from '../../lib/sensitive-mask.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { resolveVisibility, type ChatVisibility } from '../chat/access.js';
+import { readDayBoundary } from '../chat/day-boundary.js';
 import { seesPlayerContact } from '../customers/player-contact.js';
 import {
   applyTenantWindows,
@@ -77,6 +80,12 @@ import {
   readTenantWindow,
   resolveRetentionPolicy,
 } from '../retention/policy.js';
+import {
+  filterSql,
+  needsDayBoundary,
+  startedRange,
+  type ArchiveFilters,
+} from './archive-filters.js';
 
 export type ArchiveRetentionEnv = Pick<
   Env,
@@ -86,6 +95,8 @@ export type ArchiveRetentionEnv = Pick<
 export interface ArchiveListInput {
   status: ArchiveStatus;
   customerId?: string;
+  /** AR-02's filters (`archive-filters.ts`). */
+  filters?: ArchiveFilters;
   limit: number;
   pageId?: string;
 }
@@ -161,6 +172,11 @@ export class ArchiveService {
     input: ArchiveListInput,
   ): Promise<ArchiveConversationList> {
     const cursor = input.pageId ? decodeArchiveCursor(input.pageId) : undefined;
+    const filters = input.filters ?? {};
+    const range = startedRange(
+      filters,
+      needsDayBoundary(filters) ? await readDayBoundary(tx) : DEFAULT_DAY_BOUNDARY,
+    );
     const visibility = await resolveVisibility(tx, principal, 'read');
     const cutoff = await this.#retentionCutoff(tx, tenant);
 
@@ -172,6 +188,7 @@ export class ArchiveService {
       ...(cutoff ? [Prisma.sql`(t.closed_at IS NULL OR t.closed_at >= ${cutoff})`] : []),
       ...(input.customerId ? [Prisma.sql`c.customer_id = ${input.customerId}::uuid`] : []),
       visibilitySql(visibility),
+      ...filterSql(tenant.licenseId, filters, range, input.status),
     ];
     const paged = cursor ? [...where, cursorSql(cursor)] : where;
 
@@ -324,7 +341,7 @@ function pageSql(licenseId: bigint, where: Prisma.Sql, limit: number): Prisma.Sq
   return Prisma.sql`
     WITH page AS (
       SELECT t.id, t.chat_id, t.created_at, t.closed_at, t.assignee_id, t.group_id,
-             t.handled_by, t.summary, c.customer_id,
+             t.handled_by, t.summary, t.risk_flags, c.customer_id,
              (extract(epoch FROM t.closed_at) * 1000000)::bigint AS closed_key
       FROM threads t
       JOIN chats c ON c.id = t.chat_id
@@ -348,8 +365,7 @@ function pageSql(licenseId: bigint, where: Prisma.Sql, limit: number): Prisma.Sq
               FROM thread_tags tt JOIN tags tg ON tg.id = tt.tag_id
              WHERE tt.thread_id = p.id) AS tags,
            r.value AS rating_value, r.comment AS rating_comment, r.created_at AS rating_at,
-           (SELECT COALESCE(array_agg(DISTINCT rf.type), '{}'::text[])
-              FROM risk_flags rf WHERE rf.thread_id = p.id) AS risk_flags,
+           p.risk_flags,
            fm.text AS first_message,
            (SELECT count(*)::int FROM events e
              WHERE e.thread_id = p.id AND e.type = 'message'

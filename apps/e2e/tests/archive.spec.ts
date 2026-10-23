@@ -119,9 +119,14 @@ test('a player who came back twice is three rows, each opening its own conversat
     await expect(agentPage).toHaveURL(/\/app\/inbox$/);
     await agentPage.goBack();
     await expect(agentPage).toHaveURL(/\/app\/archive/);
+    // The address changes the moment "Back" does; the screen follows when the
+    // router renders it. Until then the Inbox is still on screen with its own
+    // "Reopen conversation" — under load the click below landed there (tm 336.1:
+    // the resume went through, the Inbox stayed, the address read the archive).
+    await expect(agentPage.getByRole('heading', { name: 'Archive', level: 1 })).toBeVisible();
 
     // "Reopen" starts a new connection on it and follows the chat the server names.
-    await agentPage.getByRole('button', { name: 'Reopen' }).click();
+    await agentPage.getByRole('button', { name: 'Reopen', exact: true }).click();
     // The console takes the one-shot `?chat=` and clears it, so the settled address is bare.
     await expect(agentPage).toHaveURL(/\/app\/inbox$/, { timeout: 20_000 });
     await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();

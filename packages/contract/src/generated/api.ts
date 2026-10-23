@@ -1068,6 +1068,28 @@ export interface paths {
      *     Paginated by opaque keyset cursor rather than offset: an offset page shifts
      *     under you every time a new message arrives, which in an active inbox means
      *     silently skipped conversations.
+     *
+     *     **Text search (ID-07).** With `query` the list is a search of message
+     *     text: the conversations the caller may see — open and archived — that
+     *     hold a message containing every word of the query, newest match first,
+     *     each item carrying `match` (its newest matching message, cut to a
+     *     snippet). Case and Turkish letters are folded ("İSTANBUL" finds
+     *     "istanbul", "cagri" finds "çağrı"), words match anywhere and in any order
+     *     ("papara 5000" finds "Papara ile 5000 TL"), `%` and `_` mean
+     *     themselves, and there is no stemming. Visitor and agent messages, AI
+     *     replies and internal notes are searched; system lines are not. A card
+     *     number was masked when it was written, so its digits find nothing.
+     *
+     *     A search reads messages from `date_from` (default: 90 days before
+     *     `date_to`) up to but not including `date_to` (default: now), at most
+     *     400 days. It composes with `date_from`, `date_to`, `limit` (default
+     *     50) and `page_id` only — any other filter, or `sort=oldest`, is a 400 —
+     *     and `total` is the number of matching conversations across all pages.
+     *     A query needs three letters or digits in a row in one of its words, at
+     *     most eight words and 1000 bytes; one that matches more than 20 000
+     *     messages is refused as too broad (400, `details.reason: too_broad`) —
+     *     add a word or narrow the dates. A search that runs out of time is a 503.
+     *     The request log masks `query`; it is never put in a browser address.
      */
     get: operations['listChats'];
     put?: never;
@@ -5431,6 +5453,12 @@ export interface paths {
      *     - anything else, and a ten-character number besides → members by name,
      *       username (exact first, then prefix, case-insensitive), e-mail or
      *       phone, and tickets by subject or member.
+     *
+     *     `message` — message text (ID-07), one result per conversation, its
+     *     newest matching message as `subtitle` (a snippet) with `highlights` —
+     *     is looked for only when `types` names it. It follows the rules of
+     *     `GET /chats?query=` over the last 90 days, and a query it refuses (too
+     *     short, too broad) is a 400 for the whole request.
      *
      *     Every kind is gated on its own read scope and answers only what the
      *     caller may open: conversations through the chat's visibility (a chat of
@@ -10808,6 +10836,39 @@ export interface components {
       connection_count?: number;
       last_event?: components['schemas']['Event'] | null;
       tags?: string[];
+      /**
+       * @description Present only on a text search (`GET /chats?query=`, ID-07): the
+       *     message this conversation was found by.
+       */
+      match?: components['schemas']['MessageSearchMatch'];
+    };
+    /**
+     * @description A conversation's newest message containing every word of the query
+     *     (ID-07). `created_at` is to the millisecond.
+     */
+    MessageSearchMatch: {
+      /** @description The message. */
+      event_id: string;
+      /** @description Its connection (panel "Chat ID"). */
+      thread_id: string;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * @description The message around its first match: up to 60 characters either
+       *     side, `…` where the text was cut.
+       */
+      snippet: string;
+      /** @description Where the query's words sit in `snippet` — character ranges, in order, never overlapping. */
+      highlights: components['schemas']['TextRange'][];
+      /** @description Matching messages in the conversation, this one included. */
+      match_count: number;
+      /** @description The message is an internal note, which the visitor never saw. */
+      internal: boolean;
+    };
+    /** @description A character range `[start, end)` (UTF-16 code units, as JavaScript indexes a string). */
+    TextRange: {
+      start: number;
+      end: number;
     };
     ChatUser: {
       user_id: string;
@@ -11673,11 +11734,13 @@ export interface components {
      * @description One match of `GET /search`. The ids present depend on `kind`: a `chat`
      *     carries `chat_id`; a `connection` also `thread_id`; an `event` also
      *     `event_id`; a `customer` carries `customer_id`; a `ticket` carries
-     *     `ticket_id` (and `customer_id` when it has a member).
+     *     `ticket_id` (and `customer_id` when it has a member); a `message`
+     *     carries `chat_id`, `thread_id` and `event_id`, its snippet as
+     *     `subtitle` and `highlights`.
      */
     SearchResult: {
       /** @enum {string} */
-      kind: 'chat' | 'connection' | 'event' | 'customer' | 'ticket';
+      kind: 'chat' | 'connection' | 'event' | 'customer' | 'ticket' | 'message';
       /** @description The day (panel "Thread ID"). */
       chat_id?: string;
       /** @description The connection (panel "Chat ID"). */
@@ -11690,8 +11753,9 @@ export interface components {
       /** @description The member's name, or the ticket's subject; null when the member left no name. */
       title: string | null;
       /**
-       * @description A member's e-mail (else phone), or a ticket's member name. Null when
-       *     there is none or the caller may not see it.
+       * @description A member's e-mail (else phone), a ticket's member name, or a
+       *     message's snippet. Null when there is none or the caller may not
+       *     see it.
        */
       subtitle: string | null;
       /**
@@ -11713,7 +11777,10 @@ export interface components {
         | 'username'
         | 'name'
         | 'phone'
-        | 'subject';
+        | 'subject'
+        | 'text';
+      /** @description `message` only: where the query's words sit in `subtitle`. */
+      highlights?: components['schemas']['TextRange'][];
     };
     /**
      * @description One connection of the day (`today`) or one earlier day (`history`) on
@@ -19168,6 +19235,20 @@ export interface components {
       };
     };
     /**
+     * @description The message text search ran out of time (`service_unavailable`,
+     *     ID-07): `error.details.reason` is `search_timeout`. Nothing was
+     *     written. A narrower search — another word, a shorter date range — is
+     *     likelier to answer than the same one repeated.
+     */
+    MessageSearchTimedOut: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
      * @description The language model did not write the text (`service_unavailable`,
      *     tm 257.5): it timed out, refused or cut off its answer, the provider
      *     failed, or its circuit breaker is open after repeated failures.
@@ -21060,6 +21141,15 @@ export interface operations {
          */
         priority?: components['schemas']['ThreadPriority'];
         sort?: 'newest' | 'oldest';
+        /**
+         * @description Words to find in message text (see above). Surrounding and repeated
+         *     whitespace is ignored.
+         */
+        query?: string;
+        /** @description With `query`, the earliest message time searched (inclusive). */
+        date_from?: string;
+        /** @description With `query`, the end of the searched range (exclusive). */
+        date_to?: string;
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
         limit?: components['parameters']['Limit'];
@@ -21101,9 +21191,11 @@ export interface operations {
           };
         };
       };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['MessageSearchTimedOut'];
     };
   };
   startChat: {
@@ -27510,7 +27602,10 @@ export interface operations {
       query: {
         /** @description The pasted number, e-mail, username or name. Surrounding whitespace is ignored. */
         query: string;
-        /** @description Comma-separated kinds to look for; every kind when absent. */
+        /**
+         * @description Comma-separated kinds to look for; when absent, every kind except
+         *     `message`.
+         */
         types?: string;
         limit?: number;
       };
@@ -27539,6 +27634,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['MessageSearchTimedOut'];
     };
   };
   listTrustedDomains: {

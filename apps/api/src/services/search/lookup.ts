@@ -18,6 +18,12 @@
  *   text     → members (exact username first, then the Contacts search) and
  *              tickets (the Tickets search)
  *
+ * and, only when `types` names it, `message` — the message text search
+ * (ID-07 · tm 333.3, `services/chat/event-search.ts`): conversations whose
+ * messages contain the query, one result per conversation, after every other
+ * kind. Its rules refuse a query with a 400 (the route checks them first), so
+ * it is not part of the default kinds.
+ *
  * Two rules hold every result:
  *
  * - **Visibility is the record's own.** A conversation goes through
@@ -47,6 +53,7 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { chatVisibilityFilter, hasChatScope, resolveVisibility } from '../chat/access.js';
 import type { ChatVisibility } from '../chat/access.js';
+import { searchMessages } from '../chat/event-search.js';
 import { CustomerService } from '../customers/customer-service.js';
 import { seesPlayerContact } from '../customers/player-contact.js';
 import { TicketService } from '../tickets/ticket-service.js';
@@ -114,6 +121,7 @@ export class SearchService {
     const conversations = CONVERSATION_KINDS.some(wants) && hasChatScope(principal, 'read');
     const customers = wants('customer') && hasAnyScope(principal.scopes, CUSTOMER_READ_SCOPES);
     const tickets = wants('ticket') && hasAnyScope(principal.scopes, TICKET_READ_SCOPES);
+    const messages = wants('message') && hasChatScope(principal, 'read');
     const contactVisible = seesPlayerContact(principal);
 
     const found = new ResultList(input.limit);
@@ -204,6 +212,12 @@ export class SearchService {
       }
     }
 
+    if (messages && !found.full()) {
+      for (const result of await findMessages(tx, principal, query, found.room())) {
+        found.add(result);
+      }
+    }
+
     return found.items();
   }
 
@@ -248,6 +262,10 @@ class ResultList {
 
   full(): boolean {
     return this.#items.length >= this.limit;
+  }
+
+  room(): number {
+    return Math.max(0, this.limit - this.#items.length);
   }
 
   items(): SearchResult[] {
@@ -345,6 +363,44 @@ async function findEvent(
     at: event.createdAt.toISOString(),
     matched_on: 'event_id',
   };
+}
+
+/**
+ * Conversations whose messages contain the query (ID-07), the newest match of
+ * each as the result — titled with the member's name like the other
+ * conversation kinds, the snippet as `subtitle`.
+ */
+async function findMessages(
+  tx: TenantClient,
+  principal: Principal,
+  query: string,
+  limit: number,
+): Promise<SearchResult[]> {
+  if (limit < 1) return [];
+  const page = await searchMessages(tx, principal, { query, limit });
+  if (page.hits.length === 0) return [];
+  const chats = await tx.chat.findMany({
+    where: { id: { in: page.hits.map((hit) => hit.chatId) } },
+    select: { id: true, customer: { select: { name: true } } },
+  });
+  const names = new Map(chats.map((chat) => [chat.id, chat.customer.name]));
+  return page.hits.flatMap((hit) =>
+    names.has(hit.chatId)
+      ? [
+          {
+            kind: 'message' as const,
+            chat_id: hit.chatId,
+            thread_id: hit.match.thread_id,
+            event_id: hit.match.event_id,
+            title: names.get(hit.chatId) ?? null,
+            subtitle: hit.match.snippet,
+            highlights: hit.match.highlights,
+            at: hit.match.created_at,
+            matched_on: 'text' as const,
+          },
+        ]
+      : [],
+  );
 }
 
 async function idsOf(

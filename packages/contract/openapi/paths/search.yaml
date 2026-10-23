@@ -23,6 +23,12 @@ search:
         username (exact first, then prefix, case-insensitive), e-mail or
         phone, and tickets by subject or member.
 
+      `message` — message text (ID-07), one result per conversation, its
+      newest matching message as `subtitle` (a snippet) with `highlights` —
+      is looked for only when `types` names it. It follows the rules of
+      `GET /chats?query=` over the last 90 days, and a query it refuses (too
+      short, too broad) is a 400 for the whole request.
+
       Every kind is gated on its own read scope and answers only what the
       caller may open: conversations through the chat's visibility (a chat of
       another team is not listed — the answer for a number the caller may not
@@ -42,7 +48,9 @@ search:
       - name: types
         in: query
         required: false
-        description: Comma-separated kinds to look for; every kind when absent.
+        description: |
+          Comma-separated kinds to look for; when absent, every kind except
+          `message`.
         schema: { type: string, example: "chat,connection,event" }
       - name: limit
         in: query
@@ -67,3 +75,4 @@ search:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/MessageSearchTimedOut" }

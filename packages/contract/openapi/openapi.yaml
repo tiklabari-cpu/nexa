@@ -1357,6 +1357,47 @@ components:
         tags:
           type: array
           items: { type: string }
+        match:
+          description: |
+            Present only on a text search (`GET /chats?query=`, ID-07): the
+            message this conversation was found by.
+          allOf:
+            - $ref: "#/components/schemas/MessageSearchMatch"
+
+    MessageSearchMatch:
+      type: object
+      required: [event_id, thread_id, created_at, snippet, highlights, match_count, internal]
+      description: |
+        A conversation's newest message containing every word of the query
+        (ID-07). `created_at` is to the millisecond.
+      properties:
+        event_id: { type: string, description: The message. }
+        thread_id: { type: string, description: 'Its connection (panel "Chat ID").' }
+        created_at: { type: string, format: date-time }
+        snippet:
+          type: string
+          description: |
+            The message around its first match: up to 60 characters either
+            side, `…` where the text was cut.
+        highlights:
+          type: array
+          description: Where the query's words sit in `snippet` — character ranges, in order, never overlapping.
+          items: { $ref: "#/components/schemas/TextRange" }
+        match_count:
+          type: integer
+          minimum: 1
+          description: Matching messages in the conversation, this one included.
+        internal:
+          type: boolean
+          description: The message is an internal note, which the visitor never saw.
+
+    TextRange:
+      type: object
+      required: [start, end]
+      description: A character range `[start, end)` (UTF-16 code units, as JavaScript indexes a string).
+      properties:
+        start: { type: integer, minimum: 0 }
+        end: { type: integer, minimum: 0 }
 
     ChatUser:
       type: object
@@ -2518,9 +2559,11 @@ components:
         One match of `GET /search`. The ids present depend on `kind`: a `chat`
         carries `chat_id`; a `connection` also `thread_id`; an `event` also
         `event_id`; a `customer` carries `customer_id`; a `ticket` carries
-        `ticket_id` (and `customer_id` when it has a member).
+        `ticket_id` (and `customer_id` when it has a member); a `message`
+        carries `chat_id`, `thread_id` and `event_id`, its snippet as
+        `subtitle` and `highlights`.
       properties:
-        kind: { type: string, enum: [chat, connection, event, customer, ticket] }
+        kind: { type: string, enum: [chat, connection, event, customer, ticket, message] }
         chat_id: { type: string, description: The day (panel "Thread ID"). }
         thread_id: { type: string, description: The connection (panel "Chat ID"). }
         event_id: { type: string, description: The message. }
@@ -2534,8 +2577,9 @@ components:
           type: string
           nullable: true
           description: |
-            A member's e-mail (else phone), or a ticket's member name. Null when
-            there is none or the caller may not see it.
+            A member's e-mail (else phone), a ticket's member name, or a
+            message's snippet. Null when there is none or the caller may not
+            see it.
         at:
           type: string
           format: date-time
@@ -2555,8 +2599,13 @@ components:
               name,
               phone,
               subject,
+              text,
             ]
           description: Which field the query matched.
+        highlights:
+          type: array
+          description: "`message` only: where the query's words sit in `subtitle`."
+          items: { $ref: "#/components/schemas/TextRange" }
 
     ConversationRef:
       type: object
@@ -12214,6 +12263,15 @@ components:
         `details.provider_reason` names the class (`unreachable`,
         `provider_error`). Nothing was written; an earlier connection stays,
         and the request can simply be repeated.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    MessageSearchTimedOut:
+      description: |
+        The message text search ran out of time (`service_unavailable`,
+        ID-07): `error.details.reason` is `search_timeout`. Nothing was
+        written. A narrower search — another word, a shorter date range — is
+        likelier to answer than the same one repeated.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

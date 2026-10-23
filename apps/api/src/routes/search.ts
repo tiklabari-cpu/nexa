@@ -14,6 +14,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  SEARCH_DEFAULT_KINDS,
   SEARCH_DEFAULT_LIMIT,
   SEARCH_KINDS,
   SEARCH_MAX_LIMIT,
@@ -21,6 +22,8 @@ import {
   type SearchKind,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
+import { hasChatScope } from '../services/chat/access.js';
+import { messageSearchWordsOrThrow, spendMessageSearch } from '../services/chat/event-search.js';
 import {
   CUSTOMER_READ_SCOPES,
   SearchService,
@@ -35,7 +38,9 @@ const searchQuery = z.object({
     .string()
     .optional()
     .transform((value, ctx) => {
-      if (value === undefined || value.trim() === '') return new Set<SearchKind>(SEARCH_KINDS);
+      if (value === undefined || value.trim() === '') {
+        return new Set<SearchKind>(SEARCH_DEFAULT_KINDS);
+      }
       const kinds = new Set<SearchKind>();
       for (const part of value.split(',')) {
         const kind = part.trim();
@@ -74,6 +79,14 @@ export default async function searchRoutes(app: FastifyInstance): Promise<void> 
       const query = parse(searchQuery, request.query);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
+      // The text search's own rules and budget, before the transaction opens
+      // (ID-07 · tm 333.3): a query it refuses is a 400 for the whole request.
+      if (query.types.has('message') && hasChatScope(principal, 'read')) {
+        messageSearchWordsOrThrow(query.query);
+        await spendMessageSearch(app.rateLimiter, principal, (error) =>
+          request.log.error({ err: error, bucket: 'msgsearch' }, 'budget unavailable — allowing'),
+        );
+      }
 
       const items = await request.withTenant((tx) =>
         search.search(tx, tenant, principal, {

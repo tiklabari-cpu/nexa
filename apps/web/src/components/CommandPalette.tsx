@@ -677,5 +677,15 @@ function recordResult(
         badge: t('ids.event.label'),
         icon: '▤',
       };
+    case 'message':
+      // The text search (ID-07) answers only when asked for by `types`, which
+      // this palette does not yet do; a row opens at the message it matched.
+      return {
+        ...base,
+        id: `message:${record.event_id}`,
+        label: record.title ?? t('palette.visitor'),
+        sub: line(record.subtitle, at),
+        icon: '▤',
+      };
   }
 }

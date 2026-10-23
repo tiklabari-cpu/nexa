@@ -14475,7 +14475,7 @@
           "332"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T05:04:10.321Z",
+        "updatedAt": "2026-10-23T06:26:11.456Z",
         "subtasks": [
           {
             "id": 1,
@@ -14483,11 +14483,11 @@
             "description": "pg_trgm + bölüm bazında CONCURRENTLY indeks + ATTACH + init SQL",
             "details": "Her CONCURRENTLY kendi migration dosyasında tek ifade. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): indeks işi mekanik ve hatası sessiz kalmaz. Bölümlenmiş tabloda üst tabloda CONCURRENTLY desteklenmez: üstte ON ONLY ile indeks, her bölümde CONCURRENTLY, sonra ALTER INDEX … ATTACH PARTITION; pg_index.indisvalid testi zorunlu (Prisma diff kısmi indeksleri görmez). SECURITY DEFINER fonksiyonu 333.2'de MAX kalır. Geçmiş: 2026-10-21 MAX→XHIGH (§D315).",
             "testStrategy": "db:check-drift; plan testi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "333",
             "priority": "high",
-            "updatedAt": "2026-10-23T05:04:10.321Z"
+            "updatedAt": "2026-10-23T06:26:11.456Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T05:04:10.322Z",
+      "lastModified": "2026-10-23T06:26:11.459Z",
       "taskCount": 390,
       "completedCount": 318,
       "tags": [

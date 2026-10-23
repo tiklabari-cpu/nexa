@@ -16,7 +16,7 @@
  * `scrollTop` is a plain settable value. That is enough — what is under test is
  * the correction, not the browser's own scrolling.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Transcript } from './Transcript.js';
 import type { ChatEvent } from './types.js';
@@ -252,5 +252,72 @@ describe('Transcript — rich text (FR-MOD-02.3.5)', () => {
     );
     expect(screen.getByText('**not bold**')).toBeInTheDocument();
     expect(screen.queryByText('not bold', { selector: 'strong' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Transcript — opening at a searched number (ID-06 · tm 332)', () => {
+  it('reads back until the message is loaded, then brings it into view and highlights it', () => {
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const onLoadOlder = vi.fn();
+    const focus = { eventId: 'TJ1H8CFKRV_3' };
+    const { update } = setup({ events: thread(14, 10), hasOlder: true, onLoadOlder, focus });
+
+    // Not loaded yet: one older page asked for, nothing scrolled.
+    expect(onLoadOlder).toHaveBeenCalledTimes(1);
+    expect(scrolled).not.toHaveBeenCalled();
+
+    update({ events: thread(14, 14), hasOlder: false, onLoadOlder, focus });
+    const target = screen.getByText('m3').closest('[data-event-id]');
+    expect(target).toHaveAttribute('data-event-id', 'TJ1H8CFKRV_3');
+    expect(target).toHaveAttribute('data-highlighted', 'true');
+    expect(scrolled).toHaveBeenCalledTimes(1);
+    expect(scrolled.mock.contexts[0]).toBe(target);
+
+    // Once there, a later page or push leaves the reader alone.
+    update({ events: [...thread(14, 14), message(15)], hasOlder: false, onLoadOlder, focus });
+    expect(scrolled).toHaveBeenCalledTimes(1);
+    expect(onLoadOlder).toHaveBeenCalledTimes(1);
+    scrolled.mockRestore();
+  });
+
+  it("scrolls to a connection's first message without highlighting it", () => {
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const later = { ...message(12), id: 'K3M9Q2XW7B_1', thread_id: 'K3M9Q2XW7B', text: 'later' };
+    setup({ events: [...thread(11, 5), later], hasOlder: true, focus: { threadId: 'K3M9Q2XW7B' } });
+
+    const target = screen.getByText('later').closest('[data-event-id]');
+    expect(scrolled.mock.contexts[0]).toBe(target);
+    expect(target).not.toHaveAttribute('data-highlighted');
+    scrolled.mockRestore();
+  });
+
+  it('asks again when an older-page request changed nothing', () => {
+    vi.useFakeTimers();
+    try {
+      // The paged query drops a request made while it refreshes a cached
+      // conversation: nothing re-renders, so only a timer can ask again.
+      const onLoadOlder = vi.fn();
+      setup({
+        events: thread(14, 10),
+        hasOlder: true,
+        onLoadOlder,
+        focus: { eventId: 'TJ1H8CFKRV_3' },
+      });
+      expect(onLoadOlder).toHaveBeenCalledTimes(1);
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      expect(onLoadOlder).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stays at the newest message when the target is not in this conversation', () => {
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    setup({ events: thread(14, 10), hasOlder: false, focus: { eventId: 'ZZZZZZZZZZ_1' } });
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-highlighted]')).toBeNull();
+    scrolled.mockRestore();
   });
 });

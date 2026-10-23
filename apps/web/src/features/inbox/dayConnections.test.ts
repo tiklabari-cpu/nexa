@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   connectionBreaks,
   earlierConnections,
+  focusStep,
   firstConnectionCursor,
   joinDayEvents,
   nextConnectionCursor,
@@ -114,5 +115,42 @@ describe('connectionBreaks', () => {
   it('keeps an optimistic bubble (no thread yet) in the connection before it', () => {
     const sending = [event('C2_1', 'C2'), event('optimistic-1', '')];
     expect(connectionBreaks(sending, { atStartOfDay: false, connectionCount: 2 }).size).toBe(0);
+  });
+});
+
+describe('focusStep (ID-06 · tm 332)', () => {
+  const ev = (id: string, thread: string): ChatEvent =>
+    ({ id, thread_id: thread }) as unknown as ChatEvent;
+  const events = [ev('A_1', 'A'), ev('A_2', 'A'), ev('B_1', 'B'), ev('B_2', 'B')];
+
+  it('scrolls to a loaded message and highlights it', () => {
+    expect(focusStep(events, { eventId: 'B_1' }, true)).toEqual({
+      eventId: 'B_1',
+      highlight: true,
+    });
+  });
+
+  it('asks for older history while the message is not loaded, and gives up at the start', () => {
+    expect(focusStep(events, { eventId: 'Z_1' }, true)).toBe('older');
+    expect(focusStep(events, { eventId: 'Z_1' }, false)).toBeNull();
+  });
+
+  it("finds a connection's first event once the event before it is another connection's", () => {
+    expect(focusStep(events, { threadId: 'B' }, true)).toEqual({
+      eventId: 'B_1',
+      highlight: false,
+    });
+  });
+
+  it('keeps reading when the connection reaches the top of what is loaded', () => {
+    expect(focusStep(events, { threadId: 'A' }, true)).toBe('older');
+    expect(focusStep(events, { threadId: 'A' }, false)).toEqual({
+      eventId: 'A_1',
+      highlight: false,
+    });
+  });
+
+  it('does nothing without a target', () => {
+    expect(focusStep(events, {}, true)).toBeNull();
   });
 });

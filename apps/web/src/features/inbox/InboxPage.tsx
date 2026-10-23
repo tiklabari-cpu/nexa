@@ -22,6 +22,7 @@ import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
+import type { TranscriptFocus } from './dayConnections.js';
 import { TypingIndicator } from './TypingIndicator.js';
 import { ConflictBanner } from './ConflictBanner.js';
 import { TakeTourBanner } from './TakeTourBanner.js';
@@ -167,6 +168,12 @@ export function InboxPage(): ReactElement {
 
   const [selection, setSelection] = useState<Selection>({ kind: 'chat', view: 'all' });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * Where a deep link asked the open chat to be read from (ID-06 · tm 332):
+   * a connection (`?thread=`) or a message (`?event=`) of the day `?chat=`
+   * opens. Tied to that chat — opening another one leaves it behind.
+   */
+  const [focus, setFocus] = useState<(TranscriptFocus & { chatId: string }) | null>(null);
   // What the last hand-off came to (IN-04), until dismissed or the next one.
   const [transferNotice, setTransferNotice] = useState<TransferNotice | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -205,12 +212,17 @@ export function InboxPage(): ReactElement {
       if (chatId) {
         setSelection({ kind: 'chat', view: 'all' });
         setSelectedId(chatId);
+        const threadId = searchParams.get('thread');
+        const eventId = searchParams.get('event');
+        setFocus(threadId || eventId ? { chatId, threadId, eventId } : null);
       } else if (ticketId) {
         setSelection({ kind: 'ticket' });
         setSelectedTicketId(ticketId);
       }
       const next = new URLSearchParams(searchParams);
       next.delete('chat');
+      next.delete('thread');
+      next.delete('event');
       next.delete('ticket');
       setSearchParams(next, { replace: true });
       return;
@@ -969,6 +981,7 @@ export function InboxPage(): ReactElement {
                       chatId={selectedId}
                       events={transcript.events}
                       connections={connectionLabels}
+                      focus={focus?.chatId === selectedId ? focus : undefined}
                       loading={transcript.isPending}
                       currentAgentId={agent?.account_id ?? null}
                       hasOlder={transcript.hasOlder}

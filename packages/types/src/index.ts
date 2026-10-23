@@ -31,6 +31,7 @@ export * from './access-review.js';
 export * from './rtm.js';
 export * from './ids.js';
 export * from './id-glossary.js';
+export * from './search.js';
 export * from './conversation-day.js';
 export * from './queue-entry.js';
 export * from './team-queues.js';

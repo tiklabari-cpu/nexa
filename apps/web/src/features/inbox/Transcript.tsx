@@ -1,4 +1,12 @@
-import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 import {
   isEditableEventType,
   isWithinEditWindow,
@@ -6,7 +14,12 @@ import {
   readSensitiveTypes,
 } from '@siyahtus/types';
 import type { ChatEvent } from './types.js';
-import { connectionBreaks, type ConnectionLabel } from './dayConnections.js';
+import {
+  connectionBreaks,
+  focusStep,
+  type ConnectionLabel,
+  type TranscriptFocus,
+} from './dayConnections.js';
 import type { FailedSend } from './failedSends.js';
 import { AiHandoffCardLine } from './AiHandoffCard.js';
 import { handoffCardIdOf } from './handoffCard.js';
@@ -20,6 +33,21 @@ import { getLocale, useTranslate } from '../../lib/i18n.js';
  * they arrive at the seam.
  */
 const OLDER_THRESHOLD_PX = 240;
+
+/**
+ * How many times a deep link may ask for an older page looking for its target
+ * before it settles where the conversation opened — a day is a few pages at
+ * most; a target that is still absent after this many asks is not coming.
+ */
+const MAX_FOCUS_PAGES = 30;
+
+/**
+ * How long a deep link waits on an ask that changed nothing before asking
+ * again. The paged query drops a request made while it is still refreshing a
+ * conversation it had cached (measured in the e2e run, tm 332), and a dropped
+ * request moves nothing this component watches.
+ */
+const FOCUS_RETRY_MS = 400;
 
 /**
  * The conversation.
@@ -50,9 +78,16 @@ export function Transcript({
   onRetry,
   onEdit,
   connections = [],
+  focus,
 }: {
   /** Which conversation this is — the one thing that means "start over". */
   chatId: string;
+  /**
+   * A connection or message to open at instead of the newest one (ID-06 ·
+   * tm 332) — a search result's deep link. Older pages are read until it is
+   * on screen; a message is also highlighted.
+   */
+  focus?: TranscriptFocus | undefined;
   events: ChatEvent[];
   /**
    * The day's connections, oldest first (ID-02 · tm 286.4). Each one the
@@ -171,6 +206,39 @@ export function Transcript({
     return () => observer.disconnect();
   }, [loading, events, failedSends, isLoadingOlder]);
 
+  // A deep link's target: read back until it is loaded, then bring it into
+  // view once. After that the reader is in charge — a later page, push or
+  // refetch must not drag them back to it.
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const focusSettled = useRef<string | null>(null);
+  const focusPages = useRef(0);
+  const [focusRetry, setFocusRetry] = useState(0);
+  const focusKey =
+    focus && (focus.threadId || focus.eventId)
+      ? `${chatId}|${focus.threadId ?? ''}|${focus.eventId ?? ''}`
+      : null;
+  useEffect(() => {
+    if (!focus || focusKey === null || loading || isLoadingOlder) return;
+    if (focusSettled.current === focusKey) return;
+    const step = focusStep(events, focus, hasOlder);
+    if (step === 'older' && focusPages.current < MAX_FOCUS_PAGES) {
+      focusPages.current += 1;
+      onLoadOlder?.();
+      const retry = setTimeout(() => setFocusRetry((n) => n + 1), FOCUS_RETRY_MS);
+      return () => clearTimeout(retry);
+    }
+    focusSettled.current = focusKey;
+    focusPages.current = 0;
+    if (step === null || step === 'older') return;
+    const node = containerRef.current?.querySelector(`[data-event-id="${step.eventId}"]`);
+    if (!node) return;
+    pinnedToBottom.current = false;
+    node.scrollIntoView({ block: 'center' });
+    setHighlighted(step.highlight ? step.eventId : null);
+    // `focus` is read through `focusKey`; the object itself is rebuilt by
+    // every render of the page and would re-run this for nothing.
+  }, [focusKey, focusRetry, events, loading, isLoadingOlder, hasOlder, onLoadOlder]);
+
   const handleScroll = (): void => {
     const node = containerRef.current;
     if (!node) return;
@@ -231,6 +299,7 @@ export function Transcript({
             )}
             <Bubble
               event={event}
+              highlighted={highlighted === event.id}
               isMine={event.author_id === currentAgentId}
               showDayDivider={opens === undefined && needsDayDivider(events[index - 1], event)}
               {...(onEdit ? { onEdit } : {})}
@@ -364,11 +433,14 @@ function FailedBubble({
 
 function Bubble({
   event,
+  highlighted = false,
   isMine,
   showDayDivider,
   onEdit,
 }: {
   event: ChatEvent;
+  /** The message a search opened the conversation at (ID-06). */
+  highlighted?: boolean;
   isMine: boolean;
   showDayDivider: boolean;
   onEdit?: (eventId: string, text: string) => Promise<unknown>;
@@ -378,6 +450,9 @@ function Bubble({
   // The AI's hand-over card has a line of its own (AI-10 · tm 304.2).
   const handoffCardId = isSystem ? handoffCardIdOf(event) : null;
   const pending = event.properties?.['pending'] === true;
+  // Drawn around the whole line, outside the bubble's own colours, so it reads
+  // the same on a note, a customer message and an agent's.
+  const highlightRing = highlighted ? 'rounded-lg ring-2 ring-brand-500 ring-offset-2' : '';
   const editedAt = readEditedAt(event.properties);
   // What the server masked out of this message (tm 300.2 · AI-26) — the reader
   // sees asterisks and is told why, rather than guessing at a garbled message.
@@ -434,12 +509,21 @@ function Bubble({
       )}
 
       {handoffCardId !== null ? (
-        <AiHandoffCardLine event={event} cardId={handoffCardId} />
+        <div data-event-id={event.id} className={`self-stretch ${highlightRing}`}>
+          <AiHandoffCardLine event={event} cardId={handoffCardId} />
+        </div>
       ) : isSystem ? (
-        <p className="self-center text-2xs text-content-tertiary">{event.text}</p>
+        <p
+          data-event-id={event.id}
+          className={`self-center text-2xs text-content-tertiary ${highlightRing}`}
+        >
+          {event.text}
+        </p>
       ) : (
         <div
-          className={`flex max-w-[72%] flex-col gap-1 ${
+          data-event-id={event.id}
+          {...(highlighted ? { 'data-highlighted': 'true' } : {})}
+          className={`flex max-w-[72%] flex-col gap-1 ${highlightRing} ${
             event.author_type === 'customer' ? 'self-start' : 'self-end items-end'
           }`}
         >

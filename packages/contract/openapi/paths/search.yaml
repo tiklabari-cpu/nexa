@@ -1,0 +1,69 @@
+search:
+  get:
+    tags: [Search]
+    operationId: search
+    summary: Find a conversation, a member or a ticket by its number, e-mail or username
+    description: |
+      What the ⌘K palette and the archive search box ask when an agent pastes a
+      number (ID-06): the server looks the value up directly, so a conversation
+      from last month is found as easily as one from this morning — nothing is
+      matched against a page the browser happens to hold.
+
+      The value's shape (`classifyIdentifier`, `@siyahtus/types`) decides what
+      is looked up, in this order:
+
+      - a message number (`TJ1H8CFKRV_7`) → that message (`kind: event`);
+      - a ten-character number → the day (`kind: chat`, panel "Thread ID"),
+        the connection (`kind: connection`, panel "Chat ID") and the ticket
+        with that number — a chance collision returns each;
+      - a UUID → the member (`kind: customer`);
+      - an e-mail address → the members with exactly that address
+        (case-insensitive);
+      - anything else, and a ten-character number besides → members by name,
+        username (exact first, then prefix, case-insensitive), e-mail or
+        phone, and tickets by subject or member.
+
+      Every kind is gated on its own read scope and answers only what the
+      caller may open: conversations through the chat's visibility (a chat of
+      another team is not listed — the answer for a number the caller may not
+      see is the answer for a number that does not exist), tickets through the
+      ticket's. A caller without `customers.contact.view` gets members' e-mail
+      and username as null, and neither field is searched for them — a match
+      on a value the row does not show would still confirm it.
+
+      The parameter is `query`, which the server's request log masks; it is
+      never put in a browser address.
+    parameters:
+      - name: query
+        in: query
+        required: true
+        description: The pasted number, e-mail, username or name. Surrounding whitespace is ignored.
+        schema: { type: string, minLength: 1, maxLength: 200 }
+      - name: types
+        in: query
+        required: false
+        description: Comma-separated kinds to look for; every kind when absent.
+        schema: { type: string, example: "chat,connection,event" }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+    responses:
+      "200":
+        description: |
+          The matches, exact identifier hits first. An empty list is a
+          normal answer.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/SearchResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

@@ -5404,6 +5404,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/search': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Find a conversation, a member or a ticket by its number, e-mail or username
+     * @description What the ⌘K palette and the archive search box ask when an agent pastes a
+     *     number (ID-06): the server looks the value up directly, so a conversation
+     *     from last month is found as easily as one from this morning — nothing is
+     *     matched against a page the browser happens to hold.
+     *
+     *     The value's shape (`classifyIdentifier`, `@siyahtus/types`) decides what
+     *     is looked up, in this order:
+     *
+     *     - a message number (`TJ1H8CFKRV_7`) → that message (`kind: event`);
+     *     - a ten-character number → the day (`kind: chat`, panel "Thread ID"),
+     *       the connection (`kind: connection`, panel "Chat ID") and the ticket
+     *       with that number — a chance collision returns each;
+     *     - a UUID → the member (`kind: customer`);
+     *     - an e-mail address → the members with exactly that address
+     *       (case-insensitive);
+     *     - anything else, and a ten-character number besides → members by name,
+     *       username (exact first, then prefix, case-insensitive), e-mail or
+     *       phone, and tickets by subject or member.
+     *
+     *     Every kind is gated on its own read scope and answers only what the
+     *     caller may open: conversations through the chat's visibility (a chat of
+     *     another team is not listed — the answer for a number the caller may not
+     *     see is the answer for a number that does not exist), tickets through the
+     *     ticket's. A caller without `customers.contact.view` gets members' e-mail
+     *     and username as null, and neither field is searched for them — a match
+     *     on a value the row does not show would still confirm it.
+     *
+     *     The parameter is `query`, which the server's request log masks; it is
+     *     never put in a browser address.
+     */
+    get: operations['search'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/trusted-domains': {
     parameters: {
       query?: never;
@@ -11620,6 +11668,52 @@ export interface components {
       };
       /** @description Restricted days in the whole 90-day window. */
       restricted_count: number;
+    };
+    /**
+     * @description One match of `GET /search`. The ids present depend on `kind`: a `chat`
+     *     carries `chat_id`; a `connection` also `thread_id`; an `event` also
+     *     `event_id`; a `customer` carries `customer_id`; a `ticket` carries
+     *     `ticket_id` (and `customer_id` when it has a member).
+     */
+    SearchResult: {
+      /** @enum {string} */
+      kind: 'chat' | 'connection' | 'event' | 'customer' | 'ticket';
+      /** @description The day (panel "Thread ID"). */
+      chat_id?: string;
+      /** @description The connection (panel "Chat ID"). */
+      thread_id?: string;
+      /** @description The message. */
+      event_id?: string;
+      /** Format: uuid */
+      customer_id?: string;
+      ticket_id?: string;
+      /** @description The member's name, or the ticket's subject; null when the member left no name. */
+      title: string | null;
+      /**
+       * @description A member's e-mail (else phone), or a ticket's member name. Null when
+       *     there is none or the caller may not see it.
+       */
+      subtitle: string | null;
+      /**
+       * Format: date-time
+       * @description When the day, connection or message started, or the member was last active.
+       */
+      at: string | null;
+      /**
+       * @description Which field the query matched.
+       * @enum {string}
+       */
+      matched_on:
+        | 'chat_id'
+        | 'thread_id'
+        | 'event_id'
+        | 'customer_id'
+        | 'ticket_id'
+        | 'email'
+        | 'username'
+        | 'name'
+        | 'phone'
+        | 'subject';
     };
     /**
      * @description One connection of the day (`today`) or one earlier day (`history`) on
@@ -27401,6 +27495,42 @@ export interface operations {
               type: string;
               id: string;
             };
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  search: {
+    parameters: {
+      query: {
+        /** @description The pasted number, e-mail, username or name. Surrounding whitespace is ignored. */
+        query: string;
+        /** @description Comma-separated kinds to look for; every kind when absent. */
+        types?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /**
+       * @description The matches, exact identifier hits first. An empty list is a
+       *     normal answer.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['SearchResult'][];
           };
         };
       };

@@ -14470,12 +14470,12 @@
         "description": "Mesaj metninde arama hiç yok. QA, şikâyet, uyum incelemeleri ve AI'ın cevaplayamadıklarını bulmak buna dayanır (\"geçen hafta 'Papara 5000' yazan oyuncu\", TXID, IBAN son haneleri). Kaynak: ID-07.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: ID-07. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 5 — ajan deneyimi, arama, arşiv.\n\n[MAX] RLS'i atlayan SECURITY DEFINER — kiracı ve görünürlük filtresi fonksiyonun içinde zorunlu ve testli; güvenlik incelemesi.\nKOD: Event schema:851-887 (aylık bölümlü, event-partitions.ts, runbook event-partitions.md); RLS + indeks tuzağı (migration 20260911170000_events_sequence_column, transcript-page-plan.test.ts); infra/db/init/00-extensions.sql (pg_trgm YOK).\nmigration: CREATE EXTENSION IF NOT EXISTS pg_trgm (+ 00-extensions.sql; pilot rolüyle denenir — trusted eklenti); bölümlü ebeveyne GIN trigram indeksi; mevcut büyük bölümler için önce her bölümde CONCURRENTLY + ebeveyne ATTACH (uzun kilit yok); search_events(p_license, p_query, p_from, p_to, p_unrestricted, p_group_ids, p_actor_id, p_include_notes, p_limit, p_cursor) — sabit search_path, license_id = p_license açık filtre, chat_access ∩ grup listesi veya katılımcı, yalnız gereken kolonlar; siyahtus_app'e yalnız EXECUTE.\nTürkçe İ/ı: lower/ILIKE locale bağımlı — gerekirse translate ile normalize arama kolonu.\ncontract: listChats'e query (≥3), date_from, date_to (AR-02 ile ortak); öğeye match {event_id, thread_id, snippet, created_at}; search.yaml türlerine message.\napi: services/chat/event-search.ts (resolveVisibility → fonksiyon parametreleri); GET /chats query verilince bu yol; GET /search da kullanır.\nKURALLAR: kırp, boşluk tekle, LIKE kaçışı, ≥3 karakter; tarih varsayılan son 90 gün (ID-07-S1), en fazla 400 gün (bölüm budaması); created_at DESC, id keyset, sayfa 50; sohbet başına gruplama (en yeni eşleşme + sayı), snippet sunucuda ±60; iç notlar ajanlarda dahil (S2), müşteri principal'ı ulaşamaz; kök eşleşmesi yok (S3; sonraki sürüm tsvector('simple')).\nweb: arşivde her zaman görünür arama çubuğu, tarih aralığı, vurgulu snippet, \"Bu mesaja git\" → /app/inbox?chat=T&thread=C&event=E; Ctrl+K \"Arşivde ara\" modu.\n\nKABUL KRİTERLERİ:\n- \"papara 5000\" \"Papara ile 5000 TL\" geçen mesajı bulur; büyük/küçük duyarsız; \"İSTANBUL\" \"istanbul\"u bulur.\n- Sonuçlar yalnız aramayı yapanın görebildiği sohbetlerden.\n- Maskelenmiş kartın açık hali aranınca sonuç yok.\n- Tarih yoksa son 90 gün.\n- Plan testi büyük veride trigram indeksinin kullanıldığını doğrular; seed'de p95 < 1 sn.\n- Aranan metin tarayıcı adresinde yok.\n\nKULLANILAN VARSAYIMLAR:\n- ID-07-S1/S2/S3 varsayılanları.\n- Trigram indeksinin yazma yükü yük testiyle ölçülür (07 açık risk).",
         "testStrategy": "Entegrasyon (bulma, görünürlük, iç not, kiracılar arası negatif, tarih sınırı, %/_ kaçışı, Türkçe harfler), plan testi (transcript-page-plan kalıbı), e2e arşiv araması; güvenlik incelemesi; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "332"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T10:44:55.177Z",
+        "updatedAt": "2026-10-23T11:48:06.003Z",
         "subtasks": [
           {
             "id": 1,
@@ -14523,13 +14523,13 @@
             "description": "Arşiv arama çubuğu + snippet + \"Bu mesaja git\" + Ctrl+K \"Arşivde ara\"",
             "details": "Üst görev 333 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "e2e.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "333.3"
             ],
             "parentId": "333",
             "priority": "high",
-            "updatedAt": "2026-10-23T10:44:55.177Z"
+            "updatedAt": "2026-10-23T11:48:06.003Z"
           }
         ]
       },
@@ -16146,9 +16146,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T10:44:55.178Z",
+      "lastModified": "2026-10-23T11:48:06.003Z",
       "taskCount": 390,
-      "completedCount": 318,
+      "completedCount": 319,
       "tags": [
         "master"
       ]

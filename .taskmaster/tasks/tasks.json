@@ -14697,13 +14697,13 @@
         "description": "Bugün yalnız IP/token hız sınırı ve workspace/platform günlük AI tavanı var; tek bir script tüm workspace AI kotasını tüketebilir, CAPTCHA yok (pilot-public-readiness K-e(5)). Dört katmanlı koruma kurulur. Kaynak: GV-01.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: GV-01. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.\n\nEFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).\nKOD: plugins/rate-limit.ts (müşteri 60/dk, anonim IP 30/dk; Redis yoksa açık), services/ai/ai-daily-budget.ts + plugins/ai-budget.ts (ai_budget_* SECURITY DEFINER), security/spam-filter.ts (customer.ts:687+), auth.ts:1697-1709 (her yeni ziyaretçiye müşteri satırı), config/env.ts productionProblems.\nenv: CAPTCHA_PROVIDER mock|turnstile|none, TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY; PILOT_MODE'da turnstile + anahtar zorunluluğu productionProblems'a. GERÇEK ANAHTAR YOK — geliştirme/test mock sağlayıcıyla (CLAUDE.md sınırı).\nprisma: ai_customer_daily_usage (license_id, customer_id, day, ai_turns, llm_tokens) PK + RLS; security_settings.ai_turns_per_customer_day INT DEFAULT 40, captcha_mode TEXT DEFAULT 'risk' (off|risk|always_on_chat_start); customers.challenge_passed_at.\ncontract: customer-chat.yaml + auth.yaml challenge_required (details.reason, site_key), isteğe bağlı challenge_token; settings.yaml yeni ayarlar.\napi: risk değerlendirmesi token basımında ve sohbet açılışında (aynı IP'den 10 dk'da çok yeni müşteri, dakikada çok mesaj, AI turu/insan oranı; sayaçlar Redis, Redis yoksa yalnız \"doğrulama iste\" devre dışı, kota Postgres'te kalır); services/security/captcha.ts (Turnstile + sahte); AI yolunda reserve'den önce üye başına tek ifadeli artır-ve-kontrol et; kota dolunca insan yolu + iç not + ai_decision_logs decision=cap_reached (#288); %80'de Kurucu/Yöneticilere günde bir bildirim.\nwidget: yalnız challenge_required gelince Turnstile tembel yüklenir; iframe CSP/sandbox challenges.cloudflare.com izni; 8 dil (K25).\nweb: settings-sections (scope access_rules), kota göstergesi (Home + AI performans).\nKURALLAR: doğrulamayı geçen üye 12 saat sorulmaz; geçerli üye tokenlı (K4/#287) üye hiç sorulmaz; sağlayıcıya ulaşılamazsa sohbet açılır ama AI cevap vermez; CGNAT nedeniyle IP eşikleri cömert; erişilebilir doğrulama kutusu.\n\nKABUL KRİTERLERİ:\n- Normal ziyaretçi hiç doğrulama görmez.\n- Aynı IP'den eşik üstü yeni ziyaretçi açan script doğrulamasız token/sohbet açamaz.\n- 41. AI turunda AI susar, sohbet insana gider, ajan notu görünür.\n- %80 bildirimi günde bir kez.\n- Testte gerçek sağlayıcıya ağ çağrısı yok.\n\nKULLANILAN VARSAYIMLAR:\n- Varsayılan tavan 40 tur/üye/gün; captcha_mode risk.\n- Turnstile KVKK aydınlatma metni hukuk kontrolü (07 açık risk).\n\nPANEL YERLEŞİMİ (tm 389 root panel · docs/platform-admin/gorev-yerlesimi.md · 2026-10-14): W+R. Workspace paneli: kota ayarı, doğrulama modu, kota göstergesi. ROOT panel: Turnstile anahtar VARLIĞI ve `CAPTCHA_PROVIDER` effective-config'de (389.13; değer env'de kalır, panelden değişmez); kiracılar arası challenge/cap_reached SAYAÇLARI güvenlik ekranında (389.16). Bu görev root panel kodlamaz; `captcha.ts` `reportComponentStatus('captcha', …)` çağırabilir (varsa).",
         "testStrategy": "Birim (risk eşikleri), entegrasyon (41. tur, sahte sağlayıcıyla geçerli/geçersiz doğrulama, %80 günde bir), e2e widget doğrulama akışı; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "283",
           "287"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-24T02:17:43.596Z",
+        "updatedAt": "2026-10-24T03:46:37.894Z",
         "subtasks": [
           {
             "id": 1,
@@ -14737,13 +14737,13 @@
             "description": "Widget tembel doğrulama kutusu (8 dil) + panel ayar/kota göstergesi",
             "details": "Üst görev 339 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "e2e widget doğrulama.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "339.2"
             ],
             "parentId": "339",
             "priority": "high",
-            "updatedAt": "2026-10-24T02:17:43.596Z"
+            "updatedAt": "2026-10-24T03:46:37.894Z"
           }
         ]
       },
@@ -16146,9 +16146,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-24T02:17:43.597Z",
+      "lastModified": "2026-10-24T03:46:37.895Z",
       "taskCount": 390,
-      "completedCount": 321,
+      "completedCount": 322,
       "tags": [
         "master"
       ]

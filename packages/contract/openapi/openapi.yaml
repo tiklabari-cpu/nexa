@@ -7018,6 +7018,11 @@ components:
         (tm 339.1 · GV-01): how many AI turns one member may have answered on
         one conversation day (the workspace's day boundary) before the
         conversation goes to a person. 40 unless saved; 0 turns it off.
+
+        `captcha_mode` is when the widget asks a visitor for a human check
+        (tm 339.2 · GV-01): `off`, `risk` (the default — only when the risk
+        signals fire) or `always_on_chat_start`. See `challenge_required` on
+        `POST /customer/token` and `POST /customer/chat/events`.
       required:
         [
           banned_customer_ips,
@@ -7030,6 +7035,7 @@ components:
           session_idle_timeout_seconds,
           max_concurrent_sessions,
           ai_turns_per_customer_day,
+          captcha_mode,
         ]
       properties:
         brand_id:
@@ -7090,6 +7096,8 @@ components:
             AI turns one member may have answered per conversation day; the
             next one is left to a person, with a note for the agents. 0 = no
             per-member allowance. Defaults to 40.
+        captcha_mode:
+          $ref: "#/components/schemas/CaptchaMode"
         updated_at: { type: string, format: date-time, nullable: true }
 
     # --- Member recognition (ID-03 · decision K4 · tm 287) ---------------------
@@ -12281,6 +12289,44 @@ components:
               type: object
               additionalProperties: true
 
+    CaptchaMode:
+      type: string
+      enum: ["off", risk, always_on_chat_start]
+      description: >-
+        When the widget asks a visitor for a human check (tm 339.2 · GV-01):
+        never, only when the risk signals fire (the default), or on every
+        conversation a visitor opens without a pass in the last 12 hours.
+        A member whose member token this workspace signed is never asked.
+
+    ChallengeRequiredDetails:
+      type: object
+      description: |
+        `details` of a `403 challenge_required` (tm 339.2 · GV-01): why the
+        request was flagged and which check to show. The widget loads the
+        provider's check with `site_key`, then repeats the request with the
+        check's answer as `challenge_token`. `challenge_failed` means the
+        token sent was refused — show the check again.
+      required: [reason, provider, site_key]
+      properties:
+        reason:
+          type: string
+          enum:
+            [
+              new_customers_per_ip,
+              messages_per_minute,
+              ai_turns_today,
+              always_on_chat_start,
+              challenge_failed,
+            ]
+        provider:
+          type: string
+          enum: [turnstile, mock]
+          description: >-
+            `turnstile` is Cloudflare Turnstile; `mock` is the offline
+            stand-in development and the tests run, which accepts the token
+            `mock-captcha-pass`.
+        site_key: { type: string }
+
     ErrorType:
       type: string
       description: Machine-readable error category (v2-03 §1.8).
@@ -12293,6 +12339,7 @@ components:
         - authorization
         - brand_exists
         - brand_not_found
+        - challenge_required
         - chat_anonymized
         - chat_inactive
         - customer_banned

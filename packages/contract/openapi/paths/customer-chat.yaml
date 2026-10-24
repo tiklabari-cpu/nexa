@@ -82,6 +82,19 @@ events:
       website minted the token. A workspace that has never saved the setting
       is not checked here, and a message into an existing conversation never
       is.
+
+      **The human check (tm 339.2 · GV-01).** A message that would *open* a
+      connection is answered `403 challenge_required` — nothing written — when
+      the workspace's `captcha_mode` is `always_on_chat_start`, or it is
+      `risk` and a risk signal fires: many new visitors from this address in
+      the last 10 minutes, more messages from this visitor in the last minute
+      than the deployment allows, or many AI turns for this member today.
+      `details` (`ChallengeRequiredDetails`) names the reason and the check to
+      show; the widget repeats the message with the check's answer as
+      `challenge_token`. Never asked of a visitor whose member token this
+      workspace signed (ID-03 · K4), nor of one who passed a check in the last
+      12 hours. When the provider cannot be reached the conversation opens,
+      but the AI does not answer this visitor for an hour.
     requestBody:
       required: true
       content:
@@ -145,6 +158,14 @@ events:
                   nullable: true
                   maxLength: 5000
               idempotency_key: { type: string, maxLength: 128 }
+              challenge_token:
+                type: string
+                maxLength: 2048
+                description: |
+                  The human check's answer (tm 339.2), sent only after an
+                  opening message was answered `403 challenge_required`.
+                  Verified only when the message opens a conversation and is
+                  flagged; otherwise ignored.
     responses:
       "200":
         description: Idempotent replay — the original event, no new message
@@ -162,6 +183,14 @@ events:
         description: |
           The license is read-only (expired trial). Existing conversations stay
           readable; new messages are refused.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "403":
+        description: |
+          `customer_banned`, `message_rejected` (the spam filter), or
+          `challenge_required` (tm 339.2) with `ChallengeRequiredDetails` as
+          `details`.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }

@@ -245,6 +245,14 @@ export default defineConfig({
         RATE_LIMIT_TOKEN_PER_MIN: '2000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
         RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
+        // The widget's human check (tm 339.2): the suite opens hundreds of
+        // visitors from one address, past the default 30 per 10 minutes. The
+        // check itself runs with the offline mock; a spec that wants it turns
+        // the workspace's `captcha_mode` to `always_on_chat_start`.
+        CAPTCHA_PROVIDER: 'mock',
+        CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP: '1000000',
+        CAPTCHA_RISK_MESSAGES_PER_MIN: '1000000',
+        CAPTCHA_RISK_AI_TURNS_TODAY: '1000000',
         // The seeded accounts connect Apps cards in several specs (tm 263).
         RATE_LIMIT_APPS_CONNECT_PER_HOUR: '10000',
         MAIL_DAILY_PER_WORKSPACE: '1000000',

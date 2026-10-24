@@ -32,6 +32,9 @@ import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-ev
 import { maskForWrite } from '../lib/sensitive-mask.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../services/security/spam-filter.js';
+import { assessRisk, passedRecently, readCaptchaMode } from '../services/security/abuse-guard.js';
+import { CAPTCHA_TOKEN_MAX_LENGTH } from '../services/security/captcha.js';
+import { customerAiTurnsToday } from '../services/ai/customer-ai-quota.js';
 import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -108,6 +111,12 @@ const startSchema = z
      */
     custom_fields: z.record(z.string().max(5000).nullable()).optional(),
     idempotency_key: z.string().min(1).max(128).optional(),
+    /**
+     * The human check's answer (tm 339.2 · GV-01), sent only after an opening
+     * message was answered `403 challenge_required`. Verified only when the
+     * message opens a conversation and is flagged; otherwise ignored.
+     */
+    challenge_token: z.string().min(1).max(CAPTCHA_TOKEN_MAX_LENGTH).optional(),
   })
   // `.strict()` for the reason `campaigns.ts` gives for its conditions: a typo
   // in a key the visitor's context rides on (`referer`, `custom_field`) must be
@@ -461,6 +470,7 @@ export default async function customerRoutes(
         });
       },
       requireAiBudget: () => app.requireAiBudget(tenant),
+      aiWithheld: () => app.abuseGuard.isAiWithheld(tenant.licenseId, run.customerId),
       replyProperties: run.replyProperties,
       replyOutbox: run.replyOutbox,
       // `ai_jobs_identity_trust_check` holds the column to `IDENTITY_TRUSTS`;
@@ -850,6 +860,69 @@ export default async function customerRoutes(
           throw ApiError.validation(`${missing.join(', ')}: required by the pre-chat form.`, {
             fields: missing.map((field) => ({ field, message: 'Required.' })),
           });
+        }
+      }
+
+      // The human check (tm 339.2 · GV-01), on the message that opens a
+      // conversation, after the refusals above so a passing token is not spent
+      // on a message they turn away, and before any write. Every message
+      // counts toward the visitor's minute; only an opening one is screened.
+      // Never asked of a member this workspace signed a token for (K4), nor of
+      // one who passed a check in the last 12 hours. A verdict the provider
+      // could not give opens the conversation, without the AI.
+      const guard = app.abuseGuard;
+      const messagesLastMinute = guard.verifier
+        ? await guard.recordMessage(tenant.licenseId, principal.customerId, request.log)
+        : null;
+      if (opens && guard.verifier && principal.identity !== 'verified') {
+        const screen = await request.withTenant(async (tx) => {
+          const mode = await readCaptchaMode(tx, principal.brandId);
+          if (!guard.asks(mode)) return null;
+          const customer = await tx.customer.findFirst({
+            where: { id: principal.customerId },
+            select: { challengePassedAt: true },
+          });
+          if (passedRecently(customer?.challengePassedAt ?? null)) return null;
+          return {
+            mode,
+            aiTurnsToday:
+              mode === 'risk'
+                ? await customerAiTurnsToday(tx, {
+                    licenseId: tenant.licenseId,
+                    customerId: principal.customerId,
+                  })
+                : null,
+          };
+        });
+        const reason = !screen
+          ? null
+          : screen.mode === 'always_on_chat_start'
+            ? 'always_on_chat_start'
+            : assessRisk(
+                {
+                  newCustomersFromIp: await guard.newCustomersFromIp(
+                    tenant.licenseId,
+                    request.ip,
+                    request.log,
+                  ),
+                  messagesLastMinute,
+                  aiTurnsToday: screen.aiTurnsToday,
+                },
+                guard.thresholds,
+              );
+        if (reason) {
+          const verdict = await guard.verdictFor(reason, body.challenge_token, request.ip);
+          const outcome = guard.decide(reason, verdict, request.log);
+          if (outcome === 'passed') {
+            await request.withTenant((tx) =>
+              tx.customer.update({
+                where: { id: principal.customerId },
+                data: { challengePassedAt: new Date() },
+              }),
+            );
+          } else {
+            await guard.withholdAi(tenant.licenseId, principal.customerId, request.log);
+          }
         }
       }
 

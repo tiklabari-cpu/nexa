@@ -865,6 +865,19 @@ customerToken:
       the body says which it was. A username or e-mail typed into the pre-chat
       form never selects a customer; another device is a new customer until an
       agent confirms the link.
+
+      **The human check (tm 339.2 · GV-01).** A visitor this workspace has not
+      signed a member token for is answered `403 challenge_required` — before
+      any customer is created — when the address opened more new visitors in
+      the workspace in the last 10 minutes than the deployment allows
+      (`CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP`, generous for carrier-shared
+      addresses) and the workspace's `captcha_mode` is not `off`. `details`
+      (`ChallengeRequiredDetails`) names the reason and the check to show; the
+      widget repeats the request with the check's answer as `challenge_token`.
+      A pass is remembered on the member for 12 hours. When the provider
+      cannot be reached the token is issued anyway, but the AI does not answer
+      that visitor for an hour — they can always reach a person. A normal
+      visitor never sees any of this.
     security: []
     requestBody:
       required: true
@@ -900,6 +913,13 @@ customerToken:
                 description: |
                   Origin of the page the widget is embedded in, e.g.
                   `https://shop.example`. Falls back to the `Origin` header.
+              challenge_token:
+                type: string
+                maxLength: 2048
+                description: |
+                  The human check's answer (tm 339.2), sent only after this
+                  endpoint answered `403 challenge_required`. Verified only
+                  when the request is flagged; otherwise ignored.
     responses:
       "200":
         description: Customer token issued
@@ -1029,7 +1049,14 @@ customerToken:
                     the same request, as `prospect_fields`.
                   items: { $ref: "../openapi.yaml#/components/schemas/WidgetFormField" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
-      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "403":
+        description: |
+          `authorization` (the origin is not a trusted domain),
+          `customer_banned`, or `challenge_required` (tm 339.2) with
+          `ChallengeRequiredDetails` as `details`.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "421": { $ref: "../openapi.yaml#/components/responses/MisdirectedRequest" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
   delete:

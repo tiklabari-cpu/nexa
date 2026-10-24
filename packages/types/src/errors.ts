@@ -44,6 +44,13 @@ export const ERROR_TYPES = [
   'brand_not_found',
   'chat_anonymized',
   'chat_inactive',
+  // SiyahTuş addition — widget abuse protection (GV-01 · tm 339.2). A widget token
+  // or a conversation opening that looks scripted (many new visitors from one
+  // address, a burst of messages) must first pass a human check, and the
+  // widget answers this by showing one: `details.reason` says why, `details.provider`
+  // and `details.site_key` which check to load. 403 like `customer_banned`, kept
+  // apart from it because the answer is "prove you are a person", not "go away".
+  'challenge_required',
   'customer_banned',
   // SiyahTuş addition — routing rules (FR-MOD-08.6.1). A licence holds at most one
   // fallback rule per kind, and asking for a second is a conflict rather than a
@@ -166,6 +173,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   brand_not_found: 404,
   chat_anonymized: 410,
   chat_inactive: 409,
+  challenge_required: 403,
   customer_banned: 403,
   fallback_rule_exists: 409,
   greeting_not_found: 404,

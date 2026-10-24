@@ -42,6 +42,11 @@ export interface VisitorTurn {
   requireAiInference(): Promise<void>;
   /** The daily AI caps (tm 257.8): throws `AiDailyCapError` once today's allowance is spent. */
   requireAiBudget(): Promise<void>;
+  /**
+   * Whether the AI holds back from this visitor (tm 339.2 · GV-01): they were
+   * due a human check the provider could not verify. Absent: never.
+   */
+  aiWithheld?(): Promise<boolean>;
   /** Merged into the reply's properties — the mark the job's duplicate check reads. */
   readonly replyProperties: Readonly<Record<string, unknown>>;
   /**

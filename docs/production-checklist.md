@@ -797,9 +797,13 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
   anyone who can open a workspace's chat can spend that workspace's day of tokens, and that
   workspace's AI is then off until UTC midnight: messages wait for a human. The caps bound the
   provider's bill, not the nuisance.
-- The widget's token and sign-up endpoints have no CAPTCHA (no Turnstile; ADR
-  `docs/adr/pilot-public-readiness.md` K-e(5)). Limits are per network, so a script spread over many
-  networks is slowed, not stopped. Three accepted consequences: one address can be sent only five
+  Narrowed since: one member gets 40 AI turns a day (tm 339.1, `ai_turns_per_customer_day`), and a
+  script opening many visitors from one address is asked for a human check (tm 339.2) — but only
+  with `CAPTCHA_PROVIDER=turnstile` and both keys set; the boot warns when the pilot runs without.
+- Sign-up has no CAPTCHA (ADR `docs/adr/pilot-public-readiness.md` K-e(5)); the widget's token
+  mint and the message that opens a conversation ask for Turnstile only when the risk signals fire
+  (tm 339.2), and not at all without Turnstile's keys. Limits are per network, so a script
+  spread over many networks is slowed, not stopped. Three accepted consequences: one address can be sent only five
   account mails a day (so five resets use up the day's), customers can fill a workspace's external
   mail allowance, and a wrong `TRUST_PROXY_HOPS` turns the per-network sign-up limit into one
   limit for everybody.

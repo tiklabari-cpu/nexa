@@ -90,6 +90,7 @@ import type { RiskFlag } from '@prisma/client';
 import {
   AI_BOT_ID,
   AI_CAP_REACHED_SYSTEM_EVENT,
+  AI_CHALLENGE_UNVERIFIED_SYSTEM_EVENT,
   DEFAULT_DAILY_MEMORY,
   parseEventId,
   readNoAnswerSettings,
@@ -190,6 +191,13 @@ export const CAP_NOTE_TEXT: Readonly<Record<AiCapReachedScope, string>> = {
   global:
     "The service's AI allowance for today is used up, so the AI stopped answering and a person takes it from here.",
 };
+
+/**
+ * The agents' note when the AI held back from a visitor the human check could
+ * not verify (tm 339.2 · GV-01): the provider was away when they were asked.
+ */
+export const CHALLENGE_UNVERIFIED_NOTE_TEXT =
+  'This visitor was due a human check that could not be completed (the check was unavailable), so the AI does not answer them and a person takes it from here.';
 
 export interface AiResponderOptions {
   /**
@@ -327,6 +335,34 @@ export class AiResponder {
         { err: error },
         'ai inference refused for this workspace; leaving the message for a human',
       );
+      return null;
+    }
+
+    // A visitor the human check could not verify (tm 339.2 · GV-01): asked
+    // for one while the provider was away, they got their conversation but
+    // not the AI. On the AI's connection the player is told and a person sent,
+    // like a cap; elsewhere routing's person has it. Before the caps, which
+    // this turn must not spend from.
+    if (await turn.aiWithheld?.()) {
+      log.warn(
+        { event: 'ai.withheld' },
+        'this visitor could not be checked; the ai does not answer them',
+      );
+      const handedOver = capConfig
+        ? await this.#capHandOver(turn, ref, message, capConfig, 'ai_challenge_unverified')
+        : null;
+      if (handedOver) {
+        await this.#systemNote(turn, ref, CHALLENGE_UNVERIFIED_NOTE_TEXT, {
+          system_event: AI_CHALLENGE_UNVERIFIED_SYSTEM_EVENT,
+        });
+      }
+      await record({
+        decision: 'blocked',
+        details: {
+          reason: 'challenge_unverified',
+          ...(handedOver ? { handoff_id: handedOver.handoffId, reason_codes: ['ai_failure'] } : {}),
+        },
+      });
       return null;
     }
 
@@ -1006,13 +1042,23 @@ export class AiResponder {
    * cannot be written is one log line — the hand-over already happened.
    */
   async #capNote(turn: VisitorTurn, ref: ConnectionRef, scope: AiCapReachedScope): Promise<void> {
+    await this.#systemNote(turn, ref, CAP_NOTE_TEXT[scope], {
+      system_event: AI_CAP_REACHED_SYSTEM_EVENT,
+      cap_scope: scope,
+    });
+  }
+
+  /** One agents-only system note; a note that cannot be written is one log line. */
+  async #systemNote(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    text: string,
+    properties: Record<string, unknown>,
+  ): Promise<void> {
     try {
-      await this.chats.addSystemNote(turn.tenant, ref, {
-        text: CAP_NOTE_TEXT[scope],
-        properties: { system_event: AI_CAP_REACHED_SYSTEM_EVENT, cap_scope: scope },
-      });
+      await this.chats.addSystemNote(turn.tenant, ref, { text, properties });
     } catch (error) {
-      turn.log.warn({ err: error }, 'the ai allowance note could not be written');
+      turn.log.warn({ err: error }, 'the ai hand-over note could not be written');
     }
   }
 
@@ -1029,6 +1075,7 @@ export class AiResponder {
     ref: ConnectionRef,
     message: string,
     config: AiConfigRead,
+    reason: string = 'ai_cap_reached',
   ): Promise<PlannedHandoff | null> {
     const { tenant, chatId, log } = turn;
     const handoff = config.pkg.handoff ?? DEFAULT_HANDOFF_CONFIG;
@@ -1038,7 +1085,7 @@ export class AiResponder {
       const effect = {
         kind: 'handoff' as const,
         team: null,
-        reason: 'ai_cap_reached',
+        reason,
         reasons: ['ai_failure' as const],
         priority: 'normal' as const,
       };

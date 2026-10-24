@@ -40,6 +40,9 @@ import {
 } from '@siyahtus/types';
 import {
   AI_TURNS_PER_CUSTOMER_DAY_DEFAULT,
+  CAPTCHA_MODE_DEFAULT,
+  CAPTCHA_MODES,
+  isCaptchaMode,
   AI_TURNS_PER_CUSTOMER_DAY_MAX,
   SIEM_EXPORT_TARGETS,
   SLA_MAX_TARGET_MINUTES,
@@ -503,6 +506,7 @@ const SECURITY_DEFAULTS = {
   sessionIdleTimeoutSeconds: null as number | null,
   maxConcurrentSessions: null as number | null,
   aiTurnsPerCustomerDay: AI_TURNS_PER_CUSTOMER_DAY_DEFAULT as number,
+  captchaMode: CAPTCHA_MODE_DEFAULT as string,
 } as const;
 
 /**
@@ -706,6 +710,8 @@ const updateSecurityBody = z
       .min(0)
       .max(AI_TURNS_PER_CUSTOMER_DAY_MAX)
       .optional(),
+    // When the widget asks a visitor for a human check (tm 339.2 · GV-01).
+    captcha_mode: z.enum(CAPTCHA_MODES).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -2120,6 +2126,7 @@ export default async function settingsRoutes(
         ...(body.ai_turns_per_customer_day !== undefined
           ? { aiTurnsPerCustomerDay: body.ai_turns_per_customer_day }
           : {}),
+        ...(body.captcha_mode !== undefined ? { captchaMode: body.captcha_mode } : {}),
       };
 
       // Upsert because signup leaves no row: a workspace saving these for the
@@ -3556,6 +3563,7 @@ function serialiseSecurity(
     sessionIdleTimeoutSeconds: number | null;
     maxConcurrentSessions: number | null;
     aiTurnsPerCustomerDay: number;
+    captchaMode: string;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3573,6 +3581,7 @@ function serialiseSecurity(
     session_idle_timeout_seconds: value.sessionIdleTimeoutSeconds,
     max_concurrent_sessions: value.maxConcurrentSessions,
     ai_turns_per_customer_day: value.aiTurnsPerCustomerDay,
+    captcha_mode: isCaptchaMode(value.captchaMode) ? value.captchaMode : CAPTCHA_MODE_DEFAULT,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

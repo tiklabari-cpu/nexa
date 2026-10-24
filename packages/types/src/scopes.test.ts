@@ -168,6 +168,9 @@ describe('error taxonomy', () => {
     'template_locked',
     // The AI test bench (AI-19 · tm 314.2): a second run while one is under way.
     'ai_test_run_in_progress',
+    // Widget abuse protection (GV-01 · tm 339.2): a token or a conversation
+    // opening that must first pass a human check.
+    'challenge_required',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

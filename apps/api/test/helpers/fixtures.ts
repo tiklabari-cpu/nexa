@@ -65,6 +65,14 @@ export function testEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): Env {
     // on every one. Messages already waiting are still answered together; the
     // window itself is proven with its own value in `ai-batch-lock.test.ts`.
     AI_BATCH_WINDOW_MS: '0',
+    // Suites mint hundreds of visitors and send bursts of messages from one
+    // address (tm 339.2): at the defaults the widget's human check would ask
+    // them for one. Each signal is proven with low values in
+    // `captcha-challenge.test.ts`; the provider stays the offline mock.
+    CAPTCHA_PROVIDER: 'mock',
+    CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP: '1000000',
+    CAPTCHA_RISK_MESSAGES_PER_MIN: '1000000',
+    CAPTCHA_RISK_AI_TURNS_TODAY: '1000000',
     ...overrides,
   });
 }

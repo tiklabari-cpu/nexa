@@ -56,10 +56,44 @@ const SHIFTS = [
   { start: '07:00', end: '19:00' },
 ] as const;
 
+/** A forecast body without its 168 cells; any other body as it came. Never throws. */
+function summarizeForecast(url: string, body: string): string {
+  if (!url.includes('/reports/staffing-forecast')) return body;
+  try {
+    const { range, inputs, coverage_known, roster_known, low_confidence } = JSON.parse(
+      body,
+    ) as Record<string, unknown>;
+    return JSON.stringify({ range, inputs, coverage_known, roster_known, low_confidence });
+  } catch {
+    return body.slice(0, 500);
+  }
+}
+
 test.describe('work scheduler → presence → staffing forecast (PRD §5.3-Vardiya)', () => {
   test('a saved shift and a real availability change both reach the Staffing report', async ({
     agentPage,
   }) => {
+    // What the server answered for the two writes and the read, kept for a red at the end. The
+    // presence notice has stayed on screen a handful of times under gate load (tm 333.3, 340.2)
+    // and passed alone every time; the suspects — a `to` from the browser's clock ahead of a
+    // `changed_at` from another, or an availability write that never landed — each leave a
+    // different trace here. Collected without waiting on anything, so it cannot change a result.
+    const traces: string[] = [];
+    agentPage.on('response', (response) => {
+      const url = response.url();
+      if (
+        !url.includes('/agents/me/routing-status') &&
+        !url.includes('/reports/staffing-forecast')
+      ) {
+        return;
+      }
+      const head = `${new Date().toISOString()} ${response.request().method()} ${url} → ${response.status()} (server date ${response.headers()['date'] ?? '?'})`;
+      void response.text().then(
+        (body) => traces.push(`${head} ${summarizeForecast(url, body)}`),
+        () => traces.push(`${head} (no body)`),
+      );
+    });
+
     // ---- 1. The roster leg: save a week from Team ▸ Work schedule (WORKSCHED-h).
     await agentPage.getByRole('link', { name: 'Team' }).click();
     await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
@@ -149,8 +183,18 @@ test.describe('work scheduler → presence → staffing forecast (PRD §5.3-Vard
     // writing a row the forecast never reads, or the availability control
     // updating `routing_status` without logging the transition, the matching
     // notice would still be here.
-    await expect(staffing.getByText('No agent has a saved work schedule yet')).toHaveCount(0);
-    await expect(staffing.getByText(/No presence data in this window/)).toHaveCount(0);
+    try {
+      await expect(staffing.getByText('No agent has a saved work schedule yet')).toHaveCount(0);
+      await expect(staffing.getByText(/No presence data in this window/)).toHaveCount(0);
+    } catch (error) {
+      const clock = await agentPage.evaluate(() => new Date().toISOString());
+      const body = `${traces.join('\n')}\nbrowser clock at the failure: ${clock}`;
+      // Printed as well: the list reporter cuts an attachment to two lines, and the shard log
+      // is what a window reads.
+      console.log(`staffing-traces:\n${body}`);
+      await test.info().attach('staffing-traces', { body, contentType: 'text/plain' });
+      throw error;
+    }
 
     await agentPage.screenshot({ path: 'kanit/77.10-staffing-grid.png', fullPage: true });
   });

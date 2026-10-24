@@ -44,7 +44,9 @@
  * (`playwright-report/shard-i`) and results (`test-results/shard-i`). The last
  * lines are one row per shard and a total. A red shard does not stop the
  * others; the exit code is 1 if any shard was red or reported fewer tests than
- * it was given.
+ * it was given. The same folder keeps each shard's API and RTM log
+ * (`api-shard-i.log`, `rtm-shard-i.log`) and `pg-watch.jsonl`, the connections
+ * that stayed busy past two seconds (`pg-watch.mjs`).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import {
@@ -52,6 +54,7 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -59,6 +62,7 @@ import {
 import { freemem, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { startPgWatch } from './pg-watch.mjs';
 
 const e2eDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = resolve(e2eDir, '../..');
@@ -73,6 +77,8 @@ const RESERVE_GB = 0.5;
 /** Seconds between shard starts, so N stacks do not cold-start in the same instant. */
 const STAGGER_S = 15;
 const SENTINEL = 'zz-suite-state.spec.ts';
+/** How many runs keep their API and RTM logs (`pruneServerLogs`). */
+const SERVER_LOG_RUNS = 10;
 const TIMINGS_FILE = join(e2eDir, 'node_modules/.cache/run-e2e-sharded/timings.json');
 const GB = 1024 ** 3;
 /** The two programs a shard runs, relative to `apps/e2e`. */
@@ -145,6 +151,7 @@ const logDir = join(
 );
 mkdirSync(logDir, { recursive: true });
 console.log(`[e2e] logs in ${logDir}`);
+pruneServerLogs(dirname(logDir));
 
 let lowestFreeGb = freemem() / GB;
 const memoryWatch = setInterval(() => {
@@ -159,6 +166,10 @@ const stop = () => {
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
+/** A shard's private database, read off its `[test-datastores]` line, for the db watch. */
+const shardOfDatabase = new Map();
+const pgWatch = await startPgWatch({ repoRoot, logDir });
+
 const started = Date.now();
 const results = await Promise.all(
   used.map((shard, i) => delay(i * STAGGER_S * 1000).then(() => runShard(i, shard))),
@@ -167,7 +178,7 @@ clearInterval(memoryWatch);
 const wall = Math.round((Date.now() - started) / 1000);
 
 updateTimings(results);
-process.exitCode = summarize(results, wall);
+process.exitCode = summarize(results, wall, await pgWatch.stop());
 
 // --- helpers --------------------------------------------------------------------
 
@@ -273,6 +284,8 @@ function runShard(i, shard) {
       env: {
         ...process.env,
         SIYAHTUS_E2E_SHARD: String(i),
+        // The API and RTM logs land beside this shard's (`logTo` in `playwright.config.ts`).
+        SIYAHTUS_E2E_SERVER_LOG_DIR: logDir,
         FORCE_COLOR: '0',
         // A run aimed at named spec files is a task checking its own work: no retry there.
         ...(words.length > 0 && process.env['SIYAHTUS_E2E_RETRIES'] === undefined
@@ -289,7 +302,12 @@ function runShard(i, shard) {
         pending += chunk.toString();
         const lines = pending.split(/\r?\n/);
         pending = lines.pop() ?? '';
-        for (const line of lines) if (line.trim()) console.log(`[e2e:${i}] ${line}`);
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          console.log(`[e2e:${i}] ${line}`);
+          const database = /\[test-datastores\] postgres=(siyahtus_test_[0-9a-f]+)/.exec(line);
+          if (database) shardOfDatabase.set(database[1], i);
+        }
       });
     };
     prefix(child.stdout);
@@ -408,7 +426,7 @@ function updateTimings(all) {
   writeFileSync(TIMINGS_FILE, `${JSON.stringify(next, null, 2)}\n`);
 }
 
-function summarize(all, wallSeconds) {
+function summarize(all, wallSeconds, pg) {
   console.log('');
   console.log('══════════════ e2e (sharded) ══════════════');
   let red = false;
@@ -437,6 +455,18 @@ function summarize(all, wallSeconds) {
   console.log(
     `  wall clock ${formatDuration(wallSeconds)} · ${all.length} shard(s) · lowest free memory ${lowestFreeGb.toFixed(1)} GB`,
   );
+  if (pg) {
+    // Diagnostics only (`pg-watch.mjs`): nothing here colours the verdict.
+    const peaks = [...pg.peaks]
+      .map(([database, peak]) => {
+        const shard = shardOfDatabase.get(database);
+        return `${shard === undefined ? database : `shard ${shard}`} ${peak.total} (${peak.inTransaction} in a transaction)`;
+      })
+      .join(' · ');
+    console.log(
+      `  db connections at peak: ${peaks || 'none seen'} · busy > 2 s: ${pg.held}${pg.held > 0 ? ` → ${pg.file}` : ''}`,
+    );
+  }
   const flaky = all.flatMap((r) => r.stats?.flakyTests ?? []);
   if (flaky.length > 0) {
     const { own, foreign } = judgeFlaky(flaky, changedTestFiles());
@@ -450,6 +480,24 @@ function summarize(all, wallSeconds) {
   }
   console.log(`  verdict: ${red ? 'RED' : 'GREEN'}`);
   return red ? 1 : 0;
+}
+
+/**
+ * The API and RTM logs of all but the newest {@link SERVER_LOG_RUNS} runs. They run to tens of
+ * megabytes a full suite, and a gate runs several a task; the shard logs beside them are small
+ * and stay.
+ */
+function pruneServerLogs(root) {
+  try {
+    const runs = readdirSync(root).sort().slice(0, -SERVER_LOG_RUNS);
+    for (const run of runs) {
+      for (const file of readdirSync(join(root, run))) {
+        if (/^(api|rtm)-shard-\d+\.log$/.test(file)) rmSync(join(root, run, file), { force: true });
+      }
+    }
+  } catch {
+    // Housekeeping only.
+  }
 }
 
 function killTree(child) {

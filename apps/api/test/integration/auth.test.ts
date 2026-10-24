@@ -120,9 +120,18 @@ describe('auth', () => {
         return performance.now() - started;
       };
 
-      const known = await time(fx.a.ownerEmail);
-      const unknown = await time('nobody@example.test');
-      const ratio = Math.max(known, unknown) / Math.max(1, Math.min(known, unknown));
+      // Five of each, interleaved, and the medians compared: one pair was one scheduler hiccup
+      // away from a red whenever the gate kept the CPU busy (2026-10-24). A short-circuit still
+      // fails it: skipping the hash for a missing account measured ~12× apart, 3 runs of 3.
+      const known: number[] = [];
+      const unknown: number[] = [];
+      for (let i = 0; i < 5; i += 1) {
+        known.push(await time(fx.a.ownerEmail));
+        unknown.push(await time('nobody@example.test'));
+      }
+      const median = (samples: number[]) => [...samples].sort((a, b) => a - b)[2]!;
+      const [k, u] = [median(known), median(unknown)];
+      const ratio = Math.max(k, u) / Math.max(1, Math.min(k, u));
       expect(ratio).toBeLessThan(3);
     });
 

@@ -732,20 +732,24 @@ describe('compliance guardrails (AI-08 · tm 301.2)', () => {
   describe('the hit log', () => {
     it('lists newest first, filters by rule, stage and conversation, a page at a time', async () => {
       const day = 86_400_000;
+      // Every moment below is relative to one reading of the clock: `to` used to be "now - 2.5 s"
+      // read after the seeding and five requests, so a slow gate let g3 (now - 3 s at its own
+      // insert) slide past it (tm 325.2).
+      const seededAt = Date.now();
       const first = await seedChat(fx.a);
       const second = await seedChat(fx.a);
-      const old = await seedHit(fx.a, first, { createdAt: new Date(Date.now() - 45 * day) });
-      const g3 = await seedHit(fx.a, first, { createdAt: new Date(Date.now() - 3_000) });
+      const old = await seedHit(fx.a, first, { createdAt: new Date(seededAt - 45 * day) });
+      const g3 = await seedHit(fx.a, first, { createdAt: new Date(seededAt - 3_000) });
       const g7 = await seedHit(fx.a, second, {
         ruleKey: 'G7',
         stage: 'output',
-        createdAt: new Date(Date.now() - 2_000),
+        createdAt: new Date(seededAt - 2_000),
       });
       const phraseKey = `phrase:${crypto.randomUUID()}`;
       const phrase = await seedHit(fx.a, second, {
         ruleKey: phraseKey,
         stage: 'output',
-        createdAt: new Date(Date.now() - 1_000),
+        createdAt: new Date(seededAt - 1_000),
       });
 
       const ids = async (query: string) => {
@@ -759,8 +763,8 @@ describe('compliance guardrails (AI-08 · tm 301.2)', () => {
       expect(await ids('?rule_key=G3')).toEqual([g3]);
       expect(await ids(`?rule_key=${phraseKey}`)).toEqual([phrase]);
       expect(await ids('?stage=output')).toEqual([phrase, g7]);
-      const from = new Date(Date.now() - 60 * day).toISOString();
-      const to = new Date(Date.now() - 2_500).toISOString();
+      const from = new Date(seededAt - 60 * day).toISOString();
+      const to = new Date(seededAt - 2_500).toISOString();
       expect(await ids(`?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).toEqual([
         g3,
         old,

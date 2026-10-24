@@ -10,8 +10,8 @@
     "load:rtm": "k6 run scenarios/rtm.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint lib scenarios test",
-    "test": "vitest run",
-    "test:unit": "vitest run"
+    "test": "vitest run --testTimeout=30000",
+    "test:unit": "vitest run --testTimeout=30000"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

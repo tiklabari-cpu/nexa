@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 import { E2E_SHARD, PORTS, USUAL_PORTS } from './tests/stack-ports.js';
@@ -85,10 +86,27 @@ const SHARD_ENV: Record<string, string> = PRIVATE
  * the code under a running suite. The program and its working directory are
  * what the script would have run; only the wrappers go.
  */
-function server(pkg: string, script: string, direct: string): { command: string; cwd: string } {
+function server(
+  pkg: string,
+  script: string,
+  direct: string,
+  log?: string,
+): { command: string; cwd: string } {
   return PRIVATE
-    ? { command: `node ${direct}`, cwd: `../${pkg}` }
+    ? { command: `node ${direct}${logTo(log)}`, cwd: `../${pkg}` }
     : { command: `pnpm --filter @siyahtus/${pkg} ${script}`, cwd: '../..' };
+}
+
+/**
+ * Where a private stack's API and RTM keep their log: beside the shard's own, in the folder
+ * the sharded runner names (`SIYAHTUS_E2E_SERVER_LOG_DIR`). Playwright drops a server's stdout,
+ * so a request that never answered (2026-10-24: a page left waiting 10 s with no response and
+ * no error) left nothing to read. Only stdout is redirected; stderr still reaches the shard log.
+ */
+function logTo(name: string | undefined): string {
+  const dir = process.env['SIYAHTUS_E2E_SERVER_LOG_DIR'];
+  if (!name || !dir) return '';
+  return ` > "${join(dir, `${name}-${SHARD_DIR}.log`)}"`;
 }
 
 export default defineConfig({
@@ -190,7 +208,7 @@ export default defineConfig({
       },
     },
     {
-      ...server('api', 'dev', 'node_modules/tsx/dist/cli.mjs src/index.ts'),
+      ...server('api', 'dev', 'node_modules/tsx/dist/cli.mjs src/index.ts', 'api'),
       url: `${API}/api/v1/health`,
       reuseExistingServer: REUSE,
       timeout: 60_000,
@@ -280,7 +298,7 @@ export default defineConfig({
       },
     },
     {
-      ...server('rtm', 'dev', 'node_modules/tsx/dist/cli.mjs src/index.ts'),
+      ...server('rtm', 'dev', 'node_modules/tsx/dist/cli.mjs src/index.ts', 'rtm'),
       url: `${RTM}/health`,
       reuseExistingServer: REUSE,
       timeout: 60_000,

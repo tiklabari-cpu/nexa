@@ -67,7 +67,7 @@ export const settings: Messages = {
   'settings.nav.section.sla': 'SLA',
   'settings.nav.section.cannedResponses': 'Kayıtlı yanıtlar',
   'settings.nav.section.tags': 'Etiketler',
-  'settings.nav.section.chatTimeout': 'Sohbet süresi ve gün sınırı',
+  'settings.nav.section.chatTimeout': 'Hareketsizlik, sohbet süresi ve gün sınırı',
   'settings.nav.section.ticketEmailTemplates': 'Talep e-posta şablonları',
   'settings.nav.section.customFields': 'Özel alanlar',
   'settings.nav.section.chatForms': 'Sohbet formları',
@@ -225,9 +225,9 @@ export const settings: Messages = {
   'settings.tags.editTeamsAriaLabel': '{name} etiketinin ekiplerini düzenle',
 
   // Sohbet zaman aşımı — ChatTimeout.tsx
-  'settings.chatTimeout.title': 'Sohbet süresi ve gün sınırı',
+  'settings.chatTimeout.title': 'Hareketsizlik, sohbet süresi ve gün sınırı',
   'settings.chatTimeout.description':
-    'Bir süredir sessiz kalan sohbetleri otomatik olarak kapatır ve bir konuşma gününün nerede bitip yenisinin nerede başladığını belirler.',
+    'Ajanın yanıtlamadığı sohbetleri başkasına aktarın, sessiz kalanları ajanın sınırından düşürün, boşta kalanları kapatın ve bir konuşma gününün nerede bitip yenisinin başladığını seçin.',
   'settings.chatTimeout.loadError': 'Sohbet zaman aşımı ayarı yüklenemedi.',
   'settings.chatTimeout.enableLabel': 'Boşta kalan sohbetleri otomatik kapat',
   'settings.chatTimeout.enableHint':
@@ -241,6 +241,27 @@ export const settings: Messages = {
 
   // Konuşma günü sınırı — ChatTimeout.tsx (ID-04)
   'settings.dayBoundary.heading': 'Gün sınırı',
+  'settings.chatTimeout.orderHint':
+    'Süreler sohbetin sessizleştiği sırayı izler: önce aktarılır, sonra pasif sayılır, en son kapatılır. Açık olan her süre bir sonrakinden kısa olmalıdır.',
+  'settings.chatTimeout.transfer.enableLabel': 'Yanıtlanmayan sohbetleri başka bir ajana aktar',
+  'settings.chatTimeout.transfer.enableHint':
+    'Sohbetin verildiği ajan oyuncuya bu süre içinde ilk yanıtı yazmazsa sohbet aynı ekipte başka birine geçer. İki aktarmadan sonra ya da ekipte boş kimse yoksa ekibin kuyruğunun başında bekler ve ekip liderine bildirilir.',
+  'settings.chatTimeout.transfer.amountLabel': 'Yanıtsız kalınca',
+  'settings.chatTimeout.transfer.unitLabel': 'Aktarma birimi',
+  'settings.chatTimeout.pauseLabel': 'O ajana yeni sohbet yönlendirmeyi de durdur',
+  'settings.chatTimeout.pauseHint':
+    'Ajan “Kabul etmiyor” durumuna alınır ve nedeni gösterilir; hazır olduğunda kendisi geri açar.',
+  'settings.chatTimeout.inactive.enableLabel': 'Sessiz kalan sohbetleri pasif say',
+  'settings.chatTimeout.inactive.enableHint':
+    'Bu süre boyunca mesaj gelmeyen sohbet ajanın eşzamanlı sohbet sınırına sayılmaz ve gelen kutusunda soluk görünür. Yeni mesajla yeniden aktifleşir.',
+  'settings.chatTimeout.inactive.amountLabel': 'Şu süre sessiz kalınca',
+  'settings.chatTimeout.inactive.unitLabel': 'Pasiflik birimi',
+  'settings.chatTimeout.order.transferBeforeInactive':
+    'Yanıtlanmayan sohbetler, pasif sayılmadan önce aktarılmalıdır.',
+  'settings.chatTimeout.order.transferBeforeTimeout':
+    'Yanıtlanmayan sohbetler, boşta kalanlar kapatılmadan önce aktarılmalıdır.',
+  'settings.chatTimeout.order.inactiveBeforeTimeout':
+    'Sohbetler, boşta kalanlar kapatılmadan önce pasif sayılmalıdır.',
   'settings.dayBoundary.description':
     'Bir konuşma tek bir güne aittir. Günün hangi saat diliminde sayılacağını ve kaçta başlayacağını seçin; böylece gece yarısından hemen sonra yazan oyuncu doğru güne bağlanır.',
   'settings.dayBoundary.searchLabel': 'Saat dilimi ara',

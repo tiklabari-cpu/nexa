@@ -221,7 +221,10 @@ export class ChatInactivitySweeper {
         context,
         { chatId: row.chat_id, threadId: row.thread_id, agentId: row.agent_id },
         transferCutoff!,
-        { pauseAgent: settings.pauseUnresponsiveAgents },
+        {
+          pauseAgent: settings.pauseUnresponsiveAgents,
+          windowSeconds: settings.unansweredTransferSeconds!,
+        },
       );
       if (outcome?.outcome === 'assigned') transferred += 1;
       else if (outcome?.outcome === 'queued') queued += 1;

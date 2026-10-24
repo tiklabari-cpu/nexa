@@ -46,6 +46,12 @@ export interface ChatSummary {
   queue_group_id?: number | null;
   /** How pressing the newest connection is (ADR-08a); omitted by older servers. */
   priority?: ThreadPriority;
+  /**
+   * The newest connection is open but has been quiet for the workspace's
+   * `inactive_after_seconds` (WG-03): it no longer counts against its agent's
+   * limit, and the list shows it dimmed. Omitted by older servers.
+   */
+  inactive?: boolean;
   unread_count: number;
   /** The day's connections (ID-02); absent from a server that predates them. */
   connection_count?: number;

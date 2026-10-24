@@ -220,3 +220,93 @@ describe('notifications off the inbox', () => {
     expect(document.title).toBe('SiyahTuş');
   });
 });
+
+/**
+ * The agent's own availability, changed by the system (WG-03 · tm 340.3): the
+ * unanswered-chat sweep and the gateway's disconnect-offline both change a
+ * status nobody touched in this console. The switch reads the auth store, so
+ * the push has to land there, and the notice has to say why. A change made
+ * while the socket was away is found by asking once it is back.
+ */
+describe('availability the system changed', () => {
+  it('subscribes to the sweep’s pushes at login', async () => {
+    renderShell();
+    await connected();
+    const login = FakeWebSocket.last.sent.find((frame) => frame.action === 'login');
+    const subscribed = (login?.payload['pushes'] as Record<string, string[]>)['3.6'];
+    expect(subscribed).toEqual(
+      expect.arrayContaining([
+        'routing_status_set',
+        'chat_inactivity_changed',
+        'chat_unanswered_alert',
+      ]),
+    );
+  });
+
+  it('takes a push about this agent into the switch and says why; a teammate’s says nothing', async () => {
+    renderShell();
+    await connected();
+
+    act(() =>
+      FakeWebSocket.last.push('routing_status_set', {
+        agent_id: 'a-2',
+        status: 'not_accepting_chats',
+        reason: 'agent_unresponsive',
+        after_seconds: 180,
+      }),
+    );
+    expect(useAuth.getState().agent?.routing_status).toBe('accepting_chats');
+    expect(screen.queryByText('Your availability changed')).not.toBeInTheDocument();
+
+    act(() =>
+      FakeWebSocket.last.push('routing_status_set', {
+        agent_id: 'a-1',
+        status: 'not_accepting_chats',
+        reason: 'agent_unresponsive',
+        after_seconds: 180,
+      }),
+    );
+    expect(useAuth.getState().agent?.routing_status).toBe('not_accepting_chats');
+    expect(await screen.findByText('Your availability changed')).toBeVisible();
+    expect(screen.getByText(/went without a reply for 3 minutes/)).toBeVisible();
+  });
+
+  it('re-reads the status after a dropped connection and says it changed while away', async () => {
+    // The first retry at once: the backoff is full jitter over Math.random.
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const me = useAuth.getState().agent!;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        String(url).endsWith('/auth/me')
+          ? ({
+              ok: true,
+              status: 200,
+              headers: { get: () => null },
+              json: async () => ({ ...me, routing_status: 'offline' }),
+            } as unknown as Response)
+          : ({
+              ok: false,
+              status: 404,
+              headers: { get: () => null },
+              json: async () => ({ error: { type: 'not_found', message: '-', request_id: '-' } }),
+            } as unknown as Response),
+      ),
+    );
+    renderShell();
+    await connected();
+    // A first connection asks nothing: the profile was read at sign-in.
+    expect(vi.mocked(fetch).mock.calls.map((call) => String(call[0]))).not.toContainEqual(
+      expect.stringMatching(/\/auth\/me$/),
+    );
+
+    act(() => FakeWebSocket.last.drop());
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
+    await connected();
+
+    expect(
+      await screen.findByText('While your connection was down, your status changed to Offline.'),
+    ).toBeVisible();
+    expect(useAuth.getState().agent?.routing_status).toBe('offline');
+  });
+});

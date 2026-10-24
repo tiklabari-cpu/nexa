@@ -1045,7 +1045,7 @@ test.describe('settings', () => {
       await expect(toggle).not.toBeChecked();
       await toggle.check();
       await section.getByLabel('Idle for').fill('2');
-      await section.getByLabel('Unit').selectOption('hours');
+      await section.getByLabel('Unit', { exact: true }).selectOption('hours');
 
       const saved = agentPage.waitForResponse(
         (response) =>
@@ -1063,11 +1063,94 @@ test.describe('settings', () => {
         reloaded.getByRole('checkbox', { name: /Automatically close idle chats/ }),
       ).toBeChecked();
       await expect(reloaded.getByLabel('Idle for')).toHaveValue('2');
-      await expect(reloaded.getByLabel('Unit')).toHaveValue('hours');
+      await expect(reloaded.getByLabel('Unit', { exact: true })).toHaveValue('hours');
       await reloaded.screenshot({ path: 'kanit/136.1-chat-timeout-kaydedildi.png' });
     } finally {
       const restored = await setChatTimeout(null);
       expect(restored.ok(), `could not restore chat timeout: ${restored.status()}`).toBe(true);
+    }
+  });
+
+  /**
+   * The two windows before the auto-close (WG-03 · tm 340.3): pass on an
+   * unanswered chat, then mark a quiet one inactive. The claim is the order
+   * — refused in the form before anything is sent, and by the endpoint for a
+   * caller that skips the form — and the round trip after a reload. The
+   * sweep that acts on them does not run on this stack; it is proven in
+   * `chat-inactivity-sweep.test.ts`. All three are restored to off.
+   */
+  test('saves the three inactivity windows in order and refuses them out of order (FR-MOD-08.7.3)', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const putWindows = (data: Record<string, unknown>) =>
+      request.put(`${API_BASE}/settings/chat-timeout`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: { chat_timeout_seconds: null, ...data },
+      });
+
+    try {
+      await agentPage.goto('/app/settings/chat-timeout');
+      const section = agentPage.getByRole('region', {
+        name: 'Inactivity, chat timeout and day boundary',
+      });
+      await section
+        .getByRole('checkbox', { name: /Pass unanswered chats to another agent/ })
+        .check();
+      await section.getByRole('checkbox', { name: /Mark quiet chats as inactive/ }).check();
+      await section.getByRole('checkbox', { name: /Automatically close idle chats/ }).check();
+      await expect(section.getByLabel('Unanswered for')).toHaveValue('3');
+      await expect(section.getByLabel('Quiet for')).toHaveValue('10');
+      await section.getByLabel('Idle for').fill('15');
+
+      // Out of order: passing a chat on no sooner than it goes inactive.
+      await section.getByLabel('Unanswered for').fill('10');
+      await expect(section.getByRole('alert')).toHaveText(
+        'Pass unanswered chats on sooner than chats become inactive.',
+      );
+      await expect(section.getByRole('button', { name: 'Save' })).toBeDisabled();
+      await section.screenshot({ path: 'kanit/340.3-sira-hatasi.png' });
+
+      await section.getByLabel('Unanswered for').fill('3');
+      await expect(section.getByRole('alert')).toHaveCount(0);
+      const saved = agentPage.waitForResponse(
+        (response) =>
+          response.url().endsWith('/settings/chat-timeout') &&
+          response.request().method() === 'PUT',
+      );
+      await section.getByRole('button', { name: 'Save' }).click();
+      expect((await saved).status()).toBe(200);
+
+      await agentPage.reload();
+      const reloaded = agentPage.getByRole('region', {
+        name: 'Inactivity, chat timeout and day boundary',
+      });
+      await expect(reloaded.getByLabel('Unanswered for')).toHaveValue('3');
+      await expect(reloaded.getByLabel('Quiet for')).toHaveValue('10');
+      await expect(reloaded.getByLabel('Idle for')).toHaveValue('15');
+      await expect(
+        reloaded.getByRole('checkbox', { name: /Also stop routing new chats to that agent/ }),
+      ).toBeChecked();
+      await reloaded.screenshot({ path: 'kanit/340.3-uc-pencere-kaydedildi.png' });
+
+      // The endpoint refuses the same thing the form did, by name.
+      const refused = await putWindows({
+        chat_timeout_seconds: 900,
+        unanswered_transfer_seconds: 900,
+      });
+      expect(refused.status()).toBe(400);
+      expect(
+        ((await refused.json()) as { error: { details?: { problem?: string } } }).error.details
+          ?.problem,
+      ).toBe('transfer_not_before_inactive');
+    } finally {
+      const restored = await putWindows({
+        unanswered_transfer_seconds: null,
+        inactive_after_seconds: null,
+        pause_unresponsive_agents: true,
+      });
+      expect(restored.ok(), `could not restore the windows: ${restored.status()}`).toBe(true);
     }
   });
 

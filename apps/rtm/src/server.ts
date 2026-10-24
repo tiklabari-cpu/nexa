@@ -29,6 +29,7 @@ import {
   listenForPermissionsChanges,
   rtmPermissionMatrixLoader,
 } from './permissions.js';
+import { AgentPresence } from './presence.js';
 import { decodeRequest, encodeError } from './protocol.js';
 import { SyncService } from './sync.js';
 import {
@@ -92,6 +93,11 @@ export interface RtmServer {
   registry: ConnectionRegistry;
   /** Keeps open member sockets in step with the permission matrix (tm 325.3). */
   authority: AuthorityRefresher;
+  /**
+   * Sets an agent offline once none of their sockets is open (tm 340.3); null
+   * when `RTM_DISCONNECT_OFFLINE_MS` turned it off.
+   */
+  presence: AgentPresence | null;
   listen: () => Promise<void>;
   close: () => Promise<void>;
   address: () => { port: number } | null;
@@ -229,6 +235,13 @@ export function buildRtmServer(
   const conflict = new ConflictDetectionService(db, commands);
   const conflictPublisher = new ConflictPublisher(db, publisher, log);
   const fanout = new Fanout(subscriber, registry, log, telemetryInstance);
+  // Socket presence (WG-03 · tm 340.3): scripts on the command connection,
+  // the push on the publish one, like conflict detection above.
+  const presence =
+    env.disconnectOfflineMs === null
+      ? null
+      : new AgentPresence(db, commands, publisher, log, env.disconnectOfflineMs);
+  presence?.start();
 
   const dispatcher = new Dispatcher({
     registry,
@@ -239,7 +252,24 @@ export function buildRtmServer(
     conflictPublisher,
     log,
     messagesPerSecond: env.RATE_LIMIT_RTM_PER_SEC,
-    onAuthenticated: async (_connection: Connection, principal: SocketPrincipal) => {
+    onAuthenticated: async (connection: Connection, principal: SocketPrincipal) => {
+      // Only a member's agent socket says a person is there: a bot has no
+      // membership, a visitor no routing status. Checked against the registry
+      // because the login was awaited — a socket that closed meanwhile has
+      // already run its close handler, and tracking it now would renew a
+      // socket nobody holds for as long as this process lives.
+      if (
+        presence &&
+        connection.side === 'agent' &&
+        principal.kind === 'agent' &&
+        registry.get(connection.id)
+      ) {
+        presence.opened(connection.id, {
+          licenseId: principal.licenseId,
+          organizationId: principal.organizationId,
+          agentId: principal.actorId,
+        });
+      }
       // Subscribing on demand keeps a node from decoding traffic for tenants it
       // hosts nobody from.
       await fanout.ensureSubscribed(principal.licenseId);
@@ -411,6 +441,7 @@ export function buildRtmServer(
         dispatcher,
         log,
         telemetry: telemetryInstance,
+        presence,
         isDraining: () => draining,
       });
     });
@@ -421,6 +452,7 @@ export function buildRtmServer(
     wss,
     registry,
     authority,
+    presence,
     address: () => {
       const address = http.address();
       return address && typeof address === 'object' ? { port: address.port } : null;
@@ -471,6 +503,10 @@ export function buildRtmServer(
       clearInterval(authoritySweep);
       registry.closeAll(1001, 'server shutting down');
       await closeSockets(wss);
+      // After the sockets: each close above recorded itself (the agent comes
+      // due unless they reconnect elsewhere within the tolerance), and those
+      // writes, like a sweep under way, finish before Redis and Postgres go.
+      await presence?.stop();
       await new Promise<void>((resolve) => {
         http.close(() => resolve());
         // A health probe's keep-alive connection is idle, not in flight, and
@@ -683,10 +719,12 @@ function attach(params: {
   dispatcher: Dispatcher;
   log: Logger;
   telemetry: Telemetry | null;
+  presence: AgentPresence | null;
   /** Read at close time, not captured once — the drain can start mid-connection. */
   isDraining: () => boolean;
 }): void {
-  const { ws, side, organizationId, registry, dispatcher, log, telemetry, isDraining } = params;
+  const { ws, side, organizationId, registry, dispatcher, log, telemetry, presence, isDraining } =
+    params;
   const connection = registry.add({ ws, side, organizationId });
 
   // Set when `ws` itself detects a framing problem (oversized payload, bad
@@ -772,6 +810,7 @@ function attach(params: {
     clearTimeout(loginTimer);
     clearInterval(idleTimer);
     registry.remove(connection.id);
+    presence?.closed(connection.id);
     telemetry?.instruments.disconnects.add(1, {
       reason: protocolViolation
         ? 'protocol_violation'

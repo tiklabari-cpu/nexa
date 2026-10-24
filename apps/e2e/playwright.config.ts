@@ -275,7 +275,12 @@ export default defineConfig({
       url: `${RTM}/health`,
       reuseExistingServer: REUSE,
       timeout: 60_000,
-      env: { ...process.env, RTM_PORT: String(PORTS.rtm) },
+      // No disconnect-offline (tm 340.3) for the reason the API runs no
+      // sweeps above: every spec shares the seeded roster, and a gateway that
+      // set an agent offline two minutes after their spec closed its page would
+      // hand the next spec a workspace with nobody accepting chats. Proven in
+      // `apps/rtm/test/integration/presence.test.ts` at a 600 ms tolerance.
+      env: { ...process.env, RTM_PORT: String(PORTS.rtm), RTM_DISCONNECT_OFFLINE_MS: '0' },
     },
     {
       // On a private stack the panel's relative `/api/v1` goes through Vite's

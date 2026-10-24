@@ -56,6 +56,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/components/NarrowScreenNotice.tsx',
   'src/components/NotFoundPage.tsx',
   'src/components/PresenceAvatars.tsx',
+  'src/components/PresenceNotices.tsx',
   'src/components/Tour.tsx',
   'src/components/settings/ConfirmHighRisk.tsx',
   'src/components/settings/InstantToggle.tsx',

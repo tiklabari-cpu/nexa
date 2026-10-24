@@ -1138,3 +1138,78 @@ describe('applyPush — incoming_chat re-reads the open chat (ID-02)', () => {
     expect(queryClient.getQueryState(['chat', CHAT])?.isInvalidated).toBe(true);
   });
 });
+
+describe('applyPush — a quiet connection (WG-03 · tm 340.3)', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+  });
+
+  async function listOf(rows: ChatSummary[]) {
+    api.get.mockResolvedValue(chatPage(rows));
+    const rendered = renderChatList();
+    await waitFor(() => expect(rendered.result.current.items).toHaveLength(rows.length));
+    return rendered;
+  }
+
+  it('dims the row whose newest connection went quiet, in place, and lifts it when the sweep says so', async () => {
+    const { result, queryClient } = await listOf([chat('c1', 14), chat('c2', 13)]);
+
+    act(() => {
+      applyPush(queryClient, 'chat_inactivity_changed', {
+        chat_id: 'c2',
+        thread_id: 'thread-c2',
+        inactive: true,
+      });
+    });
+    await waitFor(() =>
+      expect(result.current.items.map((c) => [c.id, c.inactive ?? false])).toEqual([
+        ['c1', false],
+        ['c2', true],
+      ]),
+    );
+
+    act(() => {
+      applyPush(queryClient, 'chat_inactivity_changed', {
+        chat_id: 'c2',
+        thread_id: 'thread-c2',
+        inactive: false,
+      });
+    });
+    await waitFor(() => expect(result.current.items[1]?.inactive).toBe(false));
+  });
+
+  it('ignores a mark on an older connection and a malformed push', async () => {
+    const { result, queryClient } = await listOf([chat('c1', 14)]);
+    act(() => {
+      applyPush(queryClient, 'chat_inactivity_changed', {
+        chat_id: 'c1',
+        thread_id: 'an-older-connection',
+        inactive: true,
+      });
+      applyPush(queryClient, 'chat_inactivity_changed', { chat_id: 'c1', inactive: 'yes' });
+    });
+    // Read from the cache, not the hook: React Query notifies on a later tick,
+    // and a hook read straight after the push would pass whatever the push did.
+    const rows = queryClient
+      .getQueriesData<{ pages?: Array<{ items: ChatSummary[] }> }>({ queryKey: ['chats'] })
+      .flatMap(([, cache]) => cache?.pages?.flatMap((page) => page.items) ?? []);
+    expect(rows.map((row) => row.id)).toEqual(['c1']);
+    expect(rows[0]?.inactive).toBeUndefined();
+    expect(result.current.items[0]?.inactive).toBeUndefined();
+  });
+
+  it('lets the next message end it — no push says so separately', async () => {
+    const { result, queryClient } = await listOf([
+      chat('c1', 14),
+      chat('c2', 13, { inactive: true }),
+    ]);
+    act(() => {
+      applyPush(queryClient, 'incoming_event', {
+        chat_id: 'c2',
+        event: message('e9', 'c2', 'Still there?'),
+      });
+    });
+    await waitFor(() => expect(result.current.items[0]?.id).toBe('c2'));
+    expect(result.current.items[0]?.inactive).toBe(false);
+  });
+});

@@ -8,7 +8,7 @@
  * — a failure that shows up as "chat does not update", not as "wrong region".
  */
 import { describe, expect, it } from 'vitest';
-import { REGIONS } from '@siyahtus/types';
+import { DISCONNECT_OFFLINE_DEFAULT_MS, REGIONS } from '@siyahtus/types';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 import { SECRET_KEYS, parseEnv } from './env.js';
 
@@ -88,6 +88,43 @@ describe('RTM_MAX_CONNECTIONS', () => {
       CUSTOMER_TOKEN_SECRET: 'customer-0123456789abcdef0123456789abcdef',
     });
     expect(env.maxConnections).toBeNull();
+  });
+});
+
+/**
+ * The disconnect tolerance (WG-03 · tm 340.3, `presence.ts`). Pinned for the
+ * same reason as the ceiling above: unset, `0` and a number sit side by side
+ * and mean "two minutes", "never" and "this long" — and under test unset has
+ * to mean "never", or every suite would gain a second writer of routing status.
+ */
+describe('RTM_DISCONNECT_OFFLINE_MS', () => {
+  const DEVELOPMENT = { ...BASE, NODE_ENV: 'development' };
+
+  it('defaults to the shared two-minute tolerance outside tests', () => {
+    expect(parseEnv(DEVELOPMENT).disconnectOfflineMs).toBe(DISCONNECT_OFFLINE_DEFAULT_MS);
+    expect(DISCONNECT_OFFLINE_DEFAULT_MS).toBe(120_000);
+  });
+
+  it('is off under test unless a suite asks for it', () => {
+    expect(parseEnv(BASE).disconnectOfflineMs).toBeNull();
+    expect(parseEnv({ ...BASE, RTM_DISCONNECT_OFFLINE_MS: '500' }).disconnectOfflineMs).toBe(500);
+  });
+
+  it('reads 0 as off, anywhere', () => {
+    expect(parseEnv({ ...DEVELOPMENT, RTM_DISCONNECT_OFFLINE_MS: '0' }).disconnectOfflineMs).toBe(
+      null,
+    );
+  });
+
+  it('refuses a negative, fractional or hour-plus tolerance', () => {
+    for (const value of ['-1', '1.5', '3600001', 'soon']) {
+      expect(() => parseEnv({ ...BASE, RTM_DISCONNECT_OFFLINE_MS: value })).toThrow(
+        /RTM_DISCONNECT_OFFLINE_MS/,
+      );
+    }
+    expect(parseEnv({ ...BASE, RTM_DISCONNECT_OFFLINE_MS: '3600000' }).disconnectOfflineMs).toBe(
+      3_600_000,
+    );
   });
 });
 

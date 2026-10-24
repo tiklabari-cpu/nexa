@@ -25,6 +25,7 @@
     "RTM_HOST",
     "RTM_BASE_URL",
     "RTM_MAX_CONNECTIONS",
+    "RTM_DISCONNECT_OFFLINE_MS",
     "WEB_PORT",
     "WEB_ORIGIN",
     "WEB_APP_URL",

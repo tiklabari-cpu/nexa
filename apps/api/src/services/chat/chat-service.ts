@@ -4058,7 +4058,7 @@ export class ChatService {
     tenant: TenantContext,
     ref: { chatId: string; threadId: string; agentId: string },
     cutoff: Date,
-    options: { pauseAgent: boolean },
+    options: { pauseAgent: boolean; windowSeconds?: number },
   ): Promise<UnansweredPassOn | null> {
     const result = await withTenant(this.db, tenant, async (tx) => {
       await tx.$queryRaw`SELECT 1 FROM chats WHERE id = ${ref.chatId} FOR NO KEY UPDATE`;
@@ -4226,6 +4226,8 @@ export class ChatService {
         agent_id: ref.agentId,
         status: 'not_accepting_chats',
         reason: 'agent_unresponsive',
+        // The window that ran out, so the agent's notice can name it (tm 340.3).
+        ...(options.windowSeconds === undefined ? {} : { after_seconds: options.windowSeconds }),
       };
       await this.publisher?.publish(tenant, 'routing_status_set', { allAgents: true }, status);
     }

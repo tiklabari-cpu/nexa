@@ -104,7 +104,8 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60_000,
       cwd: '../..',
-      env: { ...process.env, RTM_PORT: String(PORTS.rtm) },
+      // No disconnect-offline (tm 340.3): see `playwright.config.ts`.
+      env: { ...process.env, RTM_PORT: String(PORTS.rtm), RTM_DISCONNECT_OFFLINE_MS: '0' },
     },
     {
       // The panel calls the relative `/api/v1` through Vite's proxy, which runs

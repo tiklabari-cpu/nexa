@@ -49,6 +49,13 @@
  * surge alarm (`services/ai/unresolved/cluster-job.ts`) — the second job given
  * the realtime publisher, for the console's notice. They embed and title with
  * the server's providers, metered on the workspace's allowance; no CLI script.
+ *
+ * `chat_inactivity` (tm 340.2 · WG-03) passes a connection its agent left
+ * unanswered to someone else in the team and marks a quiet one inactive, out
+ * of its agent's limit (`services/chat/chat-inactivity.ts`). It shares the
+ * watchdog's publisher-wired chat service: the agent it hands a connection to,
+ * the one it stops routing to and the lead of a team nobody could take it in
+ * all hear now. No CLI script, for the watchdog's reason.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -73,6 +80,7 @@ import {
 } from '../auth/unverified-signup-sweep.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
 import { AiStallWatchdog } from '../chat/ai-stall.js';
+import { ChatInactivitySweeper } from '../chat/chat-inactivity.js';
 import { ChatService } from '../chat/chat-service.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
@@ -187,7 +195,8 @@ export function buildSchedulerJobs({
     undefined,
     automations,
   );
-  // The watchdog's own, with the publisher: the sweeps above stay as they were.
+  // The watchdog's and the inactivity sweep's, with the publisher: the sweeps
+  // above stay as they were.
   const aiChats = new ChatService(
     db,
     NO_REDIS,
@@ -500,6 +509,37 @@ export function buildSchedulerJobs({
             tenants: report.totals.tenants,
             merged: report.totals.merged,
             absorbed: report.totals.absorbed,
+          },
+        };
+      },
+    },
+    {
+      // A connection its agent left unanswered, passed on; a quiet one out of
+      // its agent's limit (tm 340.2 · WG-03). Not gated: both windows are off
+      // until a workspace sets them, and then a pass reads one settings row.
+      name: 'chat_inactivity',
+      intervalMs: intervals.chat_inactivity,
+      async run(context) {
+        const report = await new ChatInactivitySweeper(db, aiChats).run({
+          signal: context.signal,
+        });
+        if (report.totals.transferred + report.totals.queued > 0) {
+          context.logger.info(
+            {
+              event: 'chat.unanswered_passed_on',
+              transferred: report.totals.transferred,
+              queued: report.totals.queued,
+            },
+            'unanswered conversations passed on',
+          );
+        }
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            transferred: report.totals.transferred,
+            queued: report.totals.queued,
+            marked_inactive: report.totals.markedInactive,
+            cleared_inactive: report.totals.clearedInactive,
           },
         };
       },

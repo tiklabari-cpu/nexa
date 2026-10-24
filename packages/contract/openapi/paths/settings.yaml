@@ -1556,7 +1556,8 @@ chatTimeout:
       Between the windows that are on, the stored result must keep transfer <
       inactive < auto-close — compared after the save is applied, so a field
       left out counts with its stored value — or the save is refused with a
-      400 and nothing changes.
+      400 and nothing changes. `pause_unresponsive_agents` is optional too:
+      whether the agent a connection was taken from stops receiving chats.
     requestBody:
       required: true
       content:
@@ -1605,6 +1606,11 @@ chatTimeout:
                   Seconds without an event before a connection is inactive and
                   leaves its agent's concurrent limit; null turns it off. Must be
                   below `chat_timeout_seconds` when that is on.
+              pause_unresponsive_agents:
+                type: boolean
+                description: >-
+                  Whether an agent whose connection the unanswered transfer took
+                  goes `not_accepting_chats`. Left out, the stored value stays.
     responses:
       "200":
         description: Updated

@@ -18,6 +18,58 @@
 /** The longest window either takes: 30 days, the auto-close window's ceiling. */
 export const INACTIVITY_WINDOW_MAX_SECONDS = 2_592_000;
 
+/**
+ * How many times the sweep passes one connection from an agent who did not
+ * answer to another (`threads.unresponsive_transfers`, WG-03). After that it
+ * stops trying people one by one: the connection goes to the front of its
+ * team's queue and the team's lead is told, so it cannot bounce between
+ * silent agents for as long as nobody notices.
+ */
+export const UNRESPONSIVE_TRANSFER_LIMIT = 2;
+
+/**
+ * Why the sweep put an unanswered connection in its team's queue rather than
+ * with someone else (`ChatUnansweredAlertPush.reason`): nobody in the team
+ * could take it, or it already went to {@link UNRESPONSIVE_TRANSFER_LIMIT}
+ * people who did not answer either.
+ */
+export const UNANSWERED_ALERT_REASONS = ['no_agent', 'transfer_limit'] as const;
+export type UnansweredAlertReason = (typeof UNANSWERED_ALERT_REASONS)[number];
+
+/**
+ * The lead's notice (`RTM_PUSH_ACTIONS` `chat_unanswered_alert`): the agent
+ * a connection was given to did not answer the player in time, and the sweep
+ * left it at the front of the team's queue. To the team's leads — the
+ * workspace's admins and up when the team has none. Ids and numbers only;
+ * never a word the player wrote.
+ */
+export interface ChatUnansweredAlertPush {
+  chat_id: string;
+  thread_id: string;
+  group_id: number;
+  /** The agent who did not answer. */
+  agent_id: string;
+  reason: UnansweredAlertReason;
+  /** How many times the sweep has taken it from a silent agent, this one included. */
+  transfers: number;
+  /** Its place in the team's queue after the move — the front of its priority. */
+  queue_position: number | null;
+}
+
+/**
+ * A connection became inactive, or stopped being (`RTM_PUSH_ACTIONS`
+ * `chat_inactivity_changed`) — the sweep's own changes: quiet for the
+ * workspace's `inactive_after_seconds`, or the window was turned off or
+ * lengthened. To the agents who see the conversation; never to the player. A
+ * message ends it without this push: every event clears `inactive_since`, and
+ * `incoming_event` already says one arrived.
+ */
+export interface ChatInactivityChangedPush {
+  chat_id: string;
+  thread_id: string;
+  inactive: boolean;
+}
+
 /** The three windows a `PUT /settings/chat-timeout` leaves stored; null = off. */
 export interface ChatInactivityWindows {
   unansweredTransferSeconds: number | null;

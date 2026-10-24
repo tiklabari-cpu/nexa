@@ -6,7 +6,8 @@
  *   1. match routing rules → target team (most specific first, then fallback)
  *   2. candidate pool = team members who are `accepting_chats`, below their
  *      concurrent limit and holding every expertise the rule and the team
- *      require
+ *      require — an inactive connection (`threads.inactive_since`, WG-03)
+ *      does not count against the limit
  *   3. take the fullest priority tier present (primary > first > normal > last)
  *   4. within that tier, the least loaded agent
  *   5. ties broken by who has waited longest (`last_assigned_at ASC`)
@@ -432,6 +433,14 @@ export class RoutingService {
    * `prefer` is the agent tried first when they could take it (the one a
    * same-day return had, AI-12 §1.5); otherwise the order is `route()`'s.
    *
+   * The inactivity sweep (WG-03 · tm 340.2) passes on a connection its agent
+   * left unanswered with two more: `front` queues it ahead of everyone of its
+   * priority already waiting rather than behind them — the player has waited
+   * for a person once already — and `queueOnly` asks nobody, for a
+   * connection passed on as often as the sweep allows. A connection queued at
+   * the front waits by `threads.queued_at` set just before the team's
+   * earliest; its stay (`queue_entries`) still starts now.
+   *
    * Writes the connection's assignment or its place in the queue, its
    * queue stay (the one it leaves, the one it starts) and the assignee's
    * presence, in the caller's transaction. Both teams' queue locks are taken
@@ -447,6 +456,8 @@ export class RoutingService {
       at?: Date;
       requiredExpertiseId?: bigint | null;
       prefer?: string | null;
+      front?: boolean;
+      queueOnly?: boolean;
     } = {},
   ): Promise<TeamHandOff> {
     const at = options.at ?? new Date();
@@ -469,14 +480,16 @@ export class RoutingService {
     await leaveQueue(tx, threadId, 'transferred', at);
 
     const team = await this.#team(tx, licenseId, groupId);
-    const assignee = await this.#claimFromTeam(
-      tx,
-      licenseId,
-      groupId,
-      allOf(team.expertiseIds, requiredExpertiseId !== null ? [requiredExpertiseId] : []),
-      options.exclude,
-      options.prefer ?? null,
-    );
+    const assignee = options.queueOnly
+      ? null
+      : await this.#claimFromTeam(
+          tx,
+          licenseId,
+          groupId,
+          allOf(team.expertiseIds, requiredExpertiseId !== null ? [requiredExpertiseId] : []),
+          options.exclude,
+          options.prefer ?? null,
+        );
     if (assignee) {
       await tx.thread.update({
         where: { id: threadId },
@@ -506,9 +519,9 @@ export class RoutingService {
         queueGroupId: groupId,
         requiredExpertiseId,
         // Behind everyone already waiting; the renumber below puts it in its
-        // priority's place.
+        // priority's place — ahead of them, queued at the front.
         queuePosition: await this.#nextQueuePosition(tx, licenseId, groupId),
-        queuedAt: at,
+        queuedAt: options.front ? await this.#frontOfQueue(tx, licenseId, groupId, at) : at,
       },
     });
     await enterQueue(tx, { licenseId, threadId, groupId, enteredAt: at });
@@ -853,6 +866,10 @@ export class RoutingService {
    * may be waiting on it — or has committed, and the count sees its chat.
    * False when the agent is not accepting chats, is suspended or awaiting
    * approval, is at their limit, or is being given a chat elsewhere right now.
+   *
+   * The load is the agent's open connections that are not inactive (WG-03 ·
+   * tm 340.2): one quiet for the workspace's `inactive_after_seconds` gives
+   * its slot back until its next event (`#candidates` counts the same).
    */
   async #claim(tx: TenantClient, licenseId: bigint, agentId: string): Promise<boolean> {
     const [row] = await tx.$queryRaw<Array<{ has_capacity: boolean }>>`
@@ -860,6 +877,7 @@ export class RoutingService {
                SELECT COUNT(*)
                FROM threads t
                WHERE t.license_id = m.license_id AND t.assignee_id = m.agent_id AND t.active
+                 AND t.inactive_since IS NULL
              ) < m.concurrent_chats_limit AS has_capacity
       FROM agent_memberships m
       WHERE m.license_id = ${licenseId}
@@ -931,6 +949,7 @@ export class RoutingService {
         ON m.license_id = ga.license_id AND m.agent_id = ga.agent_id
       LEFT JOIN threads t
         ON t.assignee_id = ga.agent_id AND t.active AND t.license_id = ${licenseId}
+       AND t.inactive_since IS NULL
       WHERE ga.license_id = ${licenseId}
         AND ga.group_id = ${groupId}
         AND m.routing_status = 'accepting_chats'
@@ -952,6 +971,28 @@ export class RoutingService {
       return a.agent_id.localeCompare(b.agent_id);
     });
     return candidates.map((c) => c.agent_id);
+  }
+
+  /**
+   * A `queued_at` ahead of everyone waiting in one team's queue — a
+   * millisecond before its earliest, or `at` when that is earlier or nobody
+   * waits. Read under the team's lock. The queue orders by priority first, so
+   * this is the front of the connection's own priority.
+   */
+  async #frontOfQueue(
+    tx: TenantClient,
+    licenseId: bigint,
+    groupId: bigint,
+    at: Date,
+  ): Promise<Date> {
+    const [row] = await tx.$queryRaw<Array<{ front: Date }>>`
+      SELECT LEAST(MIN(queued_at) - interval '1 millisecond', ${at}::timestamptz) AS front
+      FROM threads
+      WHERE license_id = ${licenseId}
+        AND active AND assignee_id IS NULL AND queue_position IS NOT NULL
+        AND queue_group_id = ${groupId}
+    `;
+    return row?.front ?? at;
   }
 
   /** The next number in one team's queue — read under the team's lock. */

@@ -41,9 +41,14 @@ import {
   THREAD_PRIORITY_RANK,
   threadPriorityFromRank,
   transferNoteRequired,
+  UNRESPONSIVE_TRANSFER_LIMIT,
   type AdapterChannelType,
   type AgentConflictWarningPush,
   type AiConversationMode,
+  type ChatInactivityChangedPush,
+  type ChatUnansweredAlertPush,
+  type RoutingStatusSetPush,
+  type UnansweredAlertReason,
   type AiReturnResume,
   type ChatAiModeChangedPush,
   type ChatTakenOverPush,
@@ -104,6 +109,7 @@ import {
 } from './ai-mode.js';
 import { opensAiFirst } from './ai-first.js';
 import { aiStalled } from './ai-stall.js';
+import { LAST_ACTIVITY_SQL, unansweredSql } from './chat-inactivity.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { SupervisionService } from '../traffic/supervision-service.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
@@ -4015,6 +4021,337 @@ export class ChatService {
     return true;
   }
 
+  /**
+   * Take a connection from an agent who has not answered the player in time
+   * (WG-03 · tm 340.2) — the inactivity sweep's one transfer
+   * (`chat-inactivity.ts`).
+   *
+   * Compare-and-set under the conversation's locks: the chat row, then the
+   * thread's — the order every append takes them in (`#appendEvent`), so the
+   * transfer and an agent's reply queue up behind each other instead of
+   * deadlocking. Asked again there: still open, still `ref.agentId`'s, still
+   * without a first reply, assigned before `cutoff`, not the AI's to answer
+   * (`unansweredSql`). A reply that committed first spares the connection —
+   * null back; one still being written waits and lands after the transfer.
+   *
+   * Then, in the same transaction:
+   *
+   *   - someone else in its team takes it — the team's and the connection's
+   *     required expertise kept, the silent agent left out — or, nobody free,
+   *     it waits at the front of the team's queue (`assignWithinGroup`
+   *     `front`). Passed on `UNRESPONSIVE_TRANSFER_LIMIT` times already, it
+   *     goes to the queue without asking anyone: the lead decides now.
+   *   - `unresponsive_transfers` counts this one.
+   *   - `pauseAgent`: the agent goes `not_accepting_chats`, with a presence
+   *     row — only from `accepting_chats`, so an agent already away keeps the
+   *     status they chose.
+   *   - the transcript's "Chat transferred" line, reason `agent_unresponsive`.
+   *
+   * After the commit: `chat_transferred` to both sides, `incoming_chat` to
+   * whoever has it now, `routing_status_set` (reason `agent_unresponsive`) for
+   * a paused agent, `chat_unanswered_alert` to the team's leads when it waits,
+   * the board, and the workspace's automations. No audit entry: nobody acted,
+   * and the line in the transcript is the record, as for the AI's hand-over.
+   * Null too for a connection with no team to pass it on in.
+   */
+  async passOnUnanswered(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string; agentId: string },
+    cutoff: Date,
+    options: { pauseAgent: boolean },
+  ): Promise<UnansweredPassOn | null> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM chats WHERE id = ${ref.chatId} FOR NO KEY UPDATE`;
+      const [row] = await tx.$queryRaw<
+        Array<{
+          group_id: bigint | null;
+          required_expertise_id: bigint | null;
+          unresponsive_transfers: number;
+        }>
+      >`
+        SELECT t.group_id, t.required_expertise_id, t.unresponsive_transfers
+          FROM threads t
+         WHERE t.id = ${ref.threadId} AND t.chat_id = ${ref.chatId}
+           AND t.assignee_id = ${ref.agentId}::uuid AND ${unansweredSql(cutoff)}
+         FOR UPDATE`;
+      if (!row) return null;
+
+      const chat = await tx.chat.findUniqueOrThrow({
+        where: { id: ref.chatId },
+        include: chatInclude,
+      });
+      // The team the connection went to, else the first the chat is routed to
+      // that still exists.
+      let groupId: bigint | null = null;
+      for (const id of new Set([row.group_id, ...chat.access.map((a) => a.groupId)])) {
+        if (id === null) continue;
+        const team = await tx.group.findUnique({
+          where: { licenseId_id: { licenseId: tenant.licenseId, id } },
+          select: { id: true },
+        });
+        if (team) {
+          groupId = team.id;
+          break;
+        }
+      }
+      if (groupId === null) return null;
+
+      const transfers = row.unresponsive_transfers + 1;
+      const limited = row.unresponsive_transfers >= UNRESPONSIVE_TRANSFER_LIMIT;
+      const handOff = await this.routing.assignWithinGroup(
+        tx,
+        tenant.licenseId,
+        groupId,
+        ref.threadId,
+        {
+          exclude: [ref.agentId],
+          requiredExpertiseId: row.required_expertise_id,
+          front: true,
+          queueOnly: limited,
+        },
+      );
+      const moved = await tx.thread.update({
+        where: { id: ref.threadId },
+        data: { unresponsiveTransfers: transfers },
+        select: { queuePosition: true },
+      });
+
+      let paused = false;
+      if (options.pauseAgent) {
+        // The routing-status route's rule (`routes/agents.ts`): the UPDATE's
+        // own WHERE decides whether this is a change, and only a change is a
+        // row in the presence log.
+        const changed = await tx.agentMembership.updateMany({
+          where: {
+            licenseId: tenant.licenseId,
+            agentId: ref.agentId,
+            routingStatus: 'accepting_chats',
+          },
+          data: { routingStatus: 'not_accepting_chats' },
+        });
+        if (changed.count > 0) {
+          await tx.agentPresenceEvent.create({
+            data: {
+              licenseId: tenant.licenseId,
+              agentId: ref.agentId,
+              status: 'not_accepting_chats',
+            },
+          });
+          paused = true;
+        }
+      }
+
+      await this.#appendEvent(tx, {
+        licenseId: tenant.licenseId,
+        chatId: ref.chatId,
+        threadId: ref.threadId,
+        authorId: null,
+        authorType: 'system',
+        input: {
+          type: 'system_message',
+          text: 'Chat transferred',
+          recipients: 'all',
+          properties: {
+            system_event: 'chat_transferred',
+            reason: 'agent_unresponsive',
+            outcome: handOff.outcome,
+            group_id: Number(groupId),
+            from_agent_id: ref.agentId,
+            unresponsive_transfers: transfers,
+          },
+        },
+      });
+
+      const alert: ChatUnansweredAlertPush | null =
+        handOff.outcome === 'queued'
+          ? {
+              chat_id: ref.chatId,
+              thread_id: ref.threadId,
+              group_id: Number(groupId),
+              agent_id: ref.agentId,
+              reason: limited ? 'transfer_limit' : 'no_agent',
+              transfers,
+              queue_position: moved.queuePosition,
+            }
+          : null;
+      const leads = alert ? await teamLeads(tx, tenant.licenseId, groupId) : [];
+
+      const reloaded = await tx.chat.findUniqueOrThrow({
+        where: { id: ref.chatId },
+        include: chatInclude,
+      });
+      const before = this.#audienceFor(chat);
+      const after = this.#audienceFor(reloaded);
+      return {
+        groupId,
+        handOff,
+        paused,
+        alert,
+        leads,
+        audience: {
+          groupIds: [...new Set([...before.groupIds, ...after.groupIds])],
+          agentIds: [...new Set([...before.agentIds, ...after.agentIds, ref.agentId])],
+          customerId: chat.customerId,
+        },
+        assigned:
+          handOff.outcome === 'assigned'
+            ? {
+                chatId: ref.chatId,
+                threadId: ref.threadId,
+                assigneeId: handOff.assigneeId,
+                customerId: chat.customerId,
+              }
+            : null,
+      };
+    });
+    if (!result) return null;
+
+    const push: ChatTransferredPush = {
+      chat_id: ref.chatId,
+      thread_id: ref.threadId,
+      requester_id: null,
+      reason: 'agent_unresponsive',
+      transferred_to: { group_ids: [Number(result.groupId)], agent_ids: [] },
+      outcome: result.handOff.outcome,
+      assignee_id: result.handOff.assigneeId,
+    };
+    await this.publisher?.publish(tenant, 'chat_transferred', result.audience, push);
+    await this.#announceHandover(tenant, result.assigned);
+    // Back to `queued` on the board when nobody took it (FR-MOD-03.1.1).
+    if (!result.assigned) {
+      await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
+    }
+    if (result.paused) {
+      const status: RoutingStatusSetPush = {
+        agent_id: ref.agentId,
+        status: 'not_accepting_chats',
+        reason: 'agent_unresponsive',
+      };
+      await this.publisher?.publish(tenant, 'routing_status_set', { allAgents: true }, status);
+    }
+    if (result.alert && result.leads.length > 0) {
+      await this.publisher?.publish(
+        tenant,
+        'chat_unanswered_alert',
+        { agentIds: result.leads },
+        result.alert,
+      );
+    }
+    await this.automations?.emit(tenant, 'chat_transferred', {
+      chat_id: ref.chatId,
+      group_id: Number(result.groupId),
+      agent_id: null,
+      reason: 'agent_unresponsive',
+    });
+
+    return {
+      outcome: result.handOff.outcome,
+      assigneeId: result.handOff.assigneeId,
+      groupId: result.groupId,
+      alert: result.alert?.reason ?? null,
+      paused: result.paused,
+    };
+  }
+
+  /**
+   * Keep `threads.inactive_since` true to the workspace's inactive window
+   * (WG-03 · tm 340.2) — the inactivity sweep's second step. `cutoff` is the
+   * moment a connection's last activity must be older than to be inactive;
+   * null when the window is off.
+   *
+   *   - **Marks** an open connection quiet since before `cutoff`, in one
+   *     statement that sets it only where the event counter is still the one
+   *     it read: every append moves the counter (`#appendEvent`), so a message
+   *     that commits while the mark waits for its row spares it.
+   *   - **Takes the mark back** where the window says it no longer holds —
+   *     turned off, or lengthened past the connection's quiet. (A message
+   *     takes it back itself, in `#appendEvent`.)
+   *
+   * A connection marked gives its agent's slot back (`#claim` counts only
+   * the lively ones), so the agents' teams' queues are drained in the same
+   * transaction, as when a chat closes. `chat_inactivity_changed` goes to the
+   * agents who see each connection it changed — never to the player.
+   */
+  async settleInactivity(
+    tenant: TenantContext,
+    cutoff: Date | null,
+  ): Promise<{ marked: number; cleared: number }> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const cleared = await tx.$queryRaw<Array<{ id: string; chat_id: string }>>`
+        UPDATE threads t SET inactive_since = NULL
+         WHERE t.license_id = ${tenant.licenseId} AND t.active
+           AND t.inactive_since IS NOT NULL
+           ${cutoff === null ? Prisma.empty : Prisma.sql`AND ${LAST_ACTIVITY_SQL} >= ${cutoff}`}
+        RETURNING t.id, t.chat_id`;
+      const marked =
+        cutoff === null
+          ? []
+          : await tx.$queryRaw<Array<{ id: string; chat_id: string; assignee_id: string | null }>>`
+              WITH quiet AS (
+                SELECT t.id, t.event_sequence
+                  FROM threads t
+                 WHERE t.license_id = ${tenant.licenseId} AND t.active
+                   AND t.inactive_since IS NULL
+                   AND ${LAST_ACTIVITY_SQL} < ${cutoff}
+              )
+              UPDATE threads t SET inactive_since = now()
+                FROM quiet q
+               WHERE t.id = q.id AND t.event_sequence = q.event_sequence
+                 AND t.active AND t.inactive_since IS NULL
+              RETURNING t.id, t.chat_id, t.assignee_id::text AS assignee_id`;
+
+      const freed = [
+        ...new Set(marked.map((r) => r.assignee_id).filter((id): id is string => id !== null)),
+      ];
+      const drained =
+        freed.length > 0 ? await this.routing.drainQueue(tx, tenant.licenseId, { freed }) : [];
+
+      const changed = [
+        ...cleared.map((r) => ({ ...r, inactive: false })),
+        ...marked.map((r) => ({ id: r.id, chat_id: r.chat_id, inactive: true })),
+      ];
+      const chats =
+        changed.length > 0
+          ? await tx.chat.findMany({
+              where: { id: { in: [...new Set(changed.map((r) => r.chat_id))] } },
+              select: {
+                id: true,
+                customerId: true,
+                access: { select: { groupId: true } },
+                users: { select: { userId: true, userType: true } },
+              },
+            })
+          : [];
+      return { changed, drained, chats: new Map(chats.map((c) => [c.id, c])) };
+    });
+
+    for (const row of result.changed) {
+      const chat = result.chats.get(row.chat_id);
+      if (!chat) continue;
+      // The agents' half of the chat's audience: the player is never told.
+      const { groupIds, agentIds } = this.#audienceFor(chat);
+      const push: ChatInactivityChangedPush = {
+        chat_id: row.chat_id,
+        thread_id: row.id,
+        inactive: row.inactive,
+      };
+      await this.publisher?.publish(
+        tenant,
+        'chat_inactivity_changed',
+        { groupIds, agentIds },
+        push,
+      );
+    }
+    for (const assignment of result.drained) {
+      await this.#announceHandover(tenant, assignment);
+    }
+
+    return {
+      marked: result.changed.filter((r) => r.inactive).length,
+      cleared: result.changed.filter((r) => !r.inactive).length,
+    };
+  }
+
   async tagThread(
     tenant: TenantContext,
     principal: Principal,
@@ -4280,8 +4617,12 @@ export class ChatService {
       UPDATE chats SET last_event_at = GREATEST(last_event_at, now()) WHERE id = ${input.chatId}
     `;
 
+    // Any event ends a connection's inactivity (WG-03 · tm 340.2): it is
+    // lively again and counts against its agent's limit from here on. In the
+    // same write as the counter, which the inactivity sweep's mark compares
+    // against — so a mark and an event racing for the row cannot both win.
     const updated = await tx.$queryRaw<Array<{ event_sequence: number }>>`
-      UPDATE threads SET event_sequence = event_sequence + 1
+      UPDATE threads SET event_sequence = event_sequence + 1, inactive_since = NULL
       WHERE id = ${input.threadId}
       RETURNING event_sequence
     `;
@@ -4449,6 +4790,33 @@ export class ChatService {
  * it outright — else the connection's own team, else the chat's first access
  * group.
  */
+/**
+ * Who hears that a team's connection waits unanswered (WG-03 · tm 340.2): the
+ * team's leads (RL-01 · `group_agents.is_lead`), or — a team nobody leads —
+ * the workspace's admins and up, so the notice reaches someone. A suspended
+ * member hears nothing.
+ */
+async function teamLeads(tx: TenantClient, licenseId: bigint, groupId: bigint): Promise<string[]> {
+  const leads = await tx.$queryRaw<Array<{ agent_id: string }>>`
+    SELECT ga.agent_id::text AS agent_id
+      FROM group_agents ga
+      JOIN agent_memberships m ON m.license_id = ga.license_id AND m.agent_id = ga.agent_id
+     WHERE ga.license_id = ${licenseId} AND ga.group_id = ${groupId} AND ga.is_lead
+       AND NOT m.suspended
+     ORDER BY ga.agent_id`;
+  if (leads.length > 0) return leads.map((r) => r.agent_id);
+  const supervisors = await tx.agentMembership.findMany({
+    where: {
+      licenseId,
+      suspended: false,
+      role: { in: AGENT_ROLES.filter((role) => roleAtLeast(role, 'admin')) },
+    },
+    orderBy: { agentId: 'asc' },
+    select: { agentId: true },
+  });
+  return supervisors.map((row) => row.agentId);
+}
+
 function queueGroup(route: {
   queueGroupId?: bigint | null;
   groupId: bigint | null;
@@ -5280,6 +5648,18 @@ export interface ChatDetail {
 }
 
 /** The chat after a hand-off, and what became of it (`ChatTransferResult`, IN-04). */
+/** What the inactivity sweep's transfer came to (`ChatService.passOnUnanswered`). */
+export interface UnansweredPassOn {
+  outcome: ChatTransferOutcome;
+  /** Who has it now; null when it waits in the queue. */
+  assigneeId: string | null;
+  groupId: bigint;
+  /** Why it waits, when it does — the lead's notice says the same. */
+  alert: UnansweredAlertReason | null;
+  /** Whether the silent agent was set to `not_accepting_chats`. */
+  paused: boolean;
+}
+
 export interface ChatTransferResult extends ChatDetail {
   outcome: ChatTransferOutcome;
   /** Whether the caller can still open it — a team hand-off narrows its access. */

@@ -108,6 +108,7 @@ describe('GET /health — scheduler (admin caller)', () => {
         'ai_sandbox_sessions',
         'ai_unresolved_cluster',
         'ai_unresolved_merge',
+        'chat_inactivity',
       ]);
       // Registered but never ticked — `SCHEDULER_ENABLED` defaults to off
       // under `NODE_ENV=test` (env.ts), same as every other suite's server.
@@ -142,6 +143,7 @@ describe('GET /health — scheduler (admin caller)', () => {
         'ai_stall',
         'ai_unresolved_cluster',
         'ai_unresolved_merge',
+        'chat_inactivity',
       ]) {
         expect(byName[name]).toMatchObject({ enabled: true, last_status: null });
       }

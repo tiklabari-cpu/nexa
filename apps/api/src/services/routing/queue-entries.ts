@@ -30,7 +30,9 @@ import type { TenantClient } from '../../lib/tenant.js';
  * Open a stay for a connection that has just started waiting.
  *
  * `enteredAt` is the same instant written to `threads.queued_at`, so the
- * record and the live queue agree about when the wait began.
+ * record and the live queue agree about when the wait began — except for a
+ * connection put at the front of its queue (`assignWithinGroup` `front`, WG-03),
+ * whose `queued_at` is its place in the order and whose stay still starts now.
  */
 export async function enterQueue(
   tx: TenantClient,

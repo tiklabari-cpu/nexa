@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { chatInactivityOrderProblem, type ChatInactivityWindows } from './chat-inactivity.js';
+import {
+  chatInactivityOrderProblem,
+  UNANSWERED_ALERT_REASONS,
+  UNRESPONSIVE_TRANSFER_LIMIT,
+  type ChatInactivityWindows,
+} from './chat-inactivity.js';
+import { RTM_PUSH_ACTIONS } from './rtm.js';
 
 const windows = (
   unansweredTransferSeconds: number | null,
@@ -43,5 +49,17 @@ describe('chatInactivityOrderProblem (WG-03)', () => {
     expect(chatInactivityOrderProblem(windows(180, 3600, 1800))).toBe(
       'inactive_not_before_timeout',
     );
+  });
+});
+
+describe('the inactivity sweep vocabulary (WG-03 · tm 340.2)', () => {
+  it('is pushed on actions the gateway knows', () => {
+    expect(RTM_PUSH_ACTIONS).toContain('chat_unanswered_alert');
+    expect(RTM_PUSH_ACTIONS).toContain('chat_inactivity_changed');
+  });
+
+  it('passes a connection on twice before it waits for the lead', () => {
+    expect(UNRESPONSIVE_TRANSFER_LIMIT).toBe(2);
+    expect(UNANSWERED_ALERT_REASONS).toEqual(['no_agent', 'transfer_limit']);
   });
 });

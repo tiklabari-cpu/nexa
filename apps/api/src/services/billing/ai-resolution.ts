@@ -50,8 +50,9 @@ export const ADR_09A_EFFECTIVE_AT = new Date('2026-11-01T00:00:00.000Z');
 /**
  * The `chat_transferred` reasons that are a hand-off rather than a transfer
  * between people: the AI's (`ai-responder.ts`) and a rule bot's
- * (`rule-bot-responder.ts`). `manual`, `routing` and `agent_disconnected` move a
- * conversation between agents and leave the predicate alone.
+ * (`rule-bot-responder.ts`). `manual`, `routing`, `agent_disconnected` and
+ * `agent_unresponsive` move a conversation between agents and leave the
+ * predicate alone.
  */
 export const AUTOMATIC_HANDOFF_REASONS = [
   'ai_handoff',

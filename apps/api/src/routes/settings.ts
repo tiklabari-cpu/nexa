@@ -41,6 +41,9 @@ import {
 import {
   AI_TURNS_PER_CUSTOMER_DAY_DEFAULT,
   CAPTCHA_MODE_DEFAULT,
+  chatInactivityOrderProblem,
+  type ChatInactivityOrderProblem,
+  INACTIVITY_WINDOW_MAX_SECONDS,
   CAPTCHA_MODES,
   isCaptchaMode,
   AI_TURNS_PER_CUSTOMER_DAY_MAX,
@@ -554,7 +557,33 @@ const updateChatTimeoutBody = z.object({
     .number()
     .refine(isDayBoundaryHour, { message: 'must be a whole number from 0 to 23' })
     .optional(),
+  // The two windows before auto-close (WG-03), optional the same way. Positive
+  // for the same reason as the timeout: a zero window would act on every live
+  // connection at once. Their order is checked against the stored row below.
+  unanswered_transfer_seconds: z
+    .number()
+    .int()
+    .positive()
+    .max(INACTIVITY_WINDOW_MAX_SECONDS)
+    .nullable()
+    .optional(),
+  inactive_after_seconds: z
+    .number()
+    .int()
+    .positive()
+    .max(INACTIVITY_WINDOW_MAX_SECONDS)
+    .nullable()
+    .optional(),
 });
+
+/** What a save whose windows are out of order is told (`chatInactivityOrderProblem`). */
+const CHAT_INACTIVITY_ORDER_MESSAGES: Record<ChatInactivityOrderProblem, string> = {
+  transfer_not_before_inactive:
+    'unanswered_transfer_seconds must be shorter than inactive_after_seconds.',
+  transfer_not_before_timeout:
+    'unanswered_transfer_seconds must be shorter than chat_timeout_seconds.',
+  inactive_not_before_timeout: 'inactive_after_seconds must be shorter than chat_timeout_seconds.',
+};
 
 /**
  * Same 30-day ceiling as `chat_timeout_seconds`: an idle window longer than
@@ -2732,7 +2761,28 @@ export default async function settingsRoutes(
         // What the day boundary was, to say in the audit entry what it became.
         // Read before the write so the entry shows the real previous value, and
         // a workspace with no row shows the default it was running on.
-        const before = dayBoundaryFromRow(await tx.inboxSettings.findUnique({ where }));
+        const stored = await tx.inboxSettings.findUnique({ where });
+        const before = dayBoundaryFromRow(stored);
+        // The windows as this save leaves them — a field left out keeps what is
+        // stored — must run transfer < inactive < auto-close (WG-03), or nothing
+        // is written.
+        const windows = {
+          unansweredTransferSeconds:
+            body.unanswered_transfer_seconds === undefined
+              ? (stored?.unansweredTransferSeconds ?? null)
+              : body.unanswered_transfer_seconds,
+          inactiveAfterSeconds:
+            body.inactive_after_seconds === undefined
+              ? (stored?.inactiveAfterSeconds ?? null)
+              : body.inactive_after_seconds,
+        };
+        const problem = chatInactivityOrderProblem({
+          ...windows,
+          chatTimeoutSeconds: body.chat_timeout_seconds,
+        });
+        if (problem) {
+          throw ApiError.validation(CHAT_INACTIVITY_ORDER_MESSAGES[problem], { problem });
+        }
         const dayBoundary = {
           ...(body.day_boundary_timezone === undefined
             ? {}
@@ -2747,9 +2797,10 @@ export default async function settingsRoutes(
             licenseId: tenant.licenseId,
             brandId,
             chatTimeoutSeconds: body.chat_timeout_seconds,
+            ...windows,
             ...dayBoundary,
           },
-          update: { chatTimeoutSeconds: body.chat_timeout_seconds, ...dayBoundary },
+          update: { chatTimeoutSeconds: body.chat_timeout_seconds, ...windows, ...dayBoundary },
         });
         const after = dayBoundaryFromRow(row);
         const boundaryChanged = after.timezone !== before.timezone || after.hour !== before.hour;
@@ -2757,6 +2808,8 @@ export default async function settingsRoutes(
           action: 'settings.chat_timeout_updated',
           metadata: {
             chat_timeout_seconds: body.chat_timeout_seconds,
+            unanswered_transfer_seconds: row.unansweredTransferSeconds,
+            inactive_after_seconds: row.inactiveAfterSeconds,
             day_boundary_timezone: after.timezone,
             day_boundary_hour: after.hour,
             // Only when it moved: a timeout-only save is not a boundary change,
@@ -3587,7 +3640,14 @@ function serialiseSecurity(
 }
 
 function serialiseInbox(
-  row: (DayBoundaryRow & { chatTimeoutSeconds: number | null; updatedAt: Date }) | null,
+  row:
+    | (DayBoundaryRow & {
+        chatTimeoutSeconds: number | null;
+        unansweredTransferSeconds: number | null;
+        inactiveAfterSeconds: number | null;
+        updatedAt: Date;
+      })
+    | null,
   brandId: string,
 ) {
   // No row = the shipped boundary (`DEFAULT_DAY_BOUNDARY`), the same fallback the
@@ -3598,6 +3658,8 @@ function serialiseInbox(
     chat_timeout_seconds: row?.chatTimeoutSeconds ?? null,
     day_boundary_timezone: boundary.timezone,
     day_boundary_hour: boundary.hour,
+    unanswered_transfer_seconds: row?.unansweredTransferSeconds ?? null,
+    inactive_after_seconds: row?.inactiveAfterSeconds ?? null,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

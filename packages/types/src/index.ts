@@ -37,6 +37,7 @@ export * from './id-glossary.js';
 export * from './search.js';
 export * from './message-search.js';
 export * from './conversation-day.js';
+export * from './chat-inactivity.js';
 export * from './queue-entry.js';
 export * from './team-queues.js';
 export * from './handoff-routes.js';

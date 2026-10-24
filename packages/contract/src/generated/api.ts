@@ -7338,6 +7338,17 @@ export interface paths {
      *     start afterwards — chats already filed under a day keep it — and writes an
      *     audit entry (`settings.chat_timeout_updated`) carrying the old and new
      *     boundary.
+     *
+     *     The two windows before auto-close (WG-03) are saved here too, and are
+     *     optional the same way: `unanswered_transfer_seconds` (an assigned
+     *     connection whose agent has not answered the player for this long goes to
+     *     someone else in the team) and `inactive_after_seconds` (a connection
+     *     quiet for this long stops counting against its agent's concurrent
+     *     limit). Each is a positive integer (up to 30 days) or null for off.
+     *     Between the windows that are on, the stored result must keep transfer <
+     *     inactive < auto-close — compared after the save is applied, so a field
+     *     left out counts with its stored value — or the save is refused with a
+     *     400 and nothing changes.
      */
     put: operations['setChatTimeout'];
     post?: never;
@@ -10930,6 +10941,13 @@ export interface components {
       queue_group_id?: number | null;
       /** @description How pressing the newest connection is; `normal` for a chat with none. */
       priority?: components['schemas']['ThreadPriority'];
+      /**
+       * @description The newest connection is open and inactive (WG-03): quiet for the
+       *     workspace's `inactive_after_seconds`, so it does not count against
+       *     its agent's concurrent limit until the next message. The inbox
+       *     shows the row dimmed. False for a closed or a lively one.
+       */
+      inactive?: boolean;
       unread_count?: number;
       /**
        * @description How many connections `Chat.connections` lists for this chat — the
@@ -15474,6 +15492,13 @@ export interface components {
      *     00:00. Changing it affects only connections that start afterwards; a chat
      *     already filed under a day keeps it. The AI daily quota and report day
      *     buckets stay on the UTC day.
+     *
+     *     Two windows come before auto-close (WG-03 · tm 340), both null (off)
+     *     until set: `unanswered_transfer_seconds` passes an assigned connection
+     *     whose agent has not answered the player to someone else in the team,
+     *     and `inactive_after_seconds` marks a quiet connection inactive, out of
+     *     its agent's concurrent limit until the next message. When on, they keep
+     *     transfer < inactive < auto-close.
      */
     ChatTimeoutSettings: {
       /**
@@ -15496,6 +15521,16 @@ export interface components {
        * @description The local hour a conversation day starts at (`0` = midnight, `6` = 05:59 still belongs to the previous day). Defaults to `0`.
        */
       day_boundary_hour: number;
+      /**
+       * Format: int32
+       * @description Seconds an assigned connection may wait for its agent's first reply before it goes to someone else in the team; null when off.
+       */
+      unanswered_transfer_seconds: number | null;
+      /**
+       * Format: int32
+       * @description Seconds without an event before a connection is inactive and stops counting against its agent's concurrent limit; null when off.
+       */
+      inactive_after_seconds: number | null;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -21758,10 +21793,19 @@ export interface operations {
            *     Agent's and is what the AI report attributes a transfer to;
            *     `bot_handoff` is the deterministic rule bot's (FR-MOD-06.6),
            *     separate so a rule firing never reads as a model deciding.
+           *     `agent_unresponsive` is the inactivity sweep's (WG-03): the
+           *     assigned agent did not answer within
+           *     `unanswered_transfer_seconds`.
            * @default manual
            * @enum {string}
            */
-          reason?: 'manual' | 'routing' | 'agent_disconnected' | 'ai_handoff' | 'bot_handoff';
+          reason?:
+            | 'manual'
+            | 'routing'
+            | 'agent_disconnected'
+            | 'ai_handoff'
+            | 'bot_handoff'
+            | 'agent_unresponsive';
         };
       };
     };
@@ -30795,6 +30839,16 @@ export interface operations {
            * @description The local hour a conversation day starts at.
            */
           day_boundary_hour?: number;
+          /**
+           * Format: int32
+           * @description Seconds an assigned connection may go without its agent's first reply before it is transferred (`agent_unresponsive`); null turns it off. Must be below `inactive_after_seconds` and `chat_timeout_seconds` when those are on.
+           */
+          unanswered_transfer_seconds?: number | null;
+          /**
+           * Format: int32
+           * @description Seconds without an event before a connection is inactive and leaves its agent's concurrent limit; null turns it off. Must be below `chat_timeout_seconds` when that is on.
+           */
+          inactive_after_seconds?: number | null;
         };
       };
     };

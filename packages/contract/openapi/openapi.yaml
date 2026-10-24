@@ -1349,6 +1349,13 @@ components:
           description: How pressing the newest connection is; `normal` for a chat with none.
           allOf:
             - $ref: "#/components/schemas/ThreadPriority"
+        inactive:
+          type: boolean
+          description: |
+            The newest connection is open and inactive (WG-03): quiet for the
+            workspace's `inactive_after_seconds`, so it does not count against
+            its agent's concurrent limit until the next message. The inbox
+            shows the row dimmed. False for a closed or a lively one.
         unread_count: { type: integer }
         connection_count:
           type: integer
@@ -7469,7 +7476,22 @@ components:
         00:00. Changing it affects only connections that start afterwards; a chat
         already filed under a day keeps it. The AI daily quota and report day
         buckets stay on the UTC day.
-      required: [chat_timeout_seconds, day_boundary_timezone, day_boundary_hour, updated_at]
+
+        Two windows come before auto-close (WG-03 · tm 340), both null (off)
+        until set: `unanswered_transfer_seconds` passes an assigned connection
+        whose agent has not answered the player to someone else in the team,
+        and `inactive_after_seconds` marks a quiet connection inactive, out of
+        its agent's concurrent limit until the next message. When on, they keep
+        transfer < inactive < auto-close.
+      required:
+        [
+          chat_timeout_seconds,
+          day_boundary_timezone,
+          day_boundary_hour,
+          unanswered_transfer_seconds,
+          inactive_after_seconds,
+          updated_at,
+        ]
       properties:
         brand_id:
           type: string
@@ -7497,6 +7519,22 @@ components:
           description: >-
             The local hour a conversation day starts at (`0` = midnight, `6` =
             05:59 still belongs to the previous day). Defaults to `0`.
+        unanswered_transfer_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: >-
+            Seconds an assigned connection may wait for its agent's first reply
+            before it goes to someone else in the team; null when off.
+        inactive_after_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: >-
+            Seconds without an event before a connection is inactive and stops
+            counting against its agent's concurrent limit; null when off.
         updated_at: { type: string, format: date-time, nullable: true }
 
     WidgetSettings:

@@ -102,6 +102,8 @@ bekle** (`TaskOutput` block=true ya da log'da çıkış işaretini bekleyen ön 
 **KURAL:** Ara doğrulamada e2e'nin tamamını değil yalnız ilgili spec'i koş
 (`pnpm test:e2e --shards=1 <spec>`); kapıyı `--force` olmadan koş. Tam e2e + tam kapı kapanışta
 bir kez koşulur ve DoD kanıtı odur. Ayrıntı: CONVENTIONS §1.3.
+**Kapanışta önce ön kontrol:** `pnpm test:gate build statik birim` (~5–7 dk), yeşilse
+`pnpm test:gate --e2e` (o üç başlık önbellekten geçer). Kendi birim kırmızın entegrasyonu beklemez.
 **Kapı kırmızıysa e2e koşmaz** (`pnpm test:gate --e2e` entegrasyon/birim/statik kırmızıyken e2e'yi
 ATLAR; `--keep-going` eski davranıştır, gerekçesiz kullanma). Kapı sonunda kırmızı dosyalar için
 yazdığı `with-test-datastores.ts vitest run <dosya>` satırını koş, yeşile çevir, ancak sonra kapıyı
@@ -119,8 +121,10 @@ aynı `siyahtus` veritabanını TRUNCATE ettiği için kendi kodunla ilgisi olma
 üretiyordu. `--concurrency=1` gerekmez; `pnpm -w test` doğrudan çalışır.
 
 Bunun pratik sonucu: **kırmızı gördüğünde artık "başka pencere yazıyordur" diye elle kök-neden
-analizi yapma.** İzolasyon açıkken bir kırmızı ya senin değişikliğinden ya da HANDOFF/Task
-Master'da zaten kayıtlı bilinen bir kusurdan gelir. Paylaşılan `siyahtus` veritabanına karşı
+analizi yapma.** Dokunmadığın bir testin kırmızısı çoğu zaman yükten gelen rastgele kırmızıdır:
+CONVENTIONS §1.1 "İlgisiz kırmızı prosedürü"nü uygula (`.loop-logs/e2e-flaky.jsonl`'e bak,
+`flaky (YENİ)` spec'i tek başına iki kez koş, birim/entegrasyonda yalnız kırmızı başlığı yeniden
+koş; tam kapıyı baştan alma). Paylaşılan `siyahtus` veritabanına karşı
 koşmak istersen (bir testin bıraktığı veriyi elle incelemek için) `SIYAHTUS_TEST_ISOLATION=off`.
 
 İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `siyahtus` veritabanını

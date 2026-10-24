@@ -79,8 +79,19 @@ Eski kanıt, §D sapmaları ve tarihçe `docs/archive/` altındadır:
 veritabanını ve kendi Redis mantıksal veritabanını (1-15) alır. Sonuçları:
 
 - `pnpm -w test` `--concurrency=1` istemez; turbo paralelliği güvenlidir.
-- **Bir kırmızıyı "başka pencere yazıyordur" diye açıklama.** Kırmızı ya senin değişikliğindendir
-  ya da HANDOFF/Task Master'da kayıtlı bilinen bir kusurdur; ikisi de değilse gerçek regresyondur.
+- **Bir kırmızıyı "başka pencere yazıyordur" diye açıklama** — izolasyon bunu dışarıda bırakır.
+  Ama dokunmadığın bir testin kırmızısı çoğu zaman yükten gelen rastgele bir kırmızıdır (ölçüm
+  2026-10-24, 311.1–340.3: 66 kırmızı test sonucunun ~%77'si görevin dokunmadığı dosyalardaydı).
+  **İlgisiz kırmızı prosedürü:**
+  1. `grep <spec ya da dosya> .loop-logs/e2e-flaky.jsonl` — daha önce görülmüş mü?
+  2. e2e özetinde `flaky (YENİ)` satırı varsa o spec'i tek başına iki kez koş
+     (`pnpm test:e2e --shards=1 <spec>`; dosya adıyla koşu tekrar denemesizdir). İkisi de yeşilse
+     ilgisizdir, HANDOFF doğrulama satırına yaz; biri kırmızıysa senin değişikliğin say ve düzelt.
+  3. Birim/entegrasyonda dokunmadığın bir dosya kırmızıysa kapının yazdığı tek-dosya komutuyla
+     tek başına koş; yeşilse **yalnız kırmızı başlığı ve sonrasını** yeniden koş
+     (ör. `pnpm test:gate birim e2e`) — tam kapıyı baştan alma.
+  4. Aynı test defterde ≥2 kez görünüyorsa HANDOFF "açık konular"a bir satır yaz (düzeltme görevi
+     açmak sahibin kararı). Tek başına da kırmızıysa gerçek regresyondur.
 - e2e de izoledir (tm 260, §1.3). Eski tek yığın (`--legacy`) paylaşılan veritabanını sıfırlar —
   onunla iki pencere aynı anda koşamaz. Paylaşılan veritabanına karşı koşmak için:
   `SIYAHTUS_TEST_ISOLATION=off`.
@@ -112,6 +123,10 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   akışın spec'i koşulur (`pnpm test:e2e --shards=1 <spec>`, ~2 dk). e2e'nin tamamı ve tam kapı
   **kapanışta bir kez** koşulur; DoD kanıtı o koşudur. Gerekçe: son 30 görevde süre %36'sı e2e'nin
   tamamına gitti (görev başına ~4 tam koşu), kapının 62 koşusunun 44'ü `--force` ileydi.
+  **KURAL — tam kapıdan önce ön kontrol (2026-10-24):** kapanışta önce
+  `pnpm test:gate build statik birim` (~5–7 dk); yeşilse `pnpm test:gate --e2e` — o üç başlık
+  turbo önbelleğinden saniyeler içinde geçer. Kendi birim kırmızın (ör. `env.parity`) böylece
+  entegrasyonun ~11 dk'sını beklemeden görünür.
   **KURAL — kırmızı kapı e2e koşmaz (2026-10-16):** `build` kırmızıysa hiçbir şey koşmaz;
   `statik`/`birim`/`entegrasyon` kırmızıysa e2e ATLANIR (tabloda `ATLANDI`). Entegrasyon, statik/birim
   kırmızıyken de koşar (bağımsız bilgi). `--keep-going` eski "hepsini koş" davranışıdır. Gate,
@@ -122,6 +137,11 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   Kapı için **son satırlar** okunur: parça satırları, `Tests: …` ve `verdict: GREEN|RED`; exit 1 =
   bir parça kırmızı ya da eksik. **Yalnız parçalıyken düşen kırmızı bir sıra bağımlılığıdır** —
   `pnpm test:e2e --shards=1 <önceki> <düşen>` ile üret ve düzelt. CI'da `--legacy` koşar.
+  **Tekrar deneme (2026-10-24):** tam koşuda her test bir kez yeniden denenir (CI ile aynı);
+  dosya adıyla hedefli koşuda tekrar yoktur. Tekrarda geçen test özette `flaky` satırıdır ve
+  `.loop-logs/e2e-flaky.jsonl`'e yazılır. Dalın değiştirdiği bir spec'te (ya da `tests/` altında
+  bir yardımcı dosya değiştiyse herhangi bir spec'te) tekrarda geçen test **RED** sayılır.
+  Prosedür: §1.1 "İlgisiz kırmızı".
 - **`apps/web` kendi süitini `--maxWorkers=4` ile ister** — yüklü makinede
   `Test timed out in 5000ms` CPU çekişmesidir; sınırlıyken yeniden koşmadan kırmızı yazma.
 

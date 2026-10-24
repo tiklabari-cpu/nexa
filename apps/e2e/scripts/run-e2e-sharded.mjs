@@ -48,6 +48,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  appendFileSync,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -269,7 +270,15 @@ function runShard(i, shard) {
     const child = spawn(command, {
       cwd: e2eDir,
       shell: true,
-      env: { ...process.env, SIYAHTUS_E2E_SHARD: String(i), FORCE_COLOR: '0' },
+      env: {
+        ...process.env,
+        SIYAHTUS_E2E_SHARD: String(i),
+        FORCE_COLOR: '0',
+        // A run aimed at named spec files is a task checking its own work: no retry there.
+        ...(words.length > 0 && process.env['SIYAHTUS_E2E_RETRIES'] === undefined
+          ? { SIYAHTUS_E2E_RETRIES: '0' }
+          : {}),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     children.add(child);
@@ -299,10 +308,14 @@ function readReport(path) {
   if (!existsSync(path)) return null;
   const report = JSON.parse(readFileSync(path, 'utf8'));
   const perFile = new Map();
+  const flakyTests = [];
   const walk = (suite, file) => {
     const owner = suite.file ?? file;
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
+        if (test.status === 'flaky') {
+          flakyTests.push({ file: owner.replace(/\\/g, '/'), line: spec.line, title: spec.title });
+        }
         const seconds = sum((test.results ?? []).map((r) => r.duration ?? 0)) / 1000;
         const entry = perFile.get(owner) ?? { seconds: 0, tests: 0 };
         entry.seconds += seconds;
@@ -320,7 +333,68 @@ function readReport(path) {
     flaky: s.flaky ?? 0,
     skipped: s.skipped ?? 0,
     perFile,
+    flakyTests,
   };
+}
+
+/**
+ * Files under `apps/e2e/tests/` this branch changed (relative to `tests/`), against where it
+ * left `origin/main`: committed, in the working tree, or untracked. `null` when git cannot say —
+ * then every flaky test counts as the branch's own, the safe side.
+ */
+function changedTestFiles() {
+  const git = (args) => spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8' });
+  const base = git(['merge-base', 'HEAD', 'origin/main']);
+  if (base.status !== 0) return null;
+  const diff = git(['diff', '--name-only', base.stdout.trim(), '--', 'apps/e2e/tests']);
+  const untracked = git(['ls-files', '--others', '--exclude-standard', '--', 'apps/e2e/tests']);
+  if (diff.status !== 0 || untracked.status !== 0) return null;
+  return new Set(
+    `${diff.stdout}\n${untracked.stdout}`
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((path) => path.replace(/^apps\/e2e\/tests\//, '')),
+  );
+}
+
+/**
+ * A retry is allowed to rescue a test the branch did not touch, never one it did: a flaky test
+ * in a changed spec — or any flaky test once a shared helper under `tests/` changed — is red.
+ * The rest is green, printed, and appended to `.loop-logs/e2e-flaky.jsonl`, marked YENİ the
+ * first time a test shows up there.
+ */
+function judgeFlaky(flaky, changed) {
+  const helperChanged = changed === null || [...changed].some((f) => !f.endsWith('.spec.ts'));
+  const own = flaky.filter((t) => helperChanged || changed.has(t.file));
+  return { own, foreign: flaky.filter((t) => !own.includes(t)) };
+}
+
+function recordFlaky(flaky) {
+  const ledger = join(repoRoot, '.loop-logs', 'e2e-flaky.jsonl');
+  const key = (t) => `${t.file} › ${t.title}`;
+  let seen = new Set();
+  try {
+    seen = new Set(
+      readFileSync(ledger, 'utf8')
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => key(JSON.parse(line))),
+    );
+  } catch {
+    // no ledger yet
+  }
+  const branch = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  }).stdout?.trim();
+  const at = new Date().toISOString();
+  mkdirSync(dirname(ledger), { recursive: true });
+  for (const t of flaky) {
+    const fresh = !seen.has(key(t));
+    console.log(`  flaky${fresh ? ' (YENİ)' : ''}: ${t.file}:${t.line} › ${t.title}`);
+    appendFileSync(ledger, `${JSON.stringify({ at, branch, ...t })}\n`);
+    seen.add(key(t));
+  }
 }
 
 function updateTimings(all) {
@@ -363,6 +437,17 @@ function summarize(all, wallSeconds) {
   console.log(
     `  wall clock ${formatDuration(wallSeconds)} · ${all.length} shard(s) · lowest free memory ${lowestFreeGb.toFixed(1)} GB`,
   );
+  const flaky = all.flatMap((r) => r.stats?.flakyTests ?? []);
+  if (flaky.length > 0) {
+    const { own, foreign } = judgeFlaky(flaky, changedTestFiles());
+    for (const t of own) {
+      console.log(
+        `  RED — passed only on retry, in a spec this branch changed: ${t.file}:${t.line} › ${t.title}`,
+      );
+    }
+    if (own.length > 0) red = true;
+    recordFlaky(foreign);
+  }
   console.log(`  verdict: ${red ? 'RED' : 'GREEN'}`);
   return red ? 1 : 0;
 }

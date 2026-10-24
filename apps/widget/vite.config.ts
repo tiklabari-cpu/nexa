@@ -68,6 +68,8 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       globals: true,
+      // Same ceiling as web/api/rtm: under the gate's load a userEvent test can pass 5 s.
+      testTimeout: 30_000,
     },
   };
 });

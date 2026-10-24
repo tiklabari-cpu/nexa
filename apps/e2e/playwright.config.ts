@@ -105,7 +105,16 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env['CI'],
-  retries: process.env['CI'] ? 1 : 0,
+  // One retry, as CI has always had (2026-10-24): one random red in ~460 tests used to restart
+  // the whole 18-minute run. The sharded runner keeps a retry from hiding anything that matters —
+  // it sets 0 for a run aimed at named spec files (a task's own check), turns a flaky test in a
+  // spec the branch changed back into a red, and logs every other flaky to
+  // `.loop-logs/e2e-flaky.jsonl` (`scripts/run-e2e-sharded.mjs`).
+  retries: Number(process.env['SIYAHTUS_E2E_RETRIES'] ?? 1),
+  // A private shard stops after twenty failed attempts: a change that breaks many specs is already
+  // a red run, and with retries each further failure would cost a second attempt. Playwright counts
+  // a flaky test's failed first attempt too, so the ceiling sits far above the usual one or two.
+  maxFailures: PRIVATE ? 20 : 0,
   timeout: 45_000,
   expect: { timeout: 10_000 },
   reporter: PRIVATE

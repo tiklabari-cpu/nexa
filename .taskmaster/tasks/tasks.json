@@ -14703,7 +14703,7 @@
           "287"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-23T23:14:56.466Z",
+        "updatedAt": "2026-10-24T02:16:28.846Z",
         "subtasks": [
           {
             "id": 1,
@@ -14723,13 +14723,13 @@
             "description": "Risk değerlendirmesi + captcha.ts (mock/Turnstile) + challenge_required kontratı + env/productionProblems",
             "details": "Üst görev 339 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Sahte sağlayıcı entegrasyonu.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "339.1"
             ],
             "parentId": "339",
             "priority": "high",
-            "updatedAt": "2026-10-23T23:14:56.466Z"
+            "updatedAt": "2026-10-24T02:16:28.846Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-23T23:14:56.467Z",
+      "lastModified": "2026-10-24T02:16:28.847Z",
       "taskCount": 390,
       "completedCount": 321,
       "tags": [

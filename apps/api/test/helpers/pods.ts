@@ -237,6 +237,10 @@ export async function startApiPod(
       RATE_LIMIT_ANON_PER_MIN: '2000',
       // The same reasoning for the hourly sign-up limit (tm 257.14).
       RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
+      // And for the widget's human check (tm 339.2): one address, many visitors.
+      CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP: '1000000',
+      CAPTCHA_RISK_MESSAGES_PER_MIN: '1000000',
+      CAPTCHA_RISK_AI_TURNS_TODAY: '1000000',
       ...env,
     },
   });

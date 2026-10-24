@@ -108,3 +108,20 @@ export async function addCustomerAiTokens(
     WHERE license_id = ${input.licenseId} AND customer_id = ${input.customerId}::uuid
       AND day = ${input.day}::date`;
 }
+
+/**
+ * The member's AI turns so far on today's conversation day — one of the
+ * widget's risk signals (tm 339.2 · GV-01). Reads, never counts.
+ */
+export async function customerAiTurnsToday(
+  tx: TenantClient,
+  input: { licenseId: bigint; customerId: string; at?: Date },
+): Promise<number> {
+  const boundary = await readDayBoundary(tx);
+  const day = localDayKey(input.at ?? new Date(), boundary.timezone, boundary.hour);
+  const rows = await tx.$queryRaw<Array<{ ai_turns: number }>>`
+    SELECT ai_turns FROM ai_customer_daily_usage
+    WHERE license_id = ${input.licenseId} AND customer_id = ${input.customerId}::uuid
+      AND day = ${day}::date`;
+  return rows[0]?.ai_turns ?? 0;
+}

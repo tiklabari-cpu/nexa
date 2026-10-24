@@ -4,7 +4,7 @@
  * that happens to touch the missing value.
  */
 import { z } from 'zod';
-import { DEFAULT_REGION, REGIONS } from '@siyahtus/types';
+import { CAPTCHA_PROVIDERS, DEFAULT_REGION, REGIONS } from '@siyahtus/types';
 import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
 import { consoleRedirectUri, DEV_CONSOLE_REDIRECT } from '../lib/console-redirect.js';
 // The provider vocabularies live with their factories, not here: a value this
@@ -371,6 +371,35 @@ export const envSchema = z.object({
    * a sign-in and starts being a session, which is the one thing it must not be.
    */
   TWO_FACTOR_ENROLLMENT_TICKET_TTL: z.coerce.number().int().positive().max(1800).default(600),
+
+  /**
+   * Who checks a visitor the widget's risk signals flag (tm 339.2 · GV-01):
+   * Cloudflare Turnstile, the offline stand-in (`mock`, the default — it
+   * accepts `MOCK_CAPTCHA_PASS_TOKEN` and makes no network call) or nobody.
+   *
+   * Never a boot refusal (owner, 2026-10-10): `turnstile` without both keys,
+   * and `mock` in production — where its known token would let anyone
+   * through — leave the check off and say so at boot (`resolveCaptcha` in
+   * `services/security/captcha.ts`), as does a pilot without Turnstile.
+   */
+  CAPTCHA_PROVIDER: z.enum(CAPTCHA_PROVIDERS).default('mock'),
+  /** Turnstile's public site key, handed to the widget in `challenge_required`. */
+  TURNSTILE_SITE_KEY: z.string().min(1).optional(),
+  /** Turnstile's secret, for `siteverify`. Never leaves the API. */
+  TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
+  /**
+   * The risk signals' thresholds (GV-01). Generous on purpose: Turkish mobile
+   * carriers put many players behind one address (CGNAT), and a false
+   * positive is a real player asked to prove themselves.
+   *
+   * New visitors one address may open in one workspace per 10 minutes before
+   * the next one is asked for a check.
+   */
+  CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP: z.coerce.number().int().positive().default(30),
+  /** Messages one visitor may send per minute before opening a conversation asks for a check. */
+  CAPTCHA_RISK_MESSAGES_PER_MIN: z.coerce.number().int().positive().default(20),
+  /** AI turns one member may have had today before opening a conversation asks for a check. */
+  CAPTCHA_RISK_AI_TURNS_TODAY: z.coerce.number().int().positive().default(20),
 
   RATE_LIMIT_AGENT_PER_MIN: z.coerce.number().int().positive().default(180),
   RATE_LIMIT_AGENT_BURST: z.coerce.number().int().positive().default(30),

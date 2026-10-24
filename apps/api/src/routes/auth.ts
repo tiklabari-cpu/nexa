@@ -43,6 +43,13 @@ import {
   type MemberTokenSource,
 } from '../services/auth/member-recognition.js';
 import { MEMBER_TOKEN_MAX_LENGTH } from '../services/auth/member-token.js';
+import {
+  assessRisk,
+  type ChallengeOutcome,
+  passedRecently,
+  readCaptchaMode,
+} from '../services/security/abuse-guard.js';
+import { CAPTCHA_TOKEN_MAX_LENGTH } from '../services/security/captcha.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
 import type { IssuedToken } from '../services/auth/token-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
@@ -208,6 +215,12 @@ const customerTokenBody = z.object({
    * token is answered exactly like no token.
    */
   member_token: z.string().max(MEMBER_TOKEN_MAX_LENGTH).optional(),
+  /**
+   * The human check's answer (tm 339.2 · GV-01), sent only after this endpoint
+   * asked for one (`403 challenge_required`). Verified only when the request
+   * is flagged; otherwise ignored.
+   */
+  challenge_token: z.string().min(1).max(CAPTCHA_TOKEN_MAX_LENGTH).optional(),
   /**
    * The id a widget from before member tokens kept. It identifies; it does not
    * authenticate. It reaches its customer only once, inside the transition
@@ -1745,6 +1758,49 @@ export default async function authRoutes(
         ? { token: body.member_token, source: 'body' }
         : null;
 
+    // Which brand this widget speaks for (WG-01): the website registered for
+    // the embedding host, else the licence default. Signed into the token so
+    // the chat-open check enforces the same pre-chat form handed out below,
+    // and read before the visitor is resolved because the human check's mode
+    // is the brand's. Best-effort like the reads at the end — a failure leaves
+    // the token brandless, which reads as the default brand everywhere
+    // downstream.
+    let brandId: string | undefined;
+    try {
+      brandId = await withTenant(app.db, tenant, (tx) =>
+        resolveWidgetBrandId(tx, host, isChatPage),
+      );
+    } catch (error) {
+      request.log.warn({ err: error, host }, 'failed to resolve the widget brand');
+    }
+
+    // --- The human check (tm 339.2 · GV-01) -----------------------------------
+    // Flagged when this address opened more new visitors in this workspace in
+    // the last 10 minutes than a crowd behind one carrier address would. The
+    // token's verdict is asked here, before the transaction below, so a slow
+    // provider holds no connection; whether it counts is decided inside it,
+    // once it is known who this is — a member this workspace signed a token
+    // for, or one who passed a check in the last 12 hours, is not asked.
+    const guard = app.abuseGuard;
+    const captchaMode = guard.verifier
+      ? await withTenant(app.db, tenant, (tx) => readCaptchaMode(tx, brandId))
+      : 'off';
+    const mintReason = guard.asks(captchaMode)
+      ? assessRisk(
+          {
+            newCustomersFromIp: await guard.newCustomersFromIp(
+              match.license_id,
+              request.ip,
+              request.log,
+            ),
+            messagesLastMinute: null,
+            aiTurnsToday: null,
+          },
+          guard.thresholds,
+        )
+      : null;
+    const mintVerdict = await guard.verdictFor(mintReason, body.challenge_token, request.ip);
+
     // Goes through withTenant like every other write: one implementation of
     // the tenant context means one place to get it right.
     const member = await withTenant(app.db, tenant, async (tx) => {
@@ -1760,8 +1816,39 @@ export default async function authRoutes(
       // or by the one adoption — learns they are banned: a bare id that is not
       // adopted is never looked up, so it cannot probe for bans.
       if (resolved.banned) throw new ApiError('customer_banned', 'This customer is banned.');
-      return resolved;
+      // Thrown inside it too, so a refused visitor leaves no customer behind.
+      let challenge: ChallengeOutcome = 'clear';
+      if (mintReason && resolved.via !== 'token') {
+        const passedAt =
+          resolved.via === 'created'
+            ? null
+            : ((
+                await tx.customer.findUnique({
+                  where: { id: resolved.customerId },
+                  select: { challengePassedAt: true },
+                })
+              )?.challengePassedAt ?? null);
+        if (!passedRecently(passedAt)) {
+          challenge = guard.decide(mintReason, mintVerdict, request.log);
+          if (challenge === 'passed') {
+            await tx.customer.update({
+              where: { id: resolved.customerId },
+              data: { challengePassedAt: new Date() },
+            });
+          }
+        }
+      }
+      return { ...resolved, challenge };
     });
+    if (guard.verifier) {
+      // Counted once the visitor exists: a refused mint opened nobody.
+      if (member.via === 'created') {
+        await guard.recordNewCustomer(match.license_id, request.ip, request.log);
+      }
+      if (member.challenge === 'withhold') {
+        await guard.withholdAi(match.license_id, member.customerId, request.log);
+      }
+    }
     // Logged, never answered: a refused credential is a new visitor with the
     // status and the shape of a first visit, so the response says neither why
     // nor that there was anything to refuse.
@@ -1789,20 +1876,6 @@ export default async function authRoutes(
       } catch (error) {
         request.log.warn({ err: error }, 'could not record the visitor country');
       }
-    }
-
-    // Which brand this widget speaks for (WG-01): the website registered for
-    // the embedding host, else the licence default. Signed into the token so
-    // the chat-open check enforces the same pre-chat form handed out below.
-    // Best-effort like the reads at the end — a failure leaves the token
-    // brandless, which reads as the default brand everywhere downstream.
-    let brandId: string | undefined;
-    try {
-      brandId = await withTenant(app.db, tenant, (tx) =>
-        resolveWidgetBrandId(tx, host, isChatPage),
-      );
-    } catch (error) {
-      request.log.warn({ err: error, host }, 'failed to resolve the widget brand');
     }
 
     const { token, expiresIn } = app.customerTokens.issue({

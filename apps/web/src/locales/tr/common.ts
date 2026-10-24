@@ -16,6 +16,7 @@ export const common: Messages = {
   'common.errors.brand_not_found': 'Bu markayı bulamadık.',
   'common.errors.chat_anonymized': 'Bu sohbet anonimleştirildi ve artık açılamıyor.',
   'common.errors.chat_inactive': 'Bu sohbet artık etkin değil.',
+  'common.errors.challenge_required': 'Devam etmek için insan olduğunuzu doğrulayın.',
   'common.errors.customer_banned': 'Bu ziyaretçi engellenmiş.',
   'common.errors.fallback_rule_exists':
     'Bu çalışma alanının zaten bir yedek yönlendirme kuralı var — onu düzenleyin.',

@@ -53,6 +53,8 @@ import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createGeoLocator, type GeoLocator } from './services/geo/geo-locator.js';
+import { AbuseGuard } from './services/security/abuse-guard.js';
+import { resolveCaptcha } from './services/security/captcha.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
@@ -209,6 +211,12 @@ export interface BuildServerOptions {
    * `StaticGeoLocator`: no file, no network.
    */
   geo?: GeoLocator;
+  /**
+   * The fetch Turnstile's check goes through (tm 339.2). Omitted, the global
+   * one; a suite that runs `CAPTCHA_PROVIDER=turnstile` passes a stub, so no
+   * test reaches Cloudflare.
+   */
+  captchaFetch?: (input: string, init: RequestInit) => Promise<Response>;
 }
 
 export async function buildServer({
@@ -229,6 +237,7 @@ export async function buildServer({
   accessInfoHttp,
   aiJobDiscovery,
   geo: injectedGeo,
+  captchaFetch,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -464,6 +473,18 @@ export async function buildServer({
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  // The widget's human check (tm 339.2 · GV-01): a provider that cannot work
+  // leaves it off and says so, the boot goes on (owner, 2026-10-10).
+  const captcha = resolveCaptcha(env, captchaFetch);
+  for (const warning of captcha.warnings) app.log.warn({ event: 'captcha.disabled' }, warning);
+  app.decorate(
+    'abuseGuard',
+    new AbuseGuard(app.redis, captcha.verifier, {
+      newCustomersPerIp: env.CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP,
+      messagesPerMinute: env.CAPTCHA_RISK_MESSAGES_PER_MIN,
+      aiTurnsToday: env.CAPTCHA_RISK_AI_TURNS_TODAY,
+    }),
+  );
   // Each workspace's permission matrix (tm 325.2 · RL-02): cached for a
   // minute, dropped everywhere when a change is announced.
   await app.register(permissionMatrix);

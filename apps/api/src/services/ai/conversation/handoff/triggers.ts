@@ -169,6 +169,7 @@ export function catalogueReason(raw: string | null | undefined): HandoffReason {
     case 'llm_failure':
     case 'embedding_failure':
     case 'ai_cap_reached':
+    case 'ai_challenge_unverified':
       return 'ai_failure';
     default:
       return 'procedure_rule';

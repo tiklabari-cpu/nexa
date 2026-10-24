@@ -473,6 +473,9 @@ model Customer {
   /// that one adoption or by a revocation. NULL — every customer created since —
   /// means the id alone never reaches this record.
   memberAdoptableUntil DateTime? @map("member_adoptable_until") @db.Timestamptz(6)
+  /// When the member last passed the widget's human check (tm 339.2 · GV-01);
+  /// a pass spares them another for `CHALLENGE_PASS_TTL_HOURS`. NULL: never.
+  challengePassedAt    DateTime? @map("challenge_passed_at") @db.Timestamptz(6)
 
   chats             Chat[]
   tickets           Ticket[]
@@ -3459,6 +3462,10 @@ model SecuritySettings {
   /// How many AI turns one member may have answered per conversation day
   /// (tm 339.1 · GV-01); 0 turns the per-member allowance off. CHECK 0-10000.
   aiTurnsPerCustomerDay     Int      @default(40) @map("ai_turns_per_customer_day")
+  /// When the widget asks a visitor for a human check (tm 339.2 · GV-01):
+  /// `off`, `risk` (only when the risk signals fire) or `always_on_chat_start`.
+  /// CHECK holds `CAPTCHA_MODES`.
+  captchaMode               String   @default("risk") @map("captcha_mode")
   updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

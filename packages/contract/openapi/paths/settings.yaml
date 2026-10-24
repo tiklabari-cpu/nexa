@@ -959,6 +959,8 @@ securitySettings:
                 maximum: 10000
                 description: >-
                   The per-member daily AI allowance (GV-01); 0 turns it off.
+              captcha_mode:
+                $ref: "../openapi.yaml#/components/schemas/CaptchaMode"
     responses:
       "200":
         description: Updated

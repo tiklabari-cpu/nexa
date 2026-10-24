@@ -1025,6 +1025,19 @@ export interface paths {
      *     the body says which it was. A username or e-mail typed into the pre-chat
      *     form never selects a customer; another device is a new customer until an
      *     agent confirms the link.
+     *
+     *     **The human check (tm 339.2 · GV-01).** A visitor this workspace has not
+     *     signed a member token for is answered `403 challenge_required` — before
+     *     any customer is created — when the address opened more new visitors in
+     *     the workspace in the last 10 minutes than the deployment allows
+     *     (`CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP`, generous for carrier-shared
+     *     addresses) and the workspace's `captcha_mode` is not `off`. `details`
+     *     (`ChallengeRequiredDetails`) names the reason and the check to show; the
+     *     widget repeats the request with the check's answer as `challenge_token`.
+     *     A pass is remembered on the member for 12 hours. When the provider
+     *     cannot be reached the token is issued anyway, but the AI does not answer
+     *     that visitor for an hour — they can always reach a person. A normal
+     *     visitor never sees any of this.
      */
     post: operations['issueCustomerToken'];
     /**
@@ -1852,6 +1865,19 @@ export interface paths {
      *     website minted the token. A workspace that has never saved the setting
      *     is not checked here, and a message into an existing conversation never
      *     is.
+     *
+     *     **The human check (tm 339.2 · GV-01).** A message that would *open* a
+     *     connection is answered `403 challenge_required` — nothing written — when
+     *     the workspace's `captcha_mode` is `always_on_chat_start`, or it is
+     *     `risk` and a risk signal fires: many new visitors from this address in
+     *     the last 10 minutes, more messages from this visitor in the last minute
+     *     than the deployment allows, or many AI turns for this member today.
+     *     `details` (`ChallengeRequiredDetails`) names the reason and the check to
+     *     show; the widget repeats the message with the check's answer as
+     *     `challenge_token`. Never asked of a visitor whose member token this
+     *     workspace signed (ID-03 · K4), nor of one who passed a check in the last
+     *     12 hours. When the provider cannot be reached the conversation opens,
+     *     but the AI does not answer this visitor for an hour.
      */
     post: operations['sendCustomerMessage'];
     delete?: never;
@@ -15149,6 +15175,11 @@ export interface components {
      *     (tm 339.1 · GV-01): how many AI turns one member may have answered on
      *     one conversation day (the workspace's day boundary) before the
      *     conversation goes to a person. 40 unless saved; 0 turns it off.
+     *
+     *     `captcha_mode` is when the widget asks a visitor for a human check
+     *     (tm 339.2 · GV-01): `off`, `risk` (the default — only when the risk
+     *     signals fire) or `always_on_chat_start`. See `challenge_required` on
+     *     `POST /customer/token` and `POST /customer/chat/events`.
      */
     SecuritySettings: {
       /**
@@ -15186,6 +15217,7 @@ export interface components {
        * @description AI turns one member may have answered per conversation day; the next one is left to a person, with a note for the agents. 0 = no per-member allowance. Defaults to 40.
        */
       ai_turns_per_customer_day: number;
+      captcha_mode: components['schemas']['CaptchaMode'];
       /** Format: date-time */
       updated_at?: string | null;
     };
@@ -19193,6 +19225,33 @@ export interface components {
       };
     };
     /**
+     * @description When the widget asks a visitor for a human check (tm 339.2 · GV-01): never, only when the risk signals fire (the default), or on every conversation a visitor opens without a pass in the last 12 hours. A member whose member token this workspace signed is never asked.
+     * @enum {string}
+     */
+    CaptchaMode: 'off' | 'risk' | 'always_on_chat_start';
+    /**
+     * @description `details` of a `403 challenge_required` (tm 339.2 · GV-01): why the
+     *     request was flagged and which check to show. The widget loads the
+     *     provider's check with `site_key`, then repeats the request with the
+     *     check's answer as `challenge_token`. `challenge_failed` means the
+     *     token sent was refused — show the check again.
+     */
+    ChallengeRequiredDetails: {
+      /** @enum {string} */
+      reason:
+        | 'new_customers_per_ip'
+        | 'messages_per_minute'
+        | 'ai_turns_today'
+        | 'always_on_chat_start'
+        | 'challenge_failed';
+      /**
+       * @description `turnstile` is Cloudflare Turnstile; `mock` is the offline stand-in development and the tests run, which accepts the token `mock-captcha-pass`.
+       * @enum {string}
+       */
+      provider: 'turnstile' | 'mock';
+      site_key: string;
+    };
+    /**
      * @description Machine-readable error category (v2-03 §1.8).
      * @enum {string}
      */
@@ -19205,6 +19264,7 @@ export interface components {
       | 'authorization'
       | 'brand_exists'
       | 'brand_not_found'
+      | 'challenge_required'
       | 'chat_anonymized'
       | 'chat_inactive'
       | 'customer_banned'
@@ -21093,6 +21153,12 @@ export interface operations {
            *     `https://shop.example`. Falls back to the `Origin` header.
            */
           host_origin?: string;
+          /**
+           * @description The human check's answer (tm 339.2), sent only after this
+           *     endpoint answered `403 challenge_required`. Verified only
+           *     when the request is flagged; otherwise ignored.
+           */
+          challenge_token?: string;
         };
       };
     };
@@ -21222,7 +21288,19 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
-      403: components['responses']['Forbidden'];
+      /**
+       * @description `authorization` (the origin is not a trusted domain),
+       *     `customer_banned`, or `challenge_required` (tm 339.2) with
+       *     `ChallengeRequiredDetails` as `details`.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       421: components['responses']['MisdirectedRequest'];
       429: components['responses']['TooManyRequests'];
     };
@@ -22386,6 +22464,13 @@ export interface operations {
             [key: string]: string | null;
           };
           idempotency_key?: string;
+          /**
+           * @description The human check's answer (tm 339.2), sent only after an
+           *     opening message was answered `403 challenge_required`.
+           *     Verified only when the message opens a conversation and is
+           *     flagged; otherwise ignored.
+           */
+          challenge_token?: string;
         };
       };
     };
@@ -22415,6 +22500,19 @@ export interface operations {
        *     readable; new messages are refused.
        */
       402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /**
+       * @description `customer_banned`, `message_rejected` (the spam filter), or
+       *     `challenge_required` (tm 339.2) with `ChallengeRequiredDetails` as
+       *     `details`.
+       */
+      403: {
         headers: {
           [name: string]: unknown;
         };
@@ -30035,6 +30133,7 @@ export interface operations {
           max_concurrent_sessions?: number | null;
           /** @description The per-member daily AI allowance (GV-01); 0 turns it off. */
           ai_turns_per_customer_day?: number;
+          captcha_mode?: components['schemas']['CaptchaMode'];
         };
       };
     };

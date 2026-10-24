@@ -14758,7 +14758,7 @@
           "305"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-24T05:00:26.588Z",
+        "updatedAt": "2026-10-24T07:58:47.121Z",
         "subtasks": [
           {
             "id": 1,
@@ -14778,13 +14778,13 @@
             "description": "chat_inactivity sweep: CAS aktarma, hedef seçimi, kuyruk başı, ping-pong sınırı, inactive kapasite",
             "details": "Üst görev 340 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Yarış + kapasite entegrasyonu.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "340.1"
             ],
             "parentId": "340",
             "priority": "high",
-            "updatedAt": "2026-10-24T05:00:26.588Z"
+            "updatedAt": "2026-10-24T07:58:47.121Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-24T05:00:26.589Z",
+      "lastModified": "2026-10-24T07:58:47.121Z",
       "taskCount": 390,
       "completedCount": 322,
       "tags": [

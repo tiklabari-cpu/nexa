@@ -25,11 +25,13 @@ import {
   isReturningVisitor,
   WidgetApi,
   WidgetApiError,
+  type ChallengeHandler,
   type MintedAppearance,
   type TrackSaleInput,
   type WidgetEvent,
   type WidgetState,
 } from './api.js';
+import { buildChallengeParts, drawChallenge, type ChallengeParts } from './challenge.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import { appendRichText } from './rich-text.js';
 import { WidgetSocket } from './socket.js';
@@ -356,6 +358,57 @@ export function mount(doc: Document = document, win: Window = window): void {
   applyDocumentLocale();
   const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
 
+  // --- Human check (tm 339.3 · GV-01) ----------------------------------------
+  // At most one at a time: a second request behind the same check waits on it.
+  let pendingChallenge: {
+    details: Parameters<ChallengeHandler>[0];
+    failed: boolean;
+    settle: (token: string | null) => void;
+  } | null = null;
+  let stopChallenge: (() => void) | null = null;
+
+  /** Draw the pending check into the current shell, or put the conversation back. */
+  function renderChallenge(): void {
+    stopChallenge?.();
+    stopChallenge = null;
+    const pending = pendingChallenge;
+    if (pending) {
+      stopChallenge = drawChallenge({ doc, win, t, locale }, ui.challenge, pending);
+    }
+    renderPanelBody();
+    if (pending && state.open) ui.challenge.title.focus();
+  }
+
+  const askHuman: ChallengeHandler = (details) => {
+    // A second ask while one is up (a poll re-minting behind a send) shares the
+    // visitor's answer instead of stacking a second box.
+    if (pendingChallenge) {
+      return new Promise((resolve) => {
+        const first = pendingChallenge!.settle;
+        pendingChallenge!.settle = (token) => {
+          first(token);
+          resolve(token);
+        };
+      });
+    }
+    return new Promise((resolve) => {
+      const failed = details.reason === 'challenge_failed';
+      pendingChallenge = {
+        details,
+        failed,
+        settle: (token) => {
+          pendingChallenge = null;
+          resolve(token);
+          renderChallenge();
+        },
+      };
+      // Drawn even while the panel is closed (a background mint): the visitor
+      // meets it when they open the panel, never as a panel that opens itself.
+      renderChallenge();
+    });
+  };
+  api.onChallenge(askHuman);
+
   const state: State = {
     open: false,
     connected: false,
@@ -521,6 +574,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     renderedCount = 0;
     applyAppearance();
     renderConnection();
+    if (pendingChallenge) renderChallenge();
     resize();
     if (state.open && focusInside) (state.prechat ? firstPrechatInput() : ui.input).focus();
   }
@@ -1235,21 +1289,25 @@ export function mount(doc: Document = document, win: Window = window): void {
     // the same details on its own.
     const offline = offlineFormOpen();
     const showPrechat = state.prechat && !offline;
-    ui.prechat.hidden = !showPrechat;
+    // The human check takes the whole panel while it is up: the conversation,
+    // the forms and the composer all wait behind it (tm 339.3).
+    const challenging = pendingChallenge !== null;
+    ui.challenge.root.hidden = !challenging;
+    ui.prechat.hidden = !showPrechat || challenging;
     // Form and thank-you are the two halves of one panel: exactly one is on
     // screen while the offline form is open, neither when it is not.
-    ui.offline.hidden = !offline || state.offlineSent;
-    ui.offlineThanks.hidden = !offline || !state.offlineSent;
+    ui.offline.hidden = !offline || state.offlineSent || challenging;
+    ui.offlineThanks.hidden = !offline || !state.offlineSent || challenging;
     ui.offlineSubmit.disabled = state.offlineSubmitting;
     ui.offlineError.hidden = !state.offlineError;
-    ui.transcript.hidden = showPrechat;
-    ui.status.hidden = showPrechat;
+    ui.transcript.hidden = showPrechat || challenging;
+    ui.status.hidden = showPrechat || challenging;
     // The composer stands down while either form is up: during the pre-chat
     // form because the conversation has not started, and during the offline one
     // because there is nobody to receive a live message — offering both would
     // give the visitor two doors, one of which nobody is behind.
-    ui.form.hidden = showPrechat || offline;
-    ui.chip.hidden = showPrechat || offline || state.pendingAttachment === null;
+    ui.form.hidden = showPrechat || offline || challenging;
+    ui.chip.hidden = showPrechat || offline || challenging || state.pendingAttachment === null;
   }
 
   /** Rebuilt whenever the mint reports the fields — `replaceChildren` inside. */
@@ -1547,7 +1605,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       // credential it logs in with.
       openSocket();
     } catch (error) {
-      state.error = t('error.connect');
+      // A check the visitor turned away is not an outage.
+      state.error = t(
+        error instanceof WidgetApiError && error.type === 'challenge_required'
+          ? 'error.challenge'
+          : 'error.connect',
+      );
       renderStatus();
       // The real reason goes nowhere near the visitor.
       console.warn('siyahtus widget: connect failed', error);
@@ -2585,6 +2648,8 @@ interface Ui {
   greetChat: HTMLButtonElement;
   greetBrowse: HTMLButtonElement;
   prechat: HTMLFormElement;
+  /** The human check, drawn in place of the conversation only while the API asks for one (tm 339.3). */
+  challenge: ChallengeParts;
   prechatName: HTMLInputElement;
   prechatUsername: HTMLInputElement;
   prechatEmail: HTMLInputElement;
@@ -3067,6 +3132,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   );
   prechat.append(prechatIntro, prechatCard);
 
+  // The human check (tm 339.3): hidden until the API answers `challenge_required`.
+  const challenge = buildChallengeParts(doc, t);
+
   // "Powered by SiyahTuş" (FR-MOD-11.5): shown by default, hidden when a workspace
   // removes it. A link, opened in a new tab so it never navigates the panel away
   // from a live conversation.
@@ -3103,6 +3171,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     rating,
     closedBanner,
     prechat,
+    challenge.root,
     // Where the composer would be, because it is what the composer is replaced
     // by: nobody is available, so the message goes to a queue rather than to a
     // conversation.
@@ -3238,6 +3307,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     prechatMessage,
     prechatFields,
     prechatSubmit,
+    challenge,
     poweredBy,
     poweredBrand,
     poweredSeparator,
@@ -3534,6 +3604,7 @@ const REFUSED_403 = new Set([
 function sendRefusalKey(error: unknown): string {
   if (!(error instanceof WidgetApiError)) return 'error.send';
   if (error.status === 402 && error.type === 'license_expired') return 'error.readOnly';
+  if (error.status === 403 && error.type === 'challenge_required') return 'error.challenge';
   if (error.status === 403 && error.type && REFUSED_403.has(error.type)) return 'error.rejected';
   if (error.status === 429) return 'error.rateLimited';
   return 'error.send';
@@ -4323,6 +4394,36 @@ button { -webkit-tap-highlight-color: transparent; }
 .nx-prechat-submit::after { width: 16px; height: 16px; -webkit-mask-image: var(--nx-icon-send); mask-image: var(--nx-icon-send); }
 .nx-prechat-submit:hover, .nx-offline-submit:hover, .nx-postchat-submit:hover { filter: brightness(1.07); }
 .nx-offline-submit:disabled, .nx-postchat-submit:disabled { opacity: .5; cursor: default; filter: none; }
+
+/* ===== The human check (tm 339.3) ======================================== */
+/* Takes the panel's body while the API wants a check; the provider's control
+   sits in a card on the team's side, like the pre-chat form. */
+.nx-challenge {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 18px 16px 16px; background: var(--nx-surface-2);
+}
+.nx-challenge[hidden] { display: none; }
+.nx-challenge-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--nx-title); outline: none; }
+.nx-challenge-intro { margin: 0; font-size: 14px; line-height: 20px; color: var(--nx-text); }
+.nx-challenge-box {
+  width: 100%; min-height: 72px; display: flex; flex-direction: column; justify-content: center; gap: 8px;
+  padding: 12px; background: var(--nx-surface); border: 1px solid var(--nx-field-border); border-radius: 12px;
+}
+.nx-challenge-mock { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--nx-text); cursor: pointer; }
+.nx-challenge-mock input { accent-color: var(--nx-brand); width: 22px; height: 22px; margin: 0; }
+.nx-challenge-loading, .nx-challenge-provider { font-size: 12px; color: var(--nx-muted); }
+.nx-challenge-provider { margin: 0; }
+.nx-challenge-notice { margin: 0; font-size: 13px; font-weight: 600; color: var(--nx-danger); }
+.nx-challenge-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nx-challenge-retry, .nx-challenge-cancel {
+  min-height: 44px; padding: 0 16px; border-radius: 12px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.nx-challenge-retry { border: 0; background: var(--nx-cta); color: var(--nx-on-brand); }
+.nx-challenge-cancel { border: 1px solid var(--nx-field-border); background: transparent; color: var(--nx-text); }
+.nx-challenge-retry:focus-visible, .nx-challenge-cancel:focus-visible, .nx-challenge-mock input:focus-visible {
+  outline: 2px solid var(--nx-brand); outline-offset: 2px;
+}
 
 /* ===== Open, first: the pre-chat form ==================================== */
 /* Lives in the conversation's own well, as the team's first message with a

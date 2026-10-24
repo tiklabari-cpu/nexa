@@ -16065,6 +16065,20 @@ export interface components {
       }[];
       /** @description Account ids that receive the alerts besides the owner. */
       alert_recipients: string[];
+      /** @description Today's use of the per-member AI allowance (tm 339.3 · GV-01) — counts only, never a member or a word of a conversation. Counted on the workspace's conversation day (its day boundary), unlike the UTC-day token meters above. */
+      per_member: {
+        /** Format: date */
+        day: string;
+        /**
+         * Format: int32
+         * @description AI turns one member may have answered per day (`ai_turns_per_customer_day`); null when the workspace has no per-member allowance.
+         */
+        cap: number | null;
+        /** @description Members the AI has answered at least once today. */
+        members_with_ai: number;
+        /** @description Of those, the members who have used the whole allowance — their next message goes to a person. */
+        members_at_cap: number;
+      };
     };
     /**
      * @description One append-only entry in the workspace's security trail (NFR-S12). The

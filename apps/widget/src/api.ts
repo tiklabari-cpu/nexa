@@ -13,7 +13,20 @@ import {
   type WidgetFormField,
   type WidgetAppearance,
   type WidgetTokenAppearance,
+  type ChallengeRequiredDetails,
+  type ChallengeReason,
 } from '@siyahtus/types';
+
+/**
+ * Shows the human check a `403 challenge_required` asked for (tm 339.3 · GV-01)
+ * and resolves with the provider's token — or null when the visitor gave up.
+ * `reason` is `challenge_failed` when the token just sent was refused, which is
+ * the cue to show the check again rather than a fresh one.
+ */
+export type ChallengeHandler = (details: ChallengeRequiredDetails) => Promise<string | null>;
+
+/** How many times one request is retried behind a check before it gives up. */
+const MAX_CHALLENGE_ROUNDS = 3;
 
 /**
  * The appearance off a token mint. The two footer links are optional on the
@@ -110,6 +123,17 @@ export class WidgetApi {
   #minting: Promise<void> | null = null;
   /** Set by `forget`: this instance speaks for nobody any more. */
   #forgotten = false;
+  /** Asked for a token when the API answers `challenge_required`; unset = the error surfaces. */
+  #challenge: ChallengeHandler | null = null;
+
+  /**
+   * Teach this client to answer a `403 challenge_required` (tm 339.3): the
+   * handler shows the check, the request is repeated with its token as
+   * `challenge_token`. Without one the error reaches the caller as before.
+   */
+  onChallenge(handler: ChallengeHandler | null): void {
+    this.#challenge = handler;
+  }
 
   /**
    * The credential the socket logs in with (FR-MOD-11.6), or null before the
@@ -256,20 +280,26 @@ export class WidgetApi {
     const memberToken = safeGetItem(keys.memberToken) ?? legacyToken;
     const stored = memberToken ? null : legacyId;
 
-    const response = await fetch(`${this.baseUrl}/customer/token`, {
-      method: 'POST',
-      // The member cookie rides only a credentialed request; the API answers
-      // the widget's origin by name with `Access-Control-Allow-Credentials`.
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        organization_id: this.organizationId,
-        ...(memberToken ? { member_token: memberToken } : {}),
-        ...(stored ? { customer_id: stored } : {}),
-        ...(this.hostOrigin ? { host_origin: this.hostOrigin } : {}),
-      }),
+    // A script minting identities from one address is asked for a check here
+    // (tm 339.2); a normal visitor never is, and the request goes out once.
+    const response = await this.#behindChallenge(async (challengeToken) => {
+      const attempt = await fetch(`${this.baseUrl}/customer/token`, {
+        method: 'POST',
+        // The member cookie rides only a credentialed request; the API answers
+        // the widget's origin by name with `Access-Control-Allow-Credentials`.
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          organization_id: this.organizationId,
+          ...(memberToken ? { member_token: memberToken } : {}),
+          ...(stored ? { customer_id: stored } : {}),
+          ...(this.hostOrigin ? { host_origin: this.hostOrigin } : {}),
+          ...(challengeToken ? { challenge_token: challengeToken } : {}),
+        }),
+      });
+      if (!attempt.ok) throw await failure(attempt);
+      return attempt;
     });
-    if (!response.ok) throw await failure(response);
 
     const {
       token,
@@ -377,14 +407,39 @@ export class WidgetApi {
       custom_fields?: Record<string, string>;
     } = {},
   ): Promise<{ chat_id: string; event: WidgetEvent | null }> {
-    return this.#request('POST', '/customer/chat/events', {
-      // An attachment may travel without text (FR-MOD-11.4), so an empty string
-      // is omitted rather than sent — the server requires text *or* attachment.
-      ...(text ? { text } : {}),
-      ...options,
-      // Survives a retry after a timeout without posting the message twice.
-      idempotency_key: randomKey(),
-    });
+    // One key for every round: a retry behind a check must not post twice.
+    const idempotencyKey = randomKey();
+    return this.#behindChallenge((challengeToken) =>
+      this.#request('POST', '/customer/chat/events', {
+        // An attachment may travel without text (FR-MOD-11.4), so an empty string
+        // is omitted rather than sent — the server requires text *or* attachment.
+        ...(text ? { text } : {}),
+        ...options,
+        // Survives a retry after a timeout without posting the message twice.
+        idempotency_key: idempotencyKey,
+        ...(challengeToken ? { challenge_token: challengeToken } : {}),
+      }),
+    );
+  }
+
+  /**
+   * Run `attempt`; if the API answers `403 challenge_required`, show the check
+   * and run it again with the token, a few rounds at most. A refused token comes
+   * back as the same error (`reason: challenge_failed`), which asks again.
+   */
+  async #behindChallenge<T>(attempt: (challengeToken?: string) => Promise<T>): Promise<T> {
+    let token: string | undefined;
+    for (let round = 0; ; round += 1) {
+      try {
+        return await attempt(token);
+      } catch (error) {
+        const details = challengeDetails(error);
+        if (!details || !this.#challenge || round >= MAX_CHALLENGE_ROUNDS) throw error;
+        const next = await this.#challenge(details);
+        if (!next) throw error;
+        token = next;
+      }
+    }
   }
 
   /**
@@ -547,6 +602,19 @@ async function failure(response: Response): Promise<WidgetApiError> {
       ...(retryAfter ? { retryAfter } : {}),
     });
   }
+}
+
+/** `challenge_required`'s `details`, or null when `error` is some other failure. */
+function challengeDetails(error: unknown): ChallengeRequiredDetails | null {
+  if (!(error instanceof WidgetApiError)) return null;
+  if (error.status !== 403 || error.type !== 'challenge_required') return null;
+  const { reason, provider, site_key: siteKey } = error.details ?? {};
+  if (provider !== 'turnstile' && provider !== 'mock') return null;
+  return {
+    reason: typeof reason === 'string' ? (reason as ChallengeReason) : 'always_on_chat_start',
+    provider,
+    site_key: typeof siteKey === 'string' ? siteKey : '',
+  };
 }
 
 const MEMBER_TOKEN_PREFIX = 'siyahtus.member_token.';

@@ -80,6 +80,7 @@ export const settings: Messages = {
   'settings.nav.section.bannedCustomers': 'Engellenen IP adresleri',
   'settings.nav.section.memberRecognition': 'Üye tanıma',
   'settings.nav.section.fileSharing': 'Dosya paylaşımı',
+  'settings.nav.section.abuseProtection': 'Kötüye kullanım koruması',
   'settings.nav.section.sensitiveData': 'Hassas veri',
   'settings.nav.section.ipAllowlist': 'IP izin listesi',
   'settings.nav.section.sso': 'Tek oturum açma',
@@ -1070,6 +1071,37 @@ export const settings: Messages = {
     'MIME türleri, virgülle ayrılmış — bir tarayıcının bir dosyayı etiketlediği biçim.',
   'settings.fileSharing.maxSizeLabel': 'Maksimum boyut (MB)',
   'settings.fileSharing.maxSizeError': '1 ile 100 MB arasında bir boyut girin.',
+
+  // Kötüye kullanım koruması — AbuseProtection.tsx, PerMemberQuota.tsx (GV-01)
+  'settings.abuse.title': 'Kötüye kullanım koruması',
+  'settings.abuse.description':
+    'Sohbet widget’ının, betiklerin ya da tek bir yoğun ziyaretçinin yapay zekâ kotanızı tüketmesini ve gelen kutunuzu doldurmasını nasıl engellediği.',
+  'settings.abuse.loadError': 'Kötüye kullanım koruması ayarları yüklenemedi.',
+  'settings.abuse.allowanceLabel': 'Ziyaretçi başına günlük yapay zekâ yanıtı',
+  'settings.abuse.allowanceHint':
+    'Bir günde bu kadar yapay zekâ yanıtından sonra ziyaretçinin sonraki mesajı, temsilcileriniz için bir notla birlikte bir kişiye gider. 0 sınırı kapatır. Varsayılan 40’tır.',
+  'settings.abuse.allowanceError': '0 ile 10.000 arasında bir tam sayı girin.',
+  'settings.abuse.modeLegend': 'Sohbet widget’ında insan doğrulaması',
+  'settings.abuse.modeIntro':
+    'Doğrulamayı geçen ziyaretçiye 12 saat boyunca yeniden sorulmaz; widget’ın zaten tanıdığı geri dönen ziyaretçiye hiç sorulmaz.',
+  'settings.abuse.mode.off': 'Hiç sorma',
+  'settings.abuse.mode.offHint': 'Ziyaretçilerden insan olduklarını kanıtlamaları hiç istenmez.',
+  'settings.abuse.mode.risk': 'Yalnız bir şey ters görününce',
+  'settings.abuse.mode.riskHint':
+    'Aynı adresten çok sayıda yeni ziyaretçi, ani bir mesaj yağmuru ya da yoğun yapay zekâ kullanımı. Önerilir.',
+  'settings.abuse.mode.always': 'Her yeni sohbetten önce',
+  'settings.abuse.mode.alwaysHint':
+    'Son 12 saatte doğrulamayı geçmemiş her ziyaretçiye ilk mesajından önce sorulur.',
+  'settings.abuse.privacyNote':
+    'Bu kurulum Cloudflare Turnstile kullanıyorsa doğrulama Cloudflare’in sunucularında çalışır. Gizlilik bildiriminizde buna yer verin.',
+  'settings.perMemberQuota.title': 'Bugünkü yapay zekâ kotası',
+  'settings.perMemberQuota.limit': 'Ziyaretçi başına kota',
+  'settings.perMemberQuota.perDay': 'Günde {cap}',
+  'settings.perMemberQuota.noLimit': 'Sınır yok',
+  'settings.perMemberQuota.withAi': 'Yapay zekânın yanıtladığı ziyaretçi',
+  'settings.perMemberQuota.atCap': 'Kotaya ulaşan',
+  'settings.perMemberQuota.hint':
+    'Çalışma alanınızın gününe göre sayılır (Sohbet zaman aşımı altında ayarlanır). Kotaya ulaşan ziyaretçi artık bir kişiyle görüşüyor.',
 
   // Yetenekler (uzmanlık kataloğu) — Skills.tsx
   'settings.skills.title': 'Yetenekler',

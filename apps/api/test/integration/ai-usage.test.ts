@@ -20,7 +20,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
-import { licenseChannel } from '@siyahtus/types';
+import { licenseChannel, localDayKey } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTenant, type TenantContext } from '../../src/lib/tenant.js';
 import { utcDayKey } from '../../src/services/ai/ai-daily-budget.js';
@@ -30,7 +30,7 @@ import type {
   LlmProvider,
 } from '../../src/services/ai/provider/llm-provider.js';
 import { customerAsks, seedAiWorkspace, type AiWorkspace } from '../helpers/ai-workspace.js';
-import { grantToken, ownerClient, seedFixtures } from '../helpers/fixtures.js';
+import { grantToken, ownerClient, seedDefaultBrand, seedFixtures } from '../helpers/fixtures.js';
 import { asKnowledgeAnswer } from '../helpers/knowledge-answer.js';
 import { MemoryMailer } from '../helpers/invite-join.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -88,6 +88,7 @@ interface UsageBody {
     cost_usd?: number;
   }>;
   pricing?: Record<string, unknown>;
+  per_member: { day: string; cap: number | null; members_with_ai: number; members_at_cap: number };
   alerts: Array<{ meter: string; threshold: number; used: number; cap: number }>;
   alert_recipients: string[];
 }
@@ -291,6 +292,58 @@ describe('the AI usage screen’s API and the 80%/100% alerts (tm 283.3)', () =>
       const asAgent = await readUsage(server, ws, agent.id);
       expect(asAgent.statusCode).toBe(403);
       expect(asAgent.body).not.toContain('500000');
+    });
+
+    it('counts the members at the per-member allowance today — numbers only, on the workspace’s own day (GV-01)', async () => {
+      const ws = await seedAiWorkspace(owner);
+      const day = new Date(`${localDayKey(new Date())}T00:00:00.000Z`);
+      const yesterday = new Date(day.getTime() - 86_400_000);
+      const member = async (turns: number, on = day) => {
+        const { id } = await owner.customer.create({
+          data: { organizationId: ws.organizationId },
+          select: { id: true },
+        });
+        await owner.aiCustomerDailyUsage.create({
+          data: { licenseId: ws.licenseId, customerId: id, day: on, aiTurns: turns },
+        });
+      };
+
+      // Nobody yet: the default allowance, nobody counted.
+      const empty = (await readUsage(server, ws)).json() as UsageBody;
+      expect(empty.per_member).toEqual({
+        day: localDayKey(new Date()),
+        cap: 40,
+        members_with_ai: 0,
+        members_at_cap: 0,
+      });
+
+      await member(3);
+      await member(40);
+      await member(55); // over the line by an allowance lowered since
+      await member(40, yesterday); // another day: not today's
+      const brand = await seedDefaultBrand(owner, ws.licenseId);
+      await owner.securitySettings.upsert({
+        where: { licenseId_brandId: { licenseId: ws.licenseId, brandId: brand } },
+        create: { licenseId: ws.licenseId, brandId: brand, aiTurnsPerCustomerDay: 40 },
+        update: { aiTurnsPerCustomerDay: 40 },
+      });
+      const busy = (await readUsage(server, ws)).json() as UsageBody;
+      expect(busy.per_member).toMatchObject({ cap: 40, members_with_ai: 3, members_at_cap: 2 });
+      // Counts only: no member, no chat, nothing to read.
+      expect(Object.keys(busy.per_member).sort()).toEqual([
+        'cap',
+        'day',
+        'members_at_cap',
+        'members_with_ai',
+      ]);
+
+      // Allowance off: still counted as members the AI answered, none "at" a cap.
+      await owner.securitySettings.update({
+        where: { licenseId_brandId: { licenseId: ws.licenseId, brandId: brand } },
+        data: { aiTurnsPerCustomerDay: 0 },
+      });
+      const off = (await readUsage(server, ws)).json() as UsageBody;
+      expect(off.per_member).toMatchObject({ cap: null, members_with_ai: 3, members_at_cap: 0 });
     });
 
     it('carries no money at all when no price is configured (AI-16-S3)', async () => {

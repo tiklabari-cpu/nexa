@@ -17,6 +17,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatRate, formatUsdEstimate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { canViewAiUsage, useAiUsage, type AiUsage } from '../settings/ai-usage.js';
+import { PerMemberQuota } from '../../components/settings/PerMemberQuota.js';
 import { performanceKpis, type AiAgentReport, type SatisfactionSummary } from './performance.js';
 
 interface OverviewResponse {
@@ -168,6 +169,7 @@ function UsageCard({ usage }: { usage: AiUsage }): ReactElement {
           />
         )}
       </KpiGrid>
+      {usage.per_member && <PerMemberQuota quota={usage.per_member} />}
       <p className="text-2xs text-content-tertiary">
         {t('playbook.performance.usageFooter')}{' '}
         <Link to="/app/settings/ai-usage" className="underline">

@@ -85,5 +85,16 @@ export const fr: Record<string, string> = {
   'chat.end.closedMessage': 'Chat terminé.',
   'chat.end.startNew': 'Démarrer un nouveau chat',
   'error.close': 'Impossible de terminer le chat. Merci de réessayer.',
+  'error.challenge':
+    'Nous n’avons pas pu confirmer que vous êtes une personne. Merci de réessayer.',
+  'challenge.title': 'Vérification rapide',
+  'challenge.intro': 'Merci de confirmer que vous êtes une personne pour continuer.',
+  'challenge.mock': 'Je ne suis pas un robot',
+  'challenge.loading': 'Chargement de la vérification…',
+  'challenge.failed': 'La vérification a échoué. Merci de réessayer.',
+  'challenge.unavailable': 'La vérification n’a pas pu être chargée. Merci de réessayer.',
+  'challenge.retry': 'Réessayer',
+  'challenge.cancel': 'Pas maintenant',
+  'challenge.provider': 'Protégé par Cloudflare Turnstile.',
   poweredBy: 'Propulsé par SiyahTuş',
 };

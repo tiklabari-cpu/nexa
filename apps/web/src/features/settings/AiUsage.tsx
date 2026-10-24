@@ -42,6 +42,7 @@ import {
   type AiUsage as AiUsageData,
   type AiUsageMeterToday,
 } from './ai-usage.js';
+import { PerMemberQuota } from '../../components/settings/PerMemberQuota.js';
 
 interface RosterMember {
   id: string;
@@ -127,6 +128,9 @@ function TodayCards({ usage }: { usage: AiUsageData }): ReactElement {
           </div>
         )}
         <CostLine usage={usage} />
+        {usage.per_member && (
+          <PerMemberQuota quota={usage.per_member} className="border-t border-border pt-3" />
+        )}
       </div>
     </Card>
   );

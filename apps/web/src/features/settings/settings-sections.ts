@@ -356,6 +356,28 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'FileSharing',
     keywords: ['attachments', 'uploads', 'mime types'],
   },
+  // The widget's guard against scripts and one visitor's heavy AI use (tm 339.3 ·
+  // GV-01): the per-visitor daily AI allowance and the human-check mode. Both
+  // ride `GET/PATCH /settings/security`; today's use of the allowance is read
+  // from `GET /ai/usage` where the role may.
+  {
+    slug: 'abuse-protection',
+    group: 'security',
+    labelKey: 'settings.nav.section.abuseProtection',
+    scope: ACCESS_RULES,
+    file: 'AbuseProtection',
+    keywords: [
+      'captcha',
+      'turnstile',
+      'bot',
+      'spam',
+      'human check',
+      'ai limit',
+      'quota',
+      'doğrulama',
+      'kota',
+    ],
+  },
   // What the API masks out of a conversation and for whom (tm 300.2 · AI-26) —
   // static, built from the policy; shown to whoever manages the workspace's
   // security settings, the owner first among them.

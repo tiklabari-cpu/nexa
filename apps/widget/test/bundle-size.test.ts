@@ -17,8 +17,16 @@ const distDir = resolve(import.meta.dirname, '../dist');
  * 2026-10-13 to ship the design reference's Manrope face (≈22 KB, Latin +
  * Turkish subset, weights 500–700) — fonts now count towards it, since the
  * visitor downloads them like everything else.
+ *
+ * Raised again to 63 KB by tm 339.3 (GV-01): the human check — its box, the
+ * lazy Turnstile loader and ten sentences in each of eight languages — adds
+ * ≈3.5 KB gzipped, which the 60 KB ceiling had no room for (63 899 B measured =
+ * 62.4 KB). Cloudflare's own script is not part
+ * of this: it loads from their origin, only when a check is asked for. The
+ * owner's decision to keep (K25 requires all eight languages); not an
+ * invitation to grow — the next feature must fit in what is left.
  */
-const TOTAL_BUDGET_BYTES = 60 * 1024;
+const TOTAL_BUDGET_BYTES = 63 * 1024;
 /** The loader runs on the host page itself, so it gets a far tighter budget. */
 const LOADER_BUDGET_BYTES = 8 * 1024;
 
@@ -43,7 +51,7 @@ describe('widget bundle budget', () => {
     expect(size, `loader.js is ${size} B gzipped`).toBeLessThanOrEqual(LOADER_BUDGET_BYTES);
   });
 
-  it('keeps everything the browser downloads under 60 KB gzipped (NFR-P3)', () => {
+  it('keeps everything the browser downloads under 63 KB gzipped (NFR-P3)', () => {
     expect(existsSync(distDir), 'run `pnpm --filter @siyahtus/widget build` first').toBe(true);
     const assets = collectAssets(distDir);
     expect(assets.length).toBeGreaterThan(0);

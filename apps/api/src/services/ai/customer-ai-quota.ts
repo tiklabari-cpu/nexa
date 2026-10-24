@@ -125,3 +125,39 @@ export async function customerAiTurnsToday(
       AND day = ${day}::date`;
   return rows[0]?.ai_turns ?? 0;
 }
+
+/** What the usage screen shows of the per-member allowance (tm 339.3). */
+export interface CustomerAiQuotaToday {
+  /** `YYYY-MM-DD`, the workspace's conversation day the counts are for. */
+  readonly day: string;
+  /** The allowance in force (the default brand's); null = no per-member allowance. */
+  readonly cap: number | null;
+  /** Members the AI has answered at least once today. */
+  readonly membersWithAi: number;
+  /** Of those, how many have used the whole allowance — their next turn goes to a person. */
+  readonly membersAtCap: number;
+}
+
+/**
+ * Today's per-member AI use, counted — never any member's identity or text.
+ * Reads only: nothing here claims a turn.
+ */
+export async function customerAiQuotaToday(
+  tx: TenantClient,
+  input: { licenseId: bigint; at?: Date },
+): Promise<CustomerAiQuotaToday> {
+  const boundary = await readDayBoundary(tx);
+  const day = localDayKey(input.at ?? new Date(), boundary.timezone, boundary.hour);
+  const cap = await customerAiTurnCap(tx, null);
+  const rows = await tx.$queryRaw<Array<{ members: number; at_cap: number }>>`
+    SELECT count(*)::int AS members,
+           count(*) FILTER (WHERE ${cap}::int > 0 AND ai_turns >= ${cap}::int)::int AS at_cap
+    FROM ai_customer_daily_usage
+    WHERE license_id = ${input.licenseId} AND day = ${day}::date`;
+  return {
+    day,
+    cap: cap > 0 ? cap : null,
+    membersWithAi: rows[0]?.members ?? 0,
+    membersAtCap: rows[0]?.at_cap ?? 0,
+  };
+}

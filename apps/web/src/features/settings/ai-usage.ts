@@ -48,6 +48,16 @@ export interface AiUsageAlertRow {
   created_at: string;
 }
 
+/** Today's use of the per-member allowance (tm 339.3 · GV-01) — counts, on the workspace's day. */
+export interface AiUsagePerMember {
+  /** `yyyy-mm-dd`, the workspace's conversation day. */
+  day: string;
+  /** AI replies one member may have per day; null when there is no per-member allowance. */
+  cap: number | null;
+  members_with_ai: number;
+  members_at_cap: number;
+}
+
 export interface AiUsage {
   /** Today, `yyyy-mm-dd` UTC. */
   day: string;
@@ -67,6 +77,8 @@ export interface AiUsage {
   };
   alerts: AiUsageAlertRow[];
   alert_recipients: string[];
+  /** Absent only from a server that predates tm 339.3. */
+  per_member?: AiUsagePerMember;
 }
 
 /** The roles the endpoint answers (`minimumRole: admin`); an agent gets 403. */

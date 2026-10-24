@@ -3,6 +3,34 @@ import type { Messages } from '../merge.js';
 /** Chrome that surrounds every screen: the shell header, the rail, the palette. */
 export const shell: Messages = {
   // Shell chrome
+  // Availability notices (WG-03 · tm 340.3) — PresenceNotices.tsx
+  'shell.presence.title': 'Your availability changed',
+  'shell.presence.unresponsive':
+    'A chat assigned to you went without a reply for {duration}, so it was passed to a teammate and you were set to Not accepting chats.',
+  'shell.presence.unresponsive.noDuration':
+    'A chat assigned to you went without a reply for too long, so it was passed to a teammate and you were set to Not accepting chats.',
+  'shell.presence.disconnected':
+    'No console window of yours was connected for {duration}, so you were set to Offline and new chats went to others.',
+  'shell.presence.disconnected.noDuration':
+    'No console window of yours was connected for a while, so you were set to Offline and new chats went to others.',
+  'shell.presence.changedWhileAway':
+    'While your connection was down, your status changed to {status}.',
+  'shell.presence.acceptAgain': 'Accept chats again',
+  'shell.presence.acceptFailed': 'Your status could not be changed. Try again.',
+  'shell.presence.dismiss': 'Dismiss this notice',
+  'shell.presence.duration.minutes.one': '{count} minute',
+  'shell.presence.duration.minutes.other': '{count} minutes',
+  'shell.presence.duration.seconds.one': '{count} second',
+  'shell.presence.duration.seconds.other': '{count} seconds',
+  'shell.presence.alert.title': 'A chat is waiting unanswered',
+  'shell.presence.alert.noAgent':
+    '{agent} did not reply to a new chat in time and nobody else in the team was free. It is waiting at the front of the team’s queue.',
+  'shell.presence.alert.transferLimit.one':
+    'A new chat has gone unanswered by {count} agent. It is waiting at the front of the team’s queue for you to decide.',
+  'shell.presence.alert.transferLimit.other':
+    'A new chat has gone unanswered by {count} agents in a row. It is waiting at the front of the team’s queue for you to decide.',
+  'shell.presence.alert.someone': 'An agent',
+  'shell.presence.alert.open': 'Open chat',
   'shell.modules': 'Modules',
   'shell.skipToContent': 'Skip to content',
   // An address under /app that is not a page (UX audit D11).

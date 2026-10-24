@@ -32,6 +32,7 @@ import { AuthFlowError, authFailureCode } from './auth-flow-error.js';
 import { savePrefs } from '../features/notifications/notifications.js';
 import { clearAllDrafts } from '../features/inbox/composerDrafts.js';
 import { useFontStore } from './font.js';
+import { resetPresenceNotices } from './presence-notice.js';
 
 export interface Membership {
   license_id: string;
@@ -202,6 +203,17 @@ interface AuthState {
   completeSsoLogin: (code: string, state: string | null) => Promise<void>;
   signOut: () => Promise<void>;
   setRoutingStatus: (status: CurrentAgent['routing_status']) => Promise<void>;
+  /**
+   * Read the caller's routing status from the server again (WG-03 · tm 340.3).
+   * A socket that was away missed whatever `routing_status_set` went out
+   * meanwhile — the gateway's own disconnect-offline among them — so the
+   * console asks once it is back. Answers what it showed before and what the
+   * server holds; null when signed out.
+   */
+  refreshRoutingStatus: () => Promise<{
+    before: CurrentAgent['routing_status'];
+    after: CurrentAgent['routing_status'];
+  } | null>;
   /**
    * Change one or more notification channels for the caller (FR-MOD-13.8).
    * Partial: send what moved. The server answers with the complete set, which
@@ -766,6 +778,8 @@ export const useAuth = create<AuthState>((set, get) => {
     stopKeeping();
     failures = 0;
     set({ accessToken: null, agent: null, status: 'signed-out', reconnect: null, sessionEnded });
+    // A notice about this session's status is nobody else's business.
+    resetPresenceNotices();
     // Whoever was waiting out an outage hears the session is over.
     settleWaiters(null);
   }
@@ -1119,6 +1133,17 @@ export const useAuth = create<AuthState>((set, get) => {
       await sessionClient().request('PUT', '/agents/me/routing-status', { routing_status: status });
       const current = get().agent;
       if (current) set({ agent: { ...current, routing_status: status } });
+    },
+
+    async refreshRoutingStatus() {
+      if (!get().accessToken || !get().agent) return null;
+      const me = await sessionClient().request<CurrentAgent>('GET', '/auth/me');
+      const current = get().agent;
+      if (!current) return null;
+      if (current.routing_status !== me.routing_status) {
+        set({ agent: { ...current, routing_status: me.routing_status } });
+      }
+      return { before: current.routing_status, after: me.routing_status };
     },
 
     async setFontPreset(preset) {

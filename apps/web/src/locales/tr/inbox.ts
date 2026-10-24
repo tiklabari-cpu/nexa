@@ -35,6 +35,7 @@ export const inbox: Messages = {
   'inbox.rail.routing.accepting': 'Sohbet kabul ediyor',
   'inbox.rail.routing.notAccepting': 'Kabul etmiyor',
   'inbox.rail.routing.offline': 'Çevrimdışı',
+  'inbox.list.item.inactive': 'Pasif',
   'inbox.rail.connection.live': 'Canlı',
   'inbox.rail.connection.offline': 'Çevrimdışı',
   'inbox.rail.connection.reconnecting': 'Yeniden bağlanıyor',

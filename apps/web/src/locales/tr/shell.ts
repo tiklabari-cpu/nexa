@@ -3,6 +3,34 @@ import type { Messages } from '../merge.js';
 /** Chrome that surrounds every screen: the shell header, the rail, the palette. */
 export const shell: Messages = {
   // Shell chrome
+  // Availability notices (WG-03 · tm 340.3) — PresenceNotices.tsx
+  'shell.presence.title': 'Durumunuz değişti',
+  'shell.presence.unresponsive':
+    'Size atanan bir sohbet {duration} boyunca yanıtsız kaldı; sohbet bir ekip arkadaşınıza aktarıldı ve durumunuz “Kabul etmiyor” yapıldı.',
+  'shell.presence.unresponsive.noDuration':
+    'Size atanan bir sohbet çok uzun süre yanıtsız kaldı; sohbet bir ekip arkadaşınıza aktarıldı ve durumunuz “Kabul etmiyor” yapıldı.',
+  'shell.presence.disconnected':
+    'Konsolunuz {duration} boyunca hiçbir pencerede bağlı değildi; durumunuz “Çevrimdışı” yapıldı ve yeni sohbetler başkalarına gitti.',
+  'shell.presence.disconnected.noDuration':
+    'Konsolunuz bir süre hiçbir pencerede bağlı değildi; durumunuz “Çevrimdışı” yapıldı ve yeni sohbetler başkalarına gitti.',
+  'shell.presence.changedWhileAway':
+    'Bağlantınız koptuğu sırada durumunuz “{status}” olarak değişti.',
+  'shell.presence.acceptAgain': 'Yeniden sohbet kabul et',
+  'shell.presence.acceptFailed': 'Durumunuz değiştirilemedi. Yeniden deneyin.',
+  'shell.presence.dismiss': 'Bu bildirimi kapat',
+  'shell.presence.duration.minutes.one': '{count} dakika',
+  'shell.presence.duration.minutes.other': '{count} dakika',
+  'shell.presence.duration.seconds.one': '{count} saniye',
+  'shell.presence.duration.seconds.other': '{count} saniye',
+  'shell.presence.alert.title': 'Yanıtsız bekleyen bir sohbet var',
+  'shell.presence.alert.noAgent':
+    '{agent} yeni bir sohbete zamanında yanıt vermedi ve ekipte boş kimse yoktu. Sohbet ekibin kuyruğunun başında bekliyor.',
+  'shell.presence.alert.transferLimit.one':
+    'Yeni bir sohbet {count} ajan tarafından yanıtsız bırakıldı. Kararınız için ekibin kuyruğunun başında bekliyor.',
+  'shell.presence.alert.transferLimit.other':
+    'Yeni bir sohbet art arda {count} ajan tarafından yanıtsız bırakıldı. Kararınız için ekibin kuyruğunun başında bekliyor.',
+  'shell.presence.alert.someone': 'Bir ajan',
+  'shell.presence.alert.open': 'Sohbeti aç',
   'shell.modules': 'Modüller',
   'shell.skipToContent': 'İçeriğe atla',
   'shell.notFound.title': 'Sayfa bulunamadı',

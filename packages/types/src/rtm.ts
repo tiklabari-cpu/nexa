@@ -339,16 +339,42 @@ export interface SneakPeekPush {
   };
 }
 
+/**
+ * Why the system, rather than the agent, changed an agent's routing status
+ * (`RoutingStatusSetPush.reason`, WG-03):
+ *
+ *   - `agent_unresponsive` — the inactivity sweep took a connection the agent
+ *     had not answered in time and stopped routing to them (tm 340.2);
+ *   - `agent_disconnected` — the agent's last socket closed and none came back
+ *     within the gateway's tolerance, so they went offline (tm 340.3).
+ */
+export const ROUTING_STATUS_CHANGE_REASONS = ['agent_unresponsive', 'agent_disconnected'] as const;
+export type RoutingStatusChangeReason = (typeof ROUTING_STATUS_CHANGE_REASONS)[number];
+
+/**
+ * How long an agent may have no open socket before the gateway sets them
+ * offline (WG-03 · tm 340.3, RP-03's two-minute tolerance): long enough for a
+ * reload, a network blip or a laptop lid closed and opened again, short
+ * enough that a closed browser stops receiving chats within minutes. The
+ * gateway's `RTM_DISCONNECT_OFFLINE_MS` overrides it.
+ */
+export const DISCONNECT_OFFLINE_DEFAULT_MS = 120_000;
+
 export interface RoutingStatusSetPush {
   agent_id: string;
   status: RoutingStatus;
   /**
-   * Set when the system changed it rather than the agent: `agent_unresponsive`
-   * — the inactivity sweep took a connection the agent had not answered in
-   * time and stopped routing to them (WG-03 · tm 340.2), so their console can
-   * say why. Absent on the agent's own change.
+   * Set when the system changed it rather than the agent, so their console can
+   * say why (`ROUTING_STATUS_CHANGE_REASONS`). Absent on the agent's own change.
    */
-  reason?: 'agent_unresponsive';
+  reason?: RoutingStatusChangeReason;
+  /**
+   * With a `reason`: the window that ran out — the workspace's
+   * `unanswered_transfer_seconds` for `agent_unresponsive`, the gateway's
+   * tolerance for `agent_disconnected` — so the notice can say "3 minutes"
+   * rather than "a while".
+   */
+  after_seconds?: number;
 }
 
 /**

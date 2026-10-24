@@ -80,7 +80,7 @@ export const settings: Messages = {
   'settings.nav.section.sla': 'SLA',
   'settings.nav.section.cannedResponses': 'Saved replies',
   'settings.nav.section.tags': 'Tags',
-  'settings.nav.section.chatTimeout': 'Chat timeout and day boundary',
+  'settings.nav.section.chatTimeout': 'Inactivity, chat timeout and day boundary',
   'settings.nav.section.ticketEmailTemplates': 'Ticket email templates',
   'settings.nav.section.customFields': 'Custom fields',
   'settings.nav.section.chatForms': 'Chat forms',
@@ -235,9 +235,9 @@ export const settings: Messages = {
   'settings.tags.editTeamsAriaLabel': 'Edit teams for tag {name}',
 
   // Chat timeout — ChatTimeout.tsx
-  'settings.chatTimeout.title': 'Chat timeout and day boundary',
+  'settings.chatTimeout.title': 'Inactivity, chat timeout and day boundary',
   'settings.chatTimeout.description':
-    'Automatically close conversations that have gone quiet for a while, and choose where one conversation day ends and the next begins.',
+    'Pass on chats an agent has not answered, set quiet ones aside so they stop filling an agent’s limit, close idle ones, and choose where one conversation day ends and the next begins.',
   'settings.chatTimeout.loadError': 'Could not load the chat timeout setting.',
   'settings.chatTimeout.enableLabel': 'Automatically close idle chats',
   'settings.chatTimeout.enableHint':
@@ -247,6 +247,27 @@ export const settings: Messages = {
   'settings.chatTimeout.unitMinutes': 'Minutes',
   'settings.chatTimeout.unitHours': 'Hours',
   'settings.chatTimeout.amountError': 'Enter a whole number greater than 0, up to 30 days total.',
+  'settings.chatTimeout.orderHint':
+    'The windows follow the order a chat goes quiet: passed on first, then marked inactive, then closed. Each one that is on must be shorter than the next.',
+  'settings.chatTimeout.transfer.enableLabel': 'Pass unanswered chats to another agent',
+  'settings.chatTimeout.transfer.enableHint':
+    'When the agent a chat was given to has not sent the player a first reply for this long, it goes to someone else in the same team. After two such hand-offs, or when nobody in the team is free, it waits at the front of the team’s queue and the team lead is told.',
+  'settings.chatTimeout.transfer.amountLabel': 'Unanswered for',
+  'settings.chatTimeout.transfer.unitLabel': 'Transfer unit',
+  'settings.chatTimeout.pauseLabel': 'Also stop routing new chats to that agent',
+  'settings.chatTimeout.pauseHint':
+    'They are set to Not accepting chats and shown why, and switch back themselves when they are ready.',
+  'settings.chatTimeout.inactive.enableLabel': 'Mark quiet chats as inactive',
+  'settings.chatTimeout.inactive.enableHint':
+    'A chat with no message for this long stops counting against its agent’s concurrent chat limit and is shown dimmed in the inbox. The next message makes it active again.',
+  'settings.chatTimeout.inactive.amountLabel': 'Quiet for',
+  'settings.chatTimeout.inactive.unitLabel': 'Inactivity unit',
+  'settings.chatTimeout.order.transferBeforeInactive':
+    'Pass unanswered chats on sooner than chats become inactive.',
+  'settings.chatTimeout.order.transferBeforeTimeout':
+    'Pass unanswered chats on sooner than idle chats are closed.',
+  'settings.chatTimeout.order.inactiveBeforeTimeout':
+    'Mark chats inactive sooner than idle chats are closed.',
 
   // Conversation day boundary — ChatTimeout.tsx (ID-04)
   'settings.dayBoundary.heading': 'Day boundary',

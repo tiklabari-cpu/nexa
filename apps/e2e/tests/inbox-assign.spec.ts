@@ -20,7 +20,16 @@
  * Asserting on a fresh conversation for the same reason `inbox-panel.spec.ts`
  * does — the seeded "All" view's first row may already be archived.
  */
-import { DEMO, expect, openWidget, test, visitorSends } from './fixtures.js';
+import type { APIRequestContext, Page, WebSocketRoute } from '@playwright/test';
+import {
+  API_BASE,
+  DEMO,
+  expect,
+  openWidget,
+  ownerAccessToken,
+  test,
+  visitorSends,
+} from './fixtures.js';
 
 const RECEIVER = { email: 'agent2@acme.localhost', name: 'Priya Nair' } as const;
 
@@ -129,6 +138,204 @@ test.describe('assigning a conversation', () => {
       }
       await visitorContext.close();
       await receiverContext.close();
+    }
+  });
+});
+
+/**
+ * When the system changes availability (WG-03 · tm 340.3).
+ *
+ * Two server parts change routing without anybody touching a switch: the
+ * unanswered-chat sweep (`chat_inactivity`, API) and the gateway's
+ * disconnect-offline (`apps/rtm/src/presence.ts`). Neither runs on this stack —
+ * the scheduler is off and `RTM_DISCONNECT_OFFLINE_MS` is 0, because both would
+ * rewrite the shared seeded roster under every other spec — and both are proven
+ * against real servers where their clocks can be shortened
+ * (`chat-inactivity-sweep.test.ts`, `presence.test.ts`). What only a browser
+ * proves is the console's half: the push arrives on the real socket, in the
+ * real frame shape, and the agent sees what changed and why. So the gateway's
+ * own frames pass through untouched and the sweep's are added to them
+ * (`routeWebSocket`), the way the sweep would send them.
+ */
+test.describe('when the system changes availability', () => {
+  /** Route the panel's socket through the test, so a push can be added to the gateway's own. */
+  async function interceptRealtime(page: Page): Promise<() => WebSocketRoute> {
+    let socket: WebSocketRoute | undefined;
+    await page.routeWebSocket(/:4001\//, (ws) => {
+      ws.connectToServer();
+      socket = ws;
+    });
+    await page.reload();
+    await expect(
+      page.getByRole('navigation', { name: 'Inbox views' }).getByText('Live'),
+    ).toBeVisible({ timeout: 15_000 });
+    return () => {
+      if (!socket) throw new Error('the panel never opened its socket');
+      return socket;
+    };
+  }
+
+  function push(socket: WebSocketRoute, action: string, payload: Record<string, unknown>): void {
+    socket.send(JSON.stringify({ action, type: 'push', payload }));
+  }
+
+  async function accountIdOf(request: APIRequestContext, email: string): Promise<string> {
+    const token = await ownerAccessToken(request);
+    const res = await request.get(`${API_BASE}/agents`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.ok()).toBe(true);
+    const { items } = (await res.json()) as { items: Array<{ id: string; email: string }> };
+    const found = items.find((agent) => agent.email === email);
+    if (!found) throw new Error(`no agent ${email}`);
+    return found.id;
+  }
+
+  /** The conversation whose last message is `text`, from the owner's view of the list. */
+  async function chatCarrying(
+    request: APIRequestContext,
+    text: string,
+  ): Promise<{ chatId: string; threadId: string }> {
+    const token = await ownerAccessToken(request);
+    let found: { id: string; thread_id: string | null } | undefined;
+    await expect
+      .poll(
+        async () => {
+          const res = await request.get(`${API_BASE}/chats?view=all&limit=50`, {
+            headers: { authorization: `Bearer ${token}` },
+          });
+          if (!res.ok()) return undefined;
+          const { items } = (await res.json()) as {
+            items: Array<{
+              id: string;
+              thread_id: string | null;
+              last_event?: { text?: string } | null;
+            }>;
+          };
+          found = items.find((chat) => chat.last_event?.text?.includes(text));
+          return found?.thread_id ?? undefined;
+        },
+        { timeout: 20_000, message: `no chat carrying "${text}"` },
+      )
+      .toBeTruthy();
+    return { chatId: found!.id, threadId: found!.thread_id! };
+  }
+
+  test('says why the sweep paused this agent, moves the switch, and takes them back', async ({
+    agentPage,
+    request,
+  }) => {
+    const socket = await interceptRealtime(agentPage);
+    const me = await accountIdOf(request, DEMO.email);
+    const availability = agentPage.getByLabel('Availability');
+    await expect(availability).toHaveValue('accepting_chats');
+
+    push(socket(), 'routing_status_set', {
+      agent_id: me,
+      status: 'not_accepting_chats',
+      reason: 'agent_unresponsive',
+      after_seconds: 180,
+    });
+
+    const notice = agentPage.getByRole('status').filter({ hasText: 'Your availability changed' });
+    await expect(notice).toContainText(
+      'A chat assigned to you went without a reply for 3 minutes, so it was passed to a teammate and you were set to Not accepting chats.',
+    );
+    await expect(availability).toHaveValue('not_accepting_chats');
+    await agentPage.screenshot({ path: 'kanit/340.3-yanitsiz-durum-bildirimi.png' });
+
+    const restored = agentPage.waitForResponse(
+      (response) =>
+        response.url().endsWith('/agents/me/routing-status') &&
+        response.request().method() === 'PUT',
+    );
+    await notice.getByRole('button', { name: 'Accept chats again' }).click();
+    expect((await restored).status()).toBe(200);
+    await expect(notice).toHaveCount(0);
+    await expect(availability).toHaveValue('accepting_chats');
+  });
+
+  test('tells a lead which chat waits at the front of the queue, and opens it', async ({
+    agentPage,
+    browser,
+    organizationId,
+    request,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const question = `Is my withdrawal stuck? ${stamp}`;
+    const visitorContext = await browser.newContext();
+    try {
+      const visitor = await visitorContext.newPage();
+      await openWidget(visitor, organizationId);
+      await visitorSends(visitor, question);
+      const { chatId } = await chatCarrying(request, question);
+
+      const socket = await interceptRealtime(agentPage);
+      const silent = await accountIdOf(request, RECEIVER.email);
+      push(socket(), 'chat_unanswered_alert', {
+        chat_id: chatId,
+        thread_id: `thread-of-${stamp}`,
+        group_id: 1,
+        agent_id: silent,
+        reason: 'no_agent',
+        transfers: 1,
+        queue_position: 1,
+      });
+
+      const alert = agentPage
+        .getByRole('status')
+        .filter({ hasText: 'A chat is waiting unanswered' });
+      await expect(alert).toContainText(
+        `${RECEIVER.name} did not reply to a new chat in time and nobody else in the team was free.`,
+      );
+      await alert.getByRole('link', { name: 'Open chat' }).click();
+      await expect(agentPage).toHaveURL(new RegExp(`chat=${chatId}`));
+      await expect(agentPage.getByRole('log', { name: 'Conversation transcript' })).toContainText(
+        question,
+      );
+      await expect(alert).toHaveCount(0);
+    } finally {
+      await visitorContext.close();
+    }
+  });
+
+  test('dims a quiet conversation in the list until the player writes again', async ({
+    agentPage,
+    browser,
+    organizationId,
+    request,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const first = `Hello, anyone? ${stamp}`;
+    const second = `Still waiting ${stamp}`;
+    const visitorContext = await browser.newContext();
+    try {
+      const visitor = await visitorContext.newPage();
+      await openWidget(visitor, organizationId);
+      await visitorSends(visitor, first);
+      const { chatId, threadId } = await chatCarrying(request, first);
+
+      const socket = await interceptRealtime(agentPage);
+      const list = agentPage.getByRole('region', { name: 'Conversations' });
+      const row = list.getByRole('button').filter({ hasText: first });
+      await expect(row).toBeVisible({ timeout: 20_000 });
+      await expect(row).not.toContainText('Inactive');
+
+      push(socket(), 'chat_inactivity_changed', {
+        chat_id: chatId,
+        thread_id: threadId,
+        inactive: true,
+      });
+      await expect(row).toContainText('Inactive');
+      await agentPage.screenshot({ path: 'kanit/340.3-pasif-sohbet.png' });
+
+      // The gateway's own push this time: a message ends the quiet spell.
+      await visitorSends(visitor, second);
+      const woken = list.getByRole('button').filter({ hasText: second });
+      await expect(woken).toBeVisible({ timeout: 20_000 });
+      await expect(woken).not.toContainText('Inactive');
+    } finally {
+      await visitorContext.close();
     }
   });
 });

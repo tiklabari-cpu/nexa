@@ -899,9 +899,22 @@ export function InboxPage(): ReactElement {
                               }`}
                             >
                               <span className="flex items-center gap-2">
-                                <span className="flex-1 truncate text-sm font-medium">
+                                {/* A quiet connection set aside by the sweep (WG-03):
+                              dimmed by its colour, not by opacity, so the text keeps
+                              its contrast, and named, so the dimming is not the
+                              only signal. */}
+                                <span
+                                  className={`flex-1 truncate text-sm font-medium ${
+                                    item.inactive ? 'text-content-secondary' : ''
+                                  }`}
+                                >
                                   {item.customer_name ?? t('inbox.list.item.visitorFallback')}
                                 </span>
+                                {item.inactive && (
+                                  <span className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs text-content-secondary">
+                                    {t('inbox.list.item.inactive')}
+                                  </span>
+                                )}
                                 {/* How pressing it is (ADR-08a): an urgent chat is
                               first in its team's queue, and should say why. */}
                                 {(item.priority === 'urgent' || item.priority === 'high') && (

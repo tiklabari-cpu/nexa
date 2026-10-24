@@ -16,10 +16,18 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { ROUTING_STATUSES, type AdapterChannelType, type ThreadPriority } from '@siyahtus/types';
+import {
+  ROUTING_STATUSES,
+  UNANSWERED_ALERT_REASONS,
+  type AdapterChannelType,
+  type RoutingStatus,
+  type ThreadPriority,
+  type UnansweredAlertReason,
+} from '@siyahtus/types';
 import { RtmClient, type PushHandler } from '../../lib/realtime.js';
 import { noteTrafficVisitorUpdated } from '../../lib/traffic-live.js';
 import { setRealtimeStatus } from '../../lib/realtime-status.js';
+import { noteSelfStatusChange, noteUnansweredAlert } from '../../lib/presence-notice.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
@@ -1120,6 +1128,7 @@ export function useRealtime(onPush?: PushHandler): void {
       );
     }
 
+    let wasReconnecting = false;
     const client = new RtmClient({
       url: RTM_URL,
       organizationId,
@@ -1150,7 +1159,14 @@ export function useRealtime(onPush?: PushHandler): void {
         // The AI handed a conversation over and left its card (AI-10): the
         // Details panel's top and the transcript's card line, within a second.
         'ai_handoff_created',
+        // Availability, the agent's own included: the sweep and the gateway
+        // change it too now (WG-03), and say why (`reason`).
         'routing_status_set',
+        // The inactivity sweep (WG-03 · tm 340.3): a connection went quiet or
+        // woke (the list dims it), and, to a team's leads, a chat nobody
+        // answered is waiting at the front of the queue.
+        'chat_inactivity_changed',
+        'chat_unanswered_alert',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
         'agent_conflict_warning',
@@ -1161,7 +1177,15 @@ export function useRealtime(onPush?: PushHandler): void {
         // the screen an agent leaves open in another tab.
         'traffic_visitor_updated',
       ],
-      onStatusChange: setRealtimeStatus,
+      onStatusChange: (status) => {
+        setRealtimeStatus(status);
+        // Back after a drop: whatever `routing_status_set` went out meanwhile
+        // reached nobody here, the gateway's disconnect-offline above all,
+        // which by definition fires while no socket of this agent is open
+        // (tm 340.3). One profile read says what the server holds now.
+        if (status === 'live' && wasReconnecting) void reconcileOwnStatus();
+        wasReconnecting = status === 'reconnecting';
+      },
       onPush: (action, payload) => {
         applyPush(queryClient, action, payload);
         onPushRef.current?.(action, payload);
@@ -1185,6 +1209,45 @@ export function useRealtime(onPush?: PushHandler): void {
 function currentDraftScope(): { licenseId: string; accountId: string } | null {
   const agent = useAuth.getState().agent;
   return agent ? { licenseId: agent.license_id, accountId: agent.account_id } : null;
+}
+
+/**
+ * A `routing_status_set` about the caller: into the auth store, and, when the
+ * system made the change (`reason`), the notice that says why (tm 340.3).
+ */
+function foldOwnStatus(
+  agentId: string,
+  status: RoutingStatus,
+  reason: unknown,
+  afterSeconds: unknown,
+): void {
+  const me = useAuth.getState().agent;
+  if (!me || me.account_id !== agentId) return;
+  if (me.routing_status !== status) {
+    useAuth.setState({ agent: { ...me, routing_status: status } });
+  }
+  const seconds = typeof afterSeconds === 'number' && afterSeconds > 0 ? afterSeconds : null;
+  if (reason === 'agent_unresponsive') {
+    noteSelfStatusChange({ kind: 'unresponsive', afterSeconds: seconds });
+  } else if (reason === 'agent_disconnected') {
+    noteSelfStatusChange({ kind: 'disconnected', afterSeconds: seconds });
+  }
+}
+
+/**
+ * After a reconnect: if the server holds another status than this console was
+ * showing, show the server's and say it changed while the socket was away. A
+ * failed read changes nothing; the next push or sign-in settles it.
+ */
+async function reconcileOwnStatus(): Promise<void> {
+  try {
+    const result = await useAuth.getState().refreshRoutingStatus();
+    if (result && result.before !== result.after) {
+      noteSelfStatusChange({ kind: 'changed_while_away', status: result.after });
+    }
+  } catch {
+    // Offline again, or the session is ending: either way not this notice's job.
+  }
 }
 
 /** Exported for `useInbox.test.ts` — a push handler has no other way in. */
@@ -1234,10 +1297,14 @@ export function applyPush(
       // running count — 1 while the newest event is newer than this agent's
       // seen marker, 0 once it is not. An event that just arrived is always
       // newer, and `useMarkSeen` is what puts it back to 0.
+      //
+      // Every event also ends the connection's quiet spell (`#appendEvent`
+      // clears `inactive_since`, WG-03), and no push says so separately.
       const found = patchChatInPages(queryClient, chatId, (chat) => ({
         ...chat,
         last_event: event,
         unread_count: 1,
+        inactive: false,
       }));
       if (!found) refreshChatHeads();
       return;
@@ -1364,6 +1431,13 @@ export function applyPush(
       if (typeof agentId !== 'string' || typeof status !== 'string') return;
       if (!(ROUTING_STATUSES as readonly string[]).includes(status)) return;
 
+      // The caller's own status, which the availability switch reads from the
+      // auth store rather than from the roster. Until the system could change
+      // it (WG-03) only the caller ever did, through that very switch, so the
+      // store was always already right; now the sweep and the gateway change
+      // it too, and say why, which is the notice (tm 340.3).
+      foldOwnStatus(agentId, status as RoutingStatus, payload['reason'], payload['after_seconds']);
+
       /**
        * Writes the pushed status into one roster cache, and says whether there
        * was a roster there to write it into.
@@ -1482,6 +1556,48 @@ export function applyPush(
         void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
         void queryClient.invalidateQueries({ queryKey: chatAiHandoffsKey(chatId) });
       }
+      return;
+    }
+
+    case 'chat_inactivity_changed': {
+      // The sweep marked a connection quiet, or took the mark off (WG-03).
+      // Written in place, like a corrected message: it is not activity, and the
+      // row must not jump. Only the row whose newest connection it is: an older
+      // connection's mark is not what the list shows.
+      const chatId = payload['chat_id'];
+      const threadId = payload['thread_id'];
+      const inactive = payload['inactive'];
+      if (typeof chatId !== 'string' || typeof threadId !== 'string') return;
+      if (typeof inactive !== 'boolean') return;
+      patchChatInPlace(queryClient, chatId, (chat) =>
+        chat.thread_id === threadId ? { ...chat, inactive } : chat,
+      );
+      return;
+    }
+
+    case 'chat_unanswered_alert': {
+      // To a team's leads only (the API addresses it): a chat went unanswered
+      // and waits at the front of the queue (WG-03). The shell's banner says so.
+      const chatId = payload['chat_id'];
+      const threadId = payload['thread_id'];
+      const groupId = payload['group_id'];
+      const agentId = payload['agent_id'];
+      const reason = payload['reason'];
+      const transfers = payload['transfers'];
+      const position = payload['queue_position'];
+      if (typeof chatId !== 'string' || typeof threadId !== 'string') return;
+      if (typeof groupId !== 'number' || typeof agentId !== 'string') return;
+      if (!(UNANSWERED_ALERT_REASONS as readonly unknown[]).includes(reason)) return;
+      if (typeof transfers !== 'number') return;
+      noteUnansweredAlert({
+        id: threadId + ':' + String(transfers),
+        chatId,
+        groupId,
+        agentId,
+        reason: reason as UnansweredAlertReason,
+        transfers,
+        queuePosition: typeof position === 'number' ? position : null,
+      });
       return;
     }
 

@@ -30,6 +30,7 @@ import { useNotifications } from '../features/notifications/useNotifications.js'
 import { CommandPalette } from './CommandPalette.js';
 import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
+import { PresenceNotices } from './PresenceNotices.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
 import { Dropdown } from './ui/index.js';
 
@@ -75,6 +76,8 @@ export function AppShell(): ReactElement {
           </a>
           <SandboxBadge />
           <TrialBanner />
+          {/* Why your availability changed, and chats a lead must look at (WG-03). */}
+          <PresenceNotices />
           <div className="flex min-h-0 flex-1">
             <IconRail />
             {/* The page is a flex child of this region exactly as it was of the row

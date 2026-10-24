@@ -50,6 +50,8 @@ export const inbox: Messages = {
   'inbox.rail.routing.accepting': 'Accepting chats',
   'inbox.rail.routing.notAccepting': 'Not accepting',
   'inbox.rail.routing.offline': 'Offline',
+  // A quiet connection the sweep set aside (WG-03): shown dimmed in the list.
+  'inbox.list.item.inactive': 'Inactive',
   'inbox.rail.connection.live': 'Live',
   'inbox.rail.connection.offline': 'Offline',
   'inbox.rail.connection.reconnecting': 'Reconnecting',

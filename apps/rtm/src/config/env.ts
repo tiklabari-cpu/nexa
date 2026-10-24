@@ -11,7 +11,7 @@
  * and verifies the same tokens — came up on the values the API rejected.
  */
 import { z } from 'zod';
-import { DEFAULT_REGION, REGIONS } from '@siyahtus/types';
+import { DEFAULT_REGION, DISCONNECT_OFFLINE_DEFAULT_MS, REGIONS } from '@siyahtus/types';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 
 /**
@@ -98,6 +98,17 @@ const envSchema = z.object({
    * the sockets already attached are told to go somewhere else.
    */
   SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(0).max(120_000).optional(),
+  /**
+   * How long an agent may have no open socket — on any gateway — before this
+   * gateway sets them `offline` (WG-03 · tm 340.3, `presence.ts`). Unset is
+   * `DISCONNECT_OFFLINE_DEFAULT_MS` (two minutes: RP-03's tolerance for a
+   * reload or a network blip); `0` turns it off, and so does running under
+   * test unless the suite sets it — a gateway that changes routing status is a
+   * second writer every other suite would have to declare. Capped at an hour:
+   * past that it is not a tolerance, and a closed browser keeps receiving
+   * chats for as long as the number says.
+   */
+  RTM_DISCONNECT_OFFLINE_MS: z.coerce.number().int().min(0).max(3_600_000).optional(),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
@@ -180,6 +191,12 @@ export type RtmEnv = z.infer<typeof envSchema> & {
    * it fails to compile instead of comparing against `NaN`.
    */
   maxConnections: number | null;
+  /**
+   * Resolved disconnect tolerance (tm 340.3): milliseconds an agent may have
+   * no open socket before going offline, or `null` when this gateway does not
+   * change routing status at all.
+   */
+  disconnectOfflineMs: number | null;
 };
 
 /**
@@ -195,6 +212,13 @@ function withPoolSize(url: string, poolSize: number | undefined): string {
   if (parsed.searchParams.has('connection_limit')) return url;
   parsed.searchParams.set('connection_limit', String(poolSize));
   return parsed.toString();
+}
+
+/** `RTM_DISCONNECT_OFFLINE_MS`, with its default and its off switch (tm 340.3). */
+function resolveDisconnectOffline(env: z.infer<typeof envSchema>): number | null {
+  const ms =
+    env.RTM_DISCONNECT_OFFLINE_MS ?? (env.NODE_ENV === 'test' ? 0 : DISCONNECT_OFFLINE_DEFAULT_MS);
+  return ms === 0 ? null : ms;
 }
 
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
@@ -225,6 +249,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
     JWT_SIGNING_KEY_CUSTOMER: env.CUSTOMER_TOKEN_SECRET,
     shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
     maxConnections: env.RTM_MAX_CONNECTIONS ?? null,
+    disconnectOfflineMs: resolveDisconnectOffline(env),
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
   };
 }

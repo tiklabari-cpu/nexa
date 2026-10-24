@@ -372,7 +372,12 @@ describe('the inactivity sweep (WG-03)', () => {
     expect(incoming.map((p) => p.audience.agentIds)).toEqual([[other]]);
     const status = await pushed('routing_status_set');
     expect(status.map((p) => p.payload)).toEqual([
-      { agent_id: silent, status: 'not_accepting_chats', reason: 'agent_unresponsive' },
+      {
+        agent_id: silent,
+        status: 'not_accepting_chats',
+        reason: 'agent_unresponsive',
+        after_seconds: TRANSFER_SECONDS,
+      },
     ]);
     expect(await pushed('chat_unanswered_alert')).toEqual([]);
 

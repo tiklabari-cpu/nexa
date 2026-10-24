@@ -8129,7 +8129,18 @@ components:
     AiUsage:
       type: object
       required:
-        [day, time_zone, resets_at, window_days, meters, daily, surfaces, alerts, alert_recipients]
+        [
+          day,
+          time_zone,
+          resets_at,
+          window_days,
+          meters,
+          daily,
+          surfaces,
+          alerts,
+          alert_recipients,
+          per_member,
+        ]
       properties:
         day:
           type: string
@@ -8217,6 +8228,34 @@ components:
           type: array
           description: Account ids that receive the alerts besides the owner.
           items: { type: string, format: uuid }
+        per_member:
+          type: object
+          description: >-
+            Today's use of the per-member AI allowance (tm 339.3 · GV-01) —
+            counts only, never a member or a word of a conversation. Counted on
+            the workspace's conversation day (its day boundary), unlike the
+            UTC-day token meters above.
+          required: [day, cap, members_with_ai, members_at_cap]
+          properties:
+            day: { type: string, format: date }
+            cap:
+              type: integer
+              format: int32
+              nullable: true
+              description: >-
+                AI turns one member may have answered per day
+                (`ai_turns_per_customer_day`); null when the workspace has no
+                per-member allowance.
+            members_with_ai:
+              type: integer
+              minimum: 0
+              description: Members the AI has answered at least once today.
+            members_at_cap:
+              type: integer
+              minimum: 0
+              description: >-
+                Of those, the members who have used the whole allowance — their
+                next message goes to a person.
     AuditLogEntry:
       type: object
       description: |

@@ -58,6 +58,7 @@ import { TicketEmailTemplates } from './TicketEmailTemplates.js';
 import { CustomFieldsSettings } from './CustomFieldsSettings.js';
 import { ChatFormsSettings } from './ChatFormsSettings.js';
 import { BannedCustomerIps } from './BannedCustomerIps.js';
+import { AbuseProtection } from './AbuseProtection.js';
 import { FileSharing } from './FileSharing.js';
 import { SensitiveData } from './SensitiveData.js';
 import { Skills } from './Skills.js';
@@ -147,6 +148,7 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   'banned-customers': (p) => <BannedCustomerIps canEdit={p.canManageAccess} />,
   'member-recognition': (p) => <MemberRecognition canEdit={p.canManageAccess} />,
   'file-sharing': (p) => <FileSharing canEdit={p.canManageAccess} />,
+  'abuse-protection': (p) => <AbuseProtection canEdit={p.canManageAccess} />,
   'sensitive-data': () => <SensitiveData />,
   'ip-allowlist': (p) => <IpAllowlist canEdit={p.canManageAccess} />,
   sso: (p) => <SsoConnection canEdit={p.canManageAccess} />,

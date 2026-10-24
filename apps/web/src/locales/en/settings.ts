@@ -93,6 +93,7 @@ export const settings: Messages = {
   'settings.nav.section.bannedCustomers': 'Blocked IP addresses',
   'settings.nav.section.memberRecognition': 'Member recognition',
   'settings.nav.section.fileSharing': 'File sharing',
+  'settings.nav.section.abuseProtection': 'Abuse protection',
   'settings.nav.section.sensitiveData': 'Sensitive data',
   'settings.nav.section.ipAllowlist': 'IP allowlist',
   'settings.nav.section.sso': 'Single sign-on',
@@ -1021,6 +1022,37 @@ export const settings: Messages = {
     'MIME types, comma separated — the form a browser labels a file with.',
   'settings.fileSharing.maxSizeLabel': 'Max size (MB)',
   'settings.fileSharing.maxSizeError': 'Enter a size from 1 to 100 MB.',
+
+  // Abuse protection — AbuseProtection.tsx, PerMemberQuota.tsx (GV-01)
+  'settings.abuse.title': 'Abuse protection',
+  'settings.abuse.description':
+    'How the chat widget keeps scripts and a single heavy visitor from using up your AI or flooding your inbox.',
+  'settings.abuse.loadError': 'Could not load abuse protection settings.',
+  'settings.abuse.allowanceLabel': 'AI replies per visitor per day',
+  'settings.abuse.allowanceHint':
+    'After this many AI replies in a day, the visitor’s next message goes to a person, with a note for your agents. 0 turns the limit off. The default is 40.',
+  'settings.abuse.allowanceError': 'Enter a whole number from 0 to 10,000.',
+  'settings.abuse.modeLegend': 'Human check in the chat widget',
+  'settings.abuse.modeIntro':
+    'A visitor who passes the check is not asked again for 12 hours, and a returning visitor the widget already recognises is never asked.',
+  'settings.abuse.mode.off': 'Never ask',
+  'settings.abuse.mode.offHint': 'Visitors are never asked to prove they are a person.',
+  'settings.abuse.mode.risk': 'Only when something looks wrong',
+  'settings.abuse.mode.riskHint':
+    'Many new visitors from one address, a burst of messages, or heavy AI use. Recommended.',
+  'settings.abuse.mode.always': 'Before every new conversation',
+  'settings.abuse.mode.alwaysHint':
+    'Every visitor who has not passed a check in the last 12 hours is asked before their first message.',
+  'settings.abuse.privacyNote':
+    'When this deployment uses Cloudflare Turnstile, the check runs on Cloudflare’s servers. Mention it in your privacy notice.',
+  'settings.perMemberQuota.title': 'AI allowance today',
+  'settings.perMemberQuota.limit': 'Allowance per visitor',
+  'settings.perMemberQuota.perDay': '{cap} a day',
+  'settings.perMemberQuota.noLimit': 'No limit',
+  'settings.perMemberQuota.withAi': 'Visitors the AI answered',
+  'settings.perMemberQuota.atCap': 'Reached the allowance',
+  'settings.perMemberQuota.hint':
+    'Counted on your workspace’s day (set under Chat timeout). A visitor who reached the allowance is with a person now.',
 
   // Skills (expertise catalogue) — Skills.tsx
   'settings.skills.title': 'Skills',

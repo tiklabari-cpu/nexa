@@ -32,6 +32,7 @@ import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import type { AiDailyBudget } from '../services/ai/ai-daily-budget.js';
 import { AI_USAGE_ALERT_ROLES, isoDay } from '../services/ai/ai-usage-alerts.js';
+import { customerAiQuotaToday } from '../services/ai/customer-ai-quota.js';
 import { aiPrices, buildUsageReport, usageWindowDays } from '../services/ai/ai-usage-report.js';
 
 export interface AiUsageRoutesOptions {
@@ -92,7 +93,7 @@ export default async function aiUsageRoutes(
 
       const caps = await options.budget.capsFor(tenant);
       const rows = await request.withTenant(async (tx) => {
-        const [counters, ledger, alerts, recipients] = await Promise.all([
+        const [counters, ledger, alerts, recipients, perMember] = await Promise.all([
           tx.aiDailyUsage.findMany({
             where: { licenseId: tenant.licenseId, day: { gte: first } },
             select: { day: true, meter: true, used: true, reserved: true },
@@ -112,8 +113,9 @@ export default async function aiUsageRoutes(
             orderBy: { createdAt: 'asc' },
             select: { accountId: true },
           }),
+          customerAiQuotaToday(tx, { licenseId: tenant.licenseId, at }),
         ]);
-        return { counters, ledger, alerts, recipients };
+        return { counters, ledger, alerts, recipients, perMember };
       });
 
       const report = buildUsageReport({
@@ -147,6 +149,15 @@ export default async function aiUsageRoutes(
           created_at: alert.createdAt.toISOString(),
         })),
         alert_recipients: rows.recipients.map((row) => row.accountId),
+        // The per-member allowance beside the workspace's token cap (tm 339.3 ·
+        // GV-01): counts only, on the workspace's conversation day — not the UTC
+        // day the token meters use.
+        per_member: {
+          day: rows.perMember.day,
+          cap: rows.perMember.cap,
+          members_with_ai: rows.perMember.membersWithAi,
+          members_at_cap: rows.perMember.membersAtCap,
+        },
       });
     },
   );

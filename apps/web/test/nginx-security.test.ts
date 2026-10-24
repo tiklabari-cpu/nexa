@@ -247,6 +247,17 @@ describe('the panel and the widget frame in opposite directions', () => {
     // browsers and kill the embed.
     expect(stripComments(WIDGET_CONF)).not.toMatch(/X-Frame-Options/);
   });
+
+  it("lets only the widget load Turnstile's script and frame, for the human check (tm 339.3)", () => {
+    // The widget adds Cloudflare's script only when the API asks a visitor for
+    // a check; the policy names that one origin for the script and the frame
+    // it draws, and nothing wider. The agent console never runs the check.
+    expect(directive(widget, 'script-src')).toBe(
+      "script-src 'self' https://challenges.cloudflare.com",
+    );
+    expect(directive(widget, 'frame-src')).toBe('frame-src https://challenges.cloudflare.com');
+    expect(panel).not.toContain('challenges.cloudflare.com');
+  });
 });
 
 describe("the panel's inline theme boot is pinned by hash, not waved through", () => {

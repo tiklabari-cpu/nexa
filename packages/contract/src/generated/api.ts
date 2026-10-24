@@ -1741,6 +1741,14 @@ export interface paths {
      *     `rg_group_id` must be a team of this workspace (null: none) — its
      *     members read a flag's note and evidence and hear of an urgent flag.
      *     At most five addresses.
+     *
+     *     `promo_block` (EN-01) names flag types and whether each keeps a
+     *     player from campaigns. Responsible gaming's four are locked on: `false`
+     *     for one is `400` with `details.reason` `promo_flag_locked` (`true` is
+     *     accepted and changes nothing). Only `fraud_suspected` and
+     *     `complaint_formal` are the workspace's; another type is `400`
+     *     `promo_flag_not_configurable`. A high-risk setting (GV-06): `reason`
+     *     is filed with the audit entry.
      */
     put: operations['updateRiskFlagSettings'];
     post?: never;
@@ -11696,6 +11704,30 @@ export interface components {
       /** @description The next page's cursor; absent on the last page. */
       next_page_id?: string;
     };
+    /**
+     * @description A player's flags, and whether they are kept from promotions (EN-01):
+     *     by every active flag of theirs and of the records an agent linked as
+     *     the same person (ID-03), under the workspace's promotion policy —
+     *     including flags of conversations the caller does not see.
+     */
+    CustomerRiskFlagList: components['schemas']['RiskFlagList'] & {
+      /** @description The player is shown no campaign. */
+      promo_suppressed: boolean;
+      /** @description The flag type that keeps them from promotions; null when none does. */
+      promo_suppressed_reason: components['schemas']['RiskFlagType'] | null;
+    };
+    /**
+     * @description Which flag types keep a player from campaigns (EN-01). Responsible
+     *     gaming's four (`LOCKED_PROMO_FLAGS`: `rg_signal`,
+     *     `self_exclusion_request`, `underage_suspected`, `self_harm`) always
+     *     do and are not listed here; these two are the workspace's choice.
+     */
+    RiskFlagPromoBlock: {
+      /** @description Default true. */
+      fraud_suspected: boolean;
+      /** @description Default false. */
+      complaint_formal: boolean;
+    };
     RiskFlagSettings: {
       /**
        * @description The Responsible Gaming team: its members read a flag's note and
@@ -11704,6 +11736,7 @@ export interface components {
       rg_group_id: number | null;
       /** @description Addresses an urgent flag is mailed to as well (AI-27-S4). */
       notify_emails: string[];
+      promo_block: components['schemas']['RiskFlagPromoBlock'];
       /** Format: uuid */
       updated_by: string | null;
       /** Format: date-time */
@@ -16366,6 +16399,12 @@ export interface components {
       chats: number;
       /** @description Of those, how many reached a goal. */
       conversion: number;
+      /**
+       * @description Matched visitors never shown the message because a risk flag keeps
+       *     them from promotions (EN-01) — the card's "Not shown due to risk".
+       *     A suppressed send stays suppressed after the flag is cleared.
+       */
+      suppressed: number;
     };
     /** @description A proactive, targeted message (FR-MOD-03.3). */
     Campaign: {
@@ -22393,6 +22432,20 @@ export interface operations {
         'application/json': {
           rg_group_id?: number | null;
           notify_emails?: string[];
+          promo_block?: {
+            rg_signal?: boolean;
+            self_exclusion_request?: boolean;
+            underage_suspected?: boolean;
+            self_harm?: boolean;
+            complaint_formal?: boolean;
+            fraud_suspected?: boolean;
+            account_takeover_suspected?: boolean;
+            multi_account?: boolean;
+            abusive?: boolean;
+            account_security?: boolean;
+          };
+          /** @description Why — filed with the audit entry (GV-06). */
+          reason?: string;
         };
       };
     };
@@ -23532,7 +23585,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['RiskFlagList'];
+          'application/json': components['schemas']['CustomerRiskFlagList'];
         };
       };
       400: components['responses']['BadRequest'];

@@ -13,7 +13,9 @@
  * Member recognition (ID-03 · K4 · tm 287.4) adds three things from
  * `MemberIdentity.tsx`: the unverified possible matches, the records an agent
  * linked as the same person with their conversations, and forgetting this
- * person's browsers.
+ * person's browsers. EN-01 (tm 350) adds the Risk card: the player's active
+ * flags with their Clear dialog, and "Promotions blocked" while one keeps
+ * them from campaigns.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -29,6 +31,7 @@ import { formatDate, formatDateTime } from '../../lib/format.js';
 import { email, FieldError, optional, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { CustomFields } from '../custom-fields/CustomFields.js';
+import { CustomerRiskCard } from '../risk/PromoBlocked.js';
 import { ForgetBrowsers, LinkedRecordsCard, PossibleMatchesCard } from './MemberIdentity.js';
 import type { CustomerDetail } from './types.js';
 
@@ -218,6 +221,9 @@ export function CustomerDetailPanel({
 
         {canErase && <EraseCustomer customerId={customer.id} onErased={onErased} />}
       </Card>
+
+      {/* The player's risk flags and whether they are shown campaigns (EN-01). */}
+      <CustomerRiskCard key={`risk-${customer.id}`} customerId={customer.id} />
 
       <PossibleMatchesCard
         key={`matches-${customer.id}`}

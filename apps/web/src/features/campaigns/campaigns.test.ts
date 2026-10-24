@@ -20,7 +20,7 @@ function campaign(status: CampaignStatus, over: Partial<Campaign> = {}): Campaig
     ends_at: null,
     recurring: false,
     created_at: '2026-07-26T12:00:00.000Z',
-    performance: { displayed: 0, chats: 0, conversion: 0 },
+    performance: { displayed: 0, chats: 0, conversion: 0, suppressed: 0 },
     ...over,
   };
 }
@@ -82,10 +82,10 @@ describe('isCampaignActive', () => {
 
 describe('conversionRate', () => {
   it('is a whole-number percentage of the visitors reached', () => {
-    expect(conversionRate({ displayed: 200, chats: 40, conversion: 30 })).toBe(15);
+    expect(conversionRate({ displayed: 200, chats: 40, conversion: 30, suppressed: 0 })).toBe(15);
   });
 
   it('is zero — not NaN — before anything has been displayed', () => {
-    expect(conversionRate({ displayed: 0, chats: 0, conversion: 0 })).toBe(0);
+    expect(conversionRate({ displayed: 0, chats: 0, conversion: 0, suppressed: 0 })).toBe(0);
   });
 });

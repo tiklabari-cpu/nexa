@@ -105,6 +105,7 @@ export const customers: Messages = {
   'customers.detail.thisCustomer': 'this customer',
   'customers.detail.bannedHint': 'They will be able to start conversations again.',
   'customers.detail.notBannedHint': 'Blocks new conversations. History is kept.',
+  'customers.detail.risk.heading': 'Risk flags',
   'customers.detail.eraseCustomer': 'Erase this person',
   'customers.detail.eraseHint':
     'Permanently deletes their conversations, messages, visits and tickets. This cannot be undone.',
@@ -313,6 +314,7 @@ export const customers: Messages = {
   'campaigns.page.stat.conversion': 'Conversion',
 
   'campaigns.status.ongoing': 'Ongoing',
+  'campaigns.page.suppressed': 'Not shown due to risk: {count}',
   'campaigns.status.scheduled': 'Scheduled',
   'campaigns.status.inactive': 'Inactive',
   'campaigns.tab.all': 'All',

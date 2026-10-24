@@ -1426,6 +1426,15 @@ export const settings: Messages = {
 
   // Roles and permissions — PermissionsMatrix.tsx (RL-02 · tm 325.4)
   'settings.permissions.title': 'Roles and permissions',
+  'settings.riskFlags.promo.title': 'Campaigns for flagged players',
+  'settings.riskFlags.promo.description':
+    'A player with one of these flags is shown no campaign. The responsible gaming flags always block; the other two are your choice.',
+  'settings.riskFlags.promo.locked': 'Always — set by the platform',
+  'settings.riskFlags.promo.permanent':
+    'A campaign held back from a player is not shown to them later, even once the flag is cleared.',
+  'settings.riskFlags.promo.save': 'Save campaign rules',
+  'settings.riskFlags.promo.blocks': 'Blocks campaigns',
+  'settings.riskFlags.promo.doesNotBlock': 'Does not block campaigns',
   'settings.permissions.description':
     'Who may do what in this workspace, by role. Only the Owner changes it; every change is filed in the audit log with its reason and mailed to the Admins.',
   'settings.permissions.loadError': 'The permission matrix could not be loaded.',

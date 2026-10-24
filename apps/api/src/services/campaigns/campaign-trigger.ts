@@ -65,6 +65,7 @@
 import type { Prisma } from '@prisma/client';
 import type { CampaignConditions } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { guardedPromoSuppression, suppressedSendData } from '../risk/promo-suppression.js';
 import { matchesConditions, resolveCampaignStatus } from './campaign-matching.js';
 
 /**
@@ -149,6 +150,13 @@ export function selectTriggeredCampaigns(
  * (`campaign-delivery.ts` holds a send back while a conversation is open rather
  * than burning it). Keeping the two apart is what lets a nudge earned during a
  * chat still arrive after it ends.
+ *
+ * A visitor a risk flag keeps from promotions (EN-01 · tm 350) is not targeted:
+ * the sends are written already suppressed — so the card can say how many
+ * were held back — and none counts as fresh. Read only once something
+ * matched. Flags that cannot be read write the sends as usual: delivery is
+ * the gate that fails closed, and suppressing on a passing read error would
+ * hold a send back for good.
  */
 export async function fireCampaignsAtVisitor(
   tx: TenantClient,
@@ -180,16 +188,20 @@ export async function fireCampaignsAtVisitor(
   const matched = selectTriggeredCampaigns(campaigns, input.pageUrls, now);
   if (matched.length === 0) return 0;
 
+  const suppression = await guardedPromoSuppression(tx, [input.customerId]);
+  const reason = suppression?.get(input.customerId);
+
   const result = await tx.campaignSend.createMany({
     data: matched.map((campaignId) => ({
       licenseId: tenant.licenseId,
       campaignId,
       customerId: input.customerId,
+      ...(reason !== undefined ? suppressedSendData(reason, now) : {}),
     })),
     // The idempotency this path is built on: the unique (campaign, customer)
     // pair means every page view after the first is a no-op, and a visitor is
     // never nudged twice by the same campaign.
     skipDuplicates: true,
   } satisfies Prisma.CampaignSendCreateManyArgs);
-  return result.count;
+  return reason !== undefined ? 0 : result.count;
 }

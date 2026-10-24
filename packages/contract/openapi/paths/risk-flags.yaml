@@ -157,7 +157,7 @@ customerRiskFlags:
         description: The flags
         content:
           application/json:
-            schema: { $ref: "../openapi.yaml#/components/schemas/RiskFlagList" }
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerRiskFlagList" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
@@ -247,6 +247,14 @@ riskFlagSettings:
       `rg_group_id` must be a team of this workspace (null: none) — its
       members read a flag's note and evidence and hear of an urgent flag.
       At most five addresses.
+
+      `promo_block` (EN-01) names flag types and whether each keeps a
+      player from campaigns. Responsible gaming's four are locked on: `false`
+      for one is `400` with `details.reason` `promo_flag_locked` (`true` is
+      accepted and changes nothing). Only `fraud_suspected` and
+      `complaint_formal` are the workspace's; another type is `400`
+      `promo_flag_not_configurable`. A high-risk setting (GV-06): `reason`
+      is filed with the audit entry.
     requestBody:
       required: true
       content:
@@ -261,6 +269,26 @@ riskFlagSettings:
                 type: array
                 maxItems: 5
                 items: { type: string, format: email, maxLength: 254 }
+              promo_block:
+                type: object
+                additionalProperties: false
+                minProperties: 1
+                properties:
+                  rg_signal: { type: boolean }
+                  self_exclusion_request: { type: boolean }
+                  underage_suspected: { type: boolean }
+                  self_harm: { type: boolean }
+                  complaint_formal: { type: boolean }
+                  fraud_suspected: { type: boolean }
+                  account_takeover_suspected: { type: boolean }
+                  multi_account: { type: boolean }
+                  abusive: { type: boolean }
+                  account_security: { type: boolean }
+              reason:
+                type: string
+                minLength: 1
+                maxLength: 500
+                description: Why — filed with the audit entry (GV-06).
     responses:
       "200":
         description: Updated

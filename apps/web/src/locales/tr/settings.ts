@@ -1423,6 +1423,15 @@ export const settings: Messages = {
 
   // Roller ve izinler — PermissionsMatrix.tsx (RL-02 · tm 325.4)
   'settings.permissions.title': 'Roller ve izinler',
+  'settings.riskFlags.promo.title': 'Bayraklı oyuncuya kampanya',
+  'settings.riskFlags.promo.description':
+    'Bu bayraklardan biri olan oyuncuya kampanya gösterilmez. Sorumlu oyun bayrakları her zaman engeller; diğer ikisi sizin seçiminiz.',
+  'settings.riskFlags.promo.locked': 'Her zaman — platform belirler',
+  'settings.riskFlags.promo.permanent':
+    'Oyuncudan alıkonan bir kampanya, bayrak kaldırılsa da ona sonradan gösterilmez.',
+  'settings.riskFlags.promo.save': 'Kampanya kurallarını kaydet',
+  'settings.riskFlags.promo.blocks': 'Kampanyayı engeller',
+  'settings.riskFlags.promo.doesNotBlock': 'Kampanyayı engellemez',
   'settings.permissions.description':
     'Bu çalışma alanında kimin neyi yapabileceği, role göre. Yalnız Kurucu değiştirir; her değişiklik gerekçesiyle denetim kaydına yazılır ve Yöneticilere e-postayla bildirilir.',
   'settings.permissions.loadError': 'İzin matrisi yüklenemedi.',

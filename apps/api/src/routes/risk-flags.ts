@@ -9,8 +9,10 @@
  *     wherever raised, and the conversation flags of conversations the caller
  *     sees;
  *   - `GET /risk-flags` — the workspace's, filtered (reports, the archive);
- *   - `GET`/`PUT /risk-flags/settings` — the Responsible Gaming team and the
- *     addresses an urgent flag is mailed to (admin and up).
+ *   - `GET`/`PUT /risk-flags/settings` — the Responsible Gaming team, the
+ *     addresses an urgent flag is mailed to and which flags keep a player from
+ *     campaigns (EN-01 · tm 350: the locked four always, fraud and a formal
+ *     complaint as the workspace says; admin and up).
  *
  * Everyone who sees a conversation sees its flags' types; the note, the
  * evidence and the clear reason only the Responsible Gaming team and a Team
@@ -21,6 +23,8 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
+  PROMO_FLAG_LOCKED_REASON,
+  PROMO_FLAG_NOT_CONFIGURABLE_REASON,
   RISK_FLAG_CLEAR_REASON_MAX,
   RISK_FLAG_EVIDENCE_MAX,
   RISK_FLAG_NOTE_MAX,
@@ -29,10 +33,15 @@ import {
   RISK_FLAG_SOURCES,
   RISK_FLAG_STATUSES,
   RISK_FLAG_TYPES,
+  isLockedPromoFlag,
+  isPromoPolicyFlag,
   isRiskFlagType,
   isShortId,
+  type PromoPolicy,
+  type RiskFlagType,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
+import { highRiskReason, reasonMetadata } from '../lib/high-risk-reason.js';
 import type { TenantClient } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { seesPlayerContact } from '../services/customers/player-contact.js';
@@ -50,6 +59,7 @@ import {
   riskFlagVisibilityWhere,
   serialiseRiskFlag,
 } from '../services/risk/risk-flags.js';
+import { promoSuppressionOf, readPromoPolicy } from '../services/risk/promo-suppression.js';
 
 const CHAT_WRITE = ['chats--all:rw', 'chats--access:rw'];
 const CHAT_READ = ['chats--all:ro', 'chats--access:ro'];
@@ -104,9 +114,51 @@ const settingsBody = z
       .array(z.string().trim().toLowerCase().email().max(254))
       .max(RISK_FLAG_NOTIFY_EMAILS_MAX)
       .optional(),
+    promo_block: z
+      .record(z.enum(RISK_FLAG_TYPES), z.boolean())
+      .refine((value) => Object.keys(value).length > 0, 'promo_block: name at least one type')
+      .optional(),
+    reason: highRiskReason.optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, 'at least one setting is required');
+  .refine(
+    ({ reason: _reason, ...settings }) => Object.keys(settings).length > 0,
+    'at least one setting is required',
+  );
+
+/**
+ * The workspace's half of the promotion rule after `promo_block` (EN-01): a
+ * locked type switched off is a 400, a type no workspace decides about too;
+ * a locked type left on changes nothing.
+ */
+function promoPolicyAfter(
+  before: PromoPolicy,
+  change: Partial<Record<RiskFlagType, boolean>> | undefined,
+): PromoPolicy {
+  if (change === undefined) return before;
+  const next = { ...before };
+  for (const [key, block] of Object.entries(change)) {
+    const type = key as RiskFlagType;
+    if (block === undefined) continue;
+    if (isLockedPromoFlag(type)) {
+      if (!block) {
+        throw ApiError.validation(`promo_block.${type}: locked — always blocks promotions.`, {
+          reason: PROMO_FLAG_LOCKED_REASON,
+          type,
+        });
+      }
+      continue;
+    }
+    if (!isPromoPolicyFlag(type)) {
+      throw ApiError.validation(`promo_block.${type}: not a workspace setting.`, {
+        reason: PROMO_FLAG_NOT_CONFIGURABLE_REASON,
+        type,
+      });
+    }
+    next[type] = block;
+  }
+  return next;
+}
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -314,7 +366,15 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
         ];
         if (query.status) filters.push({ status: query.status });
         const page = await listPage(tx, filters, query);
-        return { ...page, detailsVisible: await riskFlagDetailsVisible(tx, principal) };
+        // Whether the player is shown campaigns (EN-01): every active flag of
+        // theirs and of their linked records, seen by the caller or not —
+        // what the campaign engine itself reads.
+        const promo = (await promoSuppressionOf(tx, [customerId])).get(customerId) ?? null;
+        return {
+          ...page,
+          promo,
+          detailsVisible: await riskFlagDetailsVisible(tx, principal),
+        };
       });
 
       return reply.send({
@@ -322,6 +382,8 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
           serialiseRiskFlag(row, result.detailsVisible, seesPlayerContact(principal)),
         ),
         ...(result.next ? { next_page_id: result.next } : {}),
+        promo_suppressed: result.promo !== null,
+        promo_suppressed_reason: result.promo,
       });
     },
   );
@@ -370,9 +432,13 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
 
   // --- Settings ------------------------------------------------------------
 
-  const serialiseSettings = (settings: Awaited<ReturnType<typeof readRiskFlagSettings>>) => ({
+  const serialiseSettings = (
+    settings: Awaited<ReturnType<typeof readRiskFlagSettings>>,
+    promo: PromoPolicy,
+  ) => ({
     rg_group_id: settings.rgGroupId === null ? null : Number(settings.rgGroupId),
     notify_emails: [...settings.notifyEmails],
+    promo_block: { ...promo },
     updated_by: settings.updatedBy,
     updated_at: settings.updatedAt?.toISOString() ?? null,
   });
@@ -381,8 +447,11 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
     '/risk-flags/settings',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
-      const settings = await request.withTenant((tx) => readRiskFlagSettings(tx));
-      return reply.send(serialiseSettings(settings));
+      const settings = await request.withTenant(async (tx) => ({
+        view: await readRiskFlagSettings(tx),
+        promo: await readPromoPolicy(tx),
+      }));
+      return reply.send(serialiseSettings(settings.view, settings.promo));
     },
   );
 
@@ -404,6 +473,8 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
           if (!team) throw ApiError.validation('rg_group_id: not a team of this workspace.');
         }
         const before = await readRiskFlagSettings(tx);
+        const promoBefore = await readPromoPolicy(tx);
+        const promo = promoPolicyAfter(promoBefore, body.promo_block);
         const rgGroupId =
           body.rg_group_id === undefined
             ? before.rgGroupId
@@ -414,27 +485,41 @@ export async function riskFlagRoutes(app: FastifyInstance): Promise<void> {
           body.notify_emails === undefined
             ? [...before.notifyEmails]
             : [...new Set(body.notify_emails)];
-        const data = { rgGroupId, notifyEmails, updatedBy: actor, updatedAt: new Date() };
+        const data = {
+          rgGroupId,
+          notifyEmails,
+          promoBlockFraud: promo.fraud_suspected,
+          promoBlockComplaint: promo.complaint_formal,
+          updatedBy: actor,
+          updatedAt: new Date(),
+        };
         await tx.riskFlagSettings.upsert({
           where: { licenseId: tenant.licenseId },
           create: { licenseId: tenant.licenseId, ...data },
           update: data,
         });
         // Who hears of an urgent flag: the team and how many addresses — the
-        // addresses themselves are on the row.
+        // addresses themselves are on the row. The promotion policy before and
+        // after, and why: a high-risk setting (GV-06) — loosening it lets a
+        // flagged player see bonuses again.
+        const { reason, ...changed } = body;
         await writeAuditEntry(tx, request.auditContext(), {
           action: 'settings.risk_flags_updated',
           target: `license:${tenant.licenseId}`,
           metadata: {
-            changed: Object.keys(body),
+            changed: Object.keys(changed),
             rg_group_id: rgGroupId === null ? null : Number(rgGroupId),
             notify_email_count: notifyEmails.length,
+            ...(body.promo_block !== undefined
+              ? { promo_block_before: { ...promoBefore }, promo_block: { ...promo } }
+              : {}),
+            ...reasonMetadata(reason),
           },
         });
-        return readRiskFlagSettings(tx);
+        return { view: await readRiskFlagSettings(tx), promo };
       });
 
-      return reply.send(serialiseSettings(saved));
+      return reply.send(serialiseSettings(saved.view, saved.promo));
     },
   );
 }

@@ -20,6 +20,7 @@ import {
   activeFlagsOf,
   chatRiskFlagsKey,
   customerRiskFlagsKey,
+  type CustomerRiskFlagPage,
   type RiskFlagItem,
   type RiskFlagPage,
 } from './riskFlags.js';
@@ -35,7 +36,7 @@ const STALE_MS = 15_000;
 export function useActiveRiskFlags(
   chatId: string | null,
   customerId: string | null,
-): { flags: RiskFlagItem[]; pending: boolean; failed: boolean } {
+): { flags: RiskFlagItem[]; pending: boolean; failed: boolean; promoSuppressed: boolean } {
   const api = useApiClient();
   const chat = useQuery({
     queryKey: chatRiskFlagsKey(chatId ?? ''),
@@ -45,7 +46,8 @@ export function useActiveRiskFlags(
   });
   const member = useQuery({
     queryKey: customerRiskFlagsKey(customerId ?? ''),
-    queryFn: () => api.get<RiskFlagPage>(`/customers/${customerId}/risk-flags?status=active`),
+    queryFn: () =>
+      api.get<CustomerRiskFlagPage>(`/customers/${customerId}/risk-flags?status=active`),
     enabled: customerId !== null,
     staleTime: STALE_MS,
   });
@@ -54,7 +56,24 @@ export function useActiveRiskFlags(
     flags,
     pending: chat.isPending || (customerId !== null && member.isPending),
     failed: chat.isError && (customerId === null || member.isError),
+    // The server's answer (EN-01): it reads flags this panel may not see.
+    promoSuppressed: member.data?.promo_suppressed === true,
   };
+}
+
+/**
+ * A player's active flags and whether they are shown campaigns (EN-01 ·
+ * tm 350) — the customer profile's Risk card. The same cache entry the inbox
+ * reads for the player, so a push refreshes both.
+ */
+export function useCustomerRiskFlags(customerId: string) {
+  const api = useApiClient();
+  return useQuery({
+    queryKey: customerRiskFlagsKey(customerId),
+    queryFn: () =>
+      api.get<CustomerRiskFlagPage>(`/customers/${customerId}/risk-flags?status=active`),
+    staleTime: STALE_MS,
+  });
 }
 
 /** `POST /chats/{chatId}/risk-flags`: flag the open conversation. */

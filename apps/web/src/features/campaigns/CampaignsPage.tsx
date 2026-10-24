@@ -251,7 +251,7 @@ function CampaignCard({
 }): ReactElement {
   const t = useTranslate();
   const active = isCampaignActive(campaign);
-  const { displayed, chats, conversion } = campaign.performance;
+  const { displayed, chats, conversion, suppressed } = campaign.performance;
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-xs">
@@ -319,6 +319,12 @@ function CampaignCard({
           hint={formatRate(conversionRate(campaign.performance) / 100) ?? undefined}
         />
       </dl>
+      {/* Matched players a risk flag kept from it (EN-01 · tm 350); never shown later. */}
+      {suppressed > 0 && (
+        <p data-testid="campaign-suppressed" className="mt-2 text-2xs text-content-tertiary">
+          {t('campaigns.page.suppressed', { count: formatCount(suppressed) ?? '0' })}
+        </p>
+      )}
     </div>
   );
 }

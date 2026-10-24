@@ -646,6 +646,9 @@ export const inbox: Messages = {
     'Bu oyuncuyla önceki bir görüşmede konuldu. Kaldırılana kadar oyuncuda kalır.',
   'inbox.risk.staysOnPlayer': 'Kaldırılana kadar oyuncunun sonraki tüm görüşmelerinde kalır.',
   'inbox.risk.declared': 'Oyuncunun kendi beyanına dayanır — kimliği doğrulanmadı.',
+  'inbox.risk.promoBlocked': 'Promosyon engelli',
+  'inbox.risk.promoBlockedHint':
+    'Oyuncunun ya da ona bağlı bir kaydın etkin bayrağı varken oyuncuya kampanya gösterilmez.',
   'inbox.risk.noteLabel': 'Not',
   'inbox.risk.policy.mustHandoff': 'AI burada artık yazmaz; bir kişi yanıtlar.',
   'inbox.risk.policy.noBonusTalk': 'AI bonus, promosyon ya da para yatırma önermez.',

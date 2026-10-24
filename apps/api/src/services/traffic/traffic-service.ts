@@ -483,6 +483,8 @@ export class TrafficService {
         where: {
           licenseId: tenant.licenseId,
           engaged: false,
+          // Held back for a risk flag (EN-01): nobody invited them.
+          suppressedAt: null,
           createdAt: { gte: liveSince },
           customer: {
             ...customerFilter,

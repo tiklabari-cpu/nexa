@@ -2335,9 +2335,41 @@ components:
           type: string
           description: The next page's cursor; absent on the last page.
 
+    CustomerRiskFlagList:
+      description: |
+        A player's flags, and whether they are kept from promotions (EN-01):
+        by every active flag of theirs and of the records an agent linked as
+        the same person (ID-03), under the workspace's promotion policy —
+        including flags of conversations the caller does not see.
+      allOf:
+        - $ref: "#/components/schemas/RiskFlagList"
+        - type: object
+          required: [promo_suppressed, promo_suppressed_reason]
+          properties:
+            promo_suppressed:
+              type: boolean
+              description: The player is shown no campaign.
+            promo_suppressed_reason:
+              description: The flag type that keeps them from promotions; null when none does.
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/RiskFlagType"
+
+    RiskFlagPromoBlock:
+      type: object
+      description: |
+        Which flag types keep a player from campaigns (EN-01). Responsible
+        gaming's four (`LOCKED_PROMO_FLAGS`: `rg_signal`,
+        `self_exclusion_request`, `underage_suspected`, `self_harm`) always
+        do and are not listed here; these two are the workspace's choice.
+      required: [fraud_suspected, complaint_formal]
+      properties:
+        fraud_suspected: { type: boolean, description: "Default true." }
+        complaint_formal: { type: boolean, description: "Default false." }
+
     RiskFlagSettings:
       type: object
-      required: [rg_group_id, notify_emails, updated_by, updated_at]
+      required: [rg_group_id, notify_emails, promo_block, updated_by, updated_at]
       properties:
         rg_group_id:
           type: integer
@@ -2350,6 +2382,7 @@ components:
           maxItems: 5
           items: { type: string }
           description: Addresses an urgent flag is mailed to as well (AI-27-S4).
+        promo_block: { $ref: "#/components/schemas/RiskFlagPromoBlock" }
         updated_by: { type: string, format: uuid, nullable: true }
         updated_at: { type: string, format: date-time, nullable: true }
 
@@ -8676,7 +8709,7 @@ components:
     CampaignPerformance:
       type: object
       description: The campaign card's numbers (FR-MOD-03.3.3), counted from its sends.
-      required: [displayed, chats, conversion]
+      required: [displayed, chats, conversion, suppressed]
       properties:
         displayed:
           type: integer
@@ -8687,6 +8720,12 @@ components:
         conversion:
           type: integer
           description: Of those, how many reached a goal.
+        suppressed:
+          type: integer
+          description: |
+            Matched visitors never shown the message because a risk flag keeps
+            them from promotions (EN-01) — the card's "Not shown due to risk".
+            A suppressed send stays suppressed after the flag is cleared.
 
     Campaign:
       type: object

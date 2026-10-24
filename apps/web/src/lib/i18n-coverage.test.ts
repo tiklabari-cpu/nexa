@@ -183,6 +183,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/audit/AccessReviewExport.tsx',
   'src/features/settings/AiUsage.tsx',
   'src/features/settings/RiskFlagSettings.tsx',
+  'src/features/risk/PromoBlocked.tsx',
   'src/features/risk/RiskChips.tsx',
   'src/features/risk/RiskDialogs.tsx',
   'src/features/risk/RiskSection.tsx',

@@ -24,6 +24,8 @@ const { api } = vi.hoisted(() => ({
 
 vi.mock('../../lib/auth-store.js', () => ({
   useApiClient: () => api,
+  // The Risk card asks for the role (tm 350); a profile test is nobody's.
+  useAuth: (selector: (state: { agent: null }) => unknown) => selector({ agent: null }),
 }));
 
 function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {

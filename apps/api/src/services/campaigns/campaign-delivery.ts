@@ -51,6 +51,11 @@
 import type { CampaignContent } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { trialState } from '../billing/metering.js';
+import {
+  guardedPromoSuppression,
+  promoSuppressionOf,
+  type PromoSuppressionReader,
+} from '../risk/promo-suppression.js';
 import { resolveCampaignStatus } from './campaign-matching.js';
 
 /**
@@ -147,12 +152,30 @@ export function pickDeliverableSend(
  * the filter and planting a B-licence send against an A visitor, which RLS
  * refused on its own. The filter stays as the second lock, and the suite's
  * isolation test should be read as proving the policy rather than the predicate.
+ *
+ * ## The risk gate — the last one, and fail-closed (EN-01 · tm 350)
+ *
+ * A player a risk flag keeps from promotions (`isPromoSuppressed`: a
+ * responsible-gaming flag always, fraud or a formal complaint as the workspace
+ * says) is shown no campaign. The fire paths already write such a player's
+ * sends suppressed and a raised flag holds back what was queued, but this is
+ * the gate every card passes: a flag can land between the fire and the poll
+ * through a path that suppressed nothing (an identity link, a policy change).
+ * Here the owed sends are stamped `suppressed_at` and the poll gets nothing;
+ * they are never delivered afterwards, even once the flag is cleared.
+ *
+ * Read only once a send is deliverable, like the trial check: the poll that
+ * finds nothing owed — almost every poll — pays nothing for it. And unlike
+ * every other check here it fails closed: flags that cannot be read deliver
+ * nothing (and stamp nothing — the send stays owed for a poll that can read
+ * them). `readSuppression` is the tests' seam for that failure.
  */
 export async function deliverPendingCampaign(
   tx: TenantClient,
   tenant: TenantContext,
   input: { customerId: string; hasOpenChat: boolean; bannedAt: Date | null },
   now: Date,
+  readSuppression: PromoSuppressionReader = promoSuppressionOf,
 ): Promise<{ id: string; message: string } | null> {
   if (input.hasOpenChat) return null;
   // A banned visitor cannot open a conversation (`chat-service` refuses on
@@ -165,7 +188,13 @@ export async function deliverPendingCampaign(
   if (input.bannedAt) return null;
 
   const candidates = await tx.campaignSend.findMany({
-    where: { licenseId: tenant.licenseId, customerId: input.customerId, deliveredAt: null },
+    where: {
+      licenseId: tenant.licenseId,
+      customerId: input.customerId,
+      deliveredAt: null,
+      // Held back for a risk flag: never owed again (EN-01).
+      suppressedAt: null,
+    },
     // Oldest first; the id breaks ties so two sends written by the same
     // `createMany` cannot swap places between polls.
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -196,13 +225,30 @@ export async function deliverPendingCampaign(
   const { access } = await trialState(tx, tenant);
   if (access === 'read_only') return null;
 
+  const suppression = await guardedPromoSuppression(tx, [input.customerId], readSuppression);
+  // Fail-closed: flags that cannot be read show nothing.
+  if (suppression === null) return null;
+  const reason = suppression.get(input.customerId);
+  if (reason !== undefined) {
+    await tx.campaignSend.updateMany({
+      where: {
+        licenseId: tenant.licenseId,
+        customerId: input.customerId,
+        deliveredAt: null,
+        suppressedAt: null,
+      },
+      data: { suppressedAt: now, suppressedReason: reason },
+    });
+    return null;
+  }
+
   // The stamp *is* the claim. `delivered_at: null` in the predicate makes it a
   // compare-and-set: two polls racing (a reconnect firing while the previous
   // request is still in flight) both read the same candidate, but the second
   // blocks on the row lock, re-reads after the first commits and matches
   // nothing. Exactly one of them may answer with the message.
   const stamped = await tx.campaignSend.updateMany({
-    where: { id: deliverable.sendId, deliveredAt: null },
+    where: { id: deliverable.sendId, deliveredAt: null, suppressedAt: null },
     data: { deliveredAt: now },
   });
   if (stamped.count !== 1) return null;

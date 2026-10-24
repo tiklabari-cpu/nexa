@@ -489,6 +489,8 @@ describe('risk flags on the API (AI-27 · tm 302.2)', () => {
       expect(initial.json()).toEqual({
         rg_group_id: null,
         notify_emails: [],
+        // EN-01 karar 2 (tm 350): the defaults until a workspace says otherwise.
+        promo_block: { fraud_suspected: true, complaint_formal: false },
         updated_by: null,
         updated_at: null,
       });

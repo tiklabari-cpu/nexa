@@ -14,6 +14,8 @@
  *
  * A flag cannot be deleted, only cleared with a reason, and not by everyone
  * (`mayClear`): below the type's clearer the button is replaced by who may.
+ * While a flag keeps the player from campaigns the section says so first
+ * ("Promotions blocked", EN-01 · tm 350).
  */
 import { useState, type ReactElement } from 'react';
 import { PanelSection } from '../../components/ui/index.js';
@@ -21,6 +23,7 @@ import { useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { RiskChip } from './RiskChips.js';
+import { PromoBlockedBadge } from './PromoBlocked.js';
 import { AddFlagDialog, ClearFlagDialog } from './RiskDialogs.js';
 import {
   clearerRole,
@@ -45,13 +48,19 @@ export function RiskSection({
 }): ReactElement {
   const t = useTranslate();
   const role = useAuth((s) => s.agent?.role ?? null);
-  const { flags, pending, failed } = useActiveRiskFlags(chatId, customerId);
+  const { flags, pending, failed, promoSuppressed } = useActiveRiskFlags(chatId, customerId);
   const [adding, setAdding] = useState(false);
   const [clearing, setClearing] = useState<RiskFlagItem | null>(null);
   const free = flaggableTypes(flags, chatId);
 
   return (
     <PanelSection title={t('inbox.risk.section')}>
+      {/* EN-01: the server's answer, over flags this panel may not all see. */}
+      {promoSuppressed && (
+        <div className="mb-2">
+          <PromoBlockedBadge />
+        </div>
+      )}
       {pending ? (
         <p className="text-xs text-content-tertiary">{t('inbox.risk.loading')}</p>
       ) : failed ? (

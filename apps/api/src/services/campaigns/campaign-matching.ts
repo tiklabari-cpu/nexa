@@ -197,18 +197,29 @@ export function resolveCampaignStatus(
  * reading it from the same filtered pass costs nothing and keeps all three
  * numbers answering "of the ones actually displayed" rather than two of them
  * quietly answering a different question.
+ *
+ * `suppressed` (EN-01 · tm 350) counts the sends a risk flag held back — the
+ * card's "Not shown due to risk". A suppressed send is never delivered, so it
+ * is never in the other three.
  */
 export function campaignPerformance(
-  sends: ReadonlyArray<{ deliveredAt: Date | null; engaged: boolean; converted: boolean }>,
+  sends: ReadonlyArray<{
+    deliveredAt: Date | null;
+    suppressedAt?: Date | null;
+    engaged: boolean;
+    converted: boolean;
+  }>,
 ): CampaignPerformance {
   let displayed = 0;
   let chats = 0;
   let conversion = 0;
+  let suppressed = 0;
   for (const send of sends) {
+    if (send.suppressedAt) suppressed += 1;
     if (!send.deliveredAt) continue;
     displayed += 1;
     if (send.engaged) chats += 1;
     if (send.converted) conversion += 1;
   }
-  return { displayed, chats, conversion };
+  return { displayed, chats, conversion, suppressed };
 }

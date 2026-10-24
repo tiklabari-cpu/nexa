@@ -94,6 +94,7 @@ export const customers: Messages = {
   'customers.detail.thisCustomer': 'bu müşteri',
   'customers.detail.bannedHint': 'Yeniden sohbet başlatabilecekler.',
   'customers.detail.notBannedHint': 'Yeni sohbetleri engeller. Geçmiş saklanır.',
+  'customers.detail.risk.heading': 'Risk bayrakları',
   'customers.detail.eraseCustomer': 'Bu kişiyi sil',
   'customers.detail.eraseHint':
     'Görüşmelerini, mesajlarını, ziyaretlerini ve biletlerini kalıcı olarak siler. Geri alınamaz.',
@@ -299,6 +300,7 @@ export const customers: Messages = {
   'campaigns.page.stat.conversion': 'Dönüşüm',
 
   'campaigns.status.ongoing': 'Devam eden',
+  'campaigns.page.suppressed': 'Risk nedeniyle gösterilmedi: {count}',
   'campaigns.status.scheduled': 'Zamanlanmış',
   'campaigns.status.inactive': 'Pasif',
   'campaigns.tab.all': 'Tümü',

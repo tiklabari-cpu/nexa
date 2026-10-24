@@ -132,6 +132,10 @@ export type ChatUserType = (typeof CHAT_USER_TYPES)[number];
  * (`report-csv.ts#AI_HANDOFF_TRANSFER`, feeding FR-MOD-06.5's "Transferred %"),
  * so a deterministic bot's transfer filed under that name would inflate a figure
  * about a model that was never consulted.
+ *
+ * `agent_unresponsive` is the inactivity sweep's (WG-03 · tm 340): the agent a
+ * connection was given wrote nothing to the player within the workspace's
+ * `unanswered_transfer_seconds`, so someone else in the team takes it.
  */
 export const TRANSFER_REASONS = [
   'manual',
@@ -139,6 +143,7 @@ export const TRANSFER_REASONS = [
   'agent_disconnected',
   'ai_handoff',
   'bot_handoff',
+  'agent_unresponsive',
 ] as const;
 export type TransferReason = (typeof TRANSFER_REASONS)[number];
 

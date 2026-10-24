@@ -1136,6 +1136,22 @@ model Thread {
   /// (AR-02 · tm 336.1) — the archive's risk filter. Kept by the trigger
   /// `risk_flags_after_insert` as a flag is raised.
   riskFlagTypes    String[]  @default([]) @map("risk_flags")
+  /// When the current assignee was given the connection (WG-03 · tm 340.1):
+  /// the inactivity sweep's clock for "assigned and not answered yet". Kept by
+  /// the trigger `threads_assigned_at` — any write that changes `assignee_id`
+  /// stamps it with the database clock (or clears it with the assignee) unless
+  /// the same write sets it — and moved to the hand-over moment when the AI
+  /// hands a connection to the agent who already holds it. Null while nobody
+  /// holds it, and on a connection assigned before the column existed.
+  assignedAt       DateTime? @map("assigned_at") @db.Timestamptz(6)
+  /// Since when the connection is inactive (WG-03): quiet for the workspace's
+  /// `inactive_after_seconds`, so it leaves its agent's concurrent limit. Null
+  /// while it is lively; the next event clears it.
+  inactiveSince    DateTime? @map("inactive_since") @db.Timestamptz(6)
+  /// How many times the sweep took the connection from an agent who did not
+  /// answer (reason `agent_unresponsive`) — capped by the sweep, so it cannot
+  /// bounce between silent agents forever. CHECK `>= 0` in the migration.
+  unresponsiveTransfers Int  @default(0) @map("unresponsive_transfers") @db.SmallInt
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]
@@ -3495,6 +3511,13 @@ model InboxSettings {
   /// The local hour a conversation day starts at, 0-23 (CHECK in the migration).
   /// Defaults to `DEFAULT_DAY_BOUNDARY.hour`.
   dayBoundaryHour    Int      @default(0) @map("day_boundary_hour") @db.SmallInt
+  /// Seconds an assigned connection may wait for its agent's first reply before
+  /// the sweep passes it to someone else in the team (WG-03 · tm 340). Null: off.
+  /// Positive by CHECK; the endpoint also keeps it below the two windows after it.
+  unansweredTransferSeconds Int? @map("unanswered_transfer_seconds")
+  /// Seconds without an event before a connection is inactive and out of its
+  /// agent's concurrent limit (WG-03). Null: off. Positive by CHECK.
+  inactiveAfterSeconds Int? @map("inactive_after_seconds")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

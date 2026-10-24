@@ -1797,7 +1797,9 @@ export class ChatService {
    * assignee, not queued — is touched: one opened AI-first. Every other one
    * was routed when it opened, or the change itself just routed it (a
    * takeover seats the supervisor, a hand-off to a named agent seats them, a
-   * transfer of a queued connection keeps its place).
+   * transfer of a queued connection keeps its place). One that already has an
+   * assignee only has its `assigned_at` moved to now: the hand-over is when
+   * that agent's wait for a first reply starts (WG-03).
    *
    *   - **An agent wrote to the player** (`agent_message`, AI-11-S2): they
    *     took it, so it is theirs — whatever their load, as a chat they start
@@ -1836,6 +1838,12 @@ export class ChatService {
       where: { id: threadId },
       select: { assigneeId: true, queuePosition: true, groupId: true },
     });
+    // Already someone's: the AI answered while they held it, so their wait for
+    // a first reply starts now, not when it was given to them (WG-03). Only
+    // when the AI took part — `#changeAiMode` returns before this otherwise.
+    if (thread?.assigneeId != null) {
+      await tx.thread.update({ where: { id: threadId }, data: { assignedAt: new Date() } });
+    }
     if (!thread || thread.assigneeId !== null || thread.queuePosition !== null) return null;
 
     const team = targetGroupId ?? thread.groupId;
@@ -4683,6 +4691,7 @@ async function summariseChats(
           ? Number(thread.queueGroupId)
           : null,
       priority: threadPriorityFromRank(thread?.priority ?? 0),
+      inactive: thread?.active === true && thread.inactiveSince !== null,
       unread_count: countUnread(lastEvents.get(chat.id), seenUpTo),
       connection_count: connectionCount(
         chat.localDay,
@@ -5169,6 +5178,8 @@ export interface ChatSummary {
   /** The team whose queue the newest connection waits in (AU-01); null when not queued. */
   queue_group_id: number | null;
   priority: ThreadPriority;
+  /** The newest connection is open and inactive (WG-03, `threads.inactive_since`). */
+  inactive: boolean;
   unread_count: number;
   /** How many connections `ChatDetail.connections` lists for the chat (ID-02). */
   connection_count: number;

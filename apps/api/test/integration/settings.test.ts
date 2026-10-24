@@ -1605,6 +1605,144 @@ describe('settings', () => {
     });
   });
 
+  describe('inactivity windows (WG-03)', () => {
+    // The two windows before auto-close ride on the same row: passed on after
+    // `unanswered_transfer_seconds`, set aside after `inactive_after_seconds`,
+    // closed after `chat_timeout_seconds`. A save that leaves them out of that
+    // order is refused whole, judged against what it would leave stored.
+    type Windows = {
+      chat_timeout_seconds: number | null;
+      unanswered_transfer_seconds: number | null;
+      inactive_after_seconds: number | null;
+    };
+    const put = (body: Record<string, unknown>) =>
+      server.put('/settings/chat-timeout', body, auth(adminToken));
+
+    it('reads both as off until set, and saves and reads them back', async () => {
+      const fresh = await server.get('/settings/chat-timeout', auth(readToken));
+      expect(fresh.json()).toMatchObject({
+        unanswered_transfer_seconds: null,
+        inactive_after_seconds: null,
+      });
+
+      const saved = await put({
+        chat_timeout_seconds: 1800,
+        unanswered_transfer_seconds: 180,
+        inactive_after_seconds: 600,
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        chat_timeout_seconds: 1800,
+        unanswered_transfer_seconds: 180,
+        inactive_after_seconds: 600,
+      } satisfies Windows);
+
+      const row = await owner.inboxSettings.findUniqueOrThrow({
+        where: key(fx.a.licenseId, brandA),
+      });
+      expect(row).toMatchObject({ unansweredTransferSeconds: 180, inactiveAfterSeconds: 600 });
+      const read = await server.get('/settings/chat-timeout', auth(readToken));
+      expect(read.json()).toMatchObject({
+        unanswered_transfer_seconds: 180,
+        inactive_after_seconds: 600,
+      });
+    });
+
+    it('keeps a window left out of a save, and turns one off with null', async () => {
+      await put({
+        chat_timeout_seconds: 1800,
+        unanswered_transfer_seconds: 180,
+        inactive_after_seconds: 600,
+      });
+
+      const timeoutOnly = await put({ chat_timeout_seconds: 3600 });
+      expect(timeoutOnly.json()).toMatchObject({
+        chat_timeout_seconds: 3600,
+        unanswered_transfer_seconds: 180,
+        inactive_after_seconds: 600,
+      } satisfies Windows);
+
+      const off = await put({ chat_timeout_seconds: 3600, inactive_after_seconds: null });
+      expect(off.json()).toMatchObject({
+        unanswered_transfer_seconds: 180,
+        inactive_after_seconds: null,
+      });
+    });
+
+    it.each([
+      [
+        { unanswered_transfer_seconds: 600, inactive_after_seconds: 600 },
+        'transfer_not_before_inactive',
+      ],
+      [
+        { unanswered_transfer_seconds: 900, inactive_after_seconds: 600 },
+        'transfer_not_before_inactive',
+      ],
+      [{ unanswered_transfer_seconds: 1800 }, 'transfer_not_before_timeout'],
+      [{ inactive_after_seconds: 3600 }, 'inactive_not_before_timeout'],
+    ])('refuses windows out of order (%j) and stores nothing', async (windows, problem) => {
+      const response = await put({ chat_timeout_seconds: 1800, ...windows });
+      expect(response.statusCode).toBe(400);
+      const body = response.json() as { error: { type: string; details?: { problem?: string } } };
+      expect(body.error.type).toBe('validation');
+      expect(body.error.details?.problem).toBe(problem);
+      expect(
+        await owner.inboxSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
+      ).toBeNull();
+    });
+
+    it('judges the order against the stored windows a save leaves alone', async () => {
+      await put({
+        chat_timeout_seconds: 1800,
+        unanswered_transfer_seconds: 180,
+        inactive_after_seconds: 600,
+      });
+
+      // Only the transfer window changes, past the stored inactive one.
+      const transfer = await put({ chat_timeout_seconds: 1800, unanswered_transfer_seconds: 600 });
+      expect(transfer.statusCode).toBe(400);
+      // Only auto-close changes, below the stored inactive window.
+      const timeout = await put({ chat_timeout_seconds: 300 });
+      expect(timeout.statusCode).toBe(400);
+
+      const row = await owner.inboxSettings.findUniqueOrThrow({
+        where: key(fx.a.licenseId, brandA),
+      });
+      expect(row).toMatchObject({
+        chatTimeoutSeconds: 1800,
+        unansweredTransferSeconds: 180,
+        inactiveAfterSeconds: 600,
+      });
+    });
+
+    it('rejects a zero, fractional or absurd window, and the database does too', async () => {
+      for (const bad of [0, -60, 1.5, 2_592_001]) {
+        const response = await put({
+          chat_timeout_seconds: null,
+          unanswered_transfer_seconds: bad,
+        });
+        expect(response.statusCode, `${bad} should be rejected`).toBe(400);
+      }
+      await expect(
+        owner.inboxSettings.create({
+          data: { licenseId: fx.a.licenseId, brandId: brandA, inactiveAfterSeconds: 0 },
+        }),
+      ).rejects.toThrow(/inbox_settings_inactive_after_seconds_check/);
+    });
+
+    it('records the windows in the audit entry', async () => {
+      await put({ chat_timeout_seconds: 1800, unanswered_transfer_seconds: 120 });
+      const entry = await owner.auditLogEntry.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId, action: 'settings.chat_timeout_updated' },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(entry.metadata).toMatchObject({
+        unanswered_transfer_seconds: 120,
+        inactive_after_seconds: null,
+      });
+    });
+  });
+
   describe('conversation day boundary', () => {
     // ID-04 (K3): which day a conversation belongs to is the workspace's zone and
     // start hour, not the server's UTC. The setting rides on the chat-timeout row

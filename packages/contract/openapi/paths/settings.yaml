@@ -1546,6 +1546,17 @@ chatTimeout:
       start afterwards — chats already filed under a day keep it — and writes an
       audit entry (`settings.chat_timeout_updated`) carrying the old and new
       boundary.
+
+      The two windows before auto-close (WG-03) are saved here too, and are
+      optional the same way: `unanswered_transfer_seconds` (an assigned
+      connection whose agent has not answered the player for this long goes to
+      someone else in the team) and `inactive_after_seconds` (a connection
+      quiet for this long stops counting against its agent's concurrent
+      limit). Each is a positive integer (up to 30 days) or null for off.
+      Between the windows that are on, the stored result must keep transfer <
+      inactive < auto-close — compared after the save is applied, so a field
+      left out counts with its stored value — or the save is refused with a
+      400 and nothing changes.
     requestBody:
       required: true
       content:
@@ -1573,6 +1584,27 @@ chatTimeout:
                 minimum: 0
                 maximum: 23
                 description: The local hour a conversation day starts at.
+              unanswered_transfer_seconds:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 2592000
+                nullable: true
+                description: >-
+                  Seconds an assigned connection may go without its agent's
+                  first reply before it is transferred (`agent_unresponsive`);
+                  null turns it off. Must be below `inactive_after_seconds` and
+                  `chat_timeout_seconds` when those are on.
+              inactive_after_seconds:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 2592000
+                nullable: true
+                description: >-
+                  Seconds without an event before a connection is inactive and
+                  leaves its agent's concurrent limit; null turns it off. Must be
+                  below `chat_timeout_seconds` when that is on.
     responses:
       "200":
         description: Updated

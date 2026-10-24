@@ -22,9 +22,20 @@
  *     order; a reverse-scrolling transcript reads `pages` and flattens it its
  *     own way rather than fighting a flag here.
  */
-import { useInfiniteQuery } from '@tanstack/react-query';
+import {
+  hashKey,
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import { useCallback, useMemo, useRef } from 'react';
 import { useApiClient } from './auth-store.js';
+
+/**
+ * How many more times `fetchNext` asks when a refresh threw its page away: one to wait out
+ * the refresh, one for the page itself.
+ */
+const LOST_PAGE_RETRIES = 2;
 
 /** The list envelope every paginated endpoint in the contract returns. */
 export interface PagedResponse<T> {
@@ -123,18 +134,47 @@ export function usePagedQuery<T>({
 
   const inFlight = useRef(false);
   const { hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = query;
+  const queryClient = useQueryClient();
+  const keyRef = useRef(queryKey);
+  keyRef.current = queryKey;
 
   const fetchNext = useCallback((): void => {
     if (!hasNextPage || isFetchingNextPage || inFlight.current) return;
     inFlight.current = true;
-    // Both arms, not `finally`: a rejected page has to clear the guard too, and
-    // `void p.finally()` would leave that rejection unhandled. The failure
-    // itself is already on `error`.
-    const settle = (): void => {
-      inFlight.current = false;
+    const key = keyRef.current;
+    const cached = (): InfiniteData<PagedResponse<T>> | undefined =>
+      queryClient.getQueryData<InfiniteData<PagedResponse<T>>>(key);
+    const before = cached()?.pages.length ?? 0;
+    // The page can be thrown away in flight: an invalidation of the list (the inbox's
+    // `POST /seen`, a push) cancels whatever the query is fetching and refetches only the pages
+    // already cached, so the request ends with no new page and the reader's click did nothing
+    // (paging.spec, 2026-10-24). Ask again — `cancelRefetch: false` waits out a refresh still
+    // running rather than cancelling it in turn — but only while the list is the one that was
+    // asked about and its last page still names a next one.
+    const lost = (): boolean => {
+      const data = cached();
+      return (
+        hashKey(keyRef.current) === hashKey(key) &&
+        (data?.pages.length ?? 0) <= before &&
+        data?.pages.at(-1)?.next_page_id != null
+      );
     };
-    void fetchNextPage().then(settle, settle);
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+    const run = async (): Promise<void> => {
+      try {
+        // A page that *failed* is not lost: it stays on `error` for the reader to see and
+        // retry, so only a request that ended without an error is asked again.
+        let result = await fetchNextPage();
+        for (let retry = 0; retry < LOST_PAGE_RETRIES && !result.isError && lost(); retry += 1) {
+          result = await fetchNextPage({ cancelRefetch: false });
+        }
+      } catch {
+        // The failure itself is already on `error`; the guard below must still clear.
+      } finally {
+        inFlight.current = false;
+      }
+    };
+    void run();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, queryClient]);
 
   const refetchAll = useCallback((): void => {
     void refetch();

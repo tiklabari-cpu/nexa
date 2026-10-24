@@ -48,7 +48,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 function renderPaged(overrides: Partial<PagedQueryOptions> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return renderHook(
+  const rendered = renderHook(
     () =>
       usePagedQuery<Row>({
         queryKey: ['rows'],
@@ -61,6 +61,7 @@ function renderPaged(overrides: Partial<PagedQueryOptions> = {}) {
       ),
     },
   );
+  return { ...rendered, queryClient };
 }
 
 beforeEach(() => {
@@ -140,6 +141,35 @@ describe('usePagedQuery', () => {
     act(() => result.current.fetchNext());
     await waitFor(() => expect(result.current.items).toHaveLength(2));
     expect(api.get).toHaveBeenCalledTimes(3);
+  });
+
+  it('still lands the next page when a refresh of the list cancels it in flight', async () => {
+    // The inbox's own sequence (paging.spec "the sidebar counts the view", 2026-10-24 trace):
+    // "Load more" asks for page two, and ~100 ms later `POST /seen` invalidates every chat list.
+    // An invalidation cancels whatever the query is fetching (TanStack's `cancelRefetch`
+    // default) and refetches only the pages already in the cache — one — so the second page
+    // was thrown away and the click did nothing.
+    const second = deferred<PagedResponse<Row>>();
+    api.get
+      .mockResolvedValueOnce(page(['a'], 'cursor-1'))
+      .mockReturnValueOnce(second.promise)
+      .mockResolvedValueOnce(page(['a'], 'cursor-1'))
+      .mockResolvedValueOnce(page(['b']));
+
+    const { result, queryClient } = renderPaged();
+    await waitFor(() => expect(result.current.hasNext).toBe(true));
+
+    act(() => result.current.fetchNext());
+    expect(api.get).toHaveBeenLastCalledWith('/rows?page_id=cursor-1');
+
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['rows'] });
+      second.resolve(page(['b']));
+    });
+
+    await waitFor(() => expect(result.current.items.map((r) => r.id)).toEqual(['a', 'b']));
+    expect(api.get).toHaveBeenCalledTimes(4);
+    expect(api.get).toHaveBeenLastCalledWith('/rows?page_id=cursor-1');
   });
 
   it('does nothing when there is no next page', async () => {

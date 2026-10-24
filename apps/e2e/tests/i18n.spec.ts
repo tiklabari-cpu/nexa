@@ -298,6 +298,11 @@ async function walk(page: Page, surface: Surface): Promise<void> {
 
 test.describe('console i18n', () => {
   test('one switch turns every screen in the shell Turkish, and back', async ({ agentPage }) => {
+    // Seventeen screens, each loaded, read and screenshotted full-page, in one test: it sat
+    // near the suite's 45 s default alone and went over it under the gate's three shards
+    // (tm 314.3, 317.2, 325.1, 331.1). It measures translation, not speed, so it gets a budget
+    // of its own; every wait inside keeps its 10 s ceiling.
+    test.setTimeout(120_000);
     await agentPage.goto('/app/inbox');
     // English is where an agent starts: the seeded session has no stored
     // preference and the browser under test asks for English.

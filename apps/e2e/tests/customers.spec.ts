@@ -75,6 +75,11 @@ test.describe('customers', () => {
 
   test('bans and unbans, keeping the history', async ({ agentPage }) => {
     await agentPage.goto('/app/customers');
+    // Searched for, not expected on the first page: the list opens newest activity first, and
+    // every spec before this one in the shard adds visitors to the shared workspace, so the
+    // seeded Mira can sit past the first fifty rows (red in tm 336.2 and 339.2). The search
+    // survives the segment tabs below, so it holds her on screen for the whole journey.
+    await agentPage.getByRole('searchbox', { name: 'Search customers' }).fill('mira');
     await agentPage.getByRole('button', { name: /Mira Haddad/ }).click();
 
     // Banning asks first (tm 259.8): Cancel leaves her unbanned, the confirmed

@@ -14758,7 +14758,7 @@
           "305"
         ],
         "priority": "high",
-        "updatedAt": "2026-10-24T03:48:11.041Z",
+        "updatedAt": "2026-10-24T04:59:21.493Z",
         "subtasks": [
           {
             "id": 1,
@@ -14766,11 +14766,11 @@
             "description": "Kontrat/types + migration (assigned_at, inactive_since, unresponsive_transfers, ayar kolonları) + tüm atama yollarında assigned_at",
             "details": "Üst görev 340 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "db:check-drift; birim.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "340",
             "priority": "high",
-            "updatedAt": "2026-10-24T03:48:11.041Z"
+            "updatedAt": "2026-10-24T04:59:21.493Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-24T03:48:11.043Z",
+      "lastModified": "2026-10-24T04:59:21.493Z",
       "taskCount": 390,
       "completedCount": 322,
       "tags": [

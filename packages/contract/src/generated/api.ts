@@ -7348,7 +7348,8 @@ export interface paths {
      *     Between the windows that are on, the stored result must keep transfer <
      *     inactive < auto-close — compared after the save is applied, so a field
      *     left out counts with its stored value — or the save is refused with a
-     *     400 and nothing changes.
+     *     400 and nothing changes. `pause_unresponsive_agents` is optional too:
+     *     whether the agent a connection was taken from stops receiving chats.
      */
     put: operations['setChatTimeout'];
     post?: never;
@@ -15498,7 +15499,9 @@ export interface components {
      *     whose agent has not answered the player to someone else in the team,
      *     and `inactive_after_seconds` marks a quiet connection inactive, out of
      *     its agent's concurrent limit until the next message. When on, they keep
-     *     transfer < inactive < auto-close.
+     *     transfer < inactive < auto-close. `pause_unresponsive_agents` (on unless
+     *     turned off) also stops routing to an agent the transfer took a
+     *     connection from: they go `not_accepting_chats` until they switch back.
      */
     ChatTimeoutSettings: {
       /**
@@ -15531,6 +15534,8 @@ export interface components {
        * @description Seconds without an event before a connection is inactive and stops counting against its agent's concurrent limit; null when off.
        */
       inactive_after_seconds: number | null;
+      /** @description Whether an agent whose connection the unanswered transfer took is set to `not_accepting_chats` (and told why). True unless turned off. */
+      pause_unresponsive_agents: boolean;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -30849,6 +30854,8 @@ export interface operations {
            * @description Seconds without an event before a connection is inactive and leaves its agent's concurrent limit; null turns it off. Must be below `chat_timeout_seconds` when that is on.
            */
           inactive_after_seconds?: number | null;
+          /** @description Whether an agent whose connection the unanswered transfer took goes `not_accepting_chats`. Left out, the stored value stays. */
+          pause_unresponsive_agents?: boolean;
         };
       };
     };

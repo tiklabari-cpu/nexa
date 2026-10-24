@@ -7482,7 +7482,9 @@ components:
         whose agent has not answered the player to someone else in the team,
         and `inactive_after_seconds` marks a quiet connection inactive, out of
         its agent's concurrent limit until the next message. When on, they keep
-        transfer < inactive < auto-close.
+        transfer < inactive < auto-close. `pause_unresponsive_agents` (on unless
+        turned off) also stops routing to an agent the transfer took a
+        connection from: they go `not_accepting_chats` until they switch back.
       required:
         [
           chat_timeout_seconds,
@@ -7490,6 +7492,7 @@ components:
           day_boundary_hour,
           unanswered_transfer_seconds,
           inactive_after_seconds,
+          pause_unresponsive_agents,
           updated_at,
         ]
       properties:
@@ -7535,6 +7538,11 @@ components:
           description: >-
             Seconds without an event before a connection is inactive and stops
             counting against its agent's concurrent limit; null when off.
+        pause_unresponsive_agents:
+          type: boolean
+          description: >-
+            Whether an agent whose connection the unanswered transfer took is
+            set to `not_accepting_chats` (and told why). True unless turned off.
         updated_at: { type: string, format: date-time, nullable: true }
 
     WidgetSettings:

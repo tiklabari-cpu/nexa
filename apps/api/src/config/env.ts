@@ -1163,6 +1163,14 @@ export const envSchema = z.object({
    */
   SCHEDULE_AI_UNRESOLVED_MERGE_MS: z.coerce.number().int().positive().default(86_400_000),
   /**
+   * The inactivity sweep (WG-03 · tm 340.2): a connection its agent left
+   * unanswered goes to someone else in the team, a quiet one leaves its
+   * agent's limit. Every 20 seconds — the analysis asked for 15–30: a player
+   * waits at most the workspace's `unanswered_transfer_seconds` plus one
+   * interval, and a pass with both windows off reads one settings row.
+   */
+  SCHEDULE_CHAT_INACTIVITY_MS: z.coerce.number().int().positive().default(20_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

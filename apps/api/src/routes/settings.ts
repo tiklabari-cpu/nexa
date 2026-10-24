@@ -574,6 +574,9 @@ const updateChatTimeoutBody = z.object({
     .max(INACTIVITY_WINDOW_MAX_SECONDS)
     .nullable()
     .optional(),
+  // Whether the transfer also stops routing to the agent it took the
+  // connection from (tm 340.2). Optional the same way.
+  pause_unresponsive_agents: z.boolean().optional(),
 });
 
 /** What a save whose windows are out of order is told (`chatInactivityOrderProblem`). */
@@ -2791,6 +2794,10 @@ export default async function settingsRoutes(
             ? {}
             : { dayBoundaryHour: body.day_boundary_hour }),
         };
+        const pause =
+          body.pause_unresponsive_agents === undefined
+            ? {}
+            : { pauseUnresponsiveAgents: body.pause_unresponsive_agents };
         const row = await tx.inboxSettings.upsert({
           where,
           create: {
@@ -2799,8 +2806,14 @@ export default async function settingsRoutes(
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
             ...dayBoundary,
+            ...pause,
           },
-          update: { chatTimeoutSeconds: body.chat_timeout_seconds, ...windows, ...dayBoundary },
+          update: {
+            chatTimeoutSeconds: body.chat_timeout_seconds,
+            ...windows,
+            ...dayBoundary,
+            ...pause,
+          },
         });
         const after = dayBoundaryFromRow(row);
         const boundaryChanged = after.timezone !== before.timezone || after.hour !== before.hour;
@@ -2810,6 +2823,7 @@ export default async function settingsRoutes(
             chat_timeout_seconds: body.chat_timeout_seconds,
             unanswered_transfer_seconds: row.unansweredTransferSeconds,
             inactive_after_seconds: row.inactiveAfterSeconds,
+            pause_unresponsive_agents: row.pauseUnresponsiveAgents,
             day_boundary_timezone: after.timezone,
             day_boundary_hour: after.hour,
             // Only when it moved: a timeout-only save is not a boundary change,
@@ -3645,6 +3659,7 @@ function serialiseInbox(
         chatTimeoutSeconds: number | null;
         unansweredTransferSeconds: number | null;
         inactiveAfterSeconds: number | null;
+        pauseUnresponsiveAgents: boolean;
         updatedAt: Date;
       })
     | null,
@@ -3660,6 +3675,8 @@ function serialiseInbox(
     day_boundary_hour: boundary.hour,
     unanswered_transfer_seconds: row?.unansweredTransferSeconds ?? null,
     inactive_after_seconds: row?.inactiveAfterSeconds ?? null,
+    // No row = the column's default: on.
+    pause_unresponsive_agents: row?.pauseUnresponsiveAgents ?? true,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

@@ -26,7 +26,9 @@ import type { Env } from '../../config/env.js';
  * the tenth sends a person to a visitor the AI left unanswered (tm 293.6);
  * the eleventh deletes the AI test bench's expired sandbox sessions (tm 314.2);
  * the twelfth groups the questions the AI could not resolve and raises their
- * surge alarm, and the thirteenth merges the groups it split, nightly (tm 317.2).
+ * surge alarm, and the thirteenth merges the groups it split, nightly (tm 317.2);
+ * the fourteenth passes on a connection its agent left unanswered and marks a
+ * quiet one inactive (tm 340.2).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -42,6 +44,7 @@ export const SCHEDULER_JOB_NAMES = [
   'ai_sandbox_sessions',
   'ai_unresolved_cluster',
   'ai_unresolved_merge',
+  'chat_inactivity',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -67,6 +70,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_AI_SANDBOX_SESSIONS_MS'
   | 'SCHEDULE_AI_UNRESOLVED_CLUSTER_MS'
   | 'SCHEDULE_AI_UNRESOLVED_MERGE_MS'
+  | 'SCHEDULE_CHAT_INACTIVITY_MS'
 >;
 
 /**
@@ -91,6 +95,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     ai_sandbox_sessions: env.SCHEDULE_AI_SANDBOX_SESSIONS_MS,
     ai_unresolved_cluster: env.SCHEDULE_AI_UNRESOLVED_CLUSTER_MS,
     ai_unresolved_merge: env.SCHEDULE_AI_UNRESOLVED_MERGE_MS,
+    chat_inactivity: env.SCHEDULE_CHAT_INACTIVITY_MS,
   };
 }
 

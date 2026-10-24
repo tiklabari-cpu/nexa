@@ -59,6 +59,7 @@ describe('buildSchedulerJobs', () => {
       'ai_sandbox_sessions',
       'ai_unresolved_cluster',
       'ai_unresolved_merge',
+      'chat_inactivity',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -80,6 +81,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_AI_SANDBOX_SESSIONS_MS: '13000',
       SCHEDULE_AI_UNRESOLVED_CLUSTER_MS: '14000',
       SCHEDULE_AI_UNRESOLVED_MERGE_MS: '15000',
+      SCHEDULE_CHAT_INACTIVITY_MS: '16000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -98,6 +100,7 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('ai_sandbox_sessions')).toBe(13_000);
     expect(intervalOf('ai_unresolved_cluster')).toBe(14_000);
     expect(intervalOf('ai_unresolved_merge')).toBe(15_000);
+    expect(intervalOf('chat_inactivity')).toBe(16_000);
   });
 
   it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
@@ -147,6 +150,20 @@ describe('buildSchedulerJobs', () => {
       );
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({ tenants: 0, stalled: 0, handed_over: 0 });
+    });
+
+    it('chat_inactivity finds nothing to pass on and reports zero tenants (tm 340.2)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'chat_inactivity',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        transferred: 0,
+        queued: 0,
+        marked_inactive: 0,
+        cleared_inactive: 0,
+      });
     });
 
     it('ai_sandbox_sessions finds nothing expired and deletes nothing (tm 314.2)', async () => {

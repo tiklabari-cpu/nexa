@@ -3518,6 +3518,9 @@ model InboxSettings {
   /// Seconds without an event before a connection is inactive and out of its
   /// agent's concurrent limit (WG-03). Null: off. Positive by CHECK.
   inactiveAfterSeconds Int? @map("inactive_after_seconds")
+  /// Whether the inactivity sweep sets an agent it took an unanswered
+  /// connection from to `not_accepting_chats` (WG-03 · tm 340.2). On by default.
+  pauseUnresponsiveAgents Boolean @default(true) @map("pause_unresponsive_agents")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

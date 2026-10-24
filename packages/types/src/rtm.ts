@@ -144,6 +144,12 @@ export const RTM_PUSH_ACTIONS = [
   // (AI-11 · tm 293.5); agents only.
   'chat_ai_mode_changed',
   'chat_access_updated',
+  // The inactivity sweep (WG-03 · tm 340.2): an agent left a connection
+  // unanswered and nobody else could take it (`ChatUnansweredAlertPush`), to
+  // the team's leads; a connection went quiet or stopped being
+  // (`ChatInactivityChangedPush`), to its agents.
+  'chat_unanswered_alert',
+  'chat_inactivity_changed',
   'user_added_to_chat',
   'user_removed_from_chat',
   'queue_positions_updated',
@@ -336,6 +342,13 @@ export interface SneakPeekPush {
 export interface RoutingStatusSetPush {
   agent_id: string;
   status: RoutingStatus;
+  /**
+   * Set when the system changed it rather than the agent: `agent_unresponsive`
+   * — the inactivity sweep took a connection the agent had not answered in
+   * time and stopped routing to them (WG-03 · tm 340.2), so their console can
+   * say why. Absent on the agent's own change.
+   */
+  reason?: 'agent_unresponsive';
 }
 
 /**

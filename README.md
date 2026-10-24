@@ -355,6 +355,7 @@ enabled flag, and last run's time/status.
 | `invoice_close`      | 1 h              | Freezes a closed billing period into a statement (FR-MOD-10.3)                   |
 | `unverified_signups` | 1 h              | Deletes an expired sign-up nobody verified, with its empty workspace (tm 257.19) |
 | `ai_stall`           | 15 s             | Sends a person to an AI-first conversation the AI left unanswered (tm 293.6)     |
+| `chat_inactivity`    | 20 s             | Passes on a chat its agent left unanswered; frees a quiet one's slot (tm 340.2)  |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see

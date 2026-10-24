@@ -204,7 +204,7 @@ describe('campaignPerformance', () => {
         { deliveredAt: delivered, engaged: true, converted: false },
         { deliveredAt: delivered, engaged: true, converted: true },
       ]),
-    ).toEqual({ displayed: 3, chats: 2, conversion: 1 });
+    ).toEqual({ displayed: 3, chats: 2, conversion: 1, suppressed: 0 });
   });
 
   it('does not count a send that has not been delivered yet as displayed (FR-MOD-03.3.3)', () => {
@@ -213,7 +213,7 @@ describe('campaignPerformance', () => {
         { deliveredAt: delivered, engaged: false, converted: false },
         { deliveredAt: null, engaged: false, converted: false },
       ]),
-    ).toEqual({ displayed: 1, chats: 0, conversion: 0 });
+    ).toEqual({ displayed: 1, chats: 0, conversion: 0, suppressed: 0 });
   });
 
   it('does not count an undelivered send as a conversion, even if the goal already fired (FR-MOD-03.3.3)', () => {
@@ -224,6 +224,7 @@ describe('campaignPerformance', () => {
       displayed: 0,
       chats: 0,
       conversion: 0,
+      suppressed: 0,
     });
   });
 
@@ -233,10 +234,27 @@ describe('campaignPerformance', () => {
         { deliveredAt: null, engaged: false, converted: false },
         { deliveredAt: null, engaged: false, converted: false },
       ]),
-    ).toEqual({ displayed: 0, chats: 0, conversion: 0 });
+    ).toEqual({ displayed: 0, chats: 0, conversion: 0, suppressed: 0 });
   });
 
   it('is all zeros for a campaign that has fired at nobody', () => {
-    expect(campaignPerformance([])).toEqual({ displayed: 0, chats: 0, conversion: 0 });
+    expect(campaignPerformance([])).toEqual({
+      displayed: 0,
+      chats: 0,
+      conversion: 0,
+      suppressed: 0,
+    });
+  });
+
+  it('counts the sends a risk flag held back apart from the displayed ones (EN-01 · tm 350)', () => {
+    const at = new Date();
+    expect(
+      campaignPerformance([
+        { deliveredAt: null, suppressedAt: at, engaged: false, converted: true },
+        { deliveredAt: null, suppressedAt: at, engaged: false, converted: false },
+        { deliveredAt: at, suppressedAt: null, engaged: true, converted: false },
+        { deliveredAt: null, suppressedAt: null, engaged: false, converted: false },
+      ]),
+    ).toEqual({ displayed: 1, chats: 1, conversion: 0, suppressed: 2 });
   });
 });

@@ -447,7 +447,7 @@ describe('campaigns', () => {
     // Four visitors matched and each got a `campaign_sends` row, but none has
     // been delivered yet (that only happens off the widget's own poll) — a
     // campaign nobody has seen must read all zeros, not four displayed.
-    expect(campaign.performance).toEqual({ displayed: 0, chats: 0, conversion: 0 });
+    expect(campaign.performance).toEqual({ displayed: 0, chats: 0, conversion: 0, suppressed: 0 });
 
     await owner.campaignSend.updateMany({
       where: { campaignId: campaign.id, customerId: { in: [c1, c2, c3] } },
@@ -472,7 +472,12 @@ describe('campaigns', () => {
     });
 
     const refreshed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
-    expect(refreshed?.performance).toEqual({ displayed: 3, chats: 2, conversion: 1 });
+    expect(refreshed?.performance).toEqual({
+      displayed: 3,
+      chats: 2,
+      conversion: 1,
+      suppressed: 0,
+    });
   });
 
   it("never counts another tenant's delivered send toward this campaign's figures", async () => {
@@ -515,7 +520,12 @@ describe('campaigns', () => {
     });
 
     const refreshed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
-    expect(refreshed?.performance).toEqual({ displayed: 1, chats: 0, conversion: 0 });
+    expect(refreshed?.performance).toEqual({
+      displayed: 1,
+      chats: 0,
+      conversion: 0,
+      suppressed: 0,
+    });
   });
 
   // --- `matched` — the "just reached" notification's number (tm 244) --------

@@ -15,16 +15,28 @@
  * anyone below is not shown a door that only answers 403; the route stays the
  * real boundary. A saved address list is sent only when it changed, so a team
  * change alone is not recorded as a change of who is mailed.
+ *
+ * A third card is the promotion rule (EN-01 · tm 350): which flags keep a
+ * player from campaigns. Responsible gaming's four are shown on and locked —
+ * the platform's, refused by the server if switched off — and the workspace
+ * decides about suspected fraud and a formal complaint. Loosening it lets a
+ * flagged player see bonuses again, so it is a high-risk setting (GV-06):
+ * saved through `ConfirmHighRisk`, with a reason the audit entry keeps.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import {
+  LOCKED_PROMO_FLAGS,
+  PROMO_POLICY_FLAGS,
   RISK_FLAG_DEFAULTS,
   RISK_FLAG_NOTIFY_EMAILS_MAX,
   RISK_FLAG_TYPES,
+  type PromoPolicy,
+  type PromoPolicyFlag,
   type RiskFlagType,
 } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { ConfirmHighRisk } from '../../components/settings/ConfirmHighRisk.js';
 import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -91,6 +103,15 @@ function RiskFlagSettingsCard({ canEdit }: { canEdit: boolean }): ReactElement {
           />
         )}
       </Card>
+      {settings.data && (
+        <Card>
+          <PromoPolicyForm
+            config={settings.data}
+            canEdit={canEdit}
+            onSaved={(data) => queryClient.setQueryData(RISK_FLAG_SETTINGS_KEY, data)}
+          />
+        </Card>
+      )}
       <Card>
         <RiskFlagLegend />
       </Card>
@@ -233,6 +254,105 @@ function RiskFlagSettingsForm({
       )}
       {canEdit && <FormSaveBar form={form} />}
     </form>
+  );
+}
+
+/**
+ * Which flags keep a player from campaigns (EN-01). The draft starts from the
+ * saved policy; after a save the two agree again and the card goes quiet.
+ */
+function PromoPolicyForm({
+  config,
+  canEdit,
+  onSaved,
+}: {
+  config: RiskFlagSettingsData;
+  canEdit: boolean;
+  onSaved: (data: RiskFlagSettingsData) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const [draft, setDraft] = useState<PromoPolicy>(config.promo_block);
+  const [confirming, setConfirming] = useState(false);
+  const changed = PROMO_POLICY_FLAGS.filter((type) => draft[type] !== config.promo_block[type]);
+
+  const save = useMutation({
+    mutationFn: (reason: string) =>
+      api.put<RiskFlagSettingsData>('/risk-flags/settings', {
+        promo_block: Object.fromEntries(changed.map((type) => [type, draft[type]])),
+        reason,
+      }),
+    onSuccess: onSaved,
+  });
+
+  const effect = (block: boolean) =>
+    block ? t('settings.riskFlags.promo.blocks') : t('settings.riskFlags.promo.doesNotBlock');
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <div>
+        <h3 className="text-sm font-medium">{t('settings.riskFlags.promo.title')}</h3>
+        <p className="text-2xs text-content-tertiary">
+          {t('settings.riskFlags.promo.description')}
+        </p>
+      </div>
+      <ul className="flex flex-col gap-1.5 text-sm">
+        {LOCKED_PROMO_FLAGS.map((type) => (
+          <li key={type}>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked disabled />
+              <span>{t(`inbox.risk.type.${type}`)}</span>
+              <span className="text-2xs text-content-tertiary">
+                {t('settings.riskFlags.promo.locked')}
+              </span>
+            </label>
+          </li>
+        ))}
+        {PROMO_POLICY_FLAGS.map((type: PromoPolicyFlag) => (
+          <li key={type}>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft[type]}
+                disabled={!canEdit}
+                onChange={(event) => setDraft({ ...draft, [type]: event.target.checked })}
+              />
+              <span>{t(`inbox.risk.type.${type}`)}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="text-2xs text-content-tertiary">{t('settings.riskFlags.promo.permanent')}</p>
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={changed.length === 0}
+            onClick={() => setConfirming(true)}
+            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-2 disabled:opacity-40"
+          >
+            {t('settings.riskFlags.promo.save')}
+          </button>
+          {save.isSuccess && changed.length === 0 && (
+            <p role="status" className="text-2xs text-success">
+              {t('settings.riskFlags.saved')}
+            </p>
+          )}
+        </div>
+      )}
+      {confirming && (
+        <ConfirmHighRisk
+          changes={changed.map((type) => ({
+            key: type,
+            label: t(`inbox.risk.type.${type}`),
+            from: effect(config.promo_block[type]),
+            to: effect(draft[type]),
+          }))}
+          onClose={() => setConfirming(false)}
+          onConfirm={(reason) => save.mutateAsync(reason)}
+        />
+      )}
+    </div>
   );
 }
 

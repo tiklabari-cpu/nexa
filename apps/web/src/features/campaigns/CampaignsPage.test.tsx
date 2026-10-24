@@ -42,7 +42,7 @@ function campaign(status: CampaignStatus, name: string, over: Partial<Campaign> 
     ends_at: null,
     recurring: false,
     created_at: '2026-07-26T12:00:00.000Z',
-    performance: { displayed: 0, chats: 0, conversion: 0 },
+    performance: { displayed: 0, chats: 0, conversion: 0, suppressed: 0 },
     ...over,
   };
 }
@@ -50,7 +50,7 @@ function campaign(status: CampaignStatus, name: string, over: Partial<Campaign> 
 const LIST = {
   items: [
     campaign('ongoing', 'Running', {
-      performance: { displayed: 200, chats: 30, conversion: 12 },
+      performance: { displayed: 200, chats: 30, conversion: 12, suppressed: 0 },
     }),
     campaign('scheduled', 'Later'),
     campaign('inactive', 'Off'),
@@ -101,6 +101,25 @@ describe('CampaignsPage', () => {
     // Conversion shows the count and its rate (12 / 200 = 6%).
     expect(stats.getByText('Conversion').parentElement).toHaveTextContent('12');
     expect(stats.getByText('Conversion').parentElement).toHaveTextContent('6%');
+  });
+
+  it('says how many matched players a risk flag kept it from, only when some were (EN-01 · tm 350)', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        campaign('ongoing', 'Bonus', {
+          performance: { displayed: 5, chats: 0, conversion: 0, suppressed: 3 },
+        }),
+        campaign('ongoing', 'Clean'),
+      ],
+      total: 2,
+    });
+    renderPage();
+    const bonus = (await screen.findByText('Bonus')).closest('div.rounded-lg') as HTMLElement;
+    expect(within(bonus).getByTestId('campaign-suppressed')).toHaveTextContent(
+      'Not shown due to risk: 3',
+    );
+    const clean = screen.getByText('Clean').closest('div.rounded-lg') as HTMLElement;
+    expect(within(clean).queryByTestId('campaign-suppressed')).not.toBeInTheDocument();
   });
 
   it('toggles a campaign off (FR-MOD-03.3.3)', async () => {

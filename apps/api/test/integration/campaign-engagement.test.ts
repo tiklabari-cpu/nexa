@@ -201,7 +201,7 @@ describe('campaign engagement', () => {
       items: { id: string; performance: { displayed: number; chats: number } }[];
     };
     const row = items.find((c) => c.id === campaign.id);
-    expect(row?.performance).toEqual({ displayed: 1, chats: 1, conversion: 0 });
+    expect(row?.performance).toEqual({ displayed: 1, chats: 1, conversion: 0, suppressed: 0 });
   });
 
   // --- Which send, when more than one is outstanding -----------------------

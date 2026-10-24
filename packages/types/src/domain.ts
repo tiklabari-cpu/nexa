@@ -543,6 +543,11 @@ export interface CampaignPerformance {
   chats: number;
   /** Of those, how many reached a goal. */
   conversion: number;
+  /**
+   * Matched visitors never shown the message because a risk flag keeps them
+   * from promotions (EN-01 · tm 350) — the card's "Not shown due to risk".
+   */
+  suppressed: number;
 }
 
 export interface Campaign {

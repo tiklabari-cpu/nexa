@@ -27,6 +27,7 @@ vi.mock('../../lib/auth-store.js', () => ({
 const SAVED: RiskFlagSettingsData = {
   rg_group_id: 2,
   notify_emails: ['rg@example.com'],
+  promo_block: { fraud_suspected: true, complaint_formal: false },
   updated_by: null,
   updated_at: null,
 };
@@ -194,5 +195,55 @@ describe('Risk flag settings (AI-27)', () => {
     );
     expect(await screen.findByLabelText('Sorumlu Oyun ekibi')).toHaveValue('2');
     expect(screen.getAllByText('Bayrak türleri').length).toBeGreaterThan(0);
+  });
+
+  describe('campaigns for flagged players (EN-01 · tm 350)', () => {
+    it('shows the responsible gaming flags on and locked, and the workspace’s two as saved', async () => {
+      mount();
+      const locked = await screen.findByRole('checkbox', { name: /Responsible gaming signal/ });
+      expect(locked).toBeChecked();
+      expect(locked).toBeDisabled();
+      expect(screen.getByRole('checkbox', { name: /Self-harm/ })).toBeDisabled();
+      expect(screen.getByRole('checkbox', { name: 'Suspected fraud' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Formal complaint' })).not.toBeChecked();
+      expect(screen.getByRole('button', { name: 'Save campaign rules' })).toBeDisabled();
+    });
+
+    it('saves only the changed type, with the reason the high-risk confirm asks for', async () => {
+      api.put.mockImplementation(async () => ({
+        ...SAVED,
+        promo_block: { fraud_suspected: true, complaint_formal: true },
+      }));
+      mount();
+      fireEvent.click(await screen.findByRole('checkbox', { name: 'Formal complaint' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save campaign rules' }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByTestId('high-risk-from-complaint_formal')).toHaveTextContent(
+        'Does not block campaigns',
+      );
+      expect(within(dialog).getByTestId('high-risk-to-complaint_formal')).toHaveTextContent(
+        'Blocks campaigns',
+      );
+      fireEvent.change(within(dialog).getByLabelText('Reason'), {
+        target: { value: 'Şikâyet eden oyunculara bonus göstermeyelim.' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm and save' }));
+
+      await waitFor(() =>
+        expect(api.put).toHaveBeenCalledWith('/risk-flags/settings', {
+          promo_block: { complaint_formal: true },
+          reason: 'Şikâyet eden oyunculara bonus göstermeyelim.',
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByRole('checkbox', { name: 'Formal complaint' })).toBeChecked();
+    });
+
+    it('is read-only without the right to edit', async () => {
+      mount(false);
+      expect(await screen.findByRole('checkbox', { name: 'Suspected fraud' })).toBeDisabled();
+      expect(screen.queryByRole('button', { name: 'Save campaign rules' })).not.toBeInTheDocument();
+    });
   });
 });

@@ -9,7 +9,9 @@
  *     `POST /chats/{id}/risk-flags`. Type decides scope and severity
  *     (`RISK_FLAG_DEFAULTS`); `basis` is `declared` in F1 (AI-27-S3). A
  *     conversation carries one active flag of a type: a second raise returns
- *     the first, serialised by an advisory lock on (chat, type).
+ *     the first, serialised by an advisory lock on (chat, type). A flag that
+ *     keeps its player from promotions holds back the campaigns already
+ *     queued for them, in the same transaction (EN-01 · tm 350).
  *   - **Clear** ({@link clearRiskFlag}): with a reason, by the type's clearer
  *     and up (AI-27-S2, `canClearRiskFlag`), once. The row's trigger holds the
  *     rest — a flag is never rewritten, and never deleted.
@@ -50,6 +52,7 @@ import {
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
+import { suppressSendsForRaisedFlag } from './promo-suppression.js';
 
 /** One flag to raise on a conversation. */
 export interface RiskFlagRaise {
@@ -127,6 +130,9 @@ export async function raiseRiskFlag(
       raisedBy: input.raisedBy,
     },
   });
+  // The campaigns queued for the player stop here, with the flag (EN-01): a
+  // send written before the flag must not reach them on the next poll.
+  await suppressSendsForRaisedFlag(tx, flag, flag.raisedAt);
   return { flag, created: true };
 }
 

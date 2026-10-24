@@ -30,6 +30,7 @@ import type {
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { guardedPromoSuppression, suppressedSendData } from '../risk/promo-suppression.js';
 import {
   campaignPerformance,
   computeCampaignStatus,
@@ -45,7 +46,7 @@ const LIVE_WINDOW_MINUTES = 30;
 
 /** The columns needed to build a DTO — sends included for the performance count. */
 const CAMPAIGN_INCLUDE = {
-  sends: { select: { deliveredAt: true, engaged: true, converted: true } },
+  sends: { select: { deliveredAt: true, suppressedAt: true, engaged: true, converted: true } },
 } satisfies Prisma.CampaignInclude;
 
 type CampaignRow = Prisma.CampaignGetPayload<{ include: typeof CAMPAIGN_INCLUDE }>;
@@ -341,8 +342,29 @@ export class CampaignService {
     }
     if (matched.length === 0) return { sent: 0, invited: [] };
 
+    // A visitor a risk flag keeps from promotions is not targeted (EN-01 ·
+    // tm 350): their send is written already suppressed — the card counts it
+    // as held back — and they are neither `sent` nor `invited`. Flags that
+    // cannot be read write every send as usual; the poll is the gate that
+    // fails closed (`campaign-delivery.ts`).
+    const suppression = (await guardedPromoSuppression(tx, matched)) ?? new Map();
+    const held = matched.filter((customerId) => suppression.has(customerId));
+    const targeted = matched.filter((customerId) => !suppression.has(customerId));
+    if (held.length > 0) {
+      await tx.campaignSend.createMany({
+        data: held.map((customerId) => ({
+          licenseId: tenant.licenseId,
+          campaignId,
+          customerId,
+          ...suppressedSendData(suppression.get(customerId)!, now),
+        })),
+        skipDuplicates: true,
+      });
+    }
+    if (targeted.length === 0) return { sent: 0, invited: [] };
+
     const result = await tx.campaignSend.createMany({
-      data: matched.map((customerId) => ({
+      data: targeted.map((customerId) => ({
         licenseId: tenant.licenseId,
         campaignId,
         customerId,
@@ -358,7 +380,7 @@ export class CampaignService {
     // them anyway costs one re-read of a first page — whereas trimming the list
     // to the count would need to know *which* of the two a `skipDuplicates`
     // insert dropped, which it does not report.
-    return { sent: result.count, invited: matched };
+    return { sent: result.count, invited: targeted };
   }
 
   async #reload(tx: TenantClient, tenant: TenantContext, id: string): Promise<Campaign> {

@@ -125,6 +125,7 @@ test.describe('risk flags (AI-27)', () => {
     const original = await emails.inputValue();
     try {
       await emails.fill(address);
+      // `exact`: the campaign rules card beside it has its own Save (tm 350).
       await Promise.all([
         agentPage.waitForResponse(
           (response) =>
@@ -132,7 +133,7 @@ test.describe('risk flags (AI-27)', () => {
             response.url().endsWith('/risk-flags/settings') &&
             response.ok(),
         ),
-        agentPage.getByRole('button', { name: 'Save' }).click(),
+        agentPage.getByRole('button', { name: 'Save', exact: true }).click(),
       ]);
       await expect(agentPage.getByText('Saved.')).toBeVisible();
 
@@ -146,8 +147,8 @@ test.describe('risk flags (AI-27)', () => {
       );
     } finally {
       await agentPage.getByLabel('Also email urgent flags to').fill(original);
-      await agentPage.getByRole('button', { name: 'Save' }).click();
-      await expect(agentPage.getByRole('button', { name: 'Save' })).toBeDisabled();
+      await agentPage.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(agentPage.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
     }
   });
 });

@@ -667,6 +667,9 @@ export const inbox: Messages = {
     'Raised in an earlier conversation with this player. It stays on the player until it is cleared.',
   'inbox.risk.staysOnPlayer': 'Stays on the player in every later conversation until cleared.',
   'inbox.risk.declared': 'Based on what the player said — their identity has not been verified.',
+  'inbox.risk.promoBlocked': 'Promotions blocked',
+  'inbox.risk.promoBlockedHint':
+    'This player is shown no campaign while a flag of theirs, or of a record linked to them, is active.',
   'inbox.risk.noteLabel': 'Note',
   'inbox.risk.policy.mustHandoff': 'The AI writes nothing more here; a person answers.',
   'inbox.risk.policy.noBonusTalk': 'The AI offers no bonus, promotion or deposit.',

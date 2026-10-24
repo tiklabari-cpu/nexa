@@ -345,3 +345,101 @@ export function riskPolicy(flags: readonly RiskPolicyFlag[], chatId: string | nu
     targetTeamKey: lead?.topic ?? null,
   };
 }
+
+/**
+ * Promotions and a flagged player (EN-01 · tm 350): whether a player is shown
+ * no campaign — the campaign engine's delivery, its fire at a visitor and at
+ * the live audience, and later AI-08's bonus talk, EN-02's card, KN-01's
+ * template and IN-07's suggestion all ask {@link isPromoSuppressed}, one
+ * function, many callers.
+ *
+ * Two kinds of type keep a player from promotions:
+ *
+ *   - {@link LOCKED_PROMO_FLAGS} — responsible gaming's four (`noPromotions`
+ *     in {@link RISK_FLAG_DEFAULTS}): always, whatever the workspace says. A
+ *     settings write that tries to switch one off is a 400
+ *     (`promo_flag_locked`); only a platform release changes the list;
+ *   - {@link PROMO_POLICY_FLAGS} — the workspace's choice
+ *     (`risk_flag_settings.promo_block_fraud` / `promo_block_complaint`):
+ *     suspected fraud on by default, a formal complaint off (EN-01 karar 2).
+ *
+ * Every other type promotes nothing either way. What counts is every active
+ * flag on the player, of either scope and in any conversation: a promotion
+ * goes to a person, not to a conversation, so a fraud flag raised in last
+ * week's chat still keeps this week's bonus away until someone clears it.
+ */
+export const LOCKED_PROMO_FLAGS = [
+  'rg_signal',
+  'self_exclusion_request',
+  'underage_suspected',
+  'self_harm',
+] as const satisfies readonly RiskFlagType[];
+export type LockedPromoFlag = (typeof LOCKED_PROMO_FLAGS)[number];
+
+/** The types a workspace decides about, and the setting each one is. */
+export const PROMO_POLICY_FLAGS = [
+  'fraud_suspected',
+  'complaint_formal',
+] as const satisfies readonly RiskFlagType[];
+export type PromoPolicyFlag = (typeof PROMO_POLICY_FLAGS)[number];
+
+/** The workspace's half of the rule (`risk_flag_settings`), keyed by type. */
+export type PromoPolicy = Readonly<Record<PromoPolicyFlag, boolean>>;
+
+/** A workspace that never saved one (the columns' defaults). */
+export const PROMO_POLICY_DEFAULTS: PromoPolicy = {
+  fraud_suspected: true,
+  complaint_formal: false,
+};
+
+/** `details.reason` of the 400 a settings write switching a locked type off gets. */
+export const PROMO_FLAG_LOCKED_REASON = 'promo_flag_locked';
+/** `details.reason` of the 400 a settings write naming a type no workspace decides about gets. */
+export const PROMO_FLAG_NOT_CONFIGURABLE_REASON = 'promo_flag_not_configurable';
+
+export function isLockedPromoFlag(type: RiskFlagType): type is LockedPromoFlag {
+  return (LOCKED_PROMO_FLAGS as readonly string[]).includes(type);
+}
+
+export function isPromoPolicyFlag(type: RiskFlagType): type is PromoPolicyFlag {
+  return (PROMO_POLICY_FLAGS as readonly string[]).includes(type);
+}
+
+/** Whether a flag of `type` keeps its player from promotions under `policy`. */
+export function blocksPromotions(type: RiskFlagType, policy: PromoPolicy): boolean {
+  if (isLockedPromoFlag(type)) return true;
+  return isPromoPolicyFlag(type) && policy[type];
+}
+
+/**
+ * The type that keeps the player from promotions, or null: of the flags that
+ * do, a locked one before the workspace's, then the earlier in
+ * {@link RISK_FLAG_TYPES} — what a suppressed send records as its reason
+ * (`campaign_sends.suppressed_reason`). Cleared flags never count.
+ */
+export function promoSuppressionReason(
+  flags: ReadonlyArray<{ readonly type: RiskFlagType; readonly status?: RiskFlagStatus }>,
+  policy: PromoPolicy,
+): RiskFlagType | null {
+  let best: RiskFlagType | null = null;
+  let bestRank = Number.POSITIVE_INFINITY;
+  for (const flag of flags) {
+    if (flag.status === 'cleared' || !blocksPromotions(flag.type, policy)) continue;
+    const rank =
+      (isLockedPromoFlag(flag.type) ? 0 : RISK_FLAG_TYPES.length) +
+      RISK_FLAG_TYPES.indexOf(flag.type);
+    if (rank < bestRank) {
+      best = flag.type;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
+/** Whether a player with `flags` is shown no promotion under `policy` (EN-01). */
+export function isPromoSuppressed(
+  flags: ReadonlyArray<{ readonly type: RiskFlagType; readonly status?: RiskFlagStatus }>,
+  policy: PromoPolicy,
+): boolean {
+  return promoSuppressionReason(flags, policy) !== null;
+}

@@ -1805,6 +1805,11 @@ model CampaignSend {
   /// backdating "delivered" to the match time would claim a visitor saw a
   /// message before the poll that could have shown it ever ran.
   deliveredAt DateTime? @map("delivered_at") @db.Timestamptz(6)
+  /// When a risk flag kept this send from the player (EN-01 · tm 350); it is
+  /// never delivered afterwards, even once the flag is cleared.
+  suppressedAt DateTime? @map("suppressed_at") @db.Timestamptz(6)
+  /// The flag type that did it (`RISK_FLAG_TYPES`, by CHECK); with `suppressedAt`.
+  suppressedReason String? @map("suppressed_reason")
 
   license  License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -2411,6 +2416,10 @@ model RiskFlagSettings {
   licenseId    BigInt   @id @map("license_id")
   rgGroupId    BigInt?  @map("rg_group_id")
   notifyEmails String[] @default([]) @map("notify_emails")
+  /// EN-01 karar 2: suspected fraud keeps a player from campaigns unless switched off.
+  promoBlockFraud Boolean @default(true) @map("promo_block_fraud")
+  /// EN-01 karar 2: a formal complaint does not unless switched on.
+  promoBlockComplaint Boolean @default(false) @map("promo_block_complaint")
   updatedBy    String?  @map("updated_by") @db.Uuid
   updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 

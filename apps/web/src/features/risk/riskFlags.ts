@@ -17,6 +17,7 @@ import {
   RISK_FLAG_TYPES,
   canClearRiskFlag,
   type AgentRole,
+  type PromoPolicy,
   type RiskFlagBasis,
   type RiskFlagScope,
   type RiskFlagSeverity,
@@ -57,10 +58,23 @@ export interface RiskFlagPage {
   next_page_id?: string;
 }
 
+/**
+ * A player's list (`GET /customers/{id}/risk-flags`): the page, and whether
+ * the player is shown campaigns (EN-01 · tm 350) — the server's answer, over
+ * every flag of theirs and of the records linked to them, which this panel
+ * may not all see.
+ */
+export interface CustomerRiskFlagPage extends RiskFlagPage {
+  promo_suppressed: boolean;
+  promo_suppressed_reason: RiskFlagType | null;
+}
+
 /** `GET|PUT /risk-flags/settings`. */
 export interface RiskFlagSettingsData {
   rg_group_id: number | null;
   notify_emails: string[];
+  /** Which of the workspace's two types keep a player from campaigns (EN-01). */
+  promo_block: PromoPolicy;
   updated_by: string | null;
   updated_at: string | null;
 }

@@ -21,6 +21,13 @@ import {
   RISK_FLAG_SEVERITIES,
   RISK_FLAG_TYPES,
   riskPolicy,
+  blocksPromotions,
+  isPromoSuppressed,
+  LOCKED_PROMO_FLAGS,
+  PROMO_POLICY_DEFAULTS,
+  PROMO_POLICY_FLAGS,
+  promoSuppressionReason,
+  type PromoPolicy,
   type RiskFlagSignal,
   type RiskFlagType,
   type RiskPolicyFlag,
@@ -253,5 +260,66 @@ describe('what a flag says outside the panel (AI-27-S4 · tm 302.2)', () => {
       expect.arrayContaining(['risk_flag_raised', 'risk_flag_cleared']),
     );
     expect(RISK_FLAG_NOTIFY_EMAILS_MAX).toBe(5);
+  });
+});
+
+describe('promotions and a flagged player (EN-01 · tm 350)', () => {
+  const ALL_ON: PromoPolicy = { fraud_suspected: true, complaint_formal: true };
+  const ALL_OFF: PromoPolicy = { fraud_suspected: false, complaint_formal: false };
+
+  it('locks exactly the types whose defaults keep promotions off — one list with AI-27', () => {
+    const noPromotions = RISK_FLAG_TYPES.filter((type) => RISK_FLAG_DEFAULTS[type].noPromotions);
+    expect([...LOCKED_PROMO_FLAGS].sort()).toEqual([...noPromotions].sort());
+    expect(LOCKED_PROMO_FLAGS).toEqual(
+      expect.arrayContaining(['rg_signal', 'self_exclusion_request', 'underage_suspected']),
+    );
+  });
+
+  it('lets no workspace policy switch a locked type off', () => {
+    for (const type of LOCKED_PROMO_FLAGS) {
+      expect(blocksPromotions(type, ALL_OFF)).toBe(true);
+      expect(isPromoSuppressed([{ type }], ALL_OFF)).toBe(true);
+    }
+  });
+
+  it('blocks on fraud by default and not on a complaint; the workspace may turn either', () => {
+    expect(PROMO_POLICY_DEFAULTS).toEqual({ fraud_suspected: true, complaint_formal: false });
+    expect(isPromoSuppressed([{ type: 'fraud_suspected' }], PROMO_POLICY_DEFAULTS)).toBe(true);
+    expect(isPromoSuppressed([{ type: 'complaint_formal' }], PROMO_POLICY_DEFAULTS)).toBe(false);
+    expect(isPromoSuppressed([{ type: 'fraud_suspected' }], ALL_OFF)).toBe(false);
+    expect(isPromoSuppressed([{ type: 'complaint_formal' }], ALL_ON)).toBe(true);
+  });
+
+  it('never blocks on the types no workspace decides about', () => {
+    const others = RISK_FLAG_TYPES.filter(
+      (type) =>
+        !(LOCKED_PROMO_FLAGS as readonly string[]).includes(type) &&
+        !(PROMO_POLICY_FLAGS as readonly string[]).includes(type),
+    );
+    expect(others.length).toBeGreaterThan(0);
+    for (const type of others) expect(isPromoSuppressed([{ type }], ALL_ON)).toBe(false);
+  });
+
+  it('ignores a cleared flag and means nothing without flags', () => {
+    expect(isPromoSuppressed([], ALL_ON)).toBe(false);
+    expect(isPromoSuppressed([{ type: 'self_exclusion_request', status: 'cleared' }], ALL_ON)).toBe(
+      false,
+    );
+    expect(isPromoSuppressed([{ type: 'self_exclusion_request', status: 'active' }], ALL_ON)).toBe(
+      true,
+    );
+  });
+
+  it('names a locked type before the workspace’s, then the earlier type', () => {
+    expect(
+      promoSuppressionReason(
+        [{ type: 'fraud_suspected' }, { type: 'underage_suspected' }, { type: 'rg_signal' }],
+        ALL_ON,
+      ),
+    ).toBe('rg_signal');
+    expect(
+      promoSuppressionReason([{ type: 'complaint_formal' }, { type: 'fraud_suspected' }], ALL_ON),
+    ).toBe('complaint_formal');
+    expect(promoSuppressionReason([{ type: 'abusive' }], ALL_ON)).toBeNull();
   });
 });

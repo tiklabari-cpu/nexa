@@ -71,6 +71,12 @@ export interface ChainableRow {
   action: string;
   actorId: string | null;
   actorType: string;
+  /**
+   * `platform` entries only (tm 389.2). Optional so every row written before
+   * the column existed — and every row since that leaves it null — hashes to
+   * exactly the bytes it always did.
+   */
+  onBehalfOf?: string | null;
   target: string | null;
   metadata: unknown;
   ip: string | null;
@@ -109,6 +115,9 @@ export function chainPayload(row: ChainableRow): string {
     canonicalJson(row.metadata),
     row.ip,
     row.prevHash,
+    // Appended, and only when set: positional, so a null here would change
+    // the payload of every entry in history (tm 389.2).
+    ...(row.onBehalfOf != null ? [row.onBehalfOf] : []),
   ]);
 }
 
@@ -337,6 +346,7 @@ export function verifyAuditChain(
       action: row.action,
       actorId: row.actorId,
       actorType: row.actorType,
+      onBehalfOf: row.onBehalfOf ?? null,
       target: row.target,
       metadata: row.metadata,
       ip: row.ip,

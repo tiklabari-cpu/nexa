@@ -16344,8 +16344,13 @@ export interface components {
       action: string;
       /** @description The acting account/bot/customer id, or null when unknown. */
       actor_id?: string | null;
-      /** @enum {string} */
-      actor_type: 'agent' | 'bot' | 'customer' | 'system';
+      /**
+       * @description `platform` is SiyahTuş staff acting from the root panel: `actor_id` is the operator, never a member of this workspace.
+       * @enum {string}
+       */
+      actor_type: 'agent' | 'bot' | 'customer' | 'system' | 'platform';
+      /** @description Present only on `platform` entries written while an operator was signed in as a member (support impersonation): that member's account id. Absent everywhere else. */
+      on_behalf_of?: string;
       /** @description The object acted on, as `<kind>:<id>` (e.g. `token:…`). */
       target?: string | null;
       /** @description Non-sensitive detail — field names, counts, roles. */
@@ -16399,8 +16404,13 @@ export interface components {
       action: string;
       /** @description The acting account/bot/customer id, or null when unknown. */
       actor_id?: string | null;
-      /** @enum {string} */
-      actor_type: 'agent' | 'bot' | 'customer' | 'system';
+      /**
+       * @description `platform` is SiyahTuş staff acting from the root panel: `actor_id` is the operator, never a member of this workspace.
+       * @enum {string}
+       */
+      actor_type: 'agent' | 'bot' | 'customer' | 'system' | 'platform';
+      /** @description Present only on `platform` entries written while an operator was signed in as a member (support impersonation): that member's account id. Absent everywhere else. */
+      on_behalf_of?: string;
       /** @description The object acted on, as `<kind>:<id>` (e.g. `token:…`). */
       target?: string | null;
       /** @description Non-sensitive detail — field names, counts, roles. Exported exactly as stored; it was stripped of anything credential-shaped on the way in, and filtering again here would let the exported copy and the entry an admin reads on screen disagree about what happened. */
@@ -18133,7 +18143,7 @@ export interface components {
       /** @enum {string} */
       billing_cycle: 'monthly' | 'annual';
       /** @enum {string} */
-      status: 'trialing' | 'active' | 'past_due' | 'read_only' | 'canceled';
+      status: 'trialing' | 'active' | 'past_due' | 'read_only' | 'canceled' | 'suspended';
       /**
        * @description What the workspace may do right now.
        * @enum {string}

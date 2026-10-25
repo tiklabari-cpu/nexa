@@ -13,6 +13,7 @@ import type { PrismaClient } from '@prisma/client';
 import {
   capabilitiesForRole,
   credentialGrantFor,
+  isLicenseClosed,
   scopesForCredential,
   type AgentRole,
   type PermissionMatrixCache,
@@ -34,8 +35,15 @@ export interface IssuedToken {
   scopes: string[];
 }
 
-/** Every bearer credential this product mints, by what it is allowed to reach. */
-export type TokenKind = 'pat' | 'oauth' | 'bot' | 'scim' | 'enrollment';
+/**
+ * Every bearer credential this product mints, by what it is allowed to reach.
+ *
+ * `impersonation` (tm 389.2) is minted only by the SQL function
+ * `auth_consume_impersonation_handoff`, never by {@link TokenService.issue},
+ * and {@link TokenService.resolve} refuses it until the impersonation gate
+ * (389.15) stands in front of it.
+ */
+export type TokenKind = 'pat' | 'oauth' | 'bot' | 'scim' | 'enrollment' | 'impersonation';
 
 interface ResolvedTokenRow {
   id: string;
@@ -50,10 +58,14 @@ interface ResolvedTokenRow {
   revoked_at: Date | null;
   license_status: string;
   organization_region: string;
+  /** Set on `impersonation` tokens only; the session the token was traded for. */
+  impersonation_session_id: string | null;
+  impersonation_mode: string | null;
+  impersonation_admin_id: string | null;
 }
 
 export type TokenRejection =
-  'unknown' | 'revoked' | 'expired' | 'idle_expired' | 'license_expired' | 'membership_missing';
+  'unknown' | 'revoked' | 'expired' | 'idle_expired' | 'license_closed' | 'membership_missing';
 
 export type TokenResolution =
   /**
@@ -63,7 +75,12 @@ export type TokenResolution =
    * C4-b.
    */
   | { ok: true; principal: Principal; licenseStatus: string; region: Region }
-  | { ok: false; reason: TokenRejection };
+  /**
+   * `licenseStatus` rides along on `license_closed` only: a suspended
+   * workspace's genuine credential is answered 403 `workspace_suspended` by
+   * `plugins/auth.ts`, not the 401 every other rejection gets.
+   */
+  | { ok: false; reason: TokenRejection; licenseStatus?: string };
 
 /** The membership read that decides a member's token, in one statement. */
 interface MembershipRow {
@@ -103,16 +120,20 @@ export class TokenService {
    * the response would confirm which tokens are real.
    */
   async resolve(token: string): Promise<TokenResolution> {
-    const rows = await this.db.$queryRaw<ResolvedTokenRow[]>`
-      SELECT * FROM auth_resolve_token(${hashToken(token)})
-    `;
-    const row = rows[0];
+    const row = await this.#lookup(token);
     if (!row) return { ok: false, reason: 'unknown' };
     if (row.revoked_at) return { ok: false, reason: 'revoked' };
     if (row.expires_at && row.expires_at.getTime() <= Date.now()) {
       return { ok: false, reason: 'expired' };
     }
-    if (row.license_status === 'canceled') return { ok: false, reason: 'license_expired' };
+    if (isLicenseClosed(row.license_status)) {
+      return { ok: false, reason: 'license_closed', licenseStatus: row.license_status };
+    }
+    // Closed until the impersonation gate exists (389.15): resolved as the
+    // member it names, this token would carry their full role whatever mode
+    // the session was opened in. `unknown`, like any credential this process
+    // does not honour.
+    if (row.kind === 'impersonation') return { ok: false, reason: 'unknown' };
 
     // The column is `TEXT` in the row type because that is what Postgres hands
     // back; the CHECK constraint on `organizations.region` is what makes the
@@ -278,6 +299,13 @@ export class TokenService {
     };
   }
 
+  async #lookup(token: string): Promise<ResolvedTokenRow | undefined> {
+    const rows = await this.db.$queryRaw<ResolvedTokenRow[]>`
+      SELECT * FROM auth_resolve_token(${hashToken(token)})
+    `;
+    return rows[0];
+  }
+
   /**
    * The workspace's matrix at `version` — a cache hit unless it just moved.
    * The version comes from the same statement as the role, so the snapshot
@@ -430,19 +458,27 @@ export class TokenService {
     token: string,
   ): Promise<{ id: string; licenseId: bigint; organizationId: string } | null> {
     const resolution = await this.resolve(token);
-    if (!resolution.ok) return null;
-    const { principal } = resolution;
-    if (principal.kind === 'customer') return null;
-    const revoked = await this.revoke({
-      licenseId: principal.licenseId,
-      organizationId: principal.organizationId,
-      tokenId: principal.tokenId,
-    });
+    let target: { tokenId: string; licenseId: bigint; organizationId: string };
+    if (resolution.ok) {
+      const { principal } = resolution;
+      if (principal.kind === 'customer') return null;
+      target = principal;
+    } else if (resolution.licenseStatus === 'suspended') {
+      // Signing out stays open while the platform has the workspace locked
+      // (tm 389.2): the credential is genuine, only unusable, and a member who
+      // signs out expects it gone when the suspension is lifted.
+      const row = await this.#lookup(token);
+      if (!row || row.revoked_at) return null;
+      target = { tokenId: row.id, licenseId: row.license_id, organizationId: row.organization_id };
+    } else {
+      return null;
+    }
+    const revoked = await this.revoke(target);
     if (!revoked) return null;
     return {
-      id: principal.tokenId,
-      licenseId: principal.licenseId,
-      organizationId: principal.organizationId,
+      id: target.tokenId,
+      licenseId: target.licenseId,
+      organizationId: target.organizationId,
     };
   }
 

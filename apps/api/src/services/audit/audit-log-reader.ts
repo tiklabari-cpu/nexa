@@ -56,6 +56,7 @@ export interface AuditLogItem {
   action: string;
   actor_id: string | null;
   actor_type: string;
+  on_behalf_of?: string;
   target: string | null;
   metadata: unknown;
   ip: string | null;
@@ -186,6 +187,7 @@ type AuditRow = {
   action: string;
   actorId: string | null;
   actorType: string;
+  onBehalfOf?: string | null;
   target: string | null;
   metadata: unknown;
   ip: string | null;
@@ -198,6 +200,9 @@ function toItem(row: AuditRow): AuditLogItem {
     action: row.action,
     actor_id: row.actorId,
     actor_type: row.actorType,
+    // `platform` entries written during an impersonation only (tm 389.2);
+    // absent elsewhere, so every other entry reads exactly as it did.
+    ...(row.onBehalfOf != null ? { on_behalf_of: row.onBehalfOf } : {}),
     target: row.target,
     metadata: row.metadata,
     ip: row.ip,

@@ -26,7 +26,7 @@ import {
   type TopicDoc,
 } from '@siyahtus/ai-mock';
 import { ApiError } from '../../lib/api-error.js';
-import { TRIAL_PLAN } from '../../lib/entitlements.js';
+import { readEntitlements } from '../../lib/entitlements.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import {
   benchmarkWindow,
@@ -40,7 +40,6 @@ import {
 import { type CsvCell } from '../../routes/reports-export.js';
 import { reviewInsights, type ReviewInsight } from './review-insights.js';
 import { aiResolvedSql } from '../billing/ai-resolution.js';
-import { entitlementsForPlan } from '../billing/subscription-service.js';
 
 // ===========================================================================
 // Shared aggregation
@@ -197,12 +196,9 @@ export async function slaActive(tx: TenantClient, licenseId: bigint): Promise<bo
   if (!policy || (policy.firstResponseMinutes === null && policy.resolutionMinutes === null)) {
     return false;
   }
-  const subscription = await tx.subscription.findFirst({
-    where: { licenseId },
-    orderBy: { createdAt: 'desc' },
-    select: { plan: true },
-  });
-  return entitlementsForPlan(subscription?.plan ?? TRIAL_PLAN).sla;
+  // The gate's own read, so the platform's override counts here too (tm 389.2).
+  const { entitlements } = await readEntitlements(tx, { licenseId });
+  return entitlements.sla;
 }
 
 /** The three stages of the Goals funnel over one window, as raw counts. */

@@ -30,6 +30,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { isLicenseClosed } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import {
   channelCredentialAad,
@@ -436,7 +437,7 @@ export class ChannelService {
     ) {
       throw ApiError.authentication('Invalid webhook secret.');
     }
-    if (target.license_status === 'canceled' || !target.address) {
+    if (isLicenseClosed(target.license_status) || !target.address) {
       throw ApiError.notFound('Unknown channel recipient.');
     }
     const normalized = telegram.live.parseUpdate(body, target.address);
@@ -619,7 +620,7 @@ export class ChannelService {
     }
 
     const match = rows[0];
-    if (!match || match.license_status === 'canceled') {
+    if (!match || isLicenseClosed(match.license_status)) {
       throw ApiError.notFound('Unknown channel recipient.');
     }
     return { licenseId: match.license_id, organizationId: match.organization_id };

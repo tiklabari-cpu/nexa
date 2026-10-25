@@ -1605,11 +1605,17 @@ export function mount(doc: Document = document, win: Window = window): void {
       // credential it logs in with.
       openSocket();
     } catch (error) {
-      // A check the visitor turned away is not an outage.
+      // A check the visitor turned away is not an outage. A workspace the
+      // platform suspended (tm 389.2) is not one a retry will fix either, and
+      // says so rather than "try again shortly".
       state.error = t(
         error instanceof WidgetApiError && error.type === 'challenge_required'
           ? 'error.challenge'
-          : 'error.connect',
+          : error instanceof WidgetApiError &&
+              error.type === 'not_allowed' &&
+              error.details?.reason === 'workspace_suspended'
+            ? 'error.suspended'
+            : 'error.connect',
       );
       renderStatus();
       // The real reason goes nowhere near the visitor.

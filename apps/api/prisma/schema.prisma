@@ -150,6 +150,16 @@ model License {
   /// bumped in that transaction, so a cache keyed by licence and version is
   /// never older than the rows once a reader asks for the current version.
   permissionsVersion    Int       @default(0) @map("permissions_version")
+  /// The platform's suspension (tm 389.2): set with `status = 'suspended'`
+  /// and cleared when it is lifted (`licenses_suspension_check`). The reason
+  /// is the operator's and is shown to nobody in the workspace. All three are
+  /// written by the platform only — `licenses_suspension_platform_only`
+  /// refuses the tenant API's role, which Prisma cannot model.
+  suspendedAt           DateTime? @map("suspended_at") @db.Timestamptz(6)
+  suspendedReason       String?   @map("suspended_reason")
+  /// When the platform's purge job (389.10) may delete this workspace's data,
+  /// if nobody lifts the suspension or the cancellation first.
+  purgeScheduledAt      DateTime? @map("purge_scheduled_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -268,6 +278,9 @@ model License {
   platformNotes          PlatformNote[]
   platformImpersonations PlatformImpersonationSession[]
   platformCredits        PlatformCredit[]
+  /// The platform's override of the plan (tm 389.2) — readable here, written
+  /// only by the platform.
+  override               LicenseOverride?
 
   @@index([organizationId])
   @@map("licenses")
@@ -809,12 +822,19 @@ model ApiToken {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   lastUsedAt     DateTime? @map("last_used_at") @db.Timestamptz(6)
   revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  /// The platform session an `impersonation` token was traded for (tm 389.2),
+  /// and set on no other kind (`api_tokens_impersonation_session_check`).
+  /// Minted only by `auth_consume_impersonation_handoff`; the session's end
+  /// and window bound the token in `auth_resolve_token`.
+  impersonationSessionId String? @map("impersonation_session_id") @db.Uuid
 
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license              License                       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  impersonationSession PlatformImpersonationSession? @relation(fields: [impersonationSessionId], references: [id], onDelete: Cascade)
 
   @@index([licenseId, kind])
   @@index([ownerId])
   @@index([familyId])
+  @@index([impersonationSessionId])
   @@map("api_tokens")
 }
 
@@ -4099,6 +4119,9 @@ model AuditLogEntry {
   licenseId BigInt   @map("license_id")
   actorId   String?  @map("actor_id")
   actorType String   @default("agent") @map("actor_type")
+  /// `actor_type = 'platform'` only (tm 389.2): the member's account id while
+  /// an operator is signed in as them. `actor_id` is then the operator.
+  onBehalfOf String? @map("on_behalf_of")
   action    String
   target    String?
   metadata  Json     @default("{}")
@@ -5121,10 +5144,33 @@ model PlatformImpersonationSession {
   admin   PlatformAdmin @relation(fields: [adminId], references: [id])
   license License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   account Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// The tenant credentials this session was traded for (tm 389.2).
+  tokens  ApiToken[]
 
   @@index([licenseId, startedAt(sort: Desc)])
   @@index([adminId, startedAt(sort: Desc)])
   @@map("platform_impersonation_sessions")
+}
+
+/// The platform's override of one workspace's plan (tm 389.2 · design §B3).
+/// Written by the platform only — the tenant role holds SELECT and nothing
+/// else; a row past `expiresAt` is ignored. A key present in `entitlements`
+/// replaces the plan's value (`lib/entitlements.ts`); `seatCeiling` replaces
+/// `SEAT_CEILING`; `mailDailyCap` replaces `MAIL_DAILY_PER_WORKSPACE`
+/// (`mail_budget_spend`). The AI caps live on `licenses` (tm 283.2).
+model LicenseOverride {
+  licenseId    BigInt    @id @map("license_id")
+  entitlements Json      @default("{}")
+  seatCeiling  Int?      @map("seat_ceiling")
+  mailDailyCap Int?      @map("mail_daily_cap")
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz(6)
+  /// The operator (`platform_admins.id`); not a foreign key, the row outlives them.
+  updatedBy    String?   @map("updated_by") @db.Uuid
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("license_overrides")
 }
 
 /// A credit an operator granted a workspace, in minor units (389.12).

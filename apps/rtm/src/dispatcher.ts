@@ -7,7 +7,13 @@
  * a socket.
  */
 import type { Logger } from 'pino';
-import { RTM_LIMITS, RTM_PUSH_ACTIONS, type ErrorType, type RtmAction } from '@siyahtus/types';
+import {
+  RTM_LIMITS,
+  RTM_PUSH_ACTIONS,
+  WORKSPACE_SUSPENDED_REASON,
+  type ErrorType,
+  type RtmAction,
+} from '@siyahtus/types';
 import { principalLogContext, type SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { ConflictDetectionService } from './conflict.js';
 import type { ConflictPublisher } from './conflict-publisher.js';
@@ -115,6 +121,18 @@ export class Dispatcher {
           type: 'misdirected_request',
           message: 'Wrong region for this organization.',
           details: { region: result.region },
+        });
+      }
+
+      // The platform suspended the workspace (tm 389.2): the credential is
+      // genuine, and the REST edge says so with the same 403, so a client
+      // shows "temporarily out of service" instead of signing in again.
+      if (result.reason === 'workspace_suspended') {
+        this.deps.log.debug({ request_id: message.request_id }, 'rtm login refused: suspended');
+        return encodeError(message.request_id, 'login', {
+          type: 'not_allowed',
+          message: 'This workspace is temporarily suspended.',
+          details: { reason: WORKSPACE_SUSPENDED_REASON },
         });
       }
 

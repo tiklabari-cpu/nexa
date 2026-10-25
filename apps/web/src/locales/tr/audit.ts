@@ -20,6 +20,7 @@ export const audit: Messages = {
   'audit.actor.bot': 'Bot',
   'audit.actor.customer': 'Müşteri',
   'audit.actor.system': 'Sistem',
+  'audit.actor.platform': 'SiyahTuş destek',
   'audit.filterByActionAriaLabel': 'Eyleme göre filtrele',
   'audit.allActions': 'Tüm eylemler',
   'audit.fromDateAriaLabel': 'Başlangıç tarihi',

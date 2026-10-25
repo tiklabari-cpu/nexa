@@ -35,7 +35,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { isScope } from '@siyahtus/types';
+import { isLicenseClosed, isScope } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { activePreviousCertificate, readSsoAttributeMapping } from '../lib/sso-connection.js';
@@ -212,7 +212,7 @@ export default async function samlRoutes(
    * Everything downstream takes its tenant from the row this returns and never
    * from anything the caller sent.
    *
-   * Missing, disabled and belonging-to-a-canceled-workspace are all "not
+   * Missing, disabled and belonging-to-a-closed-workspace are all "not
    * found": a connection id is a URL somebody may paste anywhere, and the
    * difference between "no such connection" and "that workspace has SSO turned
    * off" is not something an anonymous caller should be able to measure.
@@ -221,7 +221,7 @@ export default async function samlRoutes(
     const rows = await app.db.$queryRaw<SsoConnectionRow[]>`
       SELECT * FROM auth_find_sso_connection(${connectionId}::uuid)`;
     const row = rows[0];
-    if (!row || !row.enabled || row.license_status === 'canceled') {
+    if (!row || !row.enabled || isLicenseClosed(row.license_status)) {
       throw ApiError.notFound('Single sign-on is not available for this connection.');
     }
     return row;

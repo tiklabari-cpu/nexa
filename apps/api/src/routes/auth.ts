@@ -8,6 +8,7 @@ import {
   delegableScopes,
   isScope,
   DEFAULT_PRECHAT_CONFIG,
+  isLicenseClosed,
   isMemberTokenCookieName,
   memberTokenCookieName,
   normalizePrechatConfig,
@@ -22,6 +23,7 @@ import {
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { licenseClosedError } from '../lib/license-closed.js';
 import { cookieNames, readCookie, serializeCookie } from '../lib/cookie.js';
 import { verifyPassword } from '../lib/crypto.js';
 import { poweredByFor } from '../lib/entitlements.js';
@@ -683,8 +685,8 @@ export default async function authRoutes(
     if (membership.organization_id !== client.organization_id) {
       throw ApiError.notFound('Workspace not found.');
     }
-    if (membership.license_status === 'canceled') {
-      throw new ApiError('license_expired', 'This workspace is no longer active.');
+    if (isLicenseClosed(membership.license_status)) {
+      throw licenseClosedError(membership.license_status);
     }
 
     // --- Email verification (tm 257.7 · ADR K-e(1)) -------------------------
@@ -1260,8 +1262,8 @@ export default async function authRoutes(
    *   password reset proves the inbox and gives the account a secret of its own.
    *
    * Memberships come from `auth_list_memberships`, so suspended ones do not
-   * count, and a canceled licence does not either: a workspace nobody can enter
-   * is not one somebody can be locked out of. Same reading
+   * count, and a closed (canceled or suspended) licence does not either: a
+   * workspace nobody can enter is not one somebody can be locked out of. Same reading
    * `auth_two_factor_enforcing_licenses` gives a suspension.
    *
    * Called *before* anything is written, so an unproven caller cannot even
@@ -1292,7 +1294,7 @@ export default async function authRoutes(
     }
 
     const memberships = (await oauth.listMemberships(accountId)).filter(
-      (m) => m.license_status !== 'canceled',
+      (m) => !isLicenseClosed(m.license_status),
     );
     if (memberships.length > 1) {
       throw new ApiError(
@@ -1686,8 +1688,8 @@ export default async function authRoutes(
       );
       throw ApiError.authorization('This origin is not a trusted domain for the organization.');
     }
-    if (match.license_status === 'canceled') {
-      throw new ApiError('license_expired', 'This workspace is no longer active.');
+    if (isLicenseClosed(match.license_status)) {
+      throw licenseClosedError(match.license_status);
     }
 
     const tenant = { licenseId: match.license_id, organizationId: match.organization_id };

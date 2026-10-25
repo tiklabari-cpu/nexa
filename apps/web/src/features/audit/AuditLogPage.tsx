@@ -85,7 +85,7 @@ interface AuditLogEntry {
   id: string;
   action: string;
   actor_id: string | null;
-  actor_type: 'agent' | 'bot' | 'customer' | 'system';
+  actor_type: 'agent' | 'bot' | 'customer' | 'system' | 'platform';
   target: string | null;
   metadata: Record<string, unknown>;
   ip: string | null;

@@ -17,6 +17,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { costsTokenResolution, readCredential } from '../lib/credential.js';
 import { decideIpAccess } from '../lib/ip-allowlist.js';
+import { workspaceSuspended } from '../lib/license-closed.js';
 import {
   UUID_RE,
   withTenant,
@@ -222,6 +223,17 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     }
 
     const resolved = await resolvePrincipal();
+    // A genuine credential of a workspace the platform suspended (tm 389.2).
+    // Every authenticated route answers it 403 `workspace_suspended`, reads
+    // included — the lock is total, unlike `read_only` — so the panel can show
+    // "temporarily out of service" rather than renew a token that is not the
+    // problem. Not charged to the failure budget: nothing about it is a guess.
+    // A public route ignores it like any credential it cannot use; that is
+    // what keeps `/auth/revoke` (signing out) and `/health` open.
+    if (resolved === 'suspended') {
+      if (config.public) return;
+      throw workspaceSuspended();
+    }
     if (!resolved) {
       // Charge the query this failure just cost to the address that asked for
       // it (M-SEC-c1 · §D116 LOW/1). Only lookups that actually reached the
@@ -495,7 +507,9 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
      * residency decision as well as the identity one, and a region returned
      * separately (or looked up later) is a region somebody can forget to read.
      */
-    async function resolvePrincipal(): Promise<{ principal: Principal; region: Region } | null> {
+    async function resolvePrincipal(): Promise<
+      { principal: Principal; region: Region } | 'suspended' | null
+    > {
       // Customer tokens carry a recognisable prefix, so the common case costs
       // one string comparison instead of a database round-trip.
       if (credential!.scheme === 'bearer' && credential!.value.startsWith('nxc1.')) {
@@ -510,6 +524,7 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       }
 
       const resolution = await tokens.resolve(credential!.value);
+      if (!resolution.ok && resolution.licenseStatus === 'suspended') return 'suspended';
       if (!resolution.ok) {
         // The precise reason is logged but never returned: telling a caller
         // that a token is "expired" rather than "unknown" confirms it was real.

@@ -10,6 +10,7 @@ export const pt: Record<string, string> = {
   'status.offline': 'No momento não há ninguém disponível — deixe uma mensagem e responderemos.',
   'connection.lost': 'Conexão perdida. Reconectando…',
   'error.connect': 'O chat está indisponível no momento. Tente novamente em breve.',
+  'error.suspended': 'O chat está temporariamente fora de serviço.',
   'error.upload': 'Não foi possível anexar esse arquivo.',
   'error.send': 'Mensagem não enviada. Verifique sua conexão e tente novamente.',
   'error.rejected': 'Não foi possível enviar essa mensagem. Tente escrevê-la de outra forma.',

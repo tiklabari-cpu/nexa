@@ -143,6 +143,21 @@ describe('entry hash', () => {
   it('carries a version tag, so a future encoding cannot be confused with this one', () => {
     expect(chainPayload(row())).toContain('siyahtus.audit.chain.v1.row');
   });
+
+  it('hashes a row without on_behalf_of to the bytes it always had, and commits to one that has it (tm 389.2)', () => {
+    // Every entry written before the column existed, and every one since that
+    // leaves it null, must still verify: the field is appended only when set.
+    expect(chainPayload(row({ onBehalfOf: null }))).toBe(chainPayload(row()));
+    expect(JSON.parse(chainPayload(row()))).toHaveLength(12);
+
+    const onBehalf = row({ actorType: 'platform', onBehalfOf: 'acct-1' });
+    expect(chainRowHash(KEY, onBehalf)).not.toBe(
+      chainRowHash(KEY, { ...onBehalf, onBehalfOf: null }),
+    );
+    expect(chainRowHash(KEY, onBehalf)).not.toBe(
+      chainRowHash(KEY, { ...onBehalf, onBehalfOf: 'acct-2' }),
+    );
+  });
 });
 
 describe('canonical JSON', () => {

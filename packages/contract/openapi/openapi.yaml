@@ -281,6 +281,8 @@ paths:
     $ref: "./paths/tickets.yaml#/ticketFollower"
   /tickets/{ticketId}/custom-fields:
     $ref: "./paths/tickets.yaml#/ticketCustomFields"
+  /tickets/{ticketId}/messages:
+    $ref: "./paths/tickets.yaml#/ticketMessages"
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
   /customers/{customerId}/erase:

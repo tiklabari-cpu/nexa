@@ -15,10 +15,16 @@ import {
   DEFAULT_TICKET_SORT_KEY,
   SORT_ORDERS,
   TICKET_BULK_MAX,
+  TICKET_COMPOSER_KINDS,
+  TICKET_MESSAGE_ATTACHMENTS_MAX,
+  TICKET_MESSAGE_PAGE_SIZE,
+  TICKET_MESSAGE_TEXT_MAX,
   TICKET_PRIORITY_MAX,
   TICKET_PRIORITY_MIN,
+  TICKET_REPLY_SET_STATUSES,
   TICKET_SORT_KEYS,
 } from '@siyahtus/types';
+import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import {
@@ -36,6 +42,12 @@ import {
 import { logUnsentMail } from '../services/mail/delivery.js';
 import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { createObjectStore } from '../services/storage/object-store.js';
+import {
+  TicketMessageService,
+  resolveAttachments,
+} from '../services/tickets/ticket-message-service.js';
 
 const READ_SCOPES = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
 const WRITE_SCOPES = ['tickets--all:rw', 'tickets--access:rw'];
@@ -141,6 +153,31 @@ const customFieldsBody = z.object({
   values: z.record(z.string().max(5000).nullable()),
 });
 
+/** A page of a ticket's thread, oldest first (HD-01). */
+const messageListQuery = z.object({
+  page_id: z.string().max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(TICKET_MESSAGE_PAGE_SIZE),
+});
+
+/**
+ * The composer (HD-01 · `TicketMessageInput`). The vocabularies and bounds are
+ * `@siyahtus/types`', which the console builds the composer from. The text is
+ * trimmed before it is measured: a reply of spaces is no reply.
+ */
+const messageBody = z.object({
+  kind: z.enum(TICKET_COMPOSER_KINDS),
+  text: z.string().trim().min(1).max(TICKET_MESSAGE_TEXT_MAX),
+  attachment_keys: z
+    .array(z.string().min(1).max(512))
+    .max(TICKET_MESSAGE_ATTACHMENTS_MAX)
+    // Refused rather than collapsed, like `ticket_ids` on the bulk action: a
+    // file named twice is a composer that lost track of what it attached.
+    .refine((keys) => new Set(keys).size === keys.length, 'keys must be unique')
+    .default([]),
+  set_status: z.enum(TICKET_REPLY_SET_STATUSES).optional(),
+  idempotency_key: z.string().min(1).max(128),
+});
+
 const ticketIdSchema = z.string().min(1).max(12);
 const accountIdSchema = z.string().uuid();
 
@@ -158,16 +195,22 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 export default async function ticketRoutes(
   app: FastifyInstance,
   {
+    env,
     automations,
     pilotMode = false,
   }: {
+    /** Where the composer's attachments live (`STORAGE_PROVIDER`). */
+    env: Env;
     /** Fans a committed ticket creation out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
     /** `PILOT_MODE`: ticket notices say their mailbox reads no replies (tm 257.14). */
     pilotMode?: boolean;
-  } = {},
+  },
 ): Promise<void> {
   const tickets = new TicketService();
+  const messages = new TicketMessageService();
+  const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
+  const publisher = new RealtimePublisher(app.redis, app.log);
   const customFields = new CustomFieldService();
   const templates = new TicketEmailTemplateService();
 
@@ -476,6 +519,70 @@ export default async function ticketRoutes(
       );
 
       return reply.send(maskTicketContact(ticket, seesPlayerContact(request.requirePrincipal())));
+    },
+  );
+
+  // --- The conversation (HD-01 · tm 356): replies, notes, the player's mail ----
+
+  app.get<{ Params: { ticketId: string } }>(
+    '/tickets/:ticketId/messages',
+    { config: { scopes: READ_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const query = parse(messageListQuery, request.query);
+      const principal = request.requirePrincipal();
+
+      const page = await request.withTenant((tx) =>
+        messages.list(tx, principal, ticketId, {
+          limit: query.limit,
+          ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),
+        }),
+      );
+
+      return reply.send({
+        items: page.items,
+        ...(page.nextPageId ? { next_page_id: page.nextPageId } : {}),
+      });
+    },
+  );
+
+  app.post<{ Params: { ticketId: string } }>(
+    '/tickets/:ticketId/messages',
+    { config: { scopes: WRITE_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const body = parse(messageBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const audit = request.auditContext();
+
+      // The files first, outside the transaction: the store may be a bucket
+      // across the network, and nothing about it needs the ticket locked.
+      const attachments = await resolveAttachments(store, tenant.licenseId, body.attachment_keys);
+
+      const written = await request.withTenant((tx) =>
+        messages.createFromComposer(tx, tenant, principal, audit, ticketId, {
+          kind: body.kind,
+          text: body.text,
+          attachments,
+          idempotencyKey: body.idempotency_key,
+          ...(body.set_status !== undefined ? { setStatus: body.set_status } : {}),
+        }),
+      );
+
+      // After the commit (see `RealtimePublisher`): announced inside the
+      // transaction, a listener could fetch the thread before the message is
+      // in it. A replay announces nothing — the first attempt already did.
+      if (written.push) {
+        await publisher.publish(
+          tenant,
+          'ticket_message_created',
+          written.push.audience,
+          written.push.payload,
+        );
+      }
+
+      return reply.code(written.replayed ? 200 : 201).send(written.message);
     },
   );
 }

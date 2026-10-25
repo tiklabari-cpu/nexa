@@ -77,6 +77,8 @@ export const auditLabels: Messages = {
   'audit.action.ticket.follower_added': 'Talebe takipçi eklendi',
   'audit.action.ticket.follower_removed': 'Talepten takipçi çıkarıldı',
   'audit.action.ticket.email_sent': 'Müşteriye talep e-postası gönderildi',
+  'audit.action.ticket.replied': 'Talebe yanıt verildi',
+  'audit.action.ticket.note_added': 'Talebe iç not eklendi',
   'audit.action.chat.taken_over': 'Sohbet devralındı',
   'audit.action.chat.ai_returned': "Sohbet AI'a geri verildi",
   'audit.action.chat.ai_paused': 'Sohbette AI duraklatıldı',

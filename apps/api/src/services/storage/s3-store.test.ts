@@ -217,6 +217,16 @@ describe('S3Store round trip', () => {
     });
   });
 
+  it("states an object's type and length from a HEAD, without fetching the bytes", async () => {
+    const store = await startStore();
+
+    expect(await store.stat(KEY)).toBeNull();
+    await store.put(KEY, Buffer.from('hello bucket'), 'text/plain');
+
+    expect(await store.stat(KEY)).toEqual({ contentType: 'text/plain', sizeBytes: 12 });
+    expect(bucket!.requests.at(-1)!.method).toBe('HEAD');
+  });
+
   it('lays objects out under the licence in the key, path style', async () => {
     const store = await startStore();
     await store.put(KEY, Buffer.from('x'), 'text/plain');
@@ -292,6 +302,7 @@ describe('S3Store tells absence apart from failure', () => {
 
     expect(await store.exists(KEY)).toBe(false);
     expect(await store.get(KEY)).toBeNull();
+    expect(await store.stat(KEY)).toBeNull();
   });
 
   it('throws on 403 rather than reporting the file missing', async () => {
@@ -302,6 +313,7 @@ describe('S3Store tells absence apart from failure', () => {
     const store = await storeAnswering(403, '<Error><Code>AccessDenied</Code></Error>');
 
     await expect(store.exists(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(store.stat(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(store.get(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(store.get(KEY)).rejects.toMatchObject({
       detail: expect.stringContaining('403 (AccessDenied)'),
@@ -333,6 +345,7 @@ describe('S3Store tells absence apart from failure', () => {
     const store = await storeAnswering(500, '<Error><Code>InternalError</Code></Error>');
 
     await expect(store.exists(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(store.stat(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(store.get(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(store.put(KEY, Buffer.from('x'), 'text/plain')).rejects.toBeInstanceOf(
       StorageUnavailableError,

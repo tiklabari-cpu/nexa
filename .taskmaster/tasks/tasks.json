@@ -15047,7 +15047,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-25T00:07:43.965Z",
+        "updatedAt": "2026-10-25T00:08:49.392Z",
         "subtasks": [
           {
             "id": 1,
@@ -15067,13 +15067,13 @@
             "description": "ticket-message-service: maskeleme, durum geçişi, idempotency, birleşik ticket, audit, RTM",
             "details": "Üst görev 356 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "ticket-messages.test.ts.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "356.1"
             ],
             "parentId": "356",
             "priority": "high",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-25T00:08:49.392Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-25T00:07:43.966Z",
+      "lastModified": "2026-10-25T00:08:49.393Z",
       "taskCount": 390,
       "completedCount": 324,
       "tags": [

@@ -186,6 +186,10 @@ export const RTM_PUSH_ACTIONS = [
   // A cluster of unresolved questions surged or came back after its fix (tm
   // 317.2 · AI-22-S2, `AiUnresolvedAlertPush`): to the Team Leads and up.
   'ai_unresolved_alert',
+  // A reply, an internal note or the player's message landed on a ticket (tm
+  // 356.2 · HD-01, `TicketMessageCreatedPush`): to its assignee, its followers
+  // and its team.
+  'ticket_message_created',
   // Errors
   'incoming_error',
 ] as const;

@@ -1012,7 +1012,10 @@ describe('module parity matrix — what is still owed', () => {
       // 296 -> 298 with `/archive/conversations` and its item (tm 335.1) — the
       // archive, one row per connection (AR-01), drawn by the web panel's archive
       // screen (tm 335.2). The app has no archive screen; nothing here re-scopes.
-      contractEndpoints: 298,
+      // 298 -> 299 with `/tickets/{ticketId}/messages` (tm 356.2) — a ticket's
+      // conversation and its composer (HD-01), drawn by the web panel's ticket
+      // pane (tm 356.4). The app has no tickets screen; nothing here re-scopes.
+      contractEndpoints: 299,
       scopeBoundaries: 1,
     });
   });

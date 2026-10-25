@@ -9874,6 +9874,126 @@ components:
               description: Custom fields defined for tickets, with this ticket's values (FR-MOD-08.7.6).
               items: { $ref: "#/components/schemas/CustomFieldValue" }
 
+    TicketMessageAttachment:
+      type: object
+      description: |
+        One file on a ticket message (HD-01). `key` is the upload's storage key
+        (`POST /uploads`); only a `clean` file is offered for download or
+        mailed. A `sensitive` file (an ID document, a bank statement) is drawn
+        behind a click.
+      required: [key, name, size, mime, scan_status, sensitive]
+      properties:
+        key: { type: string, maxLength: 512 }
+        name: { type: string, maxLength: 255 }
+        size: { type: integer, minimum: 0 }
+        mime: { type: string, maxLength: 255 }
+        scan_status:
+          type: string
+          enum: [pending, clean, infected]
+        sensitive: { type: boolean }
+
+    TicketMessage:
+      type: object
+      description: |
+        One entry in a ticket's conversation (HD-01 · tm 356), oldest first in
+        `GET /tickets/{ticketId}/messages`.
+
+        - `customer_message` — what the player wrote (an inbound e-mail, the
+          ticket's opening text).
+        - `agent_reply` — an agent's answer, sent to the player by e-mail;
+          `delivery_status` says where that e-mail is.
+        - `internal_note` — for the team only. Never e-mailed and never shown
+          to the player; `delivery_status` is always null on it.
+        - `system` — a line the product wrote (a merge, a reopening).
+
+        `ticket_id` is the ticket the message was written on: a primary's
+        thread also shows the messages of the tickets merged into it, and this
+        says which one each came from.
+      required:
+        [
+          id,
+          ticket_id,
+          kind,
+          author_type,
+          author_id,
+          author_name,
+          body_text,
+          attachments,
+          delivery_status,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        ticket_id: { type: string, maxLength: 12 }
+        kind:
+          type: string
+          enum: [customer_message, agent_reply, internal_note, system]
+        author_type:
+          type: string
+          enum: [customer, agent, system, bot]
+        author_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The agent's account for `agent`, the customer for `customer`; null for `system` and `bot`.
+        author_name:
+          type: string
+          nullable: true
+          description: The agent's or the player's name as it reads now; null when there is none.
+        body_text:
+          type: string
+          description: |
+            The text, with card numbers masked. A reply or note is at most
+            20 000 characters; an inbound e-mail is stored as it arrived.
+        body_html:
+          type: string
+          nullable: true
+          description: |
+            Only on a `customer_message` that arrived as HTML, and only after
+            sanitising at intake. Still not markup to render as-is — the
+            console draws `body_text` and offers this behind its own sanitiser.
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/TicketMessageAttachment" }
+        delivery_status:
+          type: string
+          nullable: true
+          enum: [queued, sent, failed, suppressed, null]
+          description: |
+            Only on an `agent_reply`. `queued` — saved, the e-mail goes after
+            the commit · `sent` — the mail server took it · `failed` — it did
+            not; the console offers "try again" · `suppressed` — this
+            deployment keeps ticket e-mail off (K23), the reply is kept and the
+            thread says it was not sent.
+        created_at: { type: string, format: date-time }
+
+    TicketMessageInput:
+      type: object
+      description: |
+        What the composer sends (HD-01). `kind: reply` goes to the player by
+        e-mail; `kind: note` stays with the team and never reaches the mail
+        path. `idempotency_key` makes a retried request one message: the same
+        key on the same licence answers with the message already stored.
+      required: [kind, text, idempotency_key]
+      properties:
+        kind:
+          type: string
+          enum: [reply, note]
+        text: { type: string, minLength: 1, maxLength: 20000 }
+        attachment_keys:
+          type: array
+          maxItems: 10
+          description: Storage keys of files uploaded through `POST /uploads` for this licence.
+          items: { type: string, maxLength: 512 }
+        set_status:
+          type: string
+          enum: [pending, solved]
+          description: |
+            "Send and …": the status the ticket moves to in the same request.
+            Without it a reply leaves the ticket `pending` (waiting on the
+            player) and a note leaves the status as it was.
+        idempotency_key: { type: string, minLength: 1, maxLength: 128 }
+
     TicketBulkRowResult:
       type: object
       description: |
@@ -12487,6 +12607,8 @@ components:
         - service_unavailable
         - takeover_conflict
         - template_locked
+        - ticket_merged
+        - ticket_no_recipient
         - too_many_requests
         - unsupported_version
         - users_limit_reached

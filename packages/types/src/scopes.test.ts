@@ -171,6 +171,10 @@ describe('error taxonomy', () => {
     // Widget abuse protection (GV-01 · tm 339.2): a token or a conversation
     // opening that must first pass a human check.
     'challenge_required',
+    // Ticket replies (HD-01 · tm 356.1): writing to a merged ticket, and a
+    // reply to a player who left no e-mail address.
+    'ticket_merged',
+    'ticket_no_recipient',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

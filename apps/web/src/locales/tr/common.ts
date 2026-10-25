@@ -51,6 +51,9 @@ export const common: Messages = {
   'common.errors.template_locked':
     'Bu prosedür kilitli bir şablondan kuruldu — kapatılamaz ve silinemez; yalnızca metinlerini ve ekibini değiştirebilirsiniz.',
   'common.errors.ticket_exists': 'Bu sohbet için zaten bir talep var.',
+  'common.errors.ticket_merged': 'Bu talep başka bir talebe birleştirildi — o talebe yazın.',
+  'common.errors.ticket_no_recipient':
+    'Bu oyuncu e-posta adresi bırakmadı, bu yüzden yanıt gönderilemez — yine de iç not ekleyebilirsiniz.',
   'common.errors.too_many_requests': 'Çok fazla deneme — biraz bekleyip yeniden deneyin.',
   'common.errors.two_factor_already_enabled':
     'İki adımlı doğrulama zaten açık — yeniden kurmadan önce kapatın.',

@@ -65,6 +65,10 @@ export const common: Messages = {
   'common.errors.template_locked':
     'This procedure was installed from a locked template — it cannot be switched off or deleted; only its texts and team can change.',
   'common.errors.ticket_exists': 'A ticket already exists for this conversation.',
+  'common.errors.ticket_merged':
+    'This ticket was merged into another — write on that ticket instead.',
+  'common.errors.ticket_no_recipient':
+    'This player left no e-mail address, so a reply cannot be sent — you can still add an internal note.',
   'common.errors.too_many_requests': 'Too many attempts — wait a moment and try again.',
   'common.errors.two_factor_already_enabled':
     'Two-factor authentication is already on — turn it off before setting it up again.',

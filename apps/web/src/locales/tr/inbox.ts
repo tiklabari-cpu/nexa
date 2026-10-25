@@ -529,6 +529,16 @@ export const inbox: Messages = {
   'inbox.ticket.thread.attachment.infected': '{name} virüs taramasında engellendi.',
   'inbox.ticket.thread.attachment.pending': '{name} taranıyor.',
   'inbox.ticket.thread.attachment.reveal': 'Hassas dosyayı göster: {name}',
+  'inbox.ticket.thread.attachment.revealHint': 'Dosyayı açtığınız denetim kaydına yazılır.',
+  'inbox.ticket.thread.attachment.locked': '{name} · hassas dosya — rolünüz bu dosyayı açamaz.',
+  'inbox.ticket.thread.attachment.purged': '{name} saklama süresi dolduğu için silindi.',
+  'inbox.ticket.thread.showFull': 'Mesajın tamamını göster',
+  'inbox.ticket.thread.hideFull': 'Mesajın tamamını gizle',
+  'inbox.ticket.thread.fullLabel': 'E-postanın tamamı, alıntı ve imza dahil',
+  'inbox.ticket.thread.showFormatted': 'Biçimli görünüm',
+  'inbox.ticket.thread.hideFormatted': 'Biçimli görünümü gizle',
+  'inbox.ticket.thread.formattedTitle':
+    'Oyuncunun e-postası biçimli hâliyle — betikler ve dış görseller kapalı',
   'inbox.ticket.composer.merged':
     'Bu talep {id} talebine birleştirildi. Yazışmaya o talepten devam edin.',
   'inbox.ticket.composer.modeAriaLabel': 'Yanıt ya da dahili not',

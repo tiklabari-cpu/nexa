@@ -35,6 +35,8 @@ interface SecuritySettings {
   ip_allowlist_enforced: boolean;
   session_idle_timeout_seconds: number | null;
   max_concurrent_sessions: number | null;
+  /** Every e-mailed file is sensitive, not only identity documents (tm 357 · HD-02). */
+  inbound_attachments_sensitive?: boolean;
   updated_at: string | null;
 }
 
@@ -108,6 +110,7 @@ function FileSharingForm({
       enabled: String(current.file_sharing_enabled),
       types: current.allowed_file_types.join(', '),
       sizeMb: String(Math.round(current.max_file_size_bytes / 1048576)),
+      inboundSensitive: String(current.inbound_attachments_sensitive ?? false),
     },
     validators: {
       sizeMb: maxSizeMb(t('settings.fileSharing.maxSizeError')),
@@ -125,6 +128,9 @@ function FileSharingForm({
             : {}),
           allowed_file_types: parsedTypes,
           max_file_size_bytes: Math.round(Number(values.sizeMb.trim()) * 1048576),
+          ...(values.inboundSensitive !== String(current.inbound_attachments_sensitive ?? false)
+            ? { inbound_attachments_sensitive: values.inboundSensitive === 'true' }
+            : {}),
         });
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
@@ -194,6 +200,21 @@ function FileSharingForm({
           <FieldError id="max-size-error" message={sizeError} />
         </label>
       </div>
+
+      <label className="flex items-center gap-3 p-4">
+        <input
+          type="checkbox"
+          checked={form.values.inboundSensitive === 'true'}
+          disabled={!canEdit}
+          onChange={(event) => form.setValue('inboundSensitive', String(event.target.checked))}
+        />
+        <span className="flex-1 text-sm">
+          {t('settings.fileSharing.inboundSensitiveLabel')}
+          <span className="block text-2xs text-content-tertiary">
+            {t('settings.fileSharing.inboundSensitiveHint')}
+          </span>
+        </span>
+      </label>
 
       {canEdit && <FormSaveBar form={form} />}
     </form>

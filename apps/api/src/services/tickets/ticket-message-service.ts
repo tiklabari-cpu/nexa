@@ -40,6 +40,7 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import {
+  INBOUND_EMAIL_TEXT_MAX,
   TICKET_MESSAGE_PAGE_SIZE,
   type PushAudience,
   type TicketComposerKind,
@@ -52,10 +53,12 @@ import {
   type TicketReplySetStatus,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
+import { clipText } from '../../lib/clip-text.js';
 import { maskForWrite } from '../../lib/sensitive-mask.js';
 import { isMessageId } from '../mail/mime.js';
 import { UUID_RE, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
+import { hasCapability, requireCapability } from '../auth/capability.js';
 import type { Principal } from '../auth/principal.js';
 import type { ObjectStore } from '../storage/object-store.js';
 import { licenseOfKey } from '../storage/upload-url.js';
@@ -78,6 +81,8 @@ export interface TicketMessageView {
   author_id: string | null;
   author_name: string | null;
   body_text: string;
+  /** The whole e-mail text when the quote and signature were cut from `body_text` (tm 357). */
+  body_text_full: string | null;
   body_html: string | null;
   attachments: TicketMessageAttachment[];
   delivery_status: TicketMessageDeliveryStatus | null;
@@ -96,7 +101,10 @@ export interface ComposerInput {
 /** What the player wrote — the inbound e-mail path's input (HD-03, tm 358). */
 export interface CustomerMessageInput {
   ticketId: string;
+  /** What the player wrote this time — for e-mail, the reply above the quote. */
   text: string;
+  /** The whole e-mail text, when something was cut from `text` (tm 357). */
+  textFull?: string | null;
   /** Sanitised at intake; masked here like the text. */
   html?: string | null;
   emailMessageId?: string | null;
@@ -156,6 +164,9 @@ export interface TicketDeliveryPush {
 /** The longest `References` a reply carries: the thread's first id and its newest. */
 const REFERENCES_MAX = 10;
 
+/** Opening a sensitive file a player e-mailed (RL-02 · tm 357 · HD-02). */
+export const SENSITIVE_DOCUMENTS_CAPABILITY = 'customers.documents.view' as const;
+
 export interface CustomerMessageResult extends WrittenTicketMessage {
   /** A `solved` ticket the player wrote to again — HD-03 says so in the thread. */
   reopened: boolean;
@@ -174,6 +185,7 @@ interface MessageRow {
   authorType: string;
   authorId: string | null;
   bodyText: string;
+  bodyTextFull: string | null;
   bodyHtml: string | null;
   attachments: unknown;
   deliveryStatus: string | null;
@@ -195,7 +207,7 @@ interface Author {
  */
 const MESSAGE_COLUMNS = Prisma.sql`
   id, ticket_id AS "ticketId", kind, author_type AS "authorType", author_id AS "authorId",
-  body_text AS "bodyText", body_html AS "bodyHtml", attachments,
+  body_text AS "bodyText", body_text_full AS "bodyTextFull", body_html AS "bodyHtml", attachments,
   delivery_status AS "deliveryStatus",
   date_trunc('milliseconds', created_at) AS "createdAt"`;
 
@@ -253,8 +265,12 @@ export class TicketMessageService {
     const page = hasMore ? rows.slice(0, limit) : rows;
     const names = await authorNames(tx, page);
     const last = page.at(-1);
+    // A sensitive file is listed for everyone who reads the thread — that a
+    // document came is part of the conversation — but drawn locked for a role
+    // that may not open it (tm 357), the answer the download would give.
+    const mayOpen = hasCapability(principal, SENSITIVE_DOCUMENTS_CAPABILITY);
     return {
-      items: page.map((row) => toView(row, names)),
+      items: page.map((row) => withLocks(toView(row, names), mayOpen)),
       ...(hasMore && last ? { nextPageId: encodeCursor(last) } : {}),
     };
   }
@@ -372,6 +388,7 @@ export class TicketMessageService {
       author_id: author.id,
       author_name: author.id ? (names.get(author.id) ?? null) : null,
       body_text: text,
+      body_text_full: null,
       body_html: null,
       attachments: input.attachments,
       delivery_status: deliveryStatus,
@@ -539,7 +556,12 @@ export class TicketMessageService {
 
     const now = new Date();
     const id = randomUUID();
-    const text = maskForWrite(input.text, 'customer').text;
+    // Masked, then clipped (tm 357): clipped first, a card number cut at the
+    // limit would no longer pass the Luhn check and stay partly in clear.
+    const text = clipText(maskForWrite(input.text, 'customer').text, INBOUND_EMAIL_TEXT_MAX);
+    const textFull = input.textFull
+      ? clipText(maskForWrite(input.textFull, 'customer').text, INBOUND_EMAIL_TEXT_MAX)
+      : null;
     const html = maskForWrite(input.html ?? null, 'customer').text;
     const attachments = input.attachments ?? [];
 
@@ -547,12 +569,13 @@ export class TicketMessageService {
     // is its Message-ID (it carries no idempotency key).
     const inserted = await tx.$queryRaw<Array<{ id: string }>>`
       INSERT INTO ticket_messages
-        (id, license_id, ticket_id, kind, author_type, author_id, body_text, body_html,
-         attachments, email_message_id, in_reply_to, created_at)
+        (id, license_id, ticket_id, kind, author_type, author_id, body_text, body_text_full,
+         body_html, attachments, email_message_id, in_reply_to, created_at)
       VALUES
         (${id}::uuid, ${tenant.licenseId}::bigint, ${ticket.id}, 'customer_message', 'customer',
-         ${ticket.customerId}::uuid, ${text}, ${html}, ${JSON.stringify(attachments)}::jsonb,
-         ${input.emailMessageId ?? null}, ${input.inReplyTo ?? null}, ${now}::timestamptz)
+         ${ticket.customerId}::uuid, ${text}, ${textFull}, ${html},
+         ${JSON.stringify(attachments)}::jsonb, ${input.emailMessageId ?? null},
+         ${input.inReplyTo ?? null}, ${now}::timestamptz)
       ON CONFLICT DO NOTHING
       RETURNING id
     `;
@@ -588,6 +611,7 @@ export class TicketMessageService {
       author_id: ticket.customerId,
       author_name: customer?.name ?? null,
       body_text: text,
+      body_text_full: textFull,
       body_html: html,
       attachments,
       delivery_status: null,
@@ -599,6 +623,80 @@ export class TicketMessageService {
       push: await pushFor(tx, ticket, message),
       reopened: ticket.status === 'solved',
     };
+  }
+
+  /**
+   * A line the product writes on a ticket (`kind: system`) — for the inbound
+   * path, which files of the player's mail were not kept and why (tm 357).
+   *
+   * Written a millisecond after `after`, so it reads under the message it is
+   * about rather than racing it for the same `(created_at, id)` slot. Not
+   * masked: the product wrote it — but what it quotes (a file's name) the
+   * caller has masked. No push of its own: it lands with the message whose
+   * push already sends the thread to be re-read.
+   */
+  async recordSystemNote(
+    tx: TenantClient,
+    tenant: TenantContext,
+    ticketId: string,
+    text: string,
+    after: Date,
+  ): Promise<string> {
+    const id = randomUUID();
+    await tx.$executeRaw`
+      INSERT INTO ticket_messages
+        (id, license_id, ticket_id, kind, author_type, body_text, created_at)
+      VALUES
+        (${id}::uuid, ${tenant.licenseId}::bigint, ${ticketId}, 'system', 'system', ${text},
+         ${new Date(after.getTime() + 1)}::timestamptz)
+    `;
+    return id;
+  }
+
+  /**
+   * The file `key` on message `messageId` of ticket `ticketId`, if this caller
+   * may open it (`GET …/attachments/{key}` · tm 357 · HD-02).
+   *
+   * The ticket decides first, as for its thread: one the caller may not read is
+   * `404`. Then the file has to be one of *this* message's — the key alone
+   * proves nothing — still kept, and scanned clean. A sensitive file needs
+   * `customers.documents.view` (`403` otherwise) and its opening is written to
+   * the audit log, in this transaction: the entry names the ticket, the message
+   * and the key, never the file's name, which can itself be personal data
+   * ("kimlik_ali_veli.jpg").
+   */
+  async openAttachment(
+    tx: TenantClient,
+    principal: Principal,
+    audit: AuditContext,
+    ticketId: string,
+    messageId: string,
+    key: string,
+  ): Promise<TicketMessageAttachment> {
+    const visibility = await resolveVisibility(tx, principal, 'read');
+    const ticket = await loadVisible(tx, visibility, ticketId);
+    const row = UUID_RE.test(messageId)
+      ? await tx.ticketMessage.findFirst({
+          where: { id: messageId, ticketId: ticket.id },
+          select: { attachments: true },
+        })
+      : null;
+    const attachments = Array.isArray(row?.attachments)
+      ? (row.attachments as unknown as TicketMessageAttachment[])
+      : [];
+    const file = attachments.find((entry) => entry.key === key);
+    if (!file || file.purged || file.scan_status !== 'clean') {
+      throw ApiError.notFound('Attachment not found.');
+    }
+    if (file.sensitive) {
+      requireCapability(principal, SENSITIVE_DOCUMENTS_CAPABILITY);
+      await writeAuditEntry(tx, audit, {
+        action: 'ticket.attachment_opened',
+        target: `ticket:${ticket.id}`,
+        metadata: { message_id: messageId, key },
+      });
+    }
+    return file;
   }
 
   /**
@@ -825,6 +923,17 @@ async function authorNames(tx: TenantClient, rows: MessageRow[]): Promise<Map<st
   return agentNames;
 }
 
+/** `message` with its sensitive files marked `locked` when the caller may not open them. */
+function withLocks(message: TicketMessageView, mayOpen: boolean): TicketMessageView {
+  if (mayOpen || !message.attachments.some((file) => file.sensitive)) return message;
+  return {
+    ...message,
+    attachments: message.attachments.map((file) =>
+      file.sensitive ? { ...file, locked: true } : file,
+    ),
+  };
+}
+
 function toView(row: MessageRow, names: Map<string, string>): TicketMessageView {
   return {
     id: row.id,
@@ -834,6 +943,7 @@ function toView(row: MessageRow, names: Map<string, string>): TicketMessageView 
     author_id: row.authorId,
     author_name: row.authorId ? (names.get(row.authorId) ?? null) : null,
     body_text: row.bodyText,
+    body_text_full: row.bodyTextFull,
     body_html: row.bodyHtml,
     attachments: Array.isArray(row.attachments)
       ? (row.attachments as TicketMessageAttachment[])

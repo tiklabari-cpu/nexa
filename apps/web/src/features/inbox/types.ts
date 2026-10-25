@@ -242,7 +242,12 @@ export interface TicketMessage {
   author_type: TicketMessageAuthorType;
   author_id: string | null;
   author_name: string | null;
+  /** On a player's e-mail: what they wrote this time, the quote and signature cut (tm 357). */
   body_text: string;
+  /** The whole e-mail text when something was cut from `body_text`; null otherwise. */
+  body_text_full: string | null;
+  /** The e-mail's HTML, sanitised at intake — drawn only in a sandboxed frame. */
+  body_html?: string | null;
   attachments: TicketMessageAttachment[];
   /** Only on an `agent_reply`; null on every other kind. */
   delivery_status: TicketMessageDeliveryStatus | null;

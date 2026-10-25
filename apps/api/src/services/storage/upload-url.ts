@@ -52,7 +52,42 @@ const KEY = /^(\d{1,19})-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(\.[a-z0-9]{
 
 /** The licence a key belongs to, or null if the key is not one of ours. */
 export function licenseOfKey(key: string): bigint | null {
-  const match = KEY.exec(key);
+  return licenceIn(KEY, key);
+}
+
+/**
+ * `<licenseId>-m-<uuid><ext>` — a file a player e-mailed (tm 357 · HD-02).
+ *
+ * Its own shape, so it is *not* an upload key: `GET /uploads/{key}` answers
+ * any member of the licence, and a sensitive file — an ID card — must open
+ * only through the ticket's door, which checks the role and writes the audit
+ * entry. `licenseOfKey` refuses this shape, so the uploads route, the
+ * composer's `attachment_keys` and a chat's `attachment_url` all refuse it
+ * without a line of their own. The stores take both shapes
+ * ({@link licenseOfStoredKey}).
+ */
+export function buildMailKey(licenseId: bigint, contentType: string): string {
+  return `${licenseId}-m-${randomUUID()}${extensionFor(contentType)}`;
+}
+
+const MAIL_KEY = /^(\d{1,19})-m-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(\.[a-z0-9]{1,8})?$/;
+
+/** The licence an e-mailed file's key belongs to, or null if it is not one. */
+export function licenseOfMailKey(key: string): bigint | null {
+  return licenceIn(MAIL_KEY, key);
+}
+
+/**
+ * The licence of anything the object store holds — an upload or an e-mailed
+ * file — or null for a key in neither shape. What the stores lay their paths
+ * out by; never what a route authorises by.
+ */
+export function licenseOfStoredKey(key: string): bigint | null {
+  return licenseOfKey(key) ?? licenseOfMailKey(key);
+}
+
+function licenceIn(pattern: RegExp, key: string): bigint | null {
+  const match = pattern.exec(key);
   if (!match) return null;
   try {
     return BigInt(match[1]!);

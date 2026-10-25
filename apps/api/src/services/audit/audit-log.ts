@@ -348,6 +348,11 @@ export const AUDIT_ACTIONS = [
   // with a customer, a note may quote it, and this log can never forget either.
   'ticket.replied',
   'ticket.note_added',
+  // A sensitive file a player e-mailed — an ID card, a passport — was opened
+  // (tm 357 · HD-02): who looked at a person's identity document is the
+  // question this trail answers. Metadata names the message and the file's
+  // storage key, never its name, which can itself be personal data.
+  'ticket.attachment_opened',
   // Supervision (FR-MOD-08.6.3 / NFR-S12). A supervisor forcibly took a chat
   // from whoever held it — an authority action on someone *else's* conversation,
   // so it is recorded. The entry names the actor, the chat and the previous

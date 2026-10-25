@@ -271,6 +271,8 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       // A reply to the player and a note for the team (HD-01).
       'ticket.replied',
       'ticket.note_added',
+      // A sensitive file a player e-mailed was opened (HD-02 · tm 357).
+      'ticket.attachment_opened',
     ],
   },
   {

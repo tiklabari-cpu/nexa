@@ -225,6 +225,22 @@ export const CAPABILITIES = [
     floorRole: 'admin',
     defaults: { owner: 'on', admin: 'on', team_lead: 'off', agent: 'off' },
   },
+  {
+    // Checked (tm 357 · HD-02): opening a file a player e-mailed that is
+    // marked sensitive — an ID card, a passport, a KYC document. Off, the
+    // thread lists the file locked and `GET /tickets/{id}/messages/{id}/
+    // attachments/{key}` refuses it; on, every opening is written to the audit
+    // log (`ticket.attachment_opened`). The analysis's default (04 HD-02,
+    // question 2): Ekip Lideri and above; a KYC team's members get it when the
+    // Founder switches the Ekip Üyesi cell on.
+    key: 'customers.documents.view',
+    group: 'customers',
+    labelKey: 'permissions.capability.customers.documents.view',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'agent',
+    defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'off' },
+  },
   // AI
   {
     // The AI Agent's configuration: procedures, knowledge, tables, guidance,

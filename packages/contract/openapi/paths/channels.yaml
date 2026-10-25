@@ -14,9 +14,25 @@ emailInbound:
       does not spawn a duplicate record; an unknown sender becomes a new one.
 
       When the workspace keeps the spam filter on (the default) and the provider
-      flagged the message as spam, no ticket is created — the call still
-      succeeds, so the provider does not retry a message that was dropped on
-      purpose.
+      flagged the message as spam — or its subject or text reads as spam to
+      the content classifier — no ticket is created. The call still succeeds,
+      so the provider does not retry a message that was dropped on purpose.
+
+      The body is provider-neutral (`InboundEmail`, tm 357 · HD-02): no
+      inbound provider is chosen, so each one's parse webhook (Postmark,
+      Mailgun, SendGrid, SES) is translated into this shape by an adapter in
+      front of the route rather than accepted here. What the player wrote
+      becomes the ticket's first message: the quoted earlier mail and the
+      signature are cut from the text the thread shows and kept behind "show
+      full message"; card numbers, passwords and IBANs are masked (AI-26);
+      HTML is kept only after an allow-list sanitiser. Each attachment is
+      checked for type (images and PDF) and size (10 MiB a file, 25 MiB a
+      mail), virus-scanned, and stored; one that is refused is not stored,
+      and the ticket says which and why in a system line — a refused file
+      never refuses the mail. A file whose name or subject mentions an
+      identity document (kimlik, pasaport, ehliyet, KYC), or any file when
+      the workspace treats every e-mailed file as sensitive, is stored
+      `sensitive`. A Message-ID seen before opens no second ticket.
 
       Delivery itself is mocked in this build (PLAN A4); a production deployment
       authenticates the provider at the edge. When `INBOUND_EMAIL_SECRET` is
@@ -38,34 +54,15 @@ emailInbound:
       required: true
       content:
         application/json:
-          schema:
-            type: object
-            required: [to, from, subject]
-            properties:
-              to:
-                type: string
-                maxLength: 320
-                description: The workspace forwarding address the mail was sent to.
-              from:
-                type: string
-                maxLength: 320
-                description: Sender, bare or `Name <addr>`. Matched to a customer by email.
-              subject:
-                type: string
-                maxLength: 998
-                description: Becomes the ticket subject.
-              text:
-                type: string
-                maxLength: 100000
-                description: Message body. Not persisted — the ticket core carries no body.
-              spam:
-                type: boolean
-                description: The provider's spam verdict, honoured when the workspace filter is on.
+          schema: { $ref: "../openapi.yaml#/components/schemas/InboundEmail" }
     responses:
       "200":
         description: |
-          The message was processed. `created` carries the new ticket id;
-          `ignored` means the spam filter dropped it.
+          The message was processed. `created` carries the ticket id;
+          `ignored` means the spam filter dropped it. A Message-ID this
+          workspace has already taken in is answered with the ticket it opened
+          the first time and `duplicate: true` — nothing is written twice, so a
+          provider's redelivery is harmless.
         content:
           application/json:
             schema:
@@ -78,6 +75,9 @@ emailInbound:
                 ticket_id:
                   type: string
                   description: Present when `status` is `created`.
+                duplicate:
+                  type: boolean
+                  description: Present, and true, when this Message-ID had already been taken in.
                 reason:
                   type: string
                   enum: [spam]

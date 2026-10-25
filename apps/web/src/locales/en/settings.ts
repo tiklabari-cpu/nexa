@@ -1043,6 +1043,9 @@ export const settings: Messages = {
     'MIME types, comma separated — the form a browser labels a file with.',
   'settings.fileSharing.maxSizeLabel': 'Max size (MB)',
   'settings.fileSharing.maxSizeError': 'Enter a size from 1 to 100 MB.',
+  'settings.fileSharing.inboundSensitiveLabel': 'Treat every file a player e-mails as sensitive',
+  'settings.fileSharing.inboundSensitiveHint':
+    'Off, only a file whose name or subject mentions an ID document (kimlik, pasaport, ehliyet, KYC) is. A sensitive file opens only for roles allowed to, and every opening is audited.',
 
   // Abuse protection — AbuseProtection.tsx, PerMemberQuota.tsx (GV-01)
   'settings.abuse.title': 'Abuse protection',
@@ -1476,6 +1479,8 @@ export const settings: Messages = {
   'permissions.capability.customers.edit': 'Edit player records',
   'permissions.capability.customers.ban': 'Ban players',
   'permissions.capability.customers.erase': 'Erase a player’s data',
+  'permissions.capability.customers.documents.view':
+    'Open sensitive documents a player e-mailed (ID, passport, KYC)',
   'permissions.capability.ai.manage': 'Configure the AI Agent',
   'permissions.capability.ai.guardrails.edit': 'Edit AI compliance rules',
   'permissions.capability.reports.view': 'View reports',

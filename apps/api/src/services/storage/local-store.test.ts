@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LocalStore } from './local-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { buildKey } from './upload-url.js';
+import { buildKey, buildMailKey } from './upload-url.js';
 
 const KEY = buildKey(7n, 'text/plain');
 
@@ -57,6 +57,23 @@ describe('LocalStore', () => {
     await store.put(KEY, Buffer.from('hello disk'), 'text/plain');
 
     expect(await store.stat(KEY)).toEqual({ contentType: 'text/plain', sizeBytes: 10 });
+  });
+
+  it('deletes a file with its type sidecar, and takes a second delete as done (tm 357)', async () => {
+    const store = new LocalStore(dir);
+    const mailKey = buildMailKey(7n, 'image/png');
+    await store.put(mailKey, Buffer.from('png'), 'image/png');
+    expect(await store.stat(mailKey)).toEqual({ contentType: 'image/png', sizeBytes: 3 });
+
+    await store.delete(mailKey);
+    expect(await store.exists(mailKey)).toBe(false);
+    expect(await store.get(mailKey)).toBeNull();
+    await expect(store.delete(mailKey)).resolves.toBeUndefined();
+  });
+
+  it('refuses to delete a key that is not one of ours', async () => {
+    const store = new LocalStore(dir);
+    await expect(store.delete('../outside.txt')).rejects.toThrow(/not in our own format/);
   });
 
   it('keeps treating a missing licence directory as absence', async () => {

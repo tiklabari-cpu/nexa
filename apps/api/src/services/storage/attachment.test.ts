@@ -27,6 +27,7 @@ function storeWhere(exists: () => Promise<boolean>): ObjectStore {
     put: () => Promise.reject(new Error('not part of this check')),
     get: (): Promise<StoredFile | null> => Promise.reject(new Error('not part of this check')),
     stat: () => Promise.reject(new Error('not part of this check')),
+    delete: () => Promise.reject(new Error('not part of this check')),
   };
 }
 

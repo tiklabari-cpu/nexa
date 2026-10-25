@@ -89,6 +89,7 @@ import type { RealtimePublisher } from '../realtime/publisher.js';
 import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
 import { resolveRetentionPolicy } from '../retention/policy.js';
 import { RetentionRunner } from '../retention/retention.js';
+import { createObjectStore } from '../storage/object-store.js';
 import { SlaSweeper } from '../sla/sla-sweep.js';
 import { WebhookRedeliverer } from '../webhooks/redelivery.js';
 import { createHttpWebhookSender } from '../webhooks/webhook-dispatcher.js';
@@ -282,6 +283,7 @@ export function buildSchedulerJobs({
           policy: resolveRetentionPolicy(env),
           mailDir: env.MAIL_DIR,
           auditChainSecret: env.AUDIT_CHAIN_SECRET,
+          store: createObjectStore(env.STORAGE_PROVIDER, env.storage),
         });
         // Not a preview: `enabled` above is the confirmation the CLI's
         // `--apply` flag stands for, so a pass that runs at all commits.
@@ -293,6 +295,7 @@ export function buildSchedulerJobs({
             visits: report.totals.visits,
             aiDecisions: report.totals.aiDecisions,
             unresolvedItems: report.totals.unresolvedItems,
+            sensitiveFiles: report.totals.sensitiveFiles,
             mailFiles: report.totals.mailFiles,
             auditEntries: report.totals.auditEntries,
           },

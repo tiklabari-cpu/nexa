@@ -11,15 +11,15 @@
  * instance so an unknown value fails at boot rather than silently.
  *
  * **The interface is the call surface, not a wish list.** Deliberately no
- * `signedUrl` and no `delete`: signing lives in `upload-url.ts` because what is
- * signed is the *HTTP grant*, not the bytes — a real S3 provider would still
- * mint our own signature and then stream through us, since the grant carries a
- * licence and a scan verdict S3 knows nothing about — and nothing in this
- * codebase deletes an object (retention prunes rows and the mail spool, never
- * uploads). Methods with no caller are a contract a second implementation would
- * have to satisfy blind; the honest seam is the four operations that exist —
- * `stat` joined the first three when a ticket reply started recording the size
- * and type of the files it carries (tm 356.2).
+ * `signedUrl`: signing lives in `upload-url.ts` because what is signed is the
+ * *HTTP grant*, not the bytes — a real S3 provider would still mint our own
+ * signature and then stream through us, since the grant carries a licence and a
+ * scan verdict S3 knows nothing about. Methods with no caller are a contract a
+ * second implementation would have to satisfy blind; the honest seam is the
+ * operations that exist — `stat` joined the first three when a ticket reply
+ * started recording the size and type of the files it carries (tm 356.2), and
+ * `delete` when the retention sweep started removing the sensitive files a
+ * player e-mailed (tm 357 · HD-02). Uploads are still never deleted.
  *
  * `local-store.ts` imports the two types back out of here, type-only, so the
  * runtime edges in the module graph all run this way and there is no cycle.
@@ -48,7 +48,7 @@ export interface StoredFileInfo {
 }
 
 /**
- * The four operations, and the one rule they share.
+ * The five operations, and the one rule they share.
  *
  * **A `null` or a `false` from here is a statement, not a shrug.** It means the
  * store looked and the object is not there — ENOENT on disk, `404` from a
@@ -85,6 +85,13 @@ export interface ObjectStore {
    * unreachable store throws.
    */
   stat(key: string): Promise<StoredFileInfo | null>;
+  /**
+   * Remove what is stored under `key`. Resolves once it is gone — including
+   * when it was already gone: absence is the goal, not a fault. An unreachable
+   * store throws, like the other four, so a caller never records a deletion
+   * that did not happen.
+   */
+  delete(key: string): Promise<void>;
 }
 
 /** The object stores this deployment can select between (`STORAGE_PROVIDER`). */

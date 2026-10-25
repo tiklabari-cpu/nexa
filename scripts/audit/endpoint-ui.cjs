@@ -318,6 +318,18 @@ const INDIRECT = [
     },
   },
   {
+    op: 'GET /uploads/{key}',
+    reason:
+      "an attachment's bytes are fetched from the `attachment_url` a chat event carries, with the " +
+      '`/api/v1` prefix stripped — the key never appears as a literal in the client. (The ticket ' +
+      'thread stopped being its literal caller in tm 357: a ticket file opens through ' +
+      '`GET /tickets/{ticketId}/messages/{messageId}/attachments/{attachmentKey}`.)',
+    site: {
+      file: 'apps/web/src/features/inbox/Attachment.tsx',
+      contains: '.getBlob(path)',
+    },
+  },
+  {
     op: 'PUT /uploads/{key}',
     reason:
       'the second half of the grant-then-upload pair: `POST /uploads` returns a signed ' +

@@ -961,6 +961,11 @@ securitySettings:
                   The per-member daily AI allowance (GV-01); 0 turns it off.
               captcha_mode:
                 $ref: "../openapi.yaml#/components/schemas/CaptchaMode"
+              inbound_attachments_sensitive:
+                type: boolean
+                description: >-
+                  Treat every file a player e-mails as sensitive (HD-02), not
+                  only the ones whose name or subject names an ID document.
     responses:
       "200":
         description: Updated

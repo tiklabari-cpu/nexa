@@ -1074,6 +1074,10 @@ const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
   'customers.edit': { en: 'Edit player records', tr: 'Oyuncu kayıtlarını düzenleme' },
   'customers.ban': { en: 'Ban players', tr: 'Oyuncu engelleme' },
   'customers.erase': { en: "Erase a player's data", tr: 'Oyuncu verisini silme' },
+  'customers.documents.view': {
+    en: 'Open sensitive documents a player e-mailed',
+    tr: 'Oyuncunun e-postayla gönderdiği hassas belgeleri açma',
+  },
   'ai.manage': { en: 'Configure the AI Agent', tr: "AI Agent'ı yapılandırma" },
   'ai.guardrails.edit': { en: 'Edit AI compliance rules', tr: 'AI uyum kurallarını düzenleme' },
   'reports.view': { en: 'View reports', tr: 'Raporları görme' },

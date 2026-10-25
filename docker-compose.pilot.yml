@@ -176,6 +176,41 @@ services:
       api:
         condition: service_healthy
 
+  # The root panel's API (tm 389.3 · docs/platform-admin/design.md §A): the api
+  # image with another command, as siyahtus_platform (BYPASSRLS), serving only
+  # /platform/v1. Behind the `platform` profile, so `up` without
+  # `--profile platform` runs the pilot exactly as before: the role stays
+  # locked until SIYAHTUS_PLATFORM_DB_PASSWORD is set (20-platform-role-password.sh),
+  # and a process that cannot log in would only restart in a loop. Its
+  # connection string is set on this service, not in x-app-environment, so the
+  # tenant api/rtm are never handed the role that sees every workspace.
+  platform-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: siyahtus-api:pilot
+    profiles: ['platform']
+    restart: unless-stopped
+    logging: *logging
+    command: ['node', 'dist/src/platform.js']
+    env_file: *app-env-file
+    environment:
+      <<: *app-environment
+      DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:${SIYAHTUS_PLATFORM_DB_PASSWORD:-}@db:5432/siyahtus
+      # The api service migrates; this one starts after it is healthy.
+      SIYAHTUS_MIGRATE_ON_START: 'false'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:4002/platform/v1/health/ready || exit 1']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    ports:
+      - '127.0.0.1:${SIYAHTUS_PLATFORM_HOST_PORT:-4002}:4002'
+    depends_on:
+      api:
+        condition: service_healthy
+
   web:
     build:
       context: .

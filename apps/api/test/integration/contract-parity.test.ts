@@ -21,66 +21,14 @@ import type { FastifyInstance } from 'fastify';
 import { loadOpenApiDocument } from '@siyahtus/contract';
 import { API_PREFIX, buildServer } from '../../src/server.js';
 import { testEnv } from '../helpers/fixtures.js';
+import {
+  documentedOperations as documentedIn,
+  HTTP_METHODS,
+  implementedOperations as implementedIn,
+} from '../helpers/route-inventory.js';
 
-const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
-
-/** `/api/v1/chats/:chatId` → `/chats/{chatId}`, so both sides speak one dialect. */
-function toContractPath(url: string): string {
-  const withoutPrefix = url.startsWith(API_PREFIX) ? url.slice(API_PREFIX.length) : url;
-  return (withoutPrefix || '/').replace(/:([A-Za-z0-9_]+)/g, '{$1}');
-}
-
-function implementedOperations(app: FastifyInstance): Set<string> {
-  const operations = new Set<string>();
-
-  // `printRoutes` is Fastify's public introspection surface and reflects the
-  // router after `ready()` — i.e. what will actually be served, not what some
-  // registration list claims.
-  const tree = app.printRoutes({ commonPrefix: false, includeHooks: false });
-
-  // Lines look like: "    chats (GET, POST)" nested under their parent segment.
-  // Rebuild full paths by tracking indentation depth.
-  const segments: string[] = [];
-  for (const rawLine of tree.split('\n')) {
-    if (!rawLine.trim()) continue;
-
-    const content = rawLine.replace(/^[│├└─\s]+/, '');
-    if (!content) continue;
-
-    const depth = Math.max(0, Math.floor((rawLine.length - content.length) / 4));
-    const methodMatch = /\s\((.+)\)$/.exec(content);
-    const segment = methodMatch ? content.slice(0, methodMatch.index) : content;
-
-    segments.length = depth;
-    segments[depth] = segment;
-
-    if (!methodMatch?.[1]) continue;
-
-    const url = segments.slice(0, depth + 1).join('');
-    for (const method of methodMatch[1].split(',').map((m) => m.trim().toLowerCase())) {
-      // HEAD is auto-derived from GET and OPTIONS comes from CORS; neither is
-      // something a contract should have to enumerate.
-      if (!(HTTP_METHODS as readonly string[]).includes(method)) continue;
-      operations.add(`${method} ${toContractPath(url).replace(/\/$/, '') || '/'}`);
-    }
-  }
-
-  return operations;
-}
-
-function documentedOperations(): Set<string> {
-  const document = loadOpenApiDocument();
-  const operations = new Set<string>();
-
-  for (const [path, item] of Object.entries(document.paths)) {
-    for (const method of HTTP_METHODS) {
-      if (item && typeof item === 'object' && method in item) {
-        operations.add(`${method} ${path}`);
-      }
-    }
-  }
-  return operations;
-}
+const implementedOperations = (app: FastifyInstance): Set<string> => implementedIn(app, API_PREFIX);
+const documentedOperations = (): Set<string> => documentedIn(loadOpenApiDocument());
 
 describe('OpenAPI contract covers the served API', () => {
   let app: FastifyInstance;

@@ -68,9 +68,12 @@ interface Module {
     tracked?: Entry[];
   }) => Analysis;
   verbsForPath: (path: string, sources: Source[]) => Map<string, string>;
+  analysePlatform: (input?: { spec?: unknown; sources?: Source[] }) => Analysis;
   HEADLESS: Entry[];
   INDIRECT: Entry[];
   TRACKED: Entry[];
+  PLATFORM_HEADLESS: Entry[];
+  PLATFORM_TRACKED: Entry[];
 }
 
 // CommonJS, and it reads paths relative to the repo root, so it is required
@@ -350,5 +353,47 @@ describe('the repo as it stands', () => {
 
     expect(ops).toContain('POST /chats/{chatId}/supervise');
     expect(ops).toContain('DELETE /chats/{chatId}/supervise');
+  });
+});
+
+describe('the platform pair (tm 389.3)', () => {
+  it('reads the platform contract against apps/admin, with lists of its own', () => {
+    const analysis = withRepoRoot(() => load().analysePlatform());
+
+    expect(analysis.operations.map((operation) => operation.op)).toContain('GET /meta');
+    expect(analysis.dead).toEqual([]);
+    expect(analysis.errors).toEqual([]);
+    // Never the tenant lists: the tenant contract has its own GET /health/live.
+    const audit = load();
+    for (const entry of [...audit.PLATFORM_HEADLESS, ...audit.PLATFORM_TRACKED]) {
+      expect(entry.reason.trim().length, entry.op).toBeGreaterThan(0);
+    }
+    for (const entry of audit.PLATFORM_TRACKED) expect(entry.owner, entry.op).toMatch(/^tm \d+/);
+  });
+
+  it('turns a new platform operation with no admin caller and no entry into a dead end', () => {
+    const spec = { paths: { '/workspaces': { get: {} }, '/meta': { get: {} } } };
+    const analysis = withRepoRoot(() => load().analysePlatform({ spec, sources: [] }));
+
+    expect(analysis.dead.map((operation) => operation.op)).toEqual(['GET /workspaces']);
+    expect(analysis.errors).toContain(
+      'dead end: GET /workspaces — no client calls it, and no list says why',
+    );
+    // The platform lists name operations this synthetic contract dropped.
+    expect(analysis.errors).toContain(
+      'headless: GET /health/live is not an operation in the contract',
+    );
+  });
+
+  it('counts an admin SPA call as covering the platform operation', () => {
+    const spec = { paths: { '/meta': { get: {} } } };
+    const analysis = load().analysePlatform({
+      spec,
+      sources: corpus('apps/admin/src/features/shell/Strip.tsx', "api.get('/meta');"),
+    });
+    expect(analysis.called.map((operation) => operation.op)).toEqual(['GET /meta']);
+    expect(analysis.errors).toContain(
+      'tracked: GET /meta IS called now — the surface arrived, drop the entry',
+    );
   });
 });

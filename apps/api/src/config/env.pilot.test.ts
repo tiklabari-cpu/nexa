@@ -313,8 +313,24 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
 
   it('publishes every port on 127.0.0.1 only — the reverse proxy is the public side', () => {
     const published = [...uncommented.matchAll(/^\s+- '([^']*:\d+)'$/gm)].map((m) => m[1]!);
-    expect(published).toHaveLength(4);
+    // api, rtm, web, widget — and platform-api (tm 389.3) behind its profile.
+    expect(published).toHaveLength(5);
     for (const mapping of published) expect(mapping.startsWith('127.0.0.1:')).toBe(true);
+  });
+
+  it('runs platform-api from the api image, opt-in, never migrating, holding the platform role alone (tm 389.3)', () => {
+    const platform = block(/^ {2}platform-api:$/);
+    expect(platform).toContain('image: siyahtus-api:pilot');
+    expect(platform).toContain("profiles: ['platform']");
+    expect(platform).toContain("command: ['node', 'dist/src/platform.js']");
+    expect(platform).toContain("SIYAHTUS_MIGRATE_ON_START: 'false'");
+    expect(platform).toContain('/platform/v1/health/ready');
+    expect(platform).toMatch(/api:\n\s+condition: service_healthy/);
+    expect(platform).toContain(
+      'DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:${SIYAHTUS_PLATFORM_DB_PASSWORD:-}@db:5432/siyahtus',
+    );
+    // The tenant processes are never handed the BYPASSRLS role.
+    expect(block(/^x-app-environment:/)).not.toContain('DATABASE_PLATFORM_URL');
   });
 
   it('does not seed: a deployment database is not a demo (CONVENTIONS §6.1)', () => {

@@ -1,6 +1,11 @@
 /**
- * Bundles the OpenAPI source (which may be split across files via $ref) into a
- * single dist/openapi.json, and fails loudly on any spec error.
+ * Bundles an OpenAPI source (which may be split across files via $ref) into a
+ * single JSON file, and fails loudly on any spec error.
+ *
+ * Two documents, one rule set (tm 389.3): the tenant contract
+ * (`openapi/openapi.yaml` → `dist/openapi.json`, the defaults) and the
+ * platform one (`--entry platform/openapi.yaml --out dist/platform-openapi.json`).
+ * Both paths are relative to this package.
  *
  * This is the contract-first gate: types, the API server's route schemas and the
  * web client all derive from the artifact this produces, so an invalid spec must
@@ -13,8 +18,18 @@ import { bundle, createConfig } from '@redocly/openapi-core';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
-const entrypoint = resolve(packageRoot, 'openapi/openapi.yaml');
-const outFile = resolve(packageRoot, 'dist/openapi.json');
+
+/** `--name value` from the command line, or `fallback`. */
+function argument(name: string, fallback: string): string {
+  const at = process.argv.indexOf(`--${name}`);
+  if (at === -1) return fallback;
+  const value = process.argv[at + 1];
+  if (!value || value.startsWith('--')) throw new Error(`--${name} needs a path`);
+  return value;
+}
+
+const entrypoint = resolve(packageRoot, argument('entry', 'openapi/openapi.yaml'));
+const outFile = resolve(packageRoot, argument('out', 'dist/openapi.json'));
 
 async function main(): Promise<void> {
   const config = await createConfig({

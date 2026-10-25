@@ -1,0 +1,61 @@
+live:
+  get:
+    tags: [System]
+    operationId: getPlatformHealthLive
+    summary: Liveness probe
+    description: |
+      Answers while the process accepts connections; no dependency is touched.
+      The platform process's liveness probe, on the tenant API's terms
+      (M-OPS-a): restarting it because Postgres is unreachable would fix nothing.
+    security: []
+    responses:
+      "200":
+        description: The process is up. Always 200.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformHealth" }
+
+ready:
+  get:
+    tags: [System]
+    operationId: getPlatformHealthReady
+    summary: Readiness probe
+    description: |
+      Probes Postgres (as `siyahtus_platform`) and Redis for real; 503 when
+      either is unreachable or the process is draining. What the compose
+      healthcheck and an orchestrator's readiness probe point at.
+    security: []
+    responses:
+      "200":
+        description: Every dependency reachable
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformHealth" }
+      "503":
+        description: "`degraded` — a dependency is unreachable; `draining` — shutting down."
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformHealth" }
+
+narrow:
+  get:
+    tags: [System]
+    operationId: getPlatformHealth
+    summary: Dependency check, narrow body
+    description: |
+      The tenant API's `/health` for an anonymous caller: the same probe as
+      `/health/ready` and the same narrow body, kept so a monitor pointed at
+      `/health` works on both processes. The detailed body is not here — it is
+      the dashboard's (tm 389.8), behind an operator session.
+    security: []
+    responses:
+      "200":
+        description: Every dependency reachable
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformHealth" }
+      "503":
+        description: A dependency is unreachable, or the process is draining
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformHealth" }

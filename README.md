@@ -485,6 +485,17 @@ functions). The test harness derives it like the other two. `PLATFORM_SETTINGS_K
 platform's keys (its audit chain, AI keys stored by the panel) and, like `AUDIT_CHAIN_SECRET`,
 stays out of the database. Role, grants and pilot handling: `docs/production-checklist.md`.
 
+The platform-api process itself (tm 389.3) is the api image with another command:
+`pnpm --filter @siyahtus/api platform:dev` locally, `node dist/src/platform.js` in a
+container, port `PLATFORM_PORT` (4002), only `/platform/v1` (the tenant API answers 404
+there). Its contract is a separate document, `packages/contract/platform/openapi.yaml`
+(`pnpm contract:generate` bundles and generates both). It refuses to start without a valid
+`DATABASE_PLATFORM_URL` that is neither the owner nor `siyahtus_app`, and in production
+without an https `ADMIN_APP_URL` (the one origin its CORS answers) — rules the tenant API
+never applies. `docker-compose.full.yml` runs it as `platform-api`; the pilot compose has it
+behind `--profile platform`, because the role stays locked until
+`SIYAHTUS_PLATFORM_DB_PASSWORD` is set.
+
 ### Connection pool budget
 
 Every process that reaches Postgres — `apps/api`, `apps/rtm`, and each of the five

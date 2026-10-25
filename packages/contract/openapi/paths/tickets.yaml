@@ -486,3 +486,118 @@ ticketCustomFields:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ---------------------------------------------------------------------------
+# NOT MOUNTED YET — tm 356.2 (TR-SERVICE) mounts `ticketMessages` with its
+# route, adds it to `openapi.yaml` `paths` and bumps the mobile parity count.
+# Written here by tm 356.1 (schema + contract) so the shape is fixed before the
+# service: `contract-parity.test.ts` fails a documented operation no route
+# serves, so it cannot be listed under `paths` until the route exists.
+# ---------------------------------------------------------------------------
+
+ticketMessages:
+  parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 12 }
+
+  get:
+    tags: [Tickets]
+    operationId: listTicketMessages
+    summary: The ticket's conversation, oldest first
+    description: |
+      Replies, internal notes, what the player wrote and the product's own
+      lines (HD-01), oldest first — the order a conversation is read in.
+      Keyset pagination on `(created_at, id)`: `next_page_id` is present while
+      there is more, and is fed back as `page_id`.
+
+      A primary ticket's thread also carries the messages of the tickets merged
+      into it, interleaved by time; each item's `ticket_id` says where it was
+      written. A merged ticket's own thread still reads (it is history), but
+      writing to it is `409 ticket_merged`.
+
+      Visibility is the ticket's: a ticket the caller may not see — or one in
+      another tenant — is `404`, never `403` (NFR-S5).
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    responses:
+      "200":
+        description: A page of the conversation
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/TicketMessage" }
+                next_page_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Tickets]
+    operationId: createTicketMessage
+    summary: Reply to the player, or add an internal note
+    description: |
+      `kind: reply` stores the reply, then — after the commit — e-mails it to
+      the player from the system address under the brand's name, `[#<id>]` in
+      the subject, threaded on the previous message (`In-Reply-To` /
+      `References`). The response does not wait for the mail server:
+      `delivery_status` starts `queued` and the thread updates when it settles.
+      When this deployment keeps ticket e-mail off (K23) the reply is still
+      stored, with `delivery_status: suppressed`.
+
+      `kind: note` is for the team only and never reaches the mail path.
+
+      Without `set_status` a reply moves the ticket to `pending` (waiting on
+      the player); "send and solve" passes `set_status: solved`.
+
+      Retrying with the same `idempotency_key` returns the message stored the
+      first time (`200`) rather than a second one (`201`).
+
+      Refused with `409 ticket_merged` on a merged ticket
+      (`details.primary_ticket_id` names the one to write on), and with
+      `409 ticket_no_recipient` for a reply to a player who left no e-mail
+      address — a note is still allowed. A ticket the caller may not see, or
+      one in another tenant, is `404` (NFR-S5).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TicketMessageInput" }
+    responses:
+      "200":
+        description: The same `idempotency_key` was seen before; the message it stored.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketMessage" }
+      "201":
+        description: Stored.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketMessage" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: |
+          `ticket_merged` — the ticket was merged; `details.primary_ticket_id`
+          is where its conversation continues. `ticket_no_recipient` — a reply
+          to a player with no e-mail address.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

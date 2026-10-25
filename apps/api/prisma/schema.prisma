@@ -163,7 +163,8 @@ model License {
   chats                  Chat[]
   tags                   Tag[]
   tickets                Ticket[]
-  cannedResponses        CannedResponse[]
+  ticketMessages         TicketMessage[]
+  cannedResponses       CannedResponse[]
   campaigns              Campaign[]
   campaignSends          CampaignSend[]
   goals                  Goal[]
@@ -1518,6 +1519,15 @@ model Ticket {
   /// each address's own activity — the signal that proves an address works.
   inboundAddressId String?   @map("inbound_address_id") @db.Uuid
   lastMessageAt    DateTime? @map("last_message_at") @db.Timestamptz(6)
+  /// When an agent first answered the player (an `agent_reply`, HD-01) — what
+  /// the first-response SLA (HD-05) measures. Null until then, never moved once
+  /// set.
+  firstResponseAt       DateTime? @map("first_response_at") @db.Timestamptz(6)
+  /// The player's newest message and the agents' newest reply (HD-01), apart
+  /// from `last_message_at`, which any activity moves: "who is waiting on whom"
+  /// is the comparison of these two.
+  lastCustomerMessageAt DateTime? @map("last_customer_message_at") @db.Timestamptz(6)
+  lastAgentMessageAt    DateTime? @map("last_agent_message_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license           License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
@@ -1529,7 +1539,14 @@ model Ticket {
   followers         TicketFollower[]
   tags              TicketTag[]
   customFieldValues CustomFieldValue[]
+  messages          TicketMessage[]
 
+  /// The target of `ticket_messages`' (ticket_id, license_id) foreign key, so a
+  /// message cannot point at another workspace's ticket: a foreign key on `id`
+  /// alone is checked without RLS and would accept one. `id` leads on purpose —
+  /// led by `license_id`, the planner took it over
+  /// `tickets_license_customer_idx` for the Contacts `has_tickets` probe.
+  @@unique([id, licenseId])
   @@index([licenseId, status, lastMessageAt(sort: Desc)])
   @@index([assigneeId])
   @@index([licenseId, lastMessageAt(sort: Desc), id(sort: Desc)], map: "tickets_license_last_message_idx")
@@ -1559,6 +1576,52 @@ model TicketFollower {
   @@id([ticketId, accountId])
   @@index([accountId])
   @@map("ticket_followers")
+}
+
+/// A ticket's conversation (HD-01 · tm 356): what the player wrote, the agents'
+/// replies, internal notes and the product's own lines, oldest first.
+///
+/// The CHECKs in the migration hold the promises a service must not be able to
+/// break by mistake: an internal note carries no delivery status, Message-ID or
+/// In-Reply-To — it never becomes e-mail; only a reply has a delivery status;
+/// only a player's message keeps (sanitised) HTML. The vocabularies are
+/// `TICKET_MESSAGE_KINDS` / `TICKET_MESSAGE_AUTHOR_TYPES` /
+/// `TICKET_MESSAGE_DELIVERY_STATUSES` in `@siyahtus/types`.
+model TicketMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  licenseId      BigInt   @map("license_id")
+  ticketId       String   @map("ticket_id") @db.VarChar(12)
+  /// customer_message | agent_reply | internal_note | system.
+  kind           String
+  /// customer | agent | system | bot.
+  authorType     String   @map("author_type")
+  /// The account for `agent`, the customer for `customer`. No foreign key: it
+  /// points into one of two tables, and a message outlives an agent who leaves.
+  authorId       String?  @map("author_id") @db.Uuid
+  bodyText       String   @map("body_text")
+  /// Only on a `customer_message`, and only after sanitising at intake.
+  bodyHtml       String?  @map("body_html")
+  /// [{ key, name, size, mime, scan_status, sensitive }] — `TicketMessageAttachment`.
+  attachments    Json     @default("[]")
+  /// The RFC 5322 Message-ID — the one a reply was sent under, or the one an
+  /// inbound e-mail arrived with. Unique per licence (NULLs are distinct), so a
+  /// redelivered e-mail stays one message.
+  emailMessageId String?  @map("email_message_id")
+  inReplyTo      String?  @map("in_reply_to")
+  /// queued | sent | failed | suppressed — only on an `agent_reply`.
+  deliveryStatus String?  @map("delivery_status")
+  /// The composer's key: the same key on the same licence is one message.
+  idempotencyKey String?  @map("idempotency_key")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  ticket  Ticket  @relation(fields: [ticketId, licenseId], references: [id, licenseId], onDelete: Cascade)
+
+  @@unique([licenseId, emailMessageId])
+  @@unique([licenseId, idempotencyKey])
+  /// The thread, oldest first: keyset on (created_at, id).
+  @@index([ticketId, createdAt, id])
+  @@map("ticket_messages")
 }
 
 /// Password recovery (PRD FR-MOD-00.3). Not in §8.4 — see PLAN §D12.

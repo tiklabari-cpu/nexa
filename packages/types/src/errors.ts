@@ -129,6 +129,14 @@ export const ERROR_TYPES = [
   // conflict. Kept narrow rather than adding a generic `conflict`, which is how
   // the rest of this list is written (`group_offline`, not `unavailable`).
   'ticket_exists',
+  // SiyahTuş additions — ticket replies (HD-01 · tm 356). Writing to a ticket
+  // that was merged into another: the conversation lives on the primary now,
+  // and `details.primary_ticket_id` says where, so the console can go there
+  // instead of showing an error. And a reply to a player who left no e-mail
+  // address: the ticket is fine, there is simply nobody to send it to — a note
+  // is still allowed. Both 409, kept narrow like `ticket_exists`.
+  'ticket_merged',
+  'ticket_no_recipient',
   'too_many_requests',
   // SiyahTuş addition — two-factor authentication (NFR-S11 · FR-MOD-00.1). Asking
   // to set up a second factor on an account that already has a live one
@@ -201,6 +209,8 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   takeover_conflict: 409,
   template_locked: 409,
   ticket_exists: 409,
+  ticket_merged: 409,
+  ticket_no_recipient: 409,
   too_many_requests: 429,
   two_factor_already_enabled: 409,
   // Not authenticated yet, same as `authentication` — the second factor is

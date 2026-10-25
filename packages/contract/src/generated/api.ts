@@ -17317,6 +17317,97 @@ export interface components {
       custom_fields: components['schemas']['CustomFieldValue'][];
     };
     /**
+     * @description One file on a ticket message (HD-01). `key` is the upload's storage key
+     *     (`POST /uploads`); only a `clean` file is offered for download or
+     *     mailed. A `sensitive` file (an ID document, a bank statement) is drawn
+     *     behind a click.
+     */
+    TicketMessageAttachment: {
+      key: string;
+      name: string;
+      size: number;
+      mime: string;
+      /** @enum {string} */
+      scan_status: 'pending' | 'clean' | 'infected';
+      sensitive: boolean;
+    };
+    /**
+     * @description One entry in a ticket's conversation (HD-01 · tm 356), oldest first in
+     *     `GET /tickets/{ticketId}/messages`.
+     *
+     *     - `customer_message` — what the player wrote (an inbound e-mail, the
+     *       ticket's opening text).
+     *     - `agent_reply` — an agent's answer, sent to the player by e-mail;
+     *       `delivery_status` says where that e-mail is.
+     *     - `internal_note` — for the team only. Never e-mailed and never shown
+     *       to the player; `delivery_status` is always null on it.
+     *     - `system` — a line the product wrote (a merge, a reopening).
+     *
+     *     `ticket_id` is the ticket the message was written on: a primary's
+     *     thread also shows the messages of the tickets merged into it, and this
+     *     says which one each came from.
+     */
+    TicketMessage: {
+      /** Format: uuid */
+      id: string;
+      ticket_id: string;
+      /** @enum {string} */
+      kind: 'customer_message' | 'agent_reply' | 'internal_note' | 'system';
+      /** @enum {string} */
+      author_type: 'customer' | 'agent' | 'system' | 'bot';
+      /**
+       * Format: uuid
+       * @description The agent's account for `agent`, the customer for `customer`; null for `system` and `bot`.
+       */
+      author_id: string | null;
+      /** @description The agent's or the player's name as it reads now; null when there is none. */
+      author_name: string | null;
+      /**
+       * @description The text, with card numbers masked. A reply or note is at most
+       *     20 000 characters; an inbound e-mail is stored as it arrived.
+       */
+      body_text: string;
+      /**
+       * @description Only on a `customer_message` that arrived as HTML, and only after
+       *     sanitising at intake. Still not markup to render as-is — the
+       *     console draws `body_text` and offers this behind its own sanitiser.
+       */
+      body_html?: string | null;
+      attachments: components['schemas']['TicketMessageAttachment'][];
+      /**
+       * @description Only on an `agent_reply`. `queued` — saved, the e-mail goes after
+       *     the commit · `sent` — the mail server took it · `failed` — it did
+       *     not; the console offers "try again" · `suppressed` — this
+       *     deployment keeps ticket e-mail off (K23), the reply is kept and the
+       *     thread says it was not sent.
+       * @enum {string|null}
+       */
+      delivery_status: 'queued' | 'sent' | 'failed' | 'suppressed' | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
+     * @description What the composer sends (HD-01). `kind: reply` goes to the player by
+     *     e-mail; `kind: note` stays with the team and never reaches the mail
+     *     path. `idempotency_key` makes a retried request one message: the same
+     *     key on the same licence answers with the message already stored.
+     */
+    TicketMessageInput: {
+      /** @enum {string} */
+      kind: 'reply' | 'note';
+      text: string;
+      /** @description Storage keys of files uploaded through `POST /uploads` for this licence. */
+      attachment_keys?: string[];
+      /**
+       * @description "Send and …": the status the ticket moves to in the same request.
+       *     Without it a reply leaves the ticket `pending` (waiting on the
+       *     player) and a note leaves the status as it was.
+       * @enum {string}
+       */
+      set_status?: 'pending' | 'solved';
+      idempotency_key: string;
+    };
+    /**
      * @description One selected ticket's verdict, in request order. `reason` is null when
      *     the ticket changed and names the refusal otherwise — it is a closed
      *     vocabulary so a client can react to it rather than parse a sentence.
@@ -19381,6 +19472,8 @@ export interface components {
       | 'service_unavailable'
       | 'takeover_conflict'
       | 'template_locked'
+      | 'ticket_merged'
+      | 'ticket_no_recipient'
       | 'too_many_requests'
       | 'unsupported_version'
       | 'users_limit_reached'

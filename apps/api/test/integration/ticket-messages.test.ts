@@ -16,7 +16,8 @@
  *   - the player writing moves the ticket back to `open` (the inbound path's
  *     entry point, HD-03).
  *
- * Until tm 356.3 every reply is stored `suppressed` — there is no mail path.
+ * This server keeps ticket e-mail off (`TICKET_MAIL_OUTBOUND` unset), so every
+ * reply is stored `suppressed`; the mail path is `ticket-reply-mail.test.ts`.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

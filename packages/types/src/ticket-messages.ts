@@ -121,3 +121,16 @@ export interface TicketMessageCreatedPush {
   author_id: string | null;
   created_at: string;
 }
+
+/**
+ * A reply's e-mail settled (`RTM_PUSH_ACTIONS` `ticket_message_delivery_changed`,
+ * tm 356.3): `queued` became `sent` or `failed`, or a resend queued it
+ * again. Same audience as {@link TicketMessageCreatedPush}, and ids only for
+ * the same reason; the status carries no text, so it rides along — the
+ * console can redraw one badge without refetching the thread.
+ */
+export interface TicketMessageDeliveryChangedPush {
+  ticket_id: string;
+  message_id: string;
+  delivery_status: TicketMessageDeliveryStatus;
+}

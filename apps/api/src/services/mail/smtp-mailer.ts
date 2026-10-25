@@ -34,7 +34,7 @@
 import { randomUUID } from 'node:crypto';
 import pino from 'pino';
 import { maskPii, SMTP_SECRET_LOG_PATHS } from '../../lib/log-redact.js';
-import { composeMessage } from './mime.js';
+import { composeMessage, isMessageId } from './mime.js';
 import type { Mailer, Message } from './mailer.js';
 import { PermanentMailError, isMailDeliveryError, type MailDeliveryError } from './mail-error.js';
 import { deliverOnce, type SmtpConfig } from './smtp-session.js';
@@ -146,7 +146,12 @@ export class SmtpMailer implements Mailer {
     const { host, port, secure } = this.#config;
     const where = { host, port, secure, kind: message.kind };
 
-    if (!isSendableAddress(message.to)) {
+    // A caller-chosen id that is not one would be a header nobody can parse —
+    // or, with a line break in it, one somebody wrote. Refused like an address.
+    if (
+      !isSendableAddress(message.to) ||
+      (message.messageId !== undefined && !isMessageId(message.messageId))
+    ) {
       // Nothing is contacted: no server can deliver to this, now or later.
       const error = new PermanentMailError({ code: 'invalid_message', phase: 'compose' });
       this.#log.error(
@@ -156,9 +161,10 @@ export class SmtpMailer implements Mailer {
       throw error;
     }
 
-    const messageId = `${randomUUID()}@${this.#domain}`;
+    const messageId = message.messageId ?? `${randomUUID()}@${this.#domain}`;
     const data = composeMessage({
       from: this.#config.from,
+      fromName: message.fromName,
       to: message.to,
       subject: message.subject,
       body: message.body,
@@ -167,6 +173,8 @@ export class SmtpMailer implements Mailer {
       language: message.locale,
       date: this.#now(),
       messageId,
+      inReplyTo: message.inReplyTo,
+      references: message.references,
     });
     const scrub = this.#scrubber(message.to);
 

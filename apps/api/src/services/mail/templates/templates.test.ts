@@ -23,6 +23,7 @@ import {
   ssoDomainChallengeMail,
   teamTranscriptMail,
   ticketNoticeMail,
+  ticketReplyMail,
   twoFactorEnabledMail,
   verifyEmailMail,
   visitorMessageMail,
@@ -227,6 +228,22 @@ describe('the shared frame', () => {
     );
     expect(ticket.html).not.toContain('<script>');
     expect(ticket.html).toContain('line two');
+
+    // An agent's reply is the agent's text, mailed to a player (tm 356.3).
+    const reply = ticketReplyMail(
+      { locale: 'en' },
+      {
+        workspaceName: HOSTILE,
+        ticketId: 'TK12AB34',
+        ticketSubject: HOSTILE,
+        body: `${HOSTILE}\nline two`,
+        agentName: HOSTILE,
+      },
+    );
+    expect(reply.html).not.toContain('<script>');
+    expect(reply.html).toContain('line two');
+    expect(reply.subject).toBe(`[#TK12AB34] ${HOSTILE}`);
+    expect(reply.body).toBe(`${HOSTILE}\nline two`);
 
     // The Founder's name and reason reach every admin's inbox (tm 325.2).
     const permissions = permissionsChangedMail(
@@ -443,5 +460,30 @@ describe('a templated message on the wire', () => {
     expect(received.body).toBe(mail.body);
     expect(received.html).toBe(mail.html);
     expect(received.language).toBe('tr');
+  });
+});
+
+describe('ticketReplyMail (tm 356.3 · HD-01)', () => {
+  const input = {
+    workspaceName: 'Acme',
+    ticketId: 'TK12AB34',
+    ticketSubject: 'Çekim talebim bekliyor',
+    body: 'Merhaba,\nÖdemeniz bugün gönderildi.',
+    agentName: 'Deniz',
+  };
+
+  it('carries the ticket number in the subject and the reply alone as the text', () => {
+    const mail = ticketReplyMail({ locale: 'tr' }, input);
+    expect(mail.subject).toBe('[#TK12AB34] Çekim talebim bekliyor');
+    expect(mail.body).toBe(input.body);
+    expect(mail.html).toContain('Ödemeniz bugün gönderildi.');
+    expect(mail.html).toContain('Deniz · Acme');
+    expect(mail.html).toContain('açık bir talebiniz (#TK12AB34)');
+  });
+
+  it('names no agent when the reply has none (a bot)', () => {
+    const mail = ticketReplyMail({ locale: 'en' }, { ...input, agentName: null });
+    expect(mail.html).not.toContain(' · Acme');
+    expect(mail.html).toContain('a request (#TK12AB34) open with Acme');
   });
 });

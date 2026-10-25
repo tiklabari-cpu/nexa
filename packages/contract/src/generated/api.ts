@@ -2482,6 +2482,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/tickets/{ticketId}/messages/{messageId}/resend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+        messageId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a reply's e-mail again after it failed
+     * @description The console's "try again" on a reply whose `delivery_status` is
+     *     `failed` (HD-01). The reply is not written again: the same message —
+     *     the same text, the same `Message-ID` — goes back to `queued` and is
+     *     e-mailed after the commit, to the address the ticket's player has now.
+     *
+     *     Only a `failed` reply is sent again, and only once however often the
+     *     button is pressed: a reply that is `queued`, `sent` or `suppressed` is
+     *     answered as it is and nothing is mailed. With ticket e-mail switched off
+     *     on this deployment (K23) a failed reply becomes `suppressed`.
+     *
+     *     An internal note has no e-mail to resend (`400`). A player who no
+     *     longer has an address is `409 ticket_no_recipient`. A ticket or message
+     *     the caller may not see, or one in another tenant, is `404` (NFR-S5).
+     */
+    post: operations['resendTicketMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers/{customerId}/ban': {
     parameters: {
       query?: never;
@@ -23631,6 +23666,44 @@ export interface operations {
        *     is where its conversation continues. `ticket_no_recipient` — a reply
        *     to a player with no e-mail address.
        */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  resendTicketMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+        messageId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The reply as it now stands — `queued` when it is going out again. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketMessage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description `ticket_no_recipient` — the player has no e-mail address any more. */
       409: {
         headers: {
           [name: string]: unknown;

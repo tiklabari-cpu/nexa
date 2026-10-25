@@ -246,6 +246,42 @@ describe('(2) envelope and encoding', () => {
     expect(error.code).toBe('invalid_message');
     expect(server.sessions).toHaveLength(0);
   });
+
+  it('sends a ticket reply under the Message-ID it stored, threaded and named (tm 356.3)', async () => {
+    const server = await startServer({ mode: 'starttls' });
+    const { mailer } = carrier(server);
+
+    await mailer.send({
+      ...MESSAGE,
+      kind: 'ticket_reply',
+      messageId: 'stored-1@nolnk.test',
+      inReplyTo: 'p1@mail.example.test',
+      references: ['stored-0@nolnk.test', 'p1@mail.example.test'],
+      fromName: 'Acme Destek',
+    });
+
+    const message = server.messages[0]!;
+    const head = message.slice(0, message.indexOf('\r\n\r\n'));
+    expect(head).toMatch(/^Message-ID: <stored-1@nolnk\.test>$/m);
+    expect(head).toMatch(new RegExp(`^From: "Acme Destek" <${FROM}>$`, 'm'));
+    expect(head).toMatch(/^In-Reply-To: <p1@mail\.example\.test>$/m);
+    expect(head).toMatch(/^References: <stored-0@nolnk\.test>\r\n <p1@mail\.example\.test>$/m);
+    // The envelope stays the system address: the name is display text only.
+    expect(server.sessions[0]!.commands).toContain(`MAIL FROM:<${FROM}>`);
+  });
+
+  it('refuses a caller-chosen Message-ID that is not one, without contacting the server', async () => {
+    const server = await startServer({ mode: 'starttls' });
+    const { mailer } = carrier(server);
+
+    const error = await failure(
+      mailer.send({ ...MESSAGE, messageId: 'a@b.test>\r\nBcc: victim@example.test' }),
+    );
+
+    expect(error).toBeInstanceOf(PermanentMailError);
+    expect(error.code).toBe('invalid_message');
+    expect(server.sessions).toHaveLength(0);
+  });
 });
 
 describe('(3) 4xx is transient: retried, on an exponential curve', () => {

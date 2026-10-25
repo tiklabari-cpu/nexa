@@ -8,8 +8,8 @@
  * Writes are covered by the licence gate hook, so an expired trial refuses to
  * create or edit a ticket (402, ADR-10) without this file having to know.
  */
-import { ticketNoticeMail } from '../services/mail/templates/messages.js';
-import type { FastifyInstance } from 'fastify';
+import { ticketNoticeMail, ticketReplyMail } from '../services/mail/templates/messages.js';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   DEFAULT_TICKET_SORT_KEY,
@@ -26,6 +26,7 @@ import {
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { withTenant, type TenantContext } from '../lib/tenant.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import {
   TICKET_STATUSES,
@@ -47,6 +48,7 @@ import { createObjectStore } from '../services/storage/object-store.js';
 import {
   TicketMessageService,
   resolveAttachments,
+  type TicketReplyOutbound,
 } from '../services/tickets/ticket-message-service.js';
 
 const READ_SCOPES = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
@@ -208,9 +210,79 @@ export default async function ticketRoutes(
   },
 ): Promise<void> {
   const tickets = new TicketService();
-  const messages = new TicketMessageService();
+  const messages = new TicketMessageService({
+    outbound: env.TICKET_MAIL_OUTBOUND,
+    messageIdDomain: messageIdDomainOf(env),
+  });
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
   const publisher = new RealtimePublisher(app.redis, app.log);
+
+  /**
+   * A queued reply's e-mail, sent after the commit (tm 356.3 · HD-01) — like
+   * the ticket notice, handed to `app.backgroundMail` rather than awaited, so
+   * the agent's answer depends on neither the carrier's latency nor its
+   * failure. How it went is written back to the reply in a transaction of its
+   * own and announced to the people working the ticket; the log line carries
+   * the ids and the carrier's classification, never the address or the text.
+   *
+   * `unconfirmed` — handed over, acceptance never confirmed — is written
+   * `sent`: the message may well have arrived, and "try again" on it would
+   * mail the player the same answer twice.
+   */
+  const mailReply = (log: FastifyBaseLogger, tenant: TenantContext, mail: TicketReplyOutbound) => {
+    app.backgroundMail.send(
+      {
+        to: mail.to,
+        licenseId: tenant.licenseId,
+        kind: 'ticket_reply',
+        messageId: mail.emailMessageId,
+        ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo } : {}),
+        references: mail.references,
+        fromName: mail.workspaceName,
+        // The player's language is not known to the server — the frame's few
+        // words are English, as on the ticket notice.
+        ...ticketReplyMail(
+          { locale: 'en' },
+          {
+            workspaceName: mail.workspaceName,
+            ticketId: mail.ticketId,
+            ticketSubject: mail.ticketSubject,
+            body: pilotMode ? withPilotNoReplyLine(mail.body) : mail.body,
+            agentName: mail.agentName,
+          },
+        ),
+      },
+      async (outcome) => {
+        logUnsentMail(log, 'ticket.reply_mail', outcome, {
+          ticket_id: mail.ticketId,
+          message_id: mail.messageId,
+        });
+        try {
+          const push = await withTenant(app.db, tenant, (tx) =>
+            messages.recordDelivery(
+              tx,
+              mail.messageId,
+              outcome.status === 'failed' ? 'failed' : 'sent',
+            ),
+          );
+          if (push) {
+            await publisher.publish(
+              tenant,
+              'ticket_message_delivery_changed',
+              push.audience,
+              push.payload,
+            );
+          }
+        } catch (error) {
+          // The reply stays `queued`; nothing a log reader could act on is lost.
+          log.error(
+            { err: error, ticket_id: mail.ticketId, message_id: mail.messageId },
+            'ticket reply delivery status not recorded',
+          );
+        }
+      },
+    );
+  };
   const customFields = new CustomFieldService();
   const templates = new TicketEmailTemplateService();
 
@@ -581,8 +653,50 @@ export default async function ticketRoutes(
           written.push.payload,
         );
       }
+      // Only a reply just stored `queued` carries one — never a note, a replay
+      // or a reply this deployment does not mail (K23).
+      if (written.outbound) mailReply(request.log, tenant, written.outbound);
 
       return reply.code(written.replayed ? 200 : 201).send(written.message);
     },
   );
+
+  app.post<{ Params: { ticketId: string; messageId: string } }>(
+    '/tickets/:ticketId/messages/:messageId/resend',
+    { config: { scopes: WRITE_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const messageId = parse(z.string().uuid(), request.params.messageId);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      const resent = await request.withTenant((tx) =>
+        messages.resend(tx, tenant, principal, ticketId, messageId),
+      );
+
+      if (resent.push) {
+        await publisher.publish(
+          tenant,
+          'ticket_message_delivery_changed',
+          resent.push.audience,
+          resent.push.payload,
+        );
+      }
+      if (resent.outbound) mailReply(request.log, tenant, resent.outbound);
+
+      return reply.send(resent.message);
+    },
+  );
+}
+
+/**
+ * The right-hand side of a ticket reply's `Message-ID`: the system address's
+ * domain, as the SMTP carrier would choose for a message it numbers itself.
+ * Without `SMTP_FROM` (the spool in development and the test suites) a
+ * reserved name (RFC 2606) that can belong to nobody.
+ */
+function messageIdDomainOf(env: Env): string {
+  const from = env.SMTP_FROM ?? '';
+  const domain = from.slice(from.lastIndexOf('@') + 1);
+  return from.includes('@') && /^[A-Za-z0-9.-]+$/.test(domain) ? domain : 'siyahtus.invalid';
 }

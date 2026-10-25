@@ -31,6 +31,26 @@ export interface Message {
   /** The language the message is written in (`en`, `tr`) — `Content-Language`. */
   locale?: string;
   /**
+   * The `Message-ID` to send under, without the angle brackets (tm 356.3).
+   * Omitted, the carrier makes one up. Chosen by the caller only when the id
+   * has to be known before the send — a ticket reply stores it, so the
+   * player's answer (`In-Reply-To`) finds its ticket, and a resend goes out as
+   * the same message rather than a second one. Not a valid `id-left@id-right`,
+   * the carrier refuses the message rather than writing a header from it.
+   */
+  messageId?: string;
+  /** The message this one answers (`In-Reply-To`, RFC 5322 §3.6.4), without brackets. */
+  inReplyTo?: string;
+  /** The thread so far, oldest first (`References`), without brackets. */
+  references?: readonly string[];
+  /**
+   * The name shown beside the system address in `From:` — the workspace a
+   * ticket reply is written for (tm 356.3). The address itself is always the
+   * deployment's own (`SMTP_FROM`): a workspace's name is display text, never
+   * a sender a receiving server would have to trust.
+   */
+  fromName?: string;
+  /**
    * The workspace this mail is sent for, or `null` for mail about an account
    * rather than a workspace — the password reset, the sign-up link, the
    * account-exists notice, the two-factor notice (tm 257.14).
@@ -64,6 +84,10 @@ export interface Message {
    * it leaves the workspace, to an address a visitor typed, which is what the
    * external daily cap counts. The team's copy goes to a teammate and stays a
    * `notification`.
+   *
+   * `ticket_reply` is an agent's answer on a ticket, mailed to its player (tm
+   * 356.3 · HD-01) — external for the same reason as `ticket_notice`, and its
+   * own kind because it is the agent's words rather than a template's.
    */
   kind:
     | 'password_reset'
@@ -71,6 +95,7 @@ export interface Message {
     | 'notification'
     | 'scheduled_report'
     | 'ticket_notice'
+    | 'ticket_reply'
     | 'chat_transcript'
     | 'email_verification'
     | 'account_exists_notice';

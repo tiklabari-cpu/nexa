@@ -27,10 +27,15 @@
  *     (`ticket_messages_note_not_mailed_check`). The mail path (tm 356.3)
  *     starts from a reply's `delivery_status`, so a note has nothing to start it.
  *
- * Until tm 356.3 wires the mail path, every reply is stored `suppressed`: the
- * deployment has no way to send ticket e-mail yet, which is the state K23's
- * pilot gate defaults to, and saying `queued` would promise a send that nothing
- * performs.
+ * The mail path (tm 356.3). With ticket e-mail on (`TICKET_MAIL_OUTBOUND`,
+ * K23) a reply is stored `queued`, under the `Message-ID` it will be sent with
+ * and threaded on the newest message before it that has one — so the id is
+ * durable before the mail exists, the player's answer can find its ticket by
+ * it, and a resend is the same message rather than a second one. The write
+ * returns a {@link TicketReplyOutbound}; the route hands it to
+ * `app.backgroundMail` after the commit, and {@link TicketMessageService.recordDelivery}
+ * writes how the send went. With the switch off the reply is stored
+ * `suppressed` and nothing is returned to send.
  */
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -41,12 +46,14 @@ import {
   type TicketMessageAttachment,
   type TicketMessageAuthorType,
   type TicketMessageCreatedPush,
+  type TicketMessageDeliveryChangedPush,
   type TicketMessageDeliveryStatus,
   type TicketMessageKind,
   type TicketReplySetStatus,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { maskForWrite } from '../../lib/sensitive-mask.js';
+import { isMessageId } from '../mail/mime.js';
 import { UUID_RE, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import type { Principal } from '../auth/principal.js';
@@ -109,7 +116,45 @@ export interface WrittenTicketMessage {
   replayed: boolean;
   /** Null on a replay, and when the ticket has nobody to tell. */
   push: TicketMessagePush | null;
+  /**
+   * The e-mail to send once the transaction has committed — only for a reply
+   * just stored `queued`. Never on a note, a replay or a `suppressed` reply.
+   */
+  outbound?: TicketReplyOutbound | null;
 }
+
+/** How this deployment mails ticket replies (tm 356.3). */
+export interface TicketMailSettings {
+  /** `TICKET_MAIL_OUTBOUND` (K23). Off, a reply is stored `suppressed`. */
+  outbound: boolean;
+  /** The right-hand side of the `Message-ID`s replies go out under. */
+  messageIdDomain: string;
+}
+
+/** A queued reply's e-mail, as the route hands it to `app.backgroundMail`. */
+export interface TicketReplyOutbound {
+  /** The `ticket_messages` row whose `delivery_status` the send settles. */
+  messageId: string;
+  ticketId: string;
+  ticketSubject: string;
+  to: string;
+  /** The reply as stored — masked. */
+  body: string;
+  agentName: string | null;
+  workspaceName: string;
+  emailMessageId: string;
+  inReplyTo: string | null;
+  references: string[];
+}
+
+/** The realtime notice of a reply's new `delivery_status`. */
+export interface TicketDeliveryPush {
+  audience: PushAudience;
+  payload: TicketMessageDeliveryChangedPush;
+}
+
+/** The longest `References` a reply carries: the thread's first id and its newest. */
+const REFERENCES_MAX = 10;
 
 export interface CustomerMessageResult extends WrittenTicketMessage {
   /** A `solved` ticket the player wrote to again — HD-03 says so in the thread. */
@@ -155,6 +200,13 @@ const MESSAGE_COLUMNS = Prisma.sql`
   date_trunc('milliseconds', created_at) AS "createdAt"`;
 
 export class TicketMessageService {
+  readonly #mail: TicketMailSettings;
+
+  /** Without settings ticket e-mail is off: every reply is stored `suppressed`. */
+  constructor(mail: TicketMailSettings = { outbound: false, messageIdDomain: 'siyahtus.invalid' }) {
+    this.#mail = mail;
+  }
+
   /**
    * A page of the thread, oldest first (`(created_at, id)` keyset).
    *
@@ -252,18 +304,25 @@ export class TicketMessageService {
     const now = new Date();
     const id = randomUUID();
     const text = maskForWrite(input.text, author.type).text;
-    // See the module comment: `suppressed` until the mail path exists (tm 356.3).
+    // A note never gets this far into the mail path: no status, no Message-ID,
+    // no thread — the CHECK would refuse any of them, and nothing is returned
+    // to send. A reply is `queued` only when this deployment mails replies.
+    const mails = kind === 'agent_reply' && this.#mail.outbound;
     const deliveryStatus: TicketMessageDeliveryStatus | null =
-      kind === 'agent_reply' ? 'suppressed' : null;
+      kind === 'agent_reply' ? (mails ? 'queued' : 'suppressed') : null;
+    const emailMessageId = mails ? `${randomUUID()}@${this.#mail.messageIdDomain}` : null;
+    const thread = mails ? await threadOf(tx, ticket.id) : [];
+    const inReplyTo = thread.at(-1) ?? null;
 
     const inserted = await tx.$queryRaw<Array<{ id: string }>>`
       INSERT INTO ticket_messages
         (id, license_id, ticket_id, kind, author_type, author_id, body_text,
-         attachments, delivery_status, idempotency_key, created_at)
+         attachments, delivery_status, email_message_id, in_reply_to, idempotency_key, created_at)
       VALUES
         (${id}::uuid, ${tenant.licenseId}::bigint, ${ticket.id}, ${kind}, ${author.type},
          ${author.id}::uuid, ${text}, ${JSON.stringify(input.attachments)}::jsonb,
-         ${deliveryStatus}, ${input.idempotencyKey}, ${now}::timestamptz)
+         ${deliveryStatus}, ${emailMessageId}, ${inReplyTo}, ${input.idempotencyKey},
+         ${now}::timestamptz)
       ON CONFLICT (license_id, idempotency_key) DO NOTHING
       RETURNING id
     `;
@@ -318,7 +377,138 @@ export class TicketMessageService {
       delivery_status: deliveryStatus,
       created_at: now.toISOString(),
     };
-    return { message, replayed: false, push: await pushFor(tx, ticket, message) };
+    const outbound: TicketReplyOutbound | null =
+      mails && emailMessageId
+        ? {
+            messageId: id,
+            ticketId: ticket.id,
+            ticketSubject: ticket.subject,
+            // Checked non-empty above, under the same lock.
+            to: ticket.customer!.email!.trim(),
+            body: text,
+            agentName: message.author_name,
+            workspaceName: await workspaceName(tx, tenant),
+            emailMessageId,
+            inReplyTo,
+            references: referencesOf(thread),
+          }
+        : null;
+    return { message, replayed: false, push: await pushFor(tx, ticket, message), outbound };
+  }
+
+  /**
+   * "Try again" on a reply whose e-mail failed
+   * (`POST /tickets/{id}/messages/{messageId}/resend`).
+   *
+   * The same message goes out again — same text, same `Message-ID`, threaded
+   * on what came before it — to the address the player has now. Only a
+   * `failed` reply moves, and the move is made under the ticket's lock, so two
+   * presses send once: the second reads `queued` and is answered as it is. A
+   * reply in any other state is answered as it is too; a `suppressed` one
+   * stays so even after the switch is turned on, because mailing an answer
+   * the agent wrote while ticket e-mail was off, at some later moment, is not
+   * what "try again" asked for. With the switch off now, a failed reply
+   * becomes `suppressed`.
+   */
+  async resend(
+    tx: TenantClient,
+    tenant: TenantContext,
+    principal: Principal,
+    ticketId: string,
+    messageId: string,
+  ): Promise<{
+    message: TicketMessageView;
+    outbound: TicketReplyOutbound | null;
+    push: TicketDeliveryPush | null;
+  }> {
+    const visibility = await resolveVisibility(tx, principal, 'write');
+    await lockTicket(tx, ticketId);
+    const ticket = await loadVisible(tx, visibility, ticketId);
+    const row = await tx.ticketMessage.findFirst({ where: { id: messageId, ticketId: ticket.id } });
+    if (!row) throw ApiError.notFound('Message not found.');
+    if (row.kind !== 'agent_reply') {
+      throw ApiError.validation('message_id: only a reply is e-mailed; this one never was.');
+    }
+    const asIs = async () => ({
+      message: toView(row, await authorNames(tx, [row])),
+      outbound: null,
+      push: null,
+    });
+    if (row.deliveryStatus !== 'failed') return asIs();
+
+    const to = ticket.customer?.email?.trim();
+    if (this.#mail.outbound && !to) {
+      throw new ApiError('ticket_no_recipient', 'The player has no e-mail address any more.');
+    }
+    // Only a send gives `failed`, and only a queued reply is sent, so the id
+    // it was sent under is there.
+    const emailMessageId = row.emailMessageId;
+    if (!emailMessageId) throw ApiError.internal('A failed reply has no Message-ID.');
+    const next: TicketMessageDeliveryStatus = this.#mail.outbound ? 'queued' : 'suppressed';
+    // Only from `failed`, as well as under the lock: should the row have moved
+    // since it was read, the press is answered with where it stands now.
+    const moved = await tx.ticketMessage.updateMany({
+      where: { id: row.id, deliveryStatus: 'failed' },
+      data: { deliveryStatus: next },
+    });
+    if (moved.count === 0) {
+      const current = await tx.ticketMessage.findUniqueOrThrow({ where: { id: row.id } });
+      return {
+        message: toView(current, await authorNames(tx, [current])),
+        outbound: null,
+        push: null,
+      };
+    }
+    const updated = { ...row, deliveryStatus: next };
+    const message = toView(updated, await authorNames(tx, [updated]));
+    const push = await deliveryPushFor(tx, ticket, row.id, next);
+    if (next !== 'queued') return { message, outbound: null, push };
+
+    const thread = await threadOf(tx, ticket.id, { before: row });
+    return {
+      message,
+      push,
+      outbound: {
+        messageId: row.id,
+        ticketId: ticket.id,
+        ticketSubject: ticket.subject,
+        to: to!,
+        body: row.bodyText,
+        agentName: message.author_name,
+        workspaceName: await workspaceName(tx, tenant),
+        emailMessageId,
+        inReplyTo: row.inReplyTo,
+        references: referencesOf(thread),
+      },
+    };
+  }
+
+  /**
+   * How a queued reply's send went, written after it settled — in a
+   * transaction of its own, since the request's committed long before.
+   *
+   * Only `queued` moves: a status written by anything else since (a resend
+   * already queued it again and its own send settles it) is not overwritten
+   * by a slower, older outcome. Returns the realtime notice to publish, or
+   * null when nothing changed.
+   */
+  async recordDelivery(
+    tx: TenantClient,
+    messageId: string,
+    status: 'sent' | 'failed',
+  ): Promise<TicketDeliveryPush | null> {
+    const moved = await tx.$queryRaw<Array<{ ticketId: string }>>`
+      UPDATE ticket_messages SET delivery_status = ${status}
+      WHERE id = ${messageId}::uuid AND delivery_status = 'queued'
+      RETURNING ticket_id AS "ticketId"
+    `;
+    const ticketId = moved[0]?.ticketId;
+    if (!ticketId) return null;
+    const ticket = await tx.ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, assigneeId: true, groupId: true },
+    });
+    return ticket ? deliveryPushFor(tx, ticket, messageId, status) : null;
   }
 
   /**
@@ -514,9 +704,42 @@ async function findByMessageId(
  */
 async function pushFor(
   tx: TenantClient,
-  ticket: { id: string; assigneeId: string | null; groupId: bigint | null },
+  ticket: PushTicket,
   message: TicketMessageView,
 ): Promise<TicketMessagePush | null> {
+  const audience = await audienceOf(tx, ticket);
+  if (!audience) return null;
+  return {
+    audience,
+    payload: {
+      ticket_id: ticket.id,
+      message_id: message.id,
+      kind: message.kind,
+      author_type: message.author_type,
+      author_id: message.author_id,
+      created_at: message.created_at,
+    },
+  };
+}
+
+/** A reply's new delivery status, to the same people as its creation. */
+async function deliveryPushFor(
+  tx: TenantClient,
+  ticket: PushTicket,
+  messageId: string,
+  status: TicketMessageDeliveryStatus,
+): Promise<TicketDeliveryPush | null> {
+  const audience = await audienceOf(tx, ticket);
+  if (!audience) return null;
+  return {
+    audience,
+    payload: { ticket_id: ticket.id, message_id: messageId, delivery_status: status },
+  };
+}
+
+type PushTicket = { id: string; assigneeId: string | null; groupId: bigint | null };
+
+async function audienceOf(tx: TenantClient, ticket: PushTicket): Promise<PushAudience | null> {
   const followers = await tx.ticketFollower.findMany({
     where: { ticketId: ticket.id },
     select: { accountId: true },
@@ -532,18 +755,52 @@ async function pushFor(
     ...(agentIds.length > 0 ? { agentIds } : {}),
     ...(ticket.groupId !== null ? { groupIds: [Number(ticket.groupId)] } : {}),
   };
-  if (!audience.agentIds && !audience.groupIds) return null;
-  return {
-    audience,
-    payload: {
-      ticket_id: ticket.id,
-      message_id: message.id,
-      kind: message.kind,
-      author_type: message.author_type,
-      author_id: message.author_id,
-      created_at: message.created_at,
-    },
-  };
+  return audience.agentIds || audience.groupIds ? audience : null;
+}
+
+/**
+ * The `Message-ID`s a reply threads on, oldest first: every message of the
+ * ticket — and of the tickets merged into it, which are the same conversation
+ * — that went out or came in by e-mail, up to `before` when a resend rebuilds
+ * the thread its reply first went out on. Without brackets; an id a header
+ * could not carry (a player's mail server wrote it) is skipped rather than
+ * threaded on.
+ */
+async function threadOf(
+  tx: TenantClient,
+  ticketId: string,
+  options: { before?: { id: string; createdAt: Date } } = {},
+): Promise<string[]> {
+  const before = options.before;
+  const rows = await tx.$queryRaw<Array<{ emailMessageId: string }>>`
+    SELECT email_message_id AS "emailMessageId"
+    FROM ticket_messages
+    WHERE ticket_id IN (SELECT ${ticketId} UNION SELECT id FROM tickets WHERE merged_into_id = ${ticketId})
+      AND email_message_id IS NOT NULL
+      ${
+        before
+          ? Prisma.sql`AND (date_trunc('milliseconds', created_at), id) < (${before.createdAt}::timestamptz, ${before.id}::uuid)`
+          : Prisma.empty
+      }
+    ORDER BY date_trunc('milliseconds', created_at), id
+  `;
+  // An inbound id may have been kept as the header wrote it, brackets and all.
+  return rows.map((row) => row.emailMessageId.trim().replace(/^<(.*)>$/, '$1')).filter(isMessageId);
+}
+
+/** `References` for a thread: all of it, or its first id and its newest when it is long. */
+function referencesOf(thread: readonly string[]): string[] {
+  if (thread.length <= REFERENCES_MAX) return [...thread];
+  return [thread[0]!, ...thread.slice(-(REFERENCES_MAX - 1))];
+}
+
+/** The name a reply is sent under — the workspace's, as the ticket notice signs. */
+async function workspaceName(tx: TenantClient, tenant: TenantContext): Promise<string> {
+  const organization = await tx.organization.findUnique({
+    where: { id: tenant.organizationId },
+    select: { name: true },
+  });
+  return organization?.name ?? 'SiyahTuş';
 }
 
 /** The agents' and players' names for a page, two queries whatever its length. */

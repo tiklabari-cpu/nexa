@@ -127,6 +127,40 @@ export const APPS_SECRET_LOG_PATHS = [
   '*.headers.authorization',
 ];
 
+/**
+ * The operator sign-in's secrets (tm 389.4), for both processes' loggers: the
+ * request bodies that carry a password, a TOTP or recovery code or an
+ * invitation token, and the response fields that carry a fresh secret, a
+ * recovery sheet or an invitation link — wherever somebody might log a body or
+ * a result object, at the top and one level down. The platform routes log none
+ * of them; this is what keeps a debugging line from doing it.
+ *
+ * Names only these fields own. A bare `code` or `token` would also blank
+ * `err.code` (a Prisma `P2002`) and the mail outcome's `mail.code` on every
+ * tenant line — the request-body paths cover where those two names carry a
+ * secret (`req.body.token` and `req.body.password` are in the base list).
+ */
+export const PLATFORM_SECRET_LOG_PATHS = [
+  'req.body.code',
+  'req.body.recovery_code',
+  'password',
+  '*.password',
+  'recovery_code',
+  '*.recovery_code',
+  'recovery_codes',
+  '*.recovery_codes',
+  'recoveryCodes',
+  '*.recoveryCodes',
+  'otpauth_uri',
+  '*.otpauth_uri',
+  'otpauthUri',
+  '*.otpauthUri',
+  'totpSecret',
+  '*.totpSecret',
+  'accept_url',
+  '*.accept_url',
+];
+
 /** Every provider credential path, once — what the server's pino `redact.paths` spreads. */
 export const PROVIDER_SECRET_LOG_PATHS: readonly string[] = [
   ...new Set([

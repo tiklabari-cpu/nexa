@@ -496,6 +496,19 @@ never applies. `docker-compose.full.yml` runs it as `platform-api`; the pilot co
 behind `--profile platform`, because the role stays locked until
 `SIYAHTUS_PLATFORM_DB_PASSWORD` is set.
 
+Operators (tm 389.4) are `platform_admins`, not workspace accounts. The first superadmin is
+created once, from a shell: `pnpm --filter @siyahtus/api platform:bootstrap-admin --email
+<address>` (password on stdin or in `PLATFORM_BOOTSTRAP_PASSWORD`; in an image, `node
+dist/src/services/platform/bootstrap-admin-run.js`); it refuses as soon as any operator exists,
+and everyone after is invited from the panel (72-hour link). Sign-in is a password, then a
+mandatory TOTP code — an operator without an authenticator can only enroll one — and gives one
+opaque session token that ends after `PLATFORM_IDLE_TTL` (900 s) idle or `PLATFORM_SESSION_TTL`
+(28800 s) in all; destructive routes want a code younger than five minutes. Roles
+(`superadmin`, `support`, `billing`, `readonly`) and what each may do are one matrix,
+`PLATFORM_PERMISSIONS` in `@siyahtus/types`. `PLATFORM_IP_ALLOWLIST` (IPs/CIDRs) restricts the
+addresses the platform API admits; production requires `PLATFORM_SETTINGS_KEY`, which seals the
+operators' TOTP secrets.
+
 ### Connection pool budget
 
 Every process that reaches Postgres — `apps/api`, `apps/rtm`, and each of the five

@@ -44,6 +44,11 @@ export const common: Messages = {
   'common.errors.not_found': 'Bunu bulamadık.',
   'common.errors.pending_requests_limit_reached':
     'Zaten çok sayıda istek bekliyor — birazdan yeniden deneyin.',
+  'common.errors.platform_last_superadmin':
+    'Bu değişiklik platformu etkin bir süper yöneticisiz bırakır.',
+  'common.errors.platform_recent_totp_required':
+    'Bu işlemi onaylamak için doğrulama uygulamanızdan yeni bir kod girin.',
+  'common.errors.platform_totp_required': 'Önce doğrulama uygulamanızdaki kodla girişi tamamlayın.',
   'common.errors.request_timeout': 'Bu işlem çok uzun sürdü — yeniden deneyin.',
   'common.errors.sandbox_exists': 'Bu çalışma alanında zaten bir kum havuzu var.',
   'common.errors.service_unavailable': 'Servis geçici olarak kullanılamıyor — birazdan deneyin.',

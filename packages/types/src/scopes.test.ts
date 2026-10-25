@@ -175,6 +175,11 @@ describe('error taxonomy', () => {
     // reply to a player who left no e-mail address.
     'ticket_merged',
     'ticket_no_recipient',
+    // The root panel's operator sign-in (tm 389.4): a password-only session,
+    // a destructive route wanting a fresh code, and the last superadmin.
+    'platform_totp_required',
+    'platform_recent_totp_required',
+    'platform_last_superadmin',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

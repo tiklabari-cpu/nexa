@@ -75,3 +75,4 @@ export * from './high-risk.js';
 export * from './capabilities.js';
 export * from './permission-matrix.js';
 export * from './credential-scopes.js';
+export * from './platform.js';

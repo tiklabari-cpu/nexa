@@ -4988,6 +4988,8 @@ model PlatformAdmin {
   role                 String
   totpSecretCiphertext String?   @map("totp_secret_ciphertext")
   totpEnrolledAt       DateTime? @map("totp_enrolled_at") @db.Timestamptz(6)
+  /// The replay floor: the last TOTP step a code was accepted for (tm 389.4).
+  totpLastUsedStep     BigInt?   @map("totp_last_used_step")
   disabledAt           DateTime? @map("disabled_at") @db.Timestamptz(6)
   /// The operator who sent the invitation. Not a foreign key: operators are
   /// disabled, never deleted, and the attribution must survive either way.

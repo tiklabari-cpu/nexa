@@ -12,8 +12,8 @@
  * What it registers, in order: the error envelope, lifecycle, telemetry
  * (`siyahtus-platform`), sensible, helmet, CORS for the admin SPA alone, the
  * `siyahtus_platform` database, Redis, background mail, the platform rate
- * limit, and then the routes. Operator authentication (389.4) and the platform
- * audit chain (389.5) slot in after the rate limit.
+ * limit, operator authentication (`plugins/platform-auth.ts`, 389.4), and then
+ * the routes. The platform audit chain (389.5) slots in after authentication.
  *
  * What it deliberately does not: the scheduler (the tenant API's leader owns
  * every sweep), the tenant auth, licence, entitlement, sandbox and pilot gates,
@@ -31,10 +31,13 @@ import { baseFastifyOptions } from './lib/fastify-options.js';
 import backgroundMail from './plugins/background-mail.js';
 import errorHandler from './plugins/error-handler.js';
 import lifecycle from './plugins/lifecycle.js';
+import platformAuth from './plugins/platform-auth.js';
 import platformDatabase from './plugins/platform-database.js';
 import platformRateLimit from './plugins/platform-rate-limit.js';
 import redis from './plugins/redis.js';
 import telemetryPlugin from './plugins/telemetry.js';
+import platformAdminsRoutes from './routes/platform/admins.js';
+import platformAuthRoutes from './routes/platform/auth.js';
 import platformHealthRoutes from './routes/platform/health.js';
 import platformMetaRoutes from './routes/platform/meta.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
@@ -56,6 +59,11 @@ export interface BuildPlatformServerOptions {
   telemetry?: Telemetry | null;
   /** Where log lines go — a test reads them back. */
   logStream?: NodeJS.WritableStream;
+  /**
+   * The operator sign-in's clock (session lifetimes, TOTP steps), milliseconds
+   * since the epoch. `Date.now` unless a test moves time.
+   */
+  now?: () => number;
 }
 
 export async function buildPlatformServer({
@@ -64,6 +72,7 @@ export async function buildPlatformServer({
   mailer: injectedMailer,
   telemetry,
   logStream,
+  now,
 }: BuildPlatformServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -118,6 +127,9 @@ export async function buildPlatformServer({
   await app.register(redis, { env });
   await app.register(backgroundMail, { mailer });
   await app.register(platformRateLimit, { env, platform });
+  await app.register(platformAuth, { env, platform, ...(now ? { now } : {}) });
+
+  for (const warning of platform.warnings) app.log.warn({ event: 'platform.env_warning' }, warning);
 
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
@@ -127,6 +139,8 @@ export async function buildPlatformServer({
     async (api) => {
       await api.register(platformHealthRoutes);
       await api.register(platformMetaRoutes, { env, version: VERSION });
+      await api.register(platformAuthRoutes, { env });
+      await api.register(platformAdminsRoutes, { platform, mailer });
     },
     { prefix: PLATFORM_PREFIX },
   );

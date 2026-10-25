@@ -146,6 +146,21 @@ export function formatRecoveryCode(raw: string): string {
   return groups.join('-');
 }
 
+/**
+ * Whether a normalised string could be a code we generated — the alphabet and
+ * the length. Also what the operator sign-in (tm 389.4,
+ * `services/platform/admin-auth.ts`) checks before it spends a lookup; the
+ * two keep their own tables and SQL, and share only this arithmetic.
+ */
+export function isRecoveryCodeShape(normalized: string): boolean {
+  return CODE_RE.test(normalized);
+}
+
+/** One fresh code, undelimited. Shared with the operator sign-in like the check above. */
+export function randomRecoveryCode(): string {
+  return randomCode();
+}
+
 function randomCode(): string {
   let out = '';
   while (out.length < RECOVERY_CODE_LENGTH) {

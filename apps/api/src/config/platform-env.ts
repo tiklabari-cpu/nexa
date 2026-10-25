@@ -13,6 +13,7 @@
  */
 import type { Env } from './env.js';
 import { parseOriginList, withPoolSize } from './env.js';
+import { parseAllowlistEntry } from '../lib/ip-allowlist.js';
 
 export interface PlatformEnv {
   /** `DATABASE_PLATFORM_URL`, with `DATABASE_POOL_SIZE` applied like the primary's. */
@@ -23,6 +24,24 @@ export interface PlatformEnv {
   adminOrigin: string;
   /** Requests per minute per address, `RATE_LIMIT_PLATFORM_PER_MIN`. */
   rateLimitPerMin: number;
+  /**
+   * `PLATFORM_IP_ALLOWLIST`, one entry per IP or CIDR, already validated. Empty
+   * admits every address (`decideIpAccess`'s rule) — production warns.
+   */
+  ipAllowlist: string[];
+  /** A session's absolute lifetime in seconds (`PLATFORM_SESSION_TTL`, 8 h). */
+  sessionTtlS: number;
+  /** How long a session may sit without a request (`PLATFORM_IDLE_TTL`, 15 min). */
+  idleTtlS: number;
+  /**
+   * `PLATFORM_SETTINGS_KEY` — the root the platform's sub-keys are derived
+   * from (`lib/platform-keys.ts`); operator TOTP secrets are sealed under one.
+   * Outside production an unset key falls back to {@link DEV_PLATFORM_SETTINGS_KEY}
+   * with a warning; production refuses to start without a real one.
+   */
+  settingsKey: string;
+  /** What is allowed but worth saying at boot; `buildPlatformServer` logs each. */
+  warnings: string[];
 }
 
 export const PLATFORM_DEFAULTS = {
@@ -31,7 +50,28 @@ export const PLATFORM_DEFAULTS = {
   /** `apps/admin`'s Vite dev server (`ADMIN_PORT`, 389.6). Never a production default. */
   adminAppUrl: 'http://localhost:5175',
   rateLimitPerMin: 300,
+  sessionTtlS: 28_800,
+  idleTtlS: 900,
 } as const;
+
+/**
+ * Bounds of the two session lifetimes. Five minutes is the shortest session
+ * anyone could sign in and act within; a week is far past any shift, and a
+ * session that outlives one is a credential nobody remembers holding.
+ */
+const SESSION_TTL_RANGE = { min: 300, max: 604_800 } as const;
+const IDLE_TTL_MIN = 60;
+
+/**
+ * The published development root key — what `.env.example` ships. Used only
+ * outside production when `PLATFORM_SETTINGS_KEY` is unset, so a fresh clone's
+ * platform process starts; production refuses it like every `dev-only-` value.
+ */
+export const DEV_PLATFORM_SETTINGS_KEY =
+  'dev-only-platform-settings-key-change-me-0123456789abcdef';
+
+/** The shortest root key accepted — the floor `env.ts` holds every other secret to. */
+const SETTINGS_KEY_MIN_LENGTH = 32;
 
 /** The role the platform connection is meant to log in as (migration 20261101090000). */
 export const PLATFORM_DB_ROLE = 'siyahtus_platform';
@@ -41,6 +81,14 @@ function positiveInt(value: string | undefined, fallback: number, max: number): 
   if (!/^\d+$/.test(value.trim())) return null;
   const parsed = Number(value);
   return parsed >= 1 && parsed <= max ? parsed : null;
+}
+
+/** `PLATFORM_IP_ALLOWLIST`'s entries — comma- or whitespace-separated, blanks dropped. */
+export function allowlistEntries(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 function username(url: string | undefined): string | null {
@@ -121,7 +169,75 @@ export function platformEnvProblems(env: Env): string[] {
     }
   }
 
+  // An entry that does not parse is refused rather than dropped: dropping it
+  // could turn a list that was meant to restrict into an empty one, which
+  // admits everybody.
+  const unparsable = allowlistEntries(env.PLATFORM_IP_ALLOWLIST).filter(
+    (entry) => parseAllowlistEntry(entry) === null,
+  );
+  if (unparsable.length > 0) {
+    problems.push(
+      `PLATFORM_IP_ALLOWLIST holds entries that are not an IP address or CIDR: ${unparsable.join(', ')}.`,
+    );
+  }
+
+  const sessionTtl = positiveInt(
+    env.PLATFORM_SESSION_TTL,
+    PLATFORM_DEFAULTS.sessionTtlS,
+    SESSION_TTL_RANGE.max,
+  );
+  const sessionTtlValid = sessionTtl !== null && sessionTtl >= SESSION_TTL_RANGE.min;
+  if (!sessionTtlValid) {
+    problems.push(
+      `PLATFORM_SESSION_TTL must be a whole number of seconds between ${SESSION_TTL_RANGE.min} and ${SESSION_TTL_RANGE.max}.`,
+    );
+  }
+  const idleTtl = positiveInt(
+    env.PLATFORM_IDLE_TTL,
+    PLATFORM_DEFAULTS.idleTtlS,
+    SESSION_TTL_RANGE.max,
+  );
+  if (idleTtl === null || idleTtl < IDLE_TTL_MIN) {
+    problems.push(`PLATFORM_IDLE_TTL must be a whole number of seconds, at least ${IDLE_TTL_MIN}.`);
+  } else if (sessionTtlValid && sessionTtl !== null && idleTtl > sessionTtl) {
+    problems.push('PLATFORM_IDLE_TTL cannot be longer than PLATFORM_SESSION_TTL.');
+  }
+
+  const settingsKey = env.PLATFORM_SETTINGS_KEY?.trim();
+  if (!settingsKey) {
+    if (env.isProduction) {
+      problems.push(
+        'PLATFORM_SETTINGS_KEY is required in production: operator TOTP secrets are sealed under a key derived from it.',
+      );
+    }
+  } else if (settingsKey.length < SETTINGS_KEY_MIN_LENGTH) {
+    problems.push(`PLATFORM_SETTINGS_KEY must be at least ${SETTINGS_KEY_MIN_LENGTH} characters.`);
+  } else if (env.isProduction && settingsKey.startsWith('dev-only-')) {
+    problems.push('PLATFORM_SETTINGS_KEY still holds its development placeholder value.');
+  }
+
   return problems;
+}
+
+/**
+ * What the platform process accepts but says out loud at boot. Not problems:
+ * an empty allow-list is a legitimate choice behind an edge that restricts
+ * access itself (Cloudflare Access, a VPN), and the owner's rule is that a
+ * setting the deployment may not have yet never stops a start.
+ */
+export function platformEnvWarnings(env: Env): string[] {
+  const warnings: string[] = [];
+  if (env.isProduction && allowlistEntries(env.PLATFORM_IP_ALLOWLIST).length === 0) {
+    warnings.push(
+      'PLATFORM_IP_ALLOWLIST is empty: the platform API admits every address. Restrict it here or at the edge.',
+    );
+  }
+  if (!env.PLATFORM_SETTINGS_KEY?.trim()) {
+    warnings.push(
+      'PLATFORM_SETTINGS_KEY is unset: using the published development key, so operator TOTP secrets are sealed under a key anyone can read.',
+    );
+  }
+  return warnings;
 }
 
 /**
@@ -146,5 +262,18 @@ export function assertPlatformEnv(env: Env): PlatformEnv {
       PLATFORM_DEFAULTS.rateLimitPerMin,
       1_000_000,
     )!,
+    ipAllowlist: allowlistEntries(env.PLATFORM_IP_ALLOWLIST),
+    sessionTtlS: positiveInt(
+      env.PLATFORM_SESSION_TTL,
+      PLATFORM_DEFAULTS.sessionTtlS,
+      SESSION_TTL_RANGE.max,
+    )!,
+    idleTtlS: positiveInt(
+      env.PLATFORM_IDLE_TTL,
+      PLATFORM_DEFAULTS.idleTtlS,
+      SESSION_TTL_RANGE.max,
+    )!,
+    settingsKey: env.PLATFORM_SETTINGS_KEY?.trim() || DEV_PLATFORM_SETTINGS_KEY,
+    warnings: platformEnvWarnings(env),
   };
 }

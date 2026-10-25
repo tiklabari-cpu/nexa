@@ -104,7 +104,10 @@ export interface Message {
     | 'ticket_reply'
     | 'chat_transcript'
     | 'email_verification'
-    | 'account_exists_notice';
+    | 'account_exists_notice'
+    // An invitation to operate the root panel (tm 389.4) — sent by the
+    // platform process, which has no workspace and no daily caps.
+    | 'platform_invitation';
 }
 
 /**

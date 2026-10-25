@@ -1,0 +1,238 @@
+# Operator management (tm 389.4 · FR-ADMIN-03/04). `x-platform-*` as in
+# auth.yaml. Every mutation takes a `reason` (3–500 characters) for the
+# platform audit chain (389.5).
+
+admins:
+  get:
+    tags: [Admins]
+    operationId: listPlatformAdmins
+    summary: Every operator, disabled ones included
+    description: |
+      Not paged: operators are a handful of people. Operators are disabled,
+      never deleted, so every attribution keeps pointing at somebody.
+    x-platform-permission: admins.read
+    responses:
+      "200":
+        description: Oldest first
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAdminList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+invites:
+  get:
+    tags: [Admins]
+    operationId: listPlatformInvites
+    summary: Pending invitations
+    x-platform-permission: admins.read
+    responses:
+      "200":
+        description: Newest first; accepted, expired and withdrawn ones are not listed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformInviteList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  post:
+    tags: [Admins]
+    operationId: invitePlatformAdmin
+    summary: Invite an operator
+    description: |
+      Mails a single-use link valid for 72 hours to the address; accepting it
+      asks for a password and then an authenticator. An earlier pending
+      invitation for the same address is withdrawn. 409 `account_exists` when
+      the address already belongs to an operator (enable them instead).
+      `accept_url` is returned only when the mail could not be sent, so the
+      link can be handed over another way.
+    x-platform-permission: admins.manage
+    x-platform-recent-totp: true
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformInviteRequest" }
+    responses:
+      "201":
+        description: The invitation
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformInviteCreated" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+inviteRevoke:
+  post:
+    tags: [Admins]
+    operationId: revokePlatformInvite
+    summary: Withdraw a pending invitation
+    x-platform-permission: admins.manage
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/InviteId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "204":
+        description: Withdrawn; its link no longer works
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+admin:
+  get:
+    tags: [Admins]
+    operationId: getPlatformAdmin
+    summary: One operator
+    x-platform-permission: admins.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AdminId"
+    responses:
+      "200":
+        description: The operator
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAdmin" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+role:
+  post:
+    tags: [Admins]
+    operationId: setPlatformAdminRole
+    summary: Change an operator's role
+    description: |
+      Takes effect on the operator's next request: their sessions end. 409
+      `platform_last_superadmin` when this would leave no active superadmin.
+    x-platform-permission: admins.manage
+    x-platform-recent-totp: true
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AdminId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformRoleChangeRequest" }
+    responses:
+      "200":
+        description: The operator, after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAdmin" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+disable:
+  post:
+    tags: [Admins]
+    operationId: disablePlatformAdmin
+    summary: Disable an operator
+    description: |
+      Their sessions end and sign-in is refused. 409
+      `platform_last_superadmin` for the last active superadmin.
+    x-platform-permission: admins.manage
+    x-platform-recent-totp: true
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AdminId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: The operator, disabled
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAdmin" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+enable:
+  post:
+    tags: [Admins]
+    operationId: enablePlatformAdmin
+    summary: Enable a disabled operator
+    x-platform-permission: admins.manage
+    x-platform-recent-totp: true
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AdminId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: The operator, enabled
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAdmin" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+resetTwoFactor:
+  post:
+    tags: [Admins]
+    operationId: resetPlatformAdminTwoFactor
+    summary: Remove an operator's authenticator and recovery codes
+    description: |
+      For a lost phone. Their sessions end; the next sign-in can only enroll
+      a new authenticator.
+    x-platform-permission: admins.manage
+    x-platform-recent-totp: true
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AdminId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: The operator, with no authenticator
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAdmin" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+revokeSessions:
+  post:
+    tags: [Admins]
+    operationId: revokePlatformAdminSessions
+    summary: End every session of an operator
+    x-platform-permission: admins.manage
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AdminId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: How many ended
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformEndedCount" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

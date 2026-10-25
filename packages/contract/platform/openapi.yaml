@@ -30,9 +30,18 @@ servers:
 tags:
   - name: System
     description: Health and metadata.
+  - name: Auth
+    description: |
+      Operator sign-in (tm 389.4): password, then a mandatory TOTP code; one
+      opaque session token, `password` stage until the code, `active` after.
+  - name: Admins
+    description: Operator management — invitations, roles, disabling, second-factor resets.
 
 # The operator session (tm 389.4) — an opaque bearer token, not a JWT. Every
-# operation needs it unless it says `security: []`.
+# operation needs it unless it says `security: []`. What else it needs is in
+# `x-platform-permission` (a `PLATFORM_PERMISSIONS` key, or `self`),
+# `x-platform-stage` (when a `password`-stage session may call it) and
+# `x-platform-recent-totp` (a code younger than five minutes).
 security:
   - platformSession: []
 
@@ -45,6 +54,44 @@ paths:
     $ref: "./paths/health.yaml#/ready"
   /meta:
     $ref: "./paths/meta.yaml#/meta"
+  /auth/login:
+    $ref: "./paths/auth.yaml#/login"
+  /auth/totp/enroll:
+    $ref: "./paths/auth.yaml#/totpEnroll"
+  /auth/totp/activate:
+    $ref: "./paths/auth.yaml#/totpActivate"
+  /auth/totp/verify:
+    $ref: "./paths/auth.yaml#/totpVerify"
+  /auth/totp/reverify:
+    $ref: "./paths/auth.yaml#/totpReverify"
+  /auth/recovery/regenerate:
+    $ref: "./paths/auth.yaml#/recoveryRegenerate"
+  /auth/me:
+    $ref: "./paths/auth.yaml#/me"
+  /auth/sessions:
+    $ref: "./paths/auth.yaml#/sessions"
+  /auth/logout:
+    $ref: "./paths/auth.yaml#/logout"
+  /auth/invite/accept:
+    $ref: "./paths/auth.yaml#/inviteAccept"
+  /admins:
+    $ref: "./paths/admins.yaml#/admins"
+  /admins/invites:
+    $ref: "./paths/admins.yaml#/invites"
+  /admins/invites/{inviteId}/revoke:
+    $ref: "./paths/admins.yaml#/inviteRevoke"
+  /admins/{adminId}:
+    $ref: "./paths/admins.yaml#/admin"
+  /admins/{adminId}/role:
+    $ref: "./paths/admins.yaml#/role"
+  /admins/{adminId}/disable:
+    $ref: "./paths/admins.yaml#/disable"
+  /admins/{adminId}/enable:
+    $ref: "./paths/admins.yaml#/enable"
+  /admins/{adminId}/reset-two-factor:
+    $ref: "./paths/admins.yaml#/resetTwoFactor"
+  /admins/{adminId}/revoke-sessions:
+    $ref: "./paths/admins.yaml#/revokeSessions"
 
 components:
   securitySchemes:
@@ -53,7 +100,322 @@ components:
       scheme: bearer
       description: Opaque operator session token from the platform sign-in (tm 389.4).
 
+  parameters:
+    AdminId:
+      name: adminId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
   schemas:
+    PlatformRole:
+      type: string
+      description: The operator roles (`PLATFORM_ROLES`, @siyahtus/types).
+      enum: [superadmin, support, billing, readonly]
+
+    PlatformPermission:
+      type: string
+      description: |
+        A key of `PLATFORM_PERMISSIONS` (@siyahtus/types) — the matrix the
+        server enforces and the admin SPA hides its menu by.
+      enum:
+        - dashboard.read
+        - workspaces.read
+        - accounts.read
+        - billing.read
+        - usage.read
+        - settings.read
+        - ai.read
+        - operations.read
+        - audit.read
+        - security.read
+        - admins.read
+        - workspaces.support
+        - workspaces.billing
+        - workspaces.lifecycle
+        - accounts.support
+        - accounts.manage
+        - billing.manage
+        - usage.manage
+        - settings.manage
+        - ai.manage
+        - operations.run
+        - security.manage
+        - support.impersonate
+        - support.impersonate_full
+        - admins.manage
+
+    PlatformLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, minLength: 1, maxLength: 512 }
+
+    PlatformCodeRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: The six digits from the authenticator app; spaces and dashes are forgiven.
+          maxLength: 32
+
+    PlatformVerifyRequest:
+      description: Exactly one of the two.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code: { type: string, maxLength: 32 }
+        - type: object
+          additionalProperties: false
+          required: [recovery_code]
+          properties:
+            recovery_code:
+              type: string
+              description: One of the ten printed codes (`ABCDE-FGHJK`); each works once.
+              maxLength: 32
+
+    PlatformInviteAcceptRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: From the invitation link's fragment (`#token=…`).
+          maxLength: 128
+        password: { type: string, minLength: 12, maxLength: 200 }
+
+    PlatformReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: Why — recorded in the platform audit chain (tm 389.5).
+          minLength: 3
+          maxLength: 500
+
+    PlatformRoleChangeRequest:
+      type: object
+      required: [role, reason]
+      properties:
+        role: { $ref: "#/components/schemas/PlatformRole" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformInviteRequest:
+      type: object
+      required: [email, role, reason]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        role: { $ref: "#/components/schemas/PlatformRole" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformSession:
+      type: object
+      description: A session's clocks. Never its token.
+      required:
+        [
+          id,
+          stage,
+          created_at,
+          expires_at,
+          last_seen_at,
+          totp_verified_at,
+          idle_timeout_s,
+          recent_totp_until,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        stage:
+          type: string
+          description: "`password` until the second factor is shown, then `active`."
+          enum: [password, active]
+        created_at: { type: string, format: date-time }
+        expires_at:
+          type: string
+          format: date-time
+          description: The absolute end (`PLATFORM_SESSION_TTL` after sign-in, 8 h).
+        last_seen_at:
+          type: string
+          format: date-time
+          description: The session ends `idle_timeout_s` after this without a request.
+        totp_verified_at:
+          type: ["string", "null"]
+          format: date-time
+        idle_timeout_s: { type: integer }
+        recent_totp_until:
+          type: ["string", "null"]
+          format: date-time
+          description: Until when `x-platform-recent-totp` routes accept this session.
+
+    PlatformSessionEnvelope:
+      type: object
+      required: [session]
+      properties:
+        session: { $ref: "#/components/schemas/PlatformSession" }
+
+    PlatformSignIn:
+      type: object
+      required: [token, next, session]
+      properties:
+        token:
+          type: string
+          description: "The opaque session token, shown once. Send it as `Authorization: Bearer <token>`."
+        next:
+          type: string
+          enum: [totp_enroll, totp_verify]
+        session: { $ref: "#/components/schemas/PlatformSession" }
+
+    PlatformTotpEnrollment:
+      type: object
+      required: [secret, otpauth_uri]
+      properties:
+        secret: { type: string, description: Base32, for typing in by hand. }
+        otpauth_uri: { type: string, description: The `otpauth://totp/…` URI to show as a QR code. }
+
+    PlatformTotpActivation:
+      type: object
+      required: [token, session, recovery_codes]
+      properties:
+        token:
+          { type: string, description: The new token; the password-stage one has stopped working. }
+        session: { $ref: "#/components/schemas/PlatformSession" }
+        recovery_codes:
+          type: array
+          description: Ten single-use codes, shown this once.
+          items: { type: string }
+
+    PlatformTotpVerification:
+      type: object
+      required: [token, session, method, recovery_codes_remaining]
+      properties:
+        token:
+          { type: string, description: The new token; the password-stage one has stopped working. }
+        session: { $ref: "#/components/schemas/PlatformSession" }
+        method: { type: string, enum: [totp, recovery_code] }
+        recovery_codes_remaining: { type: integer }
+
+    PlatformRecoveryCodes:
+      type: object
+      required: [recovery_codes]
+      properties:
+        recovery_codes:
+          type: array
+          items: { type: string }
+
+    PlatformMe:
+      type: object
+      required: [admin, permissions, session, recovery_codes_remaining]
+      properties:
+        admin:
+          type: object
+          required: [id, email, role, totp_enrolled_at, created_at]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string }
+            role: { $ref: "#/components/schemas/PlatformRole" }
+            totp_enrolled_at: { type: ["string", "null"], format: date-time }
+            created_at: { type: string, format: date-time }
+        permissions:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformPermission" }
+        session: { $ref: "#/components/schemas/PlatformSession" }
+        recovery_codes_remaining: { type: integer }
+
+    PlatformSessionList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/PlatformSession"
+              - type: object
+                required: [ip, user_agent, current]
+                properties:
+                  ip: { type: ["string", "null"] }
+                  user_agent: { type: ["string", "null"] }
+                  current: { type: boolean }
+
+    PlatformEndedCount:
+      type: object
+      required: [ended]
+      properties:
+        ended: { type: integer, description: How many sessions ended. }
+
+    PlatformAdmin:
+      type: object
+      required:
+        [
+          id,
+          email,
+          role,
+          totp_enrolled,
+          totp_enrolled_at,
+          disabled_at,
+          invited_by,
+          created_at,
+          active_sessions,
+          last_seen_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/PlatformRole" }
+        totp_enrolled: { type: boolean }
+        totp_enrolled_at: { type: ["string", "null"], format: date-time }
+        disabled_at: { type: ["string", "null"], format: date-time }
+        invited_by: { type: ["string", "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+        active_sessions: { type: integer }
+        last_seen_at: { type: ["string", "null"], format: date-time }
+
+    PlatformAdminList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformAdmin" }
+
+    PlatformInvite:
+      type: object
+      required: [id, email, role, invited_by, created_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/PlatformRole" }
+        invited_by: { type: ["string", "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+
+    PlatformInviteList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformInvite" }
+
+    PlatformInviteCreated:
+      type: object
+      required: [invite, mail]
+      properties:
+        invite: { $ref: "#/components/schemas/PlatformInvite" }
+        mail: { type: string, enum: [sent, failed] }
+        accept_url:
+          type: string
+          description: Only when `mail` is `failed` — hand the link over another way.
+
     PlatformHealth:
       type: object
       description: |
@@ -109,6 +471,42 @@ components:
               additionalProperties: true
 
   responses:
+    BadRequest:
+      description: Malformed body, or a value failing validation (`validation`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: |
+        No session, an unknown token, or a session past its absolute lifetime or
+        its idle timeout (`authentication`) — sign in again. Also a wrong,
+        expired or replayed code.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        `platform_totp_required` — the session has shown a password but no code
+        (`details.next`: `totp_enroll` | `totp_verify`); `authorization` — the
+        operator's role lacks `details.permission`; `platform_recent_totp_required`
+        — re-verify (`/auth/totp/reverify`) and retry; `not_allowed` — the
+        address is outside `PLATFORM_IP_ALLOWLIST` (`details.reason`
+        `ip_not_allowed`) or the session is already verified.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such resource (`not_found`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: |
+        `platform_last_superadmin`, `account_exists` or
+        `two_factor_already_enabled` — the request was fine, the state refused it.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     TooManyRequests:
       description: |
         The per-address platform bucket is spent (`RATE_LIMIT_PLATFORM_PER_MIN`,

@@ -1,0 +1,84 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Hover and selection states ease in rather than snapping. In `base`, so any
+     component that sets its own `transition-*` utility still wins. */
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  [role='button'],
+  [role='tab'],
+  [role='option'],
+  [role='menuitem'] {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-out);
+  }
+
+  /* Set by `lib/theme.ts` for the frames a theme switch takes to repaint. */
+  .theme-switching *,
+  .theme-switching *::before,
+  .theme-switching *::after {
+    transition: none !important;
+  }
+
+  :where(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea):focus:not(
+      [aria-invalid='true']
+    ) {
+    border-color: var(--brand-500);
+  }
+}
+
+@layer components {
+  /* The backdrop of the sign-in pages: two soft amber glows over a faint grid. Painted on a
+     pseudo-element so the element's own background stays the solid `--bg-canvas` contrast
+     checks read; every form sits on a solid `--bg-surface` card. */
+  .auth-stage {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .auth-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(42rem 26rem at 50% 6%, var(--glow-a), transparent 72%),
+      radial-gradient(30rem 22rem at 78% 78%, var(--glow-b), transparent 70%),
+      radial-gradient(26rem 20rem at 20% 70%, var(--glow-c), transparent 70%),
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 32px 32px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 32px 32px;
+    -webkit-mask-image: radial-gradient(ellipse 95% 90% at 50% 40%, #000 45%, transparent 100%);
+    mask-image: radial-gradient(ellipse 95% 90% at 50% 40%, #000 45%, transparent 100%);
+  }
+
+  .auth-stage .auth-card {
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+@layer utilities {
+  /* Visually hidden but available to assistive technology. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}

@@ -58,9 +58,9 @@ const schemaKeys = [...new Set([...apiKeys, ...rtmKeys])].sort();
 const exampleKeys = documentedEnvExampleKeys();
 const turboKeys = turboGlobalEnvKeys();
 
-// Vite-side dev-server ports: apps/web and apps/widget read these through
+// Vite-side dev-server ports: apps/web, apps/widget and apps/admin read these through
 // `import.meta.env` directly, never through a zod schema in this repo.
-const EXAMPLE_ONLY_ALLOWLIST = ['WEB_PORT', 'WIDGET_PORT'];
+const EXAMPLE_ONLY_ALLOWLIST = ['WEB_PORT', 'WIDGET_PORT', 'ADMIN_PORT'];
 
 describe('env var parity: env.ts (api + rtm) ↔ .env.example ↔ turbo.json globalEnv', () => {
   it('parses a non-trivial key count from each source (guards an empty/broken regex passing vacuously)', () => {

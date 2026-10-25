@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>[OPS] SiyahTuş</title>
+    <!--
+      Theme boot. Inline and synchronous because `data-theme` has to be on <html> before the
+      first paint and the bundle that owns the theme store is a deferred module. Kept in step
+      with `src/lib/theme.ts` (same key, same default) by `src/lib/theme.test.ts`, which reads
+      this file; the nginx CSP pins this script by hash (`test/nginx-security.test.ts`).
+    -->
+    <script>
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem('siyahtus.admin.theme') === 'dark' ? 'dark' : 'light';
+      } catch {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

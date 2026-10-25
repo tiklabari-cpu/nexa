@@ -313,9 +313,22 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
 
   it('publishes every port on 127.0.0.1 only — the reverse proxy is the public side', () => {
     const published = [...uncommented.matchAll(/^\s+- '([^']*:\d+)'$/gm)].map((m) => m[1]!);
-    // api, rtm, web, widget — and platform-api (tm 389.3) behind its profile.
-    expect(published).toHaveLength(5);
+    // api, rtm, web, widget — and platform-api (tm 389.3) with its admin SPA (tm 389.6), both
+    // behind the `platform` profile.
+    expect(published).toHaveLength(6);
     for (const mapping of published) expect(mapping.startsWith('127.0.0.1:')).toBe(true);
+  });
+
+  it('runs the admin SPA behind the same profile, proxying /platform/ to platform-api on loopback (tm 389.6)', () => {
+    const admin = block(/^ {2}admin:$/);
+    expect(admin).toContain('dockerfile: apps/admin/Dockerfile');
+    expect(admin).toContain('image: siyahtus-admin:pilot');
+    expect(admin).toContain("profiles: ['platform']");
+    expect(admin).toContain('PLATFORM_UPSTREAM: http://platform-api:4002');
+    expect(admin).toContain("'127.0.0.1:${SIYAHTUS_ADMIN_HOST_PORT:-5175}:8080'");
+    expect(admin).toMatch(/platform-api:\n\s+condition: service_healthy/);
+    // It holds no secret and no database address: it is static files and a proxy.
+    expect(admin).not.toMatch(/DATABASE|PASSWORD|KEY|SECRET/);
   });
 
   it('runs platform-api from the api image, opt-in, never migrating, holding the platform role alone (tm 389.3)', () => {

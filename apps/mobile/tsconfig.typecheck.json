@@ -1,0 +1,20 @@
+{
+  // The type-check program, `pnpm typecheck` (tm 389.6). `tsconfig.json` stays what Expo's Metro
+  // bundler reads: Metro honours `compilerOptions.paths`, so pinning React's typings there
+  // rewrites `import 'react'` in the bundle to `@types/react` and the build dies. Only `tsc`
+  // needs the pin, so only `tsc` gets it.
+  //
+  // The pin names this app's own copy of the React typings (19), for the reason apps/web names its
+  // own (18): a declaration file inside a dependency that imports `react` walks up to pnpm's
+  // shared `.pnpm/node_modules` hoist area, and which React major lands there follows the
+  // alphabetical order of the workspace importers. Until `apps/admin` (React 18) arrived, the
+  // first importer to ask for `@types/react` was this one; `apps/admin` sorts before
+  // `apps/mobile`, so the hoist flipped to 18 and the testing library's `render()` was typed
+  // against the wrong `ReactElement` (22 errors in the screens' tests).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "react": ["./node_modules/@types/react"]
+    }
+  }
+}

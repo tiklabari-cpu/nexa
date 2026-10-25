@@ -4,7 +4,7 @@
  * calls one of them from Node.
  *
  * Unset `SIYAHTUS_E2E_SHARD`, this is the usual stack: api 4000, rtm 4001,
- * web 5173, widget 5174, mail 4625/4626, IdP 4599 — what a developer's own dev
+ * web 5173, widget 5174, platform-api 4002, admin 5175, mail 4625/4626, IdP 4599 — what a developer's own dev
  * servers hold, and what the suite adopts locally (`reuseExistingServer`).
  *
  * Set to a shard number `i` (0–5), the stack is a private one, started by this
@@ -25,6 +25,9 @@ export interface StackPorts {
   rtm: number;
   web: number;
   widget: number;
+  /** The root panel: platform-api and the admin SPA (tm 389.6). */
+  platform: number;
+  admin: number;
   smtp: number;
   mailbox: number;
   idp: number;
@@ -35,6 +38,8 @@ export const USUAL_PORTS: StackPorts = {
   rtm: 4001,
   web: 5173,
   widget: 5174,
+  platform: 4002,
+  admin: 5175,
   smtp: 4625,
   mailbox: 4626,
   idp: 4599,
@@ -71,6 +76,8 @@ export const PORTS: StackPorts = E2E_SHARD === undefined ? USUAL_PORTS : shardPo
 /** For calls made from Node, which Chromium's resolver rule does not cover. */
 export const STACK_API = `http://localhost:${PORTS.api}`;
 export const STACK_RTM = `http://localhost:${PORTS.rtm}`;
+export const STACK_PLATFORM = `http://localhost:${PORTS.platform}`;
+export const STACK_ADMIN = `http://localhost:${PORTS.admin}`;
 export const STACK_RTM_WS = `ws://localhost:${PORTS.rtm}`;
 export const STACK_MAILBOX = `http://127.0.0.1:${PORTS.mailbox}`;
 export const STACK_IDP = `http://127.0.0.1:${PORTS.idp}`;

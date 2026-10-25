@@ -1,0 +1,184 @@
+/**
+ * Design tokens for the root (platform) panel — tm 389.6.
+ *
+ * The same semantic names as apps/web (`bg-surface`, `text-content-secondary`, …) so a
+ * component copied across keeps compiling, but the one saturated colour is AMBER, not
+ * the workspace panel's indigo: an operator who has both panels open in two tabs must
+ * never mistake which one a destructive button belongs to. On top of that sits the
+ * permanent "PLATFORM" strip (`--strip-*`), which is amber in both themes.
+ *
+ * Every ratio below is re-derived by `tokens.test.ts`.
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg-canvas: #f6f6f8;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f3f3f6;
+  --bg-rail: #1c1306;
+  --bg-inset: #ececf1;
+  --border: #e4e4ea;
+  --border-strong: #cfcfd8;
+
+  /* Text */
+  --text-primary: #16161d;
+  --text-secondary: #4b4b5a;
+  --text-tertiary: #5f5f6e;
+  --text-inverse: #ffffff;
+
+  /* Brand — a *fill* ramp (amber): every step carries white text except the two tints. */
+  --brand-100: #fef3c7;
+  --brand-200: #fde68a;
+  /* White on this is 5.02:1 — clear of AA on every `bg-brand-500` button. */
+  --brand-500: #b45309;
+  --brand-600: #9a4608;
+  --brand-700: #7c3a0a;
+  --brand-900: #451a03;
+  --brand-950: #2b1002;
+  /* Brand as *text* contrasts against the surface, a different problem from fill. */
+  --brand-text: #92400e;
+  --focus-ring: var(--brand-500);
+
+  /* The permanent "PLATFORM · <region>" strip: amber in both themes. */
+  --strip-bg: #fbbf24;
+  --strip-text: #1c1203;
+
+  --success: #0f7349;
+  --warning: #925400;
+  --danger: #c4253a;
+  --info: #0a6b94;
+  --ai: #a3218f;
+  --note: #7d6210;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-xs: 0 1px 2px rgb(20 20 40 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(20 20 40 / 0.04), 0 2px 8px -2px rgb(20 20 40 / 0.08);
+  --shadow-md: 0 2px 4px -2px rgb(20 20 40 / 0.06), 0 12px 32px -8px rgb(20 20 40 / 0.16);
+  --shadow-lg: 0 4px 8px -4px rgb(20 20 40 / 0.08), 0 28px 64px -16px rgb(20 20 40 / 0.28);
+
+  --glow-a: rgb(180 83 9 / 0.2);
+  --glow-b: rgb(251 191 36 / 0.16);
+  --glow-c: rgb(120 113 108 / 0.1);
+  --grid-line: rgb(20 20 40 / 0.045);
+
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-panel: 200ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --font-body:
+    'Inter Variable', 'Inter var', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-heading:
+    'Inter Variable', 'Inter var', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-canvas: #09090c;
+  --bg-surface: #111116;
+  --bg-surface-2: #18181f;
+  --bg-rail: #080604;
+  --bg-inset: #0d0d12;
+  --border: #24242d;
+  --border-strong: #34343f;
+
+  --text-primary: #f2f2f5;
+  --text-secondary: #a4a4b2;
+  --text-tertiary: #8a8a99;
+  --text-inverse: #09090c;
+
+  /* Light amber for accent text; 9:1 or better on every dark surface. */
+  --brand-text: #fbbf24;
+  --focus-ring: #fbbf24;
+
+  --success: #3ed68c;
+  --warning: #f5b14c;
+  --danger: #ff6b7a;
+  --info: #4fc3f7;
+  --ai: #f08ae0;
+  --note: #ffce73;
+
+  --shadow-xs: 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-sm: 0 0 0 1px rgb(255 255 255 / 0.04), 0 2px 8px rgb(0 0 0 / 0.45);
+  --shadow-md:
+    0 0 0 1px rgb(255 255 255 / 0.06), inset 0 1px 0 rgb(255 255 255 / 0.04),
+    0 16px 40px -8px rgb(0 0 0 / 0.65);
+  --shadow-lg:
+    0 0 0 1px rgb(255 255 255 / 0.07), inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 32px 72px -12px rgb(0 0 0 / 0.75);
+
+  --glow-a: rgb(251 191 36 / 0.22);
+  --glow-b: rgb(180 83 9 / 0.2);
+  --glow-c: rgb(120 113 108 / 0.12);
+  --grid-line: rgb(255 255 255 / 0.04);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.011em;
+}
+
+::selection {
+  background: var(--brand-500);
+  color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A single, always-visible focus treatment. `:root` lifts it above a lone
+   `.outline-none` utility (apps/web, tm 123): an opt-out has to be written on
+   purpose with `focus-visible:outline-none`, never arrive as a side effect. */
+:root :focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

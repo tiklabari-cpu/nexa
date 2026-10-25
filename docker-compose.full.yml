@@ -242,6 +242,23 @@ services:
       api:
         condition: service_healthy
 
+  # The root panel's SPA (tm 389.6 · docs/platform-admin/design.md §E): static files behind
+  # nginx, with /platform/ proxied to platform-api over this network. Loopback only, like
+  # platform-api: the back office is not something the demo stack exposes to the LAN.
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    image: siyahtus-admin:local
+    restart: unless-stopped
+    environment:
+      PLATFORM_UPSTREAM: http://platform-api:4002
+    ports:
+      - '127.0.0.1:${SIYAHTUS_ADMIN_HOST_PORT:-5175}:8080'
+    depends_on:
+      platform-api:
+        condition: service_healthy
+
   web:
     build:
       context: .

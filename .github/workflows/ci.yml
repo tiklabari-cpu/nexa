@@ -57,6 +57,9 @@ jobs:
       # there is no fallback to derive it from.
       AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
       PLATFORM_SETTINGS_KEY: ci-platform-settings-key-0123456789abcdef0123456
+      # The back office (tm 389.7): the one origin platform-api answers, and its port.
+      ADMIN_APP_URL: http://localhost:5175
+      PLATFORM_PORT: '4002'
       # Encrypts live Apps credentials (tm 263); 64 hex characters, CI-only value.
       APPS_CREDENTIAL_KEY: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
 
@@ -179,6 +182,9 @@ jobs:
       UPLOAD_SIGNING_KEY: ci-upload-signing-key-0123456789abcdef0123456
       AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
       PLATFORM_SETTINGS_KEY: ci-platform-settings-key-0123456789abcdef0123456
+      # The back office (tm 389.7): the one origin platform-api answers, and its port.
+      ADMIN_APP_URL: http://localhost:5175
+      PLATFORM_PORT: '4002'
       # Encrypts live Apps credentials (tm 263); 64 hex characters, CI-only value.
       APPS_CREDENTIAL_KEY: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
 
@@ -222,11 +228,14 @@ jobs:
   # The pilot's images are what the owner's host builds; nothing else compiles
   # them. tm 257.12 found the api image failing `tsc` for heap only at the
   # closing rehearsal. The template's `<…>` placeholders satisfy compose's `:?`
-  # checks; only build arguments are read, no secret is involved.
+  # checks; only build arguments are read, no secret is involved. The back
+  # office's two services sit behind the `platform` profile, which a plain
+  # `build` skips, so the profile is named (tm 389.7): without it nothing would
+  # compile the admin image.
   pilot-images:
     name: Pilot images
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -234,7 +243,7 @@ jobs:
       - name: Build the pilot images
         run: |
           cp .env.production.example .env
-          docker compose -f docker-compose.pilot.yml build
+          docker compose -f docker-compose.pilot.yml --profile platform build
 
   mobile:
     name: Mobile (Jest)
@@ -305,6 +314,9 @@ jobs:
       # there is no fallback to derive it from.
       AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
       PLATFORM_SETTINGS_KEY: ci-platform-settings-key-0123456789abcdef0123456
+      # The back office (tm 389.7): the one origin platform-api answers, and its port.
+      ADMIN_APP_URL: http://localhost:5175
+      PLATFORM_PORT: '4002'
       # Encrypts live Apps credentials (tm 263); 64 hex characters, CI-only value.
       APPS_CREDENTIAL_KEY: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
       # The suite signs in, exchanges tokens and mints widget tokens from one

@@ -20,6 +20,7 @@
 # replica; that is a `values.yaml` replica-count decision, not this
 # budget's.
 {{- range $name, $app := .Values.apps }}
+{{- if or (not (hasKey $app "enabled")) $app.enabled }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -36,4 +37,5 @@ spec:
     matchLabels:
       app.kubernetes.io/name: {{ $name }}
       app.kubernetes.io/instance: {{ $.Release.Name }}
+{{- end }}
 {{- end }}

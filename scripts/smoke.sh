@@ -51,18 +51,31 @@
 # sign-up probe spends one try of the hourly per-network sign-up allowance
 # (RATE_LIMIT_SIGNUP_PER_HOUR); a run after that is used up fails it with 429.
 #
-# What a clean run counts: demo 20 passed. Pilot 27 passed over https base
+# The back office (tm 389.7) is four more checks: the root panel's SPA is served,
+# its nginx reaches platform-api, platform-api is ready on its own port, and the
+# tenant api does not serve `/platform/*` (the same 401 or 404 as any unknown
+# path). The demo stack runs it and checks it (ADMIN_BASE, PLATFORM_BASE). The
+# pilot runs it only with `--profile platform`, so there SMOKE_BACK_OFFICE=1 asks
+# for the checks (plus HSTS on the admin name over https) and, without it, one
+# more skip is printed.
+#
+# What a clean run counts: demo 24 passed. Pilot 27 passed over https base
 # URLs, 25 passed + 2 skipped over http ones; SMOKE_ADMIN_TOKEN adds 16 and
 # SMOKE_ORGANIZATION_ID adds 3 (over http: 41 with the token, 28 with the
 # organization id, 44 with both, each + 2 skipped; over https 2 more passed).
 # A live Telegram adds 1 anonymously; with the token, each live Apps data card
-# (brevo, freshdesk) adds 1 more (tm 263).
+# (brevo, freshdesk) adds 1 more (tm 263). All of that is before the back office:
+# SMOKE_BACK_OFFICE=1 adds 4 passed (5 over https with the admin HSTS check; over
+# http, 4 passed + 1 skipped), and leaving it off adds 1 skipped.
 set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:4000}"
 RTM_BASE="${RTM_BASE:-http://localhost:4001}"
 WEB_BASE="${WEB_BASE:-http://localhost:5173}"
 WIDGET_BASE="${WIDGET_BASE:-http://localhost:5174}"
+# The back office (tm 389.7): the root panel's SPA and platform-api.
+ADMIN_BASE="${ADMIN_BASE:-http://localhost:5175}"
+PLATFORM_BASE="${PLATFORM_BASE:-http://localhost:4002}"
 
 # How long to keep retrying before calling the stack dead. A cold `up` has to
 # initialise Postgres, apply every migration and run the seed before the api
@@ -82,6 +95,10 @@ case "$SMOKE_PROFILE" in
 esac
 SMOKE_ORGANIZATION_ID="${SMOKE_ORGANIZATION_ID:-}"
 SMOKE_ADMIN_TOKEN="${SMOKE_ADMIN_TOKEN:-}"
+# 1 checks the back office. The demo stack always runs it; the pilot only with
+# `--profile platform`, so there it is asked for (an unconditional check would
+# fail every pilot that has not turned the back office on).
+if [ "$SMOKE_PROFILE" = demo ]; then SMOKE_BACK_OFFICE="${SMOKE_BACK_OFFICE:-1}"; else SMOKE_BACK_OFFICE="${SMOKE_BACK_OFFICE:-0}"; fi
 
 passed=0
 failed=0
@@ -493,6 +510,38 @@ if [ "$SMOKE_PROFILE" = pilot ]; then
       fi
     done
   fi
+fi
+
+# The back office (tm 389.7). Four seams a container stack breaks in its own way:
+# the SPA is served, its nginx reaches platform-api (`PLATFORM_UPSTREAM`),
+# platform-api answers on its own port with its datastores up, and the tenant
+# api — a different process — knows nothing of `/platform/*`. Every check is
+# anonymous: the health routes are public and nothing here signs an operator in.
+printf '\nBack office\n'
+if [ "$SMOKE_BACK_OFFICE" = 1 ]; then
+  printf '  admin %s · platform-api %s\n' "$ADMIN_BASE" "$PLATFORM_BASE"
+  check 'admin serves the root panel app' \
+    GET "$ADMIN_BASE/" 200 '<div id="root">'
+  check 'admin proxies /platform/v1 to platform-api (ready)' \
+    GET "$ADMIN_BASE/platform/v1/health/ready" 200 '"service":"platform'
+  check 'platform-api /health/ready is ok (Postgres + Redis reachable)' \
+    GET "$PLATFORM_BASE/platform/v1/health/ready" 200 '"status":"ok"'
+  # Anonymous, the tenant api's auth gate answers before routing does, so an unknown path is
+  # a 401 (a 404 once signed in: platform-isolation.test.ts). What must hold either way is
+  # that the platform path is answered like one nobody serves, and is not a 200.
+  platform_on_tenant="$(request GET "$API_BASE/platform/v1/health/live")"
+  unknown_on_tenant="$(request GET "$API_BASE/platform/v1/no-such-route")"
+  if [ "$platform_on_tenant" != 200 ] && [ "$platform_on_tenant" = "$unknown_on_tenant" ]; then
+    pass "the tenant api does not serve /platform/v1 (HTTP $platform_on_tenant, as for any unknown path)"
+  else
+    fail 'the tenant api does not serve /platform/v1' \
+      "$API_BASE/platform/v1/health/live answered $platform_on_tenant, an unknown path under it $unknown_on_tenant"
+  fi
+  if [ "$SMOKE_PROFILE" = pilot ]; then
+    check_hsts 'admin sends HSTS once over https' "$ADMIN_BASE/"
+  fi
+else
+  skip 'the back office' 'the pilot runs it only with --profile platform; SMOKE_BACK_OFFICE=1 checks it'
 fi
 
 if [ "$skipped" -gt 0 ]; then

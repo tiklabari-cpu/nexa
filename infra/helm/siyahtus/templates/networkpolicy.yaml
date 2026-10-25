@@ -99,3 +99,67 @@ spec:
         - protocol: TCP
           port: {{ .Values.apps.api.port }}
 {{- end }}
+{{- $platformApi := index .Values.apps "platform-api" }}
+{{- if and .Values.networkPolicy.enabled (or (not (hasKey $platformApi "enabled")) $platformApi.enabled) }}
+---
+# The back office's api (tm 389.7). The same argument as above for the other
+# direction too: platform-api derives the operator's address from
+# X-Forwarded-For (PLATFORM_IP_ALLOWLIST, the sign-in bucket), counting
+# TRUST_PROXY_HOPS from the right, so a pod that dials it beside the admin
+# Service could choose the address it is believed to come from. Ingress is the
+# admin pods alone; `networkPolicy.platformApi.extraIngressFrom` can only add.
+#
+# Egress as well, which `api` does not have: this is the pod holding the
+# BYPASSRLS role. It may resolve names, reach Postgres and Redis, and whatever
+# `networkPolicy.platformApi.egress.extraEgress` names. The datastore rules
+# carry ports only: the chart deploys neither, so it has no address to name.
+#
+# NOT APPLIED ANYWHERE, like everything here (CLAUDE.md: no production deploy).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-platform-api
+  labels:
+    app.kubernetes.io/name: platform-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: siyahtus
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    {{- if .Values.networkPolicy.platformApi.egress.enabled }}
+    - Egress
+    {{- end }}
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: admin
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with .Values.networkPolicy.platformApi.extraIngressFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $platformApi.port }}
+  {{- if .Values.networkPolicy.platformApi.egress.enabled }}
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        {{- range .Values.networkPolicy.platformApi.egress.datastorePorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    {{- with .Values.networkPolicy.platformApi.egress.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

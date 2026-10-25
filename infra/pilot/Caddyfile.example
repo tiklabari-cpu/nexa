@@ -1,9 +1,9 @@
 # SiyahTuş pilot — the reverse proxy in front of docker-compose.pilot.yml (tm 256.5).
 #
 # LATER, AND DNS-ONLY (tm 257.10). The pilot's edge today is a Cloudflare
-# Tunnel (infra/pilot/cloudflared/config.example.yml), serving the same four
+# Tunnel (infra/pilot/cloudflared/config.example.yml), serving the same five
 # names from the same ports. This file is for when the host is reached
-# directly: the four DNS records must be DNS-only (grey cloud). Behind an
+# directly: the five DNS records must be DNS-only (grey cloud). Behind an
 # orange (proxied) record it is NOT supported. Caddy would replace
 # X-Forwarded-For with the Cloudflare edge's address, so every visitor would
 # collapse onto the edge. Fixing that needs `trusted_proxies` here plus
@@ -12,16 +12,18 @@
 # Switching edges is stopping cloudflared and starting Caddy; compose and .env
 # do not change.
 #
-# The compose file publishes its four ports on 127.0.0.1 only; this is the one
-# public side. Caddy runs on the same host (not in the compose project — it
-# dials 127.0.0.1), obtains and renews the TLS certificates itself, and serves
-# four hostnames. Replace `example.com` with the pilot's domain; each name then
+# The compose file publishes its ports on 127.0.0.1 only (four, plus the two of
+# the back office when `--profile platform` is on); this is the one public side.
+# Caddy runs on the same host (not in the compose project — it dials
+# 127.0.0.1), obtains and renews the TLS certificates itself, and serves five
+# hostnames. Replace `example.com` with the pilot's domain; each name then
 # goes into `.env`:
 #
 #   panel.example.com   WEB_APP_URL, and the first origin in WEB_ORIGIN
 #   widget.example.com  WIDGET_BASE_URL, and the second origin in WEB_ORIGIN
 #   api.example.com     API_BASE_URL  (https://)
 #   rtm.example.com     RTM_BASE_URL  (wss://)
+#   admin.example.com   ADMIN_APP_URL  (https://) — the root panel, see below
 #
 # The ports below are the compose defaults. A `SIYAHTUS_*_HOST_PORT` line in
 # `.env` moves one; change the matching line here with it.
@@ -32,8 +34,10 @@
 # The panel's nginx also proxies `/api/`, and it appends to X-Forwarded-For, so
 # a panel request sent through it would arrive with two hops while the widget's
 # arrives with one. The panel site therefore sends `/api/*` straight to the
-# api, past the panel's nginx, and TRUST_PROXY_HOPS=1 is right for all four
-# names (docs/production-checklist.md §9, "Reverse proxy").
+# api, past the panel's nginx, and TRUST_PROXY_HOPS=1 is right for all five
+# names (docs/production-checklist.md §9, "Reverse proxy"). The back office
+# does the same: its `/platform/*` goes straight to platform-api, past the
+# admin SPA's own nginx, which would be a second hop.
 #
 # Caddy does not believe an X-Forwarded-For the client sent: without a
 # `trusted_proxies` option it replaces the header with the address it saw.
@@ -74,4 +78,21 @@ api.example.com {
 # RTM. Caddy passes the WebSocket upgrade through on its own.
 rtm.example.com {
 	reverse_proxy 127.0.0.1:4001
+}
+
+# The back office (root panel; tm 389.7, docs/platform-admin/design.md §E). Only
+# when the pilot runs `docker compose --profile platform`: without it nothing
+# listens on 4002 / 5175 and this name answers 502, which is the right answer.
+# Operators only. Put Cloudflare Access (Zero Trust) or another identity-aware
+# gate in front of this one name, and set PLATFORM_IP_ALLOWLIST in `.env`; the
+# panel's own sign-in (password + TOTP) stays on top of both
+# (docs/production-checklist.md §9, "Back office"). REST goes to platform-api
+# directly (one hop); everything else is the admin SPA, served by its own nginx.
+admin.example.com {
+	handle /platform/* {
+		reverse_proxy 127.0.0.1:4002
+	}
+	handle {
+		reverse_proxy 127.0.0.1:5175
+	}
 }

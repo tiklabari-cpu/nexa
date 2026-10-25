@@ -187,3 +187,129 @@ describe('Helm chart storage ↔ apps/api storage code (tm 242, M-STORE · audit
     }
   });
 });
+
+describe('Helm chart back office ↔ the compose files and apps/admin (tm 389.7)', () => {
+  const CHART_TEMPLATES = 'infra/helm/siyahtus/templates';
+  const platformApp = mapAt(values, 'apps.platform-api');
+  const platformProbes = mapAt(values, 'apps.platform-api.probes');
+  const adminApp = mapAt(values, 'apps.admin');
+  const adminProbes = mapAt(values, 'apps.admin.probes');
+  const networkPolicy = mapAt(values, 'networkPolicy.platformApi');
+
+  /** A service's block in a compose file: lines indented deeper than its `name:` line. */
+  function composeService(file: string, name: string): string {
+    const lines = read(file).split('\n');
+    const start = lines.findIndex((line) => line === `  ${name}:`);
+    expect(start, `${file} has no service ${name}`).toBeGreaterThanOrEqual(0);
+    const end = lines.findIndex((line, i) => i > start && /^ {0,2}\S/.test(line));
+    return lines.slice(start + 1, end < 0 ? undefined : end).join('\n');
+  }
+
+  it('runs platform-api as the api image with the compose file command, past the entrypoint', () => {
+    expect(platformApp.repository).toBe(apiApp.repository);
+    // The same words compose passes as `command:` (the image's CMD) …
+    const compose = composeService('docker-compose.pilot.yml', 'platform-api');
+    const command = /command: \[(.+)\]/.exec(compose)?.[1];
+    expect(command, 'docker-compose.pilot.yml gives platform-api no command').toBeDefined();
+    const words = (list: string): string[] => list.split(',').map((w) => w.trim().slice(1, -1));
+    const args = /^\[(.+)\]$/.exec(platformApp.args ?? '')?.[1];
+    expect(words(args ?? '')).toEqual(words(command!));
+    // … and rendered as `args`: a Kubernetes `command` replaces the ENTRYPOINT, which migrates
+    // (or, here, deliberately skips migrating) before it runs the process.
+    const deployment = read(`${CHART_TEMPLATES}/deployment.yaml`);
+    expect(deployment).toContain('args: {{ toJson . }}');
+    expect(deployment).not.toMatch(/^\s+command:/m);
+  });
+
+  it('listens where PLATFORM_PORT says, and probes the platform health routes', () => {
+    expect(platformApp.port).toBe(chartConfig.PLATFORM_PORT);
+    expect(platformApp.port).toBe('4002');
+    expect(platformProbes.liveness).toBe('/platform/v1/health/live');
+    expect(platformProbes.readiness).toBe('/platform/v1/health/ready');
+    // The compose healthcheck probes the same route on the same port.
+    expect(composeService('docker-compose.pilot.yml', 'platform-api')).toContain(
+      'http://127.0.0.1:4002/platform/v1/health/ready',
+    );
+  });
+
+  it('runs the admin image on its nginx port, probing the file its Dockerfile probes', () => {
+    expect(adminApp.repository).toBe('siyahtus-admin');
+    expect(adminApp.port).toBe('8080');
+    expect(adminApp.needsSecrets).toBe('false');
+    expect(adminProbes).toEqual({ liveness: '/index.html', readiness: '/index.html' });
+    const dockerfile = read('apps/admin/Dockerfile');
+    expect(dockerfile).toContain('EXPOSE 8080');
+    expect(dockerfile).toContain('http://127.0.0.1:8080/index.html');
+  });
+
+  it('tells the admin nginx where platform-api is, from the ConfigMap, by the release name', () => {
+    const configmap = read(`${CHART_TEMPLATES}/configmap.yaml`);
+    expect(configmap).toContain(
+      'PLATFORM_UPSTREAM: http://{{ .Release.Name }}-platform-api:{{ (index .Values.apps "platform-api").port }}',
+    );
+    // apps/admin/nginx.conf reads exactly that variable.
+    expect(read('apps/admin/nginx.conf')).toContain('${PLATFORM_UPSTREAM}');
+  });
+
+  it('hands the BYPASSRLS role to the platform-api pod alone', () => {
+    // The shared Secret reaches api, rtm and the migration Job whole; the platform role
+    // gets a Secret of its own, and only `needsPlatformSecrets` apps mount it.
+    const [shared, own] = read(CHART_SECRET).split(/^---$/m);
+    expect(shared).toContain('name: {{ .Release.Name }}-secrets');
+    expect(shared).not.toContain('DATABASE_PLATFORM_URL');
+    expect(own).toContain('name: {{ .Release.Name }}-platform-secrets');
+    expect(own).toContain(
+      'DATABASE_PLATFORM_URL: {{ .Values.secrets.DATABASE_PLATFORM_URL | quote }}',
+    );
+    expect(read(`${CHART_TEMPLATES}/deployment.yaml`)).toContain(
+      'if $app.needsPlatformSecrets }}\n            # The BYPASSRLS role',
+    );
+    const apps = (values['apps'] ?? {}) as Record<string, Record<string, YamlNode>>;
+    const mounting = Object.entries(apps)
+      .filter(([, app]) => app['needsPlatformSecrets'] === 'true')
+      .map(([name]) => name);
+    expect(mounting).toEqual(['platform-api']);
+    // compose keeps the same rule: the tenant services are not given the role.
+    for (const service of ['api', 'rtm']) {
+      expect(composeService('docker-compose.pilot.yml', service)).not.toContain(
+        'DATABASE_PLATFORM_URL',
+      );
+    }
+  });
+
+  it('lets an app be switched off in every ranged template, without `| default true`', () => {
+    for (const file of ['deployment', 'service', 'hpa', 'pdb']) {
+      expect(read(`${CHART_TEMPLATES}/${file}.yaml`), file).toContain('(hasKey $app "enabled")');
+    }
+    for (const app of [platformApp, adminApp]) expect(app.enabled).toBe('true');
+    for (const name of ['api', 'rtm', 'web', 'widget']) {
+      expect(Object.keys(mapAt(values, `apps.${name}`)), name).not.toContain('enabled');
+    }
+  });
+
+  it('admits platform-api from the admin pods only, and bounds what it may dial', () => {
+    const policy = read(`${CHART_TEMPLATES}/networkpolicy.yaml`);
+    const own = policy.slice(policy.indexOf('name: {{ .Release.Name }}-platform-api'));
+    expect(own).toContain('app.kubernetes.io/name: platform-api');
+    // One unconditional ingress peer — the admin pods — on platform-api's own port.
+    expect(own).toMatch(
+      /- from:\n\s+- podSelector:\n\s+matchLabels:\n\s+app\.kubernetes\.io\/name: admin\n/,
+    );
+    expect(own).toContain('port: {{ $platformApi.port }}');
+    expect(own).toMatch(
+      /policyTypes:\n\s+- Ingress\n\s+\{\{- if [^}]+egress\.enabled \}\}\n\s+- Egress/,
+    );
+    // Databases by port: Postgres and Redis, and DNS.
+    expect(own).toContain('range .Values.networkPolicy.platformApi.egress.datastorePorts');
+    expect(networkPolicy.extraIngressFrom).toBe('[]');
+    expect(mapAt(values, 'networkPolicy.platformApi.egress').datastorePorts).toBe('[5432, 6379]');
+  });
+
+  it('ships the production overlay with a placeholder the operator must fill, never a working URL', () => {
+    const overlay = read('infra/helm/siyahtus/values.production.example.yaml');
+    expect(overlay).toContain(
+      'DATABASE_PLATFORM_URL: "postgresql://siyahtus_platform:<platform_password>@<db-host>:5432/<db>"',
+    );
+    expect(overlay).toContain('ADMIN_APP_URL: "https://admin.<your-domain>"');
+  });
+});

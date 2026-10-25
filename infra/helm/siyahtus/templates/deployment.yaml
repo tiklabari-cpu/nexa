@@ -19,7 +19,12 @@
 # `SHUTDOWN_DRAIN_MS` (5s in production) + a 15s in-flight-request timeout —
 # 20s, already inside the 30s default with headroom, so there is nothing for
 # an override to fix.
+# tm 389.7: an app may carry `enabled: false` (the back office's two do, by
+# choice) and is then skipped here and in service.yaml, hpa.yaml, pdb.yaml. No
+# `enabled` key means on: the original four have none. `hasKey` rather than
+# `| default true`, for the reason secret.yaml gives (Sprig reads `false` as empty).
 {{- range $name, $app := .Values.apps }}
+{{- if or (not (hasKey $app "enabled")) $app.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -46,6 +51,10 @@ spec:
         - name: {{ $name }}
           image: "{{ if $.Values.image.registry }}{{ $.Values.image.registry }}/{{ end }}{{ $app.repository }}:{{ $app.tag }}"
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          {{- with $app.args }}
+          # The image's CMD, not its ENTRYPOINT (see values.yaml, apps.platform-api).
+          args: {{ toJson . }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ $app.port }}
@@ -55,6 +64,11 @@ spec:
             {{- if $app.needsSecrets }}
             - secretRef:
                 name: {{ $.Release.Name }}-secrets
+            {{- end }}
+            {{- if $app.needsPlatformSecrets }}
+            # The BYPASSRLS role's connection string, for the one app that needs it.
+            - secretRef:
+                name: {{ $.Release.Name }}-platform-secrets
             {{- end }}
           # startupProbe first: while it is failing, kubelet skips
           # liveness/readiness entirely, so a slow boot cannot be mistaken
@@ -104,4 +118,5 @@ spec:
             limits:
               cpu: {{ $app.resources.limits.cpu }}
               memory: {{ $app.resources.limits.memory }}
+{{- end }}
 {{- end }}

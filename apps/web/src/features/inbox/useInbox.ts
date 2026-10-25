@@ -18,10 +18,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ROUTING_STATUSES,
+  TICKET_MESSAGE_DELIVERY_STATUSES,
   UNANSWERED_ALERT_REASONS,
   type AdapterChannelType,
   type RoutingStatus,
   type ThreadPriority,
+  type TicketMessageDeliveryStatus,
   type UnansweredAlertReason,
 } from '@siyahtus/types';
 import { RtmClient, type PushHandler } from '../../lib/realtime.js';
@@ -37,6 +39,7 @@ import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
 import { RISK_FLAGS_KEY } from '../risk/riskFlags.js';
 import { chatAiHandoffsKey } from './handoffCard.js';
+import { TICKET_MESSAGES_KEY, withDelivery } from './ticketMessages.js';
 import { customerContextKey } from './useCustomerContext.js';
 import { withAiModeChange, type AiReturnInput, type ChatAiModeResult } from './aiMode.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
@@ -56,6 +59,7 @@ import type {
   ChatTransferResult,
   InboxView,
   SendInput,
+  TicketMessage,
   TransferTarget,
 } from './types.js';
 
@@ -1159,6 +1163,10 @@ export function useRealtime(onPush?: PushHandler): void {
         // The AI handed a conversation over and left its card (AI-10): the
         // Details panel's top and the transcript's card line, within a second.
         'ai_handoff_created',
+        // A message landed on a ticket, or a reply's e-mail settled (HD-01 · tm
+        // 356): the open ticket's thread, and the status a reply moved.
+        'ticket_message_created',
+        'ticket_message_delivery_changed',
         // Availability, the agent's own included: the sweep and the gateway
         // change it too now (WG-03), and say why (`reason`).
         'routing_status_set',
@@ -1556,6 +1564,30 @@ export function applyPush(
         void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
         void queryClient.invalidateQueries({ queryKey: chatAiHandoffsKey(chatId) });
       }
+      return;
+    }
+
+    case 'ticket_message_created': {
+      // Ids only (never the text): the thread re-reads, since what a caller may
+      // see of it is the server's call. A reply or the player's answer moves the
+      // ticket's status and its place in every list, so those re-read too.
+      void queryClient.invalidateQueries({ queryKey: TICKET_MESSAGES_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['ticket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      return;
+    }
+
+    case 'ticket_message_delivery_changed': {
+      // One badge: the push carries the state and nothing else, so it is written
+      // into the loaded threads in place rather than refetching them.
+      const messageId = payload['message_id'];
+      const status = payload['delivery_status'];
+      if (typeof messageId !== 'string') return;
+      if (!(TICKET_MESSAGE_DELIVERY_STATUSES as readonly unknown[]).includes(status)) return;
+      queryClient.setQueriesData<InfiniteData<PagedResponse<TicketMessage>>>(
+        { queryKey: TICKET_MESSAGES_KEY },
+        (data) => withDelivery(data, messageId, status as TicketMessageDeliveryStatus),
+      );
       return;
     }
 

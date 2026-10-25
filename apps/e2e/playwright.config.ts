@@ -293,6 +293,10 @@ export default defineConfig({
         SMTP_USERNAME: 'info@nolnk.test',
         SMTP_PASSWORD: 'fake-smtp-password-not-a-secret',
         SMTP_FROM: 'info@nolnk.test',
+        // A ticket reply is mailed (HD-01 · K23): off by default on a deployment,
+        // on here so `tickets-reply.spec.ts` can read it from the mailbox. The
+        // closed-gate behaviour (`suppressed`) is pinned by the integration suite.
+        TICKET_MAIL_OUTBOUND: 'true',
         NODE_EXTRA_CA_CERTS: SMTP_TEST_CA,
         API_PORT: String(PORTS.api),
       },

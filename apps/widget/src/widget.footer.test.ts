@@ -10,6 +10,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from './widget.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 interface Mint {
   powered_by?: boolean;
   privacy_policy_url?: string | null;
@@ -63,7 +66,7 @@ async function mountAfterMint(): Promise<HTMLElement> {
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';
   document.body.append(root);
-  mount(document, window);
+  mounted.push(mount(document, window));
   root.querySelector<HTMLButtonElement>('.nx-launcher')!.click();
   await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(1));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -85,6 +88,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   window.history.replaceState({}, '', '/');
   vi.unstubAllGlobals();
 });
@@ -178,7 +182,7 @@ describe('widget footer links (FR-MOD-11.5)', () => {
     const root = document.createElement('div');
     root.id = 'siyahtus-widget-root';
     document.body.append(root);
-    mount(document, window);
+    mounted.push(mount(document, window));
 
     expect(brandLink(root)).toBeNull();
     const hrefs = [...root.querySelectorAll('a')].map((a) => a.getAttribute('href') ?? '');

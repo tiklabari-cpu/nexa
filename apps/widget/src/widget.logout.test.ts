@@ -9,13 +9,15 @@
  * answers `siyahtus:logged-out` — and nothing after it mints for the visitor
  * who just left. A command from any other window is ignored.
  *
- * `mount()` has no teardown, so each test's widget keeps listening; every
- * test here ends with its widget signed out, which is what keeps an earlier
- * one from answering a later test's command.
+ * Each test's widget is taken down after it (`mount` returns its teardown), so an
+ * earlier one cannot answer a later test's command.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from './widget.js';
 import { storageKeys } from './api.js';
+
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
 
 const API = 'https://api.test/v1';
 const ORG = 'org-1';
@@ -89,7 +91,7 @@ function mountWidget(path = '/widget.html'): void {
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';
   document.body.append(root);
-  mount(document, window);
+  mounted.push(mount(document, window));
 }
 
 /** The loader relaying a command — from `source`, the embedding page by default. */
@@ -139,6 +141,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   window.removeEventListener('message', onMessage);
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');

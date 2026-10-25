@@ -12,6 +12,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from './widget.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 interface FetchCall {
   url: string;
   body: unknown;
@@ -69,7 +72,7 @@ function mountWidget(search: string): void {
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';
   document.body.append(root);
-  mount(document, window);
+  mounted.push(mount(document, window));
 }
 
 /** Simulates the loader relaying a command across the message boundary. */
@@ -107,18 +110,15 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
 });
 
 describe('widget trackSale (FR-MOD-13.5)', () => {
-  // Deliberately the one test in this file that checks call *order*: it must
-  // run against a widget that has never authenticated, which only holds for
-  // the very first mount+dispatch — `mount()` has no teardown, so every test
-  // below this one may also be heard by this test's now-stale (but already
-  // authenticated) message listener. That stale listener skips straight to
-  // the sale call same as the fresh one would, which is harmless for the
-  // `.some(...)` checks the other tests make, just not for an index compare.
+  // The one test in this file that checks call *order*: it needs a widget that has never
+  // authenticated. Each test's widget is taken down after it, so none from an earlier test
+  // can answer this one's command first.
   it('mints a token first, then reports the relayed sale with the expected body', async () => {
     mountWidget('?organization_id=org-1');
     sendCommand('trackSale', VALID_PAYLOAD);

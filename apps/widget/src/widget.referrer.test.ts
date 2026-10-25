@@ -10,6 +10,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from './widget.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 interface FetchCall {
   url: string;
   body: unknown;
@@ -68,7 +71,7 @@ async function sendFirstMessage(search: string): Promise<Record<string, unknown>
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';
   document.body.append(root);
-  mount(document, window);
+  mounted.push(mount(document, window));
 
   root.querySelector<HTMLButtonElement>('.nx-greet-chat')!.click();
   await waitFor(() => root.querySelector('.nx-prechat-input') !== null);
@@ -99,6 +102,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
 });

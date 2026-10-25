@@ -14,6 +14,9 @@ import type { PrechatConfig, WidgetFormField } from '@siyahtus/types';
 import { mount } from './widget.js';
 import { storageKeys } from './api.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 interface FetchCall {
   url: string;
   body: unknown;
@@ -74,7 +77,7 @@ function mountWidget(search: string): HTMLElement {
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';
   document.body.append(root);
-  mount(document, window);
+  mounted.push(mount(document, window));
   return root;
 }
 
@@ -128,6 +131,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
 });

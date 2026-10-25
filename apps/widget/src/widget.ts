@@ -327,9 +327,21 @@ function sameConversation(
   );
 }
 
-export function mount(doc: Document = document, win: Window = window): void {
+/**
+ * Draws the widget into `#siyahtus-widget-root` and starts it. Returns the function that stops
+ * it again: the poll, the socket, every timer and the `window`/`document` listeners. The widget's
+ * own elements keep theirs, which leave with the DOM. A page loads the widget once and never
+ * calls it; tests do, after each one (2026-10-25) — a widget left polling from an earlier test
+ * re-armed its timer on the next test's fake clock and showed up as 8–16 extra polls.
+ */
+export function mount(doc: Document = document, win: Window = window): () => void {
   const root = doc.getElementById('siyahtus-widget-root');
-  if (!root) return;
+  if (!root) return () => {};
+
+  // What the returned teardown undoes, beyond the timers it clears by name.
+  const listening = new AbortController();
+  const { signal } = listening;
+  let stopped = false;
 
   const config = readConfig(win);
   // The language is chosen in order (WG-02, `pickWidgetLocale`): the snippet's
@@ -1861,6 +1873,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       console.warn('siyahtus widget: refresh failed', error);
       return;
     }
+    if (stopped) return;
     notePollAnswered();
     try {
       const previousChatId = state.chatId;
@@ -2117,7 +2130,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   }
 
   function openSocket(): void {
-    if (socket) return;
+    if (socket || stopped) return;
     const url = api.rtmUrl;
     // No gateway published, or no organization to open one for. Both leave the
     // widget on the polling path it has always had rather than failing.
@@ -2174,13 +2187,15 @@ export function mount(doc: Document = document, win: Window = window): void {
   let armedDelay: number | null = null;
 
   function startPolling(): void {
-    if (polling) return;
+    if (polling || stopped) return;
     polling = true;
     schedulePoll();
   }
 
   function schedulePoll(): void {
     if (pollTimer !== null) clearTimeout(pollTimer);
+    // A poll that was in flight when the widget was taken down must not re-arm it.
+    if (stopped) return;
     const delay = pollDelay();
     armedDelay = delay;
     pollTimer = setTimeout(() => {
@@ -2232,24 +2247,32 @@ export function mount(doc: Document = document, win: Window = window): void {
   // --- Wiring --------------------------------------------------------------
 
   // The browser knows a connection dropped before any poll can (tm 259.11).
-  win.addEventListener('offline', () => {
-    browserOffline = true;
-    renderConnection();
-  });
+  win.addEventListener(
+    'offline',
+    () => {
+      browserOffline = true;
+      renderConnection();
+    },
+    { signal },
+  );
   // …and when it is back. Catch up now rather than at the end of a back-off
   // that may have grown to half a minute; the line under the header clears
   // with the first answer (`notePollAnswered`), or here already if only the
   // event had raised it. A hidden tab still waits, as it does for every poll.
-  win.addEventListener('online', () => {
-    browserOffline = false;
-    renderConnection();
-    if (state.connected) {
-      if (!doc.hidden) void refresh();
-    } else if (state.open) {
-      // The mint itself failed while offline (`error.connect`): retry it.
-      void connect();
-    }
-  });
+  win.addEventListener(
+    'online',
+    () => {
+      browserOffline = false;
+      renderConnection();
+      if (state.connected) {
+        if (!doc.hidden) void refresh();
+      } else if (state.open) {
+        // The mint itself failed while offline (`error.connect`): retry it.
+        void connect();
+      }
+    },
+    { signal },
+  );
 
   // The listeners on the widget's own elements, in one function so a rebuilt
   // set of elements (`rebuildUi`) gets exactly the ones the first set had. The
@@ -2371,63 +2394,76 @@ export function mount(doc: Document = document, win: Window = window): void {
   }
   wireUi();
 
-  doc.addEventListener('click', (event) => {
-    if (menuOpen && !ui.menuWrap.contains(event.target as Node)) {
-      menuOpen = false;
-      renderMenu();
-    }
-    if (emojiOpen && !ui.emojiWrap.contains(event.target as Node)) {
-      emojiOpen = false;
-      renderEmojiPicker();
-    }
-  });
+  doc.addEventListener(
+    'click',
+    (event) => {
+      if (menuOpen && !ui.menuWrap.contains(event.target as Node)) {
+        menuOpen = false;
+        renderMenu();
+      }
+      if (emojiOpen && !ui.emojiWrap.contains(event.target as Node)) {
+        emojiOpen = false;
+        renderEmojiPicker();
+      }
+    },
+    { signal },
+  );
 
-  doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && endConfirmOpen) {
-      endConfirmOpen = false;
-      renderEndConfirm();
-      ui.menuButton.focus();
-      return;
-    }
-    if (event.key === 'Escape' && menuOpen) {
-      menuOpen = false;
-      renderMenu();
-      ui.menuButton.focus();
-      return;
-    }
-    if (event.key === 'Escape' && emojiOpen) {
-      emojiOpen = false;
-      renderEmojiPicker();
-      ui.emojiButton.focus();
-      return;
-    }
-    // On the Chat page there is nothing to close to, so Escape must not blank it.
-    if (event.key === 'Escape' && state.open && !config.chatPage) {
-      setOpen(false);
-      ui.launcher.focus();
-    }
-  });
+  doc.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Escape' && endConfirmOpen) {
+        endConfirmOpen = false;
+        renderEndConfirm();
+        ui.menuButton.focus();
+        return;
+      }
+      if (event.key === 'Escape' && menuOpen) {
+        menuOpen = false;
+        renderMenu();
+        ui.menuButton.focus();
+        return;
+      }
+      if (event.key === 'Escape' && emojiOpen) {
+        emojiOpen = false;
+        renderEmojiPicker();
+        ui.emojiButton.focus();
+        return;
+      }
+      // On the Chat page there is nothing to close to, so Escape must not blank it.
+      if (event.key === 'Escape' && state.open && !config.chatPage) {
+        setOpen(false);
+        ui.launcher.focus();
+      }
+    },
+    { signal },
+  );
 
-  win.addEventListener('message', (event: MessageEvent) => {
-    // The host page is cross-origin and untrusted: accept only the known
-    // commands it may issue, and ignore anything else without replying.
-    const data = event.data as { type?: unknown; command?: unknown; payload?: unknown };
-    if (data?.type === 'siyahtus:host-open') setOpen(true);
-    if (data?.type === 'siyahtus:host-close') setOpen(false);
-    if (data?.type === 'siyahtus:command' && data.command === 'trackSale')
-      void trackSale(data.payload);
-    // Only from the page the widget is embedded in: another frame on that page
-    // can reach this one too, and must not sign its visitor out.
-    if (
-      data?.type === 'siyahtus:command' &&
-      data.command === 'logout' &&
-      event.source === win.parent &&
-      !config.chatPage
-    ) {
-      void logout();
-    }
-  });
+  win.addEventListener(
+    'message',
+    (event: MessageEvent) => {
+      // The host page is cross-origin and untrusted: accept only the known
+      // commands it may issue, and ignore anything else without replying.
+      const data = event.data as { type?: unknown; command?: unknown; payload?: unknown };
+      if (data?.type === 'siyahtus:host-open') setOpen(true);
+      if (data?.type === 'siyahtus:host-close') setOpen(false);
+      if (data?.type === 'siyahtus:command' && data.command === 'trackSale')
+        void trackSale(data.payload);
+      // Only from the page the widget is embedded in: another frame on that page
+      // can reach this one too, and must not sign its visitor out.
+      if (
+        data?.type === 'siyahtus:command' &&
+        data.command === 'logout' &&
+        event.source === win.parent &&
+        !config.chatPage
+      ) {
+        void logout();
+      }
+    },
+    { signal },
+  );
 
+  let greetingTimer: number | undefined;
   if (config.chatPage) {
     // The whole page is the conversation: no launcher, no host to message, open
     // from the start.
@@ -2442,7 +2478,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // The proactive nudge, once the visitor has been here a while. A campaign
     // is not held back by this: it is addressed to this visitor and arrives
     // with a poll, which `renderCard` picks up whenever it lands.
-    win.setTimeout(() => {
+    greetingTimer = win.setTimeout(() => {
       greetingDue = true;
       renderCard();
     }, GREETING_DELAY_MS);
@@ -2452,6 +2488,26 @@ export function mount(doc: Document = document, win: Window = window): void {
     // which is the one moment an unread badge is of no use any more.
     if (returningVisitor()) void connect();
   }
+
+  return () => {
+    stopped = true;
+    listening.abort();
+    for (const timer of [
+      pollTimer,
+      previewTimer,
+      sendPauseTimer,
+      typingThrottle,
+      typingStop,
+      supportCopiedTimer,
+    ]) {
+      if (timer != null) clearTimeout(timer);
+    }
+    win.clearTimeout(greetingTimer);
+    pollTimer = null;
+    polling = false;
+    socket?.close();
+    socket = null;
+  };
 }
 
 // ---------------------------------------------------------------------------

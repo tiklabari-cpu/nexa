@@ -13,6 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CATALOGS } from './locales/index.js';
 import { mount } from './widget.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 const API = 'https://api.test/v1';
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -82,7 +85,7 @@ function setUp(routes: Routes, language = 'en'): Harness {
   doc.body.append(root);
 
   window.history.replaceState({}, '', `/?organization_id=org_test&api=${API}&language=${language}`);
-  mount(doc, window);
+  mounted.push(mount(doc, window));
   return { doc, sends: () => sends, grants: () => grants };
 }
 
@@ -129,6 +132,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });

@@ -26,6 +26,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from './widget.js';
 import { appendRichText } from './rich-text.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 const API = 'https://api.test/v1';
 
 interface Event {
@@ -90,7 +93,7 @@ async function openTranscript(): Promise<HTMLElement> {
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';
   document.body.append(root);
-  mount(document, window);
+  mounted.push(mount(document, window));
   root.querySelector<HTMLButtonElement>('.nx-launcher')!.click();
   await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(1));
   await vi.waitFor(() =>
@@ -114,6 +117,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
 });

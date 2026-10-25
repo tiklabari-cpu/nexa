@@ -12,6 +12,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mount } from './widget.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 function setupRoot(search: string): void {
   window.history.replaceState({}, '', `/widget.html${search}`);
   const root = document.createElement('div');
@@ -20,6 +23,7 @@ function setupRoot(search: string): void {
 }
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   document.body.replaceChildren();
   // `buildUi` injects a <style> into the head each mount; clear it so every
   // case starts from an identical document.
@@ -32,7 +36,7 @@ afterEach(() => {
 describe('widget RTL mount', () => {
   it('sets dir="rtl" and lang="ar" for Arabic', () => {
     setupRoot('?organization_id=org-1&language=ar');
-    mount(document, window);
+    mounted.push(mount(document, window));
 
     expect(document.documentElement.dir).toBe('rtl');
     expect(document.documentElement.lang).toBe('ar');
@@ -42,7 +46,7 @@ describe('widget RTL mount', () => {
   it('sets dir="ltr" and the matching lang for every non-Arabic locale', () => {
     for (const language of ['en', 'tr', 'de', 'fr', 'es', 'it', 'pt']) {
       setupRoot(`?organization_id=org-1&language=${language}`);
-      mount(document, window);
+      mounted.push(mount(document, window));
 
       expect(document.documentElement.dir, language).toBe('ltr');
       expect(document.documentElement.lang, language).toBe(language);
@@ -54,7 +58,7 @@ describe('widget RTL mount', () => {
 
   it('falls back to ltr/en for an unrecognised language', () => {
     setupRoot('?organization_id=org-1&language=ja');
-    mount(document, window);
+    mounted.push(mount(document, window));
 
     expect(document.documentElement.dir).toBe('ltr');
     expect(document.documentElement.lang).toBe('en');
@@ -62,7 +66,7 @@ describe('widget RTL mount', () => {
 
   it('positions the launcher and greeting card with logical CSS, not left/right', () => {
     setupRoot('?organization_id=org-1&language=ar');
-    mount(document, window);
+    mounted.push(mount(document, window));
 
     const css = document.head.querySelector('style')?.textContent ?? '';
     expect(css).toContain('inset-inline-end');

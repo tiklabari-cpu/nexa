@@ -12,6 +12,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mount } from './widget.js';
 
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
 /** Point the document at `/widget.html<search>` and give it a mount root. */
 function setupRoot(search: string): void {
   window.history.replaceState({}, '', `/widget.html${search}`);
@@ -21,6 +24,7 @@ function setupRoot(search: string): void {
 }
 
 afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
   document.body.replaceChildren();
   // `buildUi` injects a <style> into the head each mount; clear it so the two
   // cases start from an identical document.
@@ -31,7 +35,7 @@ afterEach(() => {
 describe('widget mount locale', () => {
   it('renders the launcher and panel chrome in Turkish when language=tr', () => {
     setupRoot('?organization_id=org-1&language=tr');
-    mount(document, window);
+    mounted.push(mount(document, window));
 
     const launcher = document.querySelector('.nx-launcher');
     expect(launcher?.textContent).toBe('Sohbet');
@@ -49,7 +53,7 @@ describe('widget mount locale', () => {
 
   it('falls back to English chrome when no language is configured', () => {
     setupRoot('?organization_id=org-1');
-    mount(document, window);
+    mounted.push(mount(document, window));
 
     expect(document.querySelector('.nx-launcher')?.textContent).toBe('Chat');
     expect(document.querySelector('.nx-title')?.textContent).toBe('Chat with us');
@@ -58,7 +62,7 @@ describe('widget mount locale', () => {
 
   it('resolves a region-tagged tag (tr-TR) to Turkish', () => {
     setupRoot('?organization_id=org-1&language=tr-TR');
-    mount(document, window);
+    mounted.push(mount(document, window));
 
     expect(document.querySelector('.nx-launcher')?.textContent).toBe('Sohbet');
   });

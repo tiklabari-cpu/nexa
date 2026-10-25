@@ -7,8 +7,15 @@
  * corners. No other test could see it — jsdom does no layout, and every
  * behaviour test passed — so the parse itself is asserted here.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { mount } from './widget.js';
+
+/** Every widget this file mounts, taken down after each test (`mount` returns its teardown). */
+const mounted: Array<() => void> = [];
+
+afterEach(() => {
+  for (const stop of mounted.splice(0)) stop();
+});
 
 let css = '';
 let selectors: string[] = [];
@@ -18,7 +25,7 @@ beforeAll(() => {
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';
   document.body.append(root);
-  mount(document, window);
+  mounted.push(mount(document, window));
   const style = document.head.querySelector('style')!;
   css = style.textContent ?? '';
   const walk = (rules: CSSRuleList): string[] =>

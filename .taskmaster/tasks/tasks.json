@@ -15047,7 +15047,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-24T22:31:19.356Z",
+        "updatedAt": "2026-10-25T00:07:43.965Z",
         "subtasks": [
           {
             "id": 1,
@@ -15055,11 +15055,11 @@
             "description": "ticket_messages + tickets zaman kolonları + kontrat (GET/POST messages, TicketMessage, hatalar)",
             "details": "Üst görev 356 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "db:check-drift; contract:generate.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "356",
             "priority": "high",
-            "updatedAt": "2026-10-24T22:31:19.356Z"
+            "updatedAt": "2026-10-25T00:07:43.965Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-24T22:31:19.356Z",
+      "lastModified": "2026-10-25T00:07:43.966Z",
       "taskCount": 390,
       "completedCount": 324,
       "tags": [

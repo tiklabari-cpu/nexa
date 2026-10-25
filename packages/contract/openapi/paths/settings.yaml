@@ -1563,6 +1563,8 @@ chatTimeout:
       left out counts with its stored value — or the save is refused with a
       400 and nothing changes. `pause_unresponsive_agents` is optional too:
       whether the agent a connection was taken from stops receiving chats.
+      So is `ticket_reopen_window_days` (1-365, HD-03): how many days after
+      its last activity a player's e-mail answer still reopens a solved ticket.
     requestBody:
       required: true
       content:
@@ -1616,6 +1618,15 @@ chatTimeout:
                 description: >-
                   Whether an agent whose connection the unanswered transfer took
                   goes `not_accepting_chats`. Left out, the stored value stays.
+              ticket_reopen_window_days:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 365
+                description: >-
+                  Days after its last activity that a player's e-mail answer
+                  still reopens a solved ticket (HD-03); later, a new related
+                  ticket opens. Left out, the stored value stays.
     responses:
       "200":
         description: Updated

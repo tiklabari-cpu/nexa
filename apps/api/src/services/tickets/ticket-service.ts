@@ -79,6 +79,8 @@ export interface TicketSummary {
   source_thread_id: string | null;
   /** The primary this ticket is folded into, or null when it stands alone. */
   merged_into_id: string | null;
+  /** The closed or old ticket the player's answer opened this one from (HD-03 · tm 358). */
+  related_ticket_id: string | null;
   last_message_at: string | null;
   created_at: string;
 }
@@ -318,11 +320,19 @@ export class TicketService {
    * it. Kept apart from `create()` on purpose: the scope-guarded path stays
    * unreachable without a principal, and this one cannot be called by accident
    * from a request that has an agent token.
+   *
+   * `relatedTicketId` (tm 358 · HD-03): the player answered a ticket that was
+   * closed, or quiet past the reopen window — this one follows on from it.
    */
   async createFromEmail(
     tx: TenantClient,
     tenant: TenantContext,
-    input: { subject: string; customerId: string; inboundAddressId?: string | null },
+    input: {
+      subject: string;
+      customerId: string;
+      inboundAddressId?: string | null;
+      relatedTicketId?: string | null;
+    },
   ): Promise<{ id: string }> {
     const subject = input.subject.trim() || '(no subject)';
     const created = await tx.ticket.create({
@@ -336,6 +346,7 @@ export class TicketService {
         // the caller did not name one — a ticket that did not come by e-mail
         // has no mailbox to point at.
         inboundAddressId: input.inboundAddressId ?? null,
+        relatedTicketId: input.relatedTicketId ?? null,
         // Set on creation so the ticket sorts from its first moment, matching
         // create(): a null activity timestamp sorts unpredictably in the queue.
         lastMessageAt: new Date(),
@@ -1125,6 +1136,7 @@ function serialise(row: TicketRow, names: Map<string, string>): TicketSummary {
     source_chat_id: row.sourceChatId,
     source_thread_id: row.sourceThreadId,
     merged_into_id: row.mergedIntoId,
+    related_ticket_id: row.relatedTicketId,
     last_message_at: row.lastMessageAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
   };

@@ -49,6 +49,8 @@ import {
   AI_TURNS_PER_CUSTOMER_DAY_MAX,
   SIEM_EXPORT_TARGETS,
   SLA_MAX_TARGET_MINUTES,
+  TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
+  TICKET_REOPEN_WINDOW_DAYS_MAX,
 } from '@siyahtus/types';
 import type {
   CompanySector,
@@ -578,6 +580,9 @@ const updateChatTimeoutBody = z.object({
   // Whether the transfer also stops routing to the agent it took the
   // connection from (tm 340.2). Optional the same way.
   pause_unresponsive_agents: z.boolean().optional(),
+  // How long a solved ticket still reopens on the player's e-mailed answer
+  // (tm 358 · HD-03). Optional the same way; the CHECK holds the same bounds.
+  ticket_reopen_window_days: z.number().int().min(1).max(TICKET_REOPEN_WINDOW_DAYS_MAX).optional(),
 });
 
 /** What a save whose windows are out of order is told (`chatInactivityOrderProblem`). */
@@ -2800,10 +2805,14 @@ export default async function settingsRoutes(
             ? {}
             : { dayBoundaryHour: body.day_boundary_hour }),
         };
-        const pause =
-          body.pause_unresponsive_agents === undefined
+        const pauseAndReopen = {
+          ...(body.pause_unresponsive_agents === undefined
             ? {}
-            : { pauseUnresponsiveAgents: body.pause_unresponsive_agents };
+            : { pauseUnresponsiveAgents: body.pause_unresponsive_agents }),
+          ...(body.ticket_reopen_window_days === undefined
+            ? {}
+            : { ticketReopenWindowDays: body.ticket_reopen_window_days }),
+        };
         const row = await tx.inboxSettings.upsert({
           where,
           create: {
@@ -2812,13 +2821,13 @@ export default async function settingsRoutes(
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
             ...dayBoundary,
-            ...pause,
+            ...pauseAndReopen,
           },
           update: {
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
             ...dayBoundary,
-            ...pause,
+            ...pauseAndReopen,
           },
         });
         const after = dayBoundaryFromRow(row);
@@ -2830,6 +2839,7 @@ export default async function settingsRoutes(
             unanswered_transfer_seconds: row.unansweredTransferSeconds,
             inactive_after_seconds: row.inactiveAfterSeconds,
             pause_unresponsive_agents: row.pauseUnresponsiveAgents,
+            ticket_reopen_window_days: row.ticketReopenWindowDays,
             day_boundary_timezone: after.timezone,
             day_boundary_hour: after.hour,
             // Only when it moved: a timeout-only save is not a boundary change,
@@ -3668,6 +3678,7 @@ function serialiseInbox(
         unansweredTransferSeconds: number | null;
         inactiveAfterSeconds: number | null;
         pauseUnresponsiveAgents: boolean;
+        ticketReopenWindowDays: number;
         updatedAt: Date;
       })
     | null,
@@ -3685,6 +3696,7 @@ function serialiseInbox(
     inactive_after_seconds: row?.inactiveAfterSeconds ?? null,
     // No row = the column's default: on.
     pause_unresponsive_agents: row?.pauseUnresponsiveAgents ?? true,
+    ticket_reopen_window_days: row?.ticketReopenWindowDays ?? TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

@@ -13,6 +13,7 @@
  * merged-in children are listed here with their own unmerge affordance.
  */
 import { useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualList } from '../../components/VirtualList.js';
@@ -539,6 +540,22 @@ export function TicketDetailPane({
               <span className="text-content-tertiary">{t('inbox.ticket.createdDirectly')}</span>
             )}
           </dd>
+
+          {data.related_ticket_id && (
+            // The player answered a closed or long-quiet ticket by e-mail, and
+            // the answer opened this one (HD-03 · tm 358): the way back to it.
+            <>
+              <dt className="text-content-tertiary">{t('inbox.ticket.row.related')}</dt>
+              <dd>
+                <Link
+                  to={`/app/inbox?ticket=${encodeURIComponent(data.related_ticket_id)}`}
+                  className="font-mono text-xs text-content-brand underline underline-offset-2"
+                >
+                  {data.related_ticket_id}
+                </Link>
+              </dd>
+            </>
+          )}
         </dl>
 
         <TicketThread ticketId={data.id} />

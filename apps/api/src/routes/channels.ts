@@ -11,7 +11,7 @@
  * webhook. `INBOUND_EMAIL_SECRET`, when set, stands in for that signature.
  */
 import { Buffer } from 'node:buffer';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -19,6 +19,8 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { maskForWrite } from '../lib/sensitive-mask.js';
 import { TicketMessageService } from '../services/tickets/ticket-message-service.js';
+import { TicketReplyAddresses, isReplyLabel } from '../services/tickets/ticket-reply-address.js';
+import { RateLimiter } from '../plugins/rate-limit.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { createVirusScanner } from '../services/storage/virus-scanner.js';
 import { screenInboundAttachments } from '../services/channels/inbound-email-attachments.js';
@@ -41,10 +43,11 @@ import { isChannelType, type ChannelType } from '../services/channels/channel-ad
 import {
   inboundAttachmentsAllSensitive,
   ingestInboundEmail,
+  isAutomatedMail,
   isInboundSpam,
   normalizeMessageId,
-  parseRecipient,
   parseSender,
+  recipientsOf,
   ticketOfMessageId,
 } from '../services/channels/email-inbound.js';
 import {
@@ -121,6 +124,7 @@ interface InboundRecipientMatch {
 const inboundBody = z.object({
   to: z.string().min(1).max(320),
   cc: z.array(z.string().max(320)).max(50).default([]),
+  delivered_to: z.array(z.string().max(320)).max(10).default([]),
   from: z.string().min(1).max(320),
   subject: z.string().max(998).default(''),
   text: z.string().max(2_000_000).nullish(),
@@ -128,12 +132,13 @@ const inboundBody = z.object({
   message_id: z.string().max(998).nullish(),
   in_reply_to: z.string().max(998).nullish(),
   references: z.array(z.string().max(998)).max(100).default([]),
-  // Passed through for HD-04's auto-reply guard (#359); nothing reads them yet.
+  // The loop guard's evidence (tm 358 · `isAutomatedMail`).
   headers: z
     .object({
       auto_submitted: z.string().max(200).nullish(),
       precedence: z.string().max(200).nullish(),
       x_autoreply: z.string().max(200).nullish(),
+      x_auto_response_suppress: z.string().max(200).nullish(),
     })
     .default({}),
   attachments: z
@@ -156,6 +161,16 @@ const inboundBody = z.object({
  * `server.ts` sets.
  */
 const INBOUND_EMAIL_BODY_LIMIT = 36 * 1024 * 1024;
+
+/**
+ * How many tickets one sender's mail may open, or reopen from solved, in an
+ * hour on one workspace (tm 358 · HD-03 loop guard). A person does not open
+ * ten support tickets an hour by e-mail; a mail loop with an auto-responder
+ * that sends none of the headers `isAutomatedMail` reads does — and every
+ * one it opens is one the workspace's acknowledgement would answer again.
+ */
+const INBOUND_OPENS_PER_SENDER_HOUR = 10;
+const HOUR_MS = 60 * 60 * 1000;
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -213,6 +228,25 @@ export default async function channelRoutes(
   );
   const telegramLive = channels.liveTelegram;
   const emailAddresses = new InboundEmailAddressService(env.INBOUND_EMAIL_DOMAIN);
+  const replyAddresses = new TicketReplyAddresses(
+    env.CUSTOMER_TOKEN_SECRET,
+    env.INBOUND_EMAIL_DOMAIN,
+  );
+  const limiter = new RateLimiter(app.redis);
+  /**
+   * The sender's hourly budget for opening and reopening tickets, per licence.
+   * Keyed by a hash of the address — the key sits in Redis, the address is the
+   * player's — under `rl:`, the prefix every rate limit lives under.
+   */
+  const openBudget = (licenseId: bigint) => async (senderEmail: string) => {
+    const sender = createHash('sha256').update(senderEmail).digest('hex').slice(0, 32);
+    const decision = await limiter.consume(
+      `rl:inbound-email-open:${licenseId}:${sender}`,
+      INBOUND_OPENS_PER_SENDER_HOUR,
+      HOUR_MS,
+    );
+    return decision.allowed;
+  };
   const publisher = new RealtimePublisher(app.redis, app.log);
   // The same chat core the widget uses — so a channel message routes, delivers
   // over realtime and counts toward AI resolution exactly like a Website chat.
@@ -479,19 +513,31 @@ export default async function channelRoutes(
       const body = parse(inboundBody, request.body);
 
       // Both are transport concerns, settled before any tenant context: the
-      // recipient names the workspace, the sender names the customer.
-      const recipient = parseRecipient(body.to);
+      // recipient names the workspace, the sender names the customer. The
+      // first workspace address among the envelope recipients, `to` and `cc`
+      // routes the mail (tm 358 — a player's "reply all" may put the reply
+      // address in `cc`).
+      const recipients = recipientsOf([...body.delivered_to, body.to, ...body.cc]);
+      const recipient = recipients[0];
       if (!recipient) throw ApiError.notFound('Unknown recipient.');
       const sender = parseSender(body.from);
       if (!sender) throw ApiError.validation('from: a valid sender address is required.');
+      // The ticket reply addresses (`<org>+t-<ticket>-<signature>`) this
+      // workspace was written at — verified inside the tenant, where the key is.
+      const replyLabels = recipients
+        .filter((r) => r.organizationId === recipient.organizationId)
+        .map((r) => r.label)
+        .filter((label): label is string => label !== null && isReplyLabel(label));
 
       // Two resolves, one per address shape, because they answer different
       // questions. The default address is still resolved from the organization id
       // exactly as it always was, so a workspace that never defined a labelled
       // address is unaffected by any of this, whether or not its row exists yet.
-      // A labelled address has to *exist*, and only the table knows that.
+      // A labelled address has to *exist*, and only the table knows that. A
+      // ticket reply address has no row: it is a sub-address of the default
+      // one, and resolves like it whatever its signature says.
       const matches =
-        recipient.label === null
+        recipient.label === null || isReplyLabel(recipient.label)
           ? await app.db.$queryRaw<InboundRecipientMatch[]>(
               Prisma.sql`SELECT * FROM auth_resolve_organization_license(${recipient.organizationId}::uuid)`,
             )
@@ -547,7 +593,12 @@ export default async function channelRoutes(
         return ingestInboundEmail(
           tx,
           tenant,
-          { tickets, messages: ticketMessages },
+          {
+            tickets,
+            messages: ticketMessages,
+            replyAddresses,
+            openBudget: openBudget(tenant.licenseId),
+          },
           {
             senderEmail: sender.email,
             senderName: sender.name,
@@ -557,6 +608,11 @@ export default async function channelRoutes(
             body: mail,
             messageId,
             inReplyTo: normalizeMessageId(body.in_reply_to),
+            references: body.references
+              .map((reference) => normalizeMessageId(reference))
+              .filter((reference): reference is string => reference !== null),
+            replyLabels,
+            automated: isAutomatedMail(body.headers),
             attachments: files.stored,
             rejected: files.rejected,
           },
@@ -564,9 +620,10 @@ export default async function channelRoutes(
         );
       });
 
-      // A race lost to another delivery of the same mail (or spam after all):
-      // nothing points at the files this request stored, so they go again.
-      if (outcome.result.status !== 'created' || outcome.result.duplicate) {
+      // A race lost to another delivery of the same mail, spam after all, an
+      // automatic reply kept as a line, a sender past the hourly limit: nothing
+      // points at the files this request stored, so they go again.
+      if (!outcome.filesKept) {
         await discardFiles(
           request.log,
           files.stored.map((file) => file.key),

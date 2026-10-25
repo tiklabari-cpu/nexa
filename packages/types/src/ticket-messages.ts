@@ -155,3 +155,15 @@ export interface TicketMessageDeliveryChangedPush {
   message_id: string;
   delivery_status: TicketMessageDeliveryStatus;
 }
+
+/**
+ * How long a solved ticket waits for the player's answer by e-mail (HD-03 ·
+ * tm 358), in days after its last activity — `inbox_settings`'
+ * `ticket_reopen_window_days`. Within it the answer reopens the ticket; past
+ * it, or on a `closed` ticket, the answer opens a new ticket that names the old
+ * one (`related_ticket_id`): a conversation weeks cold is a new request, and
+ * reopening it would put a stale ticket back at the head of the queue.
+ */
+export const TICKET_REOPEN_WINDOW_DAYS_DEFAULT = 30;
+/** The longest reopen window a workspace may set — a year; the CHECK says the same. */
+export const TICKET_REOPEN_WINDOW_DAYS_MAX = 365;

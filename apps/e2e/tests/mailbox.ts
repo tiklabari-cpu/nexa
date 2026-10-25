@@ -21,6 +21,10 @@ export interface Mail {
   body: string;
   /** The HTML part, when the message had one (tm 265). */
   html?: string;
+  /** `Reply-To`, when set — a ticket's signed reply address (tm 358). */
+  replyTo?: string;
+  /** `Message-ID`, brackets off. */
+  messageId?: string;
   /** Arrival order across the whole run. */
   received: number;
 }

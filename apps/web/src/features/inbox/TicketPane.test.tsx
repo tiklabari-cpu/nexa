@@ -257,6 +257,20 @@ describe('TicketDetailPane HelpDesk actions', () => {
     expect(link).toHaveAttribute('href', '/app/inbox?chat=CHAT0000001');
   });
 
+  it('links the closed ticket a player answer opened this one from (HD-03)', async () => {
+    renderPane(makeDetail({ related_ticket_id: 'TJ1H8CFKRV' }));
+    const link = await screen.findByRole('link', { name: 'TJ1H8CFKRV' });
+
+    expect(link).toHaveAttribute('href', '/app/inbox?ticket=TJ1H8CFKRV');
+    expect(screen.getByText('Follows on from')).toBeInTheDocument();
+  });
+
+  it('names no related ticket on one that follows on from none', async () => {
+    renderPane(makeDetail());
+    await screen.findByText('Customer');
+    expect(screen.queryByText('Follows on from')).toBeNull();
+  });
+
   // ID-05 (tm 329): a ticket opened from a chat names both numbers — the day it
   // belongs to and the connection it was opened from — each copyable.
   it('shows the day and the connection a ticket was opened from, and copies each alone', async () => {

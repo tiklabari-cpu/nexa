@@ -274,6 +274,14 @@ function MessageItem({
         )}
       </div>
 
+      {fromPlayer && message.sender_mismatch && (
+        // A reply address or a thread reference matched; the sender did not
+        // (HD-03). Said before the text, so it is read before anyone acts on it.
+        <p className="mb-1.5 text-2xs font-medium text-warning" data-testid="sender-mismatch">
+          {t('inbox.ticket.thread.senderMismatch')}
+        </p>
+      )}
+
       {fromPlayer ? (
         <PlayerMailBody message={message} t={t} />
       ) : (

@@ -44,6 +44,12 @@ export interface Message {
   /** The thread so far, oldest first (`References`), without brackets. */
   references?: readonly string[];
   /**
+   * Where the reader's answer goes (`Reply-To`, tm 358 · HD-03) — a ticket's
+   * signed reply address, so the player's answer comes back to the ticket
+   * rather than to the deployment's one sender. A bare `local@domain`.
+   */
+  replyTo?: string;
+  /**
    * The name shown beside the system address in `From:` — the workspace a
    * ticket reply is written for (tm 356.3). The address itself is always the
    * deployment's own (`SMTP_FROM`): a workspace's name is display text, never

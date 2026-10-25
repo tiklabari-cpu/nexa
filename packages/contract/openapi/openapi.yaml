@@ -7592,6 +7592,16 @@ components:
           description: >-
             Whether an agent whose connection the unanswered transfer took is
             set to `not_accepting_chats` (and told why). True unless turned off.
+        ticket_reopen_window_days:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 365
+          description: >-
+            How long a solved ticket waits for the player's answer by e-mail
+            (HD-03): an answer within this many days of its last activity
+            reopens it, a later one — or one to a closed ticket — opens a new
+            ticket that names it (`related_ticket_id`). 30 unless set.
         updated_at: { type: string, format: date-time, nullable: true }
 
     WidgetSettings:
@@ -9848,6 +9858,15 @@ components:
           description: |
             The primary ticket this one is folded into (FR-MOD-13.6), or null
             when it stands alone. A merged ticket is hidden from the lists.
+        related_ticket_id:
+          type: string
+          nullable: true
+          maxLength: 12
+          description: |
+            The earlier ticket this one follows on from (HD-03 · tm 358): the
+            player answered a ticket that was closed, or quiet longer than the
+            workspace's reopen window (`ticket_reopen_window_days`), so the
+            answer opened this one instead of reopening that one. Null otherwise.
         last_message_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
 
@@ -9936,12 +9955,27 @@ components:
         to:
           type: string
           maxLength: 320
-          description: The workspace forwarding address the mail was sent to.
+          description: |
+            The recipients the mail was addressed to — the workspace forwarding
+            address, or the ticket reply address a reply went out with
+            (`<organization_id>+t-<ticket>-<signature>@<inbound-domain>`, HD-03).
+            Several may be listed, comma separated.
         cc:
           type: array
           maxItems: 50
           items: { type: string, maxLength: 320 }
-          description: Other recipients. Kept out of routing; the first `to` decides the workspace.
+          description: |
+            Other recipients. A ticket reply address here threads the mail
+            like one in `to` (a player who answered "reply all").
+        delivered_to:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 320 }
+          description: |
+            The envelope recipient(s) — `Delivered-To`, or the provider's
+            "original recipient". The address this delivery is for, so it
+            decides the workspace ahead of `to` and `cc`; the first
+            workspace address among `delivered_to`, `to`, `cc` routes the mail.
         from:
           type: string
           maxLength: 320
@@ -9975,19 +10009,28 @@ components:
         in_reply_to:
           type: string
           maxLength: 998
-          description: The mail's `In-Reply-To` — stored; threading onto an existing ticket is HD-03.
+          description: |
+            The mail's `In-Reply-To`. When it names a message of a ticket — a
+            reply that went out, or the player's earlier mail — the mail is
+            added to that ticket (HD-03), even with the reply address gone.
         references:
           type: array
           maxItems: 100
           items: { type: string, maxLength: 998 }
-          description: The mail's `References`, oldest first.
+          description: The mail's `References`, oldest first — looked up newest first after `in_reply_to`.
         headers:
           type: object
-          description: The auto-reply headers, passed through for HD-04's loop guard.
+          description: |
+            The auto-reply headers (HD-03 loop guard). `auto_submitted` other
+            than `no`, any `x_autoreply`, `precedence` `bulk`, `junk` or
+            `auto_reply`, or any `x_auto_response_suppress` marks the mail
+            automated: on a ticket it is only a system line — no reopening, no
+            new ticket, nothing is ever sent back to it.
           properties:
             auto_submitted: { type: string, maxLength: 200 }
             precedence: { type: string, maxLength: 200 }
             x_autoreply: { type: string, maxLength: 200 }
+            x_auto_response_suppress: { type: string, maxLength: 200 }
         attachments:
           type: array
           maxItems: 50
@@ -10099,6 +10142,13 @@ components:
             not; the console offers "try again" · `suppressed` — this
             deployment keeps ticket e-mail off (K23), the reply is kept and the
             thread says it was not sent.
+        sender_mismatch:
+          type: boolean
+          description: |
+            Present, and true, on a `customer_message` that reached the ticket
+            from an address other than its player's (HD-03): a reply address or
+            a thread reference matched, the sender did not. The message is
+            kept; the console warns before anyone acts on it.
         created_at: { type: string, format: date-time }
 
     TicketMessageInput:

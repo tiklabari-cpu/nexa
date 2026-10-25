@@ -515,6 +515,7 @@ export const inbox: Messages = {
   'inbox.ticket.assigneeUnassigned': 'Unassigned',
   'inbox.ticket.row.created': 'Created',
   'inbox.ticket.row.fromChat': 'From chat',
+  'inbox.ticket.row.related': 'Follows on from',
   'inbox.ticket.createdDirectly': 'Created directly',
   'inbox.ticket.subjectLabel': 'Subject',
   'inbox.ticket.saveButton': 'Save',
@@ -537,6 +538,8 @@ export const inbox: Messages = {
   'inbox.ticket.thread.author.bot': 'AI assistant',
   'inbox.ticket.thread.note.label': 'Internal note · only your team sees this',
   'inbox.ticket.thread.fromMerged': 'from merged ticket {id}',
+  'inbox.ticket.thread.senderMismatch':
+    "Sent from another address than this ticket's player — check who is writing before you act on it.",
   'inbox.ticket.thread.tryAgain': 'Try again',
   'inbox.ticket.thread.delivery.queued': 'Sending…',
   'inbox.ticket.thread.delivery.sent': 'Sent',

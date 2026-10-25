@@ -116,11 +116,13 @@ export function ticketTemplateContext(facts: TicketEmailFacts): TemplateContext 
  * The line a pilot deployment adds to the end of every ticket notice (tm
  * 257.14 · ADR `docs/adr/pilot-public-readiness.md` K-e(4)).
  *
- * A notice leaves from the deployment's one sender (`SMTP_FROM`) with no
- * `Reply-To`, so a customer who answers it writes to the operator's mailbox —
- * not to the workspace that sent it — and inbound e-mail cannot route the
- * answer back (it opens a new ticket, without the text). Until notices carry a
- * per-workspace reply path, the honest thing is to say so. English only, like
+ * Since tm 358 (HD-03) a ticket's mail carries a per-ticket reply path — a
+ * signed `Reply-To` the inbound webhook threads the answer back onto the
+ * ticket by — and outside the pilot this line is gone. The pilot is where it
+ * stays: it refuses the inbound webhook (owner decision K4, no e-mail channel),
+ * so its mail carries no `Reply-To`, leaves from the deployment's one sender
+ * (`SMTP_FROM`), and an answer reaches the operator's mailbox rather than the
+ * ticket. While that holds, the honest thing is to say so. English only, like
  * the rest of the server's own mail text, and fixed: it is the operator's
  * statement about the operator's mailbox, not the workspace's template.
  */

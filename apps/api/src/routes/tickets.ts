@@ -51,6 +51,7 @@ import {
   resolveAttachments,
   type TicketReplyOutbound,
 } from '../services/tickets/ticket-message-service.js';
+import { TicketReplyAddresses } from '../services/tickets/ticket-reply-address.js';
 
 const READ_SCOPES = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
 const WRITE_SCOPES = ['tickets--all:rw', 'tickets--access:rw'];
@@ -206,7 +207,12 @@ export default async function ticketRoutes(
     env: Env;
     /** Fans a committed ticket creation out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
-    /** `PILOT_MODE`: ticket notices say their mailbox reads no replies (tm 257.14). */
+    /**
+     * `PILOT_MODE`: the pilot refuses the inbound e-mail webhook, so an answer
+     * cannot come back — ticket mail carries no `Reply-To` and says its mailbox
+     * reads no replies (tm 257.14). Off, it carries the ticket's reply address
+     * (tm 358 · HD-03) and no such line.
+     */
     pilotMode?: boolean;
   },
 ): Promise<void> {
@@ -217,6 +223,17 @@ export default async function ticketRoutes(
   });
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
   const publisher = new RealtimePublisher(app.redis, app.log);
+  const replyAddresses = new TicketReplyAddresses(
+    env.CUSTOMER_TOKEN_SECRET,
+    env.INBOUND_EMAIL_DOMAIN,
+  );
+  /**
+   * The `Reply-To` of a ticket's mail (tm 358 · HD-03): the signed address the
+   * inbound webhook threads an answer back onto this ticket by. None in the
+   * pilot, which serves no inbound mail — an answer there would go nowhere.
+   */
+  const replyToFor = (tenant: TenantContext, ticketId: string) =>
+    pilotMode ? {} : { replyTo: replyAddresses.addressFor(tenant, ticketId) };
 
   /**
    * A queued reply's e-mail, sent after the commit (tm 356.3 · HD-01) — like
@@ -239,6 +256,7 @@ export default async function ticketRoutes(
         messageId: mail.emailMessageId,
         ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo } : {}),
         references: mail.references,
+        ...replyToFor(tenant, mail.ticketId),
         fromName: mail.workspaceName,
         // The player's language is not known to the server — the frame's few
         // words are English, as on the ticket notice.
@@ -473,6 +491,7 @@ export default async function ticketRoutes(
             to: notice.to,
             licenseId: tenant.licenseId,
             kind: 'ticket_notice',
+            ...replyToFor(tenant, ticketId),
             // The workspace's subject and text, untouched, in the shared frame
             // (tm 265). The customer's language is not known to the server, so
             // the frame's few words are English.

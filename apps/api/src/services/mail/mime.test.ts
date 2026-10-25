@@ -304,3 +304,25 @@ describe('composeMessage for a ticket reply (tm 356.3)', () => {
     expect(message).not.toContain('References');
   });
 });
+
+describe('composeMessage with a reply address (tm 358 · HD-03)', () => {
+  const REPLY_TO =
+    '0b6f9a4e-2c1d-4e8f-9a7b-3c5d7e9f1a2b+t-tj1h8cfkrv-8x2k4m6p@inbound.siyahtus.localhost';
+
+  it('writes the ticket reply address as Reply-To', () => {
+    expect(headerValue(composeMessage({ ...BASE, replyTo: REPLY_TO }), 'Reply-To')).toBe(REPLY_TO);
+  });
+
+  it('leaves out a Reply-To a header cannot carry rather than writing it', () => {
+    const message = composeMessage({
+      ...BASE,
+      replyTo: 'x@y.test\r\nBcc: victim@example.test',
+    });
+    expect(message).not.toContain('Reply-To');
+    expect(message).not.toMatch(/^Bcc:/m);
+  });
+
+  it('writes none when there is none', () => {
+    expect(composeMessage(BASE)).not.toContain('Reply-To');
+  });
+});

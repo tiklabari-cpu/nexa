@@ -68,12 +68,19 @@ export interface ComposeInput {
   /** `In-Reply-To` and `References` (tm 356.3), without brackets; an invalid id is left out. */
   inReplyTo?: string | undefined;
   references?: readonly string[] | undefined;
+  /** `Reply-To` (tm 358) — a bare address; one that is not is left out. */
+  replyTo?: string | undefined;
 }
 
 export function composeMessage(input: ComposeInput): string {
   const headers = [
     fromHeader(input.from, input.fromName),
     `To: ${input.to}`,
+    // The ticket reply address (tm 358): the deployment writes it, but it is
+    // checked like the thread's ids — a line break in it would be a header.
+    ...(input.replyTo !== undefined && isMessageId(input.replyTo)
+      ? [`Reply-To: ${input.replyTo}`]
+      : []),
     foldSubject(input.subject),
     `Date: ${rfc5322Date(input.date)}`,
     `Message-ID: <${input.messageId}>`,

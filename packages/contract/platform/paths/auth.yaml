@@ -1,0 +1,258 @@
+# Operator sign-in (tm 389.4 · FR-ADMIN-01/02/03).
+#
+# `x-platform-permission` names what the route's gate asks for: a permission
+# from `PLATFORM_PERMISSIONS` (@siyahtus/types), or `self` — any signed-in
+# operator, about their own session. `x-platform-stage` says which session
+# stage reaches it when that is not `active`; `x-platform-recent-totp` marks a
+# route that wants a code younger than five minutes. The platform-auth test
+# reads these against the server's route config, so they cannot drift.
+
+login:
+  post:
+    tags: [Auth]
+    operationId: platformLogin
+    summary: Sign in with a password — the first of two steps
+    description: |
+      Answers with a `password`-stage session: it reaches the second-factor
+      routes and `logout`, nothing else. `next` says which: `totp_enroll` for
+      an operator with no authenticator yet (the bootstrap superadmin, an
+      accepted invitation, a reset factor), `totp_verify` otherwise.
+
+      One 401 for an unknown address, a wrong password and a disabled
+      operator. Ten failed attempts from one address within fifteen minutes
+      close this route for that address for the rest of the window, a correct
+      password included (429).
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformLoginRequest" }
+    responses:
+      "200":
+        description: Password accepted; the second factor is owed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSignIn" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+totpEnroll:
+  post:
+    tags: [Auth]
+    operationId: platformTotpEnroll
+    summary: Start setting up the authenticator
+    description: |
+      For a `password`-stage session of an operator with no authenticator.
+      Returns the secret and its `otpauth://` URI (shown once, as a QR code);
+      calling it again replaces a secret not yet confirmed. 409
+      `two_factor_already_enabled` once an authenticator is confirmed — a
+      superadmin resets it (`/admins/{adminId}/reset-two-factor`).
+    x-platform-permission: self
+    x-platform-stage: enrollment
+    responses:
+      "200":
+        description: The secret to import
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformTotpEnrollment" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+totpActivate:
+  post:
+    tags: [Auth]
+    operationId: platformTotpActivate
+    summary: Confirm the authenticator — the session becomes active
+    description: |
+      A code from the app proves it holds the secret. The operator is enrolled,
+      ten single-use recovery codes are issued (shown once), and the session
+      becomes `active` under a **new token** — the password-stage token stops
+      working.
+    x-platform-permission: self
+    x-platform-stage: enrollment
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCodeRequest" }
+    responses:
+      "200":
+        description: Enrolled and signed in
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformTotpActivation" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+totpVerify:
+  post:
+    tags: [Auth]
+    operationId: platformTotpVerify
+    summary: Show the second factor — the session becomes active
+    description: |
+      A TOTP code (`code`) or, once each, a recovery code (`recovery_code`).
+      The session becomes `active` under a **new token**. A code is accepted
+      once: replaying it, even within its 30 seconds, is a 401 like a wrong
+      one. Every code presented counts against the operator's hourly budget.
+    x-platform-permission: self
+    x-platform-stage: challenge
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformVerifyRequest" }
+    responses:
+      "200":
+        description: Signed in
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformTotpVerification" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+totpReverify:
+  post:
+    tags: [Auth]
+    operationId: platformTotpReverify
+    summary: A fresh code, for the destructive routes
+    description: |
+      Routes marked `x-platform-recent-totp` answer 403
+      `platform_recent_totp_required` once the session's last code is five
+      minutes old. A TOTP code here renews it; recovery codes are not accepted.
+    x-platform-permission: self
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCodeRequest" }
+    responses:
+      "200":
+        description: The session, with `totp_verified_at` now
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSessionEnvelope" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+recoveryRegenerate:
+  post:
+    tags: [Auth]
+    operationId: platformRegenerateRecoveryCodes
+    summary: A new recovery sheet
+    description: |
+      Ten new single-use codes, shown once; every earlier code stops working.
+      Wants a recent code: a stolen session must not be able to mint itself a
+      lasting second factor.
+    x-platform-permission: self
+    x-platform-recent-totp: true
+    responses:
+      "200":
+        description: The new sheet
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformRecoveryCodes" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+me:
+  get:
+    tags: [Auth]
+    operationId: getPlatformMe
+    summary: The signed-in operator, their role and permissions
+    description: |
+      What the admin SPA builds its menu from (`permissions`), and the session
+      clocks it shows. A `password`-stage session gets 403
+      `platform_totp_required` with `details.next`, which is how a reloaded
+      tab learns to show the code screen.
+    x-platform-permission: self
+    responses:
+      "200":
+        description: The operator
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformMe" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+sessions:
+  get:
+    tags: [Auth]
+    operationId: listPlatformSessions
+    summary: This operator's live sessions
+    x-platform-permission: self
+    responses:
+      "200":
+        description: Newest first; `current` marks the caller's
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSessionList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  delete:
+    tags: [Auth]
+    operationId: endOtherPlatformSessions
+    summary: End every other session of this operator
+    x-platform-permission: self
+    responses:
+      "200":
+        description: How many ended
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformEndedCount" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+logout:
+  post:
+    tags: [Auth]
+    operationId: platformLogout
+    summary: End this session
+    description: Reachable from either stage. The token stops working at once.
+    x-platform-permission: self
+    x-platform-stage: any
+    responses:
+      "204":
+        description: Signed out
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+
+inviteAccept:
+  post:
+    tags: [Auth]
+    operationId: acceptPlatformInvite
+    summary: Accept an operator invitation
+    description: |
+      The token from the invitation mail's link (its fragment) and a password
+      of at least 12 characters. The invited address becomes an operator with
+      the invited role and gets a `password`-stage session whose `next` is
+      `totp_enroll` — never an active one: the authenticator comes before
+      anything else. One 401 for an unknown, spent or expired invitation; 409
+      `account_exists` if the address became an operator meanwhile. Counts
+      against the same per-address budget as `login`.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformInviteAcceptRequest" }
+    responses:
+      "200":
+        description: Accepted; the authenticator is owed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSignIn" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

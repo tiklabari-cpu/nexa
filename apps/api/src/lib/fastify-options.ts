@@ -19,7 +19,7 @@ import { hostname } from 'node:os';
 import { LogController, type FastifyServerOptions } from 'fastify';
 import { isAcceptableRequestId, LOG_KEYS } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
-import { logSafeUrl, PROVIDER_SECRET_LOG_PATHS } from './log-redact.js';
+import { logSafeUrl, PLATFORM_SECRET_LOG_PATHS, PROVIDER_SECRET_LOG_PATHS } from './log-redact.js';
 import { trustProxyFor } from './trust-proxy.js';
 
 export interface BaseFastifyOptionsInput {
@@ -73,6 +73,9 @@ export function baseFastifyOptions({
           // the configuration or the request that holds them. The carriers
           // themselves never do. One list, in `lib/log-redact.ts` (tm 255.9).
           ...PROVIDER_SECRET_LOG_PATHS,
+          // The operator sign-in (tm 389.4): codes, recovery sheets, TOTP
+          // secrets and invitation links, in a body or a logged result.
+          ...PLATFORM_SECRET_LOG_PATHS,
           // The request line. This API puts personal data in query strings —
           // the customer search takes an address — so the URL is where PII
           // reaches the log first, and it is not covered by any secret path.

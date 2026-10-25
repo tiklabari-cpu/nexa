@@ -407,6 +407,49 @@ const PLATFORM_TRACKED = [
       'version + region for the admin SPA\'s permanent "PLATFORM · <region>" strip; ' +
       'apps/admin does not exist until 389.6 builds it.',
   },
+  // Operator sign-in (tm 389.4): the admin SPA's `features/auth` — login →
+  // enroll/verify → recovery — and the shell's `/auth/me`, all built by 389.6.
+  ...[
+    'POST /auth/login',
+    'POST /auth/totp/enroll',
+    'POST /auth/totp/activate',
+    'POST /auth/totp/verify',
+    'POST /auth/totp/reverify',
+    'POST /auth/recovery/regenerate',
+    'GET /auth/me',
+    'GET /auth/sessions',
+    'DELETE /auth/sessions',
+    'POST /auth/logout',
+    'POST /auth/invite/accept',
+  ].map((op) => ({
+    op,
+    owner: 'tm 389.6',
+    reason:
+      'the operator sign-in (tm 389.4) — apps/admin features/auth (login, TOTP enrol/verify, ' +
+      'recovery codes, invitation accept) and the shell reading /auth/me; apps/admin does not ' +
+      'exist until 389.6 builds it.',
+  })),
+  // Operator management (tm 389.4): the shell's Admins page. 389.6 builds the
+  // menu entry as an empty page; its content (list, invite, role, disable,
+  // reset) is named by no later subtask yet — HANDOFF tm 389.4 open item.
+  ...[
+    'GET /admins',
+    'GET /admins/invites',
+    'POST /admins/invites',
+    'POST /admins/invites/{inviteId}/revoke',
+    'GET /admins/{adminId}',
+    'POST /admins/{adminId}/role',
+    'POST /admins/{adminId}/disable',
+    'POST /admins/{adminId}/enable',
+    'POST /admins/{adminId}/reset-two-factor',
+    'POST /admins/{adminId}/revoke-sessions',
+  ].map((op) => ({
+    op,
+    owner: 'tm 389.6',
+    reason:
+      'operator management (tm 389.4) — the Admins page of the admin SPA, whose shell 389.6 ' +
+      'builds; apps/admin does not exist yet.',
+  })),
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

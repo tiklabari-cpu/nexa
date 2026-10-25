@@ -104,6 +104,18 @@ export const ERROR_TYPES = [
   'not_allowed',
   'not_found',
   'pending_requests_limit_reached',
+  // SiyahTuş additions — the root panel's operator sign-in (tm 389.4 ·
+  // FR-ADMIN-01/02/04). Served by the platform API only; listed here because
+  // there is one taxonomy. `platform_totp_required`: a session that has shown
+  // a password but no code yet (or an operator with no authenticator yet)
+  // asked for a business route — `details.next` says whether to enrol or
+  // verify. `platform_recent_totp_required`: a destructive route wants a code
+  // younger than five minutes; re-verify and retry. Both 403 rather than 401:
+  // the session is valid, it is simply not enough for this route.
+  // `platform_last_superadmin`: the change would leave no active superadmin.
+  'platform_last_superadmin',
+  'platform_recent_totp_required',
+  'platform_totp_required',
   'request_timeout',
   // SiyahTuş addition — the sandbox workspace (FR-MOD-11.5 · 11.5-f). A licence may
   // hold at most one sandbox, and asking for a second is a conflict rather than
@@ -203,6 +215,9 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   // both surface as 404, never 403.
   not_found: 404,
   pending_requests_limit_reached: 429,
+  platform_last_superadmin: 409,
+  platform_recent_totp_required: 403,
+  platform_totp_required: 403,
   request_timeout: 408,
   sandbox_exists: 409,
   service_unavailable: 503,

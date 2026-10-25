@@ -18,6 +18,7 @@ import {
   joinVerifyEmailMail,
   passwordResetMail,
   permissionsChangedMail,
+  platformInvitationMail,
   scheduledReportMail,
   slaBreachMail,
   ssoDomainChallengeMail,
@@ -145,14 +146,23 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       reason: 'Shift reports',
       matrixUrl: `${APP}/app/settings/permissions`,
     }),
+    platformInvite: platformInvitationMail(
+      { locale, appUrl: 'https://admin.siyahkus.com' },
+      {
+        url: 'https://admin.siyahkus.com/invite#token=abc',
+        role: 'support',
+        inviterEmail: 'ops@siyahkus.com',
+        hours: 72,
+      },
+    ),
   };
 }
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all sixteen in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all seventeen in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(16);
+      expect(Object.keys(mails)).toHaveLength(17);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();
@@ -199,6 +209,13 @@ describe('every message, in both languages (tm 265)', () => {
     expect(en['reset']!.body).toContain('The link expires in one hour and works once.');
     expect(en['invite']!.body).toContain('The invitation expires in 7 days and works once.');
     expect(en['sso']!.body).toContain('7f3a9c21');
+    // An operator invitation names the role and the authenticator it requires (tm 389.4).
+    expect(en['platformInvite']!.body).toContain(
+      'The invitation expires in 72 hours and works once.',
+    );
+    expect(en['platformInvite']!.body).toContain('with the support role');
+    expect(en['platformInvite']!.body).toContain('authenticator app');
+    expect(everyMail('tr')['platformInvite']!.body).toContain('destek rolüyle');
     expect(everyMail('tr')['verify']!.body).toContain('Bağlantı 24 saat geçerlidir');
   });
 

@@ -223,6 +223,16 @@ export const envSchema = z.object({
   ADMIN_APP_URL: z.string().optional(),
   RATE_LIMIT_PLATFORM_PER_MIN: z.string().optional(),
   /**
+   * Operator sign-in (tm 389.4 · FR-ADMIN-02/03), on the same terms as the
+   * four above — plain strings here, validated by `config/platform-env.ts`:
+   * the addresses the platform API admits (comma list of IPs/CIDRs; empty is
+   * everyone, which production warns about), a session's absolute lifetime
+   * (seconds, 28800) and how long it may sit idle (seconds, 900).
+   */
+  PLATFORM_IP_ALLOWLIST: z.string().optional(),
+  PLATFORM_SESSION_TTL: z.string().optional(),
+  PLATFORM_IDLE_TTL: z.string().optional(),
+  /**
    * How many reverse-proxy hops in front of this process are trusted, and so
    * how far into `X-Forwarded-For` `request.ip` is allowed to read
    * (NFR-S9 · M-PROD-CFG-b). See `server.ts`, which hands it to Fastify.

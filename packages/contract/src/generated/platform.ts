@@ -94,10 +94,623 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sign in with a password — the first of two steps
+     * @description Answers with a `password`-stage session: it reaches the second-factor
+     *     routes and `logout`, nothing else. `next` says which: `totp_enroll` for
+     *     an operator with no authenticator yet (the bootstrap superadmin, an
+     *     accepted invitation, a reset factor), `totp_verify` otherwise.
+     *
+     *     One 401 for an unknown address, a wrong password and a disabled
+     *     operator. Ten failed attempts from one address within fifteen minutes
+     *     close this route for that address for the rest of the window, a correct
+     *     password included (429).
+     */
+    post: operations['platformLogin'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/totp/enroll': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start setting up the authenticator
+     * @description For a `password`-stage session of an operator with no authenticator.
+     *     Returns the secret and its `otpauth://` URI (shown once, as a QR code);
+     *     calling it again replaces a secret not yet confirmed. 409
+     *     `two_factor_already_enabled` once an authenticator is confirmed — a
+     *     superadmin resets it (`/admins/{adminId}/reset-two-factor`).
+     */
+    post: operations['platformTotpEnroll'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/totp/activate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm the authenticator — the session becomes active
+     * @description A code from the app proves it holds the secret. The operator is enrolled,
+     *     ten single-use recovery codes are issued (shown once), and the session
+     *     becomes `active` under a **new token** — the password-stage token stops
+     *     working.
+     */
+    post: operations['platformTotpActivate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/totp/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Show the second factor — the session becomes active
+     * @description A TOTP code (`code`) or, once each, a recovery code (`recovery_code`).
+     *     The session becomes `active` under a **new token**. A code is accepted
+     *     once: replaying it, even within its 30 seconds, is a 401 like a wrong
+     *     one. Every code presented counts against the operator's hourly budget.
+     */
+    post: operations['platformTotpVerify'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/totp/reverify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A fresh code, for the destructive routes
+     * @description Routes marked `x-platform-recent-totp` answer 403
+     *     `platform_recent_totp_required` once the session's last code is five
+     *     minutes old. A TOTP code here renews it; recovery codes are not accepted.
+     */
+    post: operations['platformTotpReverify'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/recovery/regenerate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A new recovery sheet
+     * @description Ten new single-use codes, shown once; every earlier code stops working.
+     *     Wants a recent code: a stolen session must not be able to mint itself a
+     *     lasting second factor.
+     */
+    post: operations['platformRegenerateRecoveryCodes'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The signed-in operator, their role and permissions
+     * @description What the admin SPA builds its menu from (`permissions`), and the session
+     *     clocks it shows. A `password`-stage session gets 403
+     *     `platform_totp_required` with `details.next`, which is how a reloaded
+     *     tab learns to show the code screen.
+     */
+    get: operations['getPlatformMe'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** This operator's live sessions */
+    get: operations['listPlatformSessions'];
+    put?: never;
+    post?: never;
+    /** End every other session of this operator */
+    delete: operations['endOtherPlatformSessions'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/logout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End this session
+     * @description Reachable from either stage. The token stops working at once.
+     */
+    post: operations['platformLogout'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/invite/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept an operator invitation
+     * @description The token from the invitation mail's link (its fragment) and a password
+     *     of at least 12 characters. The invited address becomes an operator with
+     *     the invited role and gets a `password`-stage session whose `next` is
+     *     `totp_enroll` — never an active one: the authenticator comes before
+     *     anything else. One 401 for an unknown, spent or expired invitation; 409
+     *     `account_exists` if the address became an operator meanwhile. Counts
+     *     against the same per-address budget as `login`.
+     */
+    post: operations['acceptPlatformInvite'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every operator, disabled ones included
+     * @description Not paged: operators are a handful of people. Operators are disabled,
+     *     never deleted, so every attribution keeps pointing at somebody.
+     */
+    get: operations['listPlatformAdmins'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/invites': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Pending invitations */
+    get: operations['listPlatformInvites'];
+    put?: never;
+    /**
+     * Invite an operator
+     * @description Mails a single-use link valid for 72 hours to the address; accepting it
+     *     asks for a password and then an authenticator. An earlier pending
+     *     invitation for the same address is withdrawn. 409 `account_exists` when
+     *     the address already belongs to an operator (enable them instead).
+     *     `accept_url` is returned only when the mail could not be sent, so the
+     *     link can be handed over another way.
+     */
+    post: operations['invitePlatformAdmin'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/invites/{inviteId}/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Withdraw a pending invitation */
+    post: operations['revokePlatformInvite'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/{adminId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One operator */
+    get: operations['getPlatformAdmin'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/{adminId}/role': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change an operator's role
+     * @description Takes effect on the operator's next request: their sessions end. 409
+     *     `platform_last_superadmin` when this would leave no active superadmin.
+     */
+    post: operations['setPlatformAdminRole'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/{adminId}/disable': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Disable an operator
+     * @description Their sessions end and sign-in is refused. 409
+     *     `platform_last_superadmin` for the last active superadmin.
+     */
+    post: operations['disablePlatformAdmin'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/{adminId}/enable': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Enable a disabled operator */
+    post: operations['enablePlatformAdmin'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/{adminId}/reset-two-factor': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Remove an operator's authenticator and recovery codes
+     * @description For a lost phone. Their sessions end; the next sign-in can only enroll
+     *     a new authenticator.
+     */
+    post: operations['resetPlatformAdminTwoFactor'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/admins/{adminId}/revoke-sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** End every session of an operator */
+    post: operations['revokePlatformAdminSessions'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * @description The operator roles (`PLATFORM_ROLES`, @siyahtus/types).
+     * @enum {string}
+     */
+    PlatformRole: 'superadmin' | 'support' | 'billing' | 'readonly';
+    /**
+     * @description A key of `PLATFORM_PERMISSIONS` (@siyahtus/types) — the matrix the
+     *     server enforces and the admin SPA hides its menu by.
+     * @enum {string}
+     */
+    PlatformPermission:
+      | 'dashboard.read'
+      | 'workspaces.read'
+      | 'accounts.read'
+      | 'billing.read'
+      | 'usage.read'
+      | 'settings.read'
+      | 'ai.read'
+      | 'operations.read'
+      | 'audit.read'
+      | 'security.read'
+      | 'admins.read'
+      | 'workspaces.support'
+      | 'workspaces.billing'
+      | 'workspaces.lifecycle'
+      | 'accounts.support'
+      | 'accounts.manage'
+      | 'billing.manage'
+      | 'usage.manage'
+      | 'settings.manage'
+      | 'ai.manage'
+      | 'operations.run'
+      | 'security.manage'
+      | 'support.impersonate'
+      | 'support.impersonate_full'
+      | 'admins.manage';
+    PlatformLoginRequest: {
+      /** Format: email */
+      email: string;
+      password: string;
+    };
+    PlatformCodeRequest: {
+      /** @description The six digits from the authenticator app; spaces and dashes are forgiven. */
+      code: string;
+    };
+    /** @description Exactly one of the two. */
+    PlatformVerifyRequest:
+      | {
+          code: string;
+        }
+      | {
+          /** @description One of the ten printed codes (`ABCDE-FGHJK`); each works once. */
+          recovery_code: string;
+        };
+    PlatformInviteAcceptRequest: {
+      /** @description From the invitation link's fragment (`#token=…`). */
+      token: string;
+      password: string;
+    };
+    PlatformReasonRequest: {
+      /** @description Why — recorded in the platform audit chain (tm 389.5). */
+      reason: string;
+    };
+    PlatformRoleChangeRequest: {
+      role: components['schemas']['PlatformRole'];
+      reason: string;
+    };
+    PlatformInviteRequest: {
+      /** Format: email */
+      email: string;
+      role: components['schemas']['PlatformRole'];
+      reason: string;
+    };
+    /** @description A session's clocks. Never its token. */
+    PlatformSession: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description `password` until the second factor is shown, then `active`.
+       * @enum {string}
+       */
+      stage: 'password' | 'active';
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description The absolute end (`PLATFORM_SESSION_TTL` after sign-in, 8 h).
+       */
+      expires_at: string;
+      /**
+       * Format: date-time
+       * @description The session ends `idle_timeout_s` after this without a request.
+       */
+      last_seen_at: string;
+      /** Format: date-time */
+      totp_verified_at: string | null;
+      idle_timeout_s: number;
+      /**
+       * Format: date-time
+       * @description Until when `x-platform-recent-totp` routes accept this session.
+       */
+      recent_totp_until: string | null;
+    };
+    PlatformSessionEnvelope: {
+      session: components['schemas']['PlatformSession'];
+    };
+    PlatformSignIn: {
+      /** @description The opaque session token, shown once. Send it as `Authorization: Bearer <token>`. */
+      token: string;
+      /** @enum {string} */
+      next: 'totp_enroll' | 'totp_verify';
+      session: components['schemas']['PlatformSession'];
+    };
+    PlatformTotpEnrollment: {
+      /** @description Base32 */
+      secret: string;
+      /** @description The `otpauth://totp/…` URI to show as a QR code. */
+      otpauth_uri: string;
+    };
+    PlatformTotpActivation: {
+      /** @description The new token; the password-stage one has stopped working. */
+      token: string;
+      session: components['schemas']['PlatformSession'];
+      /** @description Ten single-use codes, shown this once. */
+      recovery_codes: string[];
+    };
+    PlatformTotpVerification: {
+      /** @description The new token; the password-stage one has stopped working. */
+      token: string;
+      session: components['schemas']['PlatformSession'];
+      /** @enum {string} */
+      method: 'totp' | 'recovery_code';
+      recovery_codes_remaining: number;
+    };
+    PlatformRecoveryCodes: {
+      recovery_codes: string[];
+    };
+    PlatformMe: {
+      admin: {
+        /** Format: uuid */
+        id: string;
+        email: string;
+        role: components['schemas']['PlatformRole'];
+        /** Format: date-time */
+        totp_enrolled_at: string | null;
+        /** Format: date-time */
+        created_at: string;
+      };
+      permissions: components['schemas']['PlatformPermission'][];
+      session: components['schemas']['PlatformSession'];
+      recovery_codes_remaining: number;
+    };
+    PlatformSessionList: {
+      data: (components['schemas']['PlatformSession'] & {
+        ip: string | null;
+        user_agent: string | null;
+        current: boolean;
+      })[];
+    };
+    PlatformEndedCount: {
+      /** @description How many sessions ended. */
+      ended: number;
+    };
+    PlatformAdmin: {
+      /** Format: uuid */
+      id: string;
+      email: string;
+      role: components['schemas']['PlatformRole'];
+      totp_enrolled: boolean;
+      /** Format: date-time */
+      totp_enrolled_at: string | null;
+      /** Format: date-time */
+      disabled_at: string | null;
+      /** Format: uuid */
+      invited_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      active_sessions: number;
+      /** Format: date-time */
+      last_seen_at: string | null;
+    };
+    PlatformAdminList: {
+      data: components['schemas']['PlatformAdmin'][];
+    };
+    PlatformInvite: {
+      /** Format: uuid */
+      id: string;
+      email: string;
+      role: components['schemas']['PlatformRole'];
+      /** Format: uuid */
+      invited_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      expires_at: string;
+    };
+    PlatformInviteList: {
+      data: components['schemas']['PlatformInvite'][];
+    };
+    PlatformInviteCreated: {
+      invite: components['schemas']['PlatformInvite'];
+      /** @enum {string} */
+      mail: 'sent' | 'failed';
+      /** @description Only when `mail` is `failed` — hand the link over another way. */
+      accept_url?: string;
+    };
     /**
      * @description The narrow body — never version, latencies or provider names, which
      *     would be infrastructure detail for an anonymous caller. The detailed
@@ -137,6 +750,65 @@ export interface components {
     };
   };
   responses: {
+    /** @description Malformed body, or a value failing validation (`validation`). */
+    BadRequest: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
+     * @description No session, an unknown token, or a session past its absolute lifetime or
+     *     its idle timeout (`authentication`) — sign in again. Also a wrong,
+     *     expired or replayed code.
+     */
+    Unauthorized: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
+     * @description `platform_totp_required` — the session has shown a password but no code
+     *     (`details.next`: `totp_enroll` | `totp_verify`); `authorization` — the
+     *     operator's role lacks `details.permission`; `platform_recent_totp_required`
+     *     — re-verify (`/auth/totp/reverify`) and retry; `not_allowed` — the
+     *     address is outside `PLATFORM_IP_ALLOWLIST` (`details.reason`
+     *     `ip_not_allowed`) or the session is already verified.
+     */
+    Forbidden: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /** @description No such resource (`not_found`). */
+    NotFound: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
+     * @description `platform_last_superadmin`, `account_exists` or
+     *     `two_factor_already_enabled` — the request was fine, the state refused it.
+     */
+    Conflict: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
     /**
      * @description The per-address platform bucket is spent (`RATE_LIMIT_PLATFORM_PER_MIN`,
      *     Redis `rl:platform:*`). `Retry-After` says when to try again.
@@ -151,7 +823,10 @@ export interface components {
       };
     };
   };
-  parameters: never;
+  parameters: {
+    AdminId: string;
+    InviteId: string;
+  };
   requestBodies: never;
   headers: never;
   pathItems: never;
@@ -255,6 +930,555 @@ export interface operations {
         };
       };
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  platformLogin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformLoginRequest'];
+      };
+    };
+    responses: {
+      /** @description Password accepted; the second factor is owed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSignIn'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  platformTotpEnroll: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The secret to import */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTotpEnrollment'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  platformTotpActivate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformCodeRequest'];
+      };
+    };
+    responses: {
+      /** @description Enrolled and signed in */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTotpActivation'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  platformTotpVerify: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformVerifyRequest'];
+      };
+    };
+    responses: {
+      /** @description Signed in */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTotpVerification'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  platformTotpReverify: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformCodeRequest'];
+      };
+    };
+    responses: {
+      /** @description The session, with `totp_verified_at` now */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSessionEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  platformRegenerateRecoveryCodes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The new sheet */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformRecoveryCodes'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformMe: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The operator */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformMe'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Newest first; `current` marks the caller's */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSessionList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  endOtherPlatformSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description How many ended */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformEndedCount'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  platformLogout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Signed out */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+    };
+  };
+  acceptPlatformInvite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformInviteAcceptRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted; the authenticator is owed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSignIn'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listPlatformAdmins: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Oldest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAdminList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformInvites: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Newest first; accepted, expired and withdrawn ones are not listed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformInviteList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  invitePlatformAdmin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformInviteRequest'];
+      };
+    };
+    responses: {
+      /** @description The invitation */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformInviteCreated'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  revokePlatformInvite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        inviteId: components['parameters']['InviteId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Withdrawn; its link no longer works */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformAdmin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        adminId: components['parameters']['AdminId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The operator */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAdmin'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  setPlatformAdminRole: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        adminId: components['parameters']['AdminId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformRoleChangeRequest'];
+      };
+    };
+    responses: {
+      /** @description The operator, after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAdmin'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  disablePlatformAdmin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        adminId: components['parameters']['AdminId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The operator, disabled */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAdmin'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  enablePlatformAdmin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        adminId: components['parameters']['AdminId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The operator, enabled */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAdmin'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  resetPlatformAdminTwoFactor: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        adminId: components['parameters']['AdminId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The operator, with no authenticator */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAdmin'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  revokePlatformAdminSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        adminId: components['parameters']['AdminId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description How many ended */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformEndedCount'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
     };
   };
 }

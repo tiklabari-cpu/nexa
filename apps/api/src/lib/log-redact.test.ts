@@ -15,6 +15,7 @@ import {
   maskPii,
   PROVIDER_SECRET_ENV_KEYS,
   APPS_SECRET_LOG_PATHS,
+  PLATFORM_SECRET_LOG_PATHS,
   PROVIDER_SECRET_LOG_PATHS,
   requestPath,
 } from './log-redact.js';
@@ -227,5 +228,52 @@ describe('Apps credentials (tm 263)', () => {
     for (const value of [KEY, TOKEN, CIPHER_KEY]) expect(written).not.toContain(value);
     // The non-secret half stays readable.
     expect(written).toContain('acme');
+  });
+});
+
+/**
+ * The operator sign-in's secrets (tm 389.4): no platform route logs them, so
+ * this pins the net — a debugging line that dumps a body or a result still
+ * writes no password, code, recovery sheet, TOTP secret or invitation link,
+ * while the error code and the mail outcome a tenant line carries survive.
+ */
+describe('platform sign-in secrets', () => {
+  const PASSWORD = 'operator-password-never-logged';
+  const CODE = '493021';
+  const RECOVERY = 'ABCDE-FGHJK';
+  const SECRET_URI = 'otpauth://totp/SiyahTus%20Platform:ops?secret=JBSWY3DPEHPK3PXP';
+  const LINK = 'https://admin.example.test/invite#token=never-logged-invite';
+
+  it('censors them in a request body and in a result object', () => {
+    const lines: string[] = [];
+    const logger = pino(
+      {
+        redact: {
+          paths: [
+            'req.body.password',
+            'req.body.token',
+            ...PROVIDER_SECRET_LOG_PATHS,
+            ...PLATFORM_SECRET_LOG_PATHS,
+          ],
+          censor: '[redacted]',
+        },
+      },
+      { write: (line: string) => lines.push(line) },
+    );
+
+    logger.info({ req: { body: { email: 'ops@x.test', password: PASSWORD } } }, 'login body');
+    logger.info({ req: { body: { code: CODE } } }, 'verify body');
+    logger.info({ req: { body: { recovery_code: RECOVERY } } }, 'recovery body');
+    logger.info({ result: { recovery_codes: [RECOVERY], otpauth_uri: SECRET_URI } }, 'result');
+    logger.info({ invite: { accept_url: LINK } }, 'created');
+    logger.info({ err: { code: 'P2002' }, mail: { code: 'unconfirmed' } }, 'tenant line');
+
+    const written = lines.join('\n');
+    for (const value of [PASSWORD, CODE, RECOVERY, SECRET_URI, LINK]) {
+      expect(written).not.toContain(value);
+    }
+    expect(written).toContain('ops@x.test');
+    expect(written).toContain('P2002');
+    expect(written).toContain('unconfirmed');
   });
 });

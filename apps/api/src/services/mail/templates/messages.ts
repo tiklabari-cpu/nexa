@@ -419,6 +419,81 @@ export function twoFactorEnabledMail(
   });
 }
 
+// --- Platform (root panel) mail -----------------------------------------------------
+
+/** How an operator role reads in a sentence. */
+function platformRoleName(locale: MailLocale, role: string): string {
+  const names: Record<string, { en: string; tr: string }> = {
+    superadmin: { en: 'superadmin', tr: 'süper yönetici' },
+    support: { en: 'support', tr: 'destek' },
+    billing: { en: 'billing', tr: 'faturalama' },
+    readonly: { en: 'read-only', tr: 'salt okunur' },
+  };
+  const name = names[role];
+  return name ? name[locale] : role;
+}
+
+/**
+ * An invitation to operate the deployment's root panel (tm 389.4 · FR-ADMIN-03)
+ * — not a workspace invitation: the reader becomes an operator of every
+ * workspace's platform, so the mail says what the role is and that an
+ * authenticator app is required before anything opens.
+ */
+export function platformInvitationMail(
+  ctx: MailContext,
+  input: { url: string; role: string; inviterEmail: string | null; hours: number },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const ttl = hoursText(ctx.locale, input.hours);
+  const role = platformRoleName(ctx.locale, input.role);
+  const who = input.inviterEmail?.trim() || null;
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: 'SiyahTuş Platform',
+    subject: t
+      ? 'SiyahTuş platform yönetimine davet edildiniz'
+      : 'You have been invited to operate the SiyahTuş platform',
+    preheader: t
+      ? 'Bir şifre belirleyin ve doğrulama uygulamanızı bağlayın.'
+      : 'Choose a password and connect your authenticator app.',
+    icon: ICON.key,
+    heading: t ? 'Platform yönetimine katılın' : 'Join the platform team',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: t
+          ? `${who ?? 'Bir süper yönetici'}, sizi bu SiyahTuş kurulumunun yönetim paneline ${role} rolüyle davet etti.`
+          : `${who ?? 'A superadmin'} has invited you to this SiyahTuş deployment's back office with the ${role} role.`,
+      },
+      {
+        type: 'paragraph',
+        text: t
+          ? 'Daveti kabul ederken bir şifre belirlersiniz; ardından doğrulama uygulamanızı (Google Authenticator, 1Password vb.) bağlamadan hiçbir sayfa açılmaz.'
+          : 'Accepting it asks you for a password; nothing opens until you have also connected an authenticator app (Google Authenticator, 1Password and the like).',
+      },
+      {
+        type: 'button',
+        label: t ? 'Daveti kabul et' : 'Accept invitation',
+        url: input.url,
+        fallback: fallback(ctx),
+      },
+      {
+        type: 'note',
+        text: t
+          ? `Davet ${ttl} geçerlidir ve yalnızca bir kez kullanılabilir. Beklemediğiniz bir davetse bu e-postayı yok sayın ve kurulumun yöneticisine haber verin.`
+          : `The invitation expires in ${ttl} and works once. If you were not expecting it, ignore this email and tell whoever runs this deployment.`,
+      },
+    ],
+    footer: [
+      t
+        ? 'Bu e-postayı, bu kurulumun bir süper yöneticisi sizi davet ettiği için aldınız.'
+        : 'You received this email because a superadmin of this deployment invited you.',
+      signature(ctx),
+    ],
+  });
+}
+
 // --- Workspace mail ---------------------------------------------------------------
 
 export function ssoDomainChallengeMail(

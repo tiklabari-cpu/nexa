@@ -57,6 +57,11 @@ export const common: Messages = {
   'common.errors.not_found': 'We could not find that.',
   'common.errors.pending_requests_limit_reached':
     'Too many requests are already waiting — try again shortly.',
+  'common.errors.platform_last_superadmin':
+    'This would leave the platform without an active superadmin.',
+  'common.errors.platform_recent_totp_required':
+    'Enter a fresh authenticator code to confirm this action.',
+  'common.errors.platform_totp_required': 'Finish signing in with your authenticator code first.',
   'common.errors.request_timeout': 'That took too long — try again.',
   'common.errors.sandbox_exists': 'This workspace already has a sandbox.',
   'common.errors.service_unavailable':

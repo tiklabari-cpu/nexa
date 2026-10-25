@@ -44,6 +44,7 @@ export const billing: Messages = {
   'billing.plan.statusValue.active': 'Etkin',
   'billing.plan.statusValue.past_due': 'Gecikmiş',
   'billing.plan.statusValue.canceled': 'İptal edildi',
+  'billing.plan.statusValue.suspended': 'Askıya alındı',
   'billing.provider.mock': 'Demo faturalama',
 
   // Manage plan — ManagePlan

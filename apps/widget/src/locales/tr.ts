@@ -10,6 +10,7 @@ export const tr: Record<string, string> = {
   'status.offline': 'Şu anda kimse müsait değil — mesaj bırakın, size döneceğiz.',
   'connection.lost': 'Bağlantı koptu, yeniden deneniyor…',
   'error.connect': 'Sohbet şu anda kullanılamıyor. Lütfen birazdan tekrar deneyin.',
+  'error.suspended': 'Sohbet geçici olarak hizmet dışı.',
   'error.upload': 'Bu dosya eklenemedi.',
   'error.send': 'Mesaj gönderilemedi. Bağlantınızı kontrol edip tekrar deneyin.',
   'error.rejected': 'Bu mesaj gönderilemedi. Lütfen farklı bir şekilde yazmayı deneyin.',

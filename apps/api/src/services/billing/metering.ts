@@ -8,7 +8,7 @@
  * wrong one to discover was drifting. This module only records the count.
  */
 import { Prisma } from '@prisma/client';
-import { AI_RESOLUTION_PACK_SIZE } from '@siyahtus/types';
+import { AI_RESOLUTION_PACK_SIZE, isLicenseClosed } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 export type LicenseAccess = 'active' | 'trialing' | 'read_only';
@@ -230,7 +230,7 @@ export async function trialState(tx: TenantClient, tenant: TenantContext): Promi
     access = endsAt !== null && endsAt.getTime() <= Date.now() ? 'read_only' : 'trialing';
   } else if (license.status === 'read_only' || license.status === 'past_due') {
     access = 'read_only';
-  } else if (license.status === 'canceled') {
+  } else if (isLicenseClosed(license.status)) {
     access = 'read_only';
   }
 

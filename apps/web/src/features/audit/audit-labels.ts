@@ -54,7 +54,7 @@ export interface CellText {
 
 export function actorCell(
   t: TFunction,
-  actorType: 'agent' | 'bot' | 'customer' | 'system',
+  actorType: 'agent' | 'bot' | 'customer' | 'system' | 'platform',
   actorId: string | null,
   roster: Roster,
 ): CellText {

@@ -26,6 +26,25 @@ export interface AgentPrincipal {
   capabilities: Readonly<Record<CapabilityKey, CapabilityValue>>;
   tokenId: string;
   tokenKind: 'pat' | 'oauth';
+  /**
+   * Present when SiyahTuş staff are signed in as this member from the root
+   * panel (support impersonation, design §G). The type is tm 389.2's; the
+   * token kind that carries it is refused by `token-service.ts` until the
+   * impersonation gate (389.15) sets it and enforces `mode`.
+   */
+  impersonation?: ImpersonationContext;
+}
+
+/** Which platform session a request is impersonating under, and on what terms. */
+export interface ImpersonationContext {
+  /** `platform_impersonation_sessions.id`. */
+  sessionId: string;
+  /** `read_only` refuses every write; `full` acts as the member (TOTP-gated at the platform). */
+  mode: 'read_only' | 'full';
+  /** When the session (and with it the token) stops working. */
+  endsAt: Date;
+  /** The operator, `platform_admins.id` — the audit entry's `actor_id`. */
+  adminId: string;
 }
 
 export interface BotPrincipal {

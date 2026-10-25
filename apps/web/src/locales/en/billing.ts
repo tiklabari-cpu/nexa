@@ -49,6 +49,7 @@ export const billing: Messages = {
   'billing.plan.statusValue.active': 'Active',
   'billing.plan.statusValue.past_due': 'Past due',
   'billing.plan.statusValue.canceled': 'Canceled',
+  'billing.plan.statusValue.suspended': 'Suspended',
   'billing.provider.mock': 'Demo billing',
 
   // Manage plan — ManagePlan

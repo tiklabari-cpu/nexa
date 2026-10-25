@@ -77,6 +77,8 @@ export interface AuditExportRecord {
   action: string;
   actor_id: string | null;
   actor_type: string;
+  /** `platform` entries written during an impersonation only (tm 389.2). */
+  on_behalf_of?: string;
   target: string | null;
   metadata: unknown;
   ip: string | null;
@@ -306,6 +308,7 @@ type AuditRow = {
   action: string;
   actorId: string | null;
   actorType: string;
+  onBehalfOf?: string | null;
   target: string | null;
   metadata: unknown;
   ip: string | null;
@@ -336,6 +339,8 @@ export function toRecord(row: AuditRow): AuditExportRecord {
     action: row.action,
     actor_id: row.actorId,
     actor_type: row.actorType,
+    // Only when set, so every other record keeps the bytes it always had.
+    ...(row.onBehalfOf != null ? { on_behalf_of: row.onBehalfOf } : {}),
     target: row.target,
     metadata: row.metadata,
     ip: row.ip,

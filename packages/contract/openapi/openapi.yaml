@@ -8379,7 +8379,16 @@ components:
           description: The acting account/bot/customer id, or null when unknown.
         actor_type:
           type: string
-          enum: [agent, bot, customer, system]
+          enum: [agent, bot, customer, system, platform]
+          description: >-
+            `platform` is SiyahTuş staff acting from the root panel: `actor_id` is
+            the operator, never a member of this workspace.
+        on_behalf_of:
+          type: string
+          description: >-
+            Present only on `platform` entries written while an operator was
+            signed in as a member (support impersonation): that member's account
+            id. Absent everywhere else.
         target:
           type: string
           nullable: true
@@ -8449,7 +8458,16 @@ components:
           description: The acting account/bot/customer id, or null when unknown.
         actor_type:
           type: string
-          enum: [agent, bot, customer, system]
+          enum: [agent, bot, customer, system, platform]
+          description: >-
+            `platform` is SiyahTuş staff acting from the root panel: `actor_id` is
+            the operator, never a member of this workspace.
+        on_behalf_of:
+          type: string
+          description: >-
+            Present only on `platform` entries written while an operator was
+            signed in as a member (support impersonation): that member's account
+            id. Absent everywhere else.
         target:
           type: string
           nullable: true
@@ -10726,7 +10744,7 @@ components:
         billing_cycle: { type: string, enum: [monthly, annual] }
         status:
           type: string
-          enum: [trialing, active, past_due, read_only, canceled]
+          enum: [trialing, active, past_due, read_only, canceled, suspended]
         access:
           type: string
           enum: [trialing, active, read_only]

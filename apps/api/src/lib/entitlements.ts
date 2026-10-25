@@ -29,7 +29,7 @@
  * gate exists to close. It costs one indexed lookup, inside a transaction the
  * caller already has open.
  */
-import type { Entitlement, EntitlementMap } from '@siyahtus/types';
+import { isEntitlement, type Entitlement, type EntitlementMap } from '@siyahtus/types';
 import { entitlementsForPlan } from '../services/billing/subscription-service.js';
 import { ApiError } from './api-error.js';
 import type { TenantClient, TenantContext } from './tenant.js';
@@ -62,6 +62,43 @@ const ENTITLEMENT_LABELS: Record<Entitlement, string> = {
   siem_export: 'SIEM export',
 };
 
+/** A platform override that is in force (`license_overrides`, tm 389.2). */
+export interface LiveLicenseOverride {
+  entitlements: Partial<EntitlementMap>;
+  seatCeiling: number | null;
+}
+
+/**
+ * The platform's override of this workspace's plan, or `null` when there is
+ * none or it has expired — an override past `expires_at` reads exactly as no
+ * row. The tenant role can read the row and nothing more (the table grants it
+ * SELECT only), so what is here was put here by the platform.
+ *
+ * Keys outside `ENTITLEMENTS` and non-boolean values are dropped rather than
+ * trusted: the table's CHECK refuses them, and this is the second lock on the
+ * same door, not a second vocabulary.
+ */
+export async function readLicenseOverride(
+  tx: TenantClient,
+  tenant: Pick<TenantContext, 'licenseId'>,
+): Promise<LiveLicenseOverride | null> {
+  const row = await tx.licenseOverride.findUnique({
+    where: { licenseId: tenant.licenseId },
+    select: { entitlements: true, seatCeiling: true, expiresAt: true },
+  });
+  if (!row) return null;
+  if (row.expiresAt !== null && row.expiresAt.getTime() <= Date.now()) return null;
+
+  const entitlements: Partial<EntitlementMap> = {};
+  const stored = row.entitlements;
+  if (stored !== null && typeof stored === 'object' && !Array.isArray(stored)) {
+    for (const [key, value] of Object.entries(stored)) {
+      if (isEntitlement(key) && typeof value === 'boolean') entitlements[key] = value;
+    }
+  }
+  return { entitlements, seatCeiling: row.seatCeiling };
+}
+
 /**
  * This workspace's plan and what it unlocks.
  *
@@ -73,7 +110,7 @@ const ENTITLEMENT_LABELS: Record<Entitlement, string> = {
  */
 export async function readEntitlements(
   tx: TenantClient,
-  tenant: TenantContext,
+  tenant: Pick<TenantContext, 'licenseId'>,
 ): Promise<{ plan: string; entitlements: EntitlementMap }> {
   const subscription = await tx.subscription.findFirst({
     where: { licenseId: tenant.licenseId },
@@ -82,7 +119,23 @@ export async function readEntitlements(
   });
 
   const plan = subscription?.plan ?? TRIAL_PLAN;
-  return { plan, entitlements: entitlementsForPlan(plan) };
+  // The platform's override, where one is in force (tm 389.2): a key it names
+  // replaces the plan's value in both directions — the platform may grant a
+  // capability the plan lacks or withdraw one it includes (§D218). Keys it
+  // does not name keep the plan's answer.
+  const override = await readLicenseOverride(tx, tenant);
+  return { plan, entitlements: { ...entitlementsForPlan(plan), ...override?.entitlements } };
+}
+
+/**
+ * The seat ceiling this workspace is held to: the platform's override when one
+ * is in force (tm 389.2), otherwise {@link SEAT_CEILING}. Replaces it both ways,
+ * like the entitlement override — a platform may lower the rail as well as
+ * lift it.
+ */
+export async function seatCeilingFor(tx: TenantClient, tenant: TenantContext): Promise<number> {
+  const override = await readLicenseOverride(tx, tenant);
+  return override?.seatCeiling ?? SEAT_CEILING;
 }
 
 export async function hasEntitlement(
@@ -208,12 +261,15 @@ export const SEAT_CEILING = 200;
  * outcome this exists to prevent, just relabelled as a rejected response
  * (§D116 LOW (5)).
  */
-export function assertScimSeatCeiling(nextActiveHeadcount: number): void {
-  if (nextActiveHeadcount <= SEAT_CEILING) return;
+export function assertScimSeatCeiling(
+  nextActiveHeadcount: number,
+  ceiling: number = SEAT_CEILING,
+): void {
+  if (nextActiveHeadcount <= ceiling) return;
   throw new ApiError(
     'limit_reached',
     `Directory provisioning would raise this workspace to ${nextActiveHeadcount} active ` +
-      `members, above the ${SEAT_CEILING}-seat safety ceiling on unattended growth. ` +
+      `members, above the ${ceiling}-seat safety ceiling on unattended growth. ` +
       'An administrator must confirm the new seat count at Settings → Billing before ' +
       'provisioning more active members over SCIM.',
   );
@@ -243,12 +299,15 @@ export function assertScimSeatCeiling(nextActiveHeadcount: number): void {
  * already translate it. SCIM keeps the generic type because what it names is a
  * rail on a connector, not a seat a person was going to sit in.
  */
-export function assertInviteSeatCeiling(nextCommitment: number): void {
-  if (nextCommitment <= SEAT_CEILING) return;
+export function assertInviteSeatCeiling(
+  nextCommitment: number,
+  ceiling: number = SEAT_CEILING,
+): void {
+  if (nextCommitment <= ceiling) return;
   throw new ApiError(
     'users_limit_reached',
     `These invitations would commit this workspace to ${nextCommitment} seats — its members ` +
-      `plus everyone still holding an invitation — above the ${SEAT_CEILING}-seat ceiling. ` +
+      `plus everyone still holding an invitation — above the ${ceiling}-seat ceiling. ` +
       'Revoke invitations that are no longer wanted, or talk to sales about a plan for a ' +
       'team this size.',
   );

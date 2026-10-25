@@ -22,7 +22,7 @@ import {
   type TenantClient,
   type TenantContext,
 } from '../../lib/tenant.js';
-import { assertInviteSeatCeiling } from '../../lib/entitlements.js';
+import { assertInviteSeatCeiling, seatCeilingFor } from '../../lib/entitlements.js';
 import { ensureSeatsCoverHeadcount } from '../billing/subscription-service.js';
 import { secondsUntilUtcMidnight } from '../ai/ai-daily-budget.js';
 import { hashPassword, verifyPassword } from '../../lib/crypto.js';
@@ -516,7 +516,7 @@ export class LifecycleService {
     ]);
     const alreadyLive = new Set(live.map((row) => row.email.toLowerCase()));
     const added = unique.filter((email) => !alreadyLive.has(email)).length;
-    assertInviteSeatCeiling(headcount + outstanding + added);
+    assertInviteSeatCeiling(headcount + outstanding + added, await seatCeilingFor(tx, tenant));
 
     await assertInviteDailyCap(tx, tenant.licenseId, unique.length);
 

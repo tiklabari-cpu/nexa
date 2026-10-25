@@ -558,7 +558,7 @@ export const AUDIT_ACTIONS = [
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /** Mirrors the `audit_log_actor_type_check` constraint in the schema. */
-export type AuditActorType = 'agent' | 'bot' | 'customer' | 'system';
+export type AuditActorType = 'agent' | 'bot' | 'customer' | 'system' | 'platform';
 
 /**
  * Who acted and from where. Built once per request (see `request.auditContext`)
@@ -582,6 +582,12 @@ export interface AuditContext {
   /** The acting account/bot/customer id, or null when the actor is unknown. */
   actorId?: string | null;
   actorType?: AuditActorType;
+  /**
+   * The member a `platform` actor was signed in as (impersonation, tm 389.2 ·
+   * 389.15) — their account id. Refused by the schema on any other actor type
+   * (`audit_log_on_behalf_of_check`).
+   */
+  onBehalfOf?: string | null;
   /** Correlates the entry with the request log line and the `X-Request-Id`. */
   requestId?: string | null;
   ip?: string | null;
@@ -781,6 +787,7 @@ export async function writeAuditEntry(
     action: entry.action,
     actorId: ctx.actorId ?? null,
     actorType: ctx.actorType ?? 'agent',
+    onBehalfOf: ctx.onBehalfOf ?? null,
     target: entry.target ?? null,
     metadata,
     ip: ctx.ip ?? null,
@@ -794,6 +801,7 @@ export async function writeAuditEntry(
       licenseId: ctx.licenseId,
       actorId: ctx.actorId ?? null,
       actorType: ctx.actorType ?? 'agent',
+      onBehalfOf: ctx.onBehalfOf ?? null,
       action: entry.action,
       target: entry.target ?? null,
       // Values are JSON scalars/arrays by construction; the cast bridges the

@@ -98,12 +98,12 @@ import {
 } from '../services/staffing/staffing-forecast.js';
 import type { Env } from '../config/env.js';
 import { withTenantRead, type TenantClient, type TenantContext } from '../lib/tenant.js';
+import { readEntitlements } from '../lib/entitlements.js';
 import { currentPeriod, trialState, usageSummary } from '../services/billing/metering.js';
 import {
   BILLING_CYCLES,
   PLANS,
   PLAN_IDS,
-  entitlementsForPlan,
   priceSeats,
   pricingForPlan,
   updateSubscription,
@@ -2447,21 +2447,14 @@ export default async function reportRoutes(
   app.get('/billing/entitlements', async (request, reply) => {
     const tenant = request.tenant();
 
-    const subscription = await request.withTenant((tx) =>
-      tx.subscription.findFirst({
-        where: { licenseId: tenant.licenseId },
-        orderBy: { createdAt: 'desc' },
-        select: { plan: true },
-      }),
-    );
-
-    // No subscription row is a trial (ADR-10), and a trial is on the self-serve
-    // tier — it has bought nothing, so it unlocks nothing beyond it.
-    const plan = subscription?.plan ?? 'growth';
+    // The enforcing module's own read (no subscription row is a trial on the
+    // self-serve tier, ADR-10), so what this reports and what the gate refuses
+    // cannot disagree — the platform's override included (tm 389.2).
+    const { plan, entitlements } = await request.withTenant((tx) => readEntitlements(tx, tenant));
 
     return reply.send({
       plan,
-      entitlements: entitlementsForPlan(plan),
+      entitlements,
       // The catalogue, so a screen can say *which* tier unlocks the control it
       // just greyed out rather than "upgrade" with nowhere to point. Static and
       // identical for every workspace, like `/billing/api-packages`.

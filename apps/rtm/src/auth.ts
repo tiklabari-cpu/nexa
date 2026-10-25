@@ -16,6 +16,7 @@ import {
   REGIONS,
   capabilitiesForRole,
   credentialGrantFor,
+  isLicenseClosed,
   narrowsChatReach,
   scopesForCredential,
   servesRegion,
@@ -79,7 +80,11 @@ export type AuthFailure =
   | 'revoked'
   | 'membership_missing'
   | 'organization_mismatch'
-  | 'region_mismatch';
+  | 'region_mismatch'
+  // A genuine credential of a workspace the platform suspended (tm 389.2) —
+  // answered like the REST edge answers it, `not_allowed` +
+  // `workspace_suspended`, so the panel shows the same screen on both.
+  | 'workspace_suspended';
 
 /**
  * A refusal, and — for the one refusal that is not about the credential —
@@ -119,6 +124,8 @@ interface ResolvedTokenRow {
   license_status: string;
   /** The tenant root's own column — see the residency check in `authenticate`. */
   organization_region: string;
+  /** Set on `impersonation` tokens only (tm 389.2); this gateway opens none yet. */
+  impersonation_session_id?: string | null;
 }
 
 /** The membership facts a member's socket is decided by, read in one statement. */
@@ -202,7 +209,12 @@ export class SocketAuthenticator {
     if (!servesRegion(this.region, row.organization_region)) {
       return { ok: false, reason: 'region_mismatch', region: row.organization_region as Region };
     }
-    if (row.license_status === 'canceled') return { ok: false, reason: 'expired' };
+    if (isLicenseClosed(row.license_status)) {
+      return {
+        ok: false,
+        reason: row.license_status === 'suspended' ? 'workspace_suspended' : 'expired',
+      };
+    }
 
     // A bot has no membership and no role: its scopes are its whole answer.
     if (row.kind === 'bot') {
@@ -424,7 +436,7 @@ export class SocketAuthenticator {
     if (!row) return null;
     if (row.revoked_at) return null;
     if (row.expires_at && row.expires_at.getTime() <= Date.now()) return null;
-    if (row.license_status === 'canceled') return null;
+    if (isLicenseClosed(row.license_status)) return null;
     // Same allow-list as `#authenticateAgent`, and for the same reason: a bot
     // token has no membership to hold a role, and a SCIM or enrollment
     // credential (S11-2FA-k) must not be able to read an ops surface the API

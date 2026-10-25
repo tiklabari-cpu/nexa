@@ -91,7 +91,7 @@
 import { Prisma } from '@prisma/client';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ApiError, isApiError } from '../lib/api-error.js';
-import { assertScimSeatCeiling } from '../lib/entitlements.js';
+import { assertScimSeatCeiling, seatCeilingFor } from '../lib/entitlements.js';
 import type { TenantClient } from '../lib/tenant.js';
 import {
   SCIM_CONTENT_TYPE,
@@ -584,10 +584,13 @@ export default async function scimRoutes(
     // provisioned `active: false` occupies no seat (see `applySeatEffect`), so
     // there is nothing to guard for one.
     if (user.active) {
-      const headcount = await request.withTenant((tx) =>
-        tx.agentMembership.count({ where: { suspended: false } }),
+      const [headcount, ceiling] = await request.withTenant((tx) =>
+        Promise.all([
+          tx.agentMembership.count({ where: { suspended: false } }),
+          seatCeilingFor(tx, request.tenant()),
+        ]),
       );
-      assertScimSeatCeiling(headcount + 1);
+      assertScimSeatCeiling(headcount + 1, ceiling);
     }
 
     // The account may already exist in another workspace, where this tenant
@@ -738,7 +741,7 @@ export default async function scimRoutes(
           // with no seat behind them (§D116 LOW (5)).
           if (changes.active === true && existing.suspended) {
             const headcount = await tx.agentMembership.count({ where: { suspended: false } });
-            assertScimSeatCeiling(headcount + 1);
+            assertScimSeatCeiling(headcount + 1, await seatCeilingFor(tx, request.tenant()));
           }
 
           if (changes.externalId !== undefined) {

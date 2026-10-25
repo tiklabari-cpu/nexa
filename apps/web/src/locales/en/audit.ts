@@ -27,6 +27,7 @@ export const audit: Messages = {
   'audit.actor.bot': 'Bot',
   'audit.actor.customer': 'Customer',
   'audit.actor.system': 'System',
+  'audit.actor.platform': 'SiyahTuş support',
   'audit.filterByActionAriaLabel': 'Filter by action',
   'audit.allActions': 'All actions',
   'audit.fromDateAriaLabel': 'From date',

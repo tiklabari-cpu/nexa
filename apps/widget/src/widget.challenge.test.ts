@@ -237,6 +237,46 @@ describe('a check on the token mint', () => {
   });
 });
 
+describe('a workspace the platform suspended (tm 389.2)', () => {
+  const refused = (details?: Record<string, unknown>): Response =>
+    jsonResponse(
+      {
+        error: {
+          type: 'not_allowed',
+          message: 'This workspace is temporarily suspended.',
+          ...(details ? { details } : {}),
+        },
+      },
+      403,
+    );
+
+  it('says it is out of service, not "try again shortly", and asks no check', async () => {
+    const h = setUp({ mint: () => refused({ reason: 'workspace_suspended' }) }, 'tr');
+    openLauncher(h);
+    await vi.waitFor(() =>
+      expect(el(h.doc, '.nx-status').textContent).toBe(CATALOGS.tr['error.suspended']),
+    );
+    expect(boxShown(h)).toBe(false);
+    expect(h.mints()).toHaveLength(1);
+  });
+
+  it('keeps the ordinary outage text for any other refusal', async () => {
+    const h = setUp({ mint: () => refused() });
+    openLauncher(h);
+    await vi.waitFor(() =>
+      expect(el(h.doc, '.nx-status').textContent).toBe(CATALOGS.en['error.connect']),
+    );
+  });
+
+  it('carries the sentence in all eight languages, none left in English', () => {
+    for (const [language, catalog] of Object.entries(CATALOGS)) {
+      expect(catalog['error.suspended']).toBeTruthy();
+      if (language !== 'en')
+        expect(catalog['error.suspended']).not.toBe(CATALOGS.en['error.suspended']);
+    }
+  });
+});
+
 describe('a check on the message that opens a conversation', () => {
   it('repeats the same message, with the same key, behind the check', async () => {
     const h = setUp({

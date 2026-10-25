@@ -15,6 +15,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { isLicenseClosed } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { maskForWrite } from '../lib/sensitive-mask.js';
@@ -549,7 +550,7 @@ export default async function channelRoutes(
       // Absent, or a workspace that is closed: the address no longer accepts mail.
       // A 4xx tells the provider this is permanent, not something to retry. An
       // undefined label lands here too — an address nobody created accepts nothing.
-      if (!match || match.license_status === 'canceled') {
+      if (!match || isLicenseClosed(match.license_status)) {
         throw ApiError.notFound('Unknown recipient.');
       }
 

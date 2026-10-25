@@ -339,8 +339,36 @@ export const SUBSCRIPTION_STATUSES = [
   'past_due',
   'read_only',
   'canceled',
+  // Set by the platform (root panel, tm 389.10) and lifted only by it — the
+  // tenant role cannot write it (`licenses_suspension_platform_only`). A full
+  // lock, unlike `read_only`: nothing is served, reads included, until the
+  // platform lifts it. `suspended_at`/`suspended_reason`/`purge_scheduled_at`
+  // on the licence say when, why and until when (tm 389.2).
+  'suspended',
 ] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
+
+/**
+ * The licence states nobody works in: `canceled` (wound down) and `suspended`
+ * (locked by the platform). Every "is this workspace still open?" question —
+ * sign-in, token resolution, widget token mint, inbound channel mail, SSO, the
+ * RTM gateway — asks {@link isLicenseClosed} rather than comparing against one
+ * of them, so a third closed state is one line here rather than eleven
+ * comparisons that each have to be found (tm 389.2).
+ */
+export const LICENSE_CLOSED_STATUSES = ['canceled', 'suspended'] as const;
+export type LicenseClosedStatus = (typeof LICENSE_CLOSED_STATUSES)[number];
+
+export function isLicenseClosed(status: string): status is LicenseClosedStatus {
+  return (LICENSE_CLOSED_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * `details.reason` of the 403 `not_allowed` a suspended workspace answers with
+ * — on every authenticated request, the widget token mint and the sign-in — so
+ * a client shows "temporarily out of service" instead of a sign-in loop.
+ */
+export const WORKSPACE_SUSPENDED_REASON = 'workspace_suspended';
 
 export const USAGE_METRICS = ['api_calls', 'ai_resolutions'] as const;
 export type UsageMetric = (typeof USAGE_METRICS)[number];

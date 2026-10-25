@@ -318,16 +318,6 @@ const INDIRECT = [
     },
   },
   {
-    op: 'GET /uploads/{key}',
-    reason:
-      "an attachment's bytes are fetched from the `attachment_url` the event carries, with the " +
-      '`/api/v1` prefix stripped — the key never appears as a literal in the client.',
-    site: {
-      file: 'apps/web/src/features/inbox/Attachment.tsx',
-      contains: '.getBlob(path)',
-    },
-  },
-  {
     op: 'PUT /uploads/{key}',
     reason:
       'the second half of the grant-then-upload pair: `POST /uploads` returns a signed ' +
@@ -361,27 +351,6 @@ const TRACKED = [
       "where the AI stands on a connection (tm 296.4 · AI-03 §13) — the inbox's right pane " +
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
-  },
-  {
-    op: 'GET /tickets/{ticketId}/messages',
-    owner: 'tm 356.4',
-    reason:
-      "a ticket's conversation (tm 356.2 · HD-01) — the ticket pane's thread (TicketThread), " +
-      'drawn by TR-WEB (tm 356.4).',
-  },
-  {
-    op: 'POST /tickets/{ticketId}/messages',
-    owner: 'tm 356.4',
-    reason:
-      "a reply to the player or an internal note (tm 356.2 · HD-01) — the ticket pane's composer " +
-      '(TicketComposer, Reply / Internal note), built by TR-WEB (tm 356.4).',
-  },
-  {
-    op: 'POST /tickets/{ticketId}/messages/{messageId}/resend',
-    owner: 'tm 356.4',
-    reason:
-      "a failed reply's e-mail sent again (tm 356.3 · HD-01) — the thread's \"could not send · " +
-      'try again" link under a reply, built by TR-WEB (tm 356.4).',
   },
 ];
 

@@ -1,4 +1,12 @@
-import type { AiHandoffCardView, CustomFieldValue, ThreadPriority } from '@siyahtus/types';
+import type {
+  AiHandoffCardView,
+  CustomFieldValue,
+  ThreadPriority,
+  TicketMessageAttachment,
+  TicketMessageAuthorType,
+  TicketMessageDeliveryStatus,
+  TicketMessageKind,
+} from '@siyahtus/types';
 
 export interface ChatEvent {
   id: string;
@@ -219,4 +227,24 @@ export interface TicketDetail extends Ticket {
   merged_ticket_ids: string[];
   /** Custom fields defined for tickets, with this ticket's values (FR-MOD-08.7.6). */
   custom_fields: CustomFieldValue[];
+}
+
+/**
+ * One entry in a ticket's conversation (HD-01 · tm 356): what the player wrote,
+ * an agent's reply, an internal note, or a line the product wrote. Oldest first
+ * from `GET /tickets/{id}/messages`.
+ */
+export interface TicketMessage {
+  id: string;
+  /** The ticket it was written on — a primary's thread also carries its merged tickets'. */
+  ticket_id: string;
+  kind: TicketMessageKind;
+  author_type: TicketMessageAuthorType;
+  author_id: string | null;
+  author_name: string | null;
+  body_text: string;
+  attachments: TicketMessageAttachment[];
+  /** Only on an `agent_reply`; null on every other kind. */
+  delivery_status: TicketMessageDeliveryStatus | null;
+  created_at: string;
 }

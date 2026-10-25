@@ -82,6 +82,10 @@ function stubFetch(detail: TicketDetail): { calls: Call[] } {
       calls.push({ method, path, body });
 
       if (path === '/agents') return okJson({ items: AGENTS });
+      // The conversation and the composer's saved replies (tm 356.4): these
+      // tests are about the record's controls, so both are empty.
+      if (method === 'GET' && /\/messages(\?|$)/.test(path)) return okJson({ items: [] });
+      if (path.startsWith('/settings/canned-responses')) return okJson({ items: [] });
       if (method === 'PATCH' && /^\/tickets\/[^/]+$/.test(path)) {
         current = { ...current, ...body };
         return okJson(current);
@@ -357,6 +361,8 @@ function renderPaneWithTemplates(
 
       if (path === '/agents') return okJson({ items: [] });
       if (path === '/settings/ticket-email-templates') return okJson({ items: templates });
+      if (method === 'GET' && /\/messages(\?|$)/.test(path)) return okJson({ items: [] });
+      if (path.startsWith('/settings/canned-responses')) return okJson({ items: [] });
       if (method === 'PATCH' && /^\/tickets\/[^/]+$/.test(path)) {
         current = { ...current, ...body };
         return okJson(current);

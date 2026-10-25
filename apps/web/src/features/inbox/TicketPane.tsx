@@ -35,6 +35,8 @@ import {
 } from './useTickets.js';
 import { TICKET_PRIORITIES, hasElevatedPriority, nearestPriority } from './ticket-priority.js';
 import { CustomFields } from '../custom-fields/CustomFields.js';
+import { TicketComposer } from './TicketComposer.js';
+import { TicketThread } from './TicketThread.js';
 import type { Ticket, TicketDetail, TicketStatus } from './types.js';
 
 const STATUSES: TicketStatus[] = ['open', 'pending', 'solved', 'closed', 'spam'];
@@ -539,6 +541,8 @@ export function TicketDetailPane({
           </dd>
         </dl>
 
+        <TicketThread ticketId={data.id} />
+
         <div className="mt-8 max-w-xl border-t border-border pt-6">
           <label
             htmlFor="ticket-subject"
@@ -673,6 +677,8 @@ export function TicketDetailPane({
           </>
         )}
       </div>
+
+      <TicketComposer key={data.id} ticket={data} />
     </div>
   );
 }

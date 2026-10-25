@@ -15047,7 +15047,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-25T01:43:42.059Z",
+        "updatedAt": "2026-10-25T03:38:07.089Z",
         "subtasks": [
           {
             "id": 1,
@@ -15081,13 +15081,13 @@
             "description": "E-posta gönderimi (BackgroundMail ticket_reply, Message-ID zinciri, delivery_status) + pilot kapısı ayarı (K23)",
             "details": "Üst görev 356 ayrıntılarındaki ilgili bölüm. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): BackgroundMail kuyruğu ve pilot-gate deseni depoda var; iç notun e-postaya gitmemesi ve idempotency 356.2'de (XHIGH kalır). Bu alt görevde de kind=internal_note için posta yolunun hiç çağrılmadığı bir testle kanıtlanır.",
             "testStrategy": "Spool testi; pilot kapısı testi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "356.2"
             ],
             "parentId": "356",
             "priority": "high",
-            "updatedAt": "2026-10-25T01:43:42.059Z"
+            "updatedAt": "2026-10-25T03:38:07.089Z"
           },
           {
             "id": 4,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-25T01:43:42.060Z",
+      "lastModified": "2026-10-25T03:38:07.090Z",
       "taskCount": 390,
       "completedCount": 324,
       "tags": [

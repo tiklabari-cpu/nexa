@@ -160,6 +160,23 @@ pilot-down: ## Stop the pilot stack (its data volumes are kept)
 pilot-logs: ## Follow the pilot stack's logs
 	$(COMPOSE_PILOT) logs -f
 
+# --- Back office (tm 389.7): the root panel's first operator ---
+# Runs the bootstrap CLI inside the running platform-api container, which is
+# where `DATABASE_PLATFORM_URL` is set (the pilot runs it only behind
+# `--profile platform`; the demo stack always does: PLATFORM_COMPOSE below).
+# It refuses as soon as any operator exists. The password is typed without
+# echo; or set PLATFORM_BOOTSTRAP_PASSWORD in the shell, never on the command
+# line, and the target passes it through without a terminal.
+#   make platform-bootstrap-admin EMAIL=ops@example.com
+#   PLATFORM_COMPOSE="docker compose -f docker-compose.full.yml" make platform-bootstrap-admin EMAIL=ops@example.com
+PLATFORM_COMPOSE ?= $(COMPOSE_PILOT) --profile platform
+
+.PHONY: platform-bootstrap-admin
+platform-bootstrap-admin: ## Create the root panel's first superadmin: EMAIL=ops@example.com (password prompted, or PLATFORM_BOOTSTRAP_PASSWORD)
+	@test -n "$(EMAIL)" || { echo 'usage: make platform-bootstrap-admin EMAIL=ops@example.com' >&2; exit 2; }
+	$(PLATFORM_COMPOSE) exec $(if $(PLATFORM_BOOTSTRAP_PASSWORD),-T -e PLATFORM_BOOTSTRAP_PASSWORD) platform-api \
+		node dist/src/services/platform/bootstrap-admin-run.js --email "$(EMAIL)"
+
 .PHONY: pilot-backup
 pilot-backup: ## pg_dump the pilot database into ./backups (scripts/backup.sh)
 	COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh

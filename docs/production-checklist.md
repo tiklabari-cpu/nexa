@@ -44,6 +44,13 @@ failing.
       Boot refuses a list that omits the widget's origin (`apps/api/src/config/env.ts`);
       serving the widget from the panel's own host satisfies it without a second entry.
       Evidence: `apps/api/test/integration/production-boot.test.ts`.
+- [ ] Only if the back office runs (root panel, tm 389): `DATABASE_PLATFORM_URL` names the
+      `siyahtus_platform` role — neither `DATABASE_URL`'s owner nor `siyahtus_app` — and is set on
+      the platform-api process alone; `ADMIN_APP_URL` is its one `https` origin;
+      `PLATFORM_SETTINGS_KEY` is freshly generated (`openssl rand -hex 32`); `PLATFORM_IP_ALLOWLIST`
+      lists the operators' addresses. platform-api refuses to start without the first two and the
+      key; the tenant processes never apply those rules. **9. Pilot on Docker Compose**, "Back
+      office", is the order of operations.
 - [ ] Copy [`.env.production.example`](../.env.production.example) to `.env`, fill every
       placeholder, then boot once — a missing or placeholder value fails loudly with every
       problem listed together, not on the first request that happens to touch it.
@@ -325,12 +332,13 @@ Cloudflare Tunnel**).
 
 ### Now: Cloudflare Tunnel
 
-The edge today. A tunnel managed **locally** on the host, run by systemd, dialling the four
-ports compose publishes on `127.0.0.1`. The repository's side of it is
+The edge today. A tunnel managed **locally** on the host, run by systemd, dialling the
+ports compose publishes on `127.0.0.1` (four, and the back office's two when the pilot runs
+`--profile platform`: **Back office**). The repository's side of it is
 [`infra/pilot/cloudflared/config.example.yml`](../infra/pilot/cloudflared/config.example.yml);
-`apps/api/src/config/env.pilot.test.ts` reads that file and fails if the four names stop
-matching the Caddyfile's, a rule leaves `127.0.0.1` or its port, the panel's `/api/` rule falls
-below the catch-all, or the 404 rule goes. The Cloudflare account, the domain's name servers
+`apps/api/src/config/env.pilot.test.ts` reads that file and fails if the five names stop
+matching the Caddyfile's, a rule leaves `127.0.0.1` or its port, the panel's `/api/` or the back
+office's `/platform/` rule falls below its catch-all, or the 404 rule goes. The Cloudflare account, the domain's name servers
 and the host are the owner's.
 
 A tunnel created in the Cloudflare dashboard, or installed with the
@@ -338,7 +346,7 @@ A tunnel created in the Cloudflare dashboard, or installed with the
 its routes live in the dashboard and `cloudflared` ignores the repository's YAML. The ingress
 order and the one-hop rule would then guard nothing. Create the tunnel from the host's shell.
 
-- [ ] The domain's DNS is on Cloudflare, and four names will point at the tunnel: the panel,
+- [ ] The domain's DNS is on Cloudflare, and four names (five with the back office: **Back office**) will point at the tunnel: the panel,
       the widget, the api and RTM. They become `WEB_APP_URL` and the first `WEB_ORIGIN` entry,
       `WIDGET_BASE_URL` and the second `WEB_ORIGIN` entry, `API_BASE_URL` (`https://`) and
       `RTM_BASE_URL` (`wss://`).
@@ -351,7 +359,8 @@ order and the one-hop rule would then guard nothing. Create the tunnel from the 
       whole of `.env` to the api and rtm containers — and `env.pilot.test.ts` rejects a
       `TUNNEL`/`CLOUDFLARE` key in the template.
 - [ ] `sudo cp infra/pilot/cloudflared/config.example.yml /etc/cloudflared/config.yml`, then
-      edit the id (twice) and the four names. If `.env` moves a port with a
+      edit the id (twice) and the names (delete the two `admin.` rules if the back office stays
+      off). If `.env` moves a port with a
       `SIYAHTUS_*_HOST_PORT` line, change the matching rule too.
 - [ ] `cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate` exits 0.
 - [ ] `cloudflared tunnel --config /etc/cloudflared/config.yml ingress rule https://panel.<domain>/api/v1/health/live`
@@ -423,8 +432,8 @@ measurement after any change to the tunnel, the Cloudflare settings or the edge.
 ### After the move: Caddy
 
 [`infra/pilot/Caddyfile.example`](../infra/pilot/Caddyfile.example) is the other edge, for when
-the host is reached directly. Caddy runs on the host, gets and renews the four names'
-certificates itself, and dials the same four ports on `127.0.0.1`. The records are **DNS-only**
+the host is reached directly. Caddy runs on the host, gets and renews the names'
+certificates itself, and dials the same ports on `127.0.0.1`. The records are **DNS-only**
 (grey cloud). A Caddy behind the orange cloud is a second proxy in front of the api and is not
 supported: one number cannot describe it (**Now: Cloudflare Tunnel**, the "Cloudflare address"
 result).
@@ -450,7 +459,7 @@ result).
 
 ### Switching edges
 
-The two edges serve the same four names on the same ports, so moving from one to the other is
+The two edges serve the same names on the same ports, so moving from one to the other is
 stopping one service and starting the other. Compose, `.env` and the built images stay as they are.
 
 - [ ] Cloudflare to Caddy: `sudo systemctl disable --now cloudflared`, change the four records
@@ -464,6 +473,61 @@ stopping one service and starting the other. Compose, `.env` and the built image
       under **Run**.
 - [ ] The mail-authentication check (**Mail authentication**) again, after the name servers
       have moved.
+
+### Back office
+
+The root panel (epic tm 389): the operators' own web app at `admin.<domain>` and its api,
+`platform-api`. It is separate from every workspace's panel: its own process
+(`node dist/src/platform.js`, port 4002), its own database role (`siyahtus_platform`,
+`BYPASSRLS`), its own contract and its own sign-in (password, then a mandatory authenticator
+code). The tenant pilot does not need it. Compose keeps both services behind
+`--profile platform`; without the profile nothing listens on 4002 or 5175 and nothing above
+changes. Why it is built this way: [ADR-16](adr/platform-admin-panel.md).
+
+- [ ] Decide to run it. If not, delete the two `admin.` rules from the tunnel's `config.yml`
+      (or the `admin.` block from the Caddyfile) and stop here.
+- [ ] `.env` gains, beside the optional keys under **Keys**: `SIYAHTUS_PLATFORM_DB_PASSWORD`
+      (hex; read by the database container **only on the first start of an empty volume**, so
+      for a database that already exists set the role's password by hand:
+      `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "ALTER ROLE siyahtus_platform LOGIN PASSWORD '<the same value>'"`),
+      `PLATFORM_SETTINGS_KEY` (`openssl rand -hex 32`; seals the operators' authenticator
+      secrets, and never changes after the first operator enrolls), `ADMIN_APP_URL`
+      (`https://admin.<domain>`, one origin: platform-api refuses to start in production
+      without it) and, strongly advised, `PLATFORM_IP_ALLOWLIST` (comma list of the addresses
+      or CIDRs operators sign in from; empty is allowed but logs a warning at every start).
+      Then `docker compose -f docker-compose.pilot.yml --profile platform up --build -d`.
+- [ ] A fifth name, `admin.<domain>`, points at the same edge as the other four. In the tunnel:
+      `cloudflared tunnel route dns siyahtus-pilot admin.<domain>`; the example file already
+      has its two rules (`/platform/` to port 4002 before the catch-all to 5175: one hop, like
+      the panel's `/api/`, so `TRUST_PROXY_HOPS=1` stays right for it). `cloudflared tunnel --config /etc/cloudflared/config.yml ingress rule https://admin.<domain>/platform/v1/health/live`
+      names the rule with `path: ^/platform/` and port 4002.
+- [ ] **Put Cloudflare Access (Zero Trust) in front of `admin.<domain>`.** This repository does
+      not configure it — DNS and the Cloudflare account are the owner's — but the recommendation
+      is firm: a self-hosted application covering the whole name, one Allow policy listing the
+      operators' addresses, a short session. Access keeps the sign-in page itself away from the
+      internet; the panel's own password + authenticator and `PLATFORM_IP_ALLOWLIST` stay on
+      top of it, and none of the three replaces another. Turn on no Bypass rule for
+      `/platform/*`: the SPA calls it from the same name, with the Access cookie.
+- [ ] Create the first operator once, from the host, with the stack up:
+      `docker compose -f docker-compose.pilot.yml --profile platform exec platform-api node dist/src/services/platform/bootstrap-admin-run.js --email <address>`
+      (`make platform-bootstrap-admin EMAIL=<address>` where `make` exists). The password is
+      typed without echo, or taken from `PLATFORM_BOOTSTRAP_PASSWORD` in the shell, never from
+      an argument. It refuses once any operator exists; everyone after is invited from the panel.
+      The authenticator is enrolled at the first sign-in, and the recovery codes shown there once.
+- [ ] On a **managed Postgres** (no compose database container), the role is yours to make and
+      to arm: the migration grants `BYPASSRLS` only when it runs as a superuser. As one:
+      `ALTER ROLE siyahtus_platform LOGIN PASSWORD '<generated>' BYPASSRLS`, then
+      `SELECT rolbypassrls FROM pg_roles WHERE rolname = 'siyahtus_platform'` prints `t`. A role
+      that reads zero rows looks like an empty back office, not like an error (**5. Deployment**
+      has the same item for Helm). Without a real password, lock it instead:
+      `ALTER ROLE siyahtus_platform NOLOGIN PASSWORD NULL`.
+- [ ] `SMOKE_BACK_OFFICE=1 SMOKE_PROFILE=pilot ADMIN_BASE=http://127.0.0.1:5175 PLATFORM_BASE=http://127.0.0.1:4002 ./scripts/smoke.sh`
+      on the host, beside the usual smoke run: the SPA is served, its nginx reaches platform-api,
+      platform-api is ready, and the tenant api does not serve `/platform/*`. Loopback bases, because
+      from outside, Access answers an anonymous call with its login page.
+- [ ] Not done by any of this, and not claimed: the trial-end `psql` path under **Trial end and
+      manual activation** is still the way a workspace is activated until the back office
+      carries that action (a later task of the same epic).
 
 ### Region and providers
 

@@ -48,6 +48,16 @@ apps:
     # single point of failure for every customer-facing chat iframe on every
     # tenant's site, not just an internal surface.
     replicas: 2
+  # The back office (tm 389.7): the root panel's api and its SPA. Both default
+  # to `enabled: true`; to run without them set `enabled: false` on BOTH (the SPA
+  # is useless without its api), and the secrets / config blocks below can then
+  # keep their placeholders. A single replica each is a deliberate choice for a
+  # surface a handful of operators use; the PDB (maxUnavailable: 1) then blocks
+  # voluntary evictions of these pods, which is a cost worth knowing about.
+  platform-api:
+    tag: "<image tag, e.g. git SHA or semver>"
+  admin:
+    tag: "<image tag, e.g. git SHA or semver>"
 
 # The one backup setting a real deployment has to make a decision about (tm
 # 173, M-SEC-e1). templates/backup-pvc.yaml holds a `pg_dump` of the whole
@@ -93,6 +103,14 @@ networkPolicy:
     #   podSelector:
     #     matchLabels:
     #       app.kubernetes.io/name: "<ingress controller pod label>"
+  # The back office's api accepts the admin pods alone (templates/
+  # networkpolicy.yaml), which is the browser -> admin nginx -> platform-api
+  # chain, one appending hop, TRUST_PROXY_HOPS "1". An ingress that dials
+  # platform-api directly (as the compose edge does) is another hop count; add
+  # it here only after reading the note on `api.extraIngressFrom` in values.yaml.
+  # `egress.extraEgress` is where an SMTP relay goes once MAIL_PROVIDER is real.
+  platformApi:
+    extraIngressFrom: []
 
 # Config keys the chart's skeleton (values.yaml) leaves unset because they
 # have no safe generic default. templates/configmap.yaml renders this map
@@ -143,6 +161,15 @@ config:
   # about its own address and walks through an enforced allow-list
   # (apps/api/test/integration/trust-proxy.test.ts).
   # TRUST_PROXY_HOPS: "2"
+  # The back office (tm 389.7). ADMIN_APP_URL is the ONE https origin platform-api
+  # answers cross-origin: its name in the edge, e.g. https://admin.<your-domain>.
+  # Without an https value the platform-api process refuses to start in
+  # production. PLATFORM_IP_ALLOWLIST is a comma list of IPs / CIDRs the
+  # operators sign in from; empty is allowed but logs a warning at start. Put
+  # Cloudflare Access (or another identity-aware gate) in front of the admin name
+  # as well (docs/production-checklist.md §9, "Back office").
+  ADMIN_APP_URL: "https://admin.<your-domain>"
+  # PLATFORM_IP_ALLOWLIST: "203.0.113.0/24"
   # Prisma connection pool size for api/rtm (M-SCALE-b) — set once total
   # replicas > 1: pool size x (api + rtm replicas) must stay within
   # Postgres' max_connections, with headroom for the standalone job scripts
@@ -264,10 +291,13 @@ secrets:
   # at the owner (or omitting it, which falls back to DATABASE_URL) silently
   # disables every tenant isolation policy while every test still passes.
   DATABASE_APP_URL: "postgresql://siyahtus_app:<app_password>@<db-host>:5432/<db>"
-  # Optional (tm 389.1): the siyahtus_platform role (BYPASSRLS — every
-  # workspace). Only the platform-api process reads it; empty is fine until
-  # the root panel is deployed.
-  DATABASE_PLATFORM_URL: ""
+  # The siyahtus_platform role (BYPASSRLS — every workspace). Rendered into its
+  # own Secret, `<release>-platform-secrets`, which only the platform-api pod
+  # mounts (tm 389.7). On a managed Postgres the role is created by you, with
+  # `ALTER ROLE siyahtus_platform BYPASSRLS` (docs/production-checklist.md §9,
+  # "Back office"). Without the back office, set `apps.platform-api.enabled`
+  # and `apps.admin.enabled` to false above and leave this a placeholder.
+  DATABASE_PLATFORM_URL: "postgresql://siyahtus_platform:<platform_password>@<db-host>:5432/<db>"
   REDIS_URL: "redis://<redis-host>:6379"
   # Issued by the object store, not generated here — so unlike the five keys
   # above, no `dev-only-` production guard covers them and nothing refuses to

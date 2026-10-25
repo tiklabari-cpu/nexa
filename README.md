@@ -504,7 +504,7 @@ behind `--profile platform`, because the role stays locked until
 
 Operators (tm 389.4) are `platform_admins`, not workspace accounts. The first superadmin is
 created once, from a shell: `pnpm --filter @siyahtus/api platform:bootstrap-admin --email
-<address>` (password on stdin or in `PLATFORM_BOOTSTRAP_PASSWORD`; in an image, `node
+<address>` (in a running pilot or demo stack, `make platform-bootstrap-admin EMAIL=<address>`) (password on stdin or in `PLATFORM_BOOTSTRAP_PASSWORD`; in an image, `node
 dist/src/services/platform/bootstrap-admin-run.js`); it refuses as soon as any operator exists,
 and everyone after is invited from the panel (72-hour link). Sign-in is a password, then a
 mandatory TOTP code — an operator without an authenticator can only enroll one — and gives one
@@ -514,6 +514,18 @@ opaque session token that ends after `PLATFORM_IDLE_TTL` (900 s) idle or `PLATFO
 `PLATFORM_PERMISSIONS` in `@siyahtus/types`. `PLATFORM_IP_ALLOWLIST` (IPs/CIDRs) restricts the
 addresses the platform API admits; production requires `PLATFORM_SETTINGS_KEY`, which seals the
 operators' TOTP secrets.
+
+Deployed (tm 389.7): the back office is the fifth public name, `admin.<domain>`, and the sixth
+service. In the pilot, `docker compose -f docker-compose.pilot.yml --profile platform up -d`
+starts `platform-api` (127.0.0.1:4002) and `admin` (127.0.0.1:5175); the edge examples
+(`infra/pilot/Caddyfile.example`, `infra/pilot/cloudflared/config.example.yml`) send
+`/platform/*` straight to the first and everything else to the second — one hop, like the
+panel's `/api/`, so `TRUST_PROXY_HOPS=1` holds. Put Cloudflare Access in front of the name;
+`docs/production-checklist.md` §1 and §9 ("Back office") have the env, the bootstrap, the
+managed-Postgres `ALTER ROLE … BYPASSRLS` and the smoke run (`SMOKE_BACK_OFFICE=1`), and
+[ADR-16](docs/adr/platform-admin-panel.md) the reasons. In Helm both apps are in `apps:`;
+only the platform-api pod mounts the `siyahtus_platform` connection string, and its
+NetworkPolicy admits the admin pods alone.
 
 ### Connection pool budget
 
@@ -817,10 +829,12 @@ mock reads "Reconnect needed" once it goes live; it is kept, not deleted. Under
 
 ## Deployment
 
-`infra/helm/siyahtus/` is a Helm chart for the four M-CONTAINER images (api, rtm, web,
-widget) — Deployment + Service per app, a ConfigMap/Secret pair, PodDisruptionBudgets,
+`infra/helm/siyahtus/` is a Helm chart for the M-CONTAINER images — api, rtm, web, widget,
+and the back office's `platform-api` and `admin` (tm 389.7; each of those two can be turned off
+with `enabled: false`) — Deployment + Service per app, a ConfigMap and two Secrets (the shared
+one, and `<release>-platform-secrets`, which only platform-api mounts), PodDisruptionBudgets,
 HorizontalPodAutoscalers, a pre-install/pre-upgrade migration Job, a nightly backup
-CronJob with its PersistentVolumeClaim, and a NetworkPolicy. It is a different
+CronJob with its PersistentVolumeClaim, and NetworkPolicies. It is a different
 thing from "Run the whole stack in containers" above: that section boots this same set of
 images locally with `docker compose`, on one host, for a demo. This chart describes how a
 real Kubernetes deployment of the same images would be shaped — its manifests have **never
@@ -880,14 +894,17 @@ combination is the defect.
 **What is verified, and how:**
 
 - `helm lint infra/helm/siyahtus` — passes (one non-blocking suggestion: add a chart icon).
-- `helm template` — renders successfully: 4 Deployments, 4 Services, 4 PodDisruptionBudgets,
-  3 HorizontalPodAutoscalers (api/rtm/web — widget opts out, see `values.yaml`), 1
-  ConfigMap, 1 Job, 1 CronJob, 1 PersistentVolumeClaim, 1 NetworkPolicy, and 1 Secret
-  (0 with the production overlay's `secrets.enabled: false`) — 21 or 20 resources
-  depending on that flag, and one fewer again with `networkPolicy.enabled: false`.
-- Every rendered resource validates against real Kubernetes OpenAPI schemas, fully
-  offline, with [`kubeconform`](https://github.com/yannh/kubeconform) `-strict`: 21/21
-  valid (default values) and 20/20 valid (production overlay).
+- `helm template` — renders successfully: 6 Deployments, 6 Services, 6 PodDisruptionBudgets,
+  3 HorizontalPodAutoscalers (api/rtm/web — widget and the back office opt out, see
+  `values.yaml`), 1 ConfigMap, 1 Job, 1 CronJob, 1 PersistentVolumeClaim, 2 NetworkPolicies
+  (api, platform-api) and 2 Secrets (0 with the production overlay's `secrets.enabled:
+false`) — 29 or 27 resources depending on that flag, and two fewer with
+  `networkPolicy.enabled: false`. With `apps.platform-api.enabled=false` and
+  `apps.admin.enabled=false` neither app renders a Deployment, Service, PDB or policy.
+- Every rendered resource validates against real Kubernetes OpenAPI schemas with
+  [`kubeconform`](https://github.com/yannh/kubeconform) `-strict`: 29/29 valid (default
+  values) and 27/27 valid (production overlay with `secrets.enabled=false`; re-run for
+  tm 389.7, schemas fetched from the kubeconform project).
 - `kubectl apply --dry-run=client` against the rendered YAML was attempted and does **not**
   work on a machine with no reachable cluster: even with `--validate=false`, `kubectl
 apply` still needs live API-server discovery to compute its strategic-merge patch, and

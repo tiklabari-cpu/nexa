@@ -17,3 +17,7 @@ data:
   # network this chart replaces, so they must be overridden here.
   API_UPSTREAM: http://{{ .Release.Name }}-api:{{ .Values.apps.api.port }}
   RTM_UPSTREAM: http://{{ .Release.Name }}-rtm:{{ .Values.apps.rtm.port }}
+  # The admin image's nginx proxies `/platform/` here (apps/admin/nginx.conf,
+  # tm 389.6). `index` because the app's name has a hyphen, which a Go template
+  # cannot take as a field.
+  PLATFORM_UPSTREAM: http://{{ .Release.Name }}-platform-api:{{ (index .Values.apps "platform-api").port }}

@@ -453,20 +453,21 @@ describe("the pilot's edge and operations (tm 256.5)", () => {
     expect(logging).toMatch(/^\s+driver: json-file$/m);
     expect(logging).toMatch(/^\s+max-size: \d+m$/m);
     expect(logging).toMatch(/^\s+max-file: '\d+'$/m);
-    for (const service of ['db', 'redis', 'api', 'rtm', 'web', 'widget']) {
+    for (const service of ['db', 'redis', 'api', 'rtm', 'platform-api', 'admin', 'web', 'widget']) {
       expect(block(new RegExp(`^ {2}${service}:$`)), service).toContain('logging: *logging');
     }
-    // A seventh service added without it fails here.
+    // A service added without it fails here.
     const services = COMPOSE.match(/^ {4}restart: /gm) ?? [];
     expect(COMPOSE.match(/^ {4}logging: \*logging$/gm)).toHaveLength(services.length);
   });
 
-  it('serves the four public names, each to the published port of its service', () => {
+  it('serves the five public names, each to the published port of its service', () => {
     expect([...sites.keys()]).toEqual([
       'panel.example.com',
       'widget.example.com',
       'api.example.com',
       'rtm.example.com',
+      'admin.example.com',
     ]);
     expect(upstreams('widget.example.com')).toEqual([`127.0.0.1:${publishedPort('widget')}`]);
     expect(upstreams('api.example.com')).toEqual([`127.0.0.1:${publishedPort('api')}`]);
@@ -481,6 +482,22 @@ describe("the pilot's edge and operations (tm 256.5)", () => {
     expect(upstreams('panel.example.com')).toEqual([
       `127.0.0.1:${publishedPort('api')}`,
       `127.0.0.1:${publishedPort('web')}`,
+    ]);
+    expect(TEMPLATE_ENTRIES['TRUST_PROXY_HOPS']).toBe('1');
+  });
+
+  it("sends the back office's /platform/* straight to platform-api — one hop, like the panel's /api/*", () => {
+    // The admin SPA's own nginx also proxies /platform/ (compose, Helm) and appends to
+    // X-Forwarded-For, so a request sent through it would arrive with two hops. The edge
+    // therefore skips it, and TRUST_PROXY_HOPS=1 is right for platform-api as for the api.
+    const admin = (sites.get('admin.example.com') ?? []).join('\n');
+    expect(admin).toContain(
+      `handle /platform/* {\nreverse_proxy 127.0.0.1:${publishedPort('platform-api')}\n}`,
+    );
+    expect(admin).toContain(`handle {\nreverse_proxy 127.0.0.1:${publishedPort('admin')}\n}`);
+    expect(upstreams('admin.example.com')).toEqual([
+      `127.0.0.1:${publishedPort('platform-api')}`,
+      `127.0.0.1:${publishedPort('admin')}`,
     ]);
     expect(TEMPLATE_ENTRIES['TRUST_PROXY_HOPS']).toBe('1');
   });
@@ -556,10 +573,10 @@ describe("the pilot's Cloudflare Tunnel edge (tm 257.10)", () => {
       tunnel: '<tunnel-uuid>',
       'credentials-file': '/etc/cloudflared/<tunnel-uuid>.json',
     });
-    expect(ingress).toHaveLength(6);
+    expect(ingress).toHaveLength(8);
   });
 
-  it('serves the same four names as the Caddyfile — the edge can change, the names cannot', () => {
+  it('serves the same five names as the Caddyfile — the edge can change, the names cannot', () => {
     // API_BASE_URL and RTM_BASE_URL are baked into the widget and panel
     // bundles at build time (docker-compose.pilot.yml, VITE_API_BASE_URL and
     // VITE_RTM_URL), so moving to the other edge must not move a name.
@@ -567,7 +584,7 @@ describe("the pilot's Cloudflare Tunnel edge (tm 257.10)", () => {
       ...new Set(tunnel().ingress.flatMap((rule) => (rule.hostname ? [rule.hostname] : []))),
     ];
     expect(names.sort()).toEqual(caddyNames().sort());
-    expect(names).toHaveLength(4);
+    expect(names).toHaveLength(5);
   });
 
   it("dials each name's published port on 127.0.0.1", () => {
@@ -579,6 +596,13 @@ describe("the pilot's Cloudflare Tunnel edge (tm 257.10)", () => {
     ]);
     expect(rulesFor('widget.example.com')).toEqual([
       { hostname: 'widget.example.com', service: origin('widget') },
+    ]);
+  });
+
+  it("sends the back office's /platform/ to platform-api before the admin catch-all — one hop", () => {
+    expect(rulesFor('admin.example.com')).toEqual([
+      { hostname: 'admin.example.com', path: '^/platform/', service: origin('platform-api') },
+      { hostname: 'admin.example.com', service: origin('admin') },
     ]);
   });
 

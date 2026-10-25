@@ -202,6 +202,79 @@ apps:
       enabled: false
     pdb:
       maxUnavailable: 1
+  # The back office — the root panel's two apps (tm 389.7 · docs/platform-admin/
+  # design.md §A, §E). Both are optional: `enabled: false` drops one from every
+  # ranged template (Deployment, Service, HPA, PDB) and from the NetworkPolicy
+  # below. The tenant apps above never depend on them.
+  #
+  # `args`, not `command`: this is the api image with another process, and the
+  # image's ENTRYPOINT (docker-entrypoint.sh) must still run — a Kubernetes
+  # `command` would replace it, `args` replaces only the image's CMD, which is
+  # what `command:` means in docker-compose.pilot.yml. Machine-checked against
+  # that file by apps/api/src/config/chart-storage.test.ts.
+  platform-api:
+    enabled: true
+    repository: siyahtus-api
+    tag: local
+    port: 4002
+    replicas: 1
+    needsSecrets: true
+    # Mounts `<release>-platform-secrets` (templates/secret.yaml) on top of the
+    # shared Secret. DATABASE_PLATFORM_URL — the BYPASSRLS role that sees every
+    # workspace — lives only there, so the tenant api and rtm pods, which mount
+    # the shared Secret whole, are never handed it (the same rule the compose
+    # files keep by setting it on this service alone).
+    needsPlatformSecrets: true
+    args: ["node", "dist/src/platform.js"]
+    probes:
+      liveness: /platform/v1/health/live
+      readiness: /platform/v1/health/ready
+    startupProbe:
+      # Same image, same boot as api minus the migration (SIYAHTUS_MIGRATE_ON_START
+      # is "false" in `config`): the api's 70 s budget, kept for the same reason.
+      failureThreshold: 14
+    resources:
+      # UNMEASURED placeholder, like api's: a handful of operators, no load run
+      # exists for this process. Sized below api.
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    hpa:
+      # NOT enabled — a back office for a few operators does not autoscale, and
+      # a second pod adds nothing but a second session-store reader.
+      enabled: false
+    pdb:
+      maxUnavailable: 1
+  admin:
+    enabled: true
+    repository: siyahtus-admin
+    tag: local
+    port: 8080
+    replicas: 1
+    needsSecrets: false
+    probes:
+      # The file apps/admin/Dockerfile's own HEALTHCHECK already probes — static,
+      # and independent of the platform-api upstream this image proxies to.
+      liveness: /index.html
+      readiness: /index.html
+    startupProbe:
+      # Mirrors apps/admin/Dockerfile's HEALTHCHECK (start-period=10s +
+      # interval=10s * retries=5 = 60s), as web's does.
+      failureThreshold: 12
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    hpa:
+      enabled: false
+    pdb:
+      maxUnavailable: 1
 
 # Schema migration (tm 164.3, M-IAC-c). Rendered as a pre-install/pre-upgrade
 # hook Job — templates/migrate-job.yaml carries the full reasoning, including
@@ -336,6 +409,25 @@ networkPolicy:
     #      `except:` above matters for the same reason — an ipBlock over the node
     #      range must not swallow the pod range with it.
     extraIngressFrom: []
+  # The back office's api (tm 389.7). Same shape and same reasons as `api`
+  # above, one peer: the admin pods, whose nginx appends the caller to
+  # X-Forwarded-For (TRUST_PROXY_HOPS=1). templates/networkpolicy.yaml.
+  platformApi:
+    # EXTRA ingress peers, for a deployment whose ingress controller dials
+    # platform-api directly (the compose edge does: Caddy / cloudflared send
+    # `/platform/*` straight to it). Each path is its own hop count; read the
+    # note on `api.extraIngressFrom` before adding one.
+    extraIngressFrom: []
+    # Egress is restricted too, because this is the pod holding the BYPASSRLS
+    # role: Postgres and Redis ports, and DNS. `to` is left open on those
+    # ports on purpose — the chart deploys neither datastore (managed
+    # connection strings are values) and cannot name their addresses. Anything
+    # else the process dials (an SMTP relay when MAIL_PROVIDER is not `file`)
+    # goes in `extraEgress`, as full NetworkPolicy egress rules.
+    egress:
+      enabled: true
+      datastorePorts: [5432, 6379]
+      extraEgress: []
 
 # Known gap, stated rather than hidden: the web image's RTM WebSocket address
 # (`VITE_RTM_URL`) is baked in at *build* time (apps/web/Dockerfile), not read
@@ -369,6 +461,15 @@ config:
   API_HOST: "0.0.0.0"
   RTM_PORT: "4001"
   RTM_HOST: "0.0.0.0"
+  # The back office (tm 389.7). PLATFORM_PORT is `apps.platform-api.port`
+  # (chart-storage.test.ts holds the two together). ADMIN_APP_URL is the one
+  # origin platform-api answers cross-origin: https in production, or the process
+  # refuses to start (apps/api/src/config/platform-env.ts) — hence the placeholder
+  # that cannot resolve. PLATFORM_IP_ALLOWLIST is not set here; see
+  # values.production.example.yaml.
+  PLATFORM_PORT: "4002"
+  PLATFORM_HOST: "0.0.0.0"
+  ADMIN_APP_URL: https://CHANGE_ME
   # How many reverse proxies in front of the API are trusted to have appended
   # to `X-Forwarded-For`. `request.ip` is read that many entries in from the
   # RIGHT (apps/api/src/server.ts), and it is what the agent IP allow-list, the
@@ -478,9 +579,12 @@ secrets:
   APPS_CREDENTIAL_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   DATABASE_URL: postgresql://siyahtus:CHANGE_ME@CHANGE_ME:5432/siyahtus
   DATABASE_APP_URL: postgresql://siyahtus_app:CHANGE_ME@CHANGE_ME:5432/siyahtus
-  # Optional (tm 389.1): the platform (root panel) role, BYPASSRLS. Only the
-  # platform-api process reads it; empty, the tenant pods are unaffected.
-  DATABASE_PLATFORM_URL: ""
+  # The platform (root panel) role, BYPASSRLS (tm 389.1, 389.7). Rendered into
+  # `<release>-platform-secrets`, NOT the shared Secret: only the platform-api
+  # pod mounts it. `CHANGE_ME`, like the two URLs above, so an install that never
+  # filled it in fails that one pod loudly; `apps.platform-api.enabled: false`
+  # is the way to run without the back office.
+  DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:CHANGE_ME@CHANGE_ME:5432/siyahtus
   REDIS_URL: redis://CHANGE_ME:6379
   # Credentials for the bucket `config.STORAGE_S3_ENDPOINT`/`STORAGE_S3_BUCKET`
   # names (tm 242). `CHANGE_ME` rather than `dev-only-…` on purpose: the five

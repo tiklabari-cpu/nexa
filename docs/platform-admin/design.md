@@ -181,7 +181,7 @@ zaman aşımı / çıktı token limiti, embedding modeli (1536 sabit, değişinc
 - Docs: production-checklist §1/§9 "Back office" (bootstrap, Cloudflare Access, managed
   Postgres'te `ALTER ROLE … BYPASSRLS`), "Trial end" bölümü panelle yeniden yazılır (psql dipnot);
   `docs/runbooks/platform-admin-ops.md`; `tenant-isolation-suspicion.md` paragrafı;
-  `docs/adr/platform-admin-panel.md` (ADR-15; PLAN §0 tablosuna 389.7 ekler).
+  `docs/adr/platform-admin-panel.md` (ADR-16 — 15 numara RTM zarfına ait; PLAN §0 tablosuna 389.7 ekler).
 
 ## F. Platform AI ayarları — kiracı API tarafı (389.17)
 

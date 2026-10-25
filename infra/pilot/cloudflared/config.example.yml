@@ -2,8 +2,8 @@
 #
 # The pilot's edge today. infra/pilot/Caddyfile.example is the other one, for
 # later, when the host is reached directly (DNS-only). Both run on the host,
-# outside the compose project; both dial the four ports compose publishes on
-# 127.0.0.1; both serve the same four names. Moving from one to the other is
+# outside the compose project; both dial the ports compose publishes on
+# 127.0.0.1; both serve the same five names. Moving from one to the other is
 # stopping one systemd service and starting the other. Compose, .env and the
 # built images do not change: API_BASE_URL and RTM_BASE_URL are baked into the
 # widget and panel bundles, which is why the names must be the same on both.
@@ -20,10 +20,10 @@
 #   sudo install -d -m 700 /etc/cloudflared
 #   sudo mv ~/.cloudflared/<UUID>.json /etc/cloudflared/
 #   sudo cp infra/pilot/cloudflared/config.example.yml /etc/cloudflared/config.yml
-#   # edit /etc/cloudflared/config.yml: the UUID (twice) and the four names
+#   # edit /etc/cloudflared/config.yml: the UUID (twice) and the five names
 #   cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
 #   cloudflared tunnel --config /etc/cloudflared/config.yml ingress rule https://panel.example.com/api/v1/health/live
-#   cloudflared tunnel route dns siyahtus-pilot panel.example.com  # and widget., api., rtm.
+#   cloudflared tunnel route dns siyahtus-pilot panel.example.com  # and widget., api., rtm., admin.
 #
 # `ingress rule` prints the rule a URL matches: for the panel's /api/ it has
 # to be the one with `path: ^/api/` and the api's port, not the catch-all.
@@ -62,7 +62,9 @@
 #
 # The panel's /api/ rule comes BEFORE the panel's catch-all and goes to the
 # api directly. First match wins. Through the panel's nginx it would be a
-# second hop, and every panel user would share one address (PLAN §D197).
+# second hop, and every panel user would share one address (PLAN §D197). The
+# back office's /platform/ rule is built the same way, for the same reason, and
+# for platform-api's PLATFORM_IP_ALLOWLIST on top of it.
 #
 # 127.0.0.1, never localhost: localhost may resolve to ::1, and compose
 # publishes on IPv4 loopback only. The ports are the compose defaults; a
@@ -70,7 +72,8 @@
 #
 # apps/api/src/config/env.pilot.test.ts reads this file and fails if the names
 # stop matching the Caddyfile's, a rule leaves 127.0.0.1 or its published port,
-# the panel's /api/ rule falls below the catch-all, or the 404 rule goes.
+# the panel's /api/ or the back office's /platform/ rule falls below its
+# catch-all, or the 404 rule goes.
 tunnel: <tunnel-uuid>
 credentials-file: /etc/cloudflared/<tunnel-uuid>.json
 
@@ -91,5 +94,14 @@ ingress:
   # The customer widget: loader.js, the iframe document and the hosted Chat page.
   - hostname: widget.example.com
     service: http://127.0.0.1:5174
+  # The back office (root panel; tm 389.7), up only with `--profile platform`.
+  # Same shape as the panel: `/platform/` goes to platform-api directly (one
+  # hop), everything else is the admin SPA. Put Cloudflare Access in front of
+  # this name (docs/production-checklist.md §9, "Back office").
+  - hostname: admin.example.com
+    path: ^/platform/
+    service: http://127.0.0.1:4002
+  - hostname: admin.example.com
+    service: http://127.0.0.1:5175
   # Anything else (another name pointed at this tunnel, a typo) gets a 404.
   - service: http_status:404

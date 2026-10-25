@@ -26,6 +26,9 @@ const API = `http://localhost:${PORTS.api}`;
 const RTM = `http://localhost:${PORTS.rtm}`;
 const WEB_SERVER = `http://localhost:${PORTS.web}`;
 const WIDGET = `http://localhost:${PORTS.widget}`;
+/** The root panel (tm 389.6): platform-api, and the admin SPA whose Vite proxy reaches it. */
+const PLATFORM = `http://localhost:${PORTS.platform}`;
+const ADMIN_SERVER = `http://localhost:${PORTS.admin}`;
 /** The stand-in identity provider a federated sign-in is redirected to (S11-i). */
 const MOCK_IDP = `http://127.0.0.1:${PORTS.idp}`;
 /** The mail server the API sends to, and the mailbox the tests read (tm 255.4 · `tests/mailbox.ts`). */
@@ -182,6 +185,7 @@ export default defineConfig({
                       `MAP localhost:${USUAL_PORTS.api} localhost:${PORTS.api}`,
                       `MAP localhost:${USUAL_PORTS.rtm} localhost:${PORTS.rtm}`,
                       `MAP localhost:${USUAL_PORTS.web} localhost:${PORTS.web}`,
+                      `MAP localhost:${USUAL_PORTS.admin} localhost:${PORTS.admin}`,
                       `MAP localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
                       `MAP *.localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
                     ].join(', '),
@@ -327,6 +331,41 @@ export default defineConfig({
         ...SHARD_ENV,
         WEB_PORT: String(PORTS.web),
         ...(PRIVATE ? { API_BASE_URL: API } : ({} as Record<string, string>)),
+      },
+    },
+    {
+      // The root panel's API (tm 389.6): the api image's other entry point, as
+      // `siyahtus_platform` (the run's own `DATABASE_PLATFORM_URL`, derived from the
+      // private database by `with-test-datastores.ts`). `ADMIN_APP_URL` names the one origin its
+      // CORS answers; the browser reaches it through the admin server's same-origin proxy anyway.
+      // The sign-in bucket (10 failed attempts per address per 15 minutes) is the production
+      // one: the suite signs an operator in a handful of times, never wrongly.
+      ...server('api', 'platform:dev', 'node_modules/tsx/dist/cli.mjs src/platform.ts', 'platform'),
+      url: `${PLATFORM}/platform/v1/health/live`,
+      reuseExistingServer: REUSE,
+      timeout: 60_000,
+      env: {
+        ...process.env,
+        PLATFORM_PORT: String(PORTS.platform),
+        ADMIN_APP_URL: `http://localhost:${USUAL_PORTS.admin}`,
+        RATE_LIMIT_PLATFORM_PER_MIN: '5000',
+        LLM_PROVIDER: 'mock',
+        EMBEDDING_PROVIDER: 'mock',
+      },
+    },
+    {
+      // The root panel's SPA. Its `/platform` proxy runs in Node, so on a private stack it needs
+      // the shard's platform-api port (`PLATFORM_BASE_URL`) — the same trap `API_BASE_URL` is for
+      // the workspace panel above.
+      ...server('admin', 'dev', 'node_modules/vite/bin/vite.js --strictPort'),
+      url: ADMIN_SERVER,
+      reuseExistingServer: REUSE,
+      timeout: 60_000,
+      env: {
+        ...process.env,
+        ...SHARD_ENV,
+        ADMIN_PORT: String(PORTS.admin),
+        ...(PRIVATE ? { PLATFORM_BASE_URL: PLATFORM } : ({} as Record<string, string>)),
       },
     },
     {

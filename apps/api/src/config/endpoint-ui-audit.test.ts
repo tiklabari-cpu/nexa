@@ -372,7 +372,9 @@ describe('the platform pair (tm 389.3)', () => {
   });
 
   it('turns a new platform operation with no admin caller and no entry into a dead end', () => {
-    const spec = { paths: { '/workspaces': { get: {} }, '/meta': { get: {} } } };
+    // `/audit/export` stands for an operation the admin SPA does not call yet and a TRACKED
+    // entry explains (`/meta` did until tm 389.6 built the shell that calls it).
+    const spec = { paths: { '/workspaces': { get: {} }, '/audit/export': { get: {} } } };
     const analysis = withRepoRoot(() => load().analysePlatform({ spec, sources: [] }));
 
     expect(analysis.dead.map((operation) => operation.op)).toEqual(['GET /workspaces']);
@@ -386,14 +388,36 @@ describe('the platform pair (tm 389.3)', () => {
   });
 
   it('counts an admin SPA call as covering the platform operation', () => {
-    const spec = { paths: { '/meta': { get: {} } } };
+    const spec = { paths: { '/audit/export': { get: {} } } };
     const analysis = load().analysePlatform({
       spec,
-      sources: corpus('apps/admin/src/features/shell/Strip.tsx', "api.get('/meta');"),
+      sources: corpus('apps/admin/src/features/audit/AuditPage.tsx', "api.get('/audit/export');"),
     });
-    expect(analysis.called.map((operation) => operation.op)).toEqual(['GET /meta']);
+    expect(analysis.called.map((operation) => operation.op)).toEqual(['GET /audit/export']);
     expect(analysis.errors).toContain(
-      'tracked: GET /meta IS called now — the surface arrived, drop the entry',
+      'tracked: GET /audit/export IS called now — the surface arrived, drop the entry',
     );
+  });
+
+  it('finds the sign-in surface called by the shell tm 389.6 built, and nothing else of the platform contract', () => {
+    const analysis = withRepoRoot(() => load().analysePlatform());
+
+    expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
+      [
+        'GET /meta',
+        'GET /auth/me',
+        'POST /auth/login',
+        'POST /auth/logout',
+        'POST /auth/invite/accept',
+        'POST /auth/totp/enroll',
+        'POST /auth/totp/activate',
+        'POST /auth/totp/verify',
+        'POST /auth/totp/reverify',
+      ].sort(),
+    );
+    // What the empty Admins/Audit pages and the operator's own security screen have no content
+    // for stays named, with an owner, rather than silently uncalled.
+    expect(analysis.explained.tracked.map((operation) => operation.op)).toContain('GET /admins');
+    expect(analysis.explained.tracked.map((operation) => operation.op)).toContain('GET /audit');
   });
 });

@@ -398,40 +398,28 @@ const PLATFORM_HEADLESS = [
   },
 ];
 
-/** Platform surface debt with an owner (tm 389.3). */
+/**
+ * Platform surface debt with an owner (tm 389.3, trimmed by tm 389.6).
+ *
+ * `apps/admin` (tm 389.6) now calls the sign-in surface — `/meta`, login, the two TOTP steps,
+ * `/auth/me`, logout, invitation accept, reverify — so those entries are gone (the audit fails
+ * an entry whose operation `IS called now`). What stays is what the shell's empty pages have no
+ * content for yet.
+ */
 const PLATFORM_TRACKED = [
-  {
-    op: 'GET /meta',
-    owner: 'tm 389.6',
-    reason:
-      'version + region for the admin SPA\'s permanent "PLATFORM · <region>" strip; ' +
-      'apps/admin does not exist until 389.6 builds it.',
-  },
-  // Operator sign-in (tm 389.4): the admin SPA's `features/auth` — login →
-  // enroll/verify → recovery — and the shell's `/auth/me`, all built by 389.6.
-  ...[
-    'POST /auth/login',
-    'POST /auth/totp/enroll',
-    'POST /auth/totp/activate',
-    'POST /auth/totp/verify',
-    'POST /auth/totp/reverify',
-    'POST /auth/recovery/regenerate',
-    'GET /auth/me',
-    'GET /auth/sessions',
-    'DELETE /auth/sessions',
-    'POST /auth/logout',
-    'POST /auth/invite/accept',
-  ].map((op) => ({
+  // The operator's own security screen (tm 389.4): live sessions and the recovery sheet. The
+  // shell ships the sign-in, and shows the recovery sheet once at enrolment, but nothing yet lets
+  // a signed-in operator regenerate it or end their other sessions. No subtask names that screen
+  // (HANDOFF tm 389.4/389.6 open item).
+  ...['POST /auth/recovery/regenerate', 'GET /auth/sessions', 'DELETE /auth/sessions'].map((op) => ({
     op,
     owner: 'tm 389.6',
     reason:
-      'the operator sign-in (tm 389.4) — apps/admin features/auth (login, TOTP enrol/verify, ' +
-      'recovery codes, invitation accept) and the shell reading /auth/me; apps/admin does not ' +
-      'exist until 389.6 builds it.',
+      "the operator's own security screen (tm 389.4) — recovery-sheet regeneration and their live " +
+      'sessions. The shell (tm 389.6) ships the sign-in only; no later subtask names this screen yet.',
   })),
-  // Operator management (tm 389.4): the shell's Admins page. 389.6 builds the
-  // menu entry as an empty page; its content (list, invite, role, disable,
-  // reset) is named by no later subtask yet — HANDOFF tm 389.4 open item.
+  // Operator management (tm 389.4): the shell's Admins page is an empty skeleton since tm 389.6;
+  // its content (list, invite, role, disable, reset) is named by no later subtask yet.
   ...[
     'GET /admins',
     'GET /admins/invites',
@@ -447,18 +435,16 @@ const PLATFORM_TRACKED = [
     op,
     owner: 'tm 389.6',
     reason:
-      'operator management (tm 389.4) — the Admins page of the admin SPA, whose shell 389.6 ' +
-      'builds; apps/admin does not exist yet.',
+      'operator management (tm 389.4) — the Admins page, an empty skeleton in the admin shell since ' +
+      'tm 389.6; its content is named by no later subtask yet.',
   })),
-  // The platform audit chain (tm 389.5): the shell's Audit page. Like Admins,
-  // 389.6 builds the menu entry; its content is named by no later subtask yet
-  // — HANDOFF tm 389.5 open item.
+  // The platform audit chain (tm 389.5): the Audit page is an empty skeleton in the shell too.
   ...['GET /audit', 'GET /audit/export', 'POST /audit/verify'].map((op) => ({
     op,
     owner: 'tm 389.6',
     reason:
-      'the platform audit chain (tm 389.5) — the Audit page of the admin SPA (list, filters, ' +
-      'signed export, verify), whose shell 389.6 builds; apps/admin does not exist yet.',
+      'the platform audit chain (tm 389.5) — the Audit page (list, filters, signed export, verify), ' +
+      'an empty skeleton in the admin shell since tm 389.6; its content is named by no later subtask yet.',
   })),
   {
     op: 'GET /audit/workspaces/{licenseId}',

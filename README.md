@@ -20,17 +20,23 @@ make dev
 That single command installs dependencies, starts Postgres and Redis, waits for them to
 become healthy, applies migrations, seeds demo data, and starts every app.
 
-| Surface         | URL                                               |
-| --------------- | ------------------------------------------------- |
-| Agent app       | http://localhost:5173                             |
-| REST API        | http://localhost:4000/api/v1                      |
-| RTM (WebSocket) | ws://localhost:4001/v1/agent/rtm/ws               |
-| Widget          | http://localhost:5174                             |
-| Postgres        | `localhost:5433` (user `siyahtus`, db `siyahtus`) |
-| Redis           | `localhost:6380`                                  |
+| Surface         | URL                                                 |
+| --------------- | --------------------------------------------------- |
+| Agent app       | http://localhost:5173                               |
+| REST API        | http://localhost:4000/api/v1                        |
+| RTM (WebSocket) | ws://localhost:4001/v1/agent/rtm/ws                 |
+| Widget          | http://localhost:5174                               |
+| Root panel      | http://localhost:5175 (needs `platform-api`, below) |
+| Postgres        | `localhost:5433` (user `siyahtus`, db `siyahtus`)   |
+| Redis           | `localhost:6380`                                    |
 
 Ports are offset from the defaults so SiyahTuş never collides with a Postgres or Redis you
 already run locally.
+
+The **root panel** (`apps/admin`, tm 389) is the operators' back office, not part of a workspace. `make dev`
+starts its web server; its API is a separate process (`pnpm --filter @siyahtus/api platform:dev`, port 4002), and
+the first operator is created once with `pnpm --filter @siyahtus/api platform:bootstrap-admin --email you@example.com`
+(the password is read from `PLATFORM_BOOTSTRAP_PASSWORD` or stdin). Sign-in is a password and then an authenticator code.
 
 Check everything is alive:
 

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "types": ["vite/client"],
+    // Pins the React typings to this app's own copy for the same reason apps/web does
+    // (apps/mobile brings React 19; a hoisted copy would type `Route` against another `ReactNode`).
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react-dom": ["./node_modules/@types/react-dom"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "vite.config.ts", "vitest.setup.ts"]
+}

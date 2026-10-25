@@ -211,6 +211,25 @@ services:
       api:
         condition: service_healthy
 
+  # The root panel's SPA (tm 389.6 · docs/platform-admin/design.md §E): static files behind
+  # nginx, /platform/ proxied to platform-api. Behind the same `platform` profile and for the
+  # same reason: it is the front of a service the pilot does not run unless asked.
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    image: siyahtus-admin:pilot
+    profiles: ['platform']
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      PLATFORM_UPSTREAM: http://platform-api:4002
+    ports:
+      - '127.0.0.1:${SIYAHTUS_ADMIN_HOST_PORT:-5175}:8080'
+    depends_on:
+      platform-api:
+        condition: service_healthy
+
   web:
     build:
       context: .

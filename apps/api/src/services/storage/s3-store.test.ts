@@ -27,7 +27,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { authorizationHeader, deriveSigningKey, S3Store, type S3StoreOptions } from './s3-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { buildKey } from './upload-url.js';
+import { buildKey, buildMailKey } from './upload-url.js';
 
 /** `licenseOfKey` only accepts keys `buildKey` could have produced. */
 const KEY = buildKey(7n, 'text/plain');
@@ -150,6 +150,13 @@ class FakeS3 {
     if (!recorded.authorization.startsWith('AWS4-HMAC-SHA256 Credential=')) {
       response.writeHead(403, { 'content-type': 'application/xml' });
       response.end('<Error><Code>AccessDenied</Code></Error>');
+      return;
+    }
+
+    // S3 answers 204 whether or not there was an object to delete.
+    if (recorded.method === 'DELETE') {
+      this.#objects.delete(recorded.url);
+      response.writeHead(204).end();
       return;
     }
 
@@ -278,6 +285,26 @@ describe('S3Store round trip', () => {
     );
     expect(bucket!.requests).toEqual([]);
   });
+
+  it('deletes an object, and takes a second delete of it as done (tm 357)', async () => {
+    const store = await startStore();
+    await store.put(KEY, Buffer.from('x'), 'text/plain');
+
+    await store.delete(KEY);
+    expect(await store.exists(KEY)).toBe(false);
+    // The retention sweep deletes before it marks; a run cut short deletes again.
+    await expect(store.delete(KEY)).resolves.toBeUndefined();
+    expect(bucket!.requests.filter((r) => r.method === 'DELETE')).toHaveLength(2);
+  });
+
+  it('keeps an e-mailed file under its licence like an upload (tm 357)', async () => {
+    const store = await startStore();
+    const mailKey = buildMailKey(7n, 'application/pdf');
+    await store.put(mailKey, Buffer.from('%PDF-1.4'), 'application/pdf');
+
+    expect(bucket!.requests[0]!.url).toBe(`/siyahtus-uploads/7/${mailKey}`);
+    expect((await store.get(mailKey))?.contentType).toBe('application/pdf');
+  });
 });
 
 // --- The part that matters --------------------------------------------------
@@ -303,6 +330,14 @@ describe('S3Store tells absence apart from failure', () => {
     expect(await store.exists(KEY)).toBe(false);
     expect(await store.get(KEY)).toBeNull();
     expect(await store.stat(KEY)).toBeNull();
+    // Gone is what a delete wanted.
+    await expect(store.delete(KEY)).resolves.toBeUndefined();
+  });
+
+  it('throws when a delete is refused, so a purge is never recorded that did not happen', async () => {
+    const store = await storeAnswering(403, '<Error><Code>AccessDenied</Code></Error>');
+
+    await expect(store.delete(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
   });
 
   it('throws on 403 rather than reporting the file missing', async () => {

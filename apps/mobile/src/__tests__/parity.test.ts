@@ -1018,7 +1018,10 @@ describe('module parity matrix — what is still owed', () => {
       // 299 -> 300 with `/tickets/{ticketId}/messages/{messageId}/resend` (tm
       // 356.3) — "try again" on a reply whose e-mail failed (HD-01), in the same
       // pane. Nothing here re-scopes.
-      contractEndpoints: 300,
+      // 300 -> 301 with `/tickets/{ticketId}/messages/{messageId}/attachments/
+      // {attachmentKey}` (tm 357) — a file the player e-mailed, opened from the
+      // same pane (HD-02). Nothing here re-scopes.
+      contractEndpoints: 301,
       scopeBoundaries: 1,
     });
   });

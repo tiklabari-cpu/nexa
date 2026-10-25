@@ -643,3 +643,47 @@ ticketMessageResend:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ticketMessageAttachment:
+  parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 12 }
+    - name: messageId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: attachmentKey
+      in: path
+      required: true
+      schema: { type: string, maxLength: 512 }
+
+  get:
+    tags: [Tickets]
+    operationId: getTicketMessageAttachment
+    summary: Open a file on a ticket message
+    description: |
+      The bytes of one file in a message's `attachments` (tm 357 · HD-02) —
+      the one door a file the player e-mailed is served through; `GET
+      /uploads/{key}` does not serve those keys. The ticket's own visibility
+      decides: a ticket, message or file the caller may not see, or one in
+      another tenant, is `404` (NFR-S5).
+
+      A `sensitive` file (an ID document) opens only for a role holding
+      `customers.documents.view` — `403` with `error.details.reason:
+      "capability_required"` otherwise — and each opening is written to the
+      audit log (`ticket.attachment_opened`: the ticket, the message and the
+      file's key, never its name). A file the retention window removed is
+      `404`. Served as `content-disposition: attachment` with `nosniff`; a
+      sensitive file with `cache-control: no-store`.
+    responses:
+      "200":
+        description: The file
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

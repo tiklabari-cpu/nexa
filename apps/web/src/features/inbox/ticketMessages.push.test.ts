@@ -18,6 +18,7 @@ const REPLY: TicketMessage = {
   author_id: 'a1',
   author_name: 'Ada',
   body_text: 'Hello',
+  body_text_full: null,
   attachments: [],
   delivery_status: 'queued',
   created_at: '2026-10-25T10:00:00.000Z',

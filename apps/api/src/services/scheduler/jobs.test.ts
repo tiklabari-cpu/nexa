@@ -231,6 +231,7 @@ describe('buildSchedulerJobs', () => {
         visits: 0,
         aiDecisions: 0,
         unresolvedItems: 0,
+        sensitiveFiles: 0,
         mailFiles: 0,
         auditEntries: 0,
       });

@@ -26,6 +26,7 @@ loadEnvFile();
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
 import { resolveRetentionPolicy } from './policy.js';
+import { createObjectStore } from '../storage/object-store.js';
 import { RetentionRunner } from './retention.js';
 
 async function main(): Promise<void> {
@@ -39,6 +40,7 @@ async function main(): Promise<void> {
       policy: resolveRetentionPolicy(env),
       mailDir: env.MAIL_DIR,
       auditChainSecret: env.AUDIT_CHAIN_SECRET,
+      store: createObjectStore(env.STORAGE_PROVIDER, env.storage),
     });
     const report = await runner.run({ dryRun });
 
@@ -48,7 +50,8 @@ async function main(): Promise<void> {
       `retention ${dryRun ? 'dry-run (nothing deleted; pass --apply to delete)' : 'applied'}: ` +
         `${totals.threads} thread(s), ${totals.visits} visit(s), ` +
         `${totals.aiDecisions} AI decision record(s) with no connection, ` +
-        `${totals.unresolvedItems} unresolved question(s), ${totals.mailFiles} mail file(s), ` +
+        `${totals.unresolvedItems} unresolved question(s), ` +
+        `${totals.sensitiveFiles} sensitive e-mailed file(s), ${totals.mailFiles} mail file(s), ` +
         `${totals.auditEntries} audit entr${totals.auditEntries === 1 ? 'y' : 'ies'} ` +
         `across ${totals.tenants} tenant(s)\n`,
     );

@@ -1092,6 +1092,10 @@ export const settings: Messages = {
     'MIME türleri, virgülle ayrılmış — bir tarayıcının bir dosyayı etiketlediği biçim.',
   'settings.fileSharing.maxSizeLabel': 'Maksimum boyut (MB)',
   'settings.fileSharing.maxSizeError': '1 ile 100 MB arasında bir boyut girin.',
+  'settings.fileSharing.inboundSensitiveLabel':
+    'Oyuncunun e-postayla gönderdiği her dosyayı hassas say',
+  'settings.fileSharing.inboundSensitiveHint':
+    'Kapalıyken yalnız adı ya da konusu kimlik belgesi geçen dosya (kimlik, pasaport, ehliyet, KYC) hassas sayılır. Hassas dosyayı yalnız yetkili roller açar; her açılış denetim kaydına yazılır.',
 
   // Kötüye kullanım koruması — AbuseProtection.tsx, PerMemberQuota.tsx (GV-01)
   'settings.abuse.title': 'Kötüye kullanım koruması',
@@ -1473,6 +1477,8 @@ export const settings: Messages = {
   'permissions.capability.customers.edit': 'Oyuncu kayıtlarını düzenleme',
   'permissions.capability.customers.ban': 'Oyuncu engelleme',
   'permissions.capability.customers.erase': 'Oyuncu verisini silme',
+  'permissions.capability.customers.documents.view':
+    'Oyuncunun e-postayla gönderdiği hassas belgeleri açma (kimlik, pasaport, KYC)',
   'permissions.capability.ai.manage': 'AI Agent’ı yapılandırma',
   'permissions.capability.ai.guardrails.edit': 'AI uyum kurallarını düzenleme',
   'permissions.capability.reports.view': 'Raporları görme',

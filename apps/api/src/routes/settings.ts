@@ -510,6 +510,7 @@ const SECURITY_DEFAULTS = {
   maxConcurrentSessions: null as number | null,
   aiTurnsPerCustomerDay: AI_TURNS_PER_CUSTOMER_DAY_DEFAULT as number,
   captchaMode: CAPTCHA_MODE_DEFAULT as string,
+  inboundAttachmentsSensitive: false,
 } as const;
 
 /**
@@ -744,6 +745,8 @@ const updateSecurityBody = z
       .optional(),
     // When the widget asks a visitor for a human check (tm 339.2 · GV-01).
     captcha_mode: z.enum(CAPTCHA_MODES).optional(),
+    // Treat every file a player e-mails as sensitive (tm 357 · HD-02).
+    inbound_attachments_sensitive: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -2159,6 +2162,9 @@ export default async function settingsRoutes(
           ? { aiTurnsPerCustomerDay: body.ai_turns_per_customer_day }
           : {}),
         ...(body.captcha_mode !== undefined ? { captchaMode: body.captcha_mode } : {}),
+        ...(body.inbound_attachments_sensitive !== undefined
+          ? { inboundAttachmentsSensitive: body.inbound_attachments_sensitive }
+          : {}),
       };
 
       // Upsert because signup leaves no row: a workspace saving these for the
@@ -3631,6 +3637,7 @@ function serialiseSecurity(
     maxConcurrentSessions: number | null;
     aiTurnsPerCustomerDay: number;
     captchaMode: string;
+    inboundAttachmentsSensitive: boolean;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3649,6 +3656,7 @@ function serialiseSecurity(
     max_concurrent_sessions: value.maxConcurrentSessions,
     ai_turns_per_customer_day: value.aiTurnsPerCustomerDay,
     captcha_mode: isCaptchaMode(value.captchaMode) ? value.captchaMode : CAPTCHA_MODE_DEFAULT,
+    inbound_attachments_sensitive: value.inboundAttachmentsSensitive,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

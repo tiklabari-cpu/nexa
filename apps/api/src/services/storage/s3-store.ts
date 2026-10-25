@@ -57,7 +57,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { licenseOfKey } from './upload-url.js';
+import { licenseOfStoredKey } from './upload-url.js';
 
 /** Everything the `s3` provider needs. Assembled once, in `parseEnv`. */
 export interface S3StoreOptions {
@@ -193,9 +193,23 @@ export class S3Store implements ObjectStore {
     };
   }
 
+  /**
+   * Gone from the bucket. S3 answers `204` whether or not the object was
+   * there; a `404` (some compatible stores send one) is the same answer —
+   * already absent is done, so a retention run cut short deletes again next
+   * time. Anything else is the bucket failing, never "it was not there".
+   */
+  async delete(key: string): Promise<void> {
+    const response = await this.#send('DELETE', key, {});
+    if (response.status !== 204 && response.status !== 200 && response.status !== 404) {
+      throw await unavailable('DELETE', key, response);
+    }
+    await drain(response);
+  }
+
   /** One signed request. Transport failures become `StorageUnavailableError`. */
   async #send(
-    method: 'GET' | 'PUT' | 'HEAD',
+    method: 'GET' | 'PUT' | 'HEAD' | 'DELETE',
     key: string,
     payload: { body?: Buffer; contentType?: string; payloadHash?: string },
   ): Promise<Response> {
@@ -257,7 +271,7 @@ export class S3Store implements ObjectStore {
    * written per licence.
    */
   #locate(key: string): { url: URL; canonicalPath: string } {
-    const license = licenseOfKey(key);
+    const license = licenseOfStoredKey(key);
     if (license === null) {
       throw new Error('refusing to touch a key that is not in our own format');
     }

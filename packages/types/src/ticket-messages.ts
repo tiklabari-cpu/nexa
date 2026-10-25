@@ -70,9 +70,18 @@ export type TicketReplySetStatus = (typeof TICKET_REPLY_SET_STATUSES)[number];
 /**
  * The longest reply or note, in characters. Twenty thousand — about eight
  * pages, far more than an answer needs and well under what a mail server takes.
- * An inbound e-mail is not held to it: what the player sent is stored as sent.
+ * An inbound e-mail is held to {@link INBOUND_EMAIL_TEXT_MAX} instead.
  */
 export const TICKET_MESSAGE_TEXT_MAX = 20_000;
+
+/**
+ * The most of an inbound e-mail's text a message keeps, in characters
+ * (tm 357 · HD-02) — per field: the reply above the quote, and the whole mail
+ * behind "show full message". A hundred thousand is some forty pages; what a
+ * player types is far shorter, and a longer body is a pasted log or a mail
+ * loop. The rest is cut, never refused: a refused webhook is a lost mail.
+ */
+export const INBOUND_EMAIL_TEXT_MAX = 100_000;
 
 /** How many uploaded files one reply or note may carry. */
 export const TICKET_MESSAGE_ATTACHMENTS_MAX = 10;
@@ -94,6 +103,18 @@ export interface TicketMessageAttachment {
   scan_status: TicketAttachmentScanStatus;
   /** Marked sensitive (an ID document, a bank statement): hidden behind a click. */
   sensitive: boolean;
+  /**
+   * The bytes were deleted under the workspace's conversation retention window
+   * (tm 357): a sensitive file the player e-mailed goes when the window says
+   * so. The entry stays, so the thread still says a file was there.
+   */
+  purged?: boolean;
+  /**
+   * Never stored — set on a read: the file is sensitive and the caller's role
+   * may not open it (`customers.documents.view` off). The console draws it
+   * locked; the download refuses it.
+   */
+  locked?: boolean;
 }
 
 /** A page of the thread, oldest first. */

@@ -12,11 +12,17 @@
  */
 import { Buffer } from 'node:buffer';
 import { timingSafeEqual } from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { maskForWrite } from '../lib/sensitive-mask.js';
+import { TicketMessageService } from '../services/tickets/ticket-message-service.js';
+import { createObjectStore } from '../services/storage/object-store.js';
+import { createVirusScanner } from '../services/storage/virus-scanner.js';
+import { screenInboundAttachments } from '../services/channels/inbound-email-attachments.js';
+import { prepareInboundBody } from '../services/channels/inbound-email-body.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { withTenant } from '../lib/tenant.js';
 import { selfAccountId } from '../services/auth/principal.js';
@@ -33,9 +39,13 @@ import {
 } from '../services/apps/verifiers/types.js';
 import { isChannelType, type ChannelType } from '../services/channels/channel-adapter.js';
 import {
+  inboundAttachmentsAllSensitive,
   ingestInboundEmail,
+  isInboundSpam,
+  normalizeMessageId,
   parseRecipient,
   parseSender,
+  ticketOfMessageId,
 } from '../services/channels/email-inbound.js';
 import {
   InboundEmailAddressService,
@@ -81,6 +91,10 @@ function channelTypeParam(value: string): ChannelType {
 /** Who a test message comes from when the caller has no account behind it. */
 const TEST_SENDER = 'test@siyahtus.example';
 
+/** What a test message says, so the ticket it opens shows a first message like a real one. */
+const TEST_MESSAGE_TEXT =
+  'This is a test message from SiyahTuş. Mail sent to this forwarding address becomes a ticket like this one.';
+
 /** The one field defining an address takes; the service owns the vocabulary. */
 const addressBody = z.object({ label: z.string().trim().min(1).max(32) });
 
@@ -97,15 +111,51 @@ interface InboundRecipientMatch {
   address_id?: string | null;
 }
 
+/**
+ * The provider-neutral mail (`InboundEmail`, tm 357 · HD-02). The bounds are
+ * what a request may carry, not what is kept: the text is clipped to
+ * `INBOUND_EMAIL_TEXT_MAX` after masking, the HTML dropped past
+ * `INBOUND_EMAIL_HTML_MAX`, the files held to their own ceilings — a mail that
+ * is merely long is taken in, because a refused webhook is a lost mail.
+ */
 const inboundBody = z.object({
   to: z.string().min(1).max(320),
+  cc: z.array(z.string().max(320)).max(50).default([]),
   from: z.string().min(1).max(320),
   subject: z.string().max(998).default(''),
-  // Accepted so the shape matches what a parse webhook sends, but not stored:
-  // the ticket core carries no body (see TicketService).
-  text: z.string().max(100_000).optional(),
+  text: z.string().max(2_000_000).nullish(),
+  html: z.string().max(5_000_000).nullish(),
+  message_id: z.string().max(998).nullish(),
+  in_reply_to: z.string().max(998).nullish(),
+  references: z.array(z.string().max(998)).max(100).default([]),
+  // Passed through for HD-04's auto-reply guard (#359); nothing reads them yet.
+  headers: z
+    .object({
+      auto_submitted: z.string().max(200).nullish(),
+      precedence: z.string().max(200).nullish(),
+      x_autoreply: z.string().max(200).nullish(),
+    })
+    .default({}),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string().max(255).default('attachment'),
+        content_type: z.string().max(255).default('application/octet-stream'),
+        size: z.number().int().min(0).optional(),
+        content_base64: z.string().max(36_000_000),
+      }),
+    )
+    .max(50)
+    .default([]),
   spam: z.boolean().default(false),
 });
+
+/**
+ * The webhook's request ceiling: 25 MiB of files grow by a third in base64,
+ * with the text and the HTML beside them. Every other route keeps the 1 MiB
+ * `server.ts` sets.
+ */
+const INBOUND_EMAIL_BODY_LIMIT = 36 * 1024 * 1024;
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -149,6 +199,12 @@ export default async function channelRoutes(
 ): Promise<void> {
   const { env, automations } = options;
   const tickets = new TicketService();
+  // Only the player's side of the conversation is written here, so the mail
+  // settings a reply needs (`TICKET_MAIL_OUTBOUND`) do not apply.
+  const ticketMessages = new TicketMessageService();
+  // Where an e-mailed file is kept and what scans it — the ones every upload uses.
+  const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
+  const scanner = createVirusScanner(env.VIRUS_SCANNER);
   const channels = new ChannelService(
     createLiveTelegram(env, {
       http: options.appsHttp ?? createSafeHttp(),
@@ -392,9 +448,25 @@ export default async function channelRoutes(
     },
   );
 
+  /**
+   * A received mail becomes a ticket with its text and files (FR-MOD-08.5.3 ·
+   * tm 357 · HD-02), in three steps so nothing slow sits inside a transaction
+   * and nothing is stored for a mail that will not be taken in:
+   *
+   *   1. a short read: has this Message-ID been taken in, is it spam, does the
+   *      workspace treat every file as sensitive — a redelivery or a spam mail
+   *      stores no file;
+   *   2. the files, outside any transaction: checked, scanned, stored
+   *      (`screenInboundAttachments`) — a refused one is reported, never fatal;
+   *   3. one transaction: customer, ticket, message, the refused files' line
+   *      (`ingestInboundEmail`, which takes the Message-ID lock and checks
+   *      again, so two racing deliveries still make one ticket). Should that
+   *      transaction find the mail already in, the files step 2 stored are
+   *      deleted again.
+   */
   app.post(
     '/channels/email/inbound',
-    { config: { public: true, pilotRefused: true } },
+    { config: { public: true, pilotRefused: true }, bodyLimit: INBOUND_EMAIL_BODY_LIMIT },
     async (request, reply) => {
       if (env.INBOUND_EMAIL_SECRET) {
         const header = request.headers['x-inbound-secret'];
@@ -436,23 +508,94 @@ export default async function channelRoutes(
       }
 
       const tenant = { licenseId: match.license_id, organizationId: match.organization_id };
-      const result = await withTenant(app.db, tenant, async (tx) => {
+      // NUL is not text Postgres keeps; a mail client may still put one there.
+      // eslint-disable-next-line no-control-regex
+      const subject = body.subject.replace(/\x00/g, '');
+      const mail = prepareInboundBody({ text: body.text, html: body.html });
+      const messageId = normalizeMessageId(body.message_id);
+
+      // 1. Before any file is stored.
+      const screen = await withTenant(app.db, tenant, async (tx) => ({
+        seen: messageId ? await ticketOfMessageId(tx, tenant, messageId) : null,
+        spam: await isInboundSpam(tx, {
+          maskedSubject: maskForWrite(subject, 'customer').text,
+          maskedText: maskForWrite(mail.text, 'customer').text,
+          providerFlagged: body.spam,
+        }),
+        allSensitive: await inboundAttachmentsAllSensitive(tx),
+      }));
+      if (screen.seen) {
+        return reply.send({ status: 'created', ticket_id: screen.seen, duplicate: true });
+      }
+      if (screen.spam) return reply.send({ status: 'ignored', reason: 'spam' });
+
+      // 2. The files, outside any transaction.
+      const files = await screenInboundAttachments(body.attachments, {
+        store,
+        scanner,
+        licenseId: tenant.licenseId,
+        subject,
+        allSensitive: screen.allSensitive,
+      });
+
+      // 3. One transaction.
+      const outcome = await withTenant(app.db, tenant, async (tx) => {
         // The default address materialises its row on first use, so a ticket can
         // name the mailbox it arrived at even for the address that predates the
         // table (FR-MOD-08.5.3).
         const addressId = match.address_id ?? (await emailAddresses.ensureDefault(tx, tenant)).id;
-        return ingestInboundEmail(tx, tenant, tickets, {
-          senderEmail: sender.email,
-          senderName: sender.name,
-          subject: body.subject,
-          spam: body.spam,
-          addressId,
-        });
+        return ingestInboundEmail(
+          tx,
+          tenant,
+          { tickets, messages: ticketMessages },
+          {
+            senderEmail: sender.email,
+            senderName: sender.name,
+            subject,
+            spam: body.spam,
+            addressId,
+            body: mail,
+            messageId,
+            inReplyTo: normalizeMessageId(body.in_reply_to),
+            attachments: files.stored,
+            rejected: files.rejected,
+          },
+          (customerId) => inboundAudit(request)(tenant, customerId),
+        );
       });
 
-      return reply.send(result);
+      // A race lost to another delivery of the same mail (or spam after all):
+      // nothing points at the files this request stored, so they go again.
+      if (outcome.result.status !== 'created' || outcome.result.duplicate) {
+        await discardFiles(
+          request.log,
+          files.stored.map((file) => file.key),
+        );
+      }
+      // After the commit (see `RealtimePublisher`): announced inside the
+      // transaction, a listener could read the thread before the message is in it.
+      if (outcome.push) {
+        await publisher.publish(
+          tenant,
+          'ticket_message_created',
+          outcome.push.audience,
+          outcome.push.payload,
+        );
+      }
+      return reply.send(outcome.result);
     },
   );
+
+  /** Best effort: a file left behind is an orphan in the store, never a visible one. */
+  async function discardFiles(log: FastifyBaseLogger, keys: readonly string[]): Promise<void> {
+    for (const key of keys) {
+      try {
+        await store.delete(key);
+      } catch (error) {
+        log.warn({ err: error }, 'inbound email: could not delete an unused attachment');
+      }
+    }
+  }
 
   // --- Forwarding addresses: which mailboxes this workspace accepts mail at ---
   //
@@ -538,23 +681,39 @@ export default async function channelRoutes(
         // past the pipeline would prove nothing about the pipeline. `spam:
         // false` stands in for the provider's verdict, not for a bypass — a
         // workspace whose own filter would drop this still sees it dropped.
-        const ingested = await ingestInboundEmail(tx, tenant, tickets, {
-          senderEmail: sender.email,
-          senderName: sender.name,
-          subject: 'SiyahTuş test message',
-          spam: false,
-          addressId: address.id,
-        });
-        if (ingested.status !== 'created') {
+        const ingested = await ingestInboundEmail(
+          tx,
+          tenant,
+          { tickets, messages: ticketMessages },
+          {
+            senderEmail: sender.email,
+            senderName: sender.name,
+            subject: 'SiyahTuş test message',
+            spam: false,
+            addressId: address.id,
+            body: prepareInboundBody({ text: TEST_MESSAGE_TEXT }),
+          },
+          (customerId) => inboundAudit(request)(tenant, customerId),
+        );
+        if (ingested.result.status !== 'created') {
           throw ApiError.validation('The workspace spam filter dropped the test message.');
         }
         return {
-          ticket_id: ingested.ticket_id,
+          outcome: ingested,
+          ticket_id: ingested.result.ticket_id,
           address: addressFor(tenant.organizationId, address.label, env.INBOUND_EMAIL_DOMAIN),
         };
       });
 
-      return reply.send(result);
+      if (result.outcome.push) {
+        await publisher.publish(
+          tenant,
+          'ticket_message_created',
+          result.outcome.push.audience,
+          result.outcome.push.payload,
+        );
+      }
+      return reply.send({ ticket_id: result.ticket_id, address: result.address });
     },
   );
 }

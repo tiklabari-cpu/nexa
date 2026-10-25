@@ -45,6 +45,7 @@ import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { createObjectStore } from '../services/storage/object-store.js';
+import { licenseOfStoredKey } from '../services/storage/upload-url.js';
 import {
   TicketMessageService,
   resolveAttachments,
@@ -685,6 +686,52 @@ export default async function ticketRoutes(
       if (resent.outbound) mailReply(request.log, tenant, resent.outbound);
 
       return reply.send(resent.message);
+    },
+  );
+
+  /**
+   * One file of a message (tm 357 · HD-02) — the only door a file the player
+   * e-mailed opens through; `GET /uploads/{key}` does not serve those keys.
+   *
+   * The ticket, the message and the role decide in the transaction, and a
+   * sensitive file's opening is audited there; the bytes are read after it, so
+   * no row lock waits on the store. The entry therefore records an opening the
+   * caller was allowed — should the store then fail, the 503 says so too.
+   */
+  app.get<{ Params: { ticketId: string; messageId: string; attachmentKey: string } }>(
+    '/tickets/:ticketId/messages/:messageId/attachments/:attachmentKey',
+    { config: { scopes: READ_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const { messageId, attachmentKey } = request.params;
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const audit = request.auditContext();
+
+      // The licence inside the key, as `GET /uploads/{key}` checks it — RLS
+      // already confines the message, this keeps the store's read to it too.
+      const owner = licenseOfStoredKey(attachmentKey);
+      if (owner === null || owner !== tenant.licenseId) {
+        throw ApiError.notFound('Attachment not found.');
+      }
+      const file = await request.withTenant((tx) =>
+        messages.openAttachment(tx, principal, audit, ticketId, messageId, attachmentKey),
+      );
+
+      const stored = await store.get(attachmentKey);
+      if (!stored) throw ApiError.notFound('Attachment not found.');
+      return (
+        reply
+          .header('content-type', stored.contentType)
+          // Never inline, as for every upload: the console fetches the bytes and
+          // draws them itself (an image) or offers them as a download.
+          .header('content-disposition', 'attachment')
+          .header('x-content-type-options', 'nosniff')
+          // An identity document is not left in a browser cache for the next
+          // person at the desk; an ordinary file may be, privately.
+          .header('cache-control', file.sensitive ? 'no-store' : 'private, max-age=86400')
+          .send(stored.bytes)
+      );
     },
   );
 }

@@ -547,6 +547,17 @@ export const inbox: Messages = {
   'inbox.ticket.thread.attachment.infected': '{name} was blocked by the virus scan.',
   'inbox.ticket.thread.attachment.pending': '{name} is waiting for the virus check.',
   'inbox.ticket.thread.attachment.reveal': 'Show sensitive file: {name}',
+  // A player's e-mail: the whole text, the formatted view, sensitive files (HD-02 · tm 357)
+  'inbox.ticket.thread.attachment.revealHint': 'Opening it is recorded in the audit log.',
+  'inbox.ticket.thread.attachment.locked': '{name} · sensitive file — your role cannot open it.',
+  'inbox.ticket.thread.attachment.purged': '{name} was deleted under the retention policy.',
+  'inbox.ticket.thread.showFull': 'Show full message',
+  'inbox.ticket.thread.hideFull': 'Hide full message',
+  'inbox.ticket.thread.fullLabel': 'The whole e-mail, quoted text and signature included',
+  'inbox.ticket.thread.showFormatted': 'Formatted view',
+  'inbox.ticket.thread.hideFormatted': 'Hide formatted view',
+  'inbox.ticket.thread.formattedTitle':
+    "The player's e-mail as it was formatted — scripts and remote images are off",
   'inbox.ticket.composer.merged':
     'This ticket was merged into {id}. Continue the conversation on that ticket.',
   'inbox.ticket.composer.modeAriaLabel': 'Reply or internal note',

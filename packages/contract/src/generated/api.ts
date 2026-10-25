@@ -2517,6 +2517,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/tickets/{ticketId}/messages/{messageId}/attachments/{attachmentKey}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+        messageId: string;
+        attachmentKey: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Open a file on a ticket message
+     * @description The bytes of one file in a message's `attachments` (tm 357 · HD-02) —
+     *     the one door a file the player e-mailed is served through; `GET
+     *     /uploads/{key}` does not serve those keys. The ticket's own visibility
+     *     decides: a ticket, message or file the caller may not see, or one in
+     *     another tenant, is `404` (NFR-S5).
+     *
+     *     A `sensitive` file (an ID document) opens only for a role holding
+     *     `customers.documents.view` — `403` with `error.details.reason:
+     *     "capability_required"` otherwise — and each opening is written to the
+     *     audit log (`ticket.attachment_opened`: the ticket, the message and the
+     *     file's key, never its name). A file the retention window removed is
+     *     `404`. Served as `content-disposition: attachment` with `nosniff`; a
+     *     sensitive file with `cache-control: no-store`.
+     */
+    get: operations['getTicketMessageAttachment'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers/{customerId}/ban': {
     parameters: {
       query?: never;
@@ -8596,9 +8632,25 @@ export interface paths {
      *     does not spawn a duplicate record; an unknown sender becomes a new one.
      *
      *     When the workspace keeps the spam filter on (the default) and the provider
-     *     flagged the message as spam, no ticket is created — the call still
-     *     succeeds, so the provider does not retry a message that was dropped on
-     *     purpose.
+     *     flagged the message as spam — or its subject or text reads as spam to
+     *     the content classifier — no ticket is created. The call still succeeds,
+     *     so the provider does not retry a message that was dropped on purpose.
+     *
+     *     The body is provider-neutral (`InboundEmail`, tm 357 · HD-02): no
+     *     inbound provider is chosen, so each one's parse webhook (Postmark,
+     *     Mailgun, SendGrid, SES) is translated into this shape by an adapter in
+     *     front of the route rather than accepted here. What the player wrote
+     *     becomes the ticket's first message: the quoted earlier mail and the
+     *     signature are cut from the text the thread shows and kept behind "show
+     *     full message"; card numbers, passwords and IBANs are masked (AI-26);
+     *     HTML is kept only after an allow-list sanitiser. Each attachment is
+     *     checked for type (images and PDF) and size (10 MiB a file, 25 MiB a
+     *     mail), virus-scanned, and stored; one that is refused is not stored,
+     *     and the ticket says which and why in a system line — a refused file
+     *     never refuses the mail. A file whose name or subject mentions an
+     *     identity document (kimlik, pasaport, ehliyet, KYC), or any file when
+     *     the workspace treats every e-mailed file as sensitive, is stored
+     *     `sensitive`. A Message-ID seen before opens no second ticket.
      *
      *     Delivery itself is mocked in this build (PLAN A4); a production deployment
      *     authenticates the provider at the edge. When `INBOUND_EMAIL_SECRET` is
@@ -15324,6 +15376,12 @@ export interface components {
      *     (tm 339.2 · GV-01): `off`, `risk` (the default — only when the risk
      *     signals fire) or `always_on_chat_start`. See `challenge_required` on
      *     `POST /customer/token` and `POST /customer/chat/events`.
+     *
+     *     `inbound_attachments_sensitive` (tm 357 · HD-02) marks every file a
+     *     player e-mails sensitive — opened only by a role holding
+     *     `customers.documents.view`, and every opening audited. Off (the
+     *     default), only a file whose name or the mail's subject names an ID
+     *     document is.
      */
     SecuritySettings: {
       /**
@@ -15362,6 +15420,8 @@ export interface components {
        */
       ai_turns_per_customer_day: number;
       captcha_mode: components['schemas']['CaptchaMode'];
+      /** @description Treat every e-mailed file as sensitive. Defaults to false. */
+      inbound_attachments_sensitive: boolean;
       /** Format: date-time */
       updated_at?: string | null;
     };
@@ -17409,10 +17469,13 @@ export interface components {
       custom_fields: components['schemas']['CustomFieldValue'][];
     };
     /**
-     * @description One file on a ticket message (HD-01). `key` is the upload's storage key
-     *     (`POST /uploads`); only a `clean` file is offered for download or
-     *     mailed. A `sensitive` file (an ID document, a bank statement) is drawn
-     *     behind a click.
+     * @description One file on a ticket message (HD-01). `key` is the storage key — an
+     *     upload's (`POST /uploads`) on a reply or note, a file the player
+     *     e-mailed on their message (tm 357, served only through
+     *     `GET /tickets/{ticketId}/messages/{messageId}/attachments/{attachmentKey}`).
+     *     Only a `clean` file is offered for download or mailed. A `sensitive`
+     *     file (an ID document, a bank statement) is drawn behind a click, and
+     *     `locked` when the caller's role may not open it.
      */
     TicketMessageAttachment: {
       key: string;
@@ -17422,6 +17485,80 @@ export interface components {
       /** @enum {string} */
       scan_status: 'pending' | 'clean' | 'infected';
       sensitive: boolean;
+      /**
+       * @description The bytes were deleted under the workspace's conversation retention
+       *     window — a sensitive file goes when the window does. The entry
+       *     stays so the thread still says a file was there.
+       */
+      purged?: boolean;
+      /**
+       * @description Set on a read, for this caller: the file is sensitive and their
+       *     role does not hold `customers.documents.view`, so the download
+       *     refuses it.
+       */
+      locked?: boolean;
+    };
+    /**
+     * @description A received e-mail as the inbound webhook takes it (tm 357 · HD-02):
+     *     provider-neutral, so a Postmark, Mailgun, SendGrid or SES parse hook is
+     *     translated into it by an adapter rather than accepted raw. Only `to`,
+     *     `from` and `subject` are required — a mail with no body still opens a
+     *     ticket.
+     */
+    InboundEmail: {
+      /** @description The workspace forwarding address the mail was sent to. */
+      to: string;
+      /** @description Other recipients. Kept out of routing; the first `to` decides the workspace. */
+      cc?: string[];
+      /** @description Sender, bare or `Name <addr>`. Matched to a customer by email. */
+      from: string;
+      /** @description Becomes the ticket subject. */
+      subject: string;
+      /**
+       * @description The plain-text part. The quoted earlier mail and the signature are
+       *     cut from what the thread shows; the whole text stays behind "show
+       *     full message". Each is kept to 100 000 characters.
+       */
+      text?: string;
+      /**
+       * @description The HTML part, when the mail had one. Sanitised against an allow
+       *     list before it is kept — no script, style, iframe, form or event
+       *     handler, links only to http(s) and mailto, remote images parked
+       *     under `data-src` — and the text is derived from it when `text` is
+       *     absent.
+       */
+      html?: string;
+      /**
+       * @description The mail's `Message-ID`. One Message-ID is one message per
+       *     workspace: a redelivery is answered `duplicate`.
+       */
+      message_id?: string;
+      /** @description The mail's `In-Reply-To` — stored; threading onto an existing ticket is HD-03. */
+      in_reply_to?: string;
+      /** @description The mail's `References`, oldest first. */
+      references?: string[];
+      /** @description The auto-reply headers, passed through for HD-04's loop guard. */
+      headers?: {
+        auto_submitted?: string;
+        precedence?: string;
+        x_autoreply?: string;
+      };
+      attachments?: components['schemas']['InboundEmailAttachment'][];
+      /** @description The provider's spam verdict, honoured when the workspace filter is on. */
+      spam?: boolean;
+    };
+    /**
+     * @description One file on an inbound mail, inline. Accepted: PNG, JPEG, GIF, WebP and
+     *     PDF whose bytes match the type, up to 10 MiB each and 25 MiB a mail,
+     *     that pass the virus scan. Anything else is not stored and the ticket
+     *     says so in a system line.
+     */
+    InboundEmailAttachment: {
+      filename: string;
+      content_type: string;
+      /** @description The provider's count of the decoded bytes; the decoded length is what is checked. */
+      size?: number;
+      content_base64: string;
     };
     /**
      * @description One entry in a ticket's conversation (HD-01 · tm 356), oldest first in
@@ -17456,13 +17593,24 @@ export interface components {
       author_name: string | null;
       /**
        * @description The text, with card numbers masked. A reply or note is at most
-       *     20 000 characters; an inbound e-mail is stored as it arrived.
+       *     20 000 characters. On an inbound e-mail it is what the player
+       *     wrote this time — the quoted earlier mail and the signature cut —
+       *     at most 100 000 characters.
        */
       body_text: string;
       /**
+       * @description Only on a `customer_message` from e-mail, and only when something
+       *     was cut from `body_text`: the whole text as it arrived (masked
+       *     alike), for "show full message" — cutting a quote is a guess, so
+       *     the original is kept beside it.
+       */
+      body_text_full: string | null;
+      /**
        * @description Only on a `customer_message` that arrived as HTML, and only after
-       *     sanitising at intake. Still not markup to render as-is — the
-       *     console draws `body_text` and offers this behind its own sanitiser.
+       *     sanitising at intake against an allow list. Still not markup to
+       *     put in a page: the console draws `body_text`, and offers this as
+       *     "formatted view" in a frame with an empty `sandbox` and a CSP that
+       *     loads nothing.
        */
       body_html?: string | null;
       attachments: components['schemas']['TicketMessageAttachment'][];
@@ -23712,6 +23860,34 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getTicketMessageAttachment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+        messageId: string;
+        attachmentKey: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -30562,6 +30738,8 @@ export interface operations {
           /** @description The per-member daily AI allowance (GV-01); 0 turns it off. */
           ai_turns_per_customer_day?: number;
           captcha_mode?: components['schemas']['CaptchaMode'];
+          /** @description Treat every file a player e-mails as sensitive (HD-02), not only the ones whose name or subject names an ID document. */
+          inbound_attachments_sensitive?: boolean;
         };
       };
     };
@@ -32837,24 +33015,16 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          /** @description The workspace forwarding address the mail was sent to. */
-          to: string;
-          /** @description Sender, bare or `Name <addr>`. Matched to a customer by email. */
-          from: string;
-          /** @description Becomes the ticket subject. */
-          subject: string;
-          /** @description Message body. Not persisted — the ticket core carries no body. */
-          text?: string;
-          /** @description The provider's spam verdict, honoured when the workspace filter is on. */
-          spam?: boolean;
-        };
+        'application/json': components['schemas']['InboundEmail'];
       };
     };
     responses: {
       /**
-       * @description The message was processed. `created` carries the new ticket id;
-       *     `ignored` means the spam filter dropped it.
+       * @description The message was processed. `created` carries the ticket id;
+       *     `ignored` means the spam filter dropped it. A Message-ID this
+       *     workspace has already taken in is answered with the ticket it opened
+       *     the first time and `duplicate: true` — nothing is written twice, so a
+       *     provider's redelivery is harmless.
        */
       200: {
         headers: {
@@ -32866,6 +33036,8 @@ export interface operations {
             status: 'created' | 'ignored';
             /** @description Present when `status` is `created`. */
             ticket_id?: string;
+            /** @description Present, and true, when this Message-ID had already been taken in. */
+            duplicate?: boolean;
             /**
              * @description Present when `status` is `ignored`.
              * @enum {string}

@@ -9,11 +9,11 @@
  * file would hand out the filesystem, and "the caller cannot reach it" is an
  * argument that stops being true the first time someone adds a caller.
  */
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { licenseOfKey } from './upload-url.js';
+import { licenseOfStoredKey } from './upload-url.js';
 
 /**
  * Re-exported where it has always been imported from. It is declared next to
@@ -125,8 +125,23 @@ export class LocalStore implements ObjectStore {
     return { contentType: contentType.value.trim(), sizeBytes: info.value.size };
   }
 
+  /**
+   * The file and its sidecar gone. Already absent is done, not a fault — the
+   * retention sweep (tm 357) deletes before it marks, so a run cut short
+   * deletes again next time. Anything else is the store failing.
+   */
+  async delete(key: string): Promise<void> {
+    const path = this.#pathFor(key);
+    try {
+      await rm(path, { force: true });
+      await rm(`${path}.type`, { force: true });
+    } catch (error) {
+      throw new StorageUnavailableError(`DELETE ${key} could not remove ${path}`, { cause: error });
+    }
+  }
+
   #pathFor(key: string): string {
-    const license = licenseOfKey(key);
+    const license = licenseOfStoredKey(key);
     if (license === null) {
       throw new Error('refusing to touch a key that is not in our own format');
     }

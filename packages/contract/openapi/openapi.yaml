@@ -285,6 +285,8 @@ paths:
     $ref: "./paths/tickets.yaml#/ticketMessages"
   /tickets/{ticketId}/messages/{messageId}/resend:
     $ref: "./paths/tickets.yaml#/ticketMessageResend"
+  /tickets/{ticketId}/messages/{messageId}/attachments/{attachmentKey}:
+    $ref: "./paths/tickets.yaml#/ticketMessageAttachment"
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
   /customers/{customerId}/erase:
@@ -7067,6 +7069,12 @@ components:
         (tm 339.2 · GV-01): `off`, `risk` (the default — only when the risk
         signals fire) or `always_on_chat_start`. See `challenge_required` on
         `POST /customer/token` and `POST /customer/chat/events`.
+
+        `inbound_attachments_sensitive` (tm 357 · HD-02) marks every file a
+        player e-mails sensitive — opened only by a role holding
+        `customers.documents.view`, and every opening audited. Off (the
+        default), only a file whose name or the mail's subject names an ID
+        document is.
       required:
         [
           banned_customer_ips,
@@ -7080,6 +7088,7 @@ components:
           max_concurrent_sessions,
           ai_turns_per_customer_day,
           captcha_mode,
+          inbound_attachments_sensitive,
         ]
       properties:
         brand_id:
@@ -7142,6 +7151,9 @@ components:
             per-member allowance. Defaults to 40.
         captcha_mode:
           $ref: "#/components/schemas/CaptchaMode"
+        inbound_attachments_sensitive:
+          type: boolean
+          description: Treat every e-mailed file as sensitive. Defaults to false.
         updated_at: { type: string, format: date-time, nullable: true }
 
     # --- Member recognition (ID-03 · decision K4 · tm 287) ---------------------
@@ -9881,10 +9893,13 @@ components:
     TicketMessageAttachment:
       type: object
       description: |
-        One file on a ticket message (HD-01). `key` is the upload's storage key
-        (`POST /uploads`); only a `clean` file is offered for download or
-        mailed. A `sensitive` file (an ID document, a bank statement) is drawn
-        behind a click.
+        One file on a ticket message (HD-01). `key` is the storage key — an
+        upload's (`POST /uploads`) on a reply or note, a file the player
+        e-mailed on their message (tm 357, served only through
+        `GET /tickets/{ticketId}/messages/{messageId}/attachments/{attachmentKey}`).
+        Only a `clean` file is offered for download or mailed. A `sensitive`
+        file (an ID document, a bank statement) is drawn behind a click, and
+        `locked` when the caller's role may not open it.
       required: [key, name, size, mime, scan_status, sensitive]
       properties:
         key: { type: string, maxLength: 512 }
@@ -9895,6 +9910,108 @@ components:
           type: string
           enum: [pending, clean, infected]
         sensitive: { type: boolean }
+        purged:
+          type: boolean
+          description: |
+            The bytes were deleted under the workspace's conversation retention
+            window — a sensitive file goes when the window does. The entry
+            stays so the thread still says a file was there.
+        locked:
+          type: boolean
+          description: |
+            Set on a read, for this caller: the file is sensitive and their
+            role does not hold `customers.documents.view`, so the download
+            refuses it.
+
+    InboundEmail:
+      type: object
+      description: |
+        A received e-mail as the inbound webhook takes it (tm 357 · HD-02):
+        provider-neutral, so a Postmark, Mailgun, SendGrid or SES parse hook is
+        translated into it by an adapter rather than accepted raw. Only `to`,
+        `from` and `subject` are required — a mail with no body still opens a
+        ticket.
+      required: [to, from, subject]
+      properties:
+        to:
+          type: string
+          maxLength: 320
+          description: The workspace forwarding address the mail was sent to.
+        cc:
+          type: array
+          maxItems: 50
+          items: { type: string, maxLength: 320 }
+          description: Other recipients. Kept out of routing; the first `to` decides the workspace.
+        from:
+          type: string
+          maxLength: 320
+          description: Sender, bare or `Name <addr>`. Matched to a customer by email.
+        subject:
+          type: string
+          maxLength: 998
+          description: Becomes the ticket subject.
+        text:
+          type: string
+          maxLength: 2000000
+          description: |
+            The plain-text part. The quoted earlier mail and the signature are
+            cut from what the thread shows; the whole text stays behind "show
+            full message". Each is kept to 100 000 characters.
+        html:
+          type: string
+          maxLength: 5000000
+          description: |
+            The HTML part, when the mail had one. Sanitised against an allow
+            list before it is kept — no script, style, iframe, form or event
+            handler, links only to http(s) and mailto, remote images parked
+            under `data-src` — and the text is derived from it when `text` is
+            absent.
+        message_id:
+          type: string
+          maxLength: 998
+          description: |
+            The mail's `Message-ID`. One Message-ID is one message per
+            workspace: a redelivery is answered `duplicate`.
+        in_reply_to:
+          type: string
+          maxLength: 998
+          description: The mail's `In-Reply-To` — stored; threading onto an existing ticket is HD-03.
+        references:
+          type: array
+          maxItems: 100
+          items: { type: string, maxLength: 998 }
+          description: The mail's `References`, oldest first.
+        headers:
+          type: object
+          description: The auto-reply headers, passed through for HD-04's loop guard.
+          properties:
+            auto_submitted: { type: string, maxLength: 200 }
+            precedence: { type: string, maxLength: 200 }
+            x_autoreply: { type: string, maxLength: 200 }
+        attachments:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/InboundEmailAttachment" }
+        spam:
+          type: boolean
+          description: The provider's spam verdict, honoured when the workspace filter is on.
+
+    InboundEmailAttachment:
+      type: object
+      description: |
+        One file on an inbound mail, inline. Accepted: PNG, JPEG, GIF, WebP and
+        PDF whose bytes match the type, up to 10 MiB each and 25 MiB a mail,
+        that pass the virus scan. Anything else is not stored and the ticket
+        says so in a system line.
+      required: [filename, content_type, content_base64]
+      properties:
+        filename: { type: string, maxLength: 255 }
+        content_type: { type: string, maxLength: 255 }
+        size:
+          type: integer
+          minimum: 0
+          description: The provider's count of the decoded bytes; the decoded length is what is checked.
+        content_base64: { type: string, maxLength: 36000000 }
 
     TicketMessage:
       type: object
@@ -9922,6 +10039,7 @@ components:
           author_id,
           author_name,
           body_text,
+          body_text_full,
           attachments,
           delivery_status,
           created_at,
@@ -9948,14 +10066,26 @@ components:
           type: string
           description: |
             The text, with card numbers masked. A reply or note is at most
-            20 000 characters; an inbound e-mail is stored as it arrived.
+            20 000 characters. On an inbound e-mail it is what the player
+            wrote this time — the quoted earlier mail and the signature cut —
+            at most 100 000 characters.
+        body_text_full:
+          type: string
+          nullable: true
+          description: |
+            Only on a `customer_message` from e-mail, and only when something
+            was cut from `body_text`: the whole text as it arrived (masked
+            alike), for "show full message" — cutting a quote is a guess, so
+            the original is kept beside it.
         body_html:
           type: string
           nullable: true
           description: |
             Only on a `customer_message` that arrived as HTML, and only after
-            sanitising at intake. Still not markup to render as-is — the
-            console draws `body_text` and offers this behind its own sanitiser.
+            sanitising at intake against an allow list. Still not markup to
+            put in a page: the console draws `body_text`, and offers this as
+            "formatted view" in a frame with an empty `sandbox` and a CSP that
+            loads nothing.
         attachments:
           type: array
           items: { $ref: "#/components/schemas/TicketMessageAttachment" }

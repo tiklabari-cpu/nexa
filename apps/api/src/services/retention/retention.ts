@@ -56,6 +56,8 @@ import { UNRESOLVED_TEXT_RETENTION_DAYS } from '@siyahtus/types';
 import { inHipaaScope } from '../../lib/hipaa.js';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
+import type { ObjectStore } from '../storage/object-store.js';
+import { StorageUnavailableError } from '../storage/storage-error.js';
 import {
   applyTenantWindows,
   capRetentionForHipaa,
@@ -90,6 +92,13 @@ export interface TenantPruneResult {
    * thread swept above went with it (`thread_id` cascades), inside `threads`.
    */
   unresolvedItems: number;
+  /**
+   * Sensitive files a player e-mailed (tm 357 · HD-02 — an ID card, a
+   * passport) deleted from the object store under the thread window and
+   * marked `purged` on their message. The message itself stays: tickets are
+   * not in the sweep.
+   */
+  sensitiveFiles: number;
   /** Audit-log entries pruned for this tenant (NFR-S12 30-day window). */
   auditEntries: number;
   /** Whether this workspace is covered by a signed BAA (NFR-C4 · C4-e). */
@@ -125,6 +134,7 @@ export interface RetentionReport {
     visits: number;
     aiDecisions: number;
     unresolvedItems: number;
+    sensitiveFiles: number;
     mailFiles: number;
     auditEntries: number;
   };
@@ -140,6 +150,12 @@ export interface RetentionRunnerOptions {
    * outside the chain that makes deletions visible.
    */
   auditChainSecret: string;
+  /**
+   * Where e-mailed files are kept (`STORAGE_PROVIDER`, tm 357). Without one
+   * the sensitive-file step is skipped and reports 0 — the scheduler and the
+   * CLI always pass the deployment's store.
+   */
+  store?: ObjectStore;
 }
 
 interface TenantRow {
@@ -152,12 +168,14 @@ export class RetentionRunner {
   readonly #policy: RetentionPolicy;
   readonly #mailDir: string;
   readonly #auditChainSecret: string;
+  readonly #store: ObjectStore | null;
 
   constructor(db: PrismaClient, options: RetentionRunnerOptions) {
     this.#db = db;
     this.#policy = options.policy;
     this.#mailDir = options.mailDir;
     this.#auditChainSecret = options.auditChainSecret;
+    this.#store = options.store ?? null;
   }
 
   async run(options: { dryRun: boolean; now?: Date }): Promise<RetentionReport> {
@@ -199,6 +217,7 @@ export class RetentionRunner {
         visits: results.reduce((sum, r) => sum + r.visits, 0),
         aiDecisions: results.reduce((sum, r) => sum + r.aiDecisions, 0),
         unresolvedItems: results.reduce((sum, r) => sum + r.unresolvedItems, 0),
+        sensitiveFiles: results.reduce((sum, r) => sum + r.sensitiveFiles, 0),
         mailFiles,
         auditEntries,
       },
@@ -298,6 +317,15 @@ export class RetentionRunner {
           this.#deleteUnresolvedBatch(tx, unresolvedCutoff),
         );
 
+    // A sensitive file the player e-mailed (tm 357 · HD-02) goes when the
+    // conversation window says so (04 HD-02 question 2) — the file, not the
+    // message: the thread keeps saying a file was there. Skipped with an
+    // unlimited window, like everything else on it.
+    const sensitiveFiles =
+      cutoffs.threads === null || this.#store === null
+        ? 0
+        : await this.#purgeSensitiveFiles(context, cutoffs.threads, dryRun);
+
     // The audit log is append-only to `siyahtus_app` (no DELETE grant), so its
     // window cannot be applied through `withTenant` like the tables above. A
     // real run goes through the one SECURITY DEFINER hole, `audit_prune_expired`,
@@ -313,7 +341,10 @@ export class RetentionRunner {
     // of the audit trail (a no-op delete is not an event). The audit prune runs
     // before this entry, so the row that records the sweep is itself fresh and
     // never inside the window it just applied.
-    if (!dryRun && threads + visits + aiDecisions + unresolvedItems + auditEntries > 0) {
+    if (
+      !dryRun &&
+      threads + visits + aiDecisions + unresolvedItems + sensitiveFiles + auditEntries > 0
+    ) {
       await withTenant(this.#db, context, (tx) =>
         writeAuditEntry(
           tx,
@@ -330,6 +361,7 @@ export class RetentionRunner {
               visits,
               ai_decisions: aiDecisions,
               ai_unresolved: unresolvedItems,
+              sensitive_files: sensitiveFiles,
               audit_entries: auditEntries,
               dry_run: false,
               // The windows that were actually applied, and why they were those
@@ -360,6 +392,7 @@ export class RetentionRunner {
       visits,
       aiDecisions,
       unresolvedItems,
+      sensitiveFiles,
       auditEntries,
       hipaaScope,
       policy,
@@ -432,6 +465,81 @@ export class RetentionRunner {
           ORDER BY created_at
           LIMIT ${RETENTION_BATCH}
        )`;
+  }
+
+  /**
+   * The sensitive e-mailed files older than `cutoff` (tm 357), deleted and
+   * marked, a batch of messages at a time; a dry-run only counts them.
+   *
+   * The order is the design: the bytes go first, the mark after. A run cut
+   * short between the two leaves a file already gone and still unmarked, and
+   * the next run deletes it again (absence is success) and marks it — never a
+   * mark on a file still in the store. The mark is written through the one
+   * SECURITY DEFINER hole `ticket_message_purge_attachments` (the app role may
+   * not update a message), which takes the licence, the message, the keys and
+   * the cutoff and touches nothing else. Only this licence's e-mailed-file
+   * keys are named, so an upload is never deleted from here.
+   *
+   * A store that cannot be reached stops the step, not the sweep: what was
+   * purged so far is reported, the rest of this tenant's sweep — and its audit
+   * entry, which records everything the run did delete — still runs, and the
+   * next run picks the files up again.
+   */
+  async #purgeSensitiveFiles(
+    context: TenantContext,
+    cutoff: Date,
+    dryRun: boolean,
+  ): Promise<number> {
+    const prefix = `${context.licenseId}-m-%`;
+    const select = (tx: TenantClient, limit: number) =>
+      tx.$queryRaw<Array<{ id: string; keys: string[] }>>`
+        SELECT m.id, array_agg(entry ->> 'key') AS keys
+          FROM ticket_messages AS m,
+               jsonb_array_elements(m.attachments) AS entry
+         WHERE m.created_at < ${cutoff}
+           AND entry -> 'sensitive' = 'true'::jsonb
+           -- IS DISTINCT FROM, not <>: an entry with no \`purged\` at all is the
+           -- common case, and \`NULL <> true\` would drop it.
+           AND entry -> 'purged' IS DISTINCT FROM 'true'::jsonb
+           AND entry ->> 'key' LIKE ${prefix}
+         GROUP BY m.id, m.created_at
+         ORDER BY m.created_at, m.id
+         LIMIT ${limit}`;
+
+    if (dryRun) {
+      const rows = await withTenant(this.#db, context, (tx) => select(tx, 1_000_000));
+      return rows.reduce((sum, row) => sum + row.keys.length, 0);
+    }
+
+    let total = 0;
+    for (;;) {
+      const rows = await withTenant(this.#db, context, (tx) => select(tx, RETENTION_BATCH));
+      let marked = 0;
+      for (const row of rows) {
+        try {
+          for (const key of row.keys) await this.#store!.delete(key);
+        } catch (error) {
+          if (error instanceof StorageUnavailableError) return total;
+          throw error;
+        }
+        const done = await withTenant(
+          this.#db,
+          context,
+          (tx) =>
+            tx.$queryRaw<Array<{ marked: number }>>`
+            SELECT ticket_message_purge_attachments(
+              ${context.licenseId}::bigint, ${row.id}::uuid, ${row.keys}::text[], ${cutoff}::timestamptz
+            ) AS marked`,
+        );
+        if ((done[0]?.marked ?? 0) > 0) {
+          marked += 1;
+          total += row.keys.length;
+        }
+      }
+      // Fewer than a batch, or a batch nothing could be marked in (which would
+      // otherwise be selected again forever): done.
+      if (rows.length < RETENTION_BATCH || marked === 0) return total;
+    }
   }
 
   async #countUnresolved(tx: TenantClient, cutoff: Date): Promise<number> {

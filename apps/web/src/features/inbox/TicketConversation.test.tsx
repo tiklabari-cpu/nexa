@@ -48,6 +48,7 @@ function makeMessage(overrides: Partial<TicketMessage> = {}): TicketMessage {
     author_id: 'cust-1',
     author_name: 'Mira Haddad',
     body_text: 'Where is my withdrawal?',
+    body_text_full: null,
     attachments: [],
     delivery_status: null,
     created_at: '2026-10-25T09:00:00.000Z',
@@ -106,6 +107,14 @@ function render_(
       calls.push({ method, path, body });
 
       if (path === '/agents') return okJson({ items: [] });
+      if (path.includes('/attachments/')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          blob: async () => new Blob(['bytes']),
+        } as unknown as Response;
+      }
       if (path.startsWith('/settings/canned-responses')) return okJson({ items: canned });
       if (method === 'GET' && /\/messages(\?|$)/.test(path)) {
         return okJson({ items: stub.messages.map((m) => ({ ...m })) });
@@ -228,6 +237,91 @@ describe('TicketThread', () => {
   it('labels a line from a merged ticket with the ticket it was written on', async () => {
     render_(makeDetail(), [makeMessage({ ticket_id: 'TCK9', body_text: 'Written on the child.' })]);
     expect(await screen.findByText('from merged ticket TCK9')).toBeTruthy();
+  });
+
+  it('shows what the player wrote, with the whole e-mail and its formatting one click away each (HD-02)', async () => {
+    const user = userEvent.setup();
+    render_(makeDetail(), [
+      makeMessage({
+        body_text: 'Deposit failed, 2,500 TL at 14:42.',
+        body_text_full:
+          'Deposit failed, 2,500 TL at 14:42.\n\nOn Mon, 20 Oct 2026 Support <s@example.test> wrote:\n> Send the receipt?',
+        body_html: '<p>Deposit failed</p><script>alert(1)</script>',
+      }),
+    ]);
+
+    const thread = await screen.findByRole('region', { name: 'Conversation' });
+    await within(thread).findByText('Deposit failed, 2,500 TL at 14:42.');
+    // The quote is not in the thread until asked for.
+    expect(within(thread).queryByText(/Send the receipt\?/)).toBeNull();
+
+    const showFull = within(thread).getByRole('button', { name: 'Show full message' });
+    expect(showFull.getAttribute('aria-expanded')).toBe('false');
+    await user.click(showFull);
+    expect(within(thread).getByText(/Send the receipt\?/)).toBeTruthy();
+    expect(
+      within(thread)
+        .getByRole('button', { name: 'Hide full message' })
+        .getAttribute('aria-expanded'),
+    ).toBe('true');
+
+    await user.click(within(thread).getByRole('button', { name: 'Formatted view' }));
+    const frame = within(thread).getByTitle(/as it was formatted/) as HTMLIFrameElement;
+    // Every sandbox allowance off — no script runs in it, whatever it holds —
+    // and the document's own policy loads nothing but inline images.
+    expect(frame.getAttribute('sandbox')).toBe('');
+    const doc = frame.getAttribute('srcdoc') ?? '';
+    expect(doc).toContain(`content="default-src 'none'; img-src data:; style-src 'unsafe-inline'"`);
+    expect(doc).toContain('<p>Deposit failed</p>');
+  });
+
+  it('opens a file through its ticket, keeps a sensitive one behind a click and a locked one shut (HD-02)', async () => {
+    const user = userEvent.setup();
+    // jsdom has neither; defined on `URL` itself rather than stubbing the
+    // global, which is restored before the pane unmounts and revokes its URLs.
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:file'), revokeObjectURL: vi.fn() });
+    const file = (name: string, extra: Record<string, unknown> = {}) => ({
+      key: `7-m-00000000-0000-4000-8000-00000000000${name.length % 10}.${name.split('.').pop()}`,
+      name,
+      size: 2048,
+      mime: name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+      scan_status: 'clean' as const,
+      sensitive: false,
+      ...extra,
+    });
+    const receipt = file('dekont.pdf');
+    const idCard = file('kimlik_on.jpg', { sensitive: true });
+    const passport = file('pasaport.jpg', { sensitive: true, locked: true });
+    const old = file('ehliyet_eski.jpg', { sensitive: true, purged: true });
+    const stub = render_(makeDetail(), [
+      makeMessage({ attachments: [receipt, idCard, passport, old] }),
+    ]);
+    const fetched = () =>
+      stub.calls.filter((c) => c.path.includes('/attachments/')).map((c) => c.path);
+    const url = (key: string) =>
+      `/tickets/TCK1/messages/00000000-0000-4000-8000-000000000001/attachments/${key}`;
+
+    const thread = await screen.findByRole('region', { name: 'Conversation' });
+    await within(thread).findByText(/dekont\.pdf/);
+    await waitFor(() => expect(fetched()).toEqual([url(receipt.key)]));
+    // Never `/uploads`: an e-mailed file is served only through its ticket.
+    expect(stub.calls.some((c) => c.path.startsWith('/uploads/'))).toBe(false);
+
+    expect(
+      within(thread).getByText('pasaport.jpg · sensitive file — your role cannot open it.'),
+    ).toBeTruthy();
+    expect(
+      within(thread).getByText('ehliyet_eski.jpg was deleted under the retention policy.'),
+    ).toBeTruthy();
+    expect(within(thread).getByText('Opening it is recorded in the audit log.')).toBeTruthy();
+
+    await user.click(
+      within(thread).getByRole('button', { name: 'Show sensitive file: kimlik_on.jpg' }),
+    );
+    await waitFor(() => expect(fetched()).toEqual([url(receipt.key), url(idCard.key)]));
+    // The locked and the deleted file are never asked for.
+    expect(fetched()).not.toContain(url(passport.key));
+    expect(fetched()).not.toContain(url(old.key));
   });
 });
 

@@ -1599,6 +1599,9 @@ model TicketMessage {
   /// points into one of two tables, and a message outlives an agent who leaves.
   authorId       String?  @map("author_id") @db.Uuid
   bodyText       String   @map("body_text")
+  /// Only on a `customer_message` from e-mail, and only when the quote and the
+  /// signature were cut from `body_text`: the whole text, for "show full message".
+  bodyTextFull   String?  @map("body_text_full")
   /// Only on a `customer_message`, and only after sanitising at intake.
   bodyHtml       String?  @map("body_html")
   /// [{ key, name, size, mime, scan_status, sensitive }] — `TicketMessageAttachment`.
@@ -3554,6 +3557,9 @@ model SecuritySettings {
   /// `off`, `risk` (only when the risk signals fire) or `always_on_chat_start`.
   /// CHECK holds `CAPTCHA_MODES`.
   captchaMode               String   @default("risk") @map("captcha_mode")
+  /// Treat every file a player e-mails as sensitive (tm 357 · HD-02); off, only a
+  /// file whose name or the mail's subject names an ID document is.
+  inboundAttachmentsSensitive Boolean @default(false) @map("inbound_attachments_sensitive")
   updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

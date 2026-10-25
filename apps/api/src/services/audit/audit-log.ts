@@ -553,6 +553,47 @@ export const AUDIT_ACTIONS = [
   'kb.article_published',
   'kb.article_unpublished',
   'kb.settings_updated',
+  // SiyahTuş staff acting on this workspace from the root panel (tm 389.5 ·
+  // FR-ADMIN-05). Written only by `services/platform/platform-audit.ts`, as
+  // `actor_type = 'platform'`, in the same transaction as the root panel's own
+  // entry — one per workspace-touching platform action, its name the platform
+  // action with the dot flattened. The metadata is the platform chain position
+  // (`platform_seq`) and nothing else: the operator's reason and detail stay
+  // in the root panel.
+  'platform.workspace_note_added',
+  'platform.workspace_trial_extended',
+  'platform.workspace_activated',
+  'platform.workspace_plan_changed',
+  'platform.workspace_suspended',
+  'platform.workspace_unsuspended',
+  'platform.workspace_read_only_set',
+  'platform.workspace_active_set',
+  'platform.workspace_cancelled',
+  'platform.workspace_resumed',
+  'platform.workspace_overrides_changed',
+  'platform.workspace_ai_caps_changed',
+  'platform.workspace_owner_verification_resent',
+  'platform.workspace_sandbox_reset',
+  'platform.workspace_ownership_transferred',
+  'platform.workspace_deletion_scheduled',
+  'platform.workspace_deletion_cancelled',
+  'platform.account_verification_resent',
+  'platform.account_password_reset_forced',
+  'platform.account_sessions_revoked',
+  'platform.account_tokens_revoked',
+  'platform.account_two_factor_reset',
+  'platform.account_suspended',
+  'platform.account_unsuspended',
+  'platform.account_exported',
+  'platform.account_erased',
+  'platform.billing_credit_granted',
+  'platform.billing_manual_subscription_created',
+  'platform.billing_payment_address_sent',
+  'platform.billing_payment_confirmed',
+  'platform.billing_payment_request_cancelled',
+  'platform.billing_swift_marked_paid',
+  'platform.impersonation_started',
+  'platform.impersonation_ended',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

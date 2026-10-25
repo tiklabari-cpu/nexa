@@ -16,10 +16,15 @@ import {
   chainPayload,
   chainRowHash,
   deriveChainKey,
+  PLATFORM_CHAIN_SCOPE,
+  platformChainPayload,
+  platformChainRowHash,
   signExportPage,
   verifyAuditChain,
+  verifyChain,
   verifyExportSignature,
   type ChainableRow,
+  type PlatformChainableRow,
   type VerifiableRow,
 } from './audit-chain.js';
 
@@ -330,5 +335,155 @@ describe('chain verification', () => {
   it('has nothing to say about an empty trail', () => {
     const result = verifyAuditChain([], { key: KEY });
     expect(result).toMatchObject({ ok: true, checked: 0, firstSeq: null, lastSeq: null });
+  });
+});
+
+describe('fixed vectors — the bytes every tenant chain already holds (tm 389.5)', () => {
+  // The one place this file pins literal digests, and on purpose: the scope
+  // generalisation must not move a single byte of what existing workspaces
+  // have written. These values were computed by the module *before* that
+  // change; if one of them moves, every stored chain fails verification.
+  const secret = 'test-only-audit-chain-secret-0123456789abcdef';
+  const licenseId = 1000042n;
+  const key = deriveChainKey(secret, licenseId);
+  const entry: ChainableRow = {
+    id: '11111111-1111-4111-8111-111111111111',
+    licenseId,
+    chainSeq: 7n,
+    action: 'member.role_changed',
+    actorId: '22222222-2222-4222-8222-222222222222',
+    actorType: 'agent',
+    target: 'account:33333333-3333-4333-8333-333333333333',
+    metadata: { to: 'admin', from: 'agent', request_id: 'req-1' },
+    ip: '203.0.113.9',
+    createdAt: new Date('2026-08-15T09:00:00.123Z'),
+    prevHash: 'cHJldmlvdXMtaGFzaA',
+  };
+
+  it('derives the same workspace key', () => {
+    expect(key.toString('hex')).toBe(
+      '85eb4701146c02bf38aebe3ac787b3d2ade11ef1a9f24c12b62d02a6fdeb6a91',
+    );
+  });
+
+  it('encodes and hashes an entry to the same bytes', () => {
+    expect(chainPayload(entry)).toBe(
+      '["siyahtus.audit.chain.v1.row","1000042","7","11111111-1111-4111-8111-111111111111","2026-08-15T09:00:00.123Z","member.role_changed","agent","22222222-2222-4222-8222-222222222222","account:33333333-3333-4333-8333-333333333333","{\\"from\\":\\"agent\\",\\"request_id\\":\\"req-1\\",\\"to\\":\\"admin\\"}","203.0.113.9","cHJldmlvdXMtaGFzaA"]',
+    );
+    expect(chainRowHash(key, entry)).toBe('ORT7HNDbLQrMNWGirRlyPkkFOwvjda6IGJJi0SHPa2k');
+    expect(
+      chainRowHash(key, {
+        ...entry,
+        actorType: 'platform',
+        onBehalfOf: '44444444-4444-4444-8444-444444444444',
+      }),
+    ).toBe('fS9X0yNSBLGk7uAzuEj7vYdHRs4N4VXBHr-dKY2G90o');
+    expect(
+      chainRowHash(key, {
+        ...entry,
+        chainSeq: 1n,
+        prevHash: null,
+        metadata: {},
+        ip: null,
+        target: null,
+        actorId: null,
+        actorType: 'system',
+      }),
+    ).toBe('QJiv6DlXh8n9ODzukp62f3fi1Pc3pjhcJ7PNw3kF1uc');
+  });
+
+  it('signs an export page to the same bytes', () => {
+    expect(
+      signExportPage(key, {
+        licenseId,
+        count: 2,
+        firstSeq: 7n,
+        lastSeq: 8n,
+        body: '{"a":1}\n{"b":2}\n',
+      }),
+    ).toBe('q3EDP4NBvW5Vpgr0m5zOwZrFmUPhcs72n67jtj2t-pI');
+    expect(
+      signExportPage(key, { licenseId, count: 0, firstSeq: null, lastSeq: null, body: '' }),
+    ).toBe('-5n-9A3-87jns3XGqpGFPNcqapcitfsbHVAteV2Fplo');
+  });
+});
+
+describe('the platform scope (tm 389.5)', () => {
+  const platformKey = Buffer.alloc(32, 7);
+  const entry = (over: Partial<PlatformChainableRow> = {}): PlatformChainableRow => ({
+    chainSeq: 1n,
+    adminId: '22222222-2222-4222-8222-222222222222',
+    action: 'workspace.suspended',
+    targetType: 'workspace',
+    targetId: '1000042',
+    licenseId: 1000042n,
+    reason: 'chargeback',
+    payload: { b: 1, a: 2 },
+    ip: '203.0.113.9',
+    createdAt: new Date('2026-11-02T09:00:00.000Z'),
+    prevHash: null,
+    ...over,
+  });
+
+  it('puts the scope where a tenant entry has its licence id, so neither reads as the other', () => {
+    const payload = JSON.parse(platformChainPayload(entry())) as unknown[];
+    expect(payload.slice(0, 3)).toEqual(['siyahtus.audit.chain.v1.row', PLATFORM_CHAIN_SCOPE, '1']);
+    expect(JSON.parse(chainPayload(row()))[1]).toBe('1');
+  });
+
+  it('commits to every column of a platform entry', () => {
+    const original = platformChainRowHash(platformKey, entry());
+    const mutations: Array<Partial<PlatformChainableRow>> = [
+      { chainSeq: 2n },
+      { adminId: null },
+      { action: 'workspace.unsuspended' },
+      { targetType: 'account' },
+      { targetId: '1000043' },
+      { licenseId: null },
+      { reason: 'chargeback!' },
+      { payload: { a: 2, b: 2 } },
+      { ip: null },
+      { createdAt: new Date('2026-11-02T09:00:00.001Z') },
+      { prevHash: 'x' },
+    ];
+    for (const mutation of mutations) {
+      expect(platformChainRowHash(platformKey, entry(mutation)), Object.keys(mutation)[0]).not.toBe(
+        original,
+      );
+    }
+    // JSONB key order is not content.
+    expect(platformChainRowHash(platformKey, entry({ payload: { a: 2, b: 1 } }))).toBe(original);
+  });
+
+  it('signs a page by scope, and a platform page never verifies as a workspace page', () => {
+    const page = { count: 1, firstSeq: 1n, lastSeq: 1n, body: '{}\n' };
+    const signature = signExportPage(platformKey, { ...page, scope: PLATFORM_CHAIN_SCOPE });
+    expect(
+      verifyExportSignature(platformKey, { ...page, scope: PLATFORM_CHAIN_SCOPE }, signature),
+    ).toBe(true);
+    expect(verifyExportSignature(platformKey, { ...page, licenseId: 1n }, signature)).toBe(false);
+  });
+
+  it('verifies a chain in batches, linking each batch onto the last entry of the one before', () => {
+    const rows: Array<PlatformChainableRow & { hash: string }> = [];
+    let prevHash: string | null = null;
+    for (let i = 1; i <= 4; i++) {
+      const base = entry({ chainSeq: BigInt(i), prevHash });
+      const hash = platformChainRowHash(platformKey, base);
+      rows.push({ ...base, hash });
+      prevHash = hash;
+    }
+    const recompute = (r: PlatformChainableRow) => platformChainRowHash(platformKey, r);
+    expect(verifyChain(rows.slice(0, 2), { recompute, prunedThroughSeq: 0n }).ok).toBe(true);
+    const after = { seq: 2n, hash: rows[1]!.hash };
+    expect(verifyChain(rows.slice(2), { recompute, after }).ok).toBe(true);
+    // The second batch starting one too late is a gap at the first missing position.
+    expect(verifyChain(rows.slice(3), { recompute, after }).findings).toEqual([
+      expect.objectContaining({ kind: 'sequence_gap', seq: '3', id: null }),
+    ]);
+    // …and a batch that does not link onto the previous one is a broken link.
+    expect(
+      verifyChain(rows.slice(2), { recompute, after: { seq: 2n, hash: 'other' } }).findings[0],
+    ).toMatchObject({ kind: 'broken_link', seq: '3' });
   });
 });

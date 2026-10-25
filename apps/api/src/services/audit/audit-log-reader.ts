@@ -49,6 +49,12 @@ export interface AuditLogListOptions {
   dateFrom?: Date;
   /** Open-ended (now) when omitted. */
   dateTo?: Date;
+  /**
+   * The workspace, for a reader that bypasses row level security — the root
+   * panel's `siyahtus_platform` connection (tm 389.5), where this filter *is*
+   * the boundary. A tenant caller never passes it: RLS is theirs (above).
+   */
+  licenseId?: bigint;
 }
 
 export interface AuditLogItem {
@@ -166,6 +172,7 @@ function buildWhere(options: AuditLogListOptions): Prisma.AuditLogEntryWhereInpu
   if (options.dateTo) createdAt.lte = options.dateTo;
 
   const filters: Prisma.AuditLogEntryWhereInput[] = [{ createdAt }];
+  if (options.licenseId !== undefined) filters.push({ licenseId: options.licenseId });
   if (options.action) filters.push({ action: options.action });
   if (options.actorId) filters.push({ actorId: options.actorId });
 

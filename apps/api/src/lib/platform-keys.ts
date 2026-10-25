@@ -18,6 +18,8 @@ import { hkdfSync } from 'node:crypto';
 export const PLATFORM_KEY_INFO = {
   /** AES-256-GCM over `platform_admins.totp_secret_ciphertext`. */
   totpSecret: 'siyahtus/platform/totp-secret/v1',
+  /** HMAC-SHA256 over every `platform_audit_log` entry and signed export (tm 389.5). */
+  auditChain: 'siyahtus/platform/audit-chain/v1',
 } as const;
 
 export type PlatformKeyPurpose = keyof typeof PLATFORM_KEY_INFO;

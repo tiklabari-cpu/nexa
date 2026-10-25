@@ -9,11 +9,14 @@
  *   config: { platform: { self: true } }             an active session, any role (own session/me)
  *   …, stage: 'enrollment' | 'challenge' | 'any'     self routes reachable before the code
  *   …, recentTotp: true                              a code younger than five minutes
+ *   …, safe: true                                    a POST that changes nothing (read permission)
+ *   …, audit: { action, target }                     the entry it writes (`plugins/platform-audit.ts`)
  *
  * The declaration is checked when the route is registered, not when it is
  * called: a route with neither `public` nor a permission (or `self`), a public
  * route that also names a permission, a mutation guarded by a read permission
- * or a pre-code stage on a business route stops the boot. A forgotten
+ * (unless it declares itself `safe`) or a pre-code stage on a business route
+ * stops the boot. A forgotten
  * annotation therefore cannot quietly expose a route, and a contradictory one
  * cannot quietly pick a side.
  *
@@ -51,6 +54,7 @@ import type { PlatformEnv } from '../config/platform-env.js';
 import { ApiError } from '../lib/api-error.js';
 import { decideIpAccess } from '../lib/ip-allowlist.js';
 import { PlatformAdminAuth, type PlatformSessionContext } from '../services/platform/admin-auth.js';
+import type { PlatformAuditRouteConfig } from '../services/platform/platform-audit.js';
 import { PlatformAdminDirectory } from '../services/platform/admin-directory.js';
 import { bindLogContext } from './log-context.js';
 import { RateLimiter } from './rate-limit.js';
@@ -73,6 +77,17 @@ export interface PlatformRouteConfig {
   stage?: PlatformRouteStage;
   /** A code younger than `PLATFORM_RECENT_TOTP_SECONDS` (destructive routes). */
   recentTotp?: boolean;
+  /**
+   * A non-GET route that changes nothing — a computation whose input needs a
+   * body (`POST /audit/verify`). The one way a read permission may guard a
+   * POST; such a route writes no audit entry.
+   */
+  safe?: boolean;
+  /**
+   * The audit entry the route writes (tm 389.5) — required on every mutation,
+   * public ones included; the only key a public route may carry here.
+   */
+  audit?: PlatformAuditRouteConfig;
 }
 
 declare module 'fastify' {
@@ -116,8 +131,9 @@ export function platformRouteProblem(
   const where = `${method} ${url}`;
   const platform = config?.platform;
   if (config?.public) {
-    return platform
-      ? `${where}: a public route cannot also declare operator gates (config.platform).`
+    const gates = Object.keys(platform ?? {}).filter((key) => key !== 'audit');
+    return gates.length > 0
+      ? `${where}: a public route cannot also declare operator gates (config.platform.${gates[0]}).`
       : null;
   }
   if (!platform) {
@@ -133,7 +149,11 @@ export function platformRouteProblem(
     if (!isPlatformPermission(platform.permission)) {
       return `${where}: unknown permission "${String(platform.permission)}".`;
     }
-    if (!READ_METHODS.has(method) && PLATFORM_PERMISSIONS[platform.permission].kind !== 'write') {
+    if (
+      !READ_METHODS.has(method) &&
+      !platform.safe &&
+      PLATFORM_PERMISSIONS[platform.permission].kind !== 'write'
+    ) {
       return `${where}: a mutation must be guarded by a write permission, not "${platform.permission}".`;
     }
   }

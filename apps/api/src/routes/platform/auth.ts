@@ -28,7 +28,10 @@
  *   `rl:platform:totp:<admin>`  every code presented by one operator,
  *                               `RATE_LIMIT_TWO_FACTOR_PER_HOUR` an hour.
  *
- * None of these routes writes the platform audit chain yet; 389.5 adds it.
+ * Every one of them writes the platform audit chain (tm 389.5) on success,
+ * without a reason — they are the operator's own session; a refused password
+ * or code is recorded by the handler (`admin.sign_in_failed`,
+ * `admin.totp_failed`), since a failed request writes nothing on its own.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -43,6 +46,10 @@ import {
   type PlatformSessionContext,
   type SignedIn,
 } from '../../services/platform/admin-auth.js';
+import type {
+  PlatformAuditAction,
+  PlatformAuditRouteConfig,
+} from '../../services/platform/platform-audit.js';
 
 /** Ten failed sign-ins from one address per fifteen minutes (FR-ADMIN-03). */
 export const PLATFORM_SIGNIN_FAILURES = 10;
@@ -77,6 +84,11 @@ export function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infe
 function clientMeta(request: FastifyRequest): ClientMeta {
   const agent = request.headers['user-agent'];
   return { ip: request.ip ?? null, userAgent: typeof agent === 'string' ? agent : null };
+}
+
+/** The audit half of a route's config: the operator's own session, as an `admin` target. */
+function audited(action: PlatformAuditAction, target: 'admin' | 'session' = 'admin') {
+  return { action, target } satisfies PlatformAuditRouteConfig;
 }
 
 function signedInBody(signedIn: SignedIn) {
@@ -128,6 +140,34 @@ export default async function platformAuthRoutes(
     }
   }
 
+  /**
+   * A refusal worth keeping — a wrong password, a wrong code. Never fails the
+   * request it describes: the caller gets the answer they were due either way.
+   */
+  async function recordRefusal(
+    request: FastifyRequest,
+    action: 'admin.sign_in_failed' | 'admin.totp_failed',
+    adminId: string | null,
+    payload: Record<string, unknown> = {},
+  ): Promise<void> {
+    try {
+      await app.platformAuditLog.record({
+        adminId,
+        action,
+        targetType: 'admin',
+        targetId: adminId,
+        payload,
+        ip: request.ip ?? null,
+        requestId: request.id,
+      });
+    } catch (error) {
+      request.log.error(
+        { err: error, event: 'platform_audit.write_failed', action },
+        'platform audit entry could not be written',
+      );
+    }
+  }
+
   /** One code presented by `session`'s operator; refused past the hourly budget. */
   async function spendCodeAttempt(
     request: FastifyRequest,
@@ -156,33 +196,55 @@ export default async function platformAuthRoutes(
 
   // --- Sign-in ---------------------------------------------------------------
 
-  app.post('/auth/login', { config: { public: true } }, async (request) => {
-    const body = parse(loginBody, request.body);
-    const reservation = await reserveSignIn(request);
-    const signedIn = await auth.signIn(body.email, body.password, clientMeta(request));
-    // One message for an unknown address, a wrong password and a disabled
-    // operator; the slot stays spent.
-    if (!signedIn) throw ApiError.authentication('Invalid email or password.');
-    await release(request, reservation);
-    return signedInBody(signedIn);
-  });
+  app.post(
+    '/auth/login',
+    { config: { public: true, platform: { audit: audited('admin.signed_in') } } },
+    async (request) => {
+      const body = parse(loginBody, request.body);
+      const reservation = await reserveSignIn(request);
+      const signedIn = await auth.signIn(body.email, body.password, clientMeta(request));
+      // One message for an unknown address, a wrong password and a disabled
+      // operator; the slot stays spent. The entry names nobody either: which
+      // of the three it was is exactly what the answer does not tell.
+      if (!signedIn) {
+        await recordRefusal(request, 'admin.sign_in_failed', null);
+        throw ApiError.authentication('Invalid email or password.');
+      }
+      await release(request, reservation);
+      request.platformAudit!.adminId = signedIn.adminId;
+      return signedInBody(signedIn);
+    },
+  );
 
-  app.post('/auth/invite/accept', { config: { public: true } }, async (request) => {
-    const body = parse(acceptBody, request.body);
-    const reservation = await reserveSignIn(request);
-    const signedIn = await auth.acceptInvite(body.token, body.password, clientMeta(request));
-    if (!signedIn) {
-      throw ApiError.authentication('This invitation is not valid. Ask for a new one.');
-    }
-    await release(request, reservation);
-    return signedInBody(signedIn);
-  });
+  app.post(
+    '/auth/invite/accept',
+    { config: { public: true, platform: { audit: audited('admin.invite_accepted') } } },
+    async (request) => {
+      const body = parse(acceptBody, request.body);
+      const reservation = await reserveSignIn(request);
+      const signedIn = await auth.acceptInvite(body.token, body.password, clientMeta(request));
+      if (!signedIn) {
+        throw ApiError.authentication('This invitation is not valid. Ask for a new one.');
+      }
+      await release(request, reservation);
+      request.platformAudit!.adminId = signedIn.adminId;
+      return signedInBody(signedIn);
+    },
+  );
 
   // --- Enrolment -------------------------------------------------------------
 
   app.post(
     '/auth/totp/enroll',
-    { config: { platform: { self: true, stage: 'enrollment' } } },
+    {
+      config: {
+        platform: {
+          self: true,
+          stage: 'enrollment',
+          audit: audited('admin.totp_enrollment_started'),
+        },
+      },
+    },
     async (request) => {
       const enrollment = await auth.beginEnrollment(request.requirePlatformSession());
       return { secret: enrollment.secret, otpauth_uri: enrollment.otpauthUri };
@@ -191,13 +253,20 @@ export default async function platformAuthRoutes(
 
   app.post(
     '/auth/totp/activate',
-    { config: { platform: { self: true, stage: 'enrollment' } } },
+    {
+      config: {
+        platform: { self: true, stage: 'enrollment', audit: audited('admin.totp_enrolled') },
+      },
+    },
     async (request) => {
       const body = parse(codeBody, request.body);
       const session = request.requirePlatformSession();
       await spendCodeAttempt(request, session);
       const activated = await auth.activate(session, body.code);
-      if (!activated) throw badPlatformCode();
+      if (!activated) {
+        await recordRefusal(request, 'admin.totp_failed', session.adminId, { step: 'activate' });
+        throw badPlatformCode();
+      }
       return {
         token: activated.token,
         session: activated.session,
@@ -210,7 +279,11 @@ export default async function platformAuthRoutes(
 
   app.post(
     '/auth/totp/verify',
-    { config: { platform: { self: true, stage: 'challenge' } } },
+    {
+      config: {
+        platform: { self: true, stage: 'challenge', audit: audited('admin.totp_verified') },
+      },
+    },
     async (request) => {
       const body = parse(verifyBody, request.body);
       const session = request.requirePlatformSession();
@@ -219,7 +292,14 @@ export default async function platformAuthRoutes(
         session,
         'code' in body ? { code: body.code } : { recoveryCode: body.recovery_code },
       );
-      if (!verified) throw badPlatformCode();
+      if (!verified) {
+        await recordRefusal(request, 'admin.totp_failed', session.adminId, {
+          step: 'verify',
+          method: 'code' in body ? 'totp' : 'recovery_code',
+        });
+        throw badPlatformCode();
+      }
+      request.platformAudit!.payload = { method: verified.method };
       return {
         token: verified.token,
         session: verified.session,
@@ -229,18 +309,33 @@ export default async function platformAuthRoutes(
     },
   );
 
-  app.post('/auth/totp/reverify', { config: { platform: { self: true } } }, async (request) => {
-    const body = parse(codeBody, request.body);
-    const session = request.requirePlatformSession();
-    await spendCodeAttempt(request, session);
-    const refreshed = await auth.reverify(session, body.code);
-    if (!refreshed) throw badPlatformCode();
-    return { session: refreshed };
-  });
+  app.post(
+    '/auth/totp/reverify',
+    { config: { platform: { self: true, audit: audited('admin.totp_reverified') } } },
+    async (request) => {
+      const body = parse(codeBody, request.body);
+      const session = request.requirePlatformSession();
+      await spendCodeAttempt(request, session);
+      const refreshed = await auth.reverify(session, body.code);
+      if (!refreshed) {
+        await recordRefusal(request, 'admin.totp_failed', session.adminId, { step: 'reverify' });
+        throw badPlatformCode();
+      }
+      return { session: refreshed };
+    },
+  );
 
   app.post(
     '/auth/recovery/regenerate',
-    { config: { platform: { self: true, recentTotp: true } } },
+    {
+      config: {
+        platform: {
+          self: true,
+          recentTotp: true,
+          audit: audited('admin.recovery_codes_regenerated'),
+        },
+      },
+    },
     async (request) => {
       const session = request.requirePlatformSession();
       return { recovery_codes: await auth.regenerateRecoveryCodes(session.adminId) };
@@ -272,14 +367,24 @@ export default async function platformAuthRoutes(
     return { data: sessions.map((s) => ({ ...s, current: s.id === session.sessionId })) };
   });
 
-  app.delete('/auth/sessions', { config: { platform: { self: true } } }, async (request) => {
-    const session = request.requirePlatformSession();
-    return { ended: await auth.endOtherSessions(session.adminId, session.sessionId) };
-  });
+  app.delete(
+    '/auth/sessions',
+    { config: { platform: { self: true, audit: audited('admin.other_sessions_ended') } } },
+    async (request) => {
+      const session = request.requirePlatformSession();
+      const ended = await auth.endOtherSessions(session.adminId, session.sessionId);
+      request.platformAudit!.payload = { ended };
+      return { ended };
+    },
+  );
 
   app.post(
     '/auth/logout',
-    { config: { platform: { self: true, stage: 'any' } } },
+    {
+      config: {
+        platform: { self: true, stage: 'any', audit: audited('admin.signed_out', 'session') },
+      },
+    },
     async (request, reply) => {
       await auth.endSession(request.requirePlatformSession().sessionId);
       return reply.status(204).send();

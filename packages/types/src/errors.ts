@@ -113,7 +113,10 @@ export const ERROR_TYPES = [
   // younger than five minutes; re-verify and retry. Both 403 rather than 401:
   // the session is valid, it is simply not enough for this route.
   // `platform_last_superadmin`: the change would leave no active superadmin.
+  // `platform_reason_required` (tm 389.5): every operator mutation states why
+  // (3–500 characters) for the platform audit chain, and this one did not.
   'platform_last_superadmin',
+  'platform_reason_required',
   'platform_recent_totp_required',
   'platform_totp_required',
   'request_timeout',
@@ -216,6 +219,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   not_found: 404,
   pending_requests_limit_reached: 429,
   platform_last_superadmin: 409,
+  platform_reason_required: 400,
   platform_recent_totp_required: 403,
   platform_totp_required: 403,
   request_timeout: 408,

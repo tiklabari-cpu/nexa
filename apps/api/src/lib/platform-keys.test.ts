@@ -19,6 +19,12 @@ describe('derivePlatformKey (tm 389.4)', () => {
     expect(derivePlatformKey('s'.repeat(48), 'totpSecret')).not.toBe(key);
   });
 
+  it('gives every purpose its own key from the same root (tm 389.5)', () => {
+    // A leaked audit-chain key must open no TOTP secret, and the other way round.
+    expect(derivePlatformKey(ROOT, 'auditChain')).toMatch(/^[0-9a-f]{64}$/);
+    expect(derivePlatformKey(ROOT, 'auditChain')).not.toBe(derivePlatformKey(ROOT, 'totpSecret'));
+  });
+
   it('refuses an empty root', () => {
     expect(() => derivePlatformKey('', 'totpSecret')).toThrow(/empty/);
   });

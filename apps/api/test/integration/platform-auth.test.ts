@@ -668,6 +668,8 @@ describe('the permission matrix over every documented route (tm 389.4 · (e))', 
     permission: string | undefined;
     stage: string | undefined;
     recentTotp: boolean;
+    /** A POST that changes nothing (tm 389.5) — a read permission may guard it. */
+    safe: boolean;
   }
 
   function documented(): DocumentedOperation[] {
@@ -683,6 +685,7 @@ describe('the permission matrix over every documented route (tm 389.4 · (e))', 
           permission: op['x-platform-permission'] as string | undefined,
           stage: op['x-platform-stage'] as string | undefined,
           recentTotp: op['x-platform-recent-totp'] === true,
+          safe: op['x-platform-safe'] === true,
         });
       }
     }
@@ -708,7 +711,7 @@ describe('the permission matrix over every documented route (tm 389.4 · (e))', 
       expect(op.permission, where).toBeDefined();
       if (op.permission !== 'self') {
         expect(Object.keys(PLATFORM_PERMISSIONS), where).toContain(op.permission);
-        if (op.method !== 'get') {
+        if (op.method !== 'get' && !op.safe) {
           expect(
             PLATFORM_PERMISSIONS[op.permission as keyof typeof PLATFORM_PERMISSIONS].kind,
             where,
@@ -738,7 +741,7 @@ describe('the permission matrix over every documented route (tm 389.4 · (e))', 
         const forbidden = response.statusCode === 403 && errorType(response) === 'authorization';
         if (allowed === forbidden) mismatches.push(where);
         if (response.statusCode === 401) mismatches.push(where);
-        if (role === 'readonly' && op.method !== 'get' && response.statusCode < 300) {
+        if (role === 'readonly' && op.method !== 'get' && !op.safe && response.statusCode < 300) {
           mismatches.push(`${where} (readonly mutation succeeded)`);
         }
       }

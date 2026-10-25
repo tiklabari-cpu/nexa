@@ -59,6 +59,8 @@ export const common: Messages = {
     'Too many requests are already waiting — try again shortly.',
   'common.errors.platform_last_superadmin':
     'This would leave the platform without an active superadmin.',
+  'common.errors.platform_reason_required':
+    'Say why you are doing this (3 to 500 characters) — it goes into the audit log.',
   'common.errors.platform_recent_totp_required':
     'Enter a fresh authenticator code to confirm this action.',
   'common.errors.platform_totp_required': 'Finish signing in with your authenticator code first.',

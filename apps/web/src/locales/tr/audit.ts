@@ -59,6 +59,7 @@ export const audit: Messages = {
   'audit.group.customerRecords': 'Müşteri kayıtları',
   'audit.group.credentials': 'Kimlik bilgileri',
   'audit.group.data': 'Veri',
+  'audit.group.platform': 'SiyahTuş destek',
 
   // Access review export (AccessReviewExport.tsx)
   'audit.accessReview.title': 'Erişim gözden geçirmesi',

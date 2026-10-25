@@ -160,6 +160,11 @@ export class BackgroundMail {
     this.#mailer = mailer;
   }
 
+  /**
+   * `onSettled` may return a promise (tm 356.3 — a ticket reply writes its
+   * delivery status back); the send counts as in flight until it resolves, so
+   * {@link BackgroundMail.settled} covers that write too.
+   */
   send(message: Message, onSettled: (outcome: MailOutcome) => void): void {
     const job: Promise<void> = new Promise<void>((resolve) => setImmediate(resolve))
       .then(() => deliver(this.#mailer, message))

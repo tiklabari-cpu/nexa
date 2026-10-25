@@ -1015,7 +1015,10 @@ describe('module parity matrix — what is still owed', () => {
       // 298 -> 299 with `/tickets/{ticketId}/messages` (tm 356.2) — a ticket's
       // conversation and its composer (HD-01), drawn by the web panel's ticket
       // pane (tm 356.4). The app has no tickets screen; nothing here re-scopes.
-      contractEndpoints: 299,
+      // 299 -> 300 with `/tickets/{ticketId}/messages/{messageId}/resend` (tm
+      // 356.3) — "try again" on a reply whose e-mail failed (HD-01), in the same
+      // pane. Nothing here re-scopes.
+      contractEndpoints: 300,
       scopeBoundaries: 1,
     });
   });

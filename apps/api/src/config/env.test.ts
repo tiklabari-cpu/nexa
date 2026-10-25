@@ -111,6 +111,17 @@ describe('PILOT_MODE', () => {
     },
   );
 
+  it('leaves ticket e-mail off unless TICKET_MAIL_OUTBOUND says true — its own switch (tm 356.3 · K23)', () => {
+    expect(parseEnv(BASE).TICKET_MAIL_OUTBOUND).toBe(false);
+    expect(parseEnv({ ...BASE, PILOT_MODE: 'true' }).TICKET_MAIL_OUTBOUND).toBe(false);
+    expect(parseEnv({ ...BASE, TICKET_MAIL_OUTBOUND: 'true' }).TICKET_MAIL_OUTBOUND).toBe(true);
+    for (const value of ['', '1', 'on', 'TRUE']) {
+      expect(() => parseEnv({ ...BASE, TICKET_MAIL_OUTBOUND: value })).toThrow(
+        /TICKET_MAIL_OUTBOUND/,
+      );
+    }
+  });
+
   it('takes a contact address, and refuses one that is not an address', () => {
     expect(parseEnv(BASE).PILOT_CONTACT_EMAIL).toBeUndefined();
     expect(

@@ -376,6 +376,13 @@ const TRACKED = [
       "a reply to the player or an internal note (tm 356.2 · HD-01) — the ticket pane's composer " +
       '(TicketComposer, Reply / Internal note), built by TR-WEB (tm 356.4).',
   },
+  {
+    op: 'POST /tickets/{ticketId}/messages/{messageId}/resend',
+    owner: 'tm 356.4',
+    reason:
+      "a failed reply's e-mail sent again (tm 356.3 · HD-01) — the thread's \"could not send · " +
+      'try again" link under a reply, built by TR-WEB (tm 356.4).',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

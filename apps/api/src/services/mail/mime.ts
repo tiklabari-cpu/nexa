@@ -63,17 +63,33 @@ export interface ComposeInput {
   date: Date;
   /** Without the angle brackets. */
   messageId: string;
+  /** Shown beside `from` (tm 356.3) — a workspace's name, so text a workspace wrote. */
+  fromName?: string | undefined;
+  /** `In-Reply-To` and `References` (tm 356.3), without brackets; an invalid id is left out. */
+  inReplyTo?: string | undefined;
+  references?: readonly string[] | undefined;
 }
 
 export function composeMessage(input: ComposeInput): string {
   const headers = [
-    `From: ${input.from}`,
+    fromHeader(input.from, input.fromName),
     `To: ${input.to}`,
     foldSubject(input.subject),
     `Date: ${rfc5322Date(input.date)}`,
     `Message-ID: <${input.messageId}>`,
-    'MIME-Version: 1.0',
   ];
+  // The thread (RFC 5322 §3.6.4). Each id is checked here rather than trusted:
+  // the ids a reply threads on are partly ones a player's mail server chose,
+  // and a line break in one would be a header of the sender's choosing.
+  if (input.inReplyTo !== undefined && isMessageId(input.inReplyTo)) {
+    headers.push(`In-Reply-To: <${input.inReplyTo}>`);
+  }
+  const references = (input.references ?? []).filter(isMessageId);
+  if (references.length > 0) {
+    // One id per line, so no line grows with the thread.
+    headers.push(`References: ${references.map((id) => `<${id}>`).join(`${CRLF} `)}`);
+  }
+  headers.push('MIME-Version: 1.0');
   if (input.language && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(input.language)) {
     headers.push(`Content-Language: ${input.language}`);
   }
@@ -182,6 +198,50 @@ export function foldSubject(subject: string): string {
   if (isPlainHeaderText(text)) return `Subject: ${text}`;
   const words = encodedWords(text, 39);
   return `Subject: ${words.join(`${CRLF} `)}`;
+}
+
+/**
+ * A message id as RFC 5322 §3.6.4 writes it inside the brackets, in the
+ * `dot-atom@dot-atom` form every mail server produces — no space, no line
+ * break, no bracket, one `@`. Anything else is not written into a header.
+ */
+export function isMessageId(id: string): boolean {
+  return (
+    id.length <= 250 &&
+    /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+$/.test(id)
+  );
+}
+
+/** At most this many characters of a display name — a name, not a paragraph. */
+const FROM_NAME_MAX = 100;
+
+/**
+ * `From:` with a display name when there is one (tm 356.3): `"Acme" <a@b>`.
+ *
+ * The name is a workspace's, so it is treated like a `ticket_notice` subject —
+ * line breaks and other control characters become a space before anything
+ * else, which is what keeps it from ending the header. Printable ASCII goes
+ * out as a quoted string (RFC 5322 §3.2.4, `"` and `\` escaped); anything else
+ * as encoded words (RFC 2047 §5(3) allows them in a display name), folded like
+ * the subject.
+ */
+function fromHeader(address: string, name: string | undefined): string {
+  // By code point, so the cut never splits a character.
+  const display = [
+    ...(name ?? '')
+      // eslint-disable-next-line no-control-regex -- control characters are what is removed
+      .replace(/[\x00-\x1f\x7f]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  ]
+    .slice(0, FROM_NAME_MAX)
+    .join('')
+    .trim();
+  if (!display) return `From: ${address}`;
+  if (/^[\x20-\x7e]*$/.test(display) && !display.includes('=?')) {
+    return `From: "${display.replace(/["\\]/g, (c) => `\\${c}`)}" <${address}>`;
+  }
+  return `From: ${encodedWords(display, 39).join(`${CRLF} `)}${CRLF} <${address}>`;
 }
 
 /** RFC 2047 `B` encoded words, each holding at most `maxBytes` of UTF-8 and only whole characters. */

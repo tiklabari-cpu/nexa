@@ -283,6 +283,8 @@ paths:
     $ref: "./paths/tickets.yaml#/ticketCustomFields"
   /tickets/{ticketId}/messages:
     $ref: "./paths/tickets.yaml#/ticketMessages"
+  /tickets/{ticketId}/messages/{messageId}/resend:
+    $ref: "./paths/tickets.yaml#/ticketMessageResend"
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
   /customers/{customerId}/erase:

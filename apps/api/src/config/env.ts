@@ -670,6 +670,25 @@ export const envSchema = z.object({
    * texts point at nobody. Public by design: it is printed on screens.
    */
   PILOT_CONTACT_EMAIL: z.string().email().optional(),
+  /**
+   * Whether an agent's ticket reply is e-mailed to the player (tm 356.3 · HD-01
+   * · K23). Its own switch rather than a consequence of `PILOT_MODE`: the pilot
+   * owner opens ticket e-mail when the sending domain is ready for it (SPF,
+   * DKIM, DMARC — `docs/runbooks/ticket-reply-mail.md`), which is a decision
+   * about mail, not about which surfaces the pilot offers.
+   *
+   * Off by default, and off loses nothing: the reply is stored, the ticket
+   * moves to `pending` as usual, and the reply's `delivery_status` is
+   * `suppressed`, which the console shows as "not sent (pilot)". On, the
+   * reply goes out after its commit through `app.backgroundMail` (kind
+   * `ticket_reply`, the external daily cap) and its status follows the send.
+   * An internal note is never mailed, on or off. The two literal words only,
+   * like `PILOT_MODE`. The root panel shows it (tm 389.13) and does not set it.
+   */
+  TICKET_MAIL_OUTBOUND: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 
   /**
    * The deployment's privacy policy and terms of service (tm 257.9 · ADR

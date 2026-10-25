@@ -190,6 +190,9 @@ export const RTM_PUSH_ACTIONS = [
   // 356.2 · HD-01, `TicketMessageCreatedPush`): to its assignee, its followers
   // and its team.
   'ticket_message_created',
+  // A reply's e-mail went out, failed, or was queued again (tm 356.3 · HD-01,
+  // `TicketMessageDeliveryChangedPush`): same audience.
+  'ticket_message_delivery_changed',
   // Errors
   'incoming_error',
 ] as const;

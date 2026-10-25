@@ -596,3 +596,50 @@ ticketMessages:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ticketMessageResend:
+  parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 12 }
+    - name: messageId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Tickets]
+    operationId: resendTicketMessage
+    summary: Send a reply's e-mail again after it failed
+    description: |
+      The console's "try again" on a reply whose `delivery_status` is
+      `failed` (HD-01). The reply is not written again: the same message —
+      the same text, the same `Message-ID` — goes back to `queued` and is
+      e-mailed after the commit, to the address the ticket's player has now.
+
+      Only a `failed` reply is sent again, and only once however often the
+      button is pressed: a reply that is `queued`, `sent` or `suppressed` is
+      answered as it is and nothing is mailed. With ticket e-mail switched off
+      on this deployment (K23) a failed reply becomes `suppressed`.
+
+      An internal note has no e-mail to resend (`400`). A player who no
+      longer has an address is `409 ticket_no_recipient`. A ticket or message
+      the caller may not see, or one in another tenant, is `404` (NFR-S5).
+    responses:
+      "200":
+        description: The reply as it now stands — `queued` when it is going out again.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketMessage" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: "`ticket_no_recipient` — the player has no e-mail address any more."
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

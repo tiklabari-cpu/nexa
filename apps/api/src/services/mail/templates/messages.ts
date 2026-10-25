@@ -1228,6 +1228,48 @@ export function ticketNoticeMail(
   return { ...rendered, body: input.body };
 }
 
+/**
+ * An agent's reply on a ticket, to its player (tm 356.3 · HD-01).
+ *
+ * The reply alone: the text the agent wrote (already masked), never the
+ * conversation before it — quoting would put earlier messages back in front of
+ * whoever reads this inbox, including ones the player may have written from a
+ * shared address, and the thread is what `In-Reply-To` / `References` are for.
+ * `[#<id>]` leads the subject so the player's answer can be told to belong to
+ * this ticket by eye and by the inbound path (HD-03) alike.
+ */
+export function ticketReplyMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    ticketId: string;
+    ticketSubject: string;
+    body: string;
+    agentName: string | null;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const subject = `[#${input.ticketId}] ${input.ticketSubject}`;
+  const rendered = renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    sender: input.workspaceName,
+    eyebrow: input.workspaceName,
+    subject,
+    preheader: firstLine(input.body),
+    heading: input.ticketSubject,
+    blocks: [{ type: 'verbatim', text: input.body }],
+    footer: [
+      ...(input.agentName ? [`${input.agentName} · ${input.workspaceName}`] : []),
+      t
+        ? `Bu e-postayı, ${input.workspaceName} ile açık bir talebiniz (#${input.ticketId}) olduğu için aldınız.`
+        : `You received this email because you have a request (#${input.ticketId}) open with ${input.workspaceName}.`,
+      poweredBy(ctx.locale),
+    ],
+  });
+  return { ...rendered, body: input.body };
+}
+
 // --- Formatting -------------------------------------------------------------------
 
 /** `12 min`, `8 h`, `10 h 55 min` — a duration a person reads at a glance. */

@@ -247,3 +247,60 @@ describe('composeMessage with HTML and attachments (tm 265)', () => {
     expect(composeMessage({ ...BASE, language: 'tr\r\nBcc: x@y.test' })).not.toContain('Bcc:');
   });
 });
+
+describe('composeMessage for a ticket reply (tm 356.3)', () => {
+  it('shows a workspace name beside the system address, quoted and escaped', () => {
+    const message = composeMessage({ ...BASE, fromName: 'Acme "Gold" \\ Support' });
+    expect(headerValue(message, 'From')).toBe('"Acme \\"Gold\\" \\\\ Support" <info@nolnk.test>');
+  });
+
+  it('encodes a Turkish name, folded within the line limit, and keeps the address bare', () => {
+    const name = 'Çağrı Merkezi Şubesi — Gölbaşı İletişim Hizmetleri Anonim Şirketi';
+    const message = composeMessage({ ...BASE, fromName: name });
+    const value = headerValue(message, 'From');
+    expect(value.endsWith('\r\n <info@nolnk.test>')).toBe(true);
+    expect(decodeHeader(value.slice(0, -'\r\n <info@nolnk.test>'.length))).toBe(name);
+    const head = message.slice(0, message.indexOf('\r\n\r\n'));
+    for (const line of head.split('\r\n')) expect(line.length).toBeLessThanOrEqual(76);
+    expect(head).toMatch(/^[\x20-\x7e\r\n]*$/);
+  });
+
+  it('turns a line break in the name into a space instead of a new header', () => {
+    const message = composeMessage({ ...BASE, fromName: 'Acme\r\nBcc: victim@example.test' });
+    expect(headerValue(message, 'From')).toBe('"Acme Bcc: victim@example.test" <info@nolnk.test>');
+    expect(message).not.toMatch(/^Bcc:/m);
+  });
+
+  it('falls back to the bare address for a blank name', () => {
+    expect(headerValue(composeMessage({ ...BASE, fromName: ' \r\n ' }), 'From')).toBe(
+      'info@nolnk.test',
+    );
+  });
+
+  it('threads on the earlier messages, one id per line', () => {
+    const message = composeMessage({
+      ...BASE,
+      inReplyTo: 'p1@mail.example.test',
+      references: ['r0@nolnk.test', 'p1@mail.example.test'],
+    });
+    expect(headerValue(message, 'In-Reply-To')).toBe('<p1@mail.example.test>');
+    expect(headerValue(message, 'References')).toBe('<r0@nolnk.test>\r\n <p1@mail.example.test>');
+  });
+
+  it('leaves out an id a header cannot carry rather than writing it', () => {
+    const message = composeMessage({
+      ...BASE,
+      inReplyTo: 'x@y.test>\r\nBcc: victim@example.test',
+      references: ['<bracketed@y.test>', 'two words@y.test', 'no-at-sign', 'ok@y.test'],
+    });
+    expect(message).not.toContain('In-Reply-To');
+    expect(message).not.toMatch(/^Bcc:/m);
+    expect(headerValue(message, 'References')).toBe('<ok@y.test>');
+  });
+
+  it('writes no thread headers for a message that starts one', () => {
+    const message = composeMessage({ ...BASE, references: [] });
+    expect(message).not.toContain('In-Reply-To');
+    expect(message).not.toContain('References');
+  });
+});

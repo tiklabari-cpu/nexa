@@ -247,6 +247,10 @@ secrets:
   # hides a deleted row. Keep every old value on rotation: entries already
   # written only verify under the value they were written with.
   AUDIT_CHAIN_SECRET: "<generate: openssl rand -hex 32>"
+  # Optional (tm 389.1): root of the platform keys (platform audit chain, AI
+  # keys stored by the root panel). Never stored with the database; keep old
+  # values on rotation. Empty until the root panel is deployed.
+  PLATFORM_SETTINGS_KEY: ""
   # Optional (tm 263): only live Apps cards need it — exactly 64 hex
   # characters (openssl rand -hex 32). Empty, every Apps card stays a demo and
   # the boot logs why. Never stored with the database; rotating it means every
@@ -260,6 +264,10 @@ secrets:
   # at the owner (or omitting it, which falls back to DATABASE_URL) silently
   # disables every tenant isolation policy while every test still passes.
   DATABASE_APP_URL: "postgresql://siyahtus_app:<app_password>@<db-host>:5432/<db>"
+  # Optional (tm 389.1): the siyahtus_platform role (BYPASSRLS — every
+  # workspace). Only the platform-api process reads it; empty is fine until
+  # the root panel is deployed.
+  DATABASE_PLATFORM_URL: ""
   REDIS_URL: "redis://<redis-host>:6379"
   # Issued by the object store, not generated here — so unlike the five keys
   # above, no `dev-only-` production guard covers them and nothing refuses to

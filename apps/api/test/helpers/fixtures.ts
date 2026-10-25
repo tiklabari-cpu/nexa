@@ -11,6 +11,7 @@ import { hashPassword, hashToken } from '../../src/lib/crypto.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
 import type { AuditActorType, AuditContext } from '../../src/services/audit/audit-log.js';
 import type { TokenKind } from '../../src/services/auth/token-service.js';
+import { platformUrlFor } from '../../scripts/test-datastores.js';
 
 // The mock IdP harness (S11-c) is a fixture like any other; re-exported here so
 // SSO test suites can reach it alongside the rest of `helpers/fixtures.js`.
@@ -108,6 +109,19 @@ export function auditContextFor(
 /** Owner connection — bypasses RLS so fixtures can span tenants. */
 export function ownerClient(): PrismaClient {
   return new PrismaClient({ datasourceUrl: process.env['DATABASE_URL'] });
+}
+
+/**
+ * Platform connection — the `siyahtus_platform` role (tm 389.1): BYPASSRLS, so
+ * it reads every tenant without `set_config`, but it is not the owner, so its
+ * grants (and their REVOKEs) apply. `with-test-datastores.ts` always sets the
+ * URL; a run with isolation off falls back to the same derivation.
+ */
+export function platformClient(): PrismaClient {
+  const configured = process.env['DATABASE_PLATFORM_URL'];
+  const owner = process.env['DATABASE_URL'];
+  if (!configured && !owner) throw new Error('DATABASE_PLATFORM_URL or DATABASE_URL must be set');
+  return new PrismaClient({ datasourceUrl: platformUrlFor(owner ?? '', configured) });
 }
 
 /**

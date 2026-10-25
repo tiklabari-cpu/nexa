@@ -263,6 +263,12 @@ model License {
 
   invitations Invitation[]
 
+  /// Platform-side rows about this workspace (tm 389.1). The tenant role cannot
+  /// read any of them; they are listed here only because they reference it.
+  platformNotes          PlatformNote[]
+  platformImpersonations PlatformImpersonationSession[]
+  platformCredits        PlatformCredit[]
+
   @@index([organizationId])
   @@map("licenses")
 }
@@ -299,6 +305,8 @@ model Account {
   twoFactor          AccountTwoFactor?
   recoveryCodes      TwoFactorRecoveryCode[]
   aiUsageAlertsTo    AiUsageAlertRecipient[]
+  /// Platform operators who looked at a workspace as this member (tm 389.1).
+  platformImpersonations PlatformImpersonationSession[]
 
   @@map("accounts")
 }
@@ -4042,6 +4050,8 @@ model Invoice {
 
   license   License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   lineItems InvoiceLineItem[]
+  /// Platform credits applied to this statement (tm 389.1).
+  platformCredits PlatformCredit[]
 
   /// The only index the table needs. It is the idempotency guarantee for the
   /// sweep *and* the access path for the list, which reads one workspace's rows
@@ -4931,4 +4941,219 @@ model AiUnresolvedSettings {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("ai_unresolved_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Platform (root panel, tm 389 · docs/platform-admin/design.md §B2)
+//
+// The deployment operator's side. Every table below has row level security
+// enabled with no policy and no grant to `siyahtus_app`, so the tenant API
+// cannot read or write a single row; it is reached only through the
+// `siyahtus_platform` role (BYPASSRLS) and the `platform_*` SECURITY DEFINER
+// readers. Role, grants, CHECKs and the append-only trigger live in the
+// migration (20261101090000_platform_role_and_tables).
+// ---------------------------------------------------------------------------
+
+/// A SiyahTuş operator — never a workspace `Account`. Role is one of
+/// superadmin | support | billing | readonly (CHECK). TOTP is mandatory; the
+/// secret is stored encrypted under `PLATFORM_SETTINGS_KEY`.
+model PlatformAdmin {
+  id                   String    @id @default(uuid()) @db.Uuid
+  email                String    @unique @db.Citext
+  /// scrypt (RFC 7914), the same format `accounts.password_hash` uses.
+  passwordHash         String    @map("password_hash")
+  role                 String
+  totpSecretCiphertext String?   @map("totp_secret_ciphertext")
+  totpEnrolledAt       DateTime? @map("totp_enrolled_at") @db.Timestamptz(6)
+  disabledAt           DateTime? @map("disabled_at") @db.Timestamptz(6)
+  /// The operator who sent the invitation. Not a foreign key: operators are
+  /// disabled, never deleted, and the attribution must survive either way.
+  invitedBy            String?   @map("invited_by") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  recoveryCodes         PlatformAdminRecoveryCode[]
+  sessions              PlatformSession[]
+  notes                 PlatformNote[]
+  impersonationSessions PlatformImpersonationSession[]
+  credits               PlatformCredit[]
+  alertPrefs            PlatformAlertPrefs?
+
+  @@map("platform_admins")
+}
+
+/// Single-use TOTP recovery codes, stored hashed.
+model PlatformAdminRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  adminId   String    @map("admin_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@map("platform_admin_recovery_codes")
+}
+
+/// An invitation to become an operator. Only the token's hash is stored.
+model PlatformAdminInvite {
+  id         String    @id @default(uuid()) @db.Uuid
+  email      String    @db.Citext
+  role       String
+  tokenHash  String    @unique @map("token_hash")
+  invitedBy  String?   @map("invited_by") @db.Uuid
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("platform_admin_invites")
+}
+
+/// An operator's session. `stage` is `password` until TOTP is verified, then
+/// `active`; only an active session reaches the platform routes (389.4).
+model PlatformSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  adminId        String    @map("admin_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  stage          String    @default("password")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  totpVerifiedAt DateTime? @map("totp_verified_at") @db.Timestamptz(6)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  ip             String?
+  userAgent      String?   @map("user_agent")
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@map("platform_sessions")
+}
+
+/// The platform audit trail: one HMAC chain for the whole deployment, keyed
+/// from `PLATFORM_SETTINGS_KEY` (writer: 389.5). Append-only — a trigger
+/// refuses UPDATE and DELETE for every role. `adminId` and `licenseId` are
+/// deliberately not foreign keys: the trail must outlive both.
+model PlatformAuditLog {
+  chainSeq   BigInt   @id @map("chain_seq")
+  adminId    String?  @map("admin_id") @db.Uuid
+  action     String
+  targetType String   @map("target_type")
+  targetId   String?  @map("target_id")
+  licenseId  BigInt?  @map("license_id")
+  reason     String?
+  payload    Json     @default("{}")
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  prevHash   String?  @map("prev_hash")
+  hash       String
+
+  @@index([licenseId, chainSeq])
+  @@index([adminId, chainSeq])
+  @@map("platform_audit_log")
+}
+
+/// The single head of the platform audit chain (CHECK id = 1). The writer
+/// creates it on first use and advances it under a row lock.
+model PlatformAuditChainHead {
+  id        Int      @id @default(1)
+  seq       BigInt   @default(0)
+  hash      String?
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_audit_chain_head")
+}
+
+/// Deployment-wide settings, one jsonb value per key. The key list is closed
+/// (CHECK, design.md §B2); `version` is the optimistic lock a write must match.
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version   Int      @default(1)
+
+  @@map("platform_settings")
+}
+
+/// An operator's internal note about a workspace. Never shown to the tenant.
+model PlatformNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  adminId   String   @map("admin_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  admin   PlatformAdmin @relation(fields: [adminId], references: [id])
+
+  @@index([licenseId, createdAt(sort: Desc)])
+  @@map("platform_notes")
+}
+
+/// Sign-up blocklist: an exact address, a domain (and its subdomains) or an
+/// IP/CIDR. Read by the tenant API only through `platform_signup_blocked`.
+model PlatformBlocklist {
+  id        String   @id @default(uuid()) @db.Uuid
+  kind      String
+  value     String
+  reason    String?
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([kind, value])
+  @@map("platform_blocklist")
+}
+
+/// An operator viewing a workspace as one of its members (389.15).
+model PlatformImpersonationSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  adminId          String    @map("admin_id") @db.Uuid
+  licenseId        BigInt    @map("license_id")
+  accountId        String    @map("account_id") @db.Uuid
+  mode             String    @default("read_only")
+  handoffCodeHash  String?   @unique @map("handoff_code_hash")
+  handoffExpiresAt DateTime? @map("handoff_expires_at") @db.Timestamptz(6)
+  startedAt        DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endsAt           DateTime  @map("ends_at") @db.Timestamptz(6)
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz(6)
+  endReason        String?   @map("end_reason")
+
+  admin   PlatformAdmin @relation(fields: [adminId], references: [id])
+  license License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  account Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, startedAt(sort: Desc)])
+  @@index([adminId, startedAt(sort: Desc)])
+  @@map("platform_impersonation_sessions")
+}
+
+/// A credit an operator granted a workspace, in minor units (389.12).
+model PlatformCredit {
+  id          String   @id @default(uuid()) @db.Uuid
+  licenseId   BigInt   @map("license_id")
+  amountMinor BigInt   @map("amount_minor")
+  currency    String
+  reason      String
+  adminId     String   @map("admin_id") @db.Uuid
+  invoiceId   String?  @map("invoice_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  admin   PlatformAdmin @relation(fields: [adminId], references: [id])
+  invoice Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([licenseId, createdAt(sort: Desc)])
+  @@index([invoiceId])
+  @@map("platform_credits")
+}
+
+/// Which alert kinds an operator wants (389.14).
+model PlatformAlertPrefs {
+  adminId   String   @id @map("admin_id") @db.Uuid
+  kinds     String[] @default([])
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("platform_alert_prefs")
 }

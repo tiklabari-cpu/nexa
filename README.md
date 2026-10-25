@@ -475,6 +475,16 @@ every tenant's rows are now readable by every other tenant's queries. `parseEnv`
 that gap the only way that actually holds: it refuses to boot in production without
 `DATABASE_APP_URL` set to something other than the owner connection.
 
+A third, optional one belongs to the root panel (tm 389): `DATABASE_PLATFORM_URL`, the
+`siyahtus_platform` role. It is `BYPASSRLS` — it reads every workspace — but not the owner,
+so its grants hold: no UPDATE or DELETE on the audit trail, invoices or second-factor tables,
+and its own `platform_audit_log` refuses both by trigger. Only the platform-api process opens
+it; the tenant API boots the same without it, and `siyahtus_app` has no privilege on any
+`platform_*` table (it reads platform settings through four `platform_*()` SECURITY DEFINER
+functions). The test harness derives it like the other two. `PLATFORM_SETTINGS_KEY` roots the
+platform's keys (its audit chain, AI keys stored by the panel) and, like `AUDIT_CHAIN_SECRET`,
+stays out of the database. Role, grants and pilot handling: `docs/production-checklist.md`.
+
 ### Connection pool budget
 
 Every process that reaches Postgres — `apps/api`, `apps/rtm`, and each of the five

@@ -84,6 +84,8 @@ const databaseKey = (name: string): string => `siyahtus:test:database:${name}`;
 export interface IsolatedDatastoreEnv {
   DATABASE_URL: string;
   DATABASE_APP_URL: string;
+  /** The platform role (`siyahtus_platform`, BYPASSRLS — tm 389.1) on the same database. */
+  DATABASE_PLATFORM_URL: string;
   REDIS_URL: string;
   SIYAHTUS_TEST_LICENSE_ID_OFFSET: string;
 }
@@ -105,6 +107,27 @@ export interface IsolatedDatastores {
 export function withDatabaseName(url: string, name: string): string {
   const parsed = new URL(url);
   parsed.pathname = `/${name}`;
+  return parsed.toString();
+}
+
+/** The role and development password the platform migration creates (tm 389.1). */
+export const PLATFORM_ROLE = 'siyahtus_platform';
+export const PLATFORM_DEV_PASSWORD = 'siyahtus_platform_dev_password';
+
+/**
+ * The platform-role connection for a test run (tm 389.1).
+ *
+ * A configured `DATABASE_PLATFORM_URL` wins. Without one — the root `.env` of
+ * a window opened before this existed, or a CI job that never set it — the URL
+ * is derived from the owner's: same host, port and options, the platform role
+ * and the development password its migration creates. Either way the caller
+ * repoints the database name.
+ */
+export function platformUrlFor(ownerUrl: string, configured?: string): string {
+  if (configured) return configured;
+  const parsed = new URL(ownerUrl);
+  parsed.username = PLATFORM_ROLE;
+  parsed.password = PLATFORM_DEV_PASSWORD;
   return parsed.toString();
 }
 
@@ -271,7 +294,7 @@ async function migrate(databaseUrl: string): Promise<void> {
 /**
  * Creates a private database and leases a private Redis index for one test run.
  *
- * Reads `DATABASE_URL` / `DATABASE_APP_URL` / `REDIS_URL` from `source` and
+ * Reads `DATABASE_URL` / `DATABASE_APP_URL` / `DATABASE_PLATFORM_URL` / `REDIS_URL` from `source` and
  * returns the overrides that repoint them; the caller decides whether to put
  * them in a child process's environment or in its own.
  */
@@ -283,6 +306,7 @@ export async function provisionIsolatedDatastores(
   if (!ownerUrl) throw new Error('DATABASE_URL must be set to isolate the test database');
   if (!redisUrl) throw new Error('REDIS_URL must be set to isolate the test Redis database');
   const appUrl = source['DATABASE_APP_URL'] ?? ownerUrl;
+  const platformUrl = platformUrlFor(ownerUrl, source['DATABASE_PLATFORM_URL']);
 
   const runId = randomBytes(8).toString('hex');
   const databaseName = isolatedDatabaseName();
@@ -377,6 +401,7 @@ export async function provisionIsolatedDatastores(
     env: {
       DATABASE_URL: withTestConnectionBudget(withDatabaseName(ownerUrl, databaseName)),
       DATABASE_APP_URL: withTestConnectionBudget(withDatabaseName(appUrl, databaseName)),
+      DATABASE_PLATFORM_URL: withTestConnectionBudget(withDatabaseName(platformUrl, databaseName)),
       REDIS_URL: withRedisIndex(redisUrl, redisIndex),
       SIYAHTUS_TEST_LICENSE_ID_OFFSET: String(licenseIdOffset),
     },

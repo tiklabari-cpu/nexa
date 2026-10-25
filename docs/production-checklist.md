@@ -165,6 +165,20 @@ failing.
       copied (not committed) and every placeholder is filled: image registry/tags, real
       hostnames, `TRUST_PROXY_HOPS`, `backup.storageClassName`, and the secret provisioning
       path (the file's own comments name three options and recommend one).
+- [ ] The platform (root panel) role `siyahtus_platform` (tm 389.1, migration
+      `20261101090000_platform_role_and_tables`) is created by the migration with the
+      **published development password** and `LOGIN`. Before anything can reach the database,
+      either lock it (`ALTER ROLE siyahtus_platform NOLOGIN PASSWORD NULL`) or give it a real
+      password (`ALTER ROLE siyahtus_platform LOGIN PASSWORD '<generated>'`) and put that in
+      `DATABASE_PLATFORM_URL` — only the platform-api process reads that variable.
+- [ ] The migration grants that role `BYPASSRLS`, which needs a superuser. On a managed Postgres
+      whose migration role is not one, the migration only logs
+      `WARNING: siyahtus_platform: BYPASSRLS could not be granted` and the role reads every tenant
+      table as zero rows. Check it with
+      `SELECT rolbypassrls FROM pg_roles WHERE rolname = 'siyahtus_platform'`; if that is `f`,
+      either have the provider grant it or add a separate
+      migration that appends `OR current_user = 'siyahtus_platform'` to the tenant policies
+      (`SELECT tablename, policyname FROM pg_policies`) — not written yet, on purpose.
 
 ## 6. Backup
 
@@ -269,6 +283,9 @@ key. By name, what the pilot needs:
   `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`.
 - Optional, live Apps cards only (tm 263): `APPS_CREDENTIAL_KEY` (64 hex characters). The pilot
   boots without it; the Apps cards then stay demos.
+- Optional, root panel only (tm 389.1): `SIYAHTUS_PLATFORM_DB_PASSWORD` (hex; applied to the
+  `siyahtus_platform` role on the first start of an empty volume — left out, the role is locked)
+  and `PLATFORM_SETTINGS_KEY` (`openssl rand -hex 32`). The tenant pilot boots without both.
 - Apps live connections (tm 263): `APPS_LIVE_PROVIDERS` (comma list of `brevo`, `freshdesk`,
   `telegram`; empty keeps every Apps card a demo mock and, under `PILOT_MODE=true`, the Apps
   surface closed). Telegram also needs `API_BASE_URL` to be a public `https://` address.
@@ -689,7 +706,9 @@ on closed features show. A workspace's way back is the owner.
 - [ ] Activate a workspace by hand, as the database owner role:
       `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "UPDATE licenses SET status = 'active', trial_ends_at = NULL WHERE organization_id = (SELECT id FROM organizations WHERE name = '<workspace name>') AND status IN ('trialing', 'read_only')"`.
       It prints `UPDATE 1`; two workspaces with the same name make it fail instead of
-      guessing — use the organization id then.
+      guessing — use the organization id then. (The root panel, tm 389, replaces this by hand
+      step with an audited action through the `siyahtus_platform` role; until it ships, this is
+      the path.)
 - [ ] Know what this path does not do: it writes no audit entry (the audit chain is signed inside
       the api) and it does not lift `past_due`. Record who was activated, when and why somewhere
       of your own. Or set `TRIAL_DAYS` in `.env` long enough that no trial ends inside the pilot,
@@ -706,6 +725,15 @@ on closed features show. A workspace's way back is the owner.
       To rotate it later, run `ALTER ROLE siyahtus_app PASSWORD '<new>'` through
       `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus`, change
       `.env`, then `up -d`.
+- [ ] The platform role `siyahtus_platform` (BYPASSRLS — every workspace) gets
+      `SIYAHTUS_PLATFORM_DB_PASSWORD` the same way, on an empty volume only
+      ([`infra/db/pilot/20-platform-role-password.sh`](../infra/db/pilot/20-platform-role-password.sh));
+      without it the script locks the role (`NOLOGIN`). **A volume initialised before tm 389.1**
+      never ran that script: the migration created the role with the published development
+      password. Lock it once after that deploy —
+      `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "ALTER ROLE siyahtus_platform NOLOGIN PASSWORD NULL"`
+      — and unlock it with `ALTER ROLE siyahtus_platform LOGIN PASSWORD '<new>'` when the root
+      panel is deployed.
 - [ ] Backups use the same scripts as §6, pointed at this file: `make pilot-backup`
       (`COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh`) writes
       `backups/db-<UTC>.dump`, and `make pilot-restore-drill` proves one restores (on a

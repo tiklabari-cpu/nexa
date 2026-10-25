@@ -332,6 +332,16 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
     );
   });
 
+  it('replaces or locks the published siyahtus_platform password, without making it required (tm 389.1)', () => {
+    const db = block(/^ {2}db:$/);
+    expect(db).toContain('infra/db/pilot/20-platform-role-password.sh');
+    // Optional on purpose (no new boot-blocking rule): `:-`, never `:?`.
+    expect(db).toContain('SIYAHTUS_PLATFORM_DB_PASSWORD: ${SIYAHTUS_PLATFORM_DB_PASSWORD:-}');
+    const script = read('infra/db/pilot/20-platform-role-password.sh');
+    expect(script).toContain("ALTER ROLE siyahtus_platform LOGIN PASSWORD :'platform_password'");
+    expect(script).toContain('ALTER ROLE siyahtus_platform NOLOGIN PASSWORD NULL');
+  });
+
   it('bakes the public addresses into the two browser bundles', () => {
     expect(block(/^ {2}web:$/)).toMatch(
       /VITE_RTM_URL: \$\{RTM_BASE_URL[^}]*\}\/v1\/agent\/rtm\/ws/,

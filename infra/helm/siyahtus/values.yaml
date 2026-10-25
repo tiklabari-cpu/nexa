@@ -469,12 +469,18 @@ secrets:
   CUSTOMER_TOKEN_SECRET: dev-only-customer-token-secret-change-me-0123456789
   UPLOAD_SIGNING_KEY: dev-only-upload-signing-key-change-me-0123456789
   AUDIT_CHAIN_SECRET: dev-only-audit-chain-secret-change-me-0123456789abcdef
+  # Optional (tm 389.1): root of the platform keys (platform audit chain, AI
+  # keys stored by the root panel). Empty, platform-stored AI keys are ignored.
+  PLATFORM_SETTINGS_KEY: ""
   # Encrypts live Apps credentials (tm 263): exactly 64 hex characters, so it
   # cannot carry the `dev-only-` prefix. Optional, never a boot failure:
   # production ignores this published value and the live cards stay demos.
   APPS_CREDENTIAL_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   DATABASE_URL: postgresql://siyahtus:CHANGE_ME@CHANGE_ME:5432/siyahtus
   DATABASE_APP_URL: postgresql://siyahtus_app:CHANGE_ME@CHANGE_ME:5432/siyahtus
+  # Optional (tm 389.1): the platform (root panel) role, BYPASSRLS. Only the
+  # platform-api process reads it; empty, the tenant pods are unaffected.
+  DATABASE_PLATFORM_URL: ""
   REDIS_URL: redis://CHANGE_ME:6379
   # Credentials for the bucket `config.STORAGE_S3_ENDPOINT`/`STORAGE_S3_BUCKET`
   # names (tm 242). `CHANGE_ME` rather than `dev-only-…` on purpose: the five

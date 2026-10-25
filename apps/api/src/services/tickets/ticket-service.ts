@@ -38,7 +38,7 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number];
  * uses the same set, so "one unresolved ticket per chat" means the same thing
  * in the database and here.
  */
-const UNRESOLVED: TicketStatus[] = ['open', 'pending'];
+export const UNRESOLVED: TicketStatus[] = ['open', 'pending'];
 
 export type TicketView = 'all' | 'unassigned' | 'my_open' | 'solved';
 
@@ -130,7 +130,7 @@ export interface BulkUpdateResult {
   results: BulkUpdateRowResult[];
 }
 
-interface Visibility {
+export interface Visibility {
   unrestricted: boolean;
   groupIds: bigint[];
   actorId: string;
@@ -444,32 +444,16 @@ export class TicketService {
     // a trail anybody can reason from.
     await writeTicketChangeAudit(tx, audit, ticketId, existing, patch);
 
-    // The resolution clock stops when the ticket leaves the unresolved set
-    // (FR-MOD-11.5 · 11.5-d). Only that transition — a solved ticket edited
-    // again is not resolved a second time, and the unique key on the breach
-    // would ignore it anyway.
+    // The resolution clock stops when the ticket leaves the unresolved set.
     //
-    // A ticket has *no first-response clock*, and that is a deliberate refusal
-    // rather than an omission: nothing in this repo records an agent replying to
-    // a ticket (there is no reply endpoint, and `last_message_at` moves on any
-    // edit), so the only candidates would be an assignment or a status change.
-    // Reporting either as a "first response" would be a wrong number that looks
-    // right. Where a ticket came from a chat, the first reply happened in that
-    // conversation and is measured there.
-    if (
-      patch.status !== undefined &&
-      patch.status !== existing.status &&
-      UNRESOLVED.includes(existing.status as TicketStatus) &&
-      !UNRESOLVED.includes(patch.status)
-    ) {
-      await evaluateSubject(tx, tenant, {
-        subjectType: 'ticket',
-        subjectId: ticketId,
-        target: 'resolution',
-        startedAt: existing.createdAt,
-        stoppedAt: new Date(),
-      });
-    }
+    // A ticket's *first response* is an agent's reply (HD-01): the message
+    // service stamps `first_response_at` on the first `agent_reply` (tm 356.2).
+    // The clock that measures it against a target is HD-05's (tm 360) — until
+    // then nothing reports a first-response breach for a ticket, because the
+    // only target there is to measure against is the chat's. Where a ticket
+    // came from a chat, the first reply happened in that conversation and is
+    // measured there.
+    await stopResolutionClock(tx, tenant, existing, patch.status);
 
     return toDetail(tx, updated);
   }
@@ -777,7 +761,7 @@ export class TicketService {
  * in a single batched lookup: the per-row alternative is the N+1 that only shows
  * up once a queue has a few hundred tickets in it.
  */
-async function accountNames(
+export async function accountNames(
   tx: TenantClient,
   ids: Array<string | null | undefined>,
 ): Promise<Map<string, string>> {
@@ -853,7 +837,7 @@ const TICKET_INCLUDE = {
   sourceChat: { select: { id: true, active: true, createdAt: true } },
 } as const;
 
-type TicketRow = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
+export type TicketRow = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
 
 /**
  * Reject an assignment that points at nobody.
@@ -889,7 +873,7 @@ async function assertAssignable(
   }
 }
 
-async function resolveVisibility(
+export async function resolveVisibility(
   tx: TenantClient,
   principal: Principal,
   mode: Mode,
@@ -1012,7 +996,7 @@ interface AuditableTicketState {
  * append-only log, and the bulk path makes that matter: "solve these fifty"
  * over a queue where forty were already solved must add ten entries, not fifty.
  */
-async function writeTicketChangeAudit(
+export async function writeTicketChangeAudit(
   tx: TenantClient,
   audit: AuditContext,
   ticketId: string,
@@ -1058,6 +1042,37 @@ async function writeTicketChangeAudit(
 }
 
 /**
+ * Stop the resolution clock when a ticket leaves the unresolved set
+ * (FR-MOD-11.5 · 11.5-d) — the one-ticket form, shared by `update` and the
+ * composer's "send and solve" (tm 356.2). Only that transition: a solved ticket
+ * edited again is not resolved a second time, and the unique key on the breach
+ * would ignore it anyway. `bulkUpdate` keeps its own loop, which reads the
+ * calendar once for the whole batch.
+ */
+export async function stopResolutionClock(
+  tx: TenantClient,
+  tenant: TenantContext,
+  before: { id: string; status: string; createdAt: Date },
+  next: TicketStatus | undefined,
+): Promise<void> {
+  if (
+    next === undefined ||
+    next === before.status ||
+    !UNRESOLVED.includes(before.status as TicketStatus) ||
+    UNRESOLVED.includes(next)
+  ) {
+    return;
+  }
+  await evaluateSubject(tx, tenant, {
+    subjectType: 'ticket',
+    subjectId: before.id,
+    target: 'resolution',
+    startedAt: before.createdAt,
+    stoppedAt: new Date(),
+  });
+}
+
+/**
  * Can this caller see this ticket? The in-memory half of `visibilityFilter`,
  * shared by the single load and the bulk selection so one ticket cannot be
  * visible through one endpoint and invisible through the other.
@@ -1071,7 +1086,7 @@ function isVisibleTo(
   return row.groupId != null && visibility.groupIds.includes(row.groupId);
 }
 
-async function loadVisible(
+export async function loadVisible(
   tx: TenantClient,
   visibility: Visibility,
   ticketId: string,

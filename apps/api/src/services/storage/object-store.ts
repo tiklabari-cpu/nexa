@@ -17,7 +17,9 @@
  * licence and a scan verdict S3 knows nothing about — and nothing in this
  * codebase deletes an object (retention prunes rows and the mail spool, never
  * uploads). Methods with no caller are a contract a second implementation would
- * have to satisfy blind; the honest seam is the three operations that exist.
+ * have to satisfy blind; the honest seam is the four operations that exist —
+ * `stat` joined the first three when a ticket reply started recording the size
+ * and type of the files it carries (tm 356.2).
  *
  * `local-store.ts` imports the two types back out of here, type-only, so the
  * runtime edges in the module graph all run this way and there is no cycle.
@@ -39,8 +41,14 @@ export interface StoredFile {
   contentType: string;
 }
 
+/** What is stored under a key, without the bytes. */
+export interface StoredFileInfo {
+  contentType: string;
+  sizeBytes: number;
+}
+
 /**
- * The three operations, and the one rule they share.
+ * The four operations, and the one rule they share.
  *
  * **A `null` or a `false` from here is a statement, not a shrug.** It means the
  * store looked and the object is not there — ENOENT on disk, `404` from a
@@ -69,6 +77,14 @@ export interface ObjectStore {
    * that says it while merely unreachable turns an outage into an accusation.
    */
   exists(key: string): Promise<boolean>;
+  /**
+   * The stored file's type and length, or null when the key demonstrably holds
+   * nothing — `exists` with the two facts a message records about its
+   * attachment, read without fetching the bytes (a reply may carry ten files).
+   * The same rule as the other three: `null` is a definite absence, an
+   * unreachable store throws.
+   */
+  stat(key: string): Promise<StoredFileInfo | null>;
 }
 
 /** The object stores this deployment can select between (`STORAGE_PROVIDER`). */

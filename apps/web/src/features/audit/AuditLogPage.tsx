@@ -268,6 +268,9 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       // auditor is looking for is everything that happened to a ticket, and
       // "we told the customer" is one of those things.
       'ticket.email_sent',
+      // A reply to the player and a note for the team (HD-01).
+      'ticket.replied',
+      'ticket.note_added',
     ],
   },
   {

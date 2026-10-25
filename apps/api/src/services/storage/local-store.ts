@@ -11,7 +11,7 @@
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
-import type { ObjectStore, StoredFile } from './object-store.js';
+import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
 import { licenseOfKey } from './upload-url.js';
 
@@ -93,6 +93,36 @@ export class LocalStore implements ObjectStore {
       if (isMissing(error)) return false;
       throw new StorageUnavailableError(`HEAD ${key} could not stat ${path}`, { cause: error });
     }
+  }
+
+  /**
+   * The length from the file, the type from its sidecar — `get` without the
+   * read of the bytes, and classified the same way: both lookups are inspected,
+   * a real fault wins over a missing sidecar, and only ENOENT is an absence.
+   */
+  async stat(key: string): Promise<StoredFileInfo | null> {
+    const path = this.#pathFor(key);
+    const [info, contentType] = await Promise.allSettled([
+      stat(path),
+      readFile(`${path}.type`, 'utf8'),
+    ]);
+
+    const fault = [info, contentType].find(
+      (result) => result.status === 'rejected' && !isMissing(result.reason),
+    );
+    if (fault?.status === 'rejected') {
+      throw new StorageUnavailableError(`HEAD ${key} could not stat ${path}`, {
+        cause: fault.reason,
+      });
+    }
+    // A directory where the object should be is the fault `get` meets as
+    // EISDIR — not an absence, whatever the sidecar says.
+    if (info.status === 'fulfilled' && !info.value.isFile()) {
+      throw new StorageUnavailableError(`HEAD ${key} found something other than a file at ${path}`);
+    }
+    if (info.status === 'rejected' || contentType.status === 'rejected') return null;
+
+    return { contentType: contentType.value.trim(), sizeBytes: info.value.size };
   }
 
   #pathFor(key: string): string {

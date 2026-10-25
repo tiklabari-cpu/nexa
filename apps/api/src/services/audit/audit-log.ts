@@ -342,6 +342,12 @@ export const AUDIT_ACTIONS = [
   // rendered body: the message is customer data, and copying it into an
   // append-only log would put it somewhere it can never be erased from.
   'ticket.email_sent',
+  // A reply to the player and a note for the team (HD-01 · tm 356.2). The
+  // metadata names the message, its kind and how many files it carries — never
+  // the text, for the reason the notice above gives: a reply is correspondence
+  // with a customer, a note may quote it, and this log can never forget either.
+  'ticket.replied',
+  'ticket.note_added',
   // Supervision (FR-MOD-08.6.3 / NFR-S12). A supervisor forcibly took a chat
   // from whoever held it — an authority action on someone *else's* conversation,
   // so it is recorded. The entry names the actor, the chat and the previous

@@ -362,6 +362,20 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  {
+    op: 'GET /tickets/{ticketId}/messages',
+    owner: 'tm 356.4',
+    reason:
+      "a ticket's conversation (tm 356.2 · HD-01) — the ticket pane's thread (TicketThread), " +
+      'drawn by TR-WEB (tm 356.4).',
+  },
+  {
+    op: 'POST /tickets/{ticketId}/messages',
+    owner: 'tm 356.4',
+    reason:
+      "a reply to the player or an internal note (tm 356.2 · HD-01) — the ticket pane's composer " +
+      '(TicketComposer, Reply / Internal note), built by TR-WEB (tm 356.4).',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

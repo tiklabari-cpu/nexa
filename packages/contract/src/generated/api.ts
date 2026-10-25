@@ -2425,6 +2425,63 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/tickets/{ticketId}/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * The ticket's conversation, oldest first
+     * @description Replies, internal notes, what the player wrote and the product's own
+     *     lines (HD-01), oldest first — the order a conversation is read in.
+     *     Keyset pagination on `(created_at, id)`: `next_page_id` is present while
+     *     there is more, and is fed back as `page_id`.
+     *
+     *     A primary ticket's thread also carries the messages of the tickets merged
+     *     into it, interleaved by time; each item's `ticket_id` says where it was
+     *     written. A merged ticket's own thread still reads (it is history), but
+     *     writing to it is `409 ticket_merged`.
+     *
+     *     Visibility is the ticket's: a ticket the caller may not see — or one in
+     *     another tenant — is `404`, never `403` (NFR-S5).
+     */
+    get: operations['listTicketMessages'];
+    put?: never;
+    /**
+     * Reply to the player, or add an internal note
+     * @description `kind: reply` stores the reply, then — after the commit — e-mails it to
+     *     the player from the system address under the brand's name, `[#<id>]` in
+     *     the subject, threaded on the previous message (`In-Reply-To` /
+     *     `References`). The response does not wait for the mail server:
+     *     `delivery_status` starts `queued` and the thread updates when it settles.
+     *     When this deployment keeps ticket e-mail off (K23) the reply is still
+     *     stored, with `delivery_status: suppressed`.
+     *
+     *     `kind: note` is for the team only and never reaches the mail path.
+     *
+     *     Without `set_status` a reply moves the ticket to `pending` (waiting on
+     *     the player); "send and solve" passes `set_status: solved`.
+     *
+     *     Retrying with the same `idempotency_key` returns the message stored the
+     *     first time (`200`) rather than a second one (`201`).
+     *
+     *     Refused with `409 ticket_merged` on a merged ticket
+     *     (`details.primary_ticket_id` names the one to write on), and with
+     *     `409 ticket_no_recipient` for a reply to a player who left no e-mail
+     *     address — a note is still allowed. A ticket the caller may not see, or
+     *     one in another tenant, is `404` (NFR-S5).
+     */
+    post: operations['createTicketMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers/{customerId}/ban': {
     parameters: {
       query?: never;
@@ -23493,6 +23550,95 @@ export interface operations {
       402: components['responses']['PaymentRequired'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listTicketMessages: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of the conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['TicketMessage'][];
+            next_page_id?: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createTicketMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TicketMessageInput'];
+      };
+    };
+    responses: {
+      /** @description The same `idempotency_key` was seen before; the message it stored. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketMessage'];
+        };
+      };
+      /** @description Stored. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketMessage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description `ticket_merged` — the ticket was merged; `details.primary_ticket_id`
+       *     is where its conversation continues. `ticket_no_recipient` — a reply
+       *     to a player with no e-mail address.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };

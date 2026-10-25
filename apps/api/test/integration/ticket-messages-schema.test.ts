@@ -2,9 +2,9 @@
  * Ticket messages — the store (SiyahTuş analysis HD-01 · tm 356.1, migration
  * 20261025100000_ticket_messages).
  *
- * Nothing writes `ticket_messages` yet: the service arrives in tm 356.2, the
- * mail job in 356.3. What is pinned here is what the database promises on its
- * own, before either relies on it:
+ * The service that writes `ticket_messages` is tm 356.2's
+ * (`ticket-messages.test.ts`), the mail job 356.3's. What is pinned here is
+ * what the database promises on its own, whatever either does:
  *
  *   - **Tenant isolation.** Read and write are attacked through the client the
  *     application uses (`siyahtus_app`, subject to RLS); fixtures go in through

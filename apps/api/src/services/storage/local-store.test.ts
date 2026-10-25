@@ -37,6 +37,7 @@ describe('LocalStore', () => {
 
     expect(await store.exists(KEY)).toBe(false);
     expect(await store.get(KEY)).toBeNull();
+    expect(await store.stat(KEY)).toBeNull();
   });
 
   it('throws rather than reporting absence when the path cannot be read', async () => {
@@ -48,6 +49,14 @@ describe('LocalStore', () => {
     await mkdir(join(dir, '7', KEY), { recursive: true });
 
     await expect(store.get(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(store.stat(KEY)).rejects.toBeInstanceOf(StorageUnavailableError);
+  });
+
+  it("states a stored file's type and length without reading it", async () => {
+    const store = new LocalStore(dir);
+    await store.put(KEY, Buffer.from('hello disk'), 'text/plain');
+
+    expect(await store.stat(KEY)).toEqual({ contentType: 'text/plain', sizeBytes: 10 });
   });
 
   it('keeps treating a missing licence directory as absence', async () => {
@@ -59,5 +68,6 @@ describe('LocalStore', () => {
 
     expect(await store.exists(KEY)).toBe(false);
     expect(await store.get(KEY)).toBeNull();
+    expect(await store.stat(KEY)).toBeNull();
   });
 });

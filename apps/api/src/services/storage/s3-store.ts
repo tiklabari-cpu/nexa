@@ -55,7 +55,7 @@
  * instead (`config/env.ts`).
  */
 import { createHash, createHmac } from 'node:crypto';
-import type { ObjectStore, StoredFile } from './object-store.js';
+import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
 import { licenseOfKey } from './upload-url.js';
 
@@ -162,6 +162,35 @@ export class S3Store implements ObjectStore {
       return false;
     }
     throw await unavailable('HEAD', key, response);
+  }
+
+  /**
+   * The object's type and length from a HEAD — what `exists` asks, with the two
+   * headers it already gets back read rather than drained. `null` is a `404`
+   * and nothing else, for the reason `exists` gives.
+   */
+  async stat(key: string): Promise<StoredFileInfo | null> {
+    const response = await this.#send('HEAD', key, {});
+
+    if (response.status === 404) {
+      await drain(response);
+      return null;
+    }
+    if (response.status !== 200) {
+      throw await unavailable('HEAD', key, response);
+    }
+    await drain(response);
+
+    const sizeBytes = Number(response.headers.get('content-length'));
+    if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0) {
+      throw new StorageUnavailableError(`HEAD ${key} returned no usable content-length`);
+    }
+    return {
+      // The fallback `get` uses, for the same reason: everything `put` writes
+      // carries the type its upload grant vetted.
+      contentType: response.headers.get('content-type') ?? 'application/octet-stream',
+      sizeBytes,
+    };
   }
 
   /** One signed request. Transport failures become `StorageUnavailableError`. */

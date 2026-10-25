@@ -487,14 +487,9 @@ ticketCustomFields:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
-# ---------------------------------------------------------------------------
-# NOT MOUNTED YET — tm 356.2 (TR-SERVICE) mounts `ticketMessages` with its
-# route, adds it to `openapi.yaml` `paths` and bumps the mobile parity count.
-# Written here by tm 356.1 (schema + contract) so the shape is fixed before the
-# service: `contract-parity.test.ts` fails a documented operation no route
-# serves, so it cannot be listed under `paths` until the route exists.
-# ---------------------------------------------------------------------------
-
+# The conversation under a ticket (HD-01 · tm 356): replies, internal notes and
+# what the player wrote. Served by `routes/tickets.ts` through
+# `services/tickets/ticket-message-service.ts` (tm 356.2).
 ticketMessages:
   parameters:
     - name: ticketId

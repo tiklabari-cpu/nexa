@@ -98,3 +98,26 @@ export interface TicketMessageAttachment {
 
 /** A page of the thread, oldest first. */
 export const TICKET_MESSAGE_PAGE_SIZE = 50;
+
+/**
+ * A message landed on a ticket (`RTM_PUSH_ACTIONS` `ticket_message_created`,
+ * tm 356.2): to the ticket's assignee, its followers and its team.
+ *
+ * Ids only, never the text. Following is passive and nobody re-checks a
+ * follower against the ticket's visibility, and a team audience also reaches
+ * every unrestricted connection in the workspace — a body in this push would
+ * hand an internal note to whoever happens to be listening. The console
+ * refetches the thread (`GET /tickets/{ticketId}/messages`), which is where
+ * visibility is decided.
+ *
+ * `ticket_id` is the thread the message reads in: a player's message on a
+ * merged ticket lands on its primary.
+ */
+export interface TicketMessageCreatedPush {
+  ticket_id: string;
+  message_id: string;
+  kind: TicketMessageKind;
+  author_type: TicketMessageAuthorType;
+  author_id: string | null;
+  created_at: string;
+}

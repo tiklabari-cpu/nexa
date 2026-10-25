@@ -239,6 +239,25 @@ describe('TicketThread', () => {
     expect(await screen.findByText('from merged ticket TCK9')).toBeTruthy();
   });
 
+  it("warns on a player's e-mail sent from another address than the ticket's player (HD-03)", async () => {
+    render_(makeDetail(), [
+      makeMessage({ body_text: 'From the player.' }),
+      makeMessage({
+        id: '00000000-0000-4000-8000-000000000002',
+        body_text: 'I am their brother.',
+        author_name: 'Kardeşi',
+        sender_mismatch: true,
+      }),
+    ]);
+    const warning = await screen.findByTestId('sender-mismatch');
+    expect(warning.textContent).toBe(
+      "Sent from another address than this ticket's player — check who is writing before you act on it.",
+    );
+    // Only on the message that came from elsewhere.
+    expect(screen.getAllByTestId('sender-mismatch')).toHaveLength(1);
+    expect(warning.closest('li')?.textContent).toContain('I am their brother.');
+  });
+
   it('shows what the player wrote, with the whole e-mail and its formatting one click away each (HD-02)', async () => {
     const user = userEvent.setup();
     render_(makeDetail(), [

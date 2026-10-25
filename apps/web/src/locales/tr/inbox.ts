@@ -495,6 +495,7 @@ export const inbox: Messages = {
   'inbox.ticket.assigneeUnassigned': 'Atanmamış',
   'inbox.ticket.row.created': 'Oluşturulma',
   'inbox.ticket.row.fromChat': 'Sohbetten',
+  'inbox.ticket.row.related': 'Önceki talep',
   'inbox.ticket.createdDirectly': 'Doğrudan oluşturuldu',
   'inbox.ticket.subjectLabel': 'Konu',
   'inbox.ticket.saveButton': 'Kaydet',
@@ -519,6 +520,8 @@ export const inbox: Messages = {
   'inbox.ticket.thread.author.bot': 'AI asistan',
   'inbox.ticket.thread.note.label': 'Dahili not · yalnızca ekibiniz görür',
   'inbox.ticket.thread.fromMerged': 'birleştirilen talep {id}',
+  'inbox.ticket.thread.senderMismatch':
+    'Bu talebin oyuncusundan farklı bir adresten gönderildi — işlem yapmadan önce kimin yazdığını kontrol edin.',
   'inbox.ticket.thread.tryAgain': 'Tekrar dene',
   'inbox.ticket.thread.delivery.queued': 'Gönderiliyor…',
   'inbox.ticket.thread.delivery.sent': 'Gönderildi',

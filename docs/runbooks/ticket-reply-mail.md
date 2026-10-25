@@ -25,8 +25,21 @@ The mail: `From:` the system address (`SMTP_FROM`) under the workspace's name,
 `[#<ticket id>] <subject>` as the subject, the reply's text only (masked; the
 conversation before it is not quoted), `In-Reply-To` / `References` from the
 ticket's earlier mail. Its `Message-ID` is stored on the reply before it is sent
-— the player's answer will name it (HD-03, tm 358). Attachments stay in the
-panel; they are not carried by the mail. While `PILOT_MODE=true` the text ends
+— the player's answer names it. Attachments stay in the panel; they are not
+carried by the mail.
+
+`Reply-To` (tm 358, HD-03) is the ticket's own address,
+`<organization_id>+t-<ticket id>-<signature>@<INBOUND_EMAIL_DOMAIN>` — on
+replies and on ticket notices alike. The signature is an HMAC under a key
+derived from `CUSTOMER_TOKEN_SECRET`, so only this deployment can write one;
+rotating that secret retires every address already sent (an answer to one is
+still matched by its `In-Reply-To`). The player's answer comes back through the
+inbound webhook onto the same ticket: a solved ticket reopens, a closed one —
+or one quiet longer than the workspace's `ticket_reopen_window_days`, 30 unless
+set (`PUT /settings/chat-timeout`) — gets a new related ticket. The mail
+provider has to deliver `<organization_id>+…@` sub-addresses to the webhook, as
+it already does for labelled forwarding addresses. While `PILOT_MODE=true` the
+inbound webhook is refused, so pilot mail carries no `Reply-To` and its text ends
 with the "this mailbox does not read replies" line, as the ticket notice does.
 
 A failed send is `failed`; the panel offers "try again"

@@ -35,6 +35,10 @@ export interface ReceivedMail {
   attachments?: ReceivedAttachment[];
   /** `Content-Language`, when set. */
   language?: string;
+  /** `Reply-To`, when set (tm 358 — a ticket's reply address). */
+  replyTo?: string;
+  /** `Message-ID`, brackets off — what an answer's `In-Reply-To` names. */
+  messageId?: string;
 }
 
 interface Part {
@@ -102,6 +106,8 @@ export function readReceivedMail(raw: string): ReceivedMail {
   }
 
   const language = top.headers.get('content-language');
+  const replyTo = top.headers.get('reply-to');
+  const messageId = top.headers.get('message-id')?.replace(/^<(.*)>$/, '$1');
   return {
     to: top.headers.get('to') ?? '',
     from: top.headers.get('from') ?? '',
@@ -110,6 +116,8 @@ export function readReceivedMail(raw: string): ReceivedMail {
     ...(html !== undefined ? { html } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
     ...(language ? { language } : {}),
+    ...(replyTo ? { replyTo } : {}),
+    ...(messageId ? { messageId } : {}),
   };
 }
 

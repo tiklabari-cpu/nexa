@@ -206,6 +206,8 @@ export interface Ticket {
   /** The connection it was opened from (`threads.id`); null off a chat and on older tickets. */
   source_thread_id?: string | null;
   merged_into_id: string | null;
+  /** The closed or old ticket the player's e-mailed answer opened this one from (HD-03 · tm 358). */
+  related_ticket_id?: string | null;
   last_message_at: string | null;
   created_at: string;
 }
@@ -251,5 +253,7 @@ export interface TicketMessage {
   attachments: TicketMessageAttachment[];
   /** Only on an `agent_reply`; null on every other kind. */
   delivery_status: TicketMessageDeliveryStatus | null;
+  /** A player's e-mail that came from another address than the ticket's player (HD-03 · tm 358). */
+  sender_mismatch?: boolean;
   created_at: string;
 }

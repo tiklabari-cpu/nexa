@@ -30,6 +30,7 @@
 import { Prisma } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { isReplyLabel } from '../tickets/ticket-reply-address.js';
 
 /**
  * The label vocabulary, matching `inbound_email_addresses_label_check`.
@@ -172,7 +173,9 @@ export class InboundEmailAddressService {
         'label: use 1-32 lowercase letters, digits or interior hyphens (for example `support`).',
       );
     }
-    if (RESERVED_LABELS.has(normalized)) {
+    // A label shaped like a ticket reply address (`t-<ticket>-<signature>`,
+    // tm 358) is the reply path's, which no row stands behind.
+    if (RESERVED_LABELS.has(normalized) || isReplyLabel(normalized)) {
       throw ApiError.validation('label: that name is reserved.');
     }
 

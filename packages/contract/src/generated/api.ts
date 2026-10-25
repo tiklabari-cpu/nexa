@@ -7486,6 +7486,8 @@ export interface paths {
      *     left out counts with its stored value — or the save is refused with a
      *     400 and nothing changes. `pause_unresponsive_agents` is optional too:
      *     whether the agent a connection was taken from stops receiving chats.
+     *     So is `ticket_reopen_window_days` (1-365, HD-03): how many days after
+     *     its last activity a player's e-mail answer still reopens a solved ticket.
      */
     put: operations['setChatTimeout'];
     post?: never;
@@ -8651,6 +8653,26 @@ export interface paths {
      *     identity document (kimlik, pasaport, ehliyet, KYC), or any file when
      *     the workspace treats every e-mailed file as sensitive, is stored
      *     `sensitive`. A Message-ID seen before opens no second ticket.
+     *
+     *     A player's answer joins the ticket it answers (HD-03 · tm 358) instead
+     *     of opening another, matched in this order, after the spam gate:
+     *     (1) a ticket reply address in `delivered_to`, `to` or `cc` —
+     *     `<organization_id>+t-<ticket>-<signature>@<inbound-domain>`, the
+     *     `Reply-To` of every ticket reply and notice, whose signature is an HMAC
+     *     only this deployment can make (a forged or damaged one matches nothing);
+     *     (2) `in_reply_to`, then `references` newest first, naming a message of
+     *     a ticket; (3) `[#<ticket id>]` in the subject, and only when the sender
+     *     is that ticket's player. A merged ticket's answer lands on its primary;
+     *     a solved ticket reopens, with a system line saying so; a closed ticket,
+     *     or one quiet longer than `ticket_reopen_window_days`, is not reopened —
+     *     a new ticket opens that names it (`related_ticket_id`). An answer from
+     *     an address other than the ticket's player is kept, marked
+     *     `sender_mismatch`. An automated mail (`headers`: auto-reply,
+     *     out-of-office, bulk) that matches a ticket becomes only a system line on
+     *     it — no reopening — so two auto-responders cannot ping-pong a ticket
+     *     open. One sender may open or reopen at most ten tickets an hour; past
+     *     that a reply is kept without reopening, and a new mail is `ignored`
+     *     with `reason: rate_limited`.
      *
      *     Delivery itself is mocked in this build (PLAN A4); a production deployment
      *     authenticates the provider at the edge. When `INBOUND_EMAIL_SECRET` is
@@ -15721,6 +15743,11 @@ export interface components {
       inactive_after_seconds: number | null;
       /** @description Whether an agent whose connection the unanswered transfer took is set to `not_accepting_chats` (and told why). True unless turned off. */
       pause_unresponsive_agents: boolean;
+      /**
+       * Format: int32
+       * @description How long a solved ticket waits for the player's answer by e-mail (HD-03): an answer within this many days of its last activity reopens it, a later one — or one to a closed ticket — opens a new ticket that names it (`related_ticket_id`). 30 unless set.
+       */
+      ticket_reopen_window_days?: number;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -17439,6 +17466,13 @@ export interface components {
        *     when it stands alone. A merged ticket is hidden from the lists.
        */
       merged_into_id?: string | null;
+      /**
+       * @description The earlier ticket this one follows on from (HD-03 · tm 358): the
+       *     player answered a ticket that was closed, or quiet longer than the
+       *     workspace's reopen window (`ticket_reopen_window_days`), so the
+       *     answer opened this one instead of reopening that one. Null otherwise.
+       */
+      related_ticket_id?: string | null;
       /** Format: date-time */
       last_message_at?: string | null;
       /** Format: date-time */
@@ -17506,10 +17540,25 @@ export interface components {
      *     ticket.
      */
     InboundEmail: {
-      /** @description The workspace forwarding address the mail was sent to. */
+      /**
+       * @description The recipients the mail was addressed to — the workspace forwarding
+       *     address, or the ticket reply address a reply went out with
+       *     (`<organization_id>+t-<ticket>-<signature>@<inbound-domain>`, HD-03).
+       *     Several may be listed, comma separated.
+       */
       to: string;
-      /** @description Other recipients. Kept out of routing; the first `to` decides the workspace. */
+      /**
+       * @description Other recipients. A ticket reply address here threads the mail
+       *     like one in `to` (a player who answered "reply all").
+       */
       cc?: string[];
+      /**
+       * @description The envelope recipient(s) — `Delivered-To`, or the provider's
+       *     "original recipient". The address this delivery is for, so it
+       *     decides the workspace ahead of `to` and `cc`; the first
+       *     workspace address among `delivered_to`, `to`, `cc` routes the mail.
+       */
+      delivered_to?: string[];
       /** @description Sender, bare or `Name <addr>`. Matched to a customer by email. */
       from: string;
       /** @description Becomes the ticket subject. */
@@ -17533,15 +17582,26 @@ export interface components {
        *     workspace: a redelivery is answered `duplicate`.
        */
       message_id?: string;
-      /** @description The mail's `In-Reply-To` — stored; threading onto an existing ticket is HD-03. */
+      /**
+       * @description The mail's `In-Reply-To`. When it names a message of a ticket — a
+       *     reply that went out, or the player's earlier mail — the mail is
+       *     added to that ticket (HD-03), even with the reply address gone.
+       */
       in_reply_to?: string;
-      /** @description The mail's `References`, oldest first. */
+      /** @description The mail's `References`, oldest first — looked up newest first after `in_reply_to`. */
       references?: string[];
-      /** @description The auto-reply headers, passed through for HD-04's loop guard. */
+      /**
+       * @description The auto-reply headers (HD-03 loop guard). `auto_submitted` other
+       *     than `no`, any `x_autoreply`, `precedence` `bulk`, `junk` or
+       *     `auto_reply`, or any `x_auto_response_suppress` marks the mail
+       *     automated: on a ticket it is only a system line — no reopening, no
+       *     new ticket, nothing is ever sent back to it.
+       */
       headers?: {
         auto_submitted?: string;
         precedence?: string;
         x_autoreply?: string;
+        x_auto_response_suppress?: string;
       };
       attachments?: components['schemas']['InboundEmailAttachment'][];
       /** @description The provider's spam verdict, honoured when the workspace filter is on. */
@@ -17623,6 +17683,13 @@ export interface components {
        * @enum {string|null}
        */
       delivery_status: 'queued' | 'sent' | 'failed' | 'suppressed' | null;
+      /**
+       * @description Present, and true, on a `customer_message` that reached the ticket
+       *     from an address other than its player's (HD-03): a reply address or
+       *     a thread reference matched, the sender did not. The message is
+       *     kept; the console warns before anyone acts on it.
+       */
+      sender_mismatch?: boolean;
       /** Format: date-time */
       created_at: string;
     };
@@ -31399,6 +31466,11 @@ export interface operations {
           inactive_after_seconds?: number | null;
           /** @description Whether an agent whose connection the unanswered transfer took goes `not_accepting_chats`. Left out, the stored value stays. */
           pause_unresponsive_agents?: boolean;
+          /**
+           * Format: int32
+           * @description Days after its last activity that a player's e-mail answer still reopens a solved ticket (HD-03); later, a new related ticket opens. Left out, the stored value stays.
+           */
+          ticket_reopen_window_days?: number;
         };
       };
     };
@@ -33020,10 +33092,13 @@ export interface operations {
     };
     responses: {
       /**
-       * @description The message was processed. `created` carries the ticket id;
-       *     `ignored` means the spam filter dropped it. A Message-ID this
-       *     workspace has already taken in is answered with the ticket it opened
-       *     the first time and `duplicate: true` — nothing is written twice, so a
+       * @description The message was processed. `created` carries the new ticket's id
+       *     (and `related_ticket_id` when it follows on from a closed or old
+       *     one); `threaded` carries the existing ticket the mail was added to;
+       *     `ignored` means the spam filter dropped it, or the sender passed the
+       *     hourly limit on opening tickets. A Message-ID this workspace has
+       *     already taken in is answered with the ticket it went to the first
+       *     time and `duplicate: true` — nothing is written twice, so a
        *     provider's redelivery is harmless.
        */
       200: {
@@ -33033,16 +33108,24 @@ export interface operations {
         content: {
           'application/json': {
             /** @enum {string} */
-            status: 'created' | 'ignored';
-            /** @description Present when `status` is `created`. */
+            status: 'created' | 'threaded' | 'ignored';
+            /** @description Present when `status` is `created` or `threaded`. */
             ticket_id?: string;
             /** @description Present, and true, when this Message-ID had already been taken in. */
             duplicate?: boolean;
+            /** @description On `created` — the closed or old ticket the mail answered. */
+            related_ticket_id?: string;
+            /** @description Present, and true, when `threaded` moved a solved ticket back to open. */
+            reopened?: boolean;
+            /** @description Present, and true, when `threaded` came from an address other than the ticket's player. */
+            sender_mismatch?: boolean;
+            /** @description Present, and true, when an automated mail was kept as a system line only. */
+            automated?: boolean;
             /**
              * @description Present when `status` is `ignored`.
              * @enum {string}
              */
-            reason?: 'spam';
+            reason?: 'spam' | 'rate_limited';
           };
         };
       };

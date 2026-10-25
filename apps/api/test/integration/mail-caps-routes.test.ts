@@ -105,7 +105,7 @@ async function solveTicketWithNotice(
   server: TestServer,
   t: TenantFixture,
   token: string,
-): Promise<void> {
+): Promise<string> {
   const customer = await owner.customer.create({
     data: { organizationId: t.organizationId, name: 'Ada Lovelace', email: TICKET_CUSTOMER },
     select: { id: true },
@@ -122,12 +122,14 @@ async function solveTicketWithNotice(
     auth(token),
   );
   expect(ticket.statusCode).toBe(201);
+  const ticketId = (ticket.json() as { id: string }).id;
   const solved = await server.patch(
-    `/tickets/${(ticket.json() as { id: string }).id}`,
+    `/tickets/${ticketId}`,
     { status: 'solved', email_template_id: (template.json() as { id: string }).id },
     auth(token),
   );
   expect(solved.statusCode).toBe(200);
+  return ticketId;
 }
 
 describe('routes under the daily mail caps (tm 257.14)', () => {
@@ -451,7 +453,7 @@ describe("a pilot deployment's ticket notice (tm 257.14)", () => {
           ownerId: fx.a.ownerAccountId,
           scopes: ['tickets--all:rw', 'tickets--all:ro', 'customers:ro'],
         });
-        await solveTicketWithNotice(owner, h.server, fx.a, token);
+        const ticketId = await solveTicketWithNotice(owner, h.server, fx.a, token);
         await h.server.app.backgroundMail.settled();
 
         const [notice, ...rest] = await h.spool.outbox();
@@ -459,9 +461,17 @@ describe("a pilot deployment's ticket notice (tm 257.14)", () => {
         expect(notice!.kind).toBe('ticket_notice');
         if (pilot) {
           expect(notice!.body).toBe(`Hi Ada Lovelace.\n\n${PILOT_NO_REPLY_LINE}`);
+          // The pilot serves no inbound mail: no reply address, and it says so.
+          expect(notice!.replyTo).toBeUndefined();
         } else {
           expect(notice!.body).toBe('Hi Ada Lovelace.');
           expect(notice!.body).not.toContain(PILOT_NO_REPLY_LINE);
+          // The ticket's signed reply address instead (tm 358 · HD-03).
+          expect(notice!.replyTo).toMatch(
+            new RegExp(
+              `^${fx.a.organizationId}\\+t-${ticketId.toLowerCase()}-[0-9a-z]{8}@inbound\\.siyahtus\\.localhost$`,
+            ),
+          );
         }
       } finally {
         await stopHarness(h);

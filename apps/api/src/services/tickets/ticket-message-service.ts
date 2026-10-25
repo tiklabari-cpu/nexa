@@ -86,6 +86,8 @@ export interface TicketMessageView {
   body_html: string | null;
   attachments: TicketMessageAttachment[];
   delivery_status: TicketMessageDeliveryStatus | null;
+  /** Present, and true, when a player's message came from another address than theirs (tm 358). */
+  sender_mismatch?: true;
   created_at: string;
 }
 
@@ -110,6 +112,20 @@ export interface CustomerMessageInput {
   emailMessageId?: string | null;
   inReplyTo?: string | null;
   attachments?: TicketMessageAttachment[];
+  /**
+   * Who wrote it — the sender's customer record (tm 358). Omitted, the
+   * ticket's own customer: the opening message of a ticket the sender opened.
+   */
+  authorCustomerId?: string | null;
+  /** The sender is not the ticket's player (HD-03): kept, and flagged for the console. */
+  senderMismatch?: boolean;
+  /**
+   * Whether a `solved` ticket may go back to `open` (default true) — false when
+   * the sender is past the hourly reopening limit, which keeps the message and
+   * leaves the status. A `pending` ticket moves to `open` either way: that is
+   * the conversation's ordinary turn, not a reopening.
+   */
+  allowReopen?: boolean;
 }
 
 /** The realtime notice to send once the transaction has committed. */
@@ -189,6 +205,7 @@ interface MessageRow {
   bodyHtml: string | null;
   attachments: unknown;
   deliveryStatus: string | null;
+  senderMismatch: boolean;
   createdAt: Date;
 }
 
@@ -208,7 +225,7 @@ interface Author {
 const MESSAGE_COLUMNS = Prisma.sql`
   id, ticket_id AS "ticketId", kind, author_type AS "authorType", author_id AS "authorId",
   body_text AS "bodyText", body_text_full AS "bodyTextFull", body_html AS "bodyHtml", attachments,
-  delivery_status AS "deliveryStatus",
+  delivery_status AS "deliveryStatus", sender_mismatch AS "senderMismatch",
   date_trunc('milliseconds', created_at) AS "createdAt"`;
 
 export class TicketMessageService {
@@ -538,7 +555,8 @@ export class TicketMessageService {
    * `closed` or `spam` one is left as it is, because what to do with mail to a
    * closed ticket (a new, related one) is the caller's decision, taken before
    * this is called. A redelivered e-mail — the same Message-ID — is one
-   * message.
+   * message. The author is the sender's own customer record when the caller
+   * names one (tm 358: a reply address can be forwarded), the ticket's otherwise.
    */
   async recordCustomerMessage(
     tx: TenantClient,
@@ -564,18 +582,21 @@ export class TicketMessageService {
       : null;
     const html = maskForWrite(input.html ?? null, 'customer').text;
     const attachments = input.attachments ?? [];
+    const authorId =
+      input.authorCustomerId === undefined ? ticket.customerId : input.authorCustomerId;
+    const senderMismatch = input.senderMismatch === true;
 
     // No conflict target: the one unique key a player's message can collide on
     // is its Message-ID (it carries no idempotency key).
     const inserted = await tx.$queryRaw<Array<{ id: string }>>`
       INSERT INTO ticket_messages
         (id, license_id, ticket_id, kind, author_type, author_id, body_text, body_text_full,
-         body_html, attachments, email_message_id, in_reply_to, created_at)
+         body_html, attachments, email_message_id, in_reply_to, sender_mismatch, created_at)
       VALUES
         (${id}::uuid, ${tenant.licenseId}::bigint, ${ticket.id}, 'customer_message', 'customer',
-         ${ticket.customerId}::uuid, ${text}, ${textFull}, ${html},
+         ${authorId}::uuid, ${text}, ${textFull}, ${html},
          ${JSON.stringify(attachments)}::jsonb, ${input.emailMessageId ?? null},
-         ${input.inReplyTo ?? null}, ${now}::timestamptz)
+         ${input.inReplyTo ?? null}, ${senderMismatch}, ${now}::timestamptz)
       ON CONFLICT DO NOTHING
       RETURNING id
     `;
@@ -587,7 +608,8 @@ export class TicketMessageService {
       throw ApiError.internal('The message could not be stored.');
     }
 
-    const reopen = ticket.status === 'pending' || ticket.status === 'solved';
+    const reopened = ticket.status === 'solved' && input.allowReopen !== false;
+    const reopen = ticket.status === 'pending' || reopened;
     await tx.ticket.update({
       where: { id: ticket.id },
       data: {
@@ -600,55 +622,57 @@ export class TicketMessageService {
       await writeTicketChangeAudit(tx, audit, ticket.id, ticket, { status: 'open' });
     }
 
-    const customer = ticket.customerId
-      ? await tx.customer.findUnique({ where: { id: ticket.customerId }, select: { name: true } })
+    const customer = authorId
+      ? await tx.customer.findUnique({ where: { id: authorId }, select: { name: true } })
       : null;
     const message: TicketMessageView = {
       id,
       ticket_id: ticket.id,
       kind: 'customer_message',
       author_type: 'customer',
-      author_id: ticket.customerId,
+      author_id: authorId,
       author_name: customer?.name ?? null,
       body_text: text,
       body_text_full: textFull,
       body_html: html,
       attachments,
       delivery_status: null,
+      ...(senderMismatch ? { sender_mismatch: true as const } : {}),
       created_at: now.toISOString(),
     };
-    return {
-      message,
-      replayed: false,
-      push: await pushFor(tx, ticket, message),
-      reopened: ticket.status === 'solved',
-    };
+    return { message, replayed: false, push: await pushFor(tx, ticket, message), reopened };
   }
 
   /**
    * A line the product writes on a ticket (`kind: system`) — for the inbound
-   * path, which files of the player's mail were not kept and why (tm 357).
+   * path, which files of the player's mail were not kept and why (tm 357), and
+   * since tm 358 what a player's answer did to the ticket: reopened it, opened
+   * a related one, arrived as an automatic reply.
    *
-   * Written a millisecond after `after`, so it reads under the message it is
-   * about rather than racing it for the same `(created_at, id)` slot. Not
-   * masked: the product wrote it — but what it quotes (a file's name) the
-   * caller has masked. No push of its own: it lands with the message whose
-   * push already sends the thread to be re-read.
+   * Written a millisecond after `after` when one is given, so it reads under
+   * the message it is about rather than racing it for the same
+   * `(created_at, id)` slot. Not masked: the product wrote it — but what it
+   * quotes (a file's name, an auto-reply's text) the caller has masked. No push
+   * of its own: it lands with the message whose push already sends the thread
+   * to be re-read. An automatic reply kept as a line carries its Message-ID, so
+   * a redelivery of it is recognised like any other mail.
    */
   async recordSystemNote(
     tx: TenantClient,
     tenant: TenantContext,
     ticketId: string,
     text: string,
-    after: Date,
+    options: { after?: Date; emailMessageId?: string | null; inReplyTo?: string | null } = {},
   ): Promise<string> {
     const id = randomUUID();
+    const at = options.after ? new Date(options.after.getTime() + 1) : new Date();
     await tx.$executeRaw`
       INSERT INTO ticket_messages
-        (id, license_id, ticket_id, kind, author_type, body_text, created_at)
+        (id, license_id, ticket_id, kind, author_type, body_text, email_message_id, in_reply_to,
+         created_at)
       VALUES
         (${id}::uuid, ${tenant.licenseId}::bigint, ${ticketId}, 'system', 'system', ${text},
-         ${new Date(after.getTime() + 1)}::timestamptz)
+         ${options.emailMessageId ?? null}, ${options.inReplyTo ?? null}, ${at}::timestamptz)
     `;
     return id;
   }
@@ -782,6 +806,34 @@ async function lockedTicket(tx: TenantClient, ticketId: string) {
   const ticket = await tx.ticket.findUnique({ where: { id: ticketId } });
   if (!ticket) throw ApiError.notFound('Ticket not found.');
   return ticket;
+}
+
+/**
+ * The ticket a player's answer belongs on, locked (the inbound path, tm 358):
+ * `ticketId`'s primary when it was merged — one hop, a merge refuses chains —
+ * with the address of each player it could be from. Null when the ticket is
+ * not this licence's (RLS) or no longer there. Locked first, so the status the
+ * caller decides on is the one the write will find.
+ */
+export async function lockedReplyTarget(tx: TenantClient, ticketId: string) {
+  const read = async (id: string) => {
+    await lockTicket(tx, id);
+    return tx.ticket.findUnique({
+      where: { id },
+      include: { customer: { select: { email: true } } },
+    });
+  };
+  const matched = await read(ticketId);
+  if (!matched) return null;
+  const primary = matched.mergedIntoId ? await read(matched.mergedIntoId) : matched;
+  if (!primary) return null;
+  return {
+    ticket: primary,
+    /** Who writes on it as its player: the primary's, and the merged ticket's it was found by. */
+    playerEmails: [primary.customer?.email, matched.customer?.email].filter(
+      (email): email is string => Boolean(email?.trim()),
+    ),
+  };
 }
 
 async function findByMessageId(
@@ -949,6 +1001,7 @@ function toView(row: MessageRow, names: Map<string, string>): TicketMessageView 
       ? (row.attachments as TicketMessageAttachment[])
       : [],
     delivery_status: row.deliveryStatus as TicketMessageDeliveryStatus | null,
+    ...(row.senderMismatch ? { sender_mismatch: true as const } : {}),
     created_at: row.createdAt.toISOString(),
   };
 }

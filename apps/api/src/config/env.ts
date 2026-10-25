@@ -151,6 +151,25 @@ export const envSchema = z.object({
    */
   DATABASE_APP_URL: z.string().url().optional(),
   /**
+   * The platform (root panel) connection, as `siyahtus_platform` — BYPASSRLS,
+   * every workspace visible (tm 389.1 · docs/platform-admin/design.md §B1).
+   * Read only by the platform-api process (389.3); the tenant API never opens
+   * it. A plain optional string on purpose: a missing or malformed value must
+   * not stop the tenant API from booting (owner rule 2026-10-10), so the
+   * platform process validates it itself.
+   */
+  DATABASE_PLATFORM_URL: z.string().optional(),
+  /**
+   * Root of the platform's keys (tm 389.1): the platform audit chain's HMAC key
+   * (389.5) and the encryption of the AI API keys stored in `platform_settings`
+   * (389.17) are derived from it as separate sub-keys. Like
+   * `AUDIT_CHAIN_SECRET` it lives in the environment, not the database, so a
+   * dump alone cannot forge the trail or read the keys. Optional, never a boot
+   * refusal here: unset, the platform-stored AI settings are ignored and the
+   * env ones apply.
+   */
+  PLATFORM_SETTINGS_KEY: z.string().optional(),
+  /**
    * Prisma connection pool size for this process, applied as the
    * `connection_limit` query parameter on {@link Env.runtimeDatabaseUrl}
    * (M-SCALE-b · NFR-R4).

@@ -16,6 +16,7 @@ import {
   assertDroppableDatabaseName,
   isolatedDatabaseName,
   licenseIdOffsetFor,
+  platformUrlFor,
   provisionIsolatedDatastores,
   sweepAbandonedDatabases,
   withDatabaseName,
@@ -82,6 +83,35 @@ describe('isolated test datastores', () => {
         withDatabaseName('postgresql://u:p@h:5433/siyahtus?sslmode=disable', 'other'),
       ).toContain('sslmode=disable');
     });
+
+    it("derives the platform URL from the owner's when none is configured (tm 389.1)", () => {
+      const derived = new URL(
+        platformUrlFor('postgresql://siyahtus:pw@db.example:5433/siyahtus?sslmode=disable'),
+      );
+      expect(derived.username).toBe('siyahtus_platform');
+      expect(derived.password).toBe('siyahtus_platform_dev_password');
+      expect(derived.host).toBe('db.example:5433');
+      expect(derived.pathname).toBe('/siyahtus');
+      expect(derived.searchParams.get('sslmode')).toBe('disable');
+      const configured = 'postgresql://siyahtus_platform:secret@other:5432/siyahtus';
+      expect(platformUrlFor('postgresql://siyahtus:pw@h:5433/siyahtus', configured)).toBe(
+        configured,
+      );
+    });
+
+    it('hands a provisioned run the platform URL on the same database', async () => {
+      const datastores = await provision();
+      const platform = new URL(datastores.env.DATABASE_PLATFORM_URL);
+      expect(platform.username).toBe('siyahtus_platform');
+      expect(platform.pathname).toBe('/' + datastores.databaseName);
+      const client = new PrismaClient({ datasourceUrl: datastores.env.DATABASE_PLATFORM_URL });
+      try {
+        const [row] = await client.$queryRaw<Array<{ who: string }>>`SELECT current_user AS who`;
+        expect(row!.who).toBe('siyahtus_platform');
+      } finally {
+        await client.$disconnect();
+      }
+    }, 180_000);
 
     it('replaces a Redis index that is already there', () => {
       expect(withRedisIndex('redis://h:6380/9', 3)).toBe('redis://h:6380/3');

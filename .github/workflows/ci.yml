@@ -46,6 +46,7 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@localhost:5433/siyahtus
       DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@localhost:5433/siyahtus
+      DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:siyahtus_platform_dev_password@localhost:5433/siyahtus
       REDIS_URL: redis://localhost:6380
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
@@ -55,6 +56,7 @@ jobs:
       # like the other secrets: it is held outside the database on purpose, so
       # there is no fallback to derive it from.
       AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
+      PLATFORM_SETTINGS_KEY: ci-platform-settings-key-0123456789abcdef0123456
       # Encrypts live Apps credentials (tm 263); 64 hex characters, CI-only value.
       APPS_CREDENTIAL_KEY: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
 
@@ -169,12 +171,14 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@localhost:5433/siyahtus
       DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@localhost:5433/siyahtus
+      DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:siyahtus_platform_dev_password@localhost:5433/siyahtus
       REDIS_URL: redis://localhost:6380
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
       CUSTOMER_TOKEN_SECRET: ci-customer-token-secret-0123456789abcdef0123
       UPLOAD_SIGNING_KEY: ci-upload-signing-key-0123456789abcdef0123456
       AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
+      PLATFORM_SETTINGS_KEY: ci-platform-settings-key-0123456789abcdef0123456
       # Encrypts live Apps credentials (tm 263); 64 hex characters, CI-only value.
       APPS_CREDENTIAL_KEY: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
 
@@ -290,6 +294,7 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@localhost:5433/siyahtus
       DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@localhost:5433/siyahtus
+      DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:siyahtus_platform_dev_password@localhost:5433/siyahtus
       REDIS_URL: redis://localhost:6380
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
@@ -299,6 +304,7 @@ jobs:
       # like the other secrets: it is held outside the database on purpose, so
       # there is no fallback to derive it from.
       AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
+      PLATFORM_SETTINGS_KEY: ci-platform-settings-key-0123456789abcdef0123456
       # Encrypts live Apps credentials (tm 263); 64 hex characters, CI-only value.
       APPS_CREDENTIAL_KEY: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
       # The suite signs in, exchanges tokens and mints widget tokens from one

@@ -5,10 +5,11 @@
  *
  * Provisions a private Postgres database and leases a private Redis index
  * (see `test-datastores.ts` for why), runs the command with `DATABASE_URL`,
- * `DATABASE_APP_URL` and `REDIS_URL` repointed at them, then tears both down —
+ * `DATABASE_APP_URL`, `DATABASE_PLATFORM_URL` (tm 389.1, derived from the owner's
+ * URL when unset) and `REDIS_URL` repointed at them, then tears both down —
  * including when the command fails or the window is interrupted.
  *
- * Everything downstream reads those three variables from the environment, so no
+ * Everything downstream reads those variables from the environment, so no
  * test, helper or fixture needs to know this exists. `@siyahtus/rtm` invokes this
  * same script by relative path: it shares the API's schema and datastores, so a
  * second copy of the harness would be a second thing to keep in step.

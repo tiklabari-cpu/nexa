@@ -87,6 +87,9 @@ services:
       # Read once, by infra/db/pilot/10-app-role-password.sh, on the first start
       # of an empty data directory.
       SIYAHTUS_APP_DB_PASSWORD: ${SIYAHTUS_APP_DB_PASSWORD:?set SIYAHTUS_APP_DB_PASSWORD in .env}
+      # Read once, by infra/db/pilot/20-platform-role-password.sh. Optional:
+      # empty locks the siyahtus_platform role instead (tm 389.1).
+      SIYAHTUS_PLATFORM_DB_PASSWORD: ${SIYAHTUS_PLATFORM_DB_PASSWORD:-}
       LANG: C
     volumes:
       # The pilot's data. A named volume survives `down`, `up --build` and a
@@ -96,6 +99,7 @@ services:
       # pilot's own step that replaces the role's published dev password.
       - ./infra/db/init/00-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
       - ./infra/db/pilot/10-app-role-password.sh:/docker-entrypoint-initdb.d/10-app-role-password.sh:ro
+      - ./infra/db/pilot/20-platform-role-password.sh:/docker-entrypoint-initdb.d/20-platform-role-password.sh:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U siyahtus -d siyahtus']
       interval: 3s

@@ -8,12 +8,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/generated/api.ts",
-    "./openapi.json": "./dist/openapi.json"
+    "./platform-types": "./src/generated/platform.ts",
+    "./openapi.json": "./dist/openapi.json",
+    "./platform-openapi.json": "./dist/platform-openapi.json"
   },
   "scripts": {
     "bundle": "tsx scripts/bundle.ts",
-    "generate": "pnpm bundle && openapi-typescript dist/openapi.json -o src/generated/api.ts && prettier --write src/generated/api.ts",
-    "build": "pnpm bundle",
+    "bundle:platform": "tsx scripts/bundle.ts --entry platform/openapi.yaml --out dist/platform-openapi.json",
+    "generate": "pnpm bundle && pnpm bundle:platform && openapi-typescript dist/openapi.json -o src/generated/api.ts && openapi-typescript dist/platform-openapi.json -o src/generated/platform.ts && prettier --write src/generated/api.ts src/generated/platform.ts",
+    "build": "pnpm bundle && pnpm bundle:platform",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src scripts",
     "test": "vitest run --passWithNoTests",

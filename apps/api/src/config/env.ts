@@ -76,7 +76,7 @@ const httpsUrl = z
  * paste — but a real path, query, fragment or userinfo is refused: it means
  * whoever set this pasted a URL, and the value would never match anything.
  */
-function parseOriginList(value: string): string[] | null {
+export function parseOriginList(value: string): string[] | null {
   const entries = value
     .split(',')
     .map((entry) => entry.trim())
@@ -211,6 +211,17 @@ export const envSchema = z.object({
 
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_HOST: z.string().default('0.0.0.0'),
+  /**
+   * The platform-api process (root panel, tm 389.3): where it listens, the
+   * one origin its CORS answers (the admin SPA) and its per-address request
+   * budget. Read and validated by `config/platform-env.ts` only — here they
+   * are plain optional strings, so a bad value can never stop the tenant API
+   * from booting (owner rule 2026-10-10); the platform process refuses it.
+   */
+  PLATFORM_PORT: z.string().optional(),
+  PLATFORM_HOST: z.string().optional(),
+  ADMIN_APP_URL: z.string().optional(),
+  RATE_LIMIT_PLATFORM_PER_MIN: z.string().optional(),
   /**
    * How many reverse-proxy hops in front of this process are trusted, and so
    * how far into `X-Forwarded-For` `request.ip` is allowed to read
@@ -1616,7 +1627,7 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
  * `withTestConnectionBudget` — is left alone; this is a deployment default,
  * not a way to fight a more specific override.
  */
-function withPoolSize(url: string, poolSize: number | undefined): string {
+export function withPoolSize(url: string, poolSize: number | undefined): string {
   if (poolSize === undefined) return url;
   const parsed = new URL(url);
   if (parsed.searchParams.has('connection_limit')) return url;

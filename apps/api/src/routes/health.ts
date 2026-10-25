@@ -34,7 +34,7 @@ import { roleAtLeast } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { type AiJobsHealth, readAiJobsHealth } from '../services/ai/ai-jobs.js';
 
-interface DependencyHealth {
+export interface DependencyHealth {
   status: 'up' | 'down';
   latency_ms?: number;
   error?: string;
@@ -42,7 +42,11 @@ interface DependencyHealth {
 
 const PROBE_TIMEOUT_MS = 2_000;
 
-async function probe(name: string, check: () => Promise<unknown>): Promise<DependencyHealth> {
+/** One dependency check, bounded — shared with the platform process (tm 389.3). */
+export async function probe(
+  name: string,
+  check: () => Promise<unknown>,
+): Promise<DependencyHealth> {
   const startedAt = performance.now();
   try {
     await Promise.race([

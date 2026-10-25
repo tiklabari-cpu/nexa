@@ -1,0 +1,121 @@
+openapi: 3.1.0
+
+info:
+  title: SiyahTuş Platform (root panel) API
+  version: 1.0.0
+  description: |
+    The back office of a SiyahTuş deployment (tm 389 · `docs/platform-admin/design.md`).
+    Served by its own process, `platform-api` (`node dist/src/platform.js`, port
+    4002), under `/platform/v1` — never by the tenant API, which answers 404 for
+    every path here. Its callers are SiyahTuş operators (`platform_admins`), not
+    workspace members, and it connects to Postgres as `siyahtus_platform`.
+
+    **A separate document on purpose.** Nothing here is part of the tenant
+    contract (`packages/contract/openapi/openapi.yaml`): no tenant client
+    generates types from it, nothing in it is `x-public`, and the tenant
+    document never names a `/platform` path.
+
+    **Errors** use the same envelope as the tenant API —
+    `{ error: { type, message, request_id } }` (ADR-06). Types this surface
+    adds are `platform_`-prefixed in `@siyahtus/types`.
+
+    **Conventions every later module follows:** keyset paging `?cursor&limit`,
+    free-text `?q`, and every mutation takes a `{reason}` that lands in the
+    platform audit chain.
+
+servers:
+  - url: http://localhost:4002/platform/v1
+    description: Local development (`pnpm --filter @siyahtus/api platform:dev`)
+
+tags:
+  - name: System
+    description: Health and metadata.
+
+# The operator session (tm 389.4) — an opaque bearer token, not a JWT. Every
+# operation needs it unless it says `security: []`.
+security:
+  - platformSession: []
+
+paths:
+  /health:
+    $ref: "./paths/health.yaml#/narrow"
+  /health/live:
+    $ref: "./paths/health.yaml#/live"
+  /health/ready:
+    $ref: "./paths/health.yaml#/ready"
+  /meta:
+    $ref: "./paths/meta.yaml#/meta"
+
+components:
+  securitySchemes:
+    platformSession:
+      type: http
+      scheme: bearer
+      description: Opaque operator session token from the platform sign-in (tm 389.4).
+
+  schemas:
+    PlatformHealth:
+      type: object
+      description: |
+        The narrow body — never version, latencies or provider names, which
+        would be infrastructure detail for an anonymous caller. The detailed
+        view is the dashboard's (tm 389.8), behind an operator session.
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          description: |
+            `ok` every dependency is reachable · `degraded` at least one is not
+            (503) · `draining` the process is shutting down (503, M-OPS-b).
+          enum: [ok, degraded, draining]
+        service:
+          type: string
+          enum: [platform]
+        uptime_s:
+          type: number
+          description: Present on the liveness answer only.
+
+    PlatformMeta:
+      type: object
+      description: What the admin SPA's permanent "PLATFORM · <region>" strip shows.
+      required: [version, region]
+      properties:
+        version:
+          type: string
+          examples: [0.1.0]
+        region:
+          type: string
+          enum: [eu, us]
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [type, message, request_id]
+          properties:
+            type:
+              type: string
+              description: One of `ERROR_TYPES` (`@siyahtus/types`).
+            message:
+              type: string
+              description: Human-readable; never contains secrets or raw SQL.
+            request_id:
+              type: string
+              description: Correlates with server logs and traces.
+            details:
+              type: object
+              additionalProperties: true
+
+  responses:
+    TooManyRequests:
+      description: |
+        The per-address platform bucket is spent (`RATE_LIMIT_PLATFORM_PER_MIN`,
+        Redis `rl:platform:*`). `Retry-After` says when to try again.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

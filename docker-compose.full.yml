@@ -209,6 +209,39 @@ services:
       init:
         condition: service_completed_successfully
 
+  # The root panel's API (tm 389.3 · docs/platform-admin/design.md §A): the api
+  # image with another command, its own database role (siyahtus_platform —
+  # BYPASSRLS; the dev password the init script and migration publish) and
+  # only /platform/v1. The tenant api migrates; this one never does.
+  # DATABASE_PLATFORM_URL is repointed at the compose network here, like the
+  # other two URLs in *api-environment.
+  platform-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: siyahtus-api:local
+    restart: unless-stopped
+    command: ['node', 'dist/src/platform.js']
+    env_file:
+      - .env.example
+    environment:
+      <<: *api-environment
+      DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:siyahtus_platform_dev_password@db:5432/siyahtus
+      SIYAHTUS_MIGRATE_ON_START: 'false'
+    # The image's HEALTHCHECK asks the tenant API's port; this process answers
+    # on its own.
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:4002/platform/v1/health/ready || exit 1']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    ports:
+      - '127.0.0.1:${SIYAHTUS_PLATFORM_HOST_PORT:-4002}:4002'
+    depends_on:
+      api:
+        condition: service_healthy
+
   web:
     build:
       context: .

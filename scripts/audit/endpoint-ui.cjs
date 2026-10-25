@@ -77,6 +77,14 @@
  * acquired a caller). An audit that always exits 0 stops nothing — the
  * `unpaged-lists.cjs` argument, same conclusion.
  *
+ * ## Two pairs (tm 389.3)
+ *
+ * The tenant contract is read against the three tenant clients; the platform
+ * (root panel) contract — `packages/contract/platform/`, its own bundle — is
+ * read against its one client, `apps/admin` (389.6), with lists of its own.
+ * The two never mix: a platform path a tenant client called would be a defect,
+ * not coverage, and the platform has no business in the tenant lists.
+ *
  * Read-only, like its siblings. `pnpm contract:generate` must have run first.
  */
 const { execSync } = require('child_process');
@@ -84,6 +92,10 @@ const fs = require('fs');
 
 const SPEC = 'packages/contract/dist/openapi.json';
 const CLIENT_ROOTS = ['apps/web/src', 'apps/widget/src', 'apps/mobile/src'];
+
+/** The second pair (tm 389.3): the platform contract and the admin SPA. */
+const PLATFORM_SPEC = 'packages/contract/dist/platform-openapi.json';
+const PLATFORM_CLIENT_ROOTS = ['apps/admin/src'];
 
 /** The verbs an OpenAPI path item may carry; anything else there is metadata. */
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
@@ -366,6 +378,37 @@ const TRACKED = [
   },
 ];
 
+/** The platform contract's operations with no client, and why (tm 389.3). */
+const PLATFORM_HEADLESS = [
+  {
+    op: 'GET /health/live',
+    reason:
+      "platform-api's liveness probe — its caller is the compose healthcheck and an " +
+      "orchestrator, exactly like the tenant API's.",
+  },
+  {
+    op: 'GET /health/ready',
+    reason: "platform-api's readiness probe — same caller as its `GET /health/live`.",
+  },
+  {
+    op: 'GET /health',
+    reason:
+      "platform-api's narrow dependency check, for a monitor pointed at `/health` on both " +
+      'processes; the detailed view is the dashboard (tm 389.8).',
+  },
+];
+
+/** Platform surface debt with an owner (tm 389.3). */
+const PLATFORM_TRACKED = [
+  {
+    op: 'GET /meta',
+    owner: 'tm 389.6',
+    reason:
+      'version + region for the admin SPA\'s permanent "PLATFORM · <region>" strip; ' +
+      'apps/admin does not exist until 389.6 builds it.',
+  },
+];
+
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
 function pathMatcher(path) {
   // One path segment: no quote, whitespace or slash. Matches `${chatId}` in a
@@ -464,8 +507,8 @@ function verbsForPath(path, sources) {
  * read as covered on the strength of `DeveloperPortal.test.tsx` alone. Same
  * exclusion, same reason, as `unpaged-lists.cjs`.
  */
-function readSources() {
-  return execSync(`git ls-files ${CLIENT_ROOTS.join(' ')}`, { encoding: 'utf8' })
+function readSources(roots = CLIENT_ROOTS) {
+  return execSync(`git ls-files ${roots.join(' ')}`, { encoding: 'utf8' })
     .trim()
     .split(/\r?\n/)
     .filter((file) => /\.(ts|tsx)$/.test(file) && !/\.(test|spec)\.(ts|tsx)$/.test(file))
@@ -588,8 +631,21 @@ function analyse(input = {}) {
   return { paths, operations, called, uncalled, uncalledPaths, explained, dead, errors };
 }
 
+/** The second pair: the platform contract against `apps/admin` (tm 389.3). */
+function analysePlatform(input = {}) {
+  return analyse({
+    spec: input.spec ?? JSON.parse(fs.readFileSync(PLATFORM_SPEC, 'utf8')),
+    sources: input.sources ?? readSources(PLATFORM_CLIENT_ROOTS),
+    headless: input.headless ?? PLATFORM_HEADLESS,
+    indirect: input.indirect ?? [],
+    tracked: input.tracked ?? PLATFORM_TRACKED,
+  });
+}
+
 function main(argv) {
   const result = analyse();
+  const platform = analysePlatform();
+  const errors = [...result.errors, ...platform.errors.map((error) => `platform ${error}`)];
 
   if (argv.includes('--json')) {
     console.log(
@@ -603,12 +659,20 @@ function main(argv) {
           tracked: result.explained.tracked.map((entry) => `${entry.op}  (${entry.owner})`),
           dead: result.dead.map((entry) => entry.op),
           errors: result.errors,
+          platform: {
+            operations: platform.operations.length,
+            called: platform.called.length,
+            headless: platform.explained.headless.map((entry) => entry.op),
+            tracked: platform.explained.tracked.map((entry) => `${entry.op}  (${entry.owner})`),
+            dead: platform.dead.map((entry) => entry.op),
+            errors: platform.errors,
+          },
         },
         null,
         2,
       ),
     );
-    return result.errors.length > 0 ? 1 : 0;
+    return errors.length > 0 ? 1 : 0;
   }
 
   console.log(`contract paths: ${result.paths.length}`);
@@ -634,9 +698,21 @@ function main(argv) {
   console.log(`### UNEXPLAINED = ${result.dead.length}`);
   for (const operation of result.dead) console.log('   ' + operation.op);
 
-  if (result.errors.length > 0) {
-    console.log(`\n### errors = ${result.errors.length}`);
-    for (const error of result.errors) console.log('   ' + error);
+  console.log(
+    `\n## platform contract (tm 389.3): ${platform.operations.length} operations, ` +
+      `called by apps/admin: ${platform.called.length}`,
+  );
+  for (const kind of ['headless', 'tracked']) {
+    for (const entry of platform.explained[kind]) {
+      const owner = entry.owner ? ` [${entry.owner}]` : '';
+      console.log(`   ${kind}: ${entry.op}${owner}`);
+    }
+  }
+  for (const operation of platform.dead) console.log('   UNEXPLAINED: ' + operation.op);
+
+  if (errors.length > 0) {
+    console.log(`\n### errors = ${errors.length}`);
+    for (const error of errors) console.log('   ' + error);
     console.log(
       '\nGive the operation a client, or put it in HEADLESS / INDIRECT / TRACKED with the ' +
         'reason it has none.',
@@ -648,6 +724,7 @@ function main(argv) {
 
 module.exports = {
   analyse,
+  analysePlatform,
   pathMatcher,
   markersOn,
   verbsNear,
@@ -656,6 +733,8 @@ module.exports = {
   HEADLESS,
   INDIRECT,
   TRACKED,
+  PLATFORM_HEADLESS,
+  PLATFORM_TRACKED,
   WINDOW,
 };
 

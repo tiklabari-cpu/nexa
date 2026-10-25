@@ -1,0 +1,19 @@
+meta:
+  get:
+    tags: [System]
+    operationId: getPlatformMeta
+    summary: Version and region of this deployment
+    description: |
+      Read before sign-in by the admin SPA for its permanent "PLATFORM · <region>"
+      strip (design.md §D), so an operator always knows which deployment they
+      are acting on. Version and region only — nothing a dependency, a
+      workspace or a setting could be read from.
+    security: []
+    responses:
+      "200":
+        description: This deployment's version and region
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformMeta" }
+      "429":
+        $ref: "../openapi.yaml#/components/responses/TooManyRequests"

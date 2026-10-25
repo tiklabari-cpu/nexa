@@ -17,22 +17,37 @@ export interface OpenApiDocument {
   [key: string]: unknown;
 }
 
-let cached: OpenApiDocument | undefined;
+const cached = new Map<string, OpenApiDocument>();
 
-export function loadOpenApiDocument(): OpenApiDocument {
-  if (cached) return cached;
+function load(bundle: string): OpenApiDocument {
+  const hit = cached.get(bundle);
+  if (hit) return hit;
 
   const here = dirname(fileURLToPath(import.meta.url));
-  const file = resolve(here, '../dist/openapi.json');
+  const file = resolve(here, '../dist', bundle);
   try {
-    cached = JSON.parse(readFileSync(file, 'utf8')) as OpenApiDocument;
-    return cached;
+    const document = JSON.parse(readFileSync(file, 'utf8')) as OpenApiDocument;
+    cached.set(bundle, document);
+    return document;
   } catch (cause) {
     throw new Error(
       `OpenAPI bundle missing at ${file}. Run \`pnpm --filter @siyahtus/contract build\`.`,
       { cause },
     );
   }
+}
+
+/** The tenant contract — `openapi/openapi.yaml`, served under `/api/v1`. */
+export function loadOpenApiDocument(): OpenApiDocument {
+  return load('openapi.json');
+}
+
+/**
+ * The platform (root panel) contract — `platform/openapi.yaml`, served under
+ * `/platform/v1` by the platform-api process only (tm 389.3).
+ */
+export function loadPlatformOpenApiDocument(): OpenApiDocument {
+  return load('platform-openapi.json');
 }
 
 export default loadOpenApiDocument;

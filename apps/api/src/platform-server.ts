@@ -31,12 +31,14 @@ import { baseFastifyOptions } from './lib/fastify-options.js';
 import backgroundMail from './plugins/background-mail.js';
 import errorHandler from './plugins/error-handler.js';
 import lifecycle from './plugins/lifecycle.js';
+import platformAudit from './plugins/platform-audit.js';
 import platformAuth from './plugins/platform-auth.js';
 import platformDatabase from './plugins/platform-database.js';
 import platformRateLimit from './plugins/platform-rate-limit.js';
 import redis from './plugins/redis.js';
 import telemetryPlugin from './plugins/telemetry.js';
 import platformAdminsRoutes from './routes/platform/admins.js';
+import platformAuditRoutes from './routes/platform/audit.js';
 import platformAuthRoutes from './routes/platform/auth.js';
 import platformHealthRoutes from './routes/platform/health.js';
 import platformMetaRoutes from './routes/platform/meta.js';
@@ -128,6 +130,7 @@ export async function buildPlatformServer({
   await app.register(backgroundMail, { mailer });
   await app.register(platformRateLimit, { env, platform });
   await app.register(platformAuth, { env, platform, ...(now ? { now } : {}) });
+  await app.register(platformAudit, { env, platform, ...(now ? { now } : {}) });
 
   for (const warning of platform.warnings) app.log.warn({ event: 'platform.env_warning' }, warning);
 
@@ -141,6 +144,7 @@ export async function buildPlatformServer({
       await api.register(platformMetaRoutes, { env, version: VERSION });
       await api.register(platformAuthRoutes, { env });
       await api.register(platformAdminsRoutes, { platform, mailer });
+      await api.register(platformAuditRoutes);
     },
     { prefix: PLATFORM_PREFIX },
   );

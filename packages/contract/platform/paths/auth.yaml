@@ -6,11 +6,14 @@
 # stage reaches it when that is not `active`; `x-platform-recent-totp` marks a
 # route that wants a code younger than five minutes. The platform-auth test
 # reads these against the server's route config, so they cannot drift.
+# `x-platform-audit` (tm 389.5) is the entry a successful call writes to the
+# platform audit chain — every mutation has one (`platform-audit.test.ts`).
 
 login:
   post:
     tags: [Auth]
     operationId: platformLogin
+    x-platform-audit: admin.signed_in
     summary: Sign in with a password — the first of two steps
     description: |
       Answers with a `password`-stage session: it reaches the second-factor
@@ -43,6 +46,7 @@ totpEnroll:
   post:
     tags: [Auth]
     operationId: platformTotpEnroll
+    x-platform-audit: admin.totp_enrollment_started
     summary: Start setting up the authenticator
     description: |
       For a `password`-stage session of an operator with no authenticator.
@@ -66,6 +70,7 @@ totpActivate:
   post:
     tags: [Auth]
     operationId: platformTotpActivate
+    x-platform-audit: admin.totp_enrolled
     summary: Confirm the authenticator — the session becomes active
     description: |
       A code from the app proves it holds the secret. The operator is enrolled,
@@ -95,6 +100,7 @@ totpVerify:
   post:
     tags: [Auth]
     operationId: platformTotpVerify
+    x-platform-audit: admin.totp_verified
     summary: Show the second factor — the session becomes active
     description: |
       A TOTP code (`code`) or, once each, a recovery code (`recovery_code`).
@@ -123,6 +129,7 @@ totpReverify:
   post:
     tags: [Auth]
     operationId: platformTotpReverify
+    x-platform-audit: admin.totp_reverified
     summary: A fresh code, for the destructive routes
     description: |
       Routes marked `x-platform-recent-totp` answer 403
@@ -149,6 +156,7 @@ recoveryRegenerate:
   post:
     tags: [Auth]
     operationId: platformRegenerateRecoveryCodes
+    x-platform-audit: admin.recovery_codes_regenerated
     summary: A new recovery sheet
     description: |
       Ten new single-use codes, shown once; every earlier code stops working.
@@ -202,6 +210,7 @@ sessions:
   delete:
     tags: [Auth]
     operationId: endOtherPlatformSessions
+    x-platform-audit: admin.other_sessions_ended
     summary: End every other session of this operator
     x-platform-permission: self
     responses:
@@ -217,6 +226,7 @@ logout:
   post:
     tags: [Auth]
     operationId: platformLogout
+    x-platform-audit: admin.signed_out
     summary: End this session
     description: Reachable from either stage. The token stops working at once.
     x-platform-permission: self
@@ -230,6 +240,7 @@ inviteAccept:
   post:
     tags: [Auth]
     operationId: acceptPlatformInvite
+    x-platform-audit: admin.invite_accepted
     summary: Accept an operator invitation
     description: |
       The token from the invitation mail's link (its fragment) and a password

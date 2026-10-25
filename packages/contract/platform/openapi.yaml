@@ -36,12 +36,18 @@ tags:
       opaque session token, `password` stage until the code, `active` after.
   - name: Admins
     description: Operator management — invitations, roles, disabling, second-factor resets.
+  - name: Audit
+    description: |
+      The platform audit chain (tm 389.5): every operator mutation and sign-in
+      event, HMAC-chained, signed on export; a workspace's own trail, read-only.
 
 # The operator session (tm 389.4) — an opaque bearer token, not a JWT. Every
 # operation needs it unless it says `security: []`. What else it needs is in
 # `x-platform-permission` (a `PLATFORM_PERMISSIONS` key, or `self`),
 # `x-platform-stage` (when a `password`-stage session may call it) and
-# `x-platform-recent-totp` (a code younger than five minutes).
+# `x-platform-recent-totp` (a code younger than five minutes). Every mutation
+# names the audit entry it writes in `x-platform-audit` (tm 389.5); a POST that
+# changes nothing says `x-platform-safe` instead.
 security:
   - platformSession: []
 
@@ -92,6 +98,14 @@ paths:
     $ref: "./paths/admins.yaml#/resetTwoFactor"
   /admins/{adminId}/revoke-sessions:
     $ref: "./paths/admins.yaml#/revokeSessions"
+  /audit:
+    $ref: "./paths/audit.yaml#/audit"
+  /audit/export:
+    $ref: "./paths/audit.yaml#/export"
+  /audit/verify:
+    $ref: "./paths/audit.yaml#/verify"
+  /audit/workspaces/{licenseId}:
+    $ref: "./paths/audit.yaml#/workspace"
 
 components:
   securitySchemes:
@@ -416,6 +430,215 @@ components:
           type: string
           description: Only when `mail` is `failed` — hand the link over another way.
 
+    PlatformAuditAction:
+      type: string
+      description: |
+        The closed list of what the platform audit chain records
+        (`PLATFORM_AUDIT_ACTIONS`, `services/platform/platform-audit.ts`).
+        `<module>.<verb>`; the `admin.*` session events are the only ones
+        recorded without a reason.
+      enum:
+        - admin.bootstrapped
+        - admin.signed_in
+        - admin.sign_in_failed
+        - admin.invite_accepted
+        - admin.totp_enrollment_started
+        - admin.totp_enrolled
+        - admin.totp_verified
+        - admin.totp_failed
+        - admin.totp_reverified
+        - admin.recovery_codes_regenerated
+        - admin.other_sessions_ended
+        - admin.signed_out
+        - admin.invited
+        - admin.invite_revoked
+        - admin.role_changed
+        - admin.disabled
+        - admin.enabled
+        - admin.two_factor_reset
+        - admin.sessions_revoked
+        - workspace.note_added
+        - workspace.trial_extended
+        - workspace.activated
+        - workspace.plan_changed
+        - workspace.suspended
+        - workspace.unsuspended
+        - workspace.read_only_set
+        - workspace.active_set
+        - workspace.cancelled
+        - workspace.resumed
+        - workspace.overrides_changed
+        - workspace.ai_caps_changed
+        - workspace.owner_verification_resent
+        - workspace.sandbox_reset
+        - workspace.ownership_transferred
+        - workspace.deletion_scheduled
+        - workspace.deletion_cancelled
+        - account.verification_resent
+        - account.password_reset_forced
+        - account.sessions_revoked
+        - account.tokens_revoked
+        - account.two_factor_reset
+        - account.suspended
+        - account.unsuspended
+        - account.exported
+        - account.erased
+        - billing.plan_saved
+        - billing.package_saved
+        - billing.credit_granted
+        - billing.manual_subscription_created
+        - billing.payment_address_sent
+        - billing.payment_confirmed
+        - billing.payment_request_cancelled
+        - billing.swift_marked_paid
+        - billing.providers_updated
+        - billing.bank_details_updated
+        - billing.issuer_profile_updated
+        - settings.updated
+        - settings.maintenance_changed
+        - ai_settings.updated
+        - ai_settings.connection_tested
+        - ai_settings.reembed_started
+        - impersonation.started
+        - impersonation.ended
+        - security.blocklist_added
+        - security.blocklist_removed
+        - security.unverified_signups_purged
+
+    PlatformAuditTarget:
+      type: string
+      description: What an entry is about (`target_type`).
+      enum:
+        - admin
+        - invite
+        - session
+        - workspace
+        - account
+        - plan
+        - package
+        - invoice
+        - payment_request
+        - credit
+        - settings
+        - blocklist
+        - impersonation
+
+    PlatformAuditEntry:
+      type: object
+      required:
+        [
+          chain_seq,
+          admin_id,
+          action,
+          target_type,
+          target_id,
+          license_id,
+          reason,
+          payload,
+          ip,
+          created_at,
+        ]
+      properties:
+        chain_seq:
+          type: string
+          description: The entry's gapless position in the chain (a decimal integer).
+        admin_id:
+          type: ["string", "null"]
+          format: uuid
+          description: The operator; null for a sign-in nobody could be matched to.
+        action: { $ref: "#/components/schemas/PlatformAuditAction" }
+        target_type: { $ref: "#/components/schemas/PlatformAuditTarget" }
+        target_id: { type: ["string", "null"] }
+        license_id:
+          type: ["string", "null"]
+          description: The workspace the action concerns — it has its own `platform.*` entry too.
+        reason:
+          type: ["string", "null"]
+          description: Why, in the operator's words; null only on `admin.*` session events.
+        payload:
+          type: object
+          additionalProperties: true
+          description: Identifiers, counts, changed field names — never values of secrets.
+        ip: { type: ["string", "null"] }
+        created_at: { type: string, format: date-time }
+
+    PlatformAuditList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformAuditEntry" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformAuditExportRecord:
+      description: One line of `GET /audit/export` — the entry and its two hashes.
+      allOf:
+        - $ref: "#/components/schemas/PlatformAuditEntry"
+        - type: object
+          required: [prev_hash, hash]
+          properties:
+            prev_hash: { type: ["string", "null"] }
+            hash: { type: string }
+
+    PlatformAuditVerification:
+      type: object
+      required: [ok, checked, first_seq, last_seq, head_seq, findings, findings_total]
+      properties:
+        ok: { type: boolean }
+        checked: { type: integer, description: Entries recomputed and linked. }
+        first_seq: { type: ["string", "null"] }
+        last_seq: { type: ["string", "null"] }
+        head_seq:
+          type: ["string", "null"]
+          description: The last position the chain head handed out.
+        findings:
+          type: array
+          items:
+            type: object
+            required: [kind, seq, detail]
+            properties:
+              kind:
+                type: string
+                enum:
+                  [
+                    sequence_gap,
+                    start_mismatch,
+                    broken_link,
+                    hash_mismatch,
+                    unchained_entry,
+                    head_mismatch,
+                  ]
+              seq:
+                type: ["string", "null"]
+                description: The position the finding is about (the first missing one for a gap).
+              detail: { type: string }
+        findings_total: { type: integer }
+
+    PlatformWorkspaceAuditList:
+      type: object
+      description: The tenant API's `GET /audit-log` page, for one workspace.
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, action, actor_id, actor_type, target, metadata, ip, created_at]
+            properties:
+              id: { type: string, format: uuid }
+              action: { type: string }
+              actor_id: { type: ["string", "null"] }
+              actor_type:
+                type: string
+                enum: [agent, bot, customer, system, platform]
+              on_behalf_of: { type: string }
+              target: { type: ["string", "null"] }
+              metadata: { type: object, additionalProperties: true }
+              ip: { type: ["string", "null"] }
+              created_at: { type: string, format: date-time }
+        next_page_id: { type: string }
+
     PlatformHealth:
       type: object
       description: |
@@ -472,7 +695,10 @@ components:
 
   responses:
     BadRequest:
-      description: Malformed body, or a value failing validation (`validation`).
+      description: |
+        Malformed body, or a value failing validation (`validation`);
+        `platform_reason_required` — a mutation without a 3–500 character
+        `reason` (tm 389.5).
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

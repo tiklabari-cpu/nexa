@@ -46,6 +46,8 @@ export const common: Messages = {
     'Zaten çok sayıda istek bekliyor — birazdan yeniden deneyin.',
   'common.errors.platform_last_superadmin':
     'Bu değişiklik platformu etkin bir süper yöneticisiz bırakır.',
+  'common.errors.platform_reason_required':
+    'Bu işlemin gerekçesini yazın (3–500 karakter) — denetim kaydına girer.',
   'common.errors.platform_recent_totp_required':
     'Bu işlemi onaylamak için doğrulama uygulamanızdan yeni bir kod girin.',
   'common.errors.platform_totp_required': 'Önce doğrulama uygulamanızdaki kodla girişi tamamlayın.',

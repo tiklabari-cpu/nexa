@@ -450,6 +450,23 @@ const PLATFORM_TRACKED = [
       'operator management (tm 389.4) — the Admins page of the admin SPA, whose shell 389.6 ' +
       'builds; apps/admin does not exist yet.',
   })),
+  // The platform audit chain (tm 389.5): the shell's Audit page. Like Admins,
+  // 389.6 builds the menu entry; its content is named by no later subtask yet
+  // — HANDOFF tm 389.5 open item.
+  ...['GET /audit', 'GET /audit/export', 'POST /audit/verify'].map((op) => ({
+    op,
+    owner: 'tm 389.6',
+    reason:
+      'the platform audit chain (tm 389.5) — the Audit page of the admin SPA (list, filters, ' +
+      'signed export, verify), whose shell 389.6 builds; apps/admin does not exist yet.',
+  })),
+  {
+    op: 'GET /audit/workspaces/{licenseId}',
+    owner: 'tm 389.9',
+    reason:
+      "a workspace's own audit trail, read-only (tm 389.5) — the workspace detail's audit tab " +
+      'that 389.9 builds.',
+  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */

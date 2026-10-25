@@ -15,8 +15,9 @@
  *
  * Operators are disabled, never deleted. The last active superadmin cannot be
  * disabled or moved to another role (409 `platform_last_superadmin`). Every
- * mutation takes a `reason` (3–500 characters) — the platform audit chain
- * (389.5) records it; this task validates it and writes nothing yet.
+ * mutation takes a `reason` (3–500 characters), checked and recorded in the
+ * platform audit chain by `plugins/platform-audit.ts` (tm 389.5) — the
+ * handlers here only add what the entry cannot read off the path.
  *
  * The list is not paged: operators are a handful of people, and a page
  * boundary in a list of eight is only a way to miss one.
@@ -32,16 +33,23 @@ import { deliver, logUnsentMail } from '../../services/mail/delivery.js';
 import type { Mailer } from '../../services/mail/mailer.js';
 import { platformInvitationMail } from '../../services/mail/templates/messages.js';
 import { PLATFORM_INVITE_TTL_HOURS } from '../../services/platform/admin-auth.js';
+import type {
+  PlatformAuditAction,
+  PlatformAuditRouteConfig,
+} from '../../services/platform/platform-audit.js';
 import { parse } from './auth.js';
 
-const reasonSchema = z.string().trim().min(3).max(500);
-const reasonBody = z.object({ reason: reasonSchema });
-const roleBody = z.object({ role: z.enum(PLATFORM_ROLES), reason: reasonSchema });
+// `reason` is the audit plugin's: present and 3–500 characters before a
+// handler runs, or 400 `platform_reason_required`.
+const roleBody = z.object({ role: z.enum(PLATFORM_ROLES) });
 const inviteBody = z.object({
   email: z.string().trim().toLowerCase().email().max(320),
   role: z.enum(PLATFORM_ROLES),
-  reason: reasonSchema,
 });
+
+function onAdmin(action: PlatformAuditAction): PlatformAuditRouteConfig {
+  return { action, target: 'admin', targetParam: 'adminId' };
+}
 
 function idParam(params: unknown, name: 'adminId' | 'inviteId'): string {
   const value = (params as Record<string, unknown>)[name];
@@ -60,83 +68,118 @@ export default async function platformAdminsRoutes(
 ): Promise<void> {
   const admins = app.platformAdmins;
   const read = { platform: { permission: 'admins.read' as const } };
-  const manage = { platform: { permission: 'admins.manage' as const } };
-  const manageFresh = { platform: { permission: 'admins.manage' as const, recentTotp: true } };
+  const manage = (audit: PlatformAuditRouteConfig) => ({
+    platform: { permission: 'admins.manage' as const, audit },
+  });
+  const manageFresh = (audit: PlatformAuditRouteConfig) => ({
+    platform: { permission: 'admins.manage' as const, recentTotp: true, audit },
+  });
 
   app.get('/admins', { config: read }, async () => ({ data: await admins.list() }));
 
   app.get('/admins/invites', { config: read }, async () => ({ data: await admins.listInvites() }));
 
-  app.post('/admins/invites', { config: manageFresh }, async (request, reply) => {
-    const body = parse(inviteBody, request.body);
-    const session = request.requirePlatformSession();
-    const created = await admins.invite({
-      email: body.email,
-      role: body.role,
-      invitedBy: session.adminId,
-    });
+  app.post(
+    '/admins/invites',
+    { config: manageFresh({ action: 'admin.invited', target: 'invite' }) },
+    async (request, reply) => {
+      const body = parse(inviteBody, request.body);
+      const session = request.requirePlatformSession();
+      const created = await admins.invite({
+        email: body.email,
+        role: body.role,
+        invitedBy: session.adminId,
+      });
 
-    // The token travels in the fragment: it never reaches a server log, the
-    // admin SPA reads it from `location.hash` and posts it to /auth/invite/accept.
-    const acceptUrl = `${options.platform.adminOrigin}/invite#token=${created.token}`;
-    const outcome = await deliver(options.mailer, {
-      to: created.invite.email,
-      licenseId: null,
-      kind: 'platform_invitation',
-      ...platformInvitationMail(
-        { locale: requestLocale(request), appUrl: options.platform.adminOrigin },
-        {
-          url: acceptUrl,
-          role: created.invite.role,
-          inviterEmail: session.email,
-          hours: PLATFORM_INVITE_TTL_HOURS,
-        },
-      ),
-    });
-    logUnsentMail(request.log, 'platform_invitation.mail', outcome);
+      // The token travels in the fragment: it never reaches a server log, the
+      // admin SPA reads it from `location.hash` and posts it to /auth/invite/accept.
+      const acceptUrl = `${options.platform.adminOrigin}/invite#token=${created.token}`;
+      const outcome = await deliver(options.mailer, {
+        to: created.invite.email,
+        licenseId: null,
+        kind: 'platform_invitation',
+        ...platformInvitationMail(
+          { locale: requestLocale(request), appUrl: options.platform.adminOrigin },
+          {
+            url: acceptUrl,
+            role: created.invite.role,
+            inviterEmail: session.email,
+            hours: PLATFORM_INVITE_TTL_HOURS,
+          },
+        ),
+      });
+      logUnsentMail(request.log, 'platform_invitation.mail', outcome);
+      request.platformAudit!.targetId = created.invite.id;
+      request.platformAudit!.payload = {
+        email: created.invite.email,
+        role: created.invite.role,
+        mail: outcome.status === 'sent' ? 'sent' : 'failed',
+      };
 
-    return reply.status(201).send({
-      invite: created.invite,
-      mail: outcome.status === 'sent' ? 'sent' : 'failed',
-      // Only when the mail did not go: the inviting superadmin hands the link
-      // over another way. Never otherwise — a response is not where a
-      // credential for somebody else should travel by default.
-      ...(outcome.status === 'sent' ? {} : { accept_url: acceptUrl }),
-    });
-  });
+      return reply.status(201).send({
+        invite: created.invite,
+        mail: outcome.status === 'sent' ? 'sent' : 'failed',
+        // Only when the mail did not go: the inviting superadmin hands the link
+        // over another way. Never otherwise — a response is not where a
+        // credential for somebody else should travel by default.
+        ...(outcome.status === 'sent' ? {} : { accept_url: acceptUrl }),
+      });
+    },
+  );
 
-  app.post('/admins/invites/:inviteId/revoke', { config: manage }, async (request, reply) => {
-    parse(reasonBody, request.body);
-    await admins.revokeInvite(idParam(request.params, 'inviteId'));
-    return reply.status(204).send();
-  });
+  app.post(
+    '/admins/invites/:inviteId/revoke',
+    {
+      config: manage({ action: 'admin.invite_revoked', target: 'invite', targetParam: 'inviteId' }),
+    },
+    async (request, reply) => {
+      await admins.revokeInvite(idParam(request.params, 'inviteId'));
+      return reply.status(204).send();
+    },
+  );
 
   app.get('/admins/:adminId', { config: read }, async (request) =>
     admins.get(idParam(request.params, 'adminId')),
   );
 
-  app.post('/admins/:adminId/role', { config: manageFresh }, async (request) => {
-    const body = parse(roleBody, request.body);
-    return admins.setRole(idParam(request.params, 'adminId'), body.role);
-  });
+  app.post(
+    '/admins/:adminId/role',
+    { config: manageFresh(onAdmin('admin.role_changed')) },
+    async (request) => {
+      const body = parse(roleBody, request.body);
+      const adminId = idParam(request.params, 'adminId');
+      const before = await admins.get(adminId);
+      const after = await admins.setRole(adminId, body.role);
+      request.platformAudit!.payload = { from: before.role, to: after.role };
+      return after;
+    },
+  );
 
-  app.post('/admins/:adminId/disable', { config: manageFresh }, async (request) => {
-    parse(reasonBody, request.body);
-    return admins.disable(idParam(request.params, 'adminId'));
-  });
+  app.post(
+    '/admins/:adminId/disable',
+    { config: manageFresh(onAdmin('admin.disabled')) },
+    async (request) => admins.disable(idParam(request.params, 'adminId')),
+  );
 
-  app.post('/admins/:adminId/enable', { config: manageFresh }, async (request) => {
-    parse(reasonBody, request.body);
-    return admins.enable(idParam(request.params, 'adminId'));
-  });
+  app.post(
+    '/admins/:adminId/enable',
+    { config: manageFresh(onAdmin('admin.enabled')) },
+    async (request) => admins.enable(idParam(request.params, 'adminId')),
+  );
 
-  app.post('/admins/:adminId/reset-two-factor', { config: manageFresh }, async (request) => {
-    parse(reasonBody, request.body);
-    return admins.resetTwoFactor(idParam(request.params, 'adminId'));
-  });
+  app.post(
+    '/admins/:adminId/reset-two-factor',
+    { config: manageFresh(onAdmin('admin.two_factor_reset')) },
+    async (request) => admins.resetTwoFactor(idParam(request.params, 'adminId')),
+  );
 
-  app.post('/admins/:adminId/revoke-sessions', { config: manage }, async (request) => {
-    parse(reasonBody, request.body);
-    return { ended: await admins.revokeSessions(idParam(request.params, 'adminId')) };
-  });
+  app.post(
+    '/admins/:adminId/revoke-sessions',
+    { config: manage(onAdmin('admin.sessions_revoked')) },
+    async (request) => {
+      const ended = await admins.revokeSessions(idParam(request.params, 'adminId'));
+      request.platformAudit!.payload = { ended };
+      return { ended };
+    },
+  );
 }

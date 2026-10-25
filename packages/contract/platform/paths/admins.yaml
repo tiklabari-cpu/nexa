@@ -37,6 +37,7 @@ invites:
   post:
     tags: [Admins]
     operationId: invitePlatformAdmin
+    x-platform-audit: admin.invited
     summary: Invite an operator
     description: |
       Mails a single-use link valid for 72 hours to the address; accepting it
@@ -67,6 +68,7 @@ inviteRevoke:
   post:
     tags: [Admins]
     operationId: revokePlatformInvite
+    x-platform-audit: admin.invite_revoked
     summary: Withdraw a pending invitation
     x-platform-permission: admins.manage
     parameters:
@@ -106,6 +108,7 @@ role:
   post:
     tags: [Admins]
     operationId: setPlatformAdminRole
+    x-platform-audit: admin.role_changed
     summary: Change an operator's role
     description: |
       Takes effect on the operator's next request: their sessions end. 409
@@ -135,6 +138,7 @@ disable:
   post:
     tags: [Admins]
     operationId: disablePlatformAdmin
+    x-platform-audit: admin.disabled
     summary: Disable an operator
     description: |
       Their sessions end and sign-in is refused. 409
@@ -164,6 +168,7 @@ enable:
   post:
     tags: [Admins]
     operationId: enablePlatformAdmin
+    x-platform-audit: admin.enabled
     summary: Enable a disabled operator
     x-platform-permission: admins.manage
     x-platform-recent-totp: true
@@ -189,6 +194,7 @@ resetTwoFactor:
   post:
     tags: [Admins]
     operationId: resetPlatformAdminTwoFactor
+    x-platform-audit: admin.two_factor_reset
     summary: Remove an operator's authenticator and recovery codes
     description: |
       For a lost phone. Their sessions end; the next sign-in can only enroll
@@ -217,6 +223,7 @@ revokeSessions:
   post:
     tags: [Admins]
     operationId: revokePlatformAdminSessions
+    x-platform-audit: admin.sessions_revoked
     summary: End every session of an operator
     x-platform-permission: admins.manage
     parameters:

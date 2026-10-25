@@ -16,6 +16,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../../lib/crypto.js';
 import { platformPasswordProblem } from './admin-auth.js';
+import type { PlatformAuditLog } from './platform-audit.js';
 
 const BOOTSTRAP_LOCK = 'siyahtus:platform:bootstrap';
 
@@ -33,6 +34,11 @@ export interface BootstrapInput {
   email: string;
   password: string;
   now?: Date;
+  /**
+   * Records `admin.bootstrapped` — the platform chain's first entry, in the
+   * same transaction as the operator (tm 389.5). The CLI always passes it.
+   */
+  audit?: PlatformAuditLog;
 }
 
 export async function bootstrapPlatformAdmin(
@@ -64,6 +70,16 @@ export async function bootstrapPlatformAdmin(
       },
       select: { id: true, email: true },
     });
+    await input.audit?.record(
+      {
+        adminId: admin.id,
+        action: 'admin.bootstrapped',
+        targetType: 'admin',
+        targetId: admin.id,
+        payload: { email: admin.email, role: 'superadmin', via: 'cli' },
+      },
+      tx,
+    );
     return admin;
   });
 }

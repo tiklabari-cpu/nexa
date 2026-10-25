@@ -53,6 +53,24 @@ describe('platformRouteProblem (tm 389.4)', () => {
     ).toMatch(/unknown permission/);
   });
 
+  it('lets a public route name its audit entry, and a declared-safe POST be guarded by a read (tm 389.5)', () => {
+    const audit = { action: 'admin.signed_in' as const, target: 'admin' as const };
+    expect(
+      platformRouteProblem('POST', '/auth/login', { public: true, platform: { audit } }),
+    ).toBeNull();
+    expect(
+      platformRouteProblem('POST', '/auth/login', {
+        public: true,
+        platform: { audit, recentTotp: true },
+      }),
+    ).toMatch(/public route cannot also declare operator gates \(config\.platform\.recentTotp\)/);
+    expect(
+      platformRouteProblem('POST', '/audit/verify', {
+        platform: { permission: 'audit.read', safe: true },
+      }),
+    ).toBeNull();
+  });
+
   it('keeps the pre-code stages to self routes, and recentTotp to active sessions', () => {
     expect(
       platformRouteProblem('POST', '/x', {

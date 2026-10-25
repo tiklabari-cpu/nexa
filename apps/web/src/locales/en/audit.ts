@@ -66,6 +66,7 @@ export const audit: Messages = {
   'audit.group.customerRecords': 'Customer records',
   'audit.group.credentials': 'Credentials',
   'audit.group.data': 'Data',
+  'audit.group.platform': 'SiyahTuş support',
 
   // Access review export (AccessReviewExport.tsx)
   'audit.accessReview.title': 'Access review',

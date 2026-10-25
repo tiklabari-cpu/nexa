@@ -63,6 +63,36 @@ export function deriveChainKey(secret: string, licenseId: bigint): Buffer {
   return createHmac('sha256', secret).update(`${KEY_LABEL}|${licenseId}`, 'utf8').digest();
 }
 
+// --- Scope ------------------------------------------------------------------
+
+/**
+ * Whose chain an entry belongs to (tm 389.5).
+ *
+ * A workspace's chain is scoped by its licence id, written as the decimal
+ * string it has always been in the payload; the root panel's single chain
+ * (`platform_audit_log`) is scoped `platform`. A scope is the second slot of
+ * every encoded entry and of every signed export page, so an entry or a page
+ * can never be read as belonging to a chain it was not written for — and the
+ * two kinds cannot collide, because no licence id is the word `platform`.
+ */
+export type ChainScope = string;
+
+/** The root panel's chain (`platform_audit_log`). */
+export const PLATFORM_CHAIN_SCOPE: ChainScope = 'platform';
+
+/** A workspace's chain: its licence id, exactly as every stored entry has it. */
+export function tenantChainScope(licenseId: bigint): ChainScope {
+  return licenseId.toString();
+}
+
+/**
+ * The bytes an entry's HMAC is taken over, for any scope: the version label,
+ * the scope, the position, then the scope's own fields in a fixed order.
+ */
+function encodeChainEntry(scope: ChainScope, chainSeq: bigint, fields: unknown[]): string {
+  return JSON.stringify([ROW_LABEL, scope, chainSeq.toString(), ...fields]);
+}
+
 /** The fields of an entry that the chain commits to. */
 export interface ChainableRow {
   id: string;
@@ -102,10 +132,7 @@ export interface ChainableRow {
  * own verification.
  */
 export function chainPayload(row: ChainableRow): string {
-  return JSON.stringify([
-    ROW_LABEL,
-    row.licenseId.toString(),
-    row.chainSeq.toString(),
+  return encodeChainEntry(tenantChainScope(row.licenseId), row.chainSeq, [
     row.id,
     row.createdAt.toISOString(),
     row.action,
@@ -124,6 +151,46 @@ export function chainPayload(row: ChainableRow): string {
 /** An entry's hash: HMAC-SHA256 of `chainPayload` under the workspace's key. */
 export function chainRowHash(key: Buffer, row: ChainableRow): string {
   return createHmac('sha256', key).update(chainPayload(row), 'utf8').digest('base64url');
+}
+
+/**
+ * The fields of a root-panel entry (`platform_audit_log`, tm 389.5) that its
+ * chain commits to. Every column but the hash itself: who, what, on which
+ * object, in which workspace, why, with what detail, from where and when.
+ */
+export interface PlatformChainableRow {
+  chainSeq: bigint;
+  adminId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  licenseId: bigint | null;
+  reason: string | null;
+  payload: unknown;
+  ip: string | null;
+  createdAt: Date;
+  prevHash: string | null;
+}
+
+/** The bytes a root-panel entry's HMAC is taken over — the scope is `platform`. */
+export function platformChainPayload(row: PlatformChainableRow): string {
+  return encodeChainEntry(PLATFORM_CHAIN_SCOPE, row.chainSeq, [
+    row.createdAt.toISOString(),
+    row.adminId,
+    row.action,
+    row.targetType,
+    row.targetId,
+    row.licenseId === null ? null : row.licenseId.toString(),
+    row.reason,
+    canonicalJson(row.payload),
+    row.ip,
+    row.prevHash,
+  ]);
+}
+
+/** A root-panel entry's hash, under the platform chain key (`lib/platform-keys.ts`). */
+export function platformChainRowHash(key: Buffer, row: PlatformChainableRow): string {
+  return createHmac('sha256', key).update(platformChainPayload(row), 'utf8').digest('base64url');
 }
 
 /**
@@ -166,6 +233,7 @@ function sortDeep(value: unknown): unknown {
  * a value that is checked but not signed is a value an attacker gets to choose.
  */
 export interface ExportSignatureSubject {
+  /** A workspace's page. The root panel's names its scope instead ({@link ScopedExportSignatureSubject}). */
   licenseId: bigint;
   /** Number of records in the body. */
   count: number;
@@ -174,6 +242,15 @@ export interface ExportSignatureSubject {
   lastSeq: bigint | null;
   /** The exact NDJSON bytes delivered. */
   body: string;
+}
+
+/** The same subject for a chain named by scope — the root panel's (tm 389.5). */
+export interface ScopedExportSignatureSubject extends Omit<ExportSignatureSubject, 'licenseId'> {
+  scope: ChainScope;
+}
+
+function subjectScope(subject: ExportSignatureSubject | ScopedExportSignatureSubject): ChainScope {
+  return 'scope' in subject ? subject.scope : tenantChainScope(subject.licenseId);
 }
 
 /**
@@ -186,11 +263,14 @@ export interface ExportSignatureSubject {
  * one of those, and a consumer that skipped it would be parsing evidence it had
  * chosen not to check.
  */
-export function signExportPage(key: Buffer, subject: ExportSignatureSubject): string {
+export function signExportPage(
+  key: Buffer,
+  subject: ExportSignatureSubject | ScopedExportSignatureSubject,
+): string {
   const digest = createHash('sha256').update(subject.body, 'utf8').digest('base64url');
   const payload = JSON.stringify([
     EXPORT_LABEL,
-    subject.licenseId.toString(),
+    subjectScope(subject),
     subject.count,
     subject.firstSeq === null ? null : subject.firstSeq.toString(),
     subject.lastSeq === null ? null : subject.lastSeq.toString(),
@@ -202,7 +282,7 @@ export function signExportPage(key: Buffer, subject: ExportSignatureSubject): st
 /** Constant-time check of a signature produced by `signExportPage`. */
 export function verifyExportSignature(
   key: Buffer,
-  subject: ExportSignatureSubject,
+  subject: ExportSignatureSubject | ScopedExportSignatureSubject,
   signature: string,
 ): boolean {
   const expected = Buffer.from(signExportPage(key, subject), 'utf8');
@@ -287,8 +367,64 @@ export function verifyAuditChain(
   rows: readonly VerifiableRow[],
   options: VerifyChainOptions,
 ): ChainVerification {
+  return verifyChain(rows, {
+    ...options,
+    recompute: (row) =>
+      chainRowHash(options.key, {
+        id: row.id,
+        licenseId: row.licenseId,
+        chainSeq: row.chainSeq,
+        action: row.action,
+        actorId: row.actorId,
+        actorType: row.actorType,
+        onBehalfOf: row.onBehalfOf ?? null,
+        target: row.target,
+        metadata: row.metadata,
+        ip: row.ip,
+        createdAt: row.createdAt,
+        prevHash: row.prevHash,
+      }),
+  });
+}
+
+/** What any chain's verifier needs of a row, whatever the scope's own fields. */
+export interface LinkedRow {
+  /** The entry's own id; absent for a chain whose position is its identity. */
+  id?: string | null;
+  chainSeq: bigint | null;
+  prevHash: string | null;
+  hash: string | null;
+  createdAt: Date;
+}
+
+export interface VerifyLinkedChainOptions<R extends LinkedRow> extends Omit<
+  VerifyChainOptions,
+  'key'
+> {
+  /** The entry's hash as its scope computes it. */
+  recompute: (row: R & { chainSeq: bigint }) => string;
+  /**
+   * The last entry of the previous batch, when a long chain is verified in
+   * pieces (the root panel's, tm 389.5): the first row here must link onto
+   * it, and must sit at the next position. Given, `prunedThroughSeq` is not
+   * consulted — the start was already checked with the first batch.
+   */
+  after?: { seq: bigint; hash: string } | null;
+}
+
+/**
+ * {@link verifyAuditChain} for any scope (tm 389.5): the same walk, with the
+ * entry hash supplied by the caller. The tenant chain and the root panel's
+ * share every rule about positions and links; only what a row commits to
+ * differs.
+ */
+export function verifyChain<R extends LinkedRow>(
+  rows: readonly R[],
+  options: VerifyLinkedChainOptions<R>,
+): ChainVerification {
   const findings: ChainFinding[] = [];
-  const chained = rows.filter((row): row is VerifiableRow & { chainSeq: bigint; hash: string } => {
+  type Chained = R & { chainSeq: bigint; hash: string };
+  const chained = rows.filter((row): row is Chained => {
     if (row.chainSeq !== null && row.hash !== null) return true;
     // Before the chain existed there was nothing to join, so those entries are
     // not evidence of anything. After genesis, an unchained entry means the
@@ -296,7 +432,7 @@ export function verifyAuditChain(
     if (options.genesisAt && row.createdAt >= options.genesisAt) {
       findings.push({
         kind: 'unchained_entry',
-        id: row.id,
+        id: row.id ?? null,
         seq: null,
         detail: `entry written at ${row.createdAt.toISOString()} carries no chain, but this workspace's chain began at ${options.genesisAt.toISOString()}`,
       });
@@ -304,7 +440,9 @@ export function verifyAuditChain(
     return false;
   });
 
-  let previous: (VerifiableRow & { chainSeq: bigint; hash: string }) | null = null;
+  let previous: { chainSeq: bigint; hash: string } | null = options.after
+    ? { chainSeq: options.after.seq, hash: options.after.hash }
+    : null;
 
   for (const row of chained) {
     if (previous === null) {
@@ -312,7 +450,7 @@ export function verifyAuditChain(
       if (pruned !== null && row.chainSeq !== pruned + 1n) {
         findings.push({
           kind: 'start_mismatch',
-          id: row.id,
+          id: row.id ?? null,
           seq: row.chainSeq.toString(),
           detail: `retained trail starts at ${row.chainSeq}, but retention has only pruned through ${pruned} — entries ${pruned + 1n}…${row.chainSeq - 1n} are unaccounted for`,
         });
@@ -332,31 +470,17 @@ export function verifyAuditChain(
       else if (row.prevHash !== previous.hash) {
         findings.push({
           kind: 'broken_link',
-          id: row.id,
+          id: row.id ?? null,
           seq: row.chainSeq.toString(),
           detail: `entry does not point at position ${previous.chainSeq}`,
         });
       }
     }
 
-    const recomputed = chainRowHash(options.key, {
-      id: row.id,
-      licenseId: row.licenseId,
-      chainSeq: row.chainSeq,
-      action: row.action,
-      actorId: row.actorId,
-      actorType: row.actorType,
-      onBehalfOf: row.onBehalfOf ?? null,
-      target: row.target,
-      metadata: row.metadata,
-      ip: row.ip,
-      createdAt: row.createdAt,
-      prevHash: row.prevHash,
-    });
-    if (recomputed !== row.hash) {
+    if (options.recompute(row) !== row.hash) {
       findings.push({
         kind: 'hash_mismatch',
-        id: row.id,
+        id: row.id ?? null,
         seq: row.chainSeq.toString(),
         detail: `entry at position ${row.chainSeq} no longer produces its own hash — its content or timestamp was altered`,
       });
@@ -369,7 +493,7 @@ export function verifyAuditChain(
     ok: findings.length === 0,
     checked: chained.length,
     firstSeq: chained[0]?.chainSeq.toString() ?? null,
-    lastSeq: previous?.chainSeq.toString() ?? null,
+    lastSeq: chained.at(-1)?.chainSeq.toString() ?? null,
     findings,
   };
 }

@@ -164,4 +164,50 @@ export const auditLabels: Messages = {
   'audit.target.trusted_domain': 'Güvenilir alan adı',
   'audit.target.webhook': 'Webhook',
   'audit.target.website': 'Web sitesi',
+  // SiyahTuş ekibinin kök panelden üzerinde işlem yaptığı nesneler (tm 389.5).
+  'audit.target.credit': 'Kredi',
+  'audit.target.impersonation': 'Destek oturumu',
+  'audit.target.invoice': 'Fatura',
+  'audit.target.payment_request': 'Ödeme talebi',
+  // SiyahTuş ekibinin bu çalışma alanındaki işlemleri (aktör "SiyahTuş destek", tm 389.5).
+  'audit.action.platform.workspace_note_added': 'SiyahTuş iç not ekledi',
+  'audit.action.platform.workspace_trial_extended': 'SiyahTuş deneme süresini uzattı',
+  'audit.action.platform.workspace_activated': 'SiyahTuş çalışma alanını etkinleştirdi',
+  'audit.action.platform.workspace_plan_changed': 'SiyahTuş planı değiştirdi',
+  'audit.action.platform.workspace_suspended': 'SiyahTuş çalışma alanını askıya aldı',
+  'audit.action.platform.workspace_unsuspended': 'SiyahTuş askıyı kaldırdı',
+  'audit.action.platform.workspace_read_only_set': 'SiyahTuş çalışma alanını salt okunur yaptı',
+  'audit.action.platform.workspace_active_set': 'SiyahTuş salt okunur kısıtını kaldırdı',
+  'audit.action.platform.workspace_cancelled': 'SiyahTuş aboneliği iptal etti',
+  'audit.action.platform.workspace_resumed': 'SiyahTuş aboneliği sürdürdü',
+  'audit.action.platform.workspace_overrides_changed': 'SiyahTuş plan sınırlarını ayarladı',
+  'audit.action.platform.workspace_ai_caps_changed': 'SiyahTuş AI sınırlarını ayarladı',
+  'audit.action.platform.workspace_owner_verification_resent':
+    'SiyahTuş sahip doğrulama e-postasını yeniden gönderdi',
+  'audit.action.platform.workspace_sandbox_reset': 'SiyahTuş deneme çalışma alanını sıfırladı',
+  'audit.action.platform.workspace_ownership_transferred': 'SiyahTuş sahipliği devretti',
+  'audit.action.platform.workspace_deletion_scheduled':
+    'SiyahTuş çalışma alanının silinmesini planladı',
+  'audit.action.platform.workspace_deletion_cancelled':
+    'SiyahTuş çalışma alanının silinmesini iptal etti',
+  'audit.action.platform.account_verification_resent':
+    'SiyahTuş doğrulama e-postasını yeniden gönderdi',
+  'audit.action.platform.account_password_reset_forced':
+    'SiyahTuş parola sıfırlamayı zorunlu kıldı',
+  'audit.action.platform.account_sessions_revoked': 'SiyahTuş oturumları sonlandırdı',
+  'audit.action.platform.account_tokens_revoked': 'SiyahTuş erişim belirteçlerini iptal etti',
+  'audit.action.platform.account_two_factor_reset': 'SiyahTuş iki adımlı doğrulamayı sıfırladı',
+  'audit.action.platform.account_suspended': 'SiyahTuş hesabı askıya aldı',
+  'audit.action.platform.account_unsuspended': 'SiyahTuş hesabı yeniden etkinleştirdi',
+  'audit.action.platform.account_exported': 'SiyahTuş hesap verilerini dışa aktardı',
+  'audit.action.platform.account_erased': 'SiyahTuş hesabı sildi',
+  'audit.action.platform.billing_credit_granted': 'SiyahTuş kredi tanımladı',
+  'audit.action.platform.billing_manual_subscription_created': 'SiyahTuş abonelik tanımladı',
+  'audit.action.platform.billing_payment_address_sent': 'SiyahTuş ödeme adresini gönderdi',
+  'audit.action.platform.billing_payment_confirmed': 'SiyahTuş ödemeyi onayladı',
+  'audit.action.platform.billing_payment_request_cancelled': 'SiyahTuş ödeme talebini iptal etti',
+  'audit.action.platform.billing_swift_marked_paid':
+    'SiyahTuş banka havalesini ödendi olarak işaretledi',
+  'audit.action.platform.impersonation_started': 'SiyahTuş destek oturumu başladı',
+  'audit.action.platform.impersonation_ended': 'SiyahTuş destek oturumu bitti',
 };

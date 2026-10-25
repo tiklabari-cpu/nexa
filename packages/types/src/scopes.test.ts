@@ -180,6 +180,8 @@ describe('error taxonomy', () => {
     'platform_totp_required',
     'platform_recent_totp_required',
     'platform_last_superadmin',
+    // The platform audit chain (tm 389.5): an operator mutation without a reason.
+    'platform_reason_required',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

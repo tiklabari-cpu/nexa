@@ -1,0 +1,168 @@
+# The root panel's audit trail (tm 389.5 · FR-ADMIN-05/06). `x-platform-*` as
+# in auth.yaml. Nothing here changes anything, so nothing here writes an entry;
+# `verify` is a POST declared `x-platform-safe` — the one way a read
+# permission guards a non-GET route.
+
+audit:
+  get:
+    tags: [Audit]
+    operationId: listPlatformAudit
+    summary: Every operator action, newest first
+    description: |
+      One entry per platform mutation and sign-in event, in chain order
+      (`chain_seq`). Filters are additive. Keyset paging: pass `next_cursor`
+      back as `cursor`; an unreadable cursor starts from the newest entry.
+      Hashes are not listed — they are the export's.
+    x-platform-permission: audit.read
+    parameters:
+      - name: admin_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: action
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAuditAction" }
+      - name: license_id
+        in: query
+        description: Entries about one workspace.
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 64 }
+      - name: limit
+        in: query
+        description: 1–100, default 50; more is answered with 100.
+        schema: { type: integer, minimum: 1 }
+    responses:
+      "200":
+        description: A page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAuditList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+export:
+  get:
+    tags: [Audit]
+    operationId: exportPlatformAudit
+    summary: The whole chain as signed NDJSON, oldest first
+    description: |
+      One record per line (`PlatformAuditExportRecord`, keys sorted) and
+      nothing else; never filtered — a selective copy of a trail is not
+      evidence of it. Page with `cursor` from the `x-siyahtus-export-cursor`
+      header (kept when a page comes back empty).
+
+      `X-Siyahtus-Signature` is HMAC-SHA256, under the platform chain key
+      (HKDF of `PLATFORM_SETTINGS_KEY`), over the body's SHA-256 together with
+      the count and the first and last positions — change a byte or the range
+      and it stops matching. Checked offline: `docs/runbooks/platform-audit.md`.
+      `x-siyahtus-export-chain-ok` says whether the page's own links and
+      hashes held when it was read.
+    x-platform-permission: audit.read
+    parameters:
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 64 }
+      - name: limit
+        in: query
+        description: 1–5000, default 1000.
+        schema: { type: integer, minimum: 1 }
+    responses:
+      "200":
+        description: A page of records
+        headers:
+          X-Siyahtus-Signature:
+            schema: { type: string }
+          X-Siyahtus-Export-Count:
+            schema: { type: integer }
+          X-Siyahtus-Export-First-Seq:
+            schema: { type: string }
+          X-Siyahtus-Export-Last-Seq:
+            schema: { type: string }
+          X-Siyahtus-Export-Has-More:
+            schema: { type: string, enum: ["true", "false"] }
+          X-Siyahtus-Export-Cursor:
+            schema: { type: string }
+          X-Siyahtus-Export-Chain-Ok:
+            schema: { type: string, enum: ["true", "false"] }
+        content:
+          application/x-ndjson:
+            schema: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+verify:
+  post:
+    tags: [Audit]
+    operationId: verifyPlatformAudit
+    summary: Walk the whole chain and report every break
+    description: |
+      Recomputes every entry's HMAC and link from position 1: a removed entry
+      (`sequence_gap`, `start_mismatch`), an altered one (`hash_mismatch`), a
+      relinked one (`broken_link`), and a head that does not point at the last
+      entry (`head_mismatch` — how a removed tail shows). `findings` lists the
+      first 100; `findings_total` counts them all.
+    x-platform-permission: audit.read
+    x-platform-safe: true
+    responses:
+      "200":
+        description: The report — `ok` false when anything is found
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAuditVerification" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+workspace:
+  get:
+    tags: [Audit]
+    operationId: listPlatformWorkspaceAudit
+    summary: One workspace's own audit trail, read-only
+    description: |
+      Exactly what the workspace's members see in their audit screen
+      (`GET /audit-log` of the tenant API), with the same filters and the same
+      30-day default window — including the `platform.*` entries written there
+      on behalf of this panel.
+    x-platform-permission: audit.read
+    parameters:
+      - name: licenseId
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1 }
+      - name: page_id
+        in: query
+        schema: { type: string, maxLength: 512 }
+      - name: action
+        in: query
+        description: A tenant audit action (`AUDIT_ACTIONS`).
+        schema: { type: string }
+      - name: actor_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: date_from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: date_to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: A page, newest first
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceAuditList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

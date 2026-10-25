@@ -137,6 +137,8 @@ export interface PlatformSessionView {
 export interface SignedIn {
   /** The opaque session token — shown once, in this response. */
   token: string;
+  /** Who signed in — for the audit entry (tm 389.5); not part of the response. */
+  adminId: string;
   next: PlatformNextStep;
   session: PlatformSessionView;
 }
@@ -256,6 +258,7 @@ export class PlatformAdminAuth {
     });
     return {
       token,
+      adminId,
       next: totpEnrolled ? 'totp_verify' : 'totp_enroll',
       session: this.view(row),
     };

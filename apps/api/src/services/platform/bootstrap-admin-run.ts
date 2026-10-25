@@ -29,6 +29,7 @@ import {
   parseBootstrapArgs,
   PlatformBootstrapRefused,
 } from './bootstrap-admin.js';
+import { PlatformAuditLog } from './platform-audit.js';
 
 const CTRL_C = String.fromCharCode(3);
 const BACKSPACE = String.fromCharCode(8);
@@ -91,7 +92,11 @@ async function main(): Promise<void> {
 
   const db = new PrismaClient({ datasourceUrl: platform.databaseUrl });
   try {
-    const admin = await bootstrapPlatformAdmin(db, { email: args.email, password });
+    const audit = new PlatformAuditLog(db, {
+      settingsKey: platform.settingsKey,
+      tenantChainSecret: env.AUDIT_CHAIN_SECRET,
+    });
+    const admin = await bootstrapPlatformAdmin(db, { email: args.email, password, audit });
     process.stdout.write(
       `${JSON.stringify({ id: admin.id, email: admin.email, role: 'superadmin' })}\n`,
     );

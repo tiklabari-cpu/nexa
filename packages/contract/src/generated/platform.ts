@@ -501,6 +501,106 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/audit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every operator action, newest first
+     * @description One entry per platform mutation and sign-in event, in chain order
+     *     (`chain_seq`). Filters are additive. Keyset paging: pass `next_cursor`
+     *     back as `cursor`; an unreadable cursor starts from the newest entry.
+     *     Hashes are not listed — they are the export's.
+     */
+    get: operations['listPlatformAudit'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/audit/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The whole chain as signed NDJSON, oldest first
+     * @description One record per line (`PlatformAuditExportRecord`, keys sorted) and
+     *     nothing else; never filtered — a selective copy of a trail is not
+     *     evidence of it. Page with `cursor` from the `x-siyahtus-export-cursor`
+     *     header (kept when a page comes back empty).
+     *
+     *     `X-Siyahtus-Signature` is HMAC-SHA256, under the platform chain key
+     *     (HKDF of `PLATFORM_SETTINGS_KEY`), over the body's SHA-256 together with
+     *     the count and the first and last positions — change a byte or the range
+     *     and it stops matching. Checked offline: `docs/runbooks/platform-audit.md`.
+     *     `x-siyahtus-export-chain-ok` says whether the page's own links and
+     *     hashes held when it was read.
+     */
+    get: operations['exportPlatformAudit'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/audit/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Walk the whole chain and report every break
+     * @description Recomputes every entry's HMAC and link from position 1: a removed entry
+     *     (`sequence_gap`, `start_mismatch`), an altered one (`hash_mismatch`), a
+     *     relinked one (`broken_link`), and a head that does not point at the last
+     *     entry (`head_mismatch` — how a removed tail shows). `findings` lists the
+     *     first 100; `findings_total` counts them all.
+     */
+    post: operations['verifyPlatformAudit'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/audit/workspaces/{licenseId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One workspace's own audit trail, read-only
+     * @description Exactly what the workspace's members see in their audit screen
+     *     (`GET /audit-log` of the tenant API), with the same filters and the same
+     *     30-day default window — including the `platform.*` entries written there
+     *     on behalf of this panel.
+     */
+    get: operations['listPlatformWorkspaceAudit'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -712,6 +812,173 @@ export interface components {
       accept_url?: string;
     };
     /**
+     * @description The closed list of what the platform audit chain records
+     *     (`PLATFORM_AUDIT_ACTIONS`, `services/platform/platform-audit.ts`).
+     *     `<module>.<verb>`; the `admin.*` session events are the only ones
+     *     recorded without a reason.
+     * @enum {string}
+     */
+    PlatformAuditAction:
+      | 'admin.bootstrapped'
+      | 'admin.signed_in'
+      | 'admin.sign_in_failed'
+      | 'admin.invite_accepted'
+      | 'admin.totp_enrollment_started'
+      | 'admin.totp_enrolled'
+      | 'admin.totp_verified'
+      | 'admin.totp_failed'
+      | 'admin.totp_reverified'
+      | 'admin.recovery_codes_regenerated'
+      | 'admin.other_sessions_ended'
+      | 'admin.signed_out'
+      | 'admin.invited'
+      | 'admin.invite_revoked'
+      | 'admin.role_changed'
+      | 'admin.disabled'
+      | 'admin.enabled'
+      | 'admin.two_factor_reset'
+      | 'admin.sessions_revoked'
+      | 'workspace.note_added'
+      | 'workspace.trial_extended'
+      | 'workspace.activated'
+      | 'workspace.plan_changed'
+      | 'workspace.suspended'
+      | 'workspace.unsuspended'
+      | 'workspace.read_only_set'
+      | 'workspace.active_set'
+      | 'workspace.cancelled'
+      | 'workspace.resumed'
+      | 'workspace.overrides_changed'
+      | 'workspace.ai_caps_changed'
+      | 'workspace.owner_verification_resent'
+      | 'workspace.sandbox_reset'
+      | 'workspace.ownership_transferred'
+      | 'workspace.deletion_scheduled'
+      | 'workspace.deletion_cancelled'
+      | 'account.verification_resent'
+      | 'account.password_reset_forced'
+      | 'account.sessions_revoked'
+      | 'account.tokens_revoked'
+      | 'account.two_factor_reset'
+      | 'account.suspended'
+      | 'account.unsuspended'
+      | 'account.exported'
+      | 'account.erased'
+      | 'billing.plan_saved'
+      | 'billing.package_saved'
+      | 'billing.credit_granted'
+      | 'billing.manual_subscription_created'
+      | 'billing.payment_address_sent'
+      | 'billing.payment_confirmed'
+      | 'billing.payment_request_cancelled'
+      | 'billing.swift_marked_paid'
+      | 'billing.providers_updated'
+      | 'billing.bank_details_updated'
+      | 'billing.issuer_profile_updated'
+      | 'settings.updated'
+      | 'settings.maintenance_changed'
+      | 'ai_settings.updated'
+      | 'ai_settings.connection_tested'
+      | 'ai_settings.reembed_started'
+      | 'impersonation.started'
+      | 'impersonation.ended'
+      | 'security.blocklist_added'
+      | 'security.blocklist_removed'
+      | 'security.unverified_signups_purged';
+    /**
+     * @description What an entry is about (`target_type`).
+     * @enum {string}
+     */
+    PlatformAuditTarget:
+      | 'admin'
+      | 'invite'
+      | 'session'
+      | 'workspace'
+      | 'account'
+      | 'plan'
+      | 'package'
+      | 'invoice'
+      | 'payment_request'
+      | 'credit'
+      | 'settings'
+      | 'blocklist'
+      | 'impersonation';
+    PlatformAuditEntry: {
+      /** @description The entry's gapless position in the chain (a decimal integer). */
+      chain_seq: string;
+      /**
+       * Format: uuid
+       * @description The operator; null for a sign-in nobody could be matched to.
+       */
+      admin_id: string | null;
+      action: components['schemas']['PlatformAuditAction'];
+      target_type: components['schemas']['PlatformAuditTarget'];
+      target_id: string | null;
+      /** @description The workspace the action concerns — it has its own `platform.*` entry too. */
+      license_id: string | null;
+      /** @description Why, in the operator's words; null only on `admin.*` session events. */
+      reason: string | null;
+      /** @description Identifiers, counts, changed field names — never values of secrets. */
+      payload: {
+        [key: string]: unknown;
+      };
+      ip: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    PlatformAuditList: {
+      data: components['schemas']['PlatformAuditEntry'][];
+      next_cursor: string | null;
+    };
+    /** @description One line of `GET /audit/export` — the entry and its two hashes. */
+    PlatformAuditExportRecord: components['schemas']['PlatformAuditEntry'] & {
+      prev_hash: string | null;
+      hash: string;
+    };
+    PlatformAuditVerification: {
+      ok: boolean;
+      /** @description Entries recomputed and linked. */
+      checked: number;
+      first_seq: string | null;
+      last_seq: string | null;
+      /** @description The last position the chain head handed out. */
+      head_seq: string | null;
+      findings: {
+        /** @enum {string} */
+        kind:
+          | 'sequence_gap'
+          | 'start_mismatch'
+          | 'broken_link'
+          | 'hash_mismatch'
+          | 'unchained_entry'
+          | 'head_mismatch';
+        /** @description The position the finding is about (the first missing one for a gap). */
+        seq: string | null;
+        detail: string;
+      }[];
+      findings_total: number;
+    };
+    /** @description The tenant API's `GET /audit-log` page, for one workspace. */
+    PlatformWorkspaceAuditList: {
+      items: {
+        /** Format: uuid */
+        id: string;
+        action: string;
+        actor_id: string | null;
+        /** @enum {string} */
+        actor_type: 'agent' | 'bot' | 'customer' | 'system' | 'platform';
+        on_behalf_of?: string;
+        target: string | null;
+        metadata: {
+          [key: string]: unknown;
+        };
+        ip: string | null;
+        /** Format: date-time */
+        created_at: string;
+      }[];
+      next_page_id?: string;
+    };
+    /**
      * @description The narrow body — never version, latencies or provider names, which
      *     would be infrastructure detail for an anonymous caller. The detailed
      *     view is the dashboard's (tm 389.8), behind an operator session.
@@ -750,7 +1017,11 @@ export interface components {
     };
   };
   responses: {
-    /** @description Malformed body, or a value failing validation (`validation`). */
+    /**
+     * @description Malformed body, or a value failing validation (`validation`);
+     *     `platform_reason_required` — a mutation without a 3–500 character
+     *     `reason` (tm 389.5).
+     */
     BadRequest: {
       headers: {
         [name: string]: unknown;
@@ -1473,6 +1744,129 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PlatformEndedCount'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformAudit: {
+    parameters: {
+      query?: {
+        admin_id?: string;
+        action?: components['schemas']['PlatformAuditAction'];
+        /** @description Entries about one workspace. */
+        license_id?: string;
+        from?: string;
+        to?: string;
+        cursor?: string;
+        /** @description 1–100, default 50; more is answered with 100. */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAuditList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  exportPlatformAudit: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        /** @description 1–5000, default 1000. */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of records */
+      200: {
+        headers: {
+          'X-Siyahtus-Signature'?: string;
+          'X-Siyahtus-Export-Count'?: number;
+          'X-Siyahtus-Export-First-Seq'?: string;
+          'X-Siyahtus-Export-Last-Seq'?: string;
+          'X-Siyahtus-Export-Has-More'?: 'true' | 'false';
+          'X-Siyahtus-Export-Cursor'?: string;
+          'X-Siyahtus-Export-Chain-Ok'?: 'true' | 'false';
+          [name: string]: unknown;
+        };
+        content: {
+          'application/x-ndjson': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  verifyPlatformAudit: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The report — `ok` false when anything is found */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAuditVerification'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformWorkspaceAudit: {
+    parameters: {
+      query?: {
+        limit?: number;
+        page_id?: string;
+        /** @description A tenant audit action (`AUDIT_ACTIONS`). */
+        action?: string;
+        actor_id?: string;
+        date_from?: string;
+        date_to?: string;
+      };
+      header?: never;
+      path: {
+        licenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page, newest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceAuditList'];
         };
       };
       400: components['responses']['BadRequest'];

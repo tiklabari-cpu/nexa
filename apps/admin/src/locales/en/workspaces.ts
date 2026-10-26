@@ -199,4 +199,157 @@ export const workspaces: Messages = {
   'workspaces.ai.active': 'Switched on',
   'workspaces.ai.later':
     'Counts only. Configuration history, guardrail and quality figures arrive with the AI catalogues.',
+
+  // The actions (tm 389.10).
+  'workspaces.actions.menu': 'Actions',
+  'workspaces.actions.done': '{action}: done.',
+  'workspaces.actions.unchanged':
+    '{action}: nothing changed — the workspace was already in that state.',
+  'workspaces.actions.mailFailed': '{action}: done, but the email could not be sent.',
+
+  'workspaces.actions.extendTrial.label': 'Extend trial',
+  'workspaces.actions.extendTrial.title': 'Extend the trial',
+  'workspaces.actions.extendTrial.body':
+    'The trial of {name} ends later by the days you give, counted from its current end.',
+  'workspaces.actions.extendTrial.confirm': 'Extend',
+  'workspaces.actions.extendTrial.days': 'Days to add',
+  'workspaces.actions.extendTrial.daysHint':
+    '1 to 90. A trial that has already ended counts from today.',
+
+  'workspaces.actions.activate.label': 'Activate licence',
+  'workspaces.actions.activate.title': 'Activate the licence',
+  'workspaces.actions.activate.body':
+    'The trial ends and {name} becomes a paying workspace with full access.',
+  'workspaces.actions.activate.confirm': 'Activate',
+
+  'workspaces.actions.setPlan.label': 'Change plan',
+  'workspaces.actions.setPlan.title': 'Change the plan',
+  'workspaces.actions.setPlan.body':
+    'Changes what {name} unlocks and what it lists at. An override still beats the plan.',
+  'workspaces.actions.setPlan.confirm': 'Change plan',
+  'workspaces.actions.setPlan.plan': 'New plan',
+  'workspaces.actions.setPlan.current': 'Now on {plan}.',
+
+  'workspaces.actions.overrides.label': 'Overrides',
+  'workspaces.actions.overrides.title': 'Override the plan',
+  'workspaces.actions.overrides.body':
+    'These values replace the plan’s and the deployment’s for {name}. Leave a box empty for the default.',
+  'workspaces.actions.overrides.confirm': 'Save overrides',
+  'workspaces.actions.overrides.seatCeiling': 'Seat ceiling',
+  'workspaces.actions.overrides.mailCap': 'Daily email cap',
+  'workspaces.actions.overrides.emptyHint': 'Empty: the default.',
+  'workspaces.actions.overrides.expiresAt': 'Lapses on',
+  'workspaces.actions.overrides.expiresHint':
+    'Empty: never. The override stops applying at the end of that day (UTC).',
+  'workspaces.actions.overrides.entitlements': 'Entitlements',
+  'workspaces.actions.overrides.fromPlan': 'From the plan',
+  'workspaces.actions.overrides.granted': 'Granted',
+  'workspaces.actions.overrides.withheld': 'Withheld',
+
+  'workspaces.actions.resendVerification.label': 'Resend owner verification',
+  'workspaces.actions.resendVerification.title': 'Resend the owner’s verification email',
+  'workspaces.actions.resendVerification.body':
+    'The earlier link the owner of {name} was sent stops working, and a new one is mailed.',
+  'workspaces.actions.resendVerification.confirm': 'Send',
+
+  'workspaces.actions.sandboxReset.label': 'Reset sandbox',
+  'workspaces.actions.sandboxReset.title': 'Reset the sandbox',
+  'workspaces.actions.sandboxReset.body':
+    'Everything in the sandbox of {name} is deleted, and everyone signed in to it is signed out.',
+  'workspaces.actions.sandboxReset.confirm': 'Reset',
+
+  'workspaces.actions.setReadOnly.label': 'Make read-only',
+  'workspaces.actions.setReadOnly.title': 'Make the workspace read-only',
+  'workspaces.actions.setReadOnly.body':
+    'Members of {name} can read but not write until it is set active again.',
+  'workspaces.actions.setReadOnly.confirm': 'Make read-only',
+
+  'workspaces.actions.setActive.label': 'Set active',
+  'workspaces.actions.setActive.title': 'Set the workspace active',
+  'workspaces.actions.setActive.body': 'Members of {name} can write again.',
+  'workspaces.actions.setActive.confirm': 'Set active',
+
+  'workspaces.actions.cancelSubscription.label': 'Cancel subscription',
+  'workspaces.actions.cancelSubscription.title': 'Cancel at the end of the period',
+  'workspaces.actions.cancelSubscription.body':
+    'The subscription of {name} ends when its current period does. Nothing changes before then.',
+  'workspaces.actions.cancelSubscription.confirm': 'Cancel subscription',
+
+  'workspaces.actions.resumeSubscription.label': 'Resume subscription',
+  'workspaces.actions.resumeSubscription.title': 'Take the cancellation back',
+  'workspaces.actions.resumeSubscription.body':
+    'The subscription of {name} continues past its current period.',
+  'workspaces.actions.resumeSubscription.confirm': 'Resume',
+
+  'workspaces.actions.suspend.label': 'Suspend',
+  'workspaces.actions.suspend.title': 'Suspend the workspace',
+  'workspaces.actions.suspend.body':
+    'Nobody in {name} can sign in, and its widget stops, until the suspension is lifted. Your reason is shown to operators only.',
+  'workspaces.actions.suspend.confirm': 'Suspend',
+
+  'workspaces.actions.unsuspend.label': 'Lift suspension',
+  'workspaces.actions.unsuspend.title': 'Lift the suspension',
+  'workspaces.actions.unsuspend.body': '{name} goes back to the status it had before.',
+  'workspaces.actions.unsuspend.confirm': 'Lift suspension',
+
+  'workspaces.actions.transfer.label': 'Transfer ownership',
+  'workspaces.actions.transfer.title': 'Transfer ownership by hand',
+  'workspaces.actions.transfer.body':
+    'For an owner who cannot be reached. The member you choose becomes the owner of {name} and the current owner an admin; both of them and every admin are emailed.',
+  'workspaces.actions.transfer.confirm': 'Transfer ownership',
+  'workspaces.actions.transfer.to': 'New owner',
+  'workspaces.actions.transfer.toHint': 'A member who is not suspended.',
+  'workspaces.actions.transfer.none':
+    'No member can take over: there is nobody else, or every other member is suspended.',
+  'workspaces.actions.transfer.choose': 'Choose a member',
+  'workspaces.actions.transfer.checklist': 'Identity checks',
+  'workspaces.actions.transfer.ticket': 'Support ticket',
+  'workspaces.actions.transfer.signed': 'A signed request from the organization is on file',
+  'workspaces.actions.transfer.phone':
+    'I called the requester back on a number the workspace already had',
+
+  'workspaces.actions.delete.label': 'Delete workspace',
+  'workspaces.actions.delete.title': 'Schedule the deletion',
+  'workspaces.actions.delete.body':
+    '{name} is suspended now, and all of its data is deleted in 14 days unless the deletion is cancelled first. The owner is emailed.',
+  'workspaces.actions.delete.confirm': 'Schedule deletion',
+  'workspaces.actions.delete.confirmName': 'Workspace name',
+  'workspaces.actions.delete.confirmHint': 'Type “{name}” to confirm.',
+  'workspaces.actions.delete.mismatch': 'The name does not match the workspace.',
+
+  'workspaces.actions.cancelDeletion.label': 'Cancel deletion',
+  'workspaces.actions.cancelDeletion.title': 'Cancel the scheduled deletion',
+  'workspaces.actions.cancelDeletion.body':
+    'Nothing is deleted. {name} stays suspended until you lift the suspension.',
+  'workspaces.actions.cancelDeletion.confirm': 'Cancel deletion',
+
+  'workspaces.actions.state.not_trialing': 'Only a workspace on trial can have its trial extended.',
+  'workspaces.actions.state.workspace_closed':
+    'The workspace is suspended or cancelled — lift the suspension first.',
+  'workspaces.actions.state.trialing':
+    'The workspace is on trial — extend the trial or activate the licence instead.',
+  'workspaces.actions.state.purge_scheduled':
+    'The workspace is scheduled for deletion — cancel the deletion first.',
+  'workspaces.actions.state.no_subscription': 'The workspace has no subscription.',
+  'workspaces.actions.state.no_owner': 'The workspace has no owner.',
+  'workspaces.actions.state.no_sandbox': 'The workspace has no sandbox.',
+  'workspaces.actions.state.not_a_member': 'That account is not a member of this workspace.',
+  'workspaces.actions.state.member_suspended': 'A suspended member cannot become the owner.',
+
+  'workspaces.banner.purgeTitle': 'Scheduled for deletion',
+  'workspaces.banner.purge': 'All of its data is deleted on {date}. Days left: {days}.',
+  'workspaces.banner.suspendedTitle': 'Suspended',
+  'workspaces.banner.suspended': 'Since {when}. Nobody in the workspace can sign in.',
+  'workspaces.banner.suspendedReason': 'Reason: {reason}',
+
+  'workspaces.entitlements.white_label': 'White label',
+  'workspaces.entitlements.sandbox': 'Sandbox',
+  'workspaces.entitlements.sla': 'SLA',
+  'workspaces.entitlements.sso': 'Single sign-on',
+  'workspaces.entitlements.hipaa': 'HIPAA',
+  'workspaces.entitlements.siem_export': 'SIEM export',
+
+  'workspaces.purgeQueue.title': 'Scheduled deletions',
+  'workspaces.purgeQueue.deletesOn': 'Deleted on',
+  'workspaces.purgeQueue.daysLeft': 'Days left',
 };

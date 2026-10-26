@@ -19,6 +19,7 @@ import {
   WORKSPACE_SORTS,
   type WorkspaceFilters,
 } from './queries.js';
+import { PurgeQueueCard } from './WorkspaceActions.js';
 import {
   Cell,
   DataTable,
@@ -50,6 +51,7 @@ export function WorkspacesPage(): ReactElement {
 
   return (
     <Page title={t('nav.workspaces')} description={t('shell.pages.workspaces.description')}>
+      <PurgeQueueCard />
       <Card>
         <form
           role="search"

@@ -46,6 +46,8 @@ export const auth: Messages = {
   'auth.signin.ssoStartFailed': 'Could not start single sign-on.',
   'auth.signin.ssoRedirecting': 'Taking you to your identity provider…',
   'auth.signin.noWorkspaces': 'This account is not a member of any workspace.',
+  'auth.signin.workspaceSuspended':
+    'This workspace is temporarily suspended. Contact SiyahTuş support for details.',
   'auth.signin.invalidCredentials': 'Invalid email or password.',
   'auth.signin.workspaceOpenFailed': 'Could not open that workspace.',
   'auth.signin.chooseWorkspace': 'Choose a workspace',

@@ -877,3 +877,37 @@ describe('SignInPage with an unconfirmed address', () => {
     expect(screen.queryByText('Confirm your email first')).toBeNull();
   });
 });
+
+/**
+ * A workspace the platform suspended (tm 389.2/389.10): the password was right and nothing on
+ * this page lifts the lock, so "invalid" would be a lie — the page says the workspace is
+ * suspended and who to ask.
+ */
+describe('SignInPage for a suspended workspace', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('says the workspace is suspended on the authorize refusal reason workspace_suspended', async () => {
+    const signIn = vi.fn(async () => {
+      throw new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'This workspace is temporarily suspended.',
+        requestId: 'req_s1',
+        details: { reason: 'workspace_suspended' },
+      });
+    });
+    useAuth.setState({ busy: false, listWorkspaces: async () => [WORKSPACE], signIn });
+    renderSignIn();
+
+    await submitCredentials();
+
+    expect(
+      await screen.findByText(
+        'This workspace is temporarily suspended. Contact SiyahTuş support for details.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Invalid email or password.')).toBeNull();
+  });
+});

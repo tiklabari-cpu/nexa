@@ -16,6 +16,7 @@ import {
   duration,
   invitationMail,
   joinVerifyEmailMail,
+  ownershipTransferredMail,
   passwordResetMail,
   permissionsChangedMail,
   platformInvitationMail,
@@ -28,6 +29,7 @@ import {
   twoFactorEnabledMail,
   verifyEmailMail,
   visitorMessageMail,
+  workspacePurgeScheduledMail,
 } from './messages.js';
 
 const APP = 'https://panel.siyahkus.com';
@@ -155,14 +157,25 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
         hours: 72,
       },
     ),
+    purgeScheduled: workspacePurgeScheduledMail(ctx, {
+      workspaceName: 'Acme',
+      purgeAt: '9 November 2026',
+      days: 14,
+    }),
+    ownershipTransferred: ownershipTransferredMail(ctx, {
+      workspaceName: 'Acme',
+      newOwner: 'ayse@acme.test',
+      previousOwner: 'ali@acme.test',
+      role: 'admin',
+    }),
   };
 }
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all seventeen in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all nineteen in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(17);
+      expect(Object.keys(mails)).toHaveLength(19);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();

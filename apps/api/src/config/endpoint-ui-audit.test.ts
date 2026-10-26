@@ -434,7 +434,7 @@ describe('the platform pair (tm 389.3)', () => {
     ]);
   });
 
-  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8) and the workspace pages (tm 389.9) called, and nothing else of the platform contract', () => {
+  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
@@ -464,6 +464,23 @@ describe('the platform pair (tm 389.3)', () => {
         'POST /workspaces/{licenseId}/notes',
         'GET /workspaces/{licenseId}/impersonations',
         'GET /workspaces/{licenseId}/ai-summary',
+        'GET /workspaces/purge-queue',
+        'GET /workspaces/{licenseId}/overrides',
+        'PUT /workspaces/{licenseId}/overrides',
+        'POST /workspaces/{licenseId}/extend-trial',
+        'POST /workspaces/{licenseId}/activate',
+        'POST /workspaces/{licenseId}/set-plan',
+        'POST /workspaces/{licenseId}/suspend',
+        'POST /workspaces/{licenseId}/unsuspend',
+        'POST /workspaces/{licenseId}/set-read-only',
+        'POST /workspaces/{licenseId}/set-active',
+        'POST /workspaces/{licenseId}/subscription/cancel',
+        'POST /workspaces/{licenseId}/subscription/resume',
+        'POST /workspaces/{licenseId}/resend-owner-verification',
+        'POST /workspaces/{licenseId}/sandbox/reset',
+        'POST /workspaces/{licenseId}/force-ownership-transfer',
+        'POST /workspaces/{licenseId}/delete',
+        'POST /workspaces/{licenseId}/delete/cancel',
         'GET /audit/workspaces/{licenseId}',
         'GET /support/lookup',
       ].sort(),

@@ -7,7 +7,7 @@
  * small: the real server's gates have their own suite (`platform-auth.test.ts`); what is under
  * test here is the SPA's reaction to their answers.
  */
-import { platformPermissionsFor, type PlatformRole } from '@siyahtus/types';
+import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siyahtus/types';
 import { vi } from 'vitest';
 
 export interface RecordedRequest {
@@ -128,7 +128,7 @@ function session(stage: 'password' | 'active'): Record<string, unknown> {
   };
 }
 
-function json(status: number, body: unknown): Response {
+export function json(status: number, body: unknown): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', 'X-Request-Id': 'req-test' },
@@ -225,6 +225,131 @@ export const SUPPORT_MATCH = {
   data: [{ kind: 'thread_id', license_id: WORKSPACE_ID, organization_name: 'Acme Gaming' }],
 };
 
+/** What the workspace actions (tm 389.10) change, per fake instance. */
+export interface FakeWorkspaceState {
+  workspace: typeof WORKSPACE_DETAIL.workspace;
+  overrides: Record<string, unknown>;
+  cancelAtPeriodEnd: boolean;
+}
+
+export const EMPTY_OVERRIDES = {
+  entitlements: {},
+  seat_ceiling: null,
+  mail_daily_cap: null,
+  expires_at: null,
+  in_force: false,
+  updated_by: null,
+  updated_at: null,
+};
+
+const ACTION_PERMISSIONS: Record<string, string> = {
+  'extend-trial': 'workspaces.support',
+  'resend-owner-verification': 'workspaces.support',
+  'sandbox/reset': 'workspaces.support',
+  activate: 'workspaces.billing',
+  'set-plan': 'workspaces.billing',
+  overrides: 'workspaces.billing',
+  suspend: 'workspaces.lifecycle',
+  unsuspend: 'workspaces.lifecycle',
+  'set-read-only': 'workspaces.lifecycle',
+  'set-active': 'workspaces.lifecycle',
+  'subscription/cancel': 'workspaces.lifecycle',
+  'subscription/resume': 'workspaces.lifecycle',
+  'force-ownership-transfer': 'workspaces.lifecycle',
+  delete: 'workspaces.lifecycle',
+  'delete/cancel': 'workspaces.lifecycle',
+};
+
+/** The actions, with the server's rules in miniature — enough to see the SPA react. */
+function handleAction(
+  method: string,
+  action: string,
+  body: unknown,
+  role: PlatformRole,
+  state: FakeWorkspaceState,
+): Response | null {
+  const permission = ACTION_PERMISSIONS[action];
+  if (!permission || method !== (action === 'overrides' ? 'PUT' : 'POST')) return null;
+  if (!platformRoleHas(role, permission)) return problem(403, 'authorization');
+  const input = (body ?? {}) as Record<string, unknown>;
+  if (typeof input['reason'] !== 'string' || input['reason'].trim().length < 3) {
+    return problem(400, 'platform_reason_required');
+  }
+  const license = state.workspace.license as Record<string, unknown>;
+  let unchanged = false;
+  let mail: string | undefined;
+  const set = (patch: Record<string, unknown>) => Object.assign(license, patch);
+  switch (action) {
+    case 'extend-trial':
+      set({ trial_ends_at: '2026-11-08T00:00:00.000Z' });
+      break;
+    case 'activate':
+      unchanged = license['status'] === 'active';
+      set({ status: 'active', trial_ends_at: null });
+      break;
+    case 'set-plan':
+      set({ plan: input['plan'] });
+      break;
+    case 'suspend':
+      set({ status: 'suspended', suspended_at: NOW, suspended_reason: input['reason'] });
+      break;
+    case 'unsuspend':
+      if (license['purge_scheduled_at']) {
+        return problem(409, 'platform_workspace_state', 'Cancel the deletion first.', {
+          reason: 'purge_scheduled',
+        });
+      }
+      set({ status: 'trialing', suspended_at: null, suspended_reason: null });
+      break;
+    case 'set-read-only':
+      set({ status: 'read_only' });
+      break;
+    case 'set-active':
+      set({ status: 'active' });
+      break;
+    case 'subscription/cancel':
+    case 'subscription/resume': {
+      const cancel = action === 'subscription/cancel';
+      unchanged = state.cancelAtPeriodEnd === cancel;
+      state.cancelAtPeriodEnd = cancel;
+      break;
+    }
+    case 'overrides':
+      state.overrides = { ...EMPTY_OVERRIDES, ...input, in_force: true };
+      delete state.overrides['reason'];
+      break;
+    case 'resend-owner-verification':
+    case 'force-ownership-transfer':
+      mail = 'sent';
+      break;
+    case 'sandbox/reset':
+      return problem(409, 'platform_workspace_state', 'No sandbox.', { reason: 'no_sandbox' });
+    case 'delete':
+      if (input['confirm_name'] !== state.workspace.organization.name) {
+        return problem(400, 'validation', 'confirm_name does not match.', {
+          reason: 'confirm_name_mismatch',
+        });
+      }
+      set({
+        status: 'suspended',
+        suspended_at: NOW,
+        suspended_reason: input['reason'],
+        purge_scheduled_at: '2026-11-08T10:00:00.000Z',
+      });
+      mail = 'sent';
+      break;
+    case 'delete/cancel':
+      set({ purge_scheduled_at: null });
+      break;
+  }
+  return json(200, {
+    unchanged,
+    workspace: state.workspace,
+    ...(mail ? { mail } : {}),
+    ...(action === 'overrides' ? { overrides: state.overrides } : {}),
+  });
+}
+
 function handleWorkspaces(
   method: string,
   path: string,
@@ -232,7 +357,24 @@ function handleWorkspaces(
   search: URLSearchParams,
   notes: Array<Record<string, unknown>>,
   role: PlatformRole,
+  state: FakeWorkspaceState,
 ): Response | null {
+  if (method === 'GET' && path === '/workspaces/purge-queue') {
+    const license = state.workspace.license as Record<string, unknown>;
+    return json(200, {
+      data: license['purge_scheduled_at']
+        ? [
+            {
+              license_id: WORKSPACE_ID,
+              organization_name: state.workspace.organization.name,
+              status: license['status'],
+              suspended_at: license['suspended_at'],
+              purge_scheduled_at: license['purge_scheduled_at'],
+            },
+          ]
+        : [],
+    });
+  }
   if (method === 'GET' && path === '/workspaces') {
     if (search.get('cursor') === 'page-2') {
       return json(200, { data: [workspaceRow('7', 'Zeta Bets')], next_cursor: null });
@@ -268,10 +410,14 @@ function handleWorkspaces(
   if (!match) return null;
   if (match[1] !== WORKSPACE_ID) return problem(404, 'not_found', 'Workspace not found.');
   const tab = match[2] ?? '';
+  const acted = tab ? handleAction(method, tab.slice(1), body, role, state) : null;
+  if (acted) return acted;
   if (method === 'GET') {
     switch (tab) {
       case '':
-        return json(200, WORKSPACE_DETAIL);
+        return json(200, { workspace: state.workspace });
+      case '/overrides':
+        return json(200, { overrides: state.overrides });
       case '/members':
         return json(200, WORKSPACE_MEMBERS);
       case '/brands':
@@ -375,6 +521,11 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   const overrides = new Map<string, () => Response>();
   const requests: RecordedRequest[] = [];
   const notes: Array<Record<string, unknown>> = [];
+  const workspaceState: FakeWorkspaceState = {
+    workspace: structuredClone(WORKSPACE_DETAIL.workspace),
+    overrides: { ...EMPTY_OVERRIDES },
+    cancelAtPeriodEnd: false,
+  };
   let issued = 0;
 
   const me = (stage: 'active'): Record<string, unknown> => ({
@@ -505,7 +656,15 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     }
     if (method === 'GET' && path === '/dashboard/health') return json(200, DASHBOARD_HEALTH);
 
-    const workspaceResponse = handleWorkspaces(method, path, body, search, notes, role);
+    const workspaceResponse = handleWorkspaces(
+      method,
+      path,
+      body,
+      search,
+      notes,
+      role,
+      workspaceState,
+    );
     if (workspaceResponse) return workspaceResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);

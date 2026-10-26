@@ -107,7 +107,12 @@ export interface Message {
     | 'account_exists_notice'
     // An invitation to operate the root panel (tm 389.4) — sent by the
     // platform process, which has no workspace and no daily caps.
-    | 'platform_invitation';
+    | 'platform_invitation'
+    // The platform's notices to a workspace's own people (tm 389.10): its
+    // deletion is scheduled, its ownership was moved by hand. Sent by the
+    // platform process too — the workspace is often locked when they go.
+    | 'workspace_purge_scheduled'
+    | 'ownership_transferred';
 }
 
 /**

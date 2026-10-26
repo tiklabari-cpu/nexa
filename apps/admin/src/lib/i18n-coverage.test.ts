@@ -54,6 +54,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/dashboard/HealthSection.tsx',
   'src/features/placeholder/PlaceholderPage.tsx',
   'src/features/support/SupportPage.tsx',
+  'src/features/workspaces/WorkspaceActions.tsx',
   'src/features/workspaces/WorkspaceDetailPage.tsx',
   'src/features/workspaces/WorkspaceTabs.tsx',
   'src/features/workspaces/WorkspacesPage.tsx',

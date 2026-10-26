@@ -119,6 +119,8 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'workspace.ownership_transferred',
   'workspace.deletion_scheduled',
   'workspace.deletion_cancelled',
+  // The purge job (389.10), once the cooling-off has run out.
+  'workspace.purged',
   // One account (389.11).
   'account.verification_resent',
   'account.password_reset_forced',
@@ -175,6 +177,15 @@ export const PLATFORM_SELF_ACTIONS: ReadonlySet<PlatformAuditAction> = new Set([
 ]);
 
 /**
+ * Actions that name a workspace which no longer exists once they are done —
+ * the purge. The platform entry keeps the licence number; there is no
+ * workspace trail left to write the second half into (it went with the rest).
+ */
+export const PLATFORM_WORKSPACE_GONE_ACTIONS: ReadonlySet<PlatformAuditAction> = new Set([
+  'workspace.purged',
+]);
+
+/**
  * The actions that can concern one workspace, and so are written to its own
  * trail as well. `workspace.*` and `impersonation.*` always name one; an
  * `account.*` or a billing entry does when the writer passes the workspace.
@@ -182,7 +193,7 @@ export const PLATFORM_SELF_ACTIONS: ReadonlySet<PlatformAuditAction> = new Set([
 export const PLATFORM_TENANT_ACTIONS: ReadonlySet<PlatformAuditAction> = new Set(
   PLATFORM_AUDIT_ACTIONS.filter(
     (action) =>
-      action.startsWith('workspace.') ||
+      (action.startsWith('workspace.') && !PLATFORM_WORKSPACE_GONE_ACTIONS.has(action)) ||
       action.startsWith('account.') ||
       action.startsWith('impersonation.') ||
       [
@@ -466,7 +477,11 @@ export class PlatformAuditLog {
       throw new TypeError(`${entry.action} needs a reason`);
     }
     const licenseId = entry.licenseId ?? null;
-    if (licenseId !== null && tenantActionOf(entry.action) === null) {
+    if (
+      licenseId !== null &&
+      tenantActionOf(entry.action) === null &&
+      !PLATFORM_WORKSPACE_GONE_ACTIONS.has(entry.action)
+    ) {
       throw new TypeError(`${entry.action} has no workspace wording and cannot name a workspace`);
     }
     if (licenseId === null && requiresWorkspace(entry.action)) {
@@ -486,7 +501,8 @@ export class PlatformAuditLog {
     const licenseId = entry.licenseId ?? null;
     const payload = sanitizeAuditMetadata(entry.payload);
 
-    if (licenseId !== null) {
+    const tenantAction = licenseId === null ? null : tenantActionOf(entry.action);
+    if (licenseId !== null && tenantAction !== null) {
       // BYPASSRLS skips the policy, but the column-level context is still
       // what `siyahtus_current_license()` reads anywhere a trigger asks.
       await tx.$executeRaw`SELECT set_config('app.current_license', ${licenseId.toString()}, true)`;
@@ -501,7 +517,7 @@ export class PlatformAuditLog {
           ip: entry.ip ?? null,
         },
         {
-          action: tenantActionOf(entry.action)!,
+          action: tenantAction,
           target:
             entry.targetType === 'workspace'
               ? `license:${licenseId}`

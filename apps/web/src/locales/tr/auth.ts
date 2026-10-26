@@ -41,6 +41,8 @@ export const auth: Messages = {
   'auth.signin.ssoStartFailed': 'Tek oturum açma başlatılamadı.',
   'auth.signin.ssoRedirecting': 'Kimlik sağlayıcınıza yönlendiriliyorsunuz…',
   'auth.signin.noWorkspaces': 'Bu hesap hiçbir çalışma alanının üyesi değil.',
+  'auth.signin.workspaceSuspended':
+    'Bu çalışma alanı geçici olarak askıya alındı. Ayrıntılar için SiyahTuş destek ekibine başvurun.',
   'auth.signin.invalidCredentials': 'E-posta veya parola hatalı.',
   'auth.signin.workspaceOpenFailed': 'O çalışma alanı açılamadı.',
   'auth.signin.chooseWorkspace': 'Bir çalışma alanı seçin',

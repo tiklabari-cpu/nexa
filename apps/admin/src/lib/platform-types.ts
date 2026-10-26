@@ -55,3 +55,21 @@ export type PlatformAccountDetail = Schemas['PlatformAccountDetail'];
 export type PlatformAccountActionResult = Schemas['PlatformAccountActionResult'];
 export type PlatformAccountErased = Schemas['PlatformAccountErased'];
 export type PlatformAccountExport = Schemas['PlatformAccountExport'];
+
+export type PlatformBillingPlanList = Schemas['PlatformBillingPlanList'];
+export type PlatformSubscriptionList = Schemas['PlatformSubscriptionList'];
+export type PlatformInvoiceList = Schemas['PlatformInvoiceList'];
+export type PlatformBillingPackages = Schemas['PlatformBillingPackages'];
+export type PlatformRevenue = Schemas['PlatformRevenue'];
+export type PlatformCredit = Schemas['PlatformCredit'];
+export type PlatformCreditList = Schemas['PlatformCreditList'];
+export type PlatformCreditEnvelope = Schemas['PlatformCreditEnvelope'];
+
+export type PlatformGlobalUsage = Schemas['PlatformGlobalUsage'];
+export type PlatformTopUsage = Schemas['PlatformTopUsage'];
+export type PlatformUsageTopMeter = Schemas['PlatformUsageTopMeter'];
+export type PlatformWorkspaceUsageDetail = Schemas['PlatformWorkspaceUsageDetail'];
+export type PlatformWorkspaceAiCapsResult = Schemas['PlatformWorkspaceAiCapsResult'];
+export type PlatformAiCapLayers = Schemas['PlatformAiCapLayers'];
+export type PlatformPlanAiCaps = Schemas['PlatformPlanAiCaps'];
+export type PlatformPlanAiCapsResult = Schemas['PlatformPlanAiCapsResult'];

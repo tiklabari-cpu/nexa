@@ -38,6 +38,8 @@ import platformRateLimit from './plugins/platform-rate-limit.js';
 import redis from './plugins/redis.js';
 import telemetryPlugin from './plugins/telemetry.js';
 import platformAccountsRoutes from './routes/platform/accounts.js';
+import platformBillingRoutes from './routes/platform/billing.js';
+import platformUsageRoutes from './routes/platform/usage.js';
 import platformAdminsRoutes from './routes/platform/admins.js';
 import platformAuditRoutes from './routes/platform/audit.js';
 import platformAuthRoutes from './routes/platform/auth.js';
@@ -180,6 +182,8 @@ export async function buildPlatformServer({
       await api.register(platformWorkspacesRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformSupportRoutes);
       await api.register(platformAccountsRoutes, { env, mailer, ...(now ? { now } : {}) });
+      await api.register(platformBillingRoutes, { env, ...(now ? { now } : {}) });
+      await api.register(platformUsageRoutes, { env, ...(now ? { now } : {}) });
     },
     { prefix: PLATFORM_PREFIX },
   );

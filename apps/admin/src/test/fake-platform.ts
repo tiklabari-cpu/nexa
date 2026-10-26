@@ -10,6 +10,7 @@
 import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siyahtus/types';
 import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
+import { handleBilling, initialBillingState } from './fake-billing.js';
 
 export interface RecordedRequest {
   method: string;
@@ -533,6 +534,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     account: structuredClone(ACCOUNT_DETAIL),
     soleOwner: options.accountSoleOwner ?? false,
   };
+  const billingState = initialBillingState();
   let issued = 0;
 
   const me = (stage: 'active'): Record<string, unknown> => ({
@@ -685,6 +687,19 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       problem,
     );
     if (accountResponse) return accountResponse;
+
+    const billingResponse = handleBilling(
+      method,
+      path,
+      body,
+      search,
+      role,
+      billingState,
+      () => workspaceState.workspace,
+      json,
+      problem,
+    );
+    if (billingResponse) return billingResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);
   }

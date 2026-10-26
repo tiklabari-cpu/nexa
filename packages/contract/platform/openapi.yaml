@@ -55,6 +55,15 @@ tags:
       verification link, a forced password reset, ending sessions and tokens,
       a second-factor reset, a suspension in every workspace, an export of
       their data, erasure.
+  - name: Billing
+    description: |
+      Billing across every workspace (tm 389.12): plans, subscriptions, issued
+      statements, packages, revenue by month, credits and a subscription by hand.
+  - name: Usage
+    description: |
+      Usage across every workspace (tm 389.12) and the daily AI allowance: the
+      deployment's counters, the heaviest workspaces, one workspace's caps and
+      their override, each plan's default.
   - name: Support
     description: |
       The support desk (tm 389.9): which workspace an identifier a customer
@@ -211,6 +220,32 @@ paths:
     $ref: "./paths/accounts.yaml#/export"
   /accounts/{accountId}/erase:
     $ref: "./paths/accounts.yaml#/erase"
+  /billing/plans:
+    $ref: "./paths/billing.yaml#/plans"
+  /billing/subscriptions:
+    $ref: "./paths/billing.yaml#/subscriptions"
+  /billing/invoices:
+    $ref: "./paths/billing.yaml#/invoices"
+  /billing/invoices/{invoiceId}/download:
+    $ref: "./paths/billing.yaml#/invoiceDownload"
+  /billing/packages:
+    $ref: "./paths/billing.yaml#/packages"
+  /billing/revenue:
+    $ref: "./paths/billing.yaml#/revenue"
+  /billing/credits:
+    $ref: "./paths/billing.yaml#/credits"
+  /billing/manual-subscription:
+    $ref: "./paths/billing.yaml#/manualSubscription"
+  /usage/global:
+    $ref: "./paths/usage.yaml#/global"
+  /usage/workspaces:
+    $ref: "./paths/usage.yaml#/workspaces"
+  /usage/workspaces/{licenseId}:
+    $ref: "./paths/usage.yaml#/workspace"
+  /usage/workspaces/{licenseId}/ai-caps:
+    $ref: "./paths/usage.yaml#/aiCaps"
+  /settings/ai-caps:
+    $ref: "./paths/usage.yaml#/planCaps"
 
 components:
   securitySchemes:
@@ -1726,6 +1761,411 @@ components:
                 enum: [thread_id, chat_id, ticket, customer_email]
               license_id: { type: string }
               organization_name: { type: string }
+
+    PlatformAiDailyTokens:
+      type: object
+      description: A daily AI token figure per live meter; `null` inherits the next layer.
+      required: [llm, embedding]
+      properties:
+        llm: { type: ["integer", "null"], minimum: 1 }
+        embedding: { type: ["integer", "null"], minimum: 1 }
+
+    PlatformBillingPlan:
+      type: object
+      required:
+        [
+          id,
+          pricing,
+          unit_price_cents,
+          ai_resolutions_included,
+          entitlements,
+          ai_daily_tokens,
+          workspaces,
+        ]
+      properties:
+        id: { $ref: "#/components/schemas/PlatformPlan" }
+        pricing: { type: string, enum: [listed, quoted] }
+        unit_price_cents: { type: ["integer", "null"] }
+        ai_resolutions_included: { type: ["integer", "null"] }
+        entitlements: { type: array, items: { type: string } }
+        ai_daily_tokens: { $ref: "#/components/schemas/PlatformAiDailyTokens" }
+        workspaces:
+          type: integer
+          description: Workspaces (sandboxes excluded) whose latest subscription is on this plan.
+
+    PlatformBillingPlanList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PlatformBillingPlan" } }
+
+    PlatformSubscriptionRow:
+      type: object
+      required:
+        - license_id
+        - organization_name
+        - license_status
+        - plan
+        - status
+        - billing_cycle
+        - seats
+        - unit_price_cents
+        - current_period_end
+        - cancel_at_period_end
+        - created_at
+      properties:
+        license_id: { type: string }
+        organization_name: { type: string }
+        license_status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
+        plan: { type: string }
+        status: { type: string }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        seats: { type: integer }
+        unit_price_cents: { type: integer }
+        current_period_end: { type: ["string", "null"], format: date-time }
+        cancel_at_period_end: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    PlatformSubscriptionList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PlatformSubscriptionRow" } }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformInvoiceRow:
+      type: object
+      required:
+        - id
+        - license_id
+        - organization_name
+        - number
+        - period
+        - origin
+        - status
+        - currency
+        - subtotal_cents
+        - credit_cents
+        - total_cents
+        - issued_at
+      properties:
+        id: { type: string, format: uuid }
+        license_id: { type: string }
+        organization_name: { type: string }
+        number: { type: string }
+        period: { type: string, pattern: "^[0-9]{6}$" }
+        origin: { type: string, enum: [issued, reconstructed] }
+        status: { type: string, enum: [paid, trial] }
+        currency: { type: string }
+        subtotal_cents: { type: integer }
+        credit_cents:
+          type: integer
+          description: What the platform's credits took off the statement (a positive figure).
+        total_cents: { type: integer }
+        issued_at: { type: string, format: date-time }
+
+    PlatformInvoiceList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PlatformInvoiceRow" } }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformPackageSales:
+      type: object
+      required: [count, revenue_cents]
+      properties:
+        count: { type: integer }
+        revenue_cents: { type: integer }
+
+    PlatformBillingPackages:
+      type: object
+      required: [period, api_packages, ai_resolution_pack]
+      properties:
+        period: { type: string, pattern: "^[0-9]{6}$" }
+        api_packages:
+          type: array
+          items:
+            type: object
+            required: [id, name, api_calls, price_cents, sold]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              api_calls: { type: integer }
+              price_cents: { type: integer }
+              sold: { $ref: "#/components/schemas/PlatformPackageSales" }
+        ai_resolution_pack:
+          type: object
+          required: [resolutions_per_pack, pack_price_cents, max_packs, sold]
+          properties:
+            resolutions_per_pack: { type: integer }
+            pack_price_cents: { type: integer }
+            max_packs: { type: integer }
+            sold:
+              allOf: [{ $ref: "#/components/schemas/PlatformPackageSales" }]
+              description: "`count` is packs, not purchases."
+
+    PlatformRevenueMonth:
+      type: object
+      required: [period, currency, invoices, subtotal_cents, credit_cents, total_cents]
+      properties:
+        period: { type: string, pattern: "^[0-9]{6}$" }
+        currency: { type: string }
+        invoices: { type: integer }
+        subtotal_cents: { type: integer }
+        credit_cents: { type: integer }
+        total_cents: { type: integer }
+
+    PlatformRevenue:
+      type: object
+      required: [months, open_period, open_credits]
+      properties:
+        months: { type: array, items: { $ref: "#/components/schemas/PlatformRevenueMonth" } }
+        open_period:
+          type: object
+          description: The period still running — not a statement; only what was already bought in it.
+          required: [period, package_purchases_cents]
+          properties:
+            period: { type: string, pattern: "^[0-9]{6}$" }
+            package_purchases_cents: { type: integer }
+        open_credits:
+          type: array
+          items:
+            type: object
+            required: [currency, amount_minor, credits]
+            properties:
+              currency: { type: string }
+              amount_minor: { type: integer }
+              credits: { type: integer }
+
+    PlatformCredit:
+      type: object
+      required:
+        - id
+        - license_id
+        - organization_name
+        - amount_minor
+        - currency
+        - reason
+        - admin_email
+        - invoice_id
+        - invoice_number
+        - invoice_period
+        - remainder_of
+        - created_at
+      properties:
+        id: { type: string, format: uuid }
+        license_id: { type: string }
+        organization_name: { type: string }
+        amount_minor: { type: integer }
+        currency: { type: string }
+        reason: { type: string }
+        admin_email: { type: ["string", "null"] }
+        invoice_id: { type: ["string", "null"], format: uuid }
+        invoice_number: { type: ["string", "null"] }
+        invoice_period: { type: ["string", "null"] }
+        remainder_of: { type: ["string", "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+
+    PlatformCreditList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PlatformCredit" } }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformCreditEnvelope:
+      type: object
+      required: [credit]
+      properties:
+        credit: { $ref: "#/components/schemas/PlatformCredit" }
+
+    PlatformCreditRequest:
+      type: object
+      required: [license_id, amount_minor, currency, reason]
+      properties:
+        license_id: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+        amount_minor: { type: integer, minimum: 1, maximum: 100000000 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformManualSubscriptionRequest:
+      type: object
+      required: [license_id, plan, period_end, reason]
+      properties:
+        license_id: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+        plan: { $ref: "#/components/schemas/PlatformPlan" }
+        period_end: { type: string, format: date-time }
+        seats: { type: integer, minimum: 1, maximum: 100000 }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformUsageTopMeter:
+      type: string
+      enum: [llm, embedding, ai_resolutions, api_calls]
+
+    PlatformAiCounter:
+      type: object
+      required: [used, reserved, cap]
+      properties:
+        used: { type: integer }
+        reserved: { type: integer }
+        cap: { type: integer }
+
+    PlatformGlobalUsage:
+      type: object
+      required: [days, series, today, period]
+      properties:
+        days: { type: integer }
+        series:
+          type: array
+          items:
+            type: object
+            required: [date, llm, embedding]
+            properties:
+              date: { type: string, format: date }
+              llm: { type: integer }
+              embedding: { type: integer }
+        today:
+          type: object
+          description: The deployment's own counter today, against its cap.
+          required: [llm, embedding]
+          properties:
+            llm: { $ref: "#/components/schemas/PlatformAiCounter" }
+            embedding: { $ref: "#/components/schemas/PlatformAiCounter" }
+        period:
+          type: object
+          required: [period, ai_resolutions, api_calls]
+          properties:
+            period: { type: string, pattern: "^[0-9]{6}$" }
+            ai_resolutions: { type: integer }
+            api_calls: { type: integer }
+
+    PlatformTopUsage:
+      type: object
+      required: [meter, window, data]
+      properties:
+        meter: { $ref: "#/components/schemas/PlatformUsageTopMeter" }
+        window:
+          type: string
+          description: "`YYYY-MM-DD` (today, UTC) for the token meters, `yyyymm` for the others."
+        data:
+          type: array
+          items:
+            type: object
+            required: [license_id, organization_name, plan, used, limit, percent]
+            properties:
+              license_id: { type: string }
+              organization_name: { type: string }
+              plan: { type: string }
+              used: { type: integer }
+              limit:
+                type: ["integer", "null"]
+                description: The workspace's cap (token meters) or what its plan includes (the others).
+              percent: { type: ["integer", "null"] }
+
+    PlatformAiCapLayers:
+      type: object
+      required: [effective, source, override, plan, deployment]
+      properties:
+        effective: { type: integer }
+        source: { type: string, enum: [override, plan, deployment] }
+        override: { type: ["integer", "null"] }
+        plan: { type: ["integer", "null"] }
+        deployment: { type: integer }
+
+    PlatformWorkspaceAiCaps:
+      type: object
+      required: [llm, embedding, expires_at, in_force]
+      properties:
+        llm: { $ref: "#/components/schemas/PlatformAiCapLayers" }
+        embedding: { $ref: "#/components/schemas/PlatformAiCapLayers" }
+        expires_at: { type: ["string", "null"], format: date-time }
+        in_force:
+          type: boolean
+          description: False once `expires_at` has passed — the override then reads as unset.
+
+    PlatformWorkspaceUsageDetail:
+      type: object
+      required: [license_id, organization_name, plan, caps, today, series]
+      properties:
+        license_id: { type: string }
+        organization_name: { type: string }
+        plan: { type: string }
+        caps: { $ref: "#/components/schemas/PlatformWorkspaceAiCaps" }
+        today:
+          type: object
+          required: [llm, embedding, llm_test, embedding_test]
+          properties:
+            llm: { $ref: "#/components/schemas/PlatformAiCounter" }
+            embedding: { $ref: "#/components/schemas/PlatformAiCounter" }
+            llm_test: { $ref: "#/components/schemas/PlatformAiCounter" }
+            embedding_test: { $ref: "#/components/schemas/PlatformAiCounter" }
+        series:
+          type: array
+          items:
+            type: object
+            required: [date, llm, embedding]
+            properties:
+              date: { type: string, format: date }
+              llm: { type: integer }
+              embedding: { type: integer }
+
+    PlatformWorkspaceAiCapsRequest:
+      type: object
+      required: [llm_daily_tokens_cap, embedding_daily_tokens_cap, reason]
+      properties:
+        llm_daily_tokens_cap: { type: ["integer", "null"], minimum: 1, maximum: 10000000000 }
+        embedding_daily_tokens_cap: { type: ["integer", "null"], minimum: 1, maximum: 10000000000 }
+        expires_at: { type: ["string", "null"], format: date-time }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformWorkspaceAiCapsResult:
+      type: object
+      required: [unchanged, usage]
+      properties:
+        unchanged: { type: boolean }
+        usage: { $ref: "#/components/schemas/PlatformWorkspaceUsageDetail" }
+
+    PlatformPlanAiCaps:
+      type: object
+      required: [plans, deployment, updated_at]
+      properties:
+        plans:
+          type: array
+          items:
+            type: object
+            required: [plan, set, catalogue]
+            properties:
+              plan: { $ref: "#/components/schemas/PlatformPlan" }
+              set: { $ref: "#/components/schemas/PlatformAiDailyTokens" }
+              catalogue: { $ref: "#/components/schemas/PlatformAiDailyTokens" }
+        deployment:
+          type: object
+          required: [llm, embedding]
+          properties:
+            llm: { type: integer }
+            embedding: { type: integer }
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformPlanAiCapsRequest:
+      type: object
+      required: [plans, reason]
+      properties:
+        plans:
+          type: object
+          additionalProperties: false
+          properties:
+            growth: { $ref: "#/components/schemas/PlatformAiDailyTokens" }
+            enterprise: { $ref: "#/components/schemas/PlatformAiDailyTokens" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformPlanAiCapsResult:
+      type: object
+      required: [unchanged, caps]
+      properties:
+        unchanged: { type: boolean }
+        caps: { $ref: "#/components/schemas/PlatformPlanAiCaps" }
 
     Error:
       type: object

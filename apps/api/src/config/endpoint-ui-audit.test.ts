@@ -434,7 +434,7 @@ describe('the platform pair (tm 389.3)', () => {
     ]);
   });
 
-  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11) called, and nothing else of the platform contract', () => {
+  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), billing and usage (tm 389.12) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
@@ -494,6 +494,21 @@ describe('the platform pair (tm 389.3)', () => {
         'POST /accounts/{accountId}/unsuspend',
         'POST /accounts/{accountId}/export',
         'POST /accounts/{accountId}/erase',
+        'GET /billing/plans',
+        'GET /billing/subscriptions',
+        'GET /billing/invoices',
+        'GET /billing/invoices/{invoiceId}/download',
+        'GET /billing/packages',
+        'GET /billing/revenue',
+        'GET /billing/credits',
+        'POST /billing/credits',
+        'POST /billing/manual-subscription',
+        'GET /usage/global',
+        'GET /usage/workspaces',
+        'GET /usage/workspaces/{licenseId}',
+        'PUT /usage/workspaces/{licenseId}/ai-caps',
+        'GET /settings/ai-caps',
+        'PUT /settings/ai-caps',
       ].sort(),
     );
     // What the empty Admins/Audit pages and the operator's own security screen have no content

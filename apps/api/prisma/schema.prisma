@@ -145,6 +145,11 @@ model License {
   /// Prisma cannot model, so this comment is where the schema says so.
   aiDailyLlmTokensCap       BigInt? @map("ai_daily_llm_tokens_cap")
   aiDailyEmbeddingTokensCap BigInt? @map("ai_daily_embedding_tokens_cap")
+  /// When the override above lapses (tm 389.12), or null for "until changed".
+  /// Past it the workspace reads as if no override were set. Only beside an
+  /// override (`licenses_ai_daily_caps_expiry_check`); platform-only, like the
+  /// caps (`licenses_ai_caps_platform_only`).
+  aiDailyCapsExpiresAt      DateTime? @map("ai_daily_caps_expires_at") @db.Timestamptz(6)
   /// The permission matrix's revision (tm 325.2 · RL-02): 0 until the Founder
   /// first changes it, plus one for every change that moved a stored row —
   /// bumped in that transaction, so a cache keyed by licence and version is
@@ -4115,9 +4120,14 @@ model InvoiceLineItem {
   position    Int
   description String
   amountCents Int    @map("amount_cents")
+  /// The platform credit this line applies (tm 389.12), or null. A line below
+  /// zero names its credit and a line naming one is below zero
+  /// (`invoice_line_items_amount_check`); one line per credit.
+  platformCreditId String? @unique @map("platform_credit_id") @db.Uuid
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  invoice        Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  license        License         @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  platformCredit PlatformCredit? @relation(fields: [platformCreditId], references: [id], onDelete: Cascade)
 
   @@unique([invoiceId, position])
   @@index([invoiceId])
@@ -5201,13 +5211,20 @@ model PlatformCredit {
   adminId     String   @map("admin_id") @db.Uuid
   invoiceId   String?  @map("invoice_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// The credit this row is what was left of (tm 389.12): a credit larger than
+  /// the statement it landed on keeps the applied part and the rest opens here.
+  remainderOf String?  @map("remainder_of") @db.Uuid
 
-  license License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  admin   PlatformAdmin @relation(fields: [adminId], references: [id])
-  invoice Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  license    License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  admin      PlatformAdmin    @relation(fields: [adminId], references: [id])
+  invoice    Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  parent     PlatformCredit?  @relation("PlatformCreditRemainder", fields: [remainderOf], references: [id], onDelete: Cascade)
+  remainders PlatformCredit[] @relation("PlatformCreditRemainder")
+  lineItem   InvoiceLineItem?
 
   @@index([licenseId, createdAt(sort: Desc)])
   @@index([invoiceId])
+  @@index([remainderOf])
   @@map("platform_credits")
 }
 

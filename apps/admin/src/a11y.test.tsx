@@ -132,8 +132,8 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     await screen.findByRole('link', { name: 'Lead Person' });
     expect(await violations(container)).toEqual([]);
 
-    // A page still waiting for its task: the fourth.
-    await user.click(within(screen.getAllByRole('navigation')[0]!).getAllByRole('link')[3]!);
+    // A page still waiting for its task: the sixth (Billing and Usage arrived with tm 389.12).
+    await user.click(within(screen.getAllByRole('navigation')[0]!).getAllByRole('link')[5]!);
     await screen.findByText(locale === 'tr' ? 'Burada henüz bir şey yok' : 'Nothing here yet');
     expect(await violations(container)).toEqual([]);
   });
@@ -229,6 +229,49 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     );
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByLabelText(locale === 'tr' ? 'Gerekçe' : 'Reason');
+    expect(await violations(document.body)).toEqual([]);
+  });
+
+  it('finds nothing on Billing, Usage, a workspace’s usage and their dialogs (tm 389.12)', async () => {
+    installFakePlatform({ role: 'billing' });
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp('/billing');
+    if (locale === 'tr') {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    const tr = locale === 'tr';
+    await screen.findByRole('table', { name: tr ? 'Aylara göre gelir' : 'Revenue by month' });
+    await screen.findByRole('table', { name: tr ? 'Satıştaki paketler' : 'Packages on sale' });
+    expect(await violations(document.body)).toEqual([]);
+    await user.click(screen.getByRole('button', { name: tr ? 'Kredi tanımla' : 'Grant credit' }));
+    let dialog = await screen.findByRole('dialog');
+    expect(await violations(document.body)).toEqual([]);
+    await user.click(within(dialog).getByRole('button', { name: tr ? 'Vazgeç' : 'Cancel' }));
+
+    await user.click(screen.getByRole('link', { name: tr ? 'Kullanım' : 'Usage' }));
+    await screen.findByRole('table', {
+      name: tr ? 'Plana göre günlük AI hakkı' : 'Daily AI allowance by plan',
+    });
+    await screen.findByRole('link', { name: 'Acme Gaming' });
+    expect(await violations(document.body)).toEqual([]);
+
+    await user.click(screen.getByRole('link', { name: 'Acme Gaming' }));
+    await screen.findByRole('table', { name: tr ? 'Günlük AI tavanları' : 'Daily AI caps' });
+    expect(await violations(document.body)).toEqual([]);
+    await user.click(
+      screen.getByRole('button', { name: tr ? 'AI tavanlarını değiştir' : 'Change AI caps' }),
+    );
+    dialog = await screen.findByRole('dialog');
+    await within(dialog).findByLabelText(tr ? 'Gerekçe' : 'Reason');
     expect(await violations(document.body)).toEqual([]);
   });
 

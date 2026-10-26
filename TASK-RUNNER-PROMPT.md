@@ -96,8 +96,10 @@ kapanışa (§3) ulaşmadan pencereyi bitirme.
 
 **Uzun kapı komutlarını (`pnpm test:gate`, tam test, build) `run_in_background` ile başlat** —
 pencerenin komut tavanı 10 dk ve ön planda koşan kapı orada kilitleniyordu. Log yolunu ilk
-satırdan al, bitince son satırlarını (`Tasks:`, `Failed:`, `exit`) oku. **Ama sonucu AYNI sırada
+satırdan al, bitince son satırlarını (`Tasks:`, `Failed:`, `exit`) oku. **Sonucu AYNI sırada
 bekle** (`TaskOutput` block=true ya da log'da çıkış işaretini bekleyen ön plan `until` döngüsü).
+Kapı sürerken sıranı bitiremezsin: Stop kancası (`.claude/hooks/gate-stop.sh`) kapının bitmesini
+bekler, seni geri çevirir ve ne yapacağını söyler.
 
 **KURAL:** Ara doğrulamada e2e'nin tamamını değil yalnız ilgili spec'i koş
 (`pnpm test:e2e --shards=1 <spec>`); kapıyı `--force` olmadan koş. Tam e2e + tam kapı kapanışta
@@ -108,9 +110,9 @@ bir kez koşulur ve DoD kanıtı odur. Ayrıntı: CONVENTIONS §1.3.
 ATLAR; `--keep-going` eski davranıştır, gerekçesiz kullanma). Kapı sonunda kırmızı dosyalar için
 yazdığı `with-test-datastores.ts vitest run <dosya>` satırını koş, yeşile çevir, ancak sonra kapıyı
 yeniden başlat — tam kapıyı kırmızıyı aramak için tekrar tekrar koşma (tm 289.5: 4 kapı, ~105 dk).
-Sıranı bitirmek pencerenin sonudur: `-p` oturumu kapanır, arka plandaki koşu onunla ölür, bildirim
-ASLA gelmez, kapanış (§3) çalışmaz ve döngü bunu `blocked` sayar. (Görülen vaka: tm 93.3 — kod
-bitmişti, iki pencere de "bildirim bekleyeyim" deyip sırasını bitirdiği için öldü.)
+Kapı bitmeden döndürdüğün JSON sonucu döngü için `blocked`'dır (tm 311.2 ve 389.3: kapı arka
+plandayken "bildirim bekleyeyim" deyip sıra bitirildi, turlar boşa gitti); kapanış (§3) ancak
+kapının sonucu okunduktan sonra çalışır.
 
 **DB testleri artık izole koşar (tm 105).** `@siyahtus/api` ve `@siyahtus/rtm`'in `test` /
 `test:unit` / `test:integration` script'leri her koşuya KENDİ Postgres veritabanını

@@ -33,13 +33,16 @@ EFFORT_XHIGH="xhigh"
 EFFORT_HIGH="high"
 EFFORT_MEDIUM="medium"      # [OPUS-MEDIUM]/[SONNET-MEDIUM] (2026-10-16; #385, #386)
 PERM="auto"   # tam otonom, prompt YOK, sınıflandırıcılı (2026-10-03). Eski: "bypassPermissions"
-MAX_TURNS=250               # high / xhigh pencereleri
-# max efor pencereleri daha uzun: 309.1 ve 309.2 (OPUS-MAX) 250 turda error_max_turns'e
-# çarptı; Claude Code oturumu kendiliğinden sürdürdü (309.2'de asıl işin 44 dk'sı sınırdan
-# SONRA yapıldı) ama bu davranışa güvenilmez — sınır aşılırsa görev blocked kalır ve 30 $'lık
-# pencere baştan koşar (2026-10-21 log taraması).
+MAX_TURNS=400               # tüm eforlar (2026-10-26). Eski: 250 high/xhigh, 400 max.
+# 2026-10-21: 309.1 ve 309.2 (OPUS-MAX) 250 turda error_max_turns'e çarpınca yalnız max 400'e
+# çıkarılmıştı. Sonra 336.1 (OPUS-HIGH) ve 357 (OPUS-XHIGH) da 251. turda düştü; ikisini de
+# retry penceresi kapattı, yani sınır işi kesip pencereyi iki kez ödetiyordu. Sınır aşılırsa
+# görev blocked kalır ve 30 $'lık pencere baştan koşar — bu yüzden tek sınır 400.
 MAX_TURNS_MAX=400
 RUNNER_PROMPT_FILE="TASK-RUNNER-PROMPT.md"
+# Stop kancası (.claude/hooks/gate-stop.sh) yalnız bu değişkeni gören pencerelerde çalışır —
+# sahibin aynı klasördeki etkileşimli oturumu döngünün kapısı yüzünden bekletilmez.
+export SIYAHTUS_LOOP_WINDOW=1
 LOG_DIR=".loop-logs"; mkdir -p "$LOG_DIR"
 MAX_CONSEC_ERRORS=5
 BACKOFF_SECS=90
@@ -239,6 +242,7 @@ stream_task(){
   local id="$1" eff="$2" mdl="${3:-$MODEL}"
   local logf="$LOG_DIR/task-$id.jsonl"
   : > "$logf"
+  clear_gate_markers
   # Fast mode YALNIZ Opus'ta çalışır (Sonnet'te etkisiz). Varsayılan KAPALI; açmak: FAST_MODE=1 ./run-loop.sh
   # KAPALI KALIR (sahip kararı, 2026-10-21): abonelikte fast mode plan kotasından değil,
   # ayrı ücretli "usage credits"ten düşer (kota dolmamış olsa bile); Opus 5.5 fast
@@ -359,6 +363,43 @@ wait_for_reset(){
   return 0
 }
 
+# --- Docker kapısı: pencere açılmadan servisler ayakta mı? --------------------
+# Docker kapalıyken entegrasyon testleri 0 bayt çıktıyla asılır (CONVENTIONS §1.4);
+# 389.12 dört pencereyi bu yüzden kaybetti (docker info/ps 30 sn'de zaman aşımı,
+# pencere boş bekleyip blocked döndü). Karar pencere AÇILMADAN verilir: `docker info`
+# yanıt veriyor ve `compose up -d db redis` geçiyorsa pencere açılır; değilse Docker
+# Desktop bir kez başlatılır ve 30 sn'de bir yeniden bakılır — bu bekleyiş deneme
+# hakkına girmez, pencere açılmadığı için kota harcamaz, panelden durdurulabilir.
+# Kapatmak: DOCKER_GATE=0 ./run-loop.sh
+DOCKER_DESKTOP_EXE="${LOCALAPPDATA:-}/Programs/DockerDesktop/Docker Desktop.exe"
+docker_gate(){
+  [ "${DOCKER_GATE:-1}" = "1" ] || return 0
+  local stage="$1" tries=0 started=0
+  while : ; do
+    if timeout 20 docker info >/dev/null 2>&1 \
+       && timeout 120 docker compose up -d db redis >/dev/null 2>&1; then
+      [ "$tries" -gt 0 ] && log "🐳 Docker hazır ($stage) — pencere açılıyor."
+      return 0
+    fi
+    tries=$((tries+1))
+    if [ "$started" = 0 ] && [ -f "$DOCKER_DESKTOP_EXE" ]; then
+      log "🐳 Docker yanıt vermiyor ($stage) — Docker Desktop başlatılıyor."
+      ( "$DOCKER_DESKTOP_EXE" >/dev/null 2>&1 & )
+      started=1
+    fi
+    [ $((tries % 10)) -eq 1 ] && log "⏸ Docker kapısı ($stage): docker info / compose up yanıt vermiyor; pencere AÇILMIYOR, 30 sn'de bir yeniden bakılıyor (deneme $tries)."
+    stop_gate "Docker beklenirken"
+    sleep 30
+  done
+}
+
+# --- Kapı işaretleri: pencere sınırında kapı koşuyor olamaz ------------------
+# scripts/test-gate.mjs koşarken .loop-logs/test-gate-<pid>.running bırakır; Stop
+# kancası (.claude/hooks/gate-stop.sh) bunu görünce pencerenin kapanmasını geri
+# çevirir. Yeni pencere açılmadan önce bayat işaret ve sayaçlar temizlenir ki
+# önceki pencereden kalan bir iz yeni pencereyi (ya da pick_next'i) tutmasın.
+clear_gate_markers(){ rm -f "$LOG_DIR"/test-gate-*.running "$LOG_DIR"/gate-stop-*.count 2>/dev/null; }
+
 # --- Durdurma kapısı: panel istediğinde script KENDİ çıkar --------------------
 # Panel nazik durdurma istediğinde .loop-logs/STOP-REQUESTED dosyasını bırakır.
 # Bu kapı yalnız GÖREV SINIRLARINDA okunur — çalışan bir pencere asla kesilmez.
@@ -377,6 +418,7 @@ stop_gate(){
 }
 # Koşu başında kalmış bayrak yeni koşuyu anında kapatmasın (panel de temizler).
 rm -f "$STOP_FLAG" "$STOP_HONORED"
+clear_gate_markers
 
 # =============================================================================
 consec_errors=0; iteration=0; consec_task_fails=0
@@ -419,6 +461,8 @@ while true; do
   # Durdurma kapısı: pick_next sürerken istek gelmiş olabilir — pahalı pencereyi
   # açmadan önce son kez bak.
   stop_gate "görev penceresi açılmadan"
+  # KAPI 1b — Docker/servisler ayakta değilse pencere hiç açılmaz (bekler).
+  docker_gate "görev öncesi"
 
   log "──────────────────────────────────────────────────────────────"
   log "▶ Task $task_id  (model=$mdl, effort=$eff, kalan≈$remaining)  — tek sürekli akış başlıyor (build→doğrulama→kapanış)"
@@ -431,6 +475,7 @@ while true; do
     # tek nokta burası: iki deneme arasında "BİTTİ" satırı yok, dolayısıyla
     # nazik durdurma bu araya asla düşemiyor.
     quota_gate "$eff" "retry öncesi" "$mdl" || exit 0
+    docker_gate "retry öncesi"
 
     log "⟳ Task $task_id ilk turda geçemedi ($status). 1 kez yeniden deneniyor (temiz pencere)..."
     stream_task "$task_id" "$eff" "$mdl"

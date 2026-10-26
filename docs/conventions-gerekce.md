@@ -30,7 +30,8 @@ bulunursa bulgu açılır. Yani kural yalnız iyi niyete bırakılmadı.
 
 İstisna: **faz özet tablosu** (`| Faz | PRD | Genel durum | Must sayacı | Kapanış |`) bu
 kuralın dışındadır — oradaki hücre bir sayım kaynağıdır (`54 ✅ · 0 ◐`), panel `statedCounts`
-olarak okur. Ona dokunma.
+olarak okur. Ona dokunma. Hücre yalnız sayımı taşır; sayım tarihçesi §D'ye yazılır (2026-10-26 · §D365,
+eski hücre tarihçesi `docs/archive/plan/PLAN-faz-tablosu-tarihce-2026-10-26.md`).
 
 ### 1.1 Kapının objektifliği: test veri depoları koşu başına izole (tm 105)
 

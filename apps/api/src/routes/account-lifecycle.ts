@@ -153,7 +153,9 @@ export default async function accountLifecycleRoutes(
     app.db,
     env.WEB_APP_URL,
     env.consoleRedirectUri,
-    env.TRIAL_DAYS,
+    // The root panel's trial length over `TRIAL_DAYS` (tm 389.13), read per
+    // workspace created so a change applies to the next one.
+    async () => (await app.publicSettings.get()).trialDays,
     env.SIGNUP_VERIFICATION_TTL_HOURS,
   );
 
@@ -254,6 +256,19 @@ export default async function accountLifecycleRoutes(
     }
   }
 
+  /** 403 `signup_blocked` when the root panel's blocklist names the address or the caller. */
+  async function refuseBlocked(request: FastifyRequest, email: string): Promise<void> {
+    const matched = await app.publicSettings.signupBlocked(email, request.ip ?? null);
+    if (matched === null) return;
+    request.log.warn(
+      { event: 'signup.blocked', matched_kind: matched },
+      'sign-up refused: blocklist',
+    );
+    throw new ApiError('not_allowed', 'Sign-up is not available for this address.', {
+      details: { reason: 'signup_blocked' },
+    });
+  }
+
   app.post('/auth/signup', { config: { public: true } }, async (request, reply) => {
     // --- Closed sign-up (tm 256.3) -------------------------------------------
     // The first thing the handler does, ahead of the body and the database. A
@@ -266,7 +281,10 @@ export default async function accountLifecycleRoutes(
     // wrong and no credential is missing — this deployment has chosen not to do
     // it. `details.reason` is what the form reads to say so; the taxonomy stays
     // as ADR-06 fixed it.
-    if (!env.SIGNUP_ENABLED) {
+    //
+    // The switch in force is the environment's unless the root panel closed it
+    // (tm 389.13 · `services/platform/public-settings.ts` — the stricter wins).
+    if (!(await app.publicSettings.get()).signupEnabled) {
       throw new ApiError(
         'not_allowed',
         'Sign-up is closed on this deployment. Ask the owner of a workspace to invite you.',
@@ -319,6 +337,12 @@ export default async function accountLifecycleRoutes(
     }
 
     const body = parse(signupBody, request.body);
+
+    // --- The root panel's blocklist (tm 389.13 · FR-ADMIN-15) ---------------
+    // Right after the body, because the address is the first thing it names.
+    // The same `not_allowed` as the closed door, with its own reason; which
+    // entry matched (address, domain, network) stays in the log.
+    await refuseBlocked(request, body.email);
 
     // --- Terms of service (tm 257.9 · ADR K-f) --------------------------------
     // Right after the body is read and before anything else is: the region
@@ -708,6 +732,11 @@ export default async function accountLifecycleRoutes(
 
   app.post('/auth/invitations/accept', { config: { public: true } }, async (request, reply) => {
     const body = parse(acceptBody, request.body);
+    // An invitation is not a sign-up — a closed sign-up still lets it in — but
+    // an address or network the root panel blocked is blocked here too (tm
+    // 389.13, as #282 treats the invitee like a sign-up). The invited address
+    // is the invitation's, so it is looked up before anything is spent.
+    await refuseBlocked(request, (await lifecycle.previewInvitation(body.token)).email);
     const accepted = await lifecycle.acceptInvitation({
       token: body.token,
       ...(body.name !== undefined ? { name: body.name } : {}),

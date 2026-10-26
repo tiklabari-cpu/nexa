@@ -55,6 +55,10 @@ tags:
       verification link, a forced password reset, ending sessions and tokens,
       a second-factor reset, a suspension in every workspace, an export of
       their data, erasure.
+  - name: Settings
+    description: |
+      Deployment settings (tm 389.13): sign-up, the trial length, the
+      announcement, maintenance mode, and the tenant API's effective configuration.
   - name: Support
     description: |
       The support desk (tm 389.9): which workspace an identifier a customer
@@ -211,6 +215,12 @@ paths:
     $ref: "./paths/accounts.yaml#/export"
   /accounts/{accountId}/erase:
     $ref: "./paths/accounts.yaml#/erase"
+  /settings:
+    $ref: "./paths/settings.yaml#/settings"
+  /settings/maintenance:
+    $ref: "./paths/settings.yaml#/maintenance"
+  /settings/effective-config:
+    $ref: "./paths/settings.yaml#/effectiveConfig"
 
 components:
   securitySchemes:
@@ -1747,6 +1757,116 @@ components:
             details:
               type: object
               additionalProperties: true
+
+    PlatformNoticeText:
+      type: object
+      description: One sentence in English and Turkish — both, always.
+      required: [en, tr]
+      additionalProperties: false
+      properties:
+        en: { type: string, minLength: 1, maxLength: 500 }
+        tr: { type: string, minLength: 1, maxLength: 500 }
+
+    PlatformAnnouncement:
+      type: object
+      description: |
+        The banner every panel user sees (`NoticeBar`). It stops being served
+        once `until` has passed.
+      required: [level, en, tr, until]
+      additionalProperties: false
+      properties:
+        level: { type: string, enum: [info, warning, critical] }
+        en: { type: string, minLength: 1, maxLength: 500 }
+        tr: { type: string, minLength: 1, maxLength: 500 }
+        until: { type: ["string", "null"], format: date-time }
+
+    PlatformMaintenance:
+      type: object
+      required: [enabled, mode, message]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+        mode: { type: string, enum: [read_only, full] }
+        message:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformNoticeText" }
+            - { type: "null" }
+
+    PlatformDeploymentSettings:
+      type: object
+      description: |
+        What `platform_settings` holds for the tenant API; `null` is "not set
+        here". `updated_at` is the newest change among these keys.
+      required: [signup_enabled, trial_days, announcement, maintenance, updated_at]
+      properties:
+        signup_enabled: { type: ["boolean", "null"] }
+        trial_days: { type: ["integer", "null"], minimum: 1, maximum: 365 }
+        announcement:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAnnouncement" }
+            - { type: "null" }
+        maintenance:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformMaintenance" }
+            - { type: "null" }
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformSettingsPatchRequest:
+      type: object
+      description: At least one key besides `reason`; `null` removes the stored value.
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        signup_enabled: { type: ["boolean", "null"] }
+        trial_days: { type: ["integer", "null"], minimum: 1, maximum: 365 }
+        announcement:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAnnouncement" }
+            - { type: "null" }
+
+    PlatformMaintenanceRequest:
+      type: object
+      required: [reason, enabled, mode]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        enabled: { type: boolean }
+        mode: { type: string, enum: [read_only, full] }
+        message:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformNoticeText" }
+            - { type: "null" }
+
+    PlatformEffectiveConfigEntry:
+      type: object
+      required: [key, value, source, redacted, panel]
+      properties:
+        key: { type: string, description: The environment variable's name. }
+        value:
+          type: ["string", "null"]
+          description: |
+            The value the tenant API runs with, as text; `set` / `unset` when
+            `redacted`; `null` for an optional key with no value.
+        source: { type: string, enum: [db, env, default] }
+        redacted: { type: boolean, description: A secret — only whether it is set is shown. }
+        panel:
+          type: boolean
+          description: This panel can override it (`PATCH /settings`).
+
+    PlatformEffectiveConfig:
+      type: object
+      required: [stale, generated_at, age_s, entries]
+      properties:
+        stale:
+          type: boolean
+          description: No publication, or one older than 90 seconds.
+        generated_at: { type: ["string", "null"], format: date-time }
+        age_s: { type: ["number", "null"] }
+        entries:
+          type: array
+          description: Alphabetical by key.
+          items: { $ref: "#/components/schemas/PlatformEffectiveConfigEntry" }
 
   responses:
     BadRequest:

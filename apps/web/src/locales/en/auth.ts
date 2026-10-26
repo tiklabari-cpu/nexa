@@ -104,6 +104,9 @@ export const auth: Messages = {
   'auth.signup.errorAccountExists': 'An account already exists for that email — sign in instead.',
   'auth.signup.errorSignupClosed':
     'Nothing was created. Sign-up is closed at this address — ask the owner of an existing workspace to invite you.',
+  // The root panel's blocklist (tm 389.13): the address, its domain or the network.
+  'auth.signup.errorSignupBlocked':
+    'Nothing was created. Sign-up is not available for this address. If you think this is a mistake, contact support.',
   'auth.signup.errorRegionMismatch':
     'Nothing was created. This address only creates workspaces in {region} — choose that data region, or sign up at the address that serves the one you picked.',
   'auth.signup.errorRegionUnknown':

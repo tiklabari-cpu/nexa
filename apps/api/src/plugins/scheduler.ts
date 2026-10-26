@@ -94,6 +94,8 @@ async function schedulerPlugin(
     eventPartitions: app.eventPartitions,
     logger: app.log,
     enabled: options.env.schedulerEnabled,
+    // Decorated by `server.ts` before this plugin (tm 389.13).
+    config: { env: options.env, settings: app.publicSettings },
   });
   app.decorate('opsHealth', opsHealth);
   opsHealth.start();

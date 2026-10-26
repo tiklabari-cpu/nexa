@@ -29,6 +29,8 @@ import { useRealtime } from '../features/inbox/useInbox.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
 import { CommandPalette } from './CommandPalette.js';
 import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
+import { MaintenancePage, NoticeBar } from './NoticeBar.js';
+import { useNotice } from '../lib/notice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { PresenceNotices } from './PresenceNotices.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
@@ -43,6 +45,7 @@ const MAIN_ID = 'main';
 export function AppShell(): ReactElement {
   const t = useTranslate();
   const narrow = useNarrowScreenNotice();
+  const { maintenance } = useNotice();
   // Mounted the first time it is shown, then kept: a window that narrows later
   // hides the console behind the notice rather than unmounting it, so a draft,
   // an open chat or a scroll position survive a turned tablet (tm 259.25 · O6).
@@ -55,6 +58,10 @@ export function AppShell(): ReactElement {
     if (noticeWasShown.current && !narrow.show) document.getElementById(MAIN_ID)?.focus();
     noticeWasShown.current = narrow.show;
   }, [narrow.show]);
+
+  // Full maintenance (tm 389.13): nothing in the console would work, so it is
+  // not drawn; the notice is polled, and the console returns when it ends.
+  if (maintenance?.mode === 'full') return <MaintenancePage />;
 
   return (
     <>
@@ -74,6 +81,7 @@ export function AppShell(): ReactElement {
           >
             {t('shell.skipToContent')}
           </a>
+          <NoticeBar />
           <SandboxBadge />
           <TrialBanner />
           {/* Why your availability changed, and chats a lead must look at (WG-03). */}

@@ -94,6 +94,12 @@ export const ERROR_TYPES = [
   'internal',
   'license_expired',
   'limit_reached',
+  // SiyahTuş addition — maintenance mode (FR-ADMIN-15 · tm 389.13). The root
+  // panel took the deployment down for maintenance: `full` refuses every
+  // request but health, the deployment notice and signing out; `read_only`
+  // refuses writes. 503, like `service_unavailable`, but its own type so a
+  // client shows the operator's maintenance page instead of retrying.
+  'maintenance',
   // SiyahTuş addition. A write refused for content reasons at the visitor edge —
   // the spam filter (FR-MOD-08.9.3). Deliberately generic: it does not name the
   // rule that fired, so an enveloped refusal cannot be used to probe the filter.
@@ -218,6 +224,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   internal: 500,
   license_expired: 402,
   limit_reached: 429,
+  maintenance: 503,
   message_rejected: 403,
   misdirected_request: 421,
   not_allowed: 403,

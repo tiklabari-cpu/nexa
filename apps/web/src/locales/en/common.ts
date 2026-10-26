@@ -50,6 +50,7 @@ export const common: Messages = {
   'common.errors.internal': 'Something went wrong on our side — try again.',
   'common.errors.license_expired': 'Your subscription has ended — renew it to continue.',
   'common.errors.limit_reached': 'You have reached the limit for your plan.',
+  'common.errors.maintenance': 'The service is down for maintenance. Please try again later.',
   'common.errors.message_rejected': 'That message was rejected.',
   'common.errors.misdirected_request': 'That request went to the wrong place — reload and retry.',
   'common.errors.network': 'Could not reach the server — check your connection.',

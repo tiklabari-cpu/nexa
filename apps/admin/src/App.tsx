@@ -11,6 +11,7 @@ import { InvitePage } from './features/auth/InvitePage.js';
 import { RecoveryCodesPage } from './features/auth/RecoveryCodesPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import { PlaceholderPage } from './features/placeholder/PlaceholderPage.js';
+import { SettingsPage } from './features/settings/SettingsPage.js';
 import { SupportPage } from './features/support/SupportPage.js';
 import { WorkspacesSection } from './features/workspaces/WorkspacesSection.js';
 import { useAuth } from './lib/auth-store.js';
@@ -84,6 +85,8 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <WorkspacesSection />;
     case 'accounts':
       return <AccountsSection />;
+    case 'settings':
+      return <SettingsPage />;
     case 'support':
       return <SupportPage />;
     default:

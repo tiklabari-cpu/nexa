@@ -54,6 +54,14 @@ info:
     human. Retention windows are capped for such a workspace as well, which no
     endpoint exposes yet.
 
+    **Maintenance mode** (FR-ADMIN-15 · tm 389.13). The deployment's operators
+    can take it down for maintenance from the root panel. In `full` mode every
+    operation except health, `/deployment`, `/deployment/notice` and
+    `/auth/revoke` answers `503 maintenance`; in `read_only` mode reads and
+    signing in work and every other write does. Like the region rule it is a
+    property of the deployment, so it is not listed per operation;
+    `GET /deployment/notice` says which mode is on.
+
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development
@@ -149,6 +157,8 @@ paths:
     $ref: "./paths/health.yaml#/ready"
   /deployment:
     $ref: "./paths/deployment.yaml#/deployment"
+  /deployment/notice:
+    $ref: "./paths/deployment.yaml#/notice"
 
   /auth/login:
     $ref: "./paths/auth.yaml#/login"
@@ -1033,6 +1043,62 @@ components:
             The Apps cards and channels this deployment connects to their real
             provider (tm 263, `APPS_LIVE_PROVIDERS`). Under `pilot_mode` these
             are the only ones served. Names only — never a key.
+
+    DeploymentNotice:
+      type: object
+      description: |
+        What the root panel's operators want every panel user to see (tm
+        389.13 · FR-ADMIN-15): an announcement, and maintenance mode while it
+        is on. `null` for either means nothing to show.
+      required: [announcement, maintenance]
+      additionalProperties: false
+      properties:
+        announcement:
+          oneOf:
+            - $ref: "#/components/schemas/DeploymentAnnouncement"
+            - type: "null"
+        maintenance:
+          oneOf:
+            - $ref: "#/components/schemas/DeploymentMaintenance"
+            - type: "null"
+
+    DeploymentAnnouncement:
+      type: object
+      description: |
+        The operator's announcement, in both languages the panel ships. It
+        stops being served once `until` has passed.
+      required: [level, en, tr, until]
+      additionalProperties: false
+      properties:
+        level: { type: string, enum: [info, warning, critical] }
+        en: { type: string, minLength: 1, maxLength: 500 }
+        tr: { type: string, minLength: 1, maxLength: 500 }
+        until:
+          type: string
+          nullable: true
+          format: date-time
+          description: When it comes down by itself; `null` keeps it up.
+
+    DeploymentMaintenance:
+      type: object
+      description: |
+        Maintenance mode. `full`: every request but health, this notice,
+        `/deployment` and signing out answers `503 maintenance`, and the
+        realtime gateway refuses sockets. `read_only`: reads and signing in
+        work, every other write answers `503 maintenance`.
+      required: [mode, message]
+      additionalProperties: false
+      properties:
+        mode: { type: string, enum: [read_only, full] }
+        message:
+          type: object
+          nullable: true
+          description: The operator's words; `null` uses the panel's own sentence.
+          required: [en, tr]
+          additionalProperties: false
+          properties:
+            en: { type: string, minLength: 1, maxLength: 500 }
+            tr: { type: string, minLength: 1, maxLength: 500 }
 
     DependencyHealth:
       type: object
@@ -12800,6 +12866,7 @@ components:
         - internal
         - license_expired
         - limit_reached
+        - maintenance
         - message_rejected
         - misdirected_request
         - not_allowed

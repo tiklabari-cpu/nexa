@@ -45,6 +45,14 @@ export const shell: Messages = {
   'shell.narrow.mobileApp':
     'On a phone, the SiyahTuş mobile app is the better way to answer chats.',
   'shell.narrow.continue': 'Continue anyway',
+  // The root panel's maintenance mode (tm 389.13), when the operator wrote no
+  // message of their own. Read-only is a band; full replaces the console.
+  'shell.maintenance.readOnly':
+    'Maintenance in progress — the console is read-only for now, and changes are not saved.',
+  'shell.maintenance.title': 'Down for maintenance',
+  'shell.maintenance.body':
+    'SiyahTuş is being maintained and is not available right now. Your data is safe.',
+  'shell.maintenance.autoRetry': 'This page checks again by itself every minute.',
   'shell.subscribe': 'Subscribe',
   'shell.trial.ended': 'Your trial has ended — subscribe to start new conversations.',
   // The public pilot's strip (tm 257.15): nothing is on sale there, so the way on

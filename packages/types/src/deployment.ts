@@ -37,3 +37,47 @@ export interface DeploymentConfig {
    */
   live_apps?: string[];
 }
+
+/** How loud the root panel's announcement is (FR-ADMIN-15 · tm 389.13). */
+export const ANNOUNCEMENT_LEVELS = ['info', 'warning', 'critical'] as const;
+export type AnnouncementLevel = (typeof ANNOUNCEMENT_LEVELS)[number];
+
+/**
+ * `full` refuses every request but health, the notice and signing out;
+ * `read_only` refuses writes and lets everything be read.
+ */
+export const MAINTENANCE_MODES = ['read_only', 'full'] as const;
+export type MaintenanceMode = (typeof MAINTENANCE_MODES)[number];
+
+/** One sentence in both languages the panel ships — the operator writes both. */
+export interface LocalizedNoticeText {
+  en: string;
+  tr: string;
+}
+
+/**
+ * The deployment-wide announcement an operator set in the root panel
+ * (`platform_settings.announcement`). `until` passed, it is not shown.
+ */
+export interface DeploymentAnnouncement extends LocalizedNoticeText {
+  level: AnnouncementLevel;
+  /** ISO-8601; `null` keeps it up until the operator takes it down. */
+  until: string | null;
+}
+
+/** Maintenance mode as the panel reads it — present only while it is on. */
+export interface DeploymentMaintenance {
+  mode: MaintenanceMode;
+  /** The operator's words for the banner or the full page; `null` uses the panel's own. */
+  message: LocalizedNoticeText | null;
+}
+
+/**
+ * What `GET /deployment/notice` answers (tm 389.13): its own route rather
+ * than two more `DeploymentConfig` fields, so the sign-in screen's settings
+ * keep their shape. Anonymous like `/deployment`, and readable in maintenance.
+ */
+export interface DeploymentNotice {
+  announcement: DeploymentAnnouncement | null;
+  maintenance: DeploymentMaintenance | null;
+}

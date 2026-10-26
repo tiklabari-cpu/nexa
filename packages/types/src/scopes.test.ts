@@ -186,6 +186,8 @@ describe('error taxonomy', () => {
     'platform_workspace_state',
     // An account action its state refuses (tm 389.11).
     'platform_account_state',
+    // The root panel's maintenance mode (tm 389.13).
+    'maintenance',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

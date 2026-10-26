@@ -36,6 +36,7 @@ export const common: Messages = {
   'common.errors.internal': 'Bizim tarafımızda bir şeyler ters gitti — yeniden deneyin.',
   'common.errors.license_expired': 'Aboneliğiniz sona erdi — devam etmek için yenileyin.',
   'common.errors.limit_reached': 'Paketinizin sınırına ulaştınız.',
+  'common.errors.maintenance': 'Hizmet bakımda. Lütfen daha sonra yeniden deneyin.',
   'common.errors.message_rejected': 'Bu mesaj reddedildi.',
   'common.errors.misdirected_request':
     'Bu istek yanlış yere gitti — sayfayı yenileyip tekrar deneyin.',

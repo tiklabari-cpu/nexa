@@ -41,6 +41,11 @@ export interface DispatcherDeps {
   onAuthenticated: (connection: Connection, principal: SocketPrincipal) => Promise<void>;
   /** Per-connection message budget, from RATE_LIMIT_RTM_PER_SEC. */
   messagesPerSecond: number;
+  /**
+   * Whether the root panel put the deployment in `full` maintenance (tm
+   * 389.13 · `maintenance.ts`): `login` is then refused. Omitted, never.
+   */
+  inMaintenance?: () => boolean;
 }
 
 export class Dispatcher {
@@ -94,6 +99,16 @@ export class Dispatcher {
       return encodeError(message.request_id, 'login', {
         type: 'not_allowed',
         message: 'This socket is already authenticated.',
+      });
+    }
+
+    // Maintenance (tm 389.13): the REST edge's 503 `maintenance`, before the
+    // credential is even looked at — there is nothing to sign in to.
+    if (this.deps.inMaintenance?.()) {
+      return encodeError(message.request_id, 'login', {
+        type: 'maintenance',
+        message: 'This service is down for maintenance. Please try again later.',
+        details: { mode: 'full' },
       });
     }
 

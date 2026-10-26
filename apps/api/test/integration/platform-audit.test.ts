@@ -364,6 +364,16 @@ describe('the platform audit chain (tm 389.5)', () => {
     ok(await onAccount('export'));
     ok(await onAccount('erase', { confirm_email: fx.b.agentEmail }));
 
+    // The deployment settings (tm 389.13): a change, and maintenance on and off again.
+    ok(await request('PATCH', '/settings', { token, body: { trial_days: 21, ...reason } }));
+    const maintenance = (enabled: boolean) =>
+      request('PUT', '/settings/maintenance', {
+        token,
+        body: { enabled, mode: 'read_only', ...reason },
+      });
+    ok(await maintenance(true));
+    ok(await maintenance(false));
+
     // The superadmin's own sessions.
     ok(await request('DELETE', '/auth/sessions', { token }));
     ok(await request('POST', '/auth/logout', { token }));

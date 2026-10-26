@@ -16,13 +16,25 @@
  * scheduler job — jobs are listed in the `/health` body and the interval
  * environment, and an admin-visible job list that changed shape would break
  * every monitor reading it.
+ *
+ * The same tick publishes the effective configuration (tm 389.13 ·
+ * `effective-config.ts`) and re-writes maintenance mode for the realtime
+ * gateway from the database (`OPS_MAINTENANCE_KEY`), so a Redis that lost the
+ * root panel's write is right again within one interval.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
-import type { OpsComponentState } from '@siyahtus/types';
+import { OPS_CONFIG_KEY, OPS_MAINTENANCE_KEY, type OpsComponentState } from '@siyahtus/types';
+import type { Env } from '../../config/env.js';
 import { lastMailSend } from '../mail/delivery.js';
 import { JobLock, lockTtlMs, type LockRedis } from '../scheduler/lock.js';
+import type { PublicSettings } from '../platform/public-settings.js';
 import { reportComponentStatus } from './component-status.js';
+import {
+  buildEffectiveConfig,
+  OPS_CONFIG_TTL_S,
+  type StoredEffectiveConfig,
+} from './effective-config.js';
 import { OPS_HEALTH_KEY, OPS_HEALTH_TTL_S, type StoredHealthSnapshot } from './health-keys.js';
 import {
   buildHealthSnapshot,
@@ -39,6 +51,8 @@ export const MAIL_FAILURE_WINDOW_MS = 10 * 60_000;
 type PublisherRedis = LockRedis & {
   ping(): Promise<unknown>;
   set(key: string, value: string, ex: 'EX', seconds: number): Promise<unknown>;
+  set(key: string, value: string): Promise<unknown>;
+  del(key: string): Promise<unknown>;
   hset(key: string, field: string, value: string): Promise<unknown>;
 };
 
@@ -50,6 +64,12 @@ export interface HealthSnapshotPublisherOptions {
   scheduler: BuildHealthSnapshotInput['scheduler'];
   eventPartitions: BuildHealthSnapshotInput['eventPartitions'];
   logger: FastifyBaseLogger;
+  /**
+   * The effective configuration's inputs (tm 389.13): the whole parsed
+   * environment and the root panel's settings. Omitted, neither the
+   * configuration nor the maintenance key is written.
+   */
+  config?: { env: Env; settings: PublicSettings };
   /** Whether this process publishes at all (`env.schedulerEnabled`). */
   enabled: boolean;
   now?: () => number;
@@ -114,10 +134,33 @@ export class HealthSnapshotPublisher {
       const stored: StoredHealthSnapshot = { generated_at: new Date(now).toISOString(), health };
       await redis.set(OPS_HEALTH_KEY, JSON.stringify(stored), 'EX', OPS_HEALTH_TTL_S);
       await this.#reportComponents(health, stored.generated_at, now);
+      await this.#publishConfig(stored.generated_at);
       return stored;
     } catch (error) {
       logger.warn({ err: error }, 'health snapshot could not be published');
       return null;
+    }
+  }
+
+  /** The effective configuration and the maintenance key — never a failed health publication. */
+  async #publishConfig(generatedAt: string): Promise<void> {
+    const { redis, logger, config } = this.#options;
+    if (!config) return;
+    try {
+      const settings = await config.settings.refresh();
+      const stored: StoredEffectiveConfig = {
+        generated_at: generatedAt,
+        entries: buildEffectiveConfig(config.env, settings),
+      };
+      await redis.set(OPS_CONFIG_KEY, JSON.stringify(stored), 'EX', OPS_CONFIG_TTL_S);
+      // No expiry: maintenance mode outlives the leader that wrote it.
+      if (settings.maintenance) {
+        await redis.set(OPS_MAINTENANCE_KEY, JSON.stringify({ mode: settings.maintenance.mode }));
+      } else {
+        await redis.del(OPS_MAINTENANCE_KEY);
+      }
+    } catch (error) {
+      logger.warn({ err: error }, 'effective configuration could not be published');
     }
   }
 

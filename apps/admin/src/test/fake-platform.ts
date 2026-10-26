@@ -10,6 +10,7 @@
 import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siyahtus/types';
 import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
+import { handleSettings, initialSettingsState, type FakeSettingsState } from './fake-settings.js';
 
 export interface RecordedRequest {
   method: string;
@@ -31,6 +32,10 @@ export interface FakePlatformOptions {
   password?: string;
   /** The fake account (tm 389.11) is a workspace's Founder: erasure is refused. */
   accountSoleOwner?: boolean;
+  /** The stored deployment settings (tm 389.13) the fake starts from. */
+  settings?: Partial<FakeSettingsState['settings']>;
+  /** `missing`: the tenant API has published no effective configuration. */
+  effectiveConfig?: FakeSettingsState['config'];
 }
 
 const NOW = '2026-10-25T10:00:00.000Z';
@@ -509,6 +514,8 @@ export interface FakePlatform {
   endSession: () => void;
   /** Answer `path` with a fixed response from now on. */
   override: (method: string, path: string, response: () => Response) => void;
+  /** The settings surface's state (tm 389.13) — a test reads it back or ages the code. */
+  settingsState: FakeSettingsState;
 }
 
 export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatform {
@@ -533,6 +540,9 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     account: structuredClone(ACCOUNT_DETAIL),
     soleOwner: options.accountSoleOwner ?? false,
   };
+  const settingsState = initialSettingsState();
+  Object.assign(settingsState.settings, options.settings ?? {});
+  settingsState.config = options.effectiveConfig ?? 'fresh';
   let issued = 0;
 
   const me = (stage: 'active'): Record<string, unknown> => ({
@@ -686,6 +696,9 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     );
     if (accountResponse) return accountResponse;
 
+    const settingsResponse = handleSettings(method, path, body, role, settingsState, json, problem);
+    if (settingsResponse) return settingsResponse;
+
     return problem(404, 'not_found', `${method} ${path}`);
   }
 
@@ -711,5 +724,6 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     override(method, path, response) {
       overrides.set(`${method} ${path}`, response);
     },
+    settingsState,
   };
 }

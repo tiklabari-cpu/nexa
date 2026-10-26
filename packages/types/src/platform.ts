@@ -153,3 +153,53 @@ export type OpsComponentState = (typeof OPS_COMPONENT_STATES)[number];
 export function isOpsComponentKey(value: unknown): value is OpsComponentKey {
   return typeof value === 'string' && (OPS_COMPONENTS as readonly string[]).includes(value);
 }
+
+/**
+ * The root panel's command channel to the tenant processes (design.md §A):
+ * Redis pub/sub, one JSON object per message, `{ "type": … }`. Senders publish
+ * after committing; a message nobody heard costs at most a reader's cache
+ * lifetime, never correctness.
+ */
+export const PLATFORM_OPS_CHANNEL = 'siyahtus:platform:ops';
+
+/** A deployment setting changed (tm 389.13): every tenant process drops its copy. */
+export const PLATFORM_SETTINGS_CHANGED = 'settings.changed';
+
+export interface PlatformOpsMessage {
+  type: string;
+  /** The `platform_settings` keys that moved, where the sender says. */
+  keys?: string[];
+}
+
+/** A message off {@link PLATFORM_OPS_CHANNEL}, or null when it is not one. */
+export function parsePlatformOpsMessage(message: string): PlatformOpsMessage | null {
+  try {
+    const value: unknown = JSON.parse(message);
+    if (typeof value !== 'object' || value === null) return null;
+    const { type, keys } = value as Record<string, unknown>;
+    if (typeof type !== 'string') return null;
+    return Array.isArray(keys)
+      ? { type, keys: keys.filter((key): key is string => typeof key === 'string') }
+      : { type };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Maintenance mode as the realtime gateway reads it (tm 389.13): JSON
+ * `{ "mode": "read_only" | "full" }`, absent while it is off. Written by the
+ * root panel when it changes and re-written from the database by the tenant
+ * API's scheduler leader, so a flushed Redis comes back within one interval.
+ */
+export const OPS_MAINTENANCE_KEY = 'siyahtus:ops:maintenance';
+
+/** The tenant API's effective configuration (FR-ADMIN-16), published by its leader. */
+export const OPS_CONFIG_KEY = 'siyahtus:ops:config';
+
+/**
+ * Where an effective setting comes from: the root panel's database row, the
+ * process environment, or the built-in default.
+ */
+export const EFFECTIVE_CONFIG_SOURCES = ['db', 'env', 'default'] as const;
+export type EffectiveConfigSource = (typeof EFFECTIVE_CONFIG_SOURCES)[number];

@@ -54,6 +54,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/components/LoadError.tsx',
   'src/components/LoadingPage.tsx',
   'src/components/NarrowScreenNotice.tsx',
+  'src/components/NoticeBar.tsx',
   'src/components/NotFoundPage.tsx',
   'src/components/PresenceAvatars.tsx',
   'src/components/PresenceNotices.tsx',

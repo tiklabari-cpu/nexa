@@ -1,6 +1,6 @@
 /**
  * The tenant API's end of the root panel's command channel (tm 389.14 ·
- * FR-ADMIN-20 · design.md §A): `siyahtus:platform:ops`, Redis pub/sub.
+ * FR-ADMIN-20 · design.md §A): `siyahtus:platform:ops:jobs`, Redis pub/sub.
  *
  * The platform process shares no call path with the scheduler it wants to
  * poke, so "run this job now" travels as a broadcast —
@@ -18,7 +18,7 @@
  * table. Nothing here is on a request path, and nothing here throws: a message
  * this cannot read, or a Redis that fails mid-handling, is logged and dropped.
  */
-import { PLATFORM_JOB_RUN, PLATFORM_OPS_CHANNEL, parsePlatformOpsMessage } from '@siyahtus/types';
+import { PLATFORM_JOB_CHANNEL, PLATFORM_JOB_RUN, parsePlatformOpsMessage } from '@siyahtus/types';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { ManualRunResult } from '../scheduler/types.js';
@@ -62,11 +62,11 @@ export class OpsChannel {
     this.#started = true;
     const { subscriber } = this.#options;
     subscriber.on('message', (channel: string, message: string) => {
-      if (channel !== PLATFORM_OPS_CHANNEL) return;
+      if (channel !== PLATFORM_JOB_CHANNEL) return;
       const handling = this.handle(message).finally(() => this.#pending.delete(handling));
       this.#pending.add(handling);
     });
-    await subscriber.subscribe(PLATFORM_OPS_CHANNEL);
+    await subscriber.subscribe(PLATFORM_JOB_CHANNEL);
   }
 
   /** Wait for a run in progress, so a clean shutdown does not cut a job off. */

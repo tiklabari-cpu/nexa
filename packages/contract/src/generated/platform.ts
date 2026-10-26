@@ -1679,7 +1679,7 @@ export interface paths {
     put?: never;
     /**
      * Run a scheduler job now
-     * @description Broadcasts `job.run` on `siyahtus:platform:ops`; exactly one tenant
+     * @description Broadcasts `job.run` on `siyahtus:platform:ops:jobs`; exactly one tenant
      *     process that is listening acts on it. The answer says only what the
      *     platform could know: `queued` (a process heard it — the outcome follows
      *     in the job table), `already_running` (the job's running marker is held;

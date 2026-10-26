@@ -213,3 +213,12 @@ export type EffectiveConfigSource = (typeof EFFECTIVE_CONFIG_SOURCES)[number];
  * `request_id` claim runs the job (`services/ops/ops-channel.ts`).
  */
 export const PLATFORM_JOB_RUN = 'job.run';
+
+/**
+ * The channel "run now" travels on (tm 389.14), apart from
+ * {@link PLATFORM_OPS_CHANNEL}: every tenant API process and every RTM
+ * subscribes to that one for `settings.changed` (tm 389.13), so its
+ * `PUBLISH` count no longer says whether a scheduler heard. Only the
+ * scheduler-enabled processes subscribe here, and `no_listener` stays true.
+ */
+export const PLATFORM_JOB_CHANNEL = 'siyahtus:platform:ops:jobs';

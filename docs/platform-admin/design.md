@@ -24,8 +24,10 @@ görevlerinin "KODDA BUGÜN / KARARLAR" kutularının ortak kaynağıdır; satı
   genelleştirilmiş, `audit-export`); `routes/health.ts:143-177` → `services/ops/health-snapshot.ts`;
   `routes/reports.ts:444-496` → `services/billing/billing-views.ts`.
 - **Süreçler arası:** senkron çağrı yok; paylaşılan durum Postgres; komutlar Redis pub/sub
-  `siyahtus:platform:ops` (`job.run`, `settings.changed`, `ai.settings_changed`,
-  `health.publish`), kiracı API'de zamanlayıcısı açık her süreç dinler; `job.run` isteğini
+  `siyahtus:platform:ops` (`settings.changed`, `ai.settings_changed`, `health.publish`; her kiracı
+  API süreci ve RTM dinler) ve `siyahtus:platform:ops:jobs` (yalnız `job.run`; kiracı API'de
+  zamanlayıcısı açık her süreç dinler — ayrı kanal, çünkü `PUBLISH` sayısı `no_listener`'ı
+  söyler ve genel kanalı tm 389.13'ten beri her süreç dinliyor); `job.run` isteğini
   `request_id` talep anahtarını (`SET … NX`) ilk alan süreç işler — "lider" kilidi her yarım
   dakikada bırakılıp yeniden alındığı için lider-dinler tasarımı boşluklu olurdu (tm 389.14;
   iş ayrıca `siyahtus:sched-running:<ad>` çalışıyor işaretini taşır, panel `already_running`'i

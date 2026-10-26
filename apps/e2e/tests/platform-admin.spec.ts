@@ -310,3 +310,46 @@ test('suspends a workspace from the panel: its owner is turned away at sign-in u
   await tenant.getByRole('button', { name: 'Sign in' }).click();
   await expect(tenant.getByRole('heading', { name: 'Set up your workspace' })).toBeVisible();
 });
+
+test('opens the Operations page: every section answers from the real stack and passes axe', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+
+  await page.goto(`${ADMIN}/operations`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: 'Operations', level: 1 })).toBeVisible();
+
+  for (const heading of [
+    'Scheduler jobs',
+    'Job queues',
+    'Webhook deliveries',
+    'SIEM export',
+    'Event partitions',
+    'Unverified sign-ups',
+    'Component status',
+  ]) {
+    await expect(page.getByRole('heading', { name: heading, level: 2 })).toBeVisible();
+  }
+
+  // The partitions are the real `events` table's, read past row-level security.
+  const partitions = page.getByRole('table', { name: 'Monthly partitions of the events table' });
+  await expect(partitions).toContainText('events_default');
+  // The queue table is there; the document worker is not part of this build.
+  const queues = page.getByRole('table', {
+    name: 'Background job queues and what is waiting in them',
+  });
+  await expect(queues).toContainText('AI replies');
+  await expect(queues.getByRole('row', { name: /Document worker/ })).toContainText('Not installed');
+  // Whatever the stack's scheduler is doing, the page said so rather than failing.
+  await expect(page.getByText('This section could not be loaded')).toHaveCount(0);
+  await expect(
+    page.getByRole('list', { name: 'Component status' }).getByRole('listitem'),
+  ).toHaveCount(12);
+
+  await scanBothThemes(page, 'operations', testInfo);
+});

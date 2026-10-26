@@ -11,6 +11,7 @@ import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siy
 import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
 import { handleSettings, initialSettingsState, type FakeSettingsState } from './fake-settings.js';
+import { handleOperations } from './fake-operations.js';
 
 export interface RecordedRequest {
   method: string;
@@ -698,6 +699,8 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
 
     const settingsResponse = handleSettings(method, path, body, role, settingsState, json, problem);
     if (settingsResponse) return settingsResponse;
+    const operationsResponse = handleOperations(method, path, body, role, json, problem);
+    if (operationsResponse) return operationsResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);
   }

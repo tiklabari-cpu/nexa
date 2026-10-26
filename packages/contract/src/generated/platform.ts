@@ -1623,9 +1623,10 @@ export interface paths {
      * @description The tenant API's scheduler leader publishes its parsed environment to
      *     Redis every 30 seconds with a 90-second expiry; this process never reads
      *     the tenant API's environment itself (it may be another container).
-     *     Values of keys whose name holds `SECRET`, `KEY`, `PASSWORD`, `PASS`,
-     *     `TOKEN` or `CREDENTIAL` are only `set` or `unset`, and a URL loses its
-     *     user name, password and any such query parameter. Each entry says where
+     *     A key with a `SECRET`, `KEY`, `PASSWORD`, `PASS`, `TOKEN` or
+     *     `CREDENTIAL` word in its name (not a `_TTL` or `_PER_…` limit) shows
+     *     only `set` or `unset`, and a URL loses its user name, password and the
+     *     value of any query parameter named like a secret. Each entry says where
      *     its value comes from: this panel's database (`db`), the environment
      *     (`env`) or the built-in default (`default`). Shown here, set elsewhere:
      *     `APPS_LIVE_PROVIDERS`, the Turnstile keys, `TICKET_MAIL_OUTBOUND`,
@@ -1633,6 +1634,241 @@ export interface paths {
      *     publication at all — the route still answers 200.
      */
     get: operations['getPlatformEffectiveConfig'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/scheduler': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The scheduler's jobs
+     * @description The tenant API's scheduler leader publishes its job table to Redis every
+     *     30 seconds with a 90-second expiry. `stale: true` with `jobs: []` is no
+     *     publication at all (no tenant API is reporting, or Redis cannot be read);
+     *     `stale: true` with jobs is a publication older than 90 seconds. The page
+     *     is the one an operator opens when something is wrong, so it answers 200
+     *     either way. `running` is read live from the job's running marker;
+     *     `last_manual` is the outcome of the last "run now", wherever it ran.
+     */
+    get: operations['getPlatformOperationsScheduler'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/scheduler/{name}/run': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a scheduler job now
+     * @description Broadcasts `job.run` on `siyahtus:platform:ops`; exactly one tenant
+     *     process that is listening acts on it. The answer says only what the
+     *     platform could know: `queued` (a process heard it — the outcome follows
+     *     in the job table), `already_running` (the job's running marker is held;
+     *     nothing is started), `disabled` (the job is registered but switched off,
+     *     e.g. retention without `RETENTION_ENABLED`) or `no_listener` (no
+     *     scheduler is subscribed). A job the leader does not list is 404.
+     */
+    post: operations['runPlatformSchedulerJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/webhooks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Webhook delivery backlog across workspaces
+     * @description `webhook_deliveries` counted over every workspace: deliveries owed a
+     *     retry now, those more than ten minutes past due, the oldest's age, and
+     *     the last 24 hours' outcomes with the failure rate. No URL, payload or
+     *     workspace is named.
+     */
+    get: operations['getPlatformOperationsWebhooks'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/siem': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * SIEM export status across workspaces
+     * @description `siem_export_cursors` summarised: how many workspaces export, how many of
+     *     those are stalled (never delivered, or silent for 24 hours), when the sink
+     *     last ran and last shipped an entry, and the running total.
+     */
+    get: operations['getPlatformOperationsSiem'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/partitions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The `events` partitions
+     * @description Every partition of `events` with its estimated rows and size,
+     *     the months of the runtime window (one behind, three ahead) that have no
+     *     partition, and whether the catch-all `events_default` holds rows — the
+     *     condition under which a month can no longer be opened
+     *     (docs/runbooks/event-partitions.md).
+     */
+    get: operations['getPlatformOperationsPartitions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/partitions/ensure': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open `events` partitions
+     * @description `events_ensure_partition` for `month` (`YYYY-MM`, within 60 months of the
+     *     current one) or, without it, for every month of the runtime window. One
+     *     statement per month: a blocked month is listed in `failed` with its
+     *     SQLSTATE and costs the others nothing.
+     */
+    post: operations['ensurePlatformPartitions'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/unverified-signups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Unverified accounts a purge would look at
+     * @description Accounts whose address was never verified, and how many of them are older
+     *     than `ttl_hours` — the larger of `UNVERIFIED_SIGNUP_TTL_HOURS` and seven
+     *     days. Which of those the purge may actually delete is the database
+     *     function's decision (a verification link still alive, a second membership,
+     *     a customer's chat each keep one).
+     */
+    get: operations['getPlatformOperationsUnverifiedSignups'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/unverified-signups/purge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Purge expired unverified sign-ups
+     * @description Runs `purge_unverified_signups` — the function the scheduler's
+     *     `unverified_signups` job calls — in batches of 50, at most 20, for
+     *     accounts older than `ttl_hours`. Younger than seven days is never
+     *     touched. Superadmin and a code younger than five minutes.
+     */
+    post: operations['purgePlatformUnverifiedSignups'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The job queues
+     * @description `ai_jobs` (tm 289), `knowledge_jobs` (tm 312) and the document worker
+     *     (tm 313): rows per state and the oldest unfinished one's age, where the
+     *     table exists. A queue whose table does not exist is `not_installed` and
+     *     no statement is run against it.
+     */
+    get: operations['getPlatformOperationsJobs'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/components': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The component record
+     * @description Every `OPS_COMPONENTS` key in order, `unknown` where nothing has reported.
+     *     The same record as the dashboard's health grid.
+     */
+    get: operations['getPlatformOperationsComponents'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1676,6 +1912,7 @@ export interface components {
       | 'usage.manage'
       | 'settings.manage'
       | 'ai.manage'
+      | 'operations.trigger'
       | 'operations.run'
       | 'security.manage'
       | 'support.impersonate'
@@ -1925,7 +2162,9 @@ export interface components {
       | 'impersonation.ended'
       | 'security.blocklist_added'
       | 'security.blocklist_removed'
-      | 'security.unverified_signups_purged';
+      | 'security.unverified_signups_purged'
+      | 'operations.job_run_requested'
+      | 'operations.partition_ensured';
     /**
      * @description What an entry is about (`target_type`).
      * @enum {string}
@@ -1943,7 +2182,10 @@ export interface components {
       | 'credit'
       | 'settings'
       | 'blocklist'
-      | 'impersonation';
+      | 'impersonation'
+      | 'job'
+      | 'partition'
+      | 'signup';
     PlatformAuditEntry: {
       /** @description The entry's gapless position in the chain (a decimal integer). */
       chain_seq: string;
@@ -2691,6 +2933,157 @@ export interface components {
         license_id: string;
         organization_name: string;
       }[];
+    };
+    PlatformOperationsJob: {
+      name: string;
+      interval_ms: number;
+      /** @description `false`: registered but switched off — it never runs, and "run now" is refused. */
+      enabled: boolean;
+      /**
+       * Format: date-time
+       * @description When the job last ticked on the publishing process, whatever came of it.
+       */
+      last_run_at: string | null;
+      /** @enum {string|null} */
+      last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
+      /** @description The error's class, never its message. */
+      last_error_class?: string;
+      last_duration_ms: number | null;
+      /** Format: date-time */
+      next_run_at: string | null;
+      /** @description A pass is executing right now, on some instance. */
+      running: boolean;
+      last_manual: components['schemas']['PlatformOperationsManualRun'] | null;
+    };
+    PlatformOperationsManualRun: {
+      /** Format: date-time */
+      at: string;
+      /** @enum {string} */
+      result: 'finished' | 'already_running' | 'disabled' | 'unknown_job';
+      /** @enum {string|null} */
+      status: 'ok' | 'error' | null;
+      duration_ms: number | null;
+      error_class: string | null;
+    };
+    PlatformOperationsScheduler: {
+      stale: boolean;
+      /** Format: date-time */
+      generated_at: string | null;
+      /** @description Whether the publishing process runs its jobs (`SCHEDULER_ENABLED`). */
+      enabled: boolean | null;
+      jobs: components['schemas']['PlatformOperationsJob'][];
+    };
+    PlatformOperationsRunResult: {
+      name: string;
+      /** Format: uuid */
+      request_id: string;
+      /**
+       * @description `queued` — a process heard the request · `already_running` — the
+       *     job's running marker is held · `disabled` — the job is switched off ·
+       *     `no_listener` — no scheduler is subscribed.
+       * @enum {string}
+       */
+      result: 'queued' | 'already_running' | 'disabled' | 'no_listener';
+    };
+    PlatformOperationsWebhooks: {
+      /** Format: date-time */
+      generated_at: string;
+      window_hours: number;
+      pending: number;
+      overdue: number;
+      oldest_pending_age_s: number | null;
+      last_window: {
+        delivered: number;
+        failed: number;
+        exhausted: number;
+        /** @description (failed + exhausted) / (delivered + failed + exhausted); null with none. */
+        failure_rate: number | null;
+        workspaces_failing: number;
+      };
+    };
+    PlatformOperationsSiem: {
+      /** Format: date-time */
+      generated_at: string;
+      provider: string;
+      workspaces_enabled: number;
+      workspaces_stalled: number;
+      /** Format: date-time */
+      last_run_at: string | null;
+      /** Format: date-time */
+      last_exported_at: string | null;
+      exported_total: number;
+    };
+    PlatformOperationsPartition: {
+      name: string;
+      /** @description `YYYY-MM`; null for the catch-all. */
+      month: string | null;
+      default: boolean;
+      est_rows: number;
+      size_bytes: number;
+    };
+    PlatformOperationsPartitions: {
+      /** Format: date-time */
+      generated_at: string;
+      window: {
+        behind: number;
+        ahead: number;
+      };
+      partitions: components['schemas']['PlatformOperationsPartition'][];
+      missing_months: string[];
+      /** @description Null where the catch-all could not be read. */
+      default_has_rows: boolean | null;
+    };
+    PlatformOperationsEnsureRequest: {
+      reason: string;
+      /** @description One month to open; the whole runtime window when absent. */
+      month?: string;
+    };
+    PlatformOperationsEnsureResult: {
+      ensured: {
+        month: string;
+        name: string;
+      }[];
+      failed: {
+        month: string;
+        /** @description The SQLSTATE. */
+        error_code: string;
+      }[];
+    };
+    PlatformOperationsUnverifiedSignups: {
+      /** Format: date-time */
+      generated_at: string;
+      ttl_hours: number;
+      total: number;
+      older_than_ttl: number;
+      oldest_age_s: number | null;
+    };
+    PlatformOperationsPurgeResult: {
+      purged: number;
+      batches: number;
+      ttl_hours: number;
+    };
+    PlatformOperationsQueue: {
+      /** @enum {string} */
+      key: 'ai_jobs' | 'knowledge_jobs' | 'doc_worker';
+      /**
+       * @description `not_installed` — no table, no query · `unreadable` — the table exists but could not be read.
+       * @enum {string}
+       */
+      state: 'ok' | 'not_installed' | 'unreadable';
+      counts: {
+        [key: string]: number;
+      } | null;
+      oldest_unfinished_age_s: number | null;
+    };
+    PlatformOperationsJobs: {
+      /** Format: date-time */
+      generated_at: string;
+      queues: components['schemas']['PlatformOperationsQueue'][];
+    };
+    PlatformOperationsComponents: {
+      /** Format: date-time */
+      generated_at: string;
+      components: components['schemas']['PlatformComponentStatus'][];
     };
     Error: {
       error: {
@@ -5062,6 +5455,244 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PlatformEffectiveConfig'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsScheduler: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job table */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsScheduler'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  runPlatformSchedulerJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description What the request came to */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsRunResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformOperationsWebhooks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The backlog */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsWebhooks'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsSiem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsSiem'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsPartitions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The partitions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsPartitions'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  ensurePlatformPartitions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformOperationsEnsureRequest'];
+      };
+    };
+    responses: {
+      /** @description Which months are open now, which could not be */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsEnsureResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsUnverifiedSignups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsUnverifiedSignups'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  purgePlatformUnverifiedSignups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description How many went */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsPurgeResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsJobs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The queues */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsJobs'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsComponents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The components */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsComponents'];
         };
       };
       401: components['responses']['Unauthorized'];

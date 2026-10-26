@@ -264,6 +264,54 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     expect(await violations(document.body)).toEqual([]);
   });
 
+  it('finds nothing on the Operations page and the dialogs it opens (tm 389.14)', async () => {
+    installFakePlatform();
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp('/operations');
+    if (locale === 'tr') {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByRole('heading', {
+      name: locale === 'tr' ? 'Operasyonlar' : 'Operations',
+      level: 1,
+    });
+    // Every section has landed: the job table, the partitions and the component record.
+    await screen.findByText('sla');
+    await screen.findByText('events_2026_09');
+    await screen.findByText(locale === 'tr' ? 'Henüz bildirim yok' : 'Nothing reported yet');
+    expect(await violations(document.body)).toEqual([]);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: locale === 'tr' ? 'siem işini şimdi çalıştır' : 'Run siem now',
+      }),
+    );
+    const run = await screen.findByRole('dialog');
+    await within(run).findByLabelText(locale === 'tr' ? 'Gerekçe' : 'Reason');
+    expect(await violations(document.body)).toEqual([]);
+    await user.click(
+      within(run).getByRole('button', { name: locale === 'tr' ? 'Vazgeç' : 'Cancel' }),
+    );
+
+    await user.click(
+      screen.getByRole('button', {
+        name: locale === 'tr' ? 'Süresi dolan kayıtları temizle' : 'Purge expired sign-ups',
+      }),
+    );
+    const purge = await screen.findByRole('dialog');
+    await within(purge).findByLabelText(locale === 'tr' ? 'Gerekçe' : 'Reason');
+    expect(await violations(document.body)).toEqual([]);
+  });
+
   it('finds nothing in the reason dialog', async () => {
     setLocale(locale);
     render(

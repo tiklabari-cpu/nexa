@@ -66,6 +66,9 @@ export const PLATFORM_PERMISSIONS = {
   'usage.manage': { kind: 'write', roles: ['superadmin', 'billing'] },
   'settings.manage': { kind: 'write', roles: ['superadmin'] },
   'ai.manage': { kind: 'write', roles: ['superadmin'] },
+  /** "Run now" on a scheduler job, opening a missing events partition (389.14). */
+  'operations.trigger': { kind: 'write', roles: ['superadmin', 'support'] },
+  /** Purging expired unverified sign-ups, re-embedding — the operations that delete or spend. */
   'operations.run': { kind: 'write', roles: ['superadmin'] },
   'security.manage': { kind: 'write', roles: ['superadmin'] },
   /** "Enter as the customer", read-only mode (389.15). */
@@ -203,3 +206,10 @@ export const OPS_CONFIG_KEY = 'siyahtus:ops:config';
  */
 export const EFFECTIVE_CONFIG_SOURCES = ['db', 'env', 'default'] as const;
 export type EffectiveConfigSource = (typeof EFFECTIVE_CONFIG_SOURCES)[number];
+
+/**
+ * "Run this scheduler job now" (tm 389.14): `{ type: 'job.run', name, request_id }`.
+ * Every tenant process whose scheduler is on hears it; the one that wins the
+ * `request_id` claim runs the job (`services/ops/ops-channel.ts`).
+ */
+export const PLATFORM_JOB_RUN = 'job.run';

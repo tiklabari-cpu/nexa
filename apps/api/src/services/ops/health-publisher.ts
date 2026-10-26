@@ -29,13 +29,26 @@ import type { Env } from '../../config/env.js';
 import { lastMailSend } from '../mail/delivery.js';
 import { JobLock, lockTtlMs, type LockRedis } from '../scheduler/lock.js';
 import type { PublicSettings } from '../platform/public-settings.js';
-import { reportComponentStatus } from './component-status.js';
+import type { SchedulerDetail } from '../scheduler/types.js';
+import { reportComponentNotInstalled, reportComponentStatus } from './component-status.js';
+import {
+  aiJobsProbe,
+  COMPONENTS_NOT_IN_THIS_BUILD,
+  webhooksProbe,
+  type ComponentProbeResult,
+} from './component-probes.js';
 import {
   buildEffectiveConfig,
   OPS_CONFIG_TTL_S,
   type StoredEffectiveConfig,
 } from './effective-config.js';
-import { OPS_HEALTH_KEY, OPS_HEALTH_TTL_S, type StoredHealthSnapshot } from './health-keys.js';
+import {
+  OPS_HEALTH_KEY,
+  OPS_HEALTH_TTL_S,
+  OPS_SCHEDULER_KEY,
+  type StoredHealthSnapshot,
+  type StoredSchedulerDetail,
+} from './health-keys.js';
 import {
   buildHealthSnapshot,
   probeDependencies,
@@ -54,6 +67,7 @@ type PublisherRedis = LockRedis & {
   set(key: string, value: string): Promise<unknown>;
   del(key: string): Promise<unknown>;
   hset(key: string, field: string, value: string): Promise<unknown>;
+  hsetnx(key: string, field: string, value: string): Promise<unknown>;
 };
 
 export interface HealthSnapshotPublisherOptions {
@@ -70,6 +84,14 @@ export interface HealthSnapshotPublisherOptions {
    * configuration nor the maintenance key is written.
    */
   config?: { env: Env; settings: PublicSettings };
+  /** The job table for the root panel's Operations page (tm 389.14); omitted, none is published. */
+  schedulerDetail?: () => SchedulerDetail;
+  /**
+   * What this process knows about modules the leader does not judge itself —
+   * the GeoIP file, the CAPTCHA provider (tm 389.14). Pure and synchronous: the
+   * leader runs them every thirty seconds.
+   */
+  probes?: ReadonlyArray<() => ComponentProbeResult | null>;
   /** Whether this process publishes at all (`env.schedulerEnabled`). */
   enabled: boolean;
   now?: () => number;
@@ -133,6 +155,13 @@ export class HealthSnapshotPublisher {
       });
       const stored: StoredHealthSnapshot = { generated_at: new Date(now).toISOString(), health };
       await redis.set(OPS_HEALTH_KEY, JSON.stringify(stored), 'EX', OPS_HEALTH_TTL_S);
+      if (this.#options.schedulerDetail) {
+        const detail: StoredSchedulerDetail = {
+          generated_at: stored.generated_at,
+          scheduler: this.#options.schedulerDetail(),
+        };
+        await redis.set(OPS_SCHEDULER_KEY, JSON.stringify(detail), 'EX', OPS_HEALTH_TTL_S);
+      }
       await this.#reportComponents(health, stored.generated_at, now);
       await this.#publishConfig(stored.generated_at);
       return stored;
@@ -201,6 +230,26 @@ export class HealthSnapshotPublisher {
         failed ? 'degraded' : 'ok',
         failed ? `last send failed (${env.MAIL_PROVIDER})` : env.MAIL_PROVIDER,
       );
+    }
+
+    // The modules with a state of their own (tm 389.14). Each is judged from
+    // what is already in hand, and none of them can stop the others.
+    const results: Array<ComponentProbeResult | null> = [
+      aiJobsProbe(health.ai_jobs),
+      webhooksProbe(health.scheduler.jobs),
+    ];
+    for (const probe of this.#options.probes ?? []) {
+      try {
+        results.push(probe());
+      } catch (error) {
+        logger.debug({ err: error }, 'a component probe failed');
+      }
+    }
+    for (const result of results) {
+      if (result) await put(result.key, result.state, result.detail);
+    }
+    for (const missing of COMPONENTS_NOT_IN_THIS_BUILD) {
+      await reportComponentNotInstalled(redis, missing.key, missing.detail, logger);
     }
   }
 

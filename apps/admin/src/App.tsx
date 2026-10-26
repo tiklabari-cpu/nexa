@@ -8,6 +8,7 @@ import { RequirePermission } from './components/RequirePermission.js';
 import { ChallengePage } from './features/auth/ChallengePage.js';
 import { DashboardPage } from './features/dashboard/DashboardPage.js';
 import { InvitePage } from './features/auth/InvitePage.js';
+import { OperationsPage } from './features/operations/OperationsPage.js';
 import { RecoveryCodesPage } from './features/auth/RecoveryCodesPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import { PlaceholderPage } from './features/placeholder/PlaceholderPage.js';
@@ -87,6 +88,8 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <AccountsSection />;
     case 'settings':
       return <SettingsPage />;
+    case 'operations':
+      return <OperationsPage />;
     case 'support':
       return <SupportPage />;
     default:

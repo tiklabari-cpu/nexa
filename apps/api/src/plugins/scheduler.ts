@@ -13,16 +13,22 @@
  * the leader lock lives in `app.redis`.
  *
  * It also starts the health publisher (tm 389.8): the same switch, the same
- * lock mechanism, but not a job — see `services/ops/health-publisher.ts`.
+ * lock mechanism, but not a job — see `services/ops/health-publisher.ts` — and,
+ * on the same switch, listens on the root panel's command channel so that a
+ * "run now" from the panel reaches a scheduler (tm 389.14 · `ops-channel.ts`).
  */
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
+import type { Redis } from 'ioredis';
 import type { Env } from '../config/env.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import type { RealtimePublisher } from '../services/realtime/publisher.js';
+import type { GeoLocator } from '../services/geo/geo-locator.js';
+import { captchaProbe, geoipProbe } from '../services/ops/component-probes.js';
 import { HealthSnapshotPublisher } from '../services/ops/health-publisher.js';
+import { OpsChannel } from '../services/ops/ops-channel.js';
 import { buildSchedulerJobs } from '../services/scheduler/jobs.js';
 import { Scheduler } from '../services/scheduler/scheduler.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
@@ -34,6 +40,8 @@ declare module 'fastify' {
     scheduler: Scheduler;
     /** The leader's 30-second health publication into Redis (tm 389.8); tests call `publish()`. */
     opsHealth: HealthSnapshotPublisher;
+    /** The listener for the root panel's "run now" (tm 389.14); null while the scheduler is off. */
+    opsChannel: OpsChannel | null;
   }
 }
 
@@ -54,6 +62,10 @@ export interface SchedulerPluginOptions {
   publisher?: RealtimePublisher;
   /** The server's metered model, which titles the unresolved questions' clusters (tm 317.2). */
   llm?: MeteredLlm;
+  /** The visitor-country database, for the GeoIP tile (tm 389.14). */
+  geo?: Pick<GeoLocator, 'status'>;
+  /** Whether the widget's human check can run — a provider was resolved (tm 389.14). */
+  captchaUsable?: boolean;
 }
 
 async function schedulerPlugin(
@@ -96,13 +108,43 @@ async function schedulerPlugin(
     enabled: options.env.schedulerEnabled,
     // Decorated by `server.ts` before this plugin (tm 389.13).
     config: { env: options.env, settings: app.publicSettings },
+    schedulerDetail: () => scheduler.detail(),
+    probes: [
+      ...(options.geo ? [() => geoipProbe(options.geo!.status(), Date.now())] : []),
+      () => captchaProbe(options.env.CAPTCHA_PROVIDER, options.captchaUsable ?? false),
+    ],
   });
   app.decorate('opsHealth', opsHealth);
   opsHealth.start();
 
+  // Its own connection — a subscribed client can do nothing else — and, like
+  // every optional channel, never a reason not to boot.
+  let opsChannel: OpsChannel | null = null;
+  let opsSubscriber: Redis | null = null;
+  if (options.env.schedulerEnabled) {
+    opsSubscriber = app.redis.duplicate({ connectionName: 'siyahtus-api-ops' });
+    opsSubscriber.on('error', (error) => {
+      app.log.error({ err: error }, 'redis platform ops subscriber error');
+    });
+    opsChannel = new OpsChannel({
+      subscriber: opsSubscriber,
+      redis: app.redis,
+      scheduler,
+      logger: app.log.child({ component: 'ops-channel' }),
+    });
+    await opsChannel.start().catch((error: unknown) => {
+      app.log.warn({ err: error }, 'platform ops channel not subscribed; "run now" is unavailable');
+    });
+  }
+  app.decorate('opsChannel', opsChannel);
+
   app.addHook('onClose', async () => {
+    // Unsubscribe first so no new request starts, then let a run in progress
+    // finish: `scheduler.stop()` aborts and awaits manual runs as it does passes.
+    if (opsSubscriber) await opsSubscriber.quit().catch(() => opsSubscriber!.disconnect());
     await opsHealth.stop();
     await scheduler.stop();
+    await opsChannel?.stop();
   });
 }
 

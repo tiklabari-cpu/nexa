@@ -4,6 +4,7 @@ import { auth } from './auth.js';
 import { common } from './common.js';
 import { dashboard } from './dashboard.js';
 import { settings } from './settings.js';
+import { operations } from './operations.js';
 import { shell } from './shell.js';
 import { support } from './support.js';
 import { workspaces } from './workspaces.js';
@@ -14,6 +15,7 @@ export const enNamespaces: Record<Namespace, Messages> = {
   common,
   dashboard,
   settings,
+  operations,
   shell,
   support,
   workspaces,

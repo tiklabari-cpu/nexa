@@ -70,6 +70,7 @@ export const PLATFORM_AUDIT_DOMAINS = [
   'ai_settings',
   'impersonation',
   'security',
+  'operations',
 ] as const;
 
 /**
@@ -156,6 +157,9 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'security.blocklist_added',
   'security.blocklist_removed',
   'security.unverified_signups_purged',
+  // Operations (389.14): the panel's "run now" and a partition opened by hand.
+  'operations.job_run_requested',
+  'operations.partition_ensured',
 ] as const;
 
 export type PlatformAuditAction = (typeof PLATFORM_AUDIT_ACTIONS)[number];
@@ -239,6 +243,9 @@ export const PLATFORM_AUDIT_TARGETS = [
   'settings',
   'blocklist',
   'impersonation',
+  'job',
+  'partition',
+  'signup',
 ] as const;
 
 export type PlatformAuditTarget = (typeof PLATFORM_AUDIT_TARGETS)[number];

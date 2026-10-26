@@ -59,6 +59,12 @@ tags:
     description: |
       Deployment settings (tm 389.13): sign-up, the trial length, the
       announcement, maintenance mode, and the tenant API's effective configuration.
+  - name: Operations
+    description: |
+      The Operations page (tm 389.14): the scheduler's jobs and "run now", the
+      webhook backlog, SIEM export status, the `events` partitions, expired
+      unverified sign-ups, the job queues and the component record. Counts and
+      states only.
   - name: Support
     description: |
       The support desk (tm 389.9): which workspace an identifier a customer
@@ -221,6 +227,26 @@ paths:
     $ref: "./paths/settings.yaml#/maintenance"
   /settings/effective-config:
     $ref: "./paths/settings.yaml#/effectiveConfig"
+  /operations/scheduler:
+    $ref: "./paths/operations.yaml#/scheduler"
+  /operations/scheduler/{name}/run:
+    $ref: "./paths/operations.yaml#/runJob"
+  /operations/webhooks:
+    $ref: "./paths/operations.yaml#/webhooks"
+  /operations/siem:
+    $ref: "./paths/operations.yaml#/siem"
+  /operations/partitions:
+    $ref: "./paths/operations.yaml#/partitions"
+  /operations/partitions/ensure:
+    $ref: "./paths/operations.yaml#/ensurePartitions"
+  /operations/unverified-signups:
+    $ref: "./paths/operations.yaml#/unverifiedSignups"
+  /operations/unverified-signups/purge:
+    $ref: "./paths/operations.yaml#/purgeUnverifiedSignups"
+  /operations/jobs:
+    $ref: "./paths/operations.yaml#/jobs"
+  /operations/components:
+    $ref: "./paths/operations.yaml#/componentRecord"
 
 components:
   securitySchemes:
@@ -285,6 +311,7 @@ components:
         - usage.manage
         - settings.manage
         - ai.manage
+        - operations.trigger
         - operations.run
         - security.manage
         - support.impersonate
@@ -632,6 +659,8 @@ components:
         - security.blocklist_added
         - security.blocklist_removed
         - security.unverified_signups_purged
+        - operations.job_run_requested
+        - operations.partition_ensured
 
     PlatformAuditTarget:
       type: string
@@ -650,6 +679,9 @@ components:
         - settings
         - blocklist
         - impersonation
+        - job
+        - partition
+        - signup
 
     PlatformAuditEntry:
       type: object
@@ -1736,6 +1768,242 @@ components:
                 enum: [thread_id, chat_id, ticket, customer_email]
               license_id: { type: string }
               organization_name: { type: string }
+
+    PlatformOperationsJob:
+      type: object
+      required:
+        - name
+        - interval_ms
+        - enabled
+        - last_run_at
+        - last_status
+        - last_duration_ms
+        - next_run_at
+        - running
+        - last_manual
+      properties:
+        name: { type: string }
+        interval_ms: { type: integer }
+        enabled:
+          type: boolean
+          description: '`false`: registered but switched off — it never runs, and "run now" is refused.'
+        last_run_at:
+          type: ["string", "null"]
+          format: date-time
+          description: When the job last ticked on the publishing process, whatever came of it.
+        last_status:
+          type: ["string", "null"]
+          enum: [ok, skipped, error, disabled, null]
+        last_error_class:
+          type: string
+          description: The error's class, never its message.
+        last_duration_ms: { type: ["integer", "null"] }
+        next_run_at: { type: ["string", "null"], format: date-time }
+        running:
+          type: boolean
+          description: A pass is executing right now, on some instance.
+        last_manual:
+          oneOf:
+            - $ref: "#/components/schemas/PlatformOperationsManualRun"
+            - { type: "null" }
+
+    PlatformOperationsManualRun:
+      type: object
+      required: [at, result, status, duration_ms, error_class]
+      properties:
+        at: { type: string, format: date-time }
+        result:
+          type: string
+          enum: [finished, already_running, disabled, unknown_job]
+        status:
+          type: ["string", "null"]
+          enum: [ok, error, null]
+        duration_ms: { type: ["integer", "null"] }
+        error_class: { type: ["string", "null"] }
+
+    PlatformOperationsScheduler:
+      type: object
+      required: [stale, generated_at, enabled, jobs]
+      properties:
+        stale: { type: boolean }
+        generated_at: { type: ["string", "null"], format: date-time }
+        enabled:
+          type: ["boolean", "null"]
+          description: Whether the publishing process runs its jobs (`SCHEDULER_ENABLED`).
+        jobs:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformOperationsJob" }
+
+    PlatformOperationsRunResult:
+      type: object
+      required: [name, request_id, result]
+      properties:
+        name: { type: string }
+        request_id: { type: string, format: uuid }
+        result:
+          type: string
+          description: |
+            `queued` — a process heard the request · `already_running` — the
+            job's running marker is held · `disabled` — the job is switched off ·
+            `no_listener` — no scheduler is subscribed.
+          enum: [queued, already_running, disabled, no_listener]
+
+    PlatformOperationsWebhooks:
+      type: object
+      required: [generated_at, window_hours, pending, overdue, oldest_pending_age_s, last_window]
+      properties:
+        generated_at: { type: string, format: date-time }
+        window_hours: { type: integer }
+        pending: { type: integer }
+        overdue: { type: integer }
+        oldest_pending_age_s: { type: ["number", "null"] }
+        last_window:
+          type: object
+          required: [delivered, failed, exhausted, failure_rate, workspaces_failing]
+          properties:
+            delivered: { type: integer }
+            failed: { type: integer }
+            exhausted: { type: integer }
+            failure_rate:
+              type: ["number", "null"]
+              description: (failed + exhausted) / (delivered + failed + exhausted); null with none.
+            workspaces_failing: { type: integer }
+
+    PlatformOperationsSiem:
+      type: object
+      required:
+        - generated_at
+        - provider
+        - workspaces_enabled
+        - workspaces_stalled
+        - last_run_at
+        - last_exported_at
+        - exported_total
+      properties:
+        generated_at: { type: string, format: date-time }
+        provider: { type: string }
+        workspaces_enabled: { type: integer }
+        workspaces_stalled: { type: integer }
+        last_run_at: { type: ["string", "null"], format: date-time }
+        last_exported_at: { type: ["string", "null"], format: date-time }
+        exported_total: { type: integer }
+
+    PlatformOperationsPartition:
+      type: object
+      required: [name, month, default, est_rows, size_bytes]
+      properties:
+        name: { type: string }
+        month: { type: ["string", "null"], description: "`YYYY-MM`; null for the catch-all." }
+        default: { type: boolean }
+        est_rows: { type: integer }
+        size_bytes: { type: integer }
+
+    PlatformOperationsPartitions:
+      type: object
+      required: [generated_at, window, partitions, missing_months, default_has_rows]
+      properties:
+        generated_at: { type: string, format: date-time }
+        window:
+          type: object
+          required: [behind, ahead]
+          properties:
+            behind: { type: integer }
+            ahead: { type: integer }
+        partitions:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformOperationsPartition" }
+        missing_months:
+          type: array
+          items: { type: string }
+        default_has_rows:
+          type: ["boolean", "null"]
+          description: Null where the catch-all could not be read.
+
+    PlatformOperationsEnsureRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+        month:
+          type: string
+          pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+          description: One month to open; the whole runtime window when absent.
+
+    PlatformOperationsEnsureResult:
+      type: object
+      required: [ensured, failed]
+      properties:
+        ensured:
+          type: array
+          items:
+            type: object
+            required: [month, name]
+            properties:
+              month: { type: string }
+              name: { type: string }
+        failed:
+          type: array
+          items:
+            type: object
+            required: [month, error_code]
+            properties:
+              month: { type: string }
+              error_code: { type: string, description: The SQLSTATE. }
+
+    PlatformOperationsUnverifiedSignups:
+      type: object
+      required: [generated_at, ttl_hours, total, older_than_ttl, oldest_age_s]
+      properties:
+        generated_at: { type: string, format: date-time }
+        ttl_hours: { type: integer }
+        total: { type: integer }
+        older_than_ttl: { type: integer }
+        oldest_age_s: { type: ["integer", "null"] }
+
+    PlatformOperationsPurgeResult:
+      type: object
+      required: [purged, batches, ttl_hours]
+      properties:
+        purged: { type: integer }
+        batches: { type: integer }
+        ttl_hours: { type: integer }
+
+    PlatformOperationsQueue:
+      type: object
+      required: [key, state, counts, oldest_unfinished_age_s]
+      properties:
+        key:
+          type: string
+          enum: [ai_jobs, knowledge_jobs, doc_worker]
+        state:
+          type: string
+          description: "`not_installed` — no table, no query · `unreadable` — the table exists but could not be read."
+          enum: [ok, not_installed, unreadable]
+        counts:
+          type: ["object", "null"]
+          additionalProperties: { type: integer }
+        oldest_unfinished_age_s: { type: ["number", "null"] }
+
+    PlatformOperationsJobs:
+      type: object
+      required: [generated_at, queues]
+      properties:
+        generated_at: { type: string, format: date-time }
+        queues:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformOperationsQueue" }
+
+    PlatformOperationsComponents:
+      type: object
+      required: [generated_at, components]
+      properties:
+        generated_at: { type: string, format: date-time }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformComponentStatus" }
 
     Error:
       type: object

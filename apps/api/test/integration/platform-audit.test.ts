@@ -373,6 +373,17 @@ describe('the platform audit chain (tm 389.5)', () => {
       });
     ok(await maintenance(true));
     ok(await maintenance(false));
+    // The Operations page's three mutations (tm 389.14). No scheduler is listening in this
+    // suite, so the run request is answered `no_listener` — and recorded all the same.
+    ok(await request('POST', '/operations/scheduler/sla/run', { token, body: reason }));
+    ok(await request('POST', '/operations/partitions/ensure', { token, body: reason }));
+    ok(
+      await request('POST', '/auth/totp/reverify', {
+        token,
+        body: { code: nextCode(superadmin, clock) },
+      }),
+    );
+    ok(await request('POST', '/operations/unverified-signups/purge', { token, body: reason }));
 
     // The superadmin's own sessions.
     ok(await request('DELETE', '/auth/sessions', { token }));

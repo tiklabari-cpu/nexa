@@ -11,6 +11,9 @@
  * survives a reload — and that the page that results is accessible with the real stylesheet
  * (contrast is only decidable here: jsdom has no computed colour).
  *
+ * The last one (tm 389.10 · FR-ADMIN-09) suspends a workspace from the panel and watches its
+ * owner be turned away at the workspace panel's sign-in, then lifts it and watches them get in.
+ *
  * The specs below are one story told in order (`serial`): the operator the first creates is the
  * one the rest sign in as. The bootstrap CLI refuses once any operator exists, so a retry of the
  * first test cannot re-create them — which is why a failure here is reported as a failure and not
@@ -22,7 +25,7 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { Page, TestInfo } from '@playwright/test';
 import { assertNoBlockingViolations, scanScreen } from './a11y.js';
-import { expect, ownerAccessToken, test } from './fixtures.js';
+import { API_BASE, expect, ownerAccessToken, test } from './fixtures.js';
 import { STACK_ADMIN, STACK_API, USUAL_PORTS } from './stack-ports.js';
 import { nextTotpCode, stepOf, totpCode } from './totp.js';
 
@@ -232,4 +235,78 @@ test('reaches platform-api only through its own origin, and the tenant API knows
     headers: { authorization: `Bearer ${token}` },
   });
   expect(tenant.status()).toBe(404);
+});
+
+test('suspends a workspace from the panel: its owner is turned away at sign-in until the suspension is lifted', async ({
+  page,
+  request,
+}, testInfo) => {
+  // Three codes from three different thirty-second steps: the sign-in, then a fresh one for each
+  // of the two destructive actions (`recentTotp`).
+  test.setTimeout(180_000);
+
+  // A workspace of its own — the seeded ones serve every other spec in parallel.
+  const unique = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
+  const owner = { email: `owner-${unique}@suspend.test`, password: 'suspend e2e password 1' };
+  const name = `Suspend Co ${unique}`;
+  const signup = await request.post(`${API_BASE}/auth/signup`, {
+    data: {
+      email: owner.email,
+      password: owner.password,
+      name: 'Robin Owner',
+      organization_name: name,
+    },
+  });
+  expect(signup.ok(), `signup → ${signup.status()}`).toBe(true);
+  const login = await request.post(`${API_BASE}/auth/login`, {
+    data: { email: owner.email, password: owner.password },
+  });
+  const { memberships } = (await login.json()) as { memberships: Array<{ license_id: string }> };
+  const licenseId = memberships[0]!.license_id;
+
+  // The operator opens the workspace.
+  await page.goto(`${ADMIN}/workspaces/${licenseId}`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+
+  const act = async (label: string, confirm: string, why: string) => {
+    await page.getByRole('button', { name: 'Actions' }).click();
+    await page.getByRole('button', { name: label }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Reason').fill(why);
+    const code = await nextTotpCode(secret, usedStep);
+    usedStep = stepOf();
+    await dialog.getByLabel('Authenticator code').fill(code);
+    await dialog.getByRole('button', { name: confirm }).click();
+    await expect(page.getByText(`${label}: done.`)).toBeVisible();
+  };
+
+  await act('Suspend', 'Suspend', 'e2e: chargeback investigation');
+  await expect(
+    page.getByText('Nobody in the workspace can sign in.', { exact: false }),
+  ).toBeVisible();
+  await scanBothThemes(page, 'suspended workspace', testInfo);
+
+  // The owner, at the workspace panel: the password is right, the workspace is locked.
+  const tenant = await page.context().newPage();
+  await tenant.goto('/');
+  await tenant.getByLabel('Email').fill(owner.email);
+  await tenant.getByLabel('Password').fill(owner.password);
+  await tenant.getByRole('button', { name: 'Sign in' }).click();
+  await expect(
+    tenant.getByText(
+      'This workspace is temporarily suspended. Contact SiyahTuş support for details.',
+    ),
+  ).toBeVisible();
+  await expect(tenant.getByRole('link', { name: 'Inbox' })).toHaveCount(0);
+
+  await act('Lift suspension', 'Lift suspension', 'e2e: investigation closed');
+
+  // Back in: a fresh workspace opens on its first-run wizard.
+  await tenant.getByRole('button', { name: 'Sign in' }).click();
+  await expect(tenant.getByRole('heading', { name: 'Set up your workspace' })).toBeVisible();
 });

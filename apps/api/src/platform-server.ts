@@ -46,10 +46,18 @@ import platformMetaRoutes from './routes/platform/meta.js';
 import platformSupportRoutes from './routes/platform/support.js';
 import platformWorkspacesRoutes from './routes/platform/workspaces.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
+import { WorkspacePurgeRunner } from './services/platform/workspace-purge.js';
 import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
 import { VERSION } from './version.js';
 
 export const PLATFORM_PREFIX = '/platform/v1';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** The purge job (tm 389.10) — `run()` plays one pass in a test. */
+    workspacePurge: WorkspacePurgeRunner;
+  }
+}
 
 export interface BuildPlatformServerOptions {
   env: Env;
@@ -137,6 +145,25 @@ export async function buildPlatformServer({
 
   for (const warning of platform.warnings) app.log.warn({ event: 'platform.env_warning' }, warning);
 
+  // Scheduled deletions (tm 389.10): here rather than in the tenant API's
+  // scheduler, because the purge records itself in the platform chain in the
+  // same transaction (`services/platform/workspace-purge.ts`).
+  const workspacePurge = new WorkspacePurgeRunner({
+    db: app.platformDb,
+    redis: app.redis,
+    audit: app.platformAuditLog,
+    logger: app.log.child({ component: 'workspace_purge' }),
+    enabled: env.schedulerEnabled,
+    ...(now ? { now } : {}),
+  });
+  app.decorate('workspacePurge', workspacePurge);
+  app.addHook('onReady', async () => {
+    workspacePurge.start();
+  });
+  app.addHook('onClose', async () => {
+    await workspacePurge.stop();
+  });
+
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
   });
@@ -149,7 +176,7 @@ export async function buildPlatformServer({
       await api.register(platformAdminsRoutes, { platform, mailer });
       await api.register(platformAuditRoutes);
       await api.register(platformDashboardRoutes, { platform, ...(now ? { now } : {}) });
-      await api.register(platformWorkspacesRoutes, { env, ...(now ? { now } : {}) });
+      await api.register(platformWorkspacesRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformSupportRoutes);
     },
     { prefix: PLATFORM_PREFIX },

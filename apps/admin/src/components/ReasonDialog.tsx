@@ -17,7 +17,11 @@
  *   re-typed reason;
  * - a refusal stays inside the dialog (`role="alert"`, the error's own catalogue sentence) with
  *   the reason still in the box; Escape, the backdrop and Cancel are ignored while a request
- *   runs, and ask before throwing away a typed reason.
+ *   runs, and ask before throwing away a typed reason;
+ * - an action that needs more than a reason (a number of days, a typed name, a checklist —
+ *   tm 389.10) renders its fields as `children`, above the reason, and holds the confirm
+ *   button with `confirmDisabled` until they are complete; `describeError` words a refusal
+ *   more precisely than its type's catalogue sentence (a `details.reason`).
  */
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Modal } from './ui/Modal.js';
@@ -43,6 +47,14 @@ export interface ReasonDialogProps {
   /** The mutation succeeded. */
   onDone: () => void;
   onCancel: () => void;
+  /** Fields the action needs besides the reason, shown above it. */
+  children?: ReactNode;
+  /** Hold the confirm button — the fields above are not complete yet. */
+  confirmDisabled?: boolean;
+  /** Whether the dialog's own fields changed (counts towards "discard?"). */
+  extraDirty?: boolean;
+  /** A sentence for a refusal more precise than its type's; null falls back to the type's. */
+  describeError?: (error: unknown) => string | null;
 }
 
 export function ReasonDialog({
@@ -53,6 +65,10 @@ export function ReasonDialog({
   onConfirm,
   onDone,
   onCancel,
+  children,
+  confirmDisabled = false,
+  extraDirty = false,
+  describeError,
 }: ReasonDialogProps): ReactElement {
   const t = useTranslate();
   const reverify = useAuth((s) => s.reverify);
@@ -97,7 +113,7 @@ export function ReasonDialog({
           // The window closed between opening the dialog and confirming: ask for a code now.
           setNeedsTotp(true);
         }
-        setFailure(t(errorMessageKey(error)));
+        setFailure(describeError?.(error) ?? t(errorMessageKey(error)));
         return;
       }
       onDone();
@@ -108,7 +124,10 @@ export function ReasonDialog({
     if (needsTotp && !requireTotp) codeRef.current?.focus();
   }, [needsTotp, requireTotp]);
 
-  const requestClose = useCloseGuard({ isDirty: form.isDirty || code !== '', onClose: onCancel });
+  const requestClose = useCloseGuard({
+    isDirty: form.isDirty || code !== '' || extraDirty,
+    onClose: onCancel,
+  });
 
   return (
     <Modal
@@ -117,6 +136,7 @@ export function ReasonDialog({
       description={description}
     >
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-4">
+        {children}
         <div>
           <label htmlFor="reason-dialog-reason" className="text-sm font-medium">
             {t('shell.reason.label')}
@@ -183,7 +203,7 @@ export function ReasonDialog({
           </button>
           <button
             type="submit"
-            disabled={form.isSubmitting}
+            disabled={form.isSubmitting || confirmDisabled}
             className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
           >
             {form.isSubmitting

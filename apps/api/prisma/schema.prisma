@@ -157,6 +157,12 @@ model License {
   /// refuses the tenant API's role, which Prisma cannot model.
   suspendedAt           DateTime? @map("suspended_at") @db.Timestamptz(6)
   suspendedReason       String?   @map("suspended_reason")
+  /// The status a suspension interrupted (tm 389.10), so lifting it puts the
+  /// workspace back where it was — a trial resumes as a trial, a paid licence
+  /// as paid. Only a suspended licence carries one
+  /// (`licenses_suspended_from_status_check`); platform-written, like the two
+  /// above.
+  suspendedFromStatus   String?   @map("suspended_from_status")
   /// When the platform's purge job (389.10) may delete this workspace's data,
   /// if nobody lifts the suspension or the cancellation first.
   purgeScheduledAt      DateTime? @map("purge_scheduled_at") @db.Timestamptz(6)
@@ -3737,6 +3743,11 @@ model Subscription {
   status                String    @default("trialing")
   trialEndsAt           DateTime? @map("trial_ends_at") @db.Timestamptz(6)
   currentPeriodEnd      DateTime? @map("current_period_end") @db.Timestamptz(6)
+  /// The subscription ends when its period does (tm 389.10, the platform's
+  /// cancellation; #384 adds the owner's own and the period-end step). Until
+  /// then nothing changes, and resuming clears both.
+  cancelAtPeriodEnd     Boolean   @default(false) @map("cancel_at_period_end")
+  canceledAt            DateTime? @map("canceled_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

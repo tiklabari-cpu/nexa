@@ -293,6 +293,46 @@ describe('the platform audit chain (tm 389.5)', () => {
       }),
     );
 
+    // Every workspace action (tm 389.10), each from a state it changes.
+    const ws = `/workspaces/${fx.a.licenseId}`;
+    const action = (path: string, body: Record<string, unknown> = {}, method = 'POST') =>
+      request(method, `${ws}/${path}`, { token, body: { ...body, ...reason } });
+    ok(await action('extend-trial', { days: 3 }));
+    ok(await action('activate'));
+    ok(await action('set-read-only'));
+    ok(await action('set-active'));
+    ok(await action('set-plan', { plan: 'enterprise' }));
+    ok(await action('subscription/cancel'));
+    ok(await action('subscription/resume'));
+    ok(await action('overrides', { seat_ceiling: 50 }, 'PUT'));
+    await owner.account.update({
+      where: { id: fx.a.ownerAccountId },
+      data: { emailVerifiedAt: null },
+    });
+    ok(await action('resend-owner-verification'));
+    await owner.$queryRaw`SELECT created_license FROM sandbox_create(${fx.a.licenseId}, ${fx.a.ownerAccountId}::uuid)`;
+    ok(await action('sandbox/reset'));
+    // The destructive half wants a code younger than five minutes.
+    ok(
+      await request('POST', '/auth/totp/reverify', {
+        token,
+        body: { code: nextCode(superadmin, clock) },
+      }),
+    );
+    ok(await action('suspend'));
+    ok(await action('unsuspend'));
+    ok(
+      await action('force-ownership-transfer', {
+        to_account_id: fx.a.agentAccountId,
+        verification_checklist: { ticket_id: 'SUP-1', signed_request: true, phone_verified: true },
+      }),
+    );
+    const { name } = await owner.organization.findUniqueOrThrow({
+      where: { id: fx.a.organizationId },
+    });
+    ok(await action('delete', { confirm_name: name }));
+    ok(await action('delete/cancel'));
+
     // The superadmin's own sessions.
     ok(await request('DELETE', '/auth/sessions', { token }));
     ok(await request('POST', '/auth/logout', { token }));

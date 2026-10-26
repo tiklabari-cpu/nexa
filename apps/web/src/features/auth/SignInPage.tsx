@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { WORKSPACE_SUSPENDED_REASON } from '@siyahtus/types';
 import { useAuth, type Membership, type TwoFactorEnrollment } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { authFailureMessage } from '../../lib/auth-flow-error.js';
@@ -226,6 +227,16 @@ export function SignInPage(): ReactElement {
         error.details?.['reason'] === 'email_unverified'
       ) {
         setUnverifiedEmail(email);
+        return;
+      }
+      // The platform suspended the workspace (tm 389.2/389.10): the password was right, and
+      // nothing the person can do here lifts it — say so instead of "invalid".
+      if (
+        error instanceof ApiClientError &&
+        error.type === 'not_allowed' &&
+        error.details?.['reason'] === WORKSPACE_SUSPENDED_REASON
+      ) {
+        report(t('auth.signin.workspaceSuspended'));
         return;
       }
       report(genericFailureMessage);

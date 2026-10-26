@@ -149,6 +149,38 @@ paths:
     $ref: "./paths/workspaces.yaml#/impersonations"
   /workspaces/{licenseId}/ai-summary:
     $ref: "./paths/workspaces.yaml#/aiSummary"
+  /workspaces/purge-queue:
+    $ref: "./paths/workspace-actions.yaml#/purgeQueue"
+  /workspaces/{licenseId}/extend-trial:
+    $ref: "./paths/workspace-actions.yaml#/extendTrial"
+  /workspaces/{licenseId}/activate:
+    $ref: "./paths/workspace-actions.yaml#/activate"
+  /workspaces/{licenseId}/set-plan:
+    $ref: "./paths/workspace-actions.yaml#/setPlan"
+  /workspaces/{licenseId}/suspend:
+    $ref: "./paths/workspace-actions.yaml#/suspend"
+  /workspaces/{licenseId}/unsuspend:
+    $ref: "./paths/workspace-actions.yaml#/unsuspend"
+  /workspaces/{licenseId}/set-read-only:
+    $ref: "./paths/workspace-actions.yaml#/setReadOnly"
+  /workspaces/{licenseId}/set-active:
+    $ref: "./paths/workspace-actions.yaml#/setActive"
+  /workspaces/{licenseId}/subscription/cancel:
+    $ref: "./paths/workspace-actions.yaml#/subscriptionCancel"
+  /workspaces/{licenseId}/subscription/resume:
+    $ref: "./paths/workspace-actions.yaml#/subscriptionResume"
+  /workspaces/{licenseId}/overrides:
+    $ref: "./paths/workspace-actions.yaml#/overrides"
+  /workspaces/{licenseId}/resend-owner-verification:
+    $ref: "./paths/workspace-actions.yaml#/resendOwnerVerification"
+  /workspaces/{licenseId}/sandbox/reset:
+    $ref: "./paths/workspace-actions.yaml#/sandboxReset"
+  /workspaces/{licenseId}/force-ownership-transfer:
+    $ref: "./paths/workspace-actions.yaml#/forceOwnershipTransfer"
+  /workspaces/{licenseId}/delete:
+    $ref: "./paths/workspace-actions.yaml#/delete"
+  /workspaces/{licenseId}/delete/cancel:
+    $ref: "./paths/workspace-actions.yaml#/deleteCancel"
   /support/lookup:
     $ref: "./paths/support.yaml#/lookup"
 
@@ -525,6 +557,7 @@ components:
         - workspace.ownership_transferred
         - workspace.deletion_scheduled
         - workspace.deletion_cancelled
+        - workspace.purged
         - account.verification_resent
         - account.password_reset_forced
         - account.sessions_revoked
@@ -961,76 +994,78 @@ components:
       type: object
       required: [workspace]
       properties:
-        workspace:
+        workspace: { $ref: "#/components/schemas/PlatformWorkspace" }
+
+    PlatformWorkspace:
+      type: object
+      required: [license_id, organization, license, owner, counts, status_history]
+      properties:
+        license_id: { type: string }
+        organization:
           type: object
-          required: [license_id, organization, license, owner, counts, status_history]
+          required: [id, name, region, timezone, sector, company_size, created_at]
           properties:
-            license_id: { type: string }
-            organization:
-              type: object
-              required: [id, name, region, timezone, sector, company_size, created_at]
-              properties:
-                id: { type: string, format: uuid }
-                name: { type: string }
-                region: { type: string, enum: [eu, us] }
-                timezone: { type: string }
-                sector: { type: ["string", "null"] }
-                company_size: { type: ["string", "null"] }
-                created_at: { type: string, format: date-time }
-            license:
-              type: object
-              required:
-                [
-                  status,
-                  plan,
-                  billing_cycle,
-                  trial_ends_at,
-                  suspended_at,
-                  suspended_reason,
-                  purge_scheduled_at,
-                  onboarding_completed_at,
-                  terms_accepted_at,
-                  sandbox_of_license_id,
-                  created_at,
-                ]
-              properties:
-                status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
-                plan: { $ref: "#/components/schemas/PlatformPlan" }
-                billing_cycle: { type: string, enum: [monthly, annual] }
-                trial_ends_at: { type: ["string", "null"], format: date-time }
-                suspended_at: { type: ["string", "null"], format: date-time }
-                suspended_reason: { type: ["string", "null"] }
-                purge_scheduled_at: { type: ["string", "null"], format: date-time }
-                onboarding_completed_at: { type: ["string", "null"], format: date-time }
-                terms_accepted_at: { type: ["string", "null"], format: date-time }
-                sandbox_of_license_id: { type: ["string", "null"] }
-                created_at: { type: string, format: date-time }
-            owner:
-              oneOf:
-                - { $ref: "#/components/schemas/PlatformWorkspaceOwner" }
-                - { type: "null" }
-            counts:
-              type: object
-              required: [members, brands, customers, chats, tickets, ai_agents]
-              properties:
-                members: { type: integer }
-                brands: { type: integer }
-                customers: { type: integer }
-                chats: { type: integer }
-                tickets: { type: integer }
-                ai_agents: { type: integer }
-            status_history:
-              type: array
-              items:
-                type: object
-                required: [action, at, admin_id, reason]
-                properties:
-                  action:
-                    type: string
-                    description: "`created`, or the platform audit action (`workspace.suspended`, …)."
-                  at: { type: string, format: date-time }
-                  admin_id: { type: ["string", "null"], format: uuid }
-                  reason: { type: ["string", "null"] }
+            id: { type: string, format: uuid }
+            name: { type: string }
+            region: { type: string, enum: [eu, us] }
+            timezone: { type: string }
+            sector: { type: ["string", "null"] }
+            company_size: { type: ["string", "null"] }
+            created_at: { type: string, format: date-time }
+        license:
+          type: object
+          required:
+            [
+              status,
+              plan,
+              billing_cycle,
+              trial_ends_at,
+              suspended_at,
+              suspended_reason,
+              purge_scheduled_at,
+              onboarding_completed_at,
+              terms_accepted_at,
+              sandbox_of_license_id,
+              created_at,
+            ]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
+            plan: { $ref: "#/components/schemas/PlatformPlan" }
+            billing_cycle: { type: string, enum: [monthly, annual] }
+            trial_ends_at: { type: ["string", "null"], format: date-time }
+            suspended_at: { type: ["string", "null"], format: date-time }
+            suspended_reason: { type: ["string", "null"] }
+            purge_scheduled_at: { type: ["string", "null"], format: date-time }
+            onboarding_completed_at: { type: ["string", "null"], format: date-time }
+            terms_accepted_at: { type: ["string", "null"], format: date-time }
+            sandbox_of_license_id: { type: ["string", "null"] }
+            created_at: { type: string, format: date-time }
+        owner:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformWorkspaceOwner" }
+            - { type: "null" }
+        counts:
+          type: object
+          required: [members, brands, customers, chats, tickets, ai_agents]
+          properties:
+            members: { type: integer }
+            brands: { type: integer }
+            customers: { type: integer }
+            chats: { type: integer }
+            tickets: { type: integer }
+            ai_agents: { type: integer }
+        status_history:
+          type: array
+          items:
+            type: object
+            required: [action, at, admin_id, reason]
+            properties:
+              action:
+                type: string
+                description: "`created`, or the platform audit action (`workspace.suspended`, …)."
+              at: { type: string, format: date-time }
+              admin_id: { type: ["string", "null"], format: uuid }
+              reason: { type: ["string", "null"] }
 
     PlatformWorkspaceMemberList:
       type: object
@@ -1228,6 +1263,129 @@ components:
                 reset_at: { type: ["string", "null"], format: date-time }
             - { type: "null" }
 
+    PlatformWorkspaceActionResult:
+      type: object
+      description: |
+        What a workspace action answers (tm 389.10): whether it changed
+        anything and the workspace as it now reads. `mail` on the actions that
+        send one (owner verification, ownership transfer, deletion) when they
+        did; `overrides` on `PUT …/overrides`.
+      required: [unchanged, workspace]
+      properties:
+        unchanged: { type: boolean }
+        workspace: { $ref: "#/components/schemas/PlatformWorkspace" }
+        mail: { type: string, enum: [sent, failed] }
+        overrides: { $ref: "#/components/schemas/PlatformWorkspaceOverrides" }
+
+    PlatformExtendTrialRequest:
+      type: object
+      required: [days, reason]
+      properties:
+        days: { type: integer, minimum: 1, maximum: 90 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformSetPlanRequest:
+      type: object
+      required: [plan, reason]
+      properties:
+        plan: { $ref: "#/components/schemas/PlatformPlan" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformEntitlementOverrides:
+      type: object
+      description: A key present replaces the plan's value; an absent key leaves it to the plan.
+      additionalProperties: false
+      properties:
+        white_label: { type: boolean }
+        sandbox: { type: boolean }
+        sla: { type: boolean }
+        sso: { type: boolean }
+        hipaa: { type: boolean }
+        siem_export: { type: boolean }
+
+    PlatformWorkspaceOverrides:
+      type: object
+      required:
+        [entitlements, seat_ceiling, mail_daily_cap, expires_at, in_force, updated_by, updated_at]
+      properties:
+        entitlements: { $ref: "#/components/schemas/PlatformEntitlementOverrides" }
+        seat_ceiling: { type: ["integer", "null"] }
+        mail_daily_cap: { type: ["integer", "null"] }
+        expires_at: { type: ["string", "null"], format: date-time }
+        in_force: { type: boolean }
+        updated_by: { type: ["string", "null"], format: uuid }
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformWorkspaceOverridesEnvelope:
+      type: object
+      required: [overrides]
+      properties:
+        overrides: { $ref: "#/components/schemas/PlatformWorkspaceOverrides" }
+
+    PlatformWorkspaceOverridesRequest:
+      type: object
+      required: [reason]
+      properties:
+        entitlements: { $ref: "#/components/schemas/PlatformEntitlementOverrides" }
+        seat_ceiling: { type: ["integer", "null"], minimum: 1, maximum: 100000 }
+        mail_daily_cap: { type: ["integer", "null"], minimum: 1, maximum: 1000000 }
+        expires_at:
+          type: ["string", "null"]
+          format: date-time
+          description: In the future; null for an override that does not lapse.
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformForceOwnershipTransferRequest:
+      type: object
+      required: [to_account_id, verification_checklist, reason]
+      properties:
+        to_account_id: { type: string, format: uuid }
+        verification_checklist:
+          type: object
+          description: How the requester's identity was checked — every step, or no transfer.
+          required: [ticket_id, signed_request, phone_verified]
+          properties:
+            ticket_id:
+              type: string
+              minLength: 1
+              maxLength: 100
+              description: The support ticket the request arrived on.
+            signed_request:
+              type: boolean
+              enum: [true]
+              description: A signed request from the organisation is on file.
+            phone_verified:
+              type: boolean
+              enum: [true]
+              description: The requester was called back on a number the workspace already had.
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformWorkspaceDeleteRequest:
+      type: object
+      required: [confirm_name, reason]
+      properties:
+        confirm_name:
+          type: string
+          maxLength: 255
+          description: The workspace's name, typed — it must match.
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformWorkspacePurgeQueue:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [license_id, organization_name, status, suspended_at, purge_scheduled_at]
+            properties:
+              license_id: { type: string }
+              organization_name: { type: string }
+              status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
+              suspended_at: { type: ["string", "null"], format: date-time }
+              purge_scheduled_at: { type: string, format: date-time }
+
     PlatformWorkspaceNoteRequest:
       type: object
       required: [body, reason]
@@ -1375,8 +1533,9 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     Conflict:
       description: |
-        `platform_last_superadmin`, `account_exists` or
-        `two_factor_already_enabled` — the request was fine, the state refused it.
+        `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
+        `platform_workspace_state` (`details.reason`, tm 389.10) — the request was
+        fine, the state refused it.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

@@ -7,16 +7,27 @@
  * Counts, states and identities only — never a message, a player or a knowledge article
  * (requirements §2). The Audit tab is the workspace's own trail (`GET /audit/workspaces/{id}`),
  * so it shows only for a role that reads audit trails.
+ *
+ * The header's "Actions" menu (tm 389.10 · FR-ADMIN-09) acts on the workspace; a suspension or
+ * a scheduled deletion shows as a banner above the tabs, with the deletion's countdown.
  */
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { NavLink, useParams } from 'react-router-dom';
 import { LoadError } from '../../components/LoadError.js';
 import { NotFoundPage } from '../../components/NotFoundPage.js';
 import { Card, Page } from '../../components/Page.js';
+import { Banner } from '../../components/ui/Banner.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { hasPermission, useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { useWorkspace } from './queries.js';
+import {
+  WorkspaceActionDialog,
+  WorkspaceActionsMenu,
+  WorkspaceStateBanners,
+  type ActionNotice,
+  type WorkspaceActionKey,
+} from './WorkspaceActions.js';
 import {
   AiTab,
   AuditTab,
@@ -56,6 +67,12 @@ export function WorkspaceDetailPage(): ReactElement {
   const requested = params['*'] || 'overview';
   const tab = (tabs as readonly string[]).includes(requested) ? (requested as WorkspaceTab) : null;
   const query = useWorkspace(licenseId);
+  const [action, setAction] = useState<WorkspaceActionKey | null>(null);
+  const [notice, setNotice] = useState<ActionNotice | null>(null);
+  const select = (next: WorkspaceActionKey) => {
+    setNotice(null);
+    setAction(next);
+  };
 
   if (tab === null) return <NotFoundPage />;
 
@@ -88,7 +105,22 @@ export function WorkspaceDetailPage(): ReactElement {
     <Page
       title={workspace?.organization.name ?? t('nav.workspaces')}
       description={t('workspaces.detail.description', { id: licenseId })}
+      actions={workspace ? <WorkspaceActionsMenu workspace={workspace} onSelect={select} /> : null}
     >
+      {workspace && <WorkspaceStateBanners workspace={workspace} onSelect={select} />}
+      {notice && (
+        <Banner tone={notice.tone} role="status" dismissible onDismiss={() => setNotice(null)}>
+          {notice.message}
+        </Banner>
+      )}
+      {workspace && action && (
+        <WorkspaceActionDialog
+          action={action}
+          workspace={workspace}
+          onClose={() => setAction(null)}
+          onNotice={setNotice}
+        />
+      )}
       <nav aria-label={t('workspaces.tabs.label')}>
         <ul className="flex flex-wrap gap-1 border-b border-border">
           {tabs.map((name) => (

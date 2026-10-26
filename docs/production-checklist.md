@@ -254,7 +254,7 @@ The public pilot (owner decision 2026-10-02, which replaced the controlled pilot
 under `NODE_ENV=production` and `PILOT_MODE=true`, with no demo seed. Sign-up is open to anyone,
 behind e-mail verification and daily caps (**Sign-up, caps and abuse limits**). Every region is
 `us`. There are no payments: the billing surfaces are hidden, a trial lasts 14 days, and after it
-the owner activates a workspace by hand (**Trial end and manual activation**). The compose file
+the owner activates a workspace from the back office (**Trial end and manual activation**). The compose file
 publishes every port on `127.0.0.1` only. The edge in front of it runs on the host: a Cloudflare
 Tunnel now (**Now: Cloudflare Tunnel**), Caddy on DNS-only records after a later move
 (**After the move: Caddy**). DNS, the accounts and the host are the owner's. Sections 1–8 still
@@ -525,9 +525,9 @@ changes. Why it is built this way: [ADR-16](adr/platform-admin-panel.md).
       on the host, beside the usual smoke run: the SPA is served, its nginx reaches platform-api,
       platform-api is ready, and the tenant api does not serve `/platform/*`. Loopback bases, because
       from outside, Access answers an anonymous call with its login page.
-- [ ] Not done by any of this, and not claimed: the trial-end `psql` path under **Trial end and
-      manual activation** is still the way a workspace is activated until the back office
-      carries that action (a later task of the same epic).
+- [ ] Workspace actions (tm 389.10): activation, trial extension and the rest live in the back
+      office's workspace page (**Trial end and manual activation**); the `psql` path there is a
+      footnote for a deployment without the back office.
 
 ### Region and providers
 
@@ -767,16 +767,27 @@ payments, so the billing surfaces are hidden and the trial-end notice, shown to 
 carries `PILOT_CONTACT_EMAIL` instead of a "subscribe" button; the same address is what the notes
 on closed features show. A workspace's way back is the owner.
 
-- [ ] Activate a workspace by hand, as the database owner role:
-      `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "UPDATE licenses SET status = 'active', trial_ends_at = NULL WHERE organization_id = (SELECT id FROM organizations WHERE name = '<workspace name>') AND status IN ('trialing', 'read_only')"`.
-      It prints `UPDATE 1`; two workspaces with the same name make it fail instead of
-      guessing — use the organization id then. (The root panel, tm 389, replaces this by hand
-      step with an audited action through the `siyahtus_platform` role; until it ships, this is
-      the path.)
-- [ ] Know what this path does not do: it writes no audit entry (the audit chain is signed inside
-      the api) and it does not lift `past_due`. Record who was activated, when and why somewhere
-      of your own. Or set `TRIAL_DAYS` in `.env` long enough that no trial ends inside the pilot,
-      before the workspaces sign up.
+- [ ] Activate a workspace from the back office (**Back office**; tm 389.10): Workspaces → the
+      workspace → **Actions** → **Activate licence** (billing or superadmin). It ends the trial
+      and makes the licence `active` from `trialing`, `read_only` or `past_due`; the reason you
+      type is written to the platform audit chain and the workspace's own audit log sees a
+      `SiyahTuş support` entry. **Extend trial** (support or superadmin) gives a trial more days
+      instead — counted from today when it has already ended, which lifts the read-only mode.
+- [ ] The same menu covers the rest of what used to be a hand-written `UPDATE`: plan, overrides
+      (seat ceiling, entitlements, daily mail cap), read-only/active, suspension (fresh code),
+      the owner's verification mail, a sandbox reset, a forced ownership transfer and a scheduled
+      deletion (superadmin, fresh code, the workspace's name typed; deleted 14 days later by the
+      platform process's purge job unless cancelled — **Workspaces** lists what is due).
+- [ ] Or set `TRIAL_DAYS` in `.env` long enough that no trial ends inside the pilot, before the
+      workspaces sign up.
+
+[^psql-activation]:
+    Only when the back office is not deployed: as the database owner role,
+    `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "UPDATE licenses SET status = 'active', trial_ends_at = NULL WHERE organization_id = (SELECT id FROM organizations WHERE name = '<workspace name>') AND status IN ('trialing', 'read_only')"`
+    (`UPDATE 1`; a duplicate name fails instead of guessing — use the organization id then). It
+    writes no audit entry and does not lift `past_due`; record who, when and why yourself.
+
+Without the back office, the by-hand path is a footnote.[^psql-activation]
 
 ### Data and backups
 

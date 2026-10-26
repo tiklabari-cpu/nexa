@@ -198,4 +198,157 @@ export const workspaces: Messages = {
   'workspaces.ai.active': 'Açık olanlar',
   'workspaces.ai.later':
     'Yalnız sayılar. Yapılandırma geçmişi, korkuluk ve kalite rakamları yapay zekâ kataloglarıyla gelir.',
+
+  // Eylemler (tm 389.10).
+  'workspaces.actions.menu': 'Eylemler',
+  'workspaces.actions.done': '{action}: tamamlandı.',
+  'workspaces.actions.unchanged':
+    '{action}: hiçbir şey değişmedi — çalışma alanı zaten bu durumdaydı.',
+  'workspaces.actions.mailFailed': '{action}: tamamlandı, ancak e-posta gönderilemedi.',
+
+  'workspaces.actions.extendTrial.label': 'Denemeyi uzat',
+  'workspaces.actions.extendTrial.title': 'Deneme süresini uzat',
+  'workspaces.actions.extendTrial.body':
+    '{name} çalışma alanının denemesi, girdiğiniz gün sayısı kadar, mevcut bitişinden itibaren uzar.',
+  'workspaces.actions.extendTrial.confirm': 'Uzat',
+  'workspaces.actions.extendTrial.days': 'Eklenecek gün',
+  'workspaces.actions.extendTrial.daysHint':
+    '1 ile 90 arası. Bitmiş bir deneme bugünden itibaren sayılır.',
+
+  'workspaces.actions.activate.label': 'Lisansı etkinleştir',
+  'workspaces.actions.activate.title': 'Lisansı etkinleştir',
+  'workspaces.actions.activate.body':
+    'Deneme biter ve {name} tam erişimli, ücretli bir çalışma alanı olur.',
+  'workspaces.actions.activate.confirm': 'Etkinleştir',
+
+  'workspaces.actions.setPlan.label': 'Planı değiştir',
+  'workspaces.actions.setPlan.title': 'Planı değiştir',
+  'workspaces.actions.setPlan.body':
+    '{name} çalışma alanının neleri açtığını ve liste fiyatını değiştirir. Bir geçersiz kılma plandan yine üstündür.',
+  'workspaces.actions.setPlan.confirm': 'Planı değiştir',
+  'workspaces.actions.setPlan.plan': 'Yeni plan',
+  'workspaces.actions.setPlan.current': 'Şu an: {plan}.',
+
+  'workspaces.actions.overrides.label': 'Geçersiz kılmalar',
+  'workspaces.actions.overrides.title': 'Planı geçersiz kıl',
+  'workspaces.actions.overrides.body':
+    'Bu değerler {name} için planın ve kurulumun değerlerinin yerine geçer. Varsayılan için kutuyu boş bırakın.',
+  'workspaces.actions.overrides.confirm': 'Kaydet',
+  'workspaces.actions.overrides.seatCeiling': 'Koltuk tavanı',
+  'workspaces.actions.overrides.mailCap': 'Günlük e-posta tavanı',
+  'workspaces.actions.overrides.emptyHint': 'Boş: varsayılan.',
+  'workspaces.actions.overrides.expiresAt': 'Bitiş tarihi',
+  'workspaces.actions.overrides.expiresHint':
+    'Boş: hiç bitmez. Geçersiz kılma o günün sonunda (UTC) uygulanmaz olur.',
+  'workspaces.actions.overrides.entitlements': 'Haklar',
+  'workspaces.actions.overrides.fromPlan': 'Plandan',
+  'workspaces.actions.overrides.granted': 'Verildi',
+  'workspaces.actions.overrides.withheld': 'Verilmedi',
+
+  'workspaces.actions.resendVerification.label': 'Kurucu doğrulamasını yeniden gönder',
+  'workspaces.actions.resendVerification.title': 'Kurucunun doğrulama e-postasını yeniden gönder',
+  'workspaces.actions.resendVerification.body':
+    '{name} Kurucusuna gönderilen önceki bağlantı geçersiz olur ve yenisi e-postayla gönderilir.',
+  'workspaces.actions.resendVerification.confirm': 'Gönder',
+
+  'workspaces.actions.sandboxReset.label': 'Sandbox’ı sıfırla',
+  'workspaces.actions.sandboxReset.title': 'Sandbox’ı sıfırla',
+  'workspaces.actions.sandboxReset.body':
+    '{name} sandbox’ındaki her şey silinir ve oturum açmış herkesin oturumu kapanır.',
+  'workspaces.actions.sandboxReset.confirm': 'Sıfırla',
+
+  'workspaces.actions.setReadOnly.label': 'Salt okunur yap',
+  'workspaces.actions.setReadOnly.title': 'Çalışma alanını salt okunur yap',
+  'workspaces.actions.setReadOnly.body':
+    '{name} üyeleri yeniden etkin yapılana kadar okuyabilir ama yazamaz.',
+  'workspaces.actions.setReadOnly.confirm': 'Salt okunur yap',
+
+  'workspaces.actions.setActive.label': 'Etkin yap',
+  'workspaces.actions.setActive.title': 'Çalışma alanını etkin yap',
+  'workspaces.actions.setActive.body': '{name} üyeleri yeniden yazabilir.',
+  'workspaces.actions.setActive.confirm': 'Etkin yap',
+
+  'workspaces.actions.cancelSubscription.label': 'Aboneliği iptal et',
+  'workspaces.actions.cancelSubscription.title': 'Dönem sonunda iptal et',
+  'workspaces.actions.cancelSubscription.body':
+    '{name} aboneliği mevcut dönemi bittiğinde sona erer. O zamana kadar hiçbir şey değişmez.',
+  'workspaces.actions.cancelSubscription.confirm': 'Aboneliği iptal et',
+
+  'workspaces.actions.resumeSubscription.label': 'Aboneliği sürdür',
+  'workspaces.actions.resumeSubscription.title': 'İptali geri al',
+  'workspaces.actions.resumeSubscription.body': '{name} aboneliği mevcut dönemden sonra da sürer.',
+  'workspaces.actions.resumeSubscription.confirm': 'Sürdür',
+
+  'workspaces.actions.suspend.label': 'Askıya al',
+  'workspaces.actions.suspend.title': 'Çalışma alanını askıya al',
+  'workspaces.actions.suspend.body':
+    'Askı kaldırılana kadar {name} içinde kimse giriş yapamaz ve widget durur. Gerekçenizi yalnız operatörler görür.',
+  'workspaces.actions.suspend.confirm': 'Askıya al',
+
+  'workspaces.actions.unsuspend.label': 'Askıyı kaldır',
+  'workspaces.actions.unsuspend.title': 'Askıyı kaldır',
+  'workspaces.actions.unsuspend.body': '{name} önceki durumuna döner.',
+  'workspaces.actions.unsuspend.confirm': 'Askıyı kaldır',
+
+  'workspaces.actions.transfer.label': 'Sahipliği devret',
+  'workspaces.actions.transfer.title': 'Sahipliği elle devret',
+  'workspaces.actions.transfer.body':
+    'Kurucuya ulaşılamadığında. Seçtiğiniz üye {name} çalışma alanının Kurucusu, mevcut Kurucu Yönetici olur; ikisine ve tüm Yöneticilere e-posta gider.',
+  'workspaces.actions.transfer.confirm': 'Sahipliği devret',
+  'workspaces.actions.transfer.to': 'Yeni Kurucu',
+  'workspaces.actions.transfer.toHint': 'Askıda olmayan bir üye.',
+  'workspaces.actions.transfer.none':
+    'Devralabilecek üye yok: başka üye yok ya da diğer üyelerin hepsi askıda.',
+  'workspaces.actions.transfer.choose': 'Bir üye seçin',
+  'workspaces.actions.transfer.checklist': 'Kimlik kontrolleri',
+  'workspaces.actions.transfer.ticket': 'Destek talebi',
+  'workspaces.actions.transfer.signed': 'Kuruluştan imzalı bir talep elimizde',
+  'workspaces.actions.transfer.phone':
+    'Talep sahibini çalışma alanında zaten kayıtlı bir numaradan geri aradım',
+
+  'workspaces.actions.delete.label': 'Çalışma alanını sil',
+  'workspaces.actions.delete.title': 'Silmeyi planla',
+  'workspaces.actions.delete.body':
+    '{name} şimdi askıya alınır ve silme iptal edilmezse tüm verileri 14 gün sonra silinir. Kurucuya e-posta gider.',
+  'workspaces.actions.delete.confirm': 'Silmeyi planla',
+  'workspaces.actions.delete.confirmName': 'Çalışma alanı adı',
+  'workspaces.actions.delete.confirmHint': 'Onaylamak için “{name}” yazın.',
+  'workspaces.actions.delete.mismatch': 'Ad, çalışma alanının adıyla eşleşmiyor.',
+
+  'workspaces.actions.cancelDeletion.label': 'Silmeyi iptal et',
+  'workspaces.actions.cancelDeletion.title': 'Planlanan silmeyi iptal et',
+  'workspaces.actions.cancelDeletion.body':
+    'Hiçbir şey silinmez. {name} siz askıyı kaldırana kadar askıda kalır.',
+  'workspaces.actions.cancelDeletion.confirm': 'Silmeyi iptal et',
+
+  'workspaces.actions.state.not_trialing':
+    'Yalnız denemedeki bir çalışma alanının denemesi uzatılabilir.',
+  'workspaces.actions.state.workspace_closed':
+    'Çalışma alanı askıda ya da iptal edilmiş — önce askıyı kaldırın.',
+  'workspaces.actions.state.trialing':
+    'Çalışma alanı denemede — bunun yerine denemeyi uzatın ya da lisansı etkinleştirin.',
+  'workspaces.actions.state.purge_scheduled':
+    'Çalışma alanının silinmesi planlanmış — önce silmeyi iptal edin.',
+  'workspaces.actions.state.no_subscription': 'Çalışma alanının aboneliği yok.',
+  'workspaces.actions.state.no_owner': 'Çalışma alanının Kurucusu yok.',
+  'workspaces.actions.state.no_sandbox': 'Çalışma alanının sandbox’ı yok.',
+  'workspaces.actions.state.not_a_member': 'Bu hesap bu çalışma alanının üyesi değil.',
+  'workspaces.actions.state.member_suspended': 'Askıdaki bir üye Kurucu olamaz.',
+
+  'workspaces.banner.purgeTitle': 'Silinmesi planlandı',
+  'workspaces.banner.purge': 'Tüm verileri {date} tarihinde silinecek. Kalan gün: {days}.',
+  'workspaces.banner.suspendedTitle': 'Askıda',
+  'workspaces.banner.suspended': '{when} tarihinden beri. Çalışma alanında kimse giriş yapamıyor.',
+  'workspaces.banner.suspendedReason': 'Gerekçe: {reason}',
+
+  'workspaces.entitlements.white_label': 'Beyaz etiket',
+  'workspaces.entitlements.sandbox': 'Sandbox',
+  'workspaces.entitlements.sla': 'SLA',
+  'workspaces.entitlements.sso': 'Tek oturum açma',
+  'workspaces.entitlements.hipaa': 'HIPAA',
+  'workspaces.entitlements.siem_export': 'SIEM dışa aktarımı',
+
+  'workspaces.purgeQueue.title': 'Planlanan silmeler',
+  'workspaces.purgeQueue.deletesOn': 'Silinme tarihi',
+  'workspaces.purgeQueue.daysLeft': 'Kalan gün',
 };

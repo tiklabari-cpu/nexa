@@ -157,6 +157,47 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     expect(await violations(container)).toEqual([]);
   });
 
+  it('finds nothing in the workspace actions menu and the dialogs with fields of their own (tm 389.10)', async () => {
+    installFakePlatform();
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp('/workspaces/42');
+    if (locale === 'tr') {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByRole('heading', { name: 'Acme Gaming' });
+    const menu = locale === 'tr' ? 'Eylemler' : 'Actions';
+    await user.click(screen.getByRole('button', { name: menu }));
+    expect(await violations(document.body)).toEqual([]);
+
+    const dialogs =
+      locale === 'tr'
+        ? ['Geçersiz kılmalar', 'Sahipliği devret', 'Çalışma alanını sil']
+        : ['Overrides', 'Transfer ownership', 'Delete workspace'];
+    for (const label of dialogs) {
+      if (!screen.queryByRole('button', { name: label })) {
+        await user.click(screen.getByRole('button', { name: menu }));
+      }
+      await user.click(screen.getByRole('button', { name: label }));
+      const dialog = await screen.findByRole('dialog');
+      await within(dialog).findByLabelText(locale === 'tr' ? 'Gerekçe' : 'Reason');
+      // The override form and the member list arrive after a read.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(await violations(document.body), label).toEqual([]);
+      await user.click(
+        within(dialog).getByRole('button', { name: locale === 'tr' ? 'Vazgeç' : 'Cancel' }),
+      );
+    }
+  });
+
   it('finds nothing in the reason dialog', async () => {
     setLocale(locale);
     render(

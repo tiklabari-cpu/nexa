@@ -1,0 +1,323 @@
+# What the root panel does to one workspace (tm 389.10 · FR-ADMIN-09 ·
+# design.md §C workspaces). `x-platform-*` as in auth.yaml.
+#
+# Every action takes a `reason` (3–500 characters) and is recorded twice, in
+# one transaction with the change: in the platform audit chain as
+# `workspace.<verb>` (with the reason) and in the workspace's own trail as
+# `platform.workspace_<verb>` (without it). Every action answers
+# `PlatformWorkspaceActionResult` — `unchanged` and the workspace as it now
+# reads. Asking for the state the workspace is already in is `unchanged: true`
+# and records nothing; a state the action cannot start from is 409
+# `platform_workspace_state` with `details.reason`
+# (`not_trialing`, `workspace_closed`, `trialing`, `purge_scheduled`,
+# `no_subscription`, `no_owner`, `no_sandbox`, `not_a_member`,
+# `member_suspended`).
+
+extendTrial:
+  post:
+    tags: [Workspaces]
+    operationId: extendPlatformWorkspaceTrial
+    summary: Extend the trial
+    description: |
+      Moves the trial's end `days` further out — from the current end, or from
+      now if it has already passed (which lifts the trial's read-only mode).
+      Only a workspace on trial (`not_trialing` otherwise).
+    x-platform-permission: workspaces.support
+    x-platform-audit: workspace.trial_extended
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformExtendTrialRequest" }
+    responses: &actionResponses
+      "200":
+        description: The workspace after the action
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceActionResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+activate:
+  post:
+    tags: [Workspaces]
+    operationId: activatePlatformWorkspace
+    summary: Activate the licence by hand
+    description: |
+      `active`, trial ended — what a bank transfer or a signed contract earns.
+      From `trialing`, `read_only` or `past_due`; a suspended or cancelled
+      workspace is `workspace_closed`.
+    x-platform-permission: workspaces.billing
+    x-platform-audit: workspace.activated
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: &reasonBody
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses: *actionResponses
+
+setPlan:
+  post:
+    tags: [Workspaces]
+    operationId: setPlatformWorkspacePlan
+    summary: Put the workspace on a plan
+    description: |
+      Changes what the workspace unlocks and lists at; creates the
+      subscription (sized to its headcount) when it has none. The self-serve
+      downgrade guard does not apply, the workspace's own checkout is
+      untouched, and an override (`PUT …/overrides`) still beats the plan.
+    x-platform-permission: workspaces.billing
+    x-platform-audit: workspace.plan_changed
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSetPlanRequest" }
+    responses: *actionResponses
+
+suspend:
+  post:
+    tags: [Workspaces]
+    operationId: suspendPlatformWorkspace
+    summary: Suspend the workspace
+    description: |
+      The total lock (tm 389.2): members, tokens and the widget are refused
+      with 403 `workspace_suspended` until it is lifted. The reason is kept
+      on the licence for the panel and shown to nobody in the workspace.
+    x-platform-permission: workspaces.lifecycle
+    x-platform-recent-totp: true
+    x-platform-audit: workspace.suspended
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+unsuspend:
+  post:
+    tags: [Workspaces]
+    operationId: unsuspendPlatformWorkspace
+    summary: Lift the suspension
+    description: |
+      Back to the status it was suspended from. `purge_scheduled` while a
+      deletion is scheduled — cancel that first.
+    x-platform-permission: workspaces.lifecycle
+    x-platform-recent-totp: true
+    x-platform-audit: workspace.unsuspended
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+setReadOnly:
+  post:
+    tags: [Workspaces]
+    operationId: setPlatformWorkspaceReadOnly
+    summary: Make the workspace read-only
+    description: Writes refused with `license_expired`, reads allowed (ADR-10).
+    x-platform-permission: workspaces.lifecycle
+    x-platform-audit: workspace.read_only_set
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+setActive:
+  post:
+    tags: [Workspaces]
+    operationId: setPlatformWorkspaceActive
+    summary: Bring the workspace back from read-only
+    description: |
+      From `read_only` or `past_due` to `active`. A workspace on trial is
+      `trialing` — extend the trial or activate the licence instead.
+    x-platform-permission: workspaces.lifecycle
+    x-platform-audit: workspace.active_set
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+subscriptionCancel:
+  post:
+    tags: [Workspaces]
+    operationId: cancelPlatformWorkspaceSubscription
+    summary: Cancel the subscription at the end of its period
+    description: |
+      Sets `cancel_at_period_end`; nothing changes before the period ends
+      (the period-end step is #384's). `no_subscription` on a trial.
+    x-platform-permission: workspaces.lifecycle
+    x-platform-audit: workspace.cancelled
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+subscriptionResume:
+  post:
+    tags: [Workspaces]
+    operationId: resumePlatformWorkspaceSubscription
+    summary: Take the cancellation back
+    x-platform-permission: workspaces.lifecycle
+    x-platform-audit: workspace.resumed
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+overrides:
+  get:
+    tags: [Workspaces]
+    operationId: getPlatformWorkspaceOverrides
+    summary: The workspace's override of its plan
+    description: |
+      `license_overrides` (tm 389.2): entitlements that replace the plan's,
+      the seat ceiling, the daily mail cap and when it lapses. Empty values
+      when there is none; `in_force` is false once `expires_at` has passed.
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The override
+        content:
+          application/json:
+            schema:
+              { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceOverridesEnvelope" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+  put:
+    tags: [Workspaces]
+    operationId: putPlatformWorkspaceOverrides
+    summary: Replace the override
+    description: |
+      The whole row, as `PUT` says; an omitted field is cleared. Nothing
+      overridden removes the row. The audit entry names the changed fields,
+      not their values. The response carries `overrides` as stored.
+    x-platform-permission: workspaces.billing
+    x-platform-audit: workspace.overrides_changed
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceOverridesRequest" }
+    responses: *actionResponses
+
+resendOwnerVerification:
+  post:
+    tags: [Workspaces]
+    operationId: resendPlatformWorkspaceOwnerVerification
+    summary: Resend the owner's verification e-mail
+    description: |
+      Spends the owner's earlier link and mails a new one, exactly as the
+      owner's own resend does. An owner who has verified already is
+      `unchanged` and gets nothing. `no_owner` without one.
+    x-platform-permission: workspaces.support
+    x-platform-audit: workspace.owner_verification_resent
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+sandboxReset:
+  post:
+    tags: [Workspaces]
+    operationId: resetPlatformWorkspaceSandbox
+    summary: Empty the workspace's sandbox
+    description: |
+      `sandbox_reset` on the workspace's sandbox (or on the workspace, when it
+      is one); everyone signed in to the sandbox is signed out of it.
+      `no_sandbox` without one.
+    x-platform-permission: workspaces.support
+    x-platform-audit: workspace.sandbox_reset
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+forceOwnershipTransfer:
+  post:
+    tags: [Workspaces]
+    operationId: forcePlatformWorkspaceOwnershipTransfer
+    summary: Move the ownership by hand
+    description: |
+      For an owner who cannot be reached: `to_account_id` (a member, not
+      suspended) becomes the owner and the current owner an admin, in one
+      transaction. Every step of `verification_checklist` is required (400
+      otherwise) and travels into the audit entry. The new owner, the
+      previous one and every admin are mailed.
+    x-platform-permission: workspaces.lifecycle
+    x-platform-recent-totp: true
+    x-platform-audit: workspace.ownership_transferred
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            { $ref: "../openapi.yaml#/components/schemas/PlatformForceOwnershipTransferRequest" }
+    responses: *actionResponses
+
+delete:
+  post:
+    tags: [Workspaces]
+    operationId: deletePlatformWorkspace
+    summary: Schedule the workspace's deletion
+    description: |
+      `purge_scheduled_at` fourteen days out and the workspace suspended
+      meanwhile; the owner is mailed. `confirm_name` must be the workspace's
+      name (400 `validation`, `details.reason: confirm_name_mismatch`). The
+      purge job deletes it when the time comes and records
+      `workspace.purged`.
+    x-platform-permission: workspaces.lifecycle
+    x-platform-recent-totp: true
+    x-platform-audit: workspace.deletion_scheduled
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceDeleteRequest" }
+    responses: *actionResponses
+
+deleteCancel:
+  post:
+    tags: [Workspaces]
+    operationId: cancelPlatformWorkspaceDeletion
+    summary: Cancel the scheduled deletion
+    description: |
+      Clears `purge_scheduled_at`. The suspension stays — lift it with
+      `unsuspend` if it should go too.
+    x-platform-permission: workspaces.lifecycle
+    x-platform-audit: workspace.deletion_cancelled
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+purgeQueue:
+  get:
+    tags: [Workspaces]
+    operationId: listPlatformWorkspacePurgeQueue
+    summary: Every scheduled deletion, the soonest first
+    x-platform-permission: workspaces.read
+    responses:
+      "200":
+        description: The queue (at most 100)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspacePurgeQueue" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

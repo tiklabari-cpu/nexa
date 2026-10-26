@@ -115,10 +115,14 @@ export const ERROR_TYPES = [
   // `platform_last_superadmin`: the change would leave no active superadmin.
   // `platform_reason_required` (tm 389.5): every operator mutation states why
   // (3–500 characters) for the platform audit chain, and this one did not.
+  // `platform_workspace_state` (tm 389.10): a workspace action the
+  // workspace's current state refuses (`details.reason` says which — a trial
+  // to extend on a paid licence, a suspension to lift under a scheduled purge).
   'platform_last_superadmin',
   'platform_reason_required',
   'platform_recent_totp_required',
   'platform_totp_required',
+  'platform_workspace_state',
   'request_timeout',
   // SiyahTuş addition — the sandbox workspace (FR-MOD-11.5 · 11.5-f). A licence may
   // hold at most one sandbox, and asking for a second is a conflict rather than
@@ -222,6 +226,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   platform_reason_required: 400,
   platform_recent_totp_required: 403,
   platform_totp_required: 403,
+  platform_workspace_state: 409,
   request_timeout: 408,
   sandbox_exists: 409,
   service_unavailable: 503,

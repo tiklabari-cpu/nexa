@@ -935,6 +935,353 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/workspaces/purge-queue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Every scheduled deletion, the soonest first */
+    get: operations['listPlatformWorkspacePurgeQueue'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/extend-trial': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Extend the trial
+     * @description Moves the trial's end `days` further out — from the current end, or from
+     *     now if it has already passed (which lifts the trial's read-only mode).
+     *     Only a workspace on trial (`not_trialing` otherwise).
+     */
+    post: operations['extendPlatformWorkspaceTrial'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/activate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Activate the licence by hand
+     * @description `active`, trial ended — what a bank transfer or a signed contract earns.
+     *     From `trialing`, `read_only` or `past_due`; a suspended or cancelled
+     *     workspace is `workspace_closed`.
+     */
+    post: operations['activatePlatformWorkspace'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/set-plan': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Put the workspace on a plan
+     * @description Changes what the workspace unlocks and lists at; creates the
+     *     subscription (sized to its headcount) when it has none. The self-serve
+     *     downgrade guard does not apply, the workspace's own checkout is
+     *     untouched, and an override (`PUT …/overrides`) still beats the plan.
+     */
+    post: operations['setPlatformWorkspacePlan'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/suspend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Suspend the workspace
+     * @description The total lock (tm 389.2): members, tokens and the widget are refused
+     *     with 403 `workspace_suspended` until it is lifted. The reason is kept
+     *     on the licence for the panel and shown to nobody in the workspace.
+     */
+    post: operations['suspendPlatformWorkspace'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/unsuspend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Lift the suspension
+     * @description Back to the status it was suspended from. `purge_scheduled` while a
+     *     deletion is scheduled — cancel that first.
+     */
+    post: operations['unsuspendPlatformWorkspace'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/set-read-only': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Make the workspace read-only
+     * @description Writes refused with `license_expired`, reads allowed (ADR-10).
+     */
+    post: operations['setPlatformWorkspaceReadOnly'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/set-active': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Bring the workspace back from read-only
+     * @description From `read_only` or `past_due` to `active`. A workspace on trial is
+     *     `trialing` — extend the trial or activate the licence instead.
+     */
+    post: operations['setPlatformWorkspaceActive'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/subscription/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancel the subscription at the end of its period
+     * @description Sets `cancel_at_period_end`; nothing changes before the period ends
+     *     (the period-end step is #384's). `no_subscription` on a trial.
+     */
+    post: operations['cancelPlatformWorkspaceSubscription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/subscription/resume': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Take the cancellation back */
+    post: operations['resumePlatformWorkspaceSubscription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/overrides': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's override of its plan
+     * @description `license_overrides` (tm 389.2): entitlements that replace the plan's,
+     *     the seat ceiling, the daily mail cap and when it lapses. Empty values
+     *     when there is none; `in_force` is false once `expires_at` has passed.
+     */
+    get: operations['getPlatformWorkspaceOverrides'];
+    /**
+     * Replace the override
+     * @description The whole row, as `PUT` says; an omitted field is cleared. Nothing
+     *     overridden removes the row. The audit entry names the changed fields,
+     *     not their values. The response carries `overrides` as stored.
+     */
+    put: operations['putPlatformWorkspaceOverrides'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/resend-owner-verification': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Resend the owner's verification e-mail
+     * @description Spends the owner's earlier link and mails a new one, exactly as the
+     *     owner's own resend does. An owner who has verified already is
+     *     `unchanged` and gets nothing. `no_owner` without one.
+     */
+    post: operations['resendPlatformWorkspaceOwnerVerification'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/sandbox/reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Empty the workspace's sandbox
+     * @description `sandbox_reset` on the workspace's sandbox (or on the workspace, when it
+     *     is one); everyone signed in to the sandbox is signed out of it.
+     *     `no_sandbox` without one.
+     */
+    post: operations['resetPlatformWorkspaceSandbox'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/force-ownership-transfer': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Move the ownership by hand
+     * @description For an owner who cannot be reached: `to_account_id` (a member, not
+     *     suspended) becomes the owner and the current owner an admin, in one
+     *     transaction. Every step of `verification_checklist` is required (400
+     *     otherwise) and travels into the audit entry. The new owner, the
+     *     previous one and every admin are mailed.
+     */
+    post: operations['forcePlatformWorkspaceOwnershipTransfer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/delete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Schedule the workspace's deletion
+     * @description `purge_scheduled_at` fourteen days out and the workspace suspended
+     *     meanwhile; the owner is mailed. `confirm_name` must be the workspace's
+     *     name (400 `validation`, `details.reason: confirm_name_mismatch`). The
+     *     purge job deletes it when the time comes and records
+     *     `workspace.purged`.
+     */
+    post: operations['deletePlatformWorkspace'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/delete/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancel the scheduled deletion
+     * @description Clears `purge_scheduled_at`. The suspension stays — lift it with
+     *     `unsuspend` if it should go too.
+     */
+    post: operations['cancelPlatformWorkspaceDeletion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/support/lookup': {
     parameters: {
       query?: never;
@@ -1220,6 +1567,7 @@ export interface components {
       | 'workspace.ownership_transferred'
       | 'workspace.deletion_scheduled'
       | 'workspace.deletion_cancelled'
+      | 'workspace.purged'
       | 'account.verification_resent'
       | 'account.password_reset_forced'
       | 'account.sessions_revoked'
@@ -1536,59 +1884,60 @@ export interface components {
       next_cursor: string | null;
     };
     PlatformWorkspaceDetail: {
-      workspace: {
-        license_id: string;
-        organization: {
-          /** Format: uuid */
-          id: string;
-          name: string;
-          /** @enum {string} */
-          region: 'eu' | 'us';
-          timezone: string;
-          sector: string | null;
-          company_size: string | null;
-          /** Format: date-time */
-          created_at: string;
-        };
-        license: {
-          status: components['schemas']['PlatformLicenseStatus'];
-          plan: components['schemas']['PlatformPlan'];
-          /** @enum {string} */
-          billing_cycle: 'monthly' | 'annual';
-          /** Format: date-time */
-          trial_ends_at: string | null;
-          /** Format: date-time */
-          suspended_at: string | null;
-          suspended_reason: string | null;
-          /** Format: date-time */
-          purge_scheduled_at: string | null;
-          /** Format: date-time */
-          onboarding_completed_at: string | null;
-          /** Format: date-time */
-          terms_accepted_at: string | null;
-          sandbox_of_license_id: string | null;
-          /** Format: date-time */
-          created_at: string;
-        };
-        owner: components['schemas']['PlatformWorkspaceOwner'] | null;
-        counts: {
-          members: number;
-          brands: number;
-          customers: number;
-          chats: number;
-          tickets: number;
-          ai_agents: number;
-        };
-        status_history: {
-          /** @description `created`, or the platform audit action (`workspace.suspended`, …). */
-          action: string;
-          /** Format: date-time */
-          at: string;
-          /** Format: uuid */
-          admin_id: string | null;
-          reason: string | null;
-        }[];
+      workspace: components['schemas']['PlatformWorkspace'];
+    };
+    PlatformWorkspace: {
+      license_id: string;
+      organization: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        /** @enum {string} */
+        region: 'eu' | 'us';
+        timezone: string;
+        sector: string | null;
+        company_size: string | null;
+        /** Format: date-time */
+        created_at: string;
       };
+      license: {
+        status: components['schemas']['PlatformLicenseStatus'];
+        plan: components['schemas']['PlatformPlan'];
+        /** @enum {string} */
+        billing_cycle: 'monthly' | 'annual';
+        /** Format: date-time */
+        trial_ends_at: string | null;
+        /** Format: date-time */
+        suspended_at: string | null;
+        suspended_reason: string | null;
+        /** Format: date-time */
+        purge_scheduled_at: string | null;
+        /** Format: date-time */
+        onboarding_completed_at: string | null;
+        /** Format: date-time */
+        terms_accepted_at: string | null;
+        sandbox_of_license_id: string | null;
+        /** Format: date-time */
+        created_at: string;
+      };
+      owner: components['schemas']['PlatformWorkspaceOwner'] | null;
+      counts: {
+        members: number;
+        brands: number;
+        customers: number;
+        chats: number;
+        tickets: number;
+        ai_agents: number;
+      };
+      status_history: {
+        /** @description `created`, or the platform audit action (`workspace.suspended`, …). */
+        action: string;
+        /** Format: date-time */
+        at: string;
+        /** Format: uuid */
+        admin_id: string | null;
+        reason: string | null;
+      }[];
     };
     PlatformWorkspaceMemberList: {
       data: {
@@ -1711,6 +2060,98 @@ export interface components {
         /** Format: date-time */
         reset_at: string | null;
       } | null;
+    };
+    /**
+     * @description What a workspace action answers (tm 389.10): whether it changed
+     *     anything and the workspace as it now reads. `mail` on the actions that
+     *     send one (owner verification, ownership transfer, deletion) when they
+     *     did; `overrides` on `PUT …/overrides`.
+     */
+    PlatformWorkspaceActionResult: {
+      unchanged: boolean;
+      workspace: components['schemas']['PlatformWorkspace'];
+      /** @enum {string} */
+      mail?: 'sent' | 'failed';
+      overrides?: components['schemas']['PlatformWorkspaceOverrides'];
+    };
+    PlatformExtendTrialRequest: {
+      days: number;
+      reason: string;
+    };
+    PlatformSetPlanRequest: {
+      plan: components['schemas']['PlatformPlan'];
+      reason: string;
+    };
+    /** @description A key present replaces the plan's value; an absent key leaves it to the plan. */
+    PlatformEntitlementOverrides: {
+      white_label?: boolean;
+      sandbox?: boolean;
+      sla?: boolean;
+      sso?: boolean;
+      hipaa?: boolean;
+      siem_export?: boolean;
+    };
+    PlatformWorkspaceOverrides: {
+      entitlements: components['schemas']['PlatformEntitlementOverrides'];
+      seat_ceiling: number | null;
+      mail_daily_cap: number | null;
+      /** Format: date-time */
+      expires_at: string | null;
+      in_force: boolean;
+      /** Format: uuid */
+      updated_by: string | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    PlatformWorkspaceOverridesEnvelope: {
+      overrides: components['schemas']['PlatformWorkspaceOverrides'];
+    };
+    PlatformWorkspaceOverridesRequest: {
+      entitlements?: components['schemas']['PlatformEntitlementOverrides'];
+      seat_ceiling?: number | null;
+      mail_daily_cap?: number | null;
+      /**
+       * Format: date-time
+       * @description In the future; null for an override that does not lapse.
+       */
+      expires_at?: string | null;
+      reason: string;
+    };
+    PlatformForceOwnershipTransferRequest: {
+      /** Format: uuid */
+      to_account_id: string;
+      /** @description How the requester's identity was checked — every step, or no transfer. */
+      verification_checklist: {
+        /** @description The support ticket the request arrived on. */
+        ticket_id: string;
+        /**
+         * @description A signed request from the organisation is on file.
+         * @enum {boolean}
+         */
+        signed_request: true;
+        /**
+         * @description The requester was called back on a number the workspace already had.
+         * @enum {boolean}
+         */
+        phone_verified: true;
+      };
+      reason: string;
+    };
+    PlatformWorkspaceDeleteRequest: {
+      /** @description The workspace's name, typed — it must match. */
+      confirm_name: string;
+      reason: string;
+    };
+    PlatformWorkspacePurgeQueue: {
+      data: {
+        license_id: string;
+        organization_name: string;
+        status: components['schemas']['PlatformLicenseStatus'];
+        /** Format: date-time */
+        suspended_at: string | null;
+        /** Format: date-time */
+        purge_scheduled_at: string;
+      }[];
     };
     PlatformWorkspaceNoteRequest: {
       body: string;
@@ -1837,8 +2278,9 @@ export interface components {
       };
     };
     /**
-     * @description `platform_last_superadmin`, `account_exists` or
-     *     `two_factor_already_enabled` — the request was fine, the state refused it.
+     * @description `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
+     *     `platform_workspace_state` (`details.reason`, tm 389.10) — the request was
+     *     fine, the state refused it.
      */
     Conflict: {
       headers: {
@@ -3074,6 +3516,534 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformWorkspacePurgeQueue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The queue (at most 100) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspacePurgeQueue'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  extendPlatformWorkspaceTrial: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformExtendTrialRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  activatePlatformWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  setPlatformWorkspacePlan: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformSetPlanRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  suspendPlatformWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  unsuspendPlatformWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  setPlatformWorkspaceReadOnly: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  setPlatformWorkspaceActive: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  cancelPlatformWorkspaceSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  resumePlatformWorkspaceSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformWorkspaceOverrides: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The override */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceOverridesEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  putPlatformWorkspaceOverrides: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformWorkspaceOverridesRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  resendPlatformWorkspaceOwnerVerification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  resetPlatformWorkspaceSandbox: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  forcePlatformWorkspaceOwnershipTransfer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformForceOwnershipTransferRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  deletePlatformWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformWorkspaceDeleteRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  cancelPlatformWorkspaceDeletion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
     };
   };
   lookupPlatformSupport: {

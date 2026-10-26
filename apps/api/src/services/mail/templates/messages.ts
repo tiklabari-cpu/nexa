@@ -494,6 +494,120 @@ export function platformInvitationMail(
   });
 }
 
+/**
+ * The owner's notice that SiyahTuş has scheduled their workspace for deletion
+ * (tm 389.10 · FR-ADMIN-09): it is suspended now, and its data goes on
+ * `purgeAt` unless the deletion is cancelled first. Sent by the platform — the
+ * workspace itself is locked, so nothing inside it could say so.
+ */
+export function workspacePurgeScheduledMail(
+  ctx: MailContext,
+  input: { workspaceName: string; purgeAt: string; days: number },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const days = daysText(ctx.locale, input.days);
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `${input.workspaceName} çalışma alanı silinmek üzere planlandı`
+      : `Your workspace ${input.workspaceName} is scheduled for deletion`,
+    preheader: t
+      ? `Verileri ${days} sonra silinecek. Vazgeçmek için bizimle iletişime geçin.`
+      : `Its data will be deleted in ${days}. Contact us if this should not happen.`,
+    icon: ICON.alarm,
+    heading: t ? 'Çalışma alanınız silinecek' : 'Your workspace will be deleted',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: t
+          ? `SiyahTuş ekibi ${input.workspaceName} çalışma alanını silinmek üzere planladı. Çalışma alanı şu andan itibaren askıda: kimse giriş yapamaz, ziyaretçiler sohbet başlatamaz.`
+          : `The SiyahTuş team has scheduled the workspace ${input.workspaceName} for deletion. It is suspended from now on: nobody can sign in and visitors cannot start a chat.`,
+      },
+      {
+        type: 'paragraph',
+        text: t
+          ? `Sohbetler, kayıtlar ve ayarlar dahil tüm verileri ${input.purgeAt} tarihinde (${days} sonra) kalıcı olarak silinecek.`
+          : `All of its data — conversations, records and settings — will be deleted for good on ${input.purgeAt} (in ${days}).`,
+      },
+      {
+        type: 'note',
+        text: t
+          ? 'Bu bir hataysa ya da verilerinizi dışa aktarmanız gerekiyorsa, bu tarihten önce bu e-postayı yanıtlayarak ya da destek ekibimize yazarak bize ulaşın; silme işlemi o zamana kadar geri alınabilir.'
+          : 'If this is a mistake, or you need to export your data first, reply to this email or write to our support team before that date — until then the deletion can be cancelled.',
+      },
+    ],
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının Kurucusu olduğunuz için aldınız.'
+        : 'You received this email because you are the owner of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
+ * SiyahTuş moved a workspace's ownership by hand (tm 389.10 · FR-ADMIN-09 —
+ * the forced transfer, when the owner could not be reached). Everyone with a
+ * stake hears it: the new owner, the previous one, and every admin — so a
+ * transfer nobody asked for cannot go unnoticed. `role` says which one the
+ * reader is.
+ */
+export function ownershipTransferredMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    newOwner: string;
+    previousOwner: string | null;
+    role: 'new_owner' | 'previous_owner' | 'admin';
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const lead = (): string => {
+    switch (input.role) {
+      case 'new_owner':
+        return t
+          ? `SiyahTuş destek ekibi, kimlik doğrulamasının ardından ${input.workspaceName} çalışma alanının Kurucusu olarak sizi atadı.`
+          : `After verifying your identity, the SiyahTuş support team has made you the owner of the workspace ${input.workspaceName}.`;
+      case 'previous_owner':
+        return t
+          ? `SiyahTuş destek ekibi, ${input.workspaceName} çalışma alanının sahipliğini ${input.newOwner} kişisine devretti. Siz artık bu çalışma alanında Yöneticisiniz.`
+          : `The SiyahTuş support team has transferred ownership of the workspace ${input.workspaceName} to ${input.newOwner}. You are now an admin of it.`;
+      case 'admin':
+        return t
+          ? `SiyahTuş destek ekibi, ${input.workspaceName} çalışma alanının sahipliğini ${input.previousOwner ? `${input.previousOwner} kişisinden ` : ''}${input.newOwner} kişisine devretti.`
+          : `The SiyahTuş support team has transferred ownership of the workspace ${input.workspaceName}${input.previousOwner ? ` from ${input.previousOwner}` : ''} to ${input.newOwner}.`;
+    }
+  };
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `${input.workspaceName} çalışma alanının sahipliği devredildi`
+      : `Ownership of ${input.workspaceName} has been transferred`,
+    preheader: t ? `Yeni Kurucu: ${input.newOwner}.` : `The new owner is ${input.newOwner}.`,
+    icon: ICON.lock,
+    heading: t ? 'Sahiplik devredildi' : 'Ownership transferred',
+    blocks: [
+      { type: 'paragraph', text: lead() },
+      {
+        type: 'note',
+        text: t
+          ? 'Bu devri beklemiyorsanız hemen destek ekibimize yazın.'
+          : 'If you did not expect this transfer, write to our support team straight away.',
+      },
+    ],
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanında Kurucu ya da Yönetici olduğunuz için aldınız.'
+        : 'You received this email because you are an owner or admin of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
 // --- Workspace mail ---------------------------------------------------------------
 
 export function ssoDomainChallengeMail(

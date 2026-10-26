@@ -10,6 +10,7 @@
 import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siyahtus/types';
 import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
+import { handleOperations } from './fake-operations.js';
 
 export interface RecordedRequest {
   method: string;
@@ -685,6 +686,9 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       problem,
     );
     if (accountResponse) return accountResponse;
+
+    const operationsResponse = handleOperations(method, path, body, role, json, problem);
+    if (operationsResponse) return operationsResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);
   }

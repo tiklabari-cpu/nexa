@@ -55,3 +55,15 @@ export type PlatformAccountDetail = Schemas['PlatformAccountDetail'];
 export type PlatformAccountActionResult = Schemas['PlatformAccountActionResult'];
 export type PlatformAccountErased = Schemas['PlatformAccountErased'];
 export type PlatformAccountExport = Schemas['PlatformAccountExport'];
+
+export type PlatformOperationsJob = Schemas['PlatformOperationsJob'];
+export type PlatformOperationsScheduler = Schemas['PlatformOperationsScheduler'];
+export type PlatformOperationsRunResult = Schemas['PlatformOperationsRunResult'];
+export type PlatformOperationsWebhooks = Schemas['PlatformOperationsWebhooks'];
+export type PlatformOperationsSiem = Schemas['PlatformOperationsSiem'];
+export type PlatformOperationsPartitions = Schemas['PlatformOperationsPartitions'];
+export type PlatformOperationsEnsureResult = Schemas['PlatformOperationsEnsureResult'];
+export type PlatformOperationsUnverifiedSignups = Schemas['PlatformOperationsUnverifiedSignups'];
+export type PlatformOperationsPurgeResult = Schemas['PlatformOperationsPurgeResult'];
+export type PlatformOperationsJobs = Schemas['PlatformOperationsJobs'];
+export type PlatformOperationsComponents = Schemas['PlatformOperationsComponents'];

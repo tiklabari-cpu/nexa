@@ -9,6 +9,7 @@ import {
   emptyComponentStatuses,
   OPS_COMPONENTS_KEY,
   readComponentStatuses,
+  reportComponentNotInstalled,
   reportComponentStatus,
 } from './component-status.js';
 
@@ -98,5 +99,41 @@ describe('readComponentStatuses', () => {
 
   it('has an empty list for a reader that could not reach Redis', () => {
     expect(emptyComponentStatuses().every((c) => c.state === 'unknown')).toBe(true);
+  });
+});
+
+describe('reportComponentNotInstalled (tm 389.14)', () => {
+  function hashRedis() {
+    const hash: Record<string, string> = {};
+    return {
+      hash,
+      hsetnx: vi.fn(async (_key: string, field: string, value: string) => {
+        if (field in hash) return 0;
+        hash[field] = value;
+        return 1;
+      }),
+    };
+  }
+
+  it('writes the placeholder only while nothing has reported', async () => {
+    const redis = hashRedis();
+    redis.hash['doc_worker'] = JSON.stringify({ state: 'ok', detail: 'real', updatedAt: 'x' });
+
+    await reportComponentNotInstalled(redis, 'doc_worker', 'not in this build');
+    await reportComponentNotInstalled(redis, 'knowledge_jobs', 'not in this build');
+
+    // The module that reported for itself keeps its word; the silent one is marked.
+    expect(JSON.parse(redis.hash['doc_worker']!)).toMatchObject({ state: 'ok', detail: 'real' });
+    expect(JSON.parse(redis.hash['knowledge_jobs']!)).toMatchObject({
+      state: 'not_installed',
+      detail: 'not in this build',
+    });
+  });
+
+  it('refuses a key the record does not list, and swallows a Redis failure', async () => {
+    const redis = hashRedis();
+    expect(await reportComponentNotInstalled(redis, 'nope' as never, 'x')).toBe(false);
+    redis.hsetnx.mockRejectedValueOnce(new Error('down'));
+    expect(await reportComponentNotInstalled(redis, 'geoip', 'x')).toBe(false);
   });
 });

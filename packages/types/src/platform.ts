@@ -66,6 +66,9 @@ export const PLATFORM_PERMISSIONS = {
   'usage.manage': { kind: 'write', roles: ['superadmin', 'billing'] },
   'settings.manage': { kind: 'write', roles: ['superadmin'] },
   'ai.manage': { kind: 'write', roles: ['superadmin'] },
+  /** "Run now" on a scheduler job, opening a missing events partition (389.14). */
+  'operations.trigger': { kind: 'write', roles: ['superadmin', 'support'] },
+  /** Purging expired unverified sign-ups, re-embedding — the operations that delete or spend. */
   'operations.run': { kind: 'write', roles: ['superadmin'] },
   'security.manage': { kind: 'write', roles: ['superadmin'] },
   /** "Enter as the customer", read-only mode (389.15). */
@@ -153,3 +156,39 @@ export type OpsComponentState = (typeof OPS_COMPONENT_STATES)[number];
 export function isOpsComponentKey(value: unknown): value is OpsComponentKey {
   return typeof value === 'string' && (OPS_COMPONENTS as readonly string[]).includes(value);
 }
+
+/**
+ * The root panel's command channel to the tenant processes (design.md §A):
+ * Redis pub/sub, one JSON object per message, `{ "type": … }`. Senders publish
+ * after committing; a message nobody heard costs at most a reader's cache
+ * lifetime, never correctness.
+ */
+export const PLATFORM_OPS_CHANNEL = 'siyahtus:platform:ops';
+
+export interface PlatformOpsMessage {
+  type: string;
+  /** The `platform_settings` keys that moved, where the sender says. */
+  keys?: string[];
+}
+
+/** A message off {@link PLATFORM_OPS_CHANNEL}, or null when it is not one. */
+export function parsePlatformOpsMessage(message: string): PlatformOpsMessage | null {
+  try {
+    const value: unknown = JSON.parse(message);
+    if (typeof value !== 'object' || value === null) return null;
+    const { type, keys } = value as Record<string, unknown>;
+    if (typeof type !== 'string') return null;
+    return Array.isArray(keys)
+      ? { type, keys: keys.filter((key): key is string => typeof key === 'string') }
+      : { type };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "Run this scheduler job now" (tm 389.14): `{ type: 'job.run', name, request_id }`.
+ * Every tenant process whose scheduler is on hears it; the one that wins the
+ * `request_id` claim runs the job (`services/ops/ops-channel.ts`).
+ */
+export const PLATFORM_JOB_RUN = 'job.run';

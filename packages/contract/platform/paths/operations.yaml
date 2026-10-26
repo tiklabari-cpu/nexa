@@ -1,0 +1,241 @@
+# The Operations page (tm 389.14 · FR-ADMIN-20 · design.md §C operations).
+# `x-platform-*` as in auth.yaml. Reads change nothing and write no audit
+# entry; the three mutations take a `reason` (3–500 characters) and are each
+# recorded once in the platform audit chain.
+#
+# Counts, ages and states only — a workspace's name, a message, a webhook
+# payload or a queue row's content is never in any of these answers.
+
+scheduler:
+  get:
+    tags: [Operations]
+    operationId: getPlatformOperationsScheduler
+    summary: The scheduler's jobs
+    description: |
+      The tenant API's scheduler leader publishes its job table to Redis every
+      30 seconds with a 90-second expiry. `stale: true` with `jobs: []` is no
+      publication at all (no tenant API is reporting, or Redis cannot be read);
+      `stale: true` with jobs is a publication older than 90 seconds. The page
+      is the one an operator opens when something is wrong, so it answers 200
+      either way. `running` is read live from the job's running marker;
+      `last_manual` is the outcome of the last "run now", wherever it ran.
+    x-platform-permission: operations.read
+    responses:
+      "200":
+        description: The job table
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsScheduler" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+runJob:
+  post:
+    tags: [Operations]
+    operationId: runPlatformSchedulerJob
+    summary: Run a scheduler job now
+    description: |
+      Broadcasts `job.run` on `siyahtus:platform:ops`; exactly one tenant
+      process that is listening acts on it. The answer says only what the
+      platform could know: `queued` (a process heard it — the outcome follows
+      in the job table), `already_running` (the job's running marker is held;
+      nothing is started), `disabled` (the job is registered but switched off,
+      e.g. retention without `RETENTION_ENABLED`) or `no_listener` (no
+      scheduler is subscribed). A job the leader does not list is 404.
+    x-platform-permission: operations.trigger
+    x-platform-audit: operations.job_run_requested
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: What the request came to
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsRunResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+webhooks:
+  get:
+    tags: [Operations]
+    operationId: getPlatformOperationsWebhooks
+    summary: Webhook delivery backlog across workspaces
+    description: |
+      `webhook_deliveries` counted over every workspace: deliveries owed a
+      retry now, those more than ten minutes past due, the oldest's age, and
+      the last 24 hours' outcomes with the failure rate. No URL, payload or
+      workspace is named.
+    x-platform-permission: operations.read
+    responses:
+      "200":
+        description: The backlog
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsWebhooks" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+siem:
+  get:
+    tags: [Operations]
+    operationId: getPlatformOperationsSiem
+    summary: SIEM export status across workspaces
+    description: |
+      `siem_export_cursors` summarised: how many workspaces export, how many of
+      those are stalled (never delivered, or silent for 24 hours), when the sink
+      last ran and last shipped an entry, and the running total.
+    x-platform-permission: operations.read
+    responses:
+      "200":
+        description: The status
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsSiem" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+partitions:
+  get:
+    tags: [Operations]
+    operationId: getPlatformOperationsPartitions
+    summary: The `events` partitions
+    description: |
+      Every partition of `events` with its estimated rows and size,
+      the months of the runtime window (one behind, three ahead) that have no
+      partition, and whether the catch-all `events_default` holds rows — the
+      condition under which a month can no longer be opened
+      (docs/runbooks/event-partitions.md).
+    x-platform-permission: operations.read
+    responses:
+      "200":
+        description: The partitions
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsPartitions" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+ensurePartitions:
+  post:
+    tags: [Operations]
+    operationId: ensurePlatformPartitions
+    summary: Open `events` partitions
+    description: |
+      `events_ensure_partition` for `month` (`YYYY-MM`, within 60 months of the
+      current one) or, without it, for every month of the runtime window. One
+      statement per month: a blocked month is listed in `failed` with its
+      SQLSTATE and costs the others nothing.
+    x-platform-permission: operations.trigger
+    x-platform-audit: operations.partition_ensured
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsEnsureRequest" }
+    responses:
+      "200":
+        description: Which months are open now, which could not be
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsEnsureResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+unverifiedSignups:
+  get:
+    tags: [Operations]
+    operationId: getPlatformOperationsUnverifiedSignups
+    summary: Unverified accounts a purge would look at
+    description: |
+      Accounts whose address was never verified, and how many of them are older
+      than `ttl_hours` — the larger of `UNVERIFIED_SIGNUP_TTL_HOURS` and seven
+      days. Which of those the purge may actually delete is the database
+      function's decision (a verification link still alive, a second membership,
+      a customer's chat each keep one).
+    x-platform-permission: operations.read
+    responses:
+      "200":
+        description: The counts
+        content:
+          application/json:
+            schema:
+              { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsUnverifiedSignups" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+purgeUnverifiedSignups:
+  post:
+    tags: [Operations]
+    operationId: purgePlatformUnverifiedSignups
+    summary: Purge expired unverified sign-ups
+    description: |
+      Runs `purge_unverified_signups` — the function the scheduler's
+      `unverified_signups` job calls — in batches of 50, at most 20, for
+      accounts older than `ttl_hours`. Younger than seven days is never
+      touched. Superadmin and a code younger than five minutes.
+    x-platform-permission: operations.run
+    x-platform-recent-totp: true
+    x-platform-audit: security.unverified_signups_purged
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: How many went
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsPurgeResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+jobs:
+  get:
+    tags: [Operations]
+    operationId: getPlatformOperationsJobs
+    summary: The job queues
+    description: |
+      `ai_jobs` (tm 289), `knowledge_jobs` (tm 312) and the document worker
+      (tm 313): rows per state and the oldest unfinished one's age, where the
+      table exists. A queue whose table does not exist is `not_installed` and
+      no statement is run against it.
+    x-platform-permission: operations.read
+    responses:
+      "200":
+        description: The queues
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsJobs" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+componentRecord:
+  get:
+    tags: [Operations]
+    operationId: getPlatformOperationsComponents
+    summary: The component record
+    description: |
+      Every `OPS_COMPONENTS` key in order, `unknown` where nothing has reported.
+      The same record as the dashboard's health grid.
+    x-platform-permission: operations.read
+    responses:
+      "200":
+        description: The components
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformOperationsComponents" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

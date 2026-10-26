@@ -399,7 +399,20 @@ describe('the platform pair (tm 389.3)', () => {
     );
   });
 
-  it('finds the sign-in surface called by the shell tm 389.6 built, and nothing else of the platform contract', () => {
+  it('does not take a call to /dashboard/health for a call to /health', () => {
+    // The tail of a longer path is not the path (tm 389.8): the narrow probe stays headless.
+    const spec = { paths: { '/health': { get: {} }, '/dashboard/health': { get: {} } } };
+    const analysis = load().analysePlatform({
+      spec,
+      sources: corpus(
+        'apps/admin/src/features/dashboard/queries.ts',
+        "api.get('/dashboard/health');",
+      ),
+    });
+    expect(analysis.called.map((operation) => operation.op)).toEqual(['GET /dashboard/health']);
+  });
+
+  it('finds the sign-in surface (tm 389.6) and the dashboard (tm 389.8) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
@@ -413,6 +426,9 @@ describe('the platform pair (tm 389.3)', () => {
         'POST /auth/totp/activate',
         'POST /auth/totp/verify',
         'POST /auth/totp/reverify',
+        'GET /dashboard/kpis',
+        'GET /dashboard/signups',
+        'GET /dashboard/health',
       ].sort(),
     );
     // What the empty Admins/Audit pages and the operator's own security screen have no content

@@ -5,6 +5,7 @@ import { LoadingPage } from './components/LoadingPage.js';
 import { NotFoundPage } from './components/NotFoundPage.js';
 import { RequirePermission } from './components/RequirePermission.js';
 import { ChallengePage } from './features/auth/ChallengePage.js';
+import { DashboardPage } from './features/dashboard/DashboardPage.js';
 import { InvitePage } from './features/auth/InvitePage.js';
 import { RecoveryCodesPage } from './features/auth/RecoveryCodesPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
@@ -59,7 +60,7 @@ function SignedInRoutes(): ReactElement {
             path={`${item.path}/*`}
             element={
               <RequirePermission permission={item.permission}>
-                <PlaceholderPage item={item} />
+                {item.id === 'dashboard' ? <DashboardPage /> : <PlaceholderPage item={item} />}
               </RequirePermission>
             }
           />

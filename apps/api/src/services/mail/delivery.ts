@@ -50,15 +50,32 @@ export type MailOutcome =
   | { status: 'unconfirmed'; error: MailDeliveryError }
   | { status: 'failed'; error: unknown };
 
+/**
+ * How this process's last send went (tm 389.8) — what the scheduler leader
+ * reports as the `mail` component. Per process and in memory on purpose: it is
+ * a hint for the dashboard, not a record, and a restart forgetting it only
+ * makes the tile say "ok" until the next failure. `unconfirmed` is not a
+ * failure here: the carrier was handed the message and may well have sent it.
+ */
+let lastSend: { at: number; failed: boolean } | null = null;
+
+export function lastMailSend(): { at: number; failed: boolean } | null {
+  return lastSend;
+}
+
 /** Send, and report how it went. Never throws — the caller decides what a failure means. */
 export async function deliver(mailer: Mailer, message: Message): Promise<MailOutcome> {
   try {
     await mailer.send(message);
+    lastSend = { at: Date.now(), failed: false };
     return { status: 'sent' };
   } catch (error) {
     if (isMailDeliveryError(error) && error.code === 'unconfirmed') {
+      lastSend = { at: Date.now(), failed: false };
       return { status: 'unconfirmed', error };
     }
+    // A daily-cap refusal is the deployment's own limit, not a carrier fault.
+    lastSend = { at: Date.now(), failed: !isMailCapError(error) };
     return { status: 'failed', error };
   }
 }

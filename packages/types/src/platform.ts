@@ -121,3 +121,35 @@ export function platformPermissionsFor(role: string): PlatformPermission[] {
     platformRoleHas(role, permission),
   );
 }
+
+/**
+ * The components the root panel's health grid lists (tm 389.8 · FR-ADMIN-07) —
+ * the keys of the `siyahtus:ops:components` record the tenant API writes to
+ * (`reportComponentStatus`). A closed list: a key not named here is refused on
+ * write and never shown, so a typo cannot grow a tile nobody owns. The four
+ * the scheduler leader reports itself are `mail`, `redis`, `db`, `scheduler`;
+ * the rest are reported by their own modules (389.14).
+ */
+export const OPS_COMPONENTS = [
+  'mail',
+  'redis',
+  'db',
+  'scheduler',
+  'ai_jobs',
+  'knowledge_jobs',
+  'doc_worker',
+  'captcha',
+  'geoip',
+  'channel_whatsapp',
+  'channel_meta',
+  'webhooks',
+] as const;
+export type OpsComponentKey = (typeof OPS_COMPONENTS)[number];
+
+/** `not_installed`: the module is not part of this deployment — not a fault. */
+export const OPS_COMPONENT_STATES = ['ok', 'degraded', 'down', 'not_installed'] as const;
+export type OpsComponentState = (typeof OPS_COMPONENT_STATES)[number];
+
+export function isOpsComponentKey(value: unknown): value is OpsComponentKey {
+  return typeof value === 'string' && (OPS_COMPONENTS as readonly string[]).includes(value);
+}

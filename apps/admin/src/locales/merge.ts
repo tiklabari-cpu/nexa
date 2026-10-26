@@ -11,7 +11,7 @@
  *  - **Keys live in the file that owns their prefix** (`NAMESPACE_PREFIXES`), checked by
  *    `i18n-coverage.test.ts`.
  *
- * The root panel starts with three namespaces; each later page (389.8–389.20) adds its own
+ * The root panel starts with three namespaces (the dashboard, 389.8, is the fourth); each later page (389.8–389.20) adds its own
  * here and in both locale folders, which keeps the windows that build them out of each
  * other's files.
  */
@@ -19,7 +19,7 @@
 /** A catalogue, or one namespace of one: fully-qualified key → text. */
 export type Messages = Readonly<Record<string, string>>;
 
-export const NAMESPACES = ['auth', 'common', 'shell'] as const;
+export const NAMESPACES = ['auth', 'common', 'dashboard', 'shell'] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];
 
@@ -27,6 +27,7 @@ export type Namespace = (typeof NAMESPACES)[number];
 export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   auth: ['auth.'],
   common: ['common.', 'ui.'],
+  dashboard: ['dashboard.'],
   shell: ['shell.', 'nav.'],
 };
 

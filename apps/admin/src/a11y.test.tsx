@@ -110,8 +110,15 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     await screen.findByRole('alert');
     expect(await violations(container)).toEqual([]);
 
-    // A page: the first menu entry.
+    // The dashboard (the first menu entry), once its three reads have landed.
     await user.click(within(screen.getByRole('navigation')).getAllByRole('link')[0]!);
+    await screen.findByText(locale === 'tr' ? 'Bileşenler' : 'Components');
+    await screen.findByText(locale === 'tr' ? 'Temel rakamlar' : 'Key figures');
+    await screen.findByText(locale === 'tr' ? 'Sağlıklı' : 'Healthy');
+    expect(await violations(container)).toEqual([]);
+
+    // A page still waiting for its task: the second.
+    await user.click(within(screen.getByRole('navigation')).getAllByRole('link')[1]!);
     await screen.findByText(locale === 'tr' ? 'Burada henüz bir şey yok' : 'Nothing here yet');
     expect(await violations(container)).toEqual([]);
   });

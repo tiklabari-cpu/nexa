@@ -36,6 +36,10 @@ tags:
       opaque session token, `password` stage until the code, `active` after.
   - name: Admins
     description: Operator management — invitations, roles, disabling, second-factor resets.
+  - name: Dashboard
+    description: |
+      The operator's landing screen (tm 389.8): workspace counts, the sign-up
+      timeline, the tenant API's published health snapshot and the component record.
   - name: Audit
     description: |
       The platform audit chain (tm 389.5): every operator mutation and sign-in
@@ -98,6 +102,12 @@ paths:
     $ref: "./paths/admins.yaml#/resetTwoFactor"
   /admins/{adminId}/revoke-sessions:
     $ref: "./paths/admins.yaml#/revokeSessions"
+  /dashboard/kpis:
+    $ref: "./paths/dashboard.yaml#/kpis"
+  /dashboard/signups:
+    $ref: "./paths/dashboard.yaml#/signups"
+  /dashboard/health:
+    $ref: "./paths/dashboard.yaml#/health"
   /audit:
     $ref: "./paths/audit.yaml#/audit"
   /audit/export:
@@ -644,7 +654,8 @@ components:
       description: |
         The narrow body — never version, latencies or provider names, which
         would be infrastructure detail for an anonymous caller. The detailed
-        view is the dashboard's (tm 389.8), behind an operator session.
+        view is the dashboard's (`GET /dashboard/health`, tm 389.8), behind an
+        operator session.
       required: [status, service]
       properties:
         status:
@@ -671,6 +682,180 @@ components:
         region:
           type: string
           enum: [eu, us]
+
+    PlatformDashboardKpis:
+      type: object
+      required:
+        - generated_at
+        - workspaces
+        - trials_ending_7d
+        - active_operator_sessions
+        - pending_payment_requests
+        - usage
+      properties:
+        generated_at: { type: string, format: date-time }
+        workspaces:
+          type: object
+          required: [total, by_status]
+          properties:
+            total: { type: integer }
+            by_status:
+              type: object
+              description: Every licence status, `0` where there is none.
+              required: [trialing, active, past_due, read_only, canceled, suspended]
+              properties:
+                trialing: { type: integer }
+                active: { type: integer }
+                past_due: { type: integer }
+                read_only: { type: integer }
+                canceled: { type: integer }
+                suspended: { type: integer }
+        trials_ending_7d: { type: integer }
+        active_operator_sessions: { type: integer }
+        pending_payment_requests: { type: integer }
+        usage:
+          type: object
+          required: [day, ai_tokens_today, period, ai_resolutions_month, api_calls_month]
+          properties:
+            day: { type: string, pattern: "^[0-9]{8}$", description: "`yyyymmdd`, UTC." }
+            ai_tokens_today:
+              type: object
+              required: [llm, embedding]
+              properties:
+                llm: { type: integer }
+                embedding: { type: integer }
+            period: { type: string, pattern: "^[0-9]{6}$", description: "`yyyymm`, UTC." }
+            ai_resolutions_month: { type: integer }
+            api_calls_month: { type: integer }
+
+    PlatformDashboardSignups:
+      type: object
+      required: [days, total, data]
+      properties:
+        days: { type: integer }
+        total: { type: integer }
+        data:
+          type: array
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer }
+
+    PlatformDashboardDependency:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [up, down] }
+        latency_ms: { type: number }
+        error: { type: string }
+
+    PlatformHealthSnapshot:
+      type: object
+      description: |
+        The tenant API's admin `GET /health` body as its scheduler leader last
+        published it (`buildHealthSnapshot`).
+      required:
+        - status
+        - service
+        - version
+        - region
+        - uptime_s
+        - dependencies
+        - scheduler
+        - event_partitions
+        - ai_jobs
+        - providers
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        service: { type: string, enum: [api] }
+        version: { type: string }
+        region: { type: string }
+        uptime_s: { type: number }
+        dependencies:
+          type: object
+          required: [database, redis]
+          properties:
+            database: { $ref: "#/components/schemas/PlatformDashboardDependency" }
+            redis: { $ref: "#/components/schemas/PlatformDashboardDependency" }
+        scheduler:
+          type: object
+          required: [enabled, jobs]
+          properties:
+            enabled: { type: boolean }
+            jobs:
+              type: array
+              items:
+                type: object
+                required: [name, interval_ms, enabled, last_run_at, last_status]
+                properties:
+                  name: { type: string }
+                  interval_ms: { type: integer }
+                  enabled: { type: boolean }
+                  last_run_at: { type: ["string", "null"], format: date-time }
+                  last_status:
+                    { type: ["string", "null"], enum: [ok, skipped, error, disabled, null] }
+                  last_error_class: { type: string }
+        event_partitions:
+          type: object
+          additionalProperties: true
+        ai_jobs:
+          type: ["object", "null"]
+          required: [pending, running, oldest_age_s]
+          properties:
+            pending: { type: integer }
+            running: { type: integer }
+            oldest_age_s: { type: ["number", "null"] }
+        providers:
+          type: object
+          additionalProperties: { type: string }
+
+    PlatformComponentStatus:
+      type: object
+      required: [key, state, detail, updated_at]
+      properties:
+        key:
+          type: string
+          description: A key of `OPS_COMPONENTS` (@siyahtus/types).
+          enum:
+            - mail
+            - redis
+            - db
+            - scheduler
+            - ai_jobs
+            - knowledge_jobs
+            - doc_worker
+            - captcha
+            - geoip
+            - channel_whatsapp
+            - channel_meta
+            - webhooks
+        state:
+          type: string
+          description: |
+            `not_installed` — the module is not part of this deployment, not a
+            fault · `unknown` — nothing has reported it yet.
+          enum: [ok, degraded, down, not_installed, unknown]
+        detail: { type: ["string", "null"] }
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformDashboardHealth:
+      type: object
+      required: [stale, generated_at, age_s, snapshot, components]
+      properties:
+        stale:
+          type: boolean
+          description: No snapshot, or one older than 90 seconds.
+        generated_at: { type: ["string", "null"], format: date-time }
+        age_s: { type: ["number", "null"] }
+        snapshot:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformHealthSnapshot" }
+            - { type: "null" }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformComponentStatus" }
 
     Error:
       type: object

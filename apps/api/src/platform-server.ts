@@ -40,6 +40,7 @@ import telemetryPlugin from './plugins/telemetry.js';
 import platformAdminsRoutes from './routes/platform/admins.js';
 import platformAuditRoutes from './routes/platform/audit.js';
 import platformAuthRoutes from './routes/platform/auth.js';
+import platformDashboardRoutes from './routes/platform/dashboard.js';
 import platformHealthRoutes from './routes/platform/health.js';
 import platformMetaRoutes from './routes/platform/meta.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
@@ -145,6 +146,7 @@ export async function buildPlatformServer({
       await api.register(platformAuthRoutes, { env });
       await api.register(platformAdminsRoutes, { platform, mailer });
       await api.register(platformAuditRoutes);
+      await api.register(platformDashboardRoutes, { platform, ...(now ? { now } : {}) });
     },
     { prefix: PLATFORM_PREFIX },
   );

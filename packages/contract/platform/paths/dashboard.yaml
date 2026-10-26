@@ -1,0 +1,75 @@
+# The operator's landing screen (tm 389.8 · FR-ADMIN-07). `x-platform-*` as in
+# auth.yaml. Reads only, so nothing here writes an audit entry. Counts and
+# states — never a workspace's name or content.
+
+kpis:
+  get:
+    tags: [Dashboard]
+    operationId: getPlatformDashboardKpis
+    summary: Workspace counts, trials ending, sessions, usage and the payment queue
+    description: |
+      Everything is deployment-wide (`siyahtus_platform` bypasses row-level
+      security) and sandboxes are not counted as workspaces. `trials_ending_7d`
+      is `trialing` workspaces whose trial ends in the next seven days.
+      `active_operator_sessions` counts verified operator sessions inside their
+      lifetime and idle window. `pending_payment_requests` is the manual crypto
+      queue's open requests, `0` until that queue exists. "Today" is the UTC day:
+      `ai_tokens_today` is the deployment-wide AI meter, `ai_resolutions_month`
+      and `api_calls_month` come from the current period's usage records.
+    x-platform-permission: dashboard.read
+    responses:
+      "200":
+        description: The numbers, at `generated_at`
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformDashboardKpis" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+signups:
+  get:
+    tags: [Dashboard]
+    operationId: getPlatformDashboardSignups
+    summary: New workspaces per day
+    description: |
+      One point per UTC day, oldest first, today included; days without a
+      sign-up are `0`. Sandboxes are not counted.
+    x-platform-permission: dashboard.read
+    parameters:
+      - name: days
+        in: query
+        description: 1–90, default 30.
+        schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+    responses:
+      "200":
+        description: The series
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformDashboardSignups" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+health:
+  get:
+    tags: [Dashboard]
+    operationId: getPlatformDashboardHealth
+    summary: The tenant API's published health snapshot and the component record
+    description: |
+      The tenant API's scheduler leader publishes its detailed health body to
+      Redis every 30 seconds with a 90-second expiry. `stale: true` with a
+      `snapshot` is a publication older than 90 seconds; `stale: true` with
+      `snapshot: null` is no publication at all (no tenant API leader is
+      reporting, or Redis cannot be read) — this route still answers 200,
+      because it is the screen that has to render when something is down.
+      `components` always lists every `OPS_COMPONENTS` key, `unknown` where
+      nothing has reported.
+    x-platform-permission: dashboard.read
+    responses:
+      "200":
+        description: Snapshot, staleness and components
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformDashboardHealth" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

@@ -10,8 +10,10 @@ import { InvitePage } from './features/auth/InvitePage.js';
 import { RecoveryCodesPage } from './features/auth/RecoveryCodesPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import { PlaceholderPage } from './features/placeholder/PlaceholderPage.js';
+import { SupportPage } from './features/support/SupportPage.js';
+import { WorkspacesSection } from './features/workspaces/WorkspacesSection.js';
 import { useAuth } from './lib/auth-store.js';
-import { NAV_ITEMS } from './lib/navigation.js';
+import { NAV_ITEMS, type NavItem } from './lib/navigation.js';
 
 /**
  * Which screen the session is on: nothing drawn until a stored token is checked, then the
@@ -60,7 +62,7 @@ function SignedInRoutes(): ReactElement {
             path={`${item.path}/*`}
             element={
               <RequirePermission permission={item.permission}>
-                {item.id === 'dashboard' ? <DashboardPage /> : <PlaceholderPage item={item} />}
+                <SectionPage item={item} />
               </RequirePermission>
             }
           />
@@ -70,4 +72,18 @@ function SignedInRoutes(): ReactElement {
       </Route>
     </Routes>
   );
+}
+
+/** The page a menu entry opens: its feature once built, the empty skeleton until then. */
+function SectionPage({ item }: { item: NavItem }): ReactElement {
+  switch (item.id) {
+    case 'dashboard':
+      return <DashboardPage />;
+    case 'workspaces':
+      return <WorkspacesSection />;
+    case 'support':
+      return <SupportPage />;
+    default:
+      return <PlaceholderPage item={item} />;
+  }
 }

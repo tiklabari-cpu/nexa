@@ -130,15 +130,37 @@ export class ApiClient {
     return this.request<T>('DELETE', path, undefined, init);
   }
 
+  /**
+   * A download (an invoice CSV): the same headers, errors and session handling as {@link request},
+   * the body handed back as bytes instead of parsed.
+   */
+  async getBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+    const response = await this.#send('GET', path, undefined, init, '*/*');
+    return response.blob();
+  }
+
   async request<T>(
     method: string,
     path: string,
     body?: unknown,
     init: RequestInit = {},
   ): Promise<T> {
+    const response = await this.#send(method, path, body, init, 'application/json');
+    if (response.status === 204) return undefined as T;
+    return (await response.json().catch(() => null)) as T;
+  }
+
+  /** The request, sent; a refusal thrown as an {@link ApiClientError}, an accepted response returned unread. */
+  async #send(
+    method: string,
+    path: string,
+    body: unknown,
+    init: RequestInit,
+    accept: string,
+  ): Promise<Response> {
     const token = this.#getAccessToken();
     const headers = new Headers(init.headers);
-    headers.set('Accept', 'application/json');
+    headers.set('Accept', accept);
     if (token) headers.set('Authorization', `Bearer ${token}`);
     // The language the panel is showing, so mail a request sets off (an invitation) can follow it.
     if (!headers.has('X-SiyahTus-Locale')) headers.set('X-SiyahTus-Locale', getLocale());
@@ -168,13 +190,9 @@ export class ApiClient {
       });
     }
 
-    if (response.status === 204) return undefined as T;
-
-    const requestId = response.headers.get('X-Request-Id') ?? '-';
-    const payload = await response.json().catch(() => null);
-
     if (!response.ok) {
-      const errorBody = payload as ApiErrorBody | null;
+      const requestId = response.headers.get('X-Request-Id') ?? '-';
+      const errorBody = (await response.json().catch(() => null)) as ApiErrorBody | null;
       const retryAfter = response.headers.get('Retry-After');
       const error = new ApiClientError({
         type: errorBody?.error?.type ?? 'internal',
@@ -190,6 +208,6 @@ export class ApiClient {
       throw error;
     }
 
-    return payload as T;
+    return response;
   }
 }

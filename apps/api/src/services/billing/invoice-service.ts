@@ -331,7 +331,10 @@ export async function readComposition(
     tx.usageRecord.findMany({ where: { licenseId: tenant.licenseId, period } }),
     tx.apiPackagePurchase.findMany({ where: { licenseId: tenant.licenseId, period } }),
     tx.aiPackagePurchase.findMany({ where: { licenseId: tenant.licenseId, period } }),
-    tx.agentMembership.count({ where: { suspended: false } }),
+    // Named, not left to row level security: the root panel reads invoices on a
+    // connection that bypasses it (tm 389.9), and an unfiltered count there is
+    // every workspace's headcount.
+    tx.agentMembership.count({ where: { licenseId: tenant.licenseId, suspended: false } }),
   ]);
 
   return {

@@ -53,6 +53,10 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/dashboard/DashboardPage.tsx',
   'src/features/dashboard/HealthSection.tsx',
   'src/features/placeholder/PlaceholderPage.tsx',
+  'src/features/support/SupportPage.tsx',
+  'src/features/workspaces/WorkspaceDetailPage.tsx',
+  'src/features/workspaces/WorkspaceTabs.tsx',
+  'src/features/workspaces/WorkspacesPage.tsx',
 ];
 
 /**
@@ -68,6 +72,8 @@ const TEXT_FREE_FILES: readonly string[] = [
   'src/components/ui/Dropdown.tsx',
   'src/components/ui/Modal.tsx',
   'src/features/auth/AuthLayout.tsx',
+  'src/features/workspaces/WorkspacesSection.tsx',
+  'src/features/workspaces/ui.tsx',
 ];
 
 /** Screen files not yet translated or accounted for. A ratchet that starts at zero: never raise it. */

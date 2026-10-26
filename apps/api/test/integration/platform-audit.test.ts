@@ -285,6 +285,14 @@ describe('the platform audit chain (tm 389.5)', () => {
     ok(await request('POST', `/admins/${newcomer}/reset-two-factor`, { token, body: reason }));
     ok(await request('POST', `/admins/${newcomer}/revoke-sessions`, { token, body: reason }));
 
+    // A workspace note (tm 389.9).
+    ok(
+      await request('POST', `/workspaces/${fx.a.licenseId}/notes`, {
+        token,
+        body: { body: 'Prefers email.', ...reason },
+      }),
+    );
+
     // The superadmin's own sessions.
     ok(await request('DELETE', '/auth/sessions', { token }));
     ok(await request('POST', '/auth/logout', { token }));
@@ -333,7 +341,9 @@ describe('the platform audit chain (tm 389.5)', () => {
     }
     // No secret anywhere in the trail: not the invitation token, not a code.
     expect(
-      JSON.stringify(trail.map((e) => ({ ...e, chainSeq: String(e.chainSeq) }))),
+      JSON.stringify(
+        trail.map((e) => ({ ...e, chainSeq: String(e.chainSeq), licenseId: String(e.licenseId) })),
+      ),
     ).not.toContain(inviteToken);
   });
 

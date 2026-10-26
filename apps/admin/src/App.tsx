@@ -12,6 +12,7 @@ import { OperationsPage } from './features/operations/OperationsPage.js';
 import { RecoveryCodesPage } from './features/auth/RecoveryCodesPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import { PlaceholderPage } from './features/placeholder/PlaceholderPage.js';
+import { SecurityPage } from './features/security/SecurityPage.js';
 import { SettingsPage } from './features/settings/SettingsPage.js';
 import { SupportPage } from './features/support/SupportPage.js';
 import { WorkspacesSection } from './features/workspaces/WorkspacesSection.js';
@@ -90,6 +91,8 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <SettingsPage />;
     case 'operations':
       return <OperationsPage />;
+    case 'security':
+      return <SecurityPage />;
     case 'support':
       return <SupportPage />;
     default:

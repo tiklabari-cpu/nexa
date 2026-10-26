@@ -24,6 +24,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
+import { normaliseIp } from '../../lib/banned-ip.js';
 import {
   ANNOUNCEMENT_LEVELS,
   MAINTENANCE_MODES,
@@ -238,7 +239,7 @@ export class PublicSettings {
       const rows = await this.#db.$queryRaw<
         Array<{ blocked: boolean; matched_kind: string | null }>
       >`
-        SELECT blocked, matched_kind FROM platform_signup_blocked(${email}, ${ip})`;
+        SELECT blocked, matched_kind FROM platform_signup_blocked(${email}, ${ip === null ? null : normaliseIp(ip)})`;
       const row = rows[0];
       return row?.blocked ? (row.matched_kind ?? 'email') : null;
     } catch (error) {

@@ -409,3 +409,10 @@ export function impersonationWriteVerdict(path: string): ImpersonationWriteVerdi
   }
   return { verdict: 'unclassified' };
 }
+
+// --- Sign-up blocklist (tm 389.16) -------------------------------------------
+
+/** What a `platform_blocklist` entry matches: an address, a domain (and its subdomains), an IP or CIDR. */
+export const PLATFORM_BLOCKLIST_KINDS = ['email', 'domain', 'ip'] as const;
+
+export type PlatformBlocklistKind = (typeof PLATFORM_BLOCKLIST_KINDS)[number];

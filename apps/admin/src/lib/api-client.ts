@@ -126,8 +126,9 @@ export class ApiClient {
     return this.request<T>('PUT', path, body, init);
   }
 
-  delete<T>(path: string, init?: RequestInit): Promise<T> {
-    return this.request<T>('DELETE', path, undefined, init);
+  /** A platform DELETE carries its `{reason}` in a body, like every operator mutation. */
+  delete<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+    return this.request<T>('DELETE', path, body, init);
   }
 
   /**

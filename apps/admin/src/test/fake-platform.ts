@@ -12,6 +12,7 @@ import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
 import { handleSettings, initialSettingsState, type FakeSettingsState } from './fake-settings.js';
 import { handleOperations } from './fake-operations.js';
+import { handleSecurity, initialSecurityState, type FakeSecurityState } from './fake-security.js';
 import {
   handleImpersonations,
   initialImpersonationState,
@@ -524,6 +525,8 @@ export interface FakePlatform {
   settingsState: FakeSettingsState;
   /** The support sessions opened against this fake (tm 389.15). */
   impersonationState: FakeImpersonationState;
+  /** The blocklist and counters of the Security page (tm 389.16). */
+  securityState: FakeSecurityState;
 }
 
 export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatform {
@@ -549,6 +552,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     soleOwner: options.accountSoleOwner ?? false,
   };
   const settingsState = initialSettingsState();
+  const securityState = initialSecurityState();
   const impersonationState = initialImpersonationState({
     id: WORKSPACE_ID,
     members: WORKSPACE_MEMBERS.data,
@@ -712,6 +716,17 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     if (settingsResponse) return settingsResponse;
     const operationsResponse = handleOperations(method, path, body, role, json, problem);
     if (operationsResponse) return operationsResponse;
+    const securityResponse = handleSecurity(
+      method,
+      path,
+      body,
+      search,
+      role,
+      securityState,
+      json,
+      problem,
+    );
+    if (securityResponse) return securityResponse;
     const impersonationResponse = handleImpersonations(
       method,
       path,
@@ -751,5 +766,6 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     },
     settingsState,
     impersonationState,
+    securityState,
   };
 }

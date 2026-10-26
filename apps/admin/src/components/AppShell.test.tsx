@@ -107,9 +107,9 @@ describe('a route opened by hand', () => {
   });
 
   it('shows a page that is not built yet as its placeholder', async () => {
-    await enter('superadmin', '/operations');
+    await enter('superadmin', '/audit');
 
-    expect(await screen.findByRole('heading', { name: 'Operations', level: 1 })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Audit', level: 1 })).toBeVisible();
     expect(screen.getByText('Nothing here yet')).toBeVisible();
   });
 

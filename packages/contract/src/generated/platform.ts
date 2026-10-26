@@ -1405,6 +1405,161 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/security/blocklist': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The sign-up blocklist
+     * @description Every entry of `platform_blocklist`, newest first: an exact address, a
+     *     domain (which also covers its subdomains) or an IP / CIDR. Keyset paging
+     *     on the creation time. `kind` keeps one kind; `q` keeps the entries whose
+     *     value contains the text.
+     */
+    get: operations['listPlatformBlocklist'];
+    put?: never;
+    /**
+     * Block an address, a domain or an IP range from signing up
+     * @description The value is stored normalised: an address and a domain in lower case
+     *     (a leading `@` or `*.` on a domain is dropped), an IP in its canonical
+     *     form with the host bits of a CIDR zeroed (`10.0.0.5/24` is stored as
+     *     `10.0.0.0/24`; a bare address is its own range). The same range twice is
+     *     a 400 `validation` with `details.reason: already_listed`. The next sign-up is checked against
+     *     it — no cache sits between this write and the gate.
+     *
+     *     The `reason` is kept on the entry as well as in the audit chain.
+     */
+    post: operations['addPlatformBlocklistEntry'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/blocklist/{entryId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Lift a block
+     * @description Removes the entry; the next sign-up it covered passes this gate. The body
+     *     carries the `reason`. An unknown id is a 404.
+     */
+    delete: operations['removePlatformBlocklistEntry'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/failed-logins': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Failed sign-ins, tenants and operators
+     * @description Three views. `tenant.live` is the pre-authentication failure budget
+     *     (`rl:authfail:<ip>`, a 60-second window in Redis) read without spending
+     *     it: which addresses are failing now, and which are locked out.
+     *     `tenant.history` is the workspaces' own trail (`auth.login_failed`) over
+     *     the last `hours`, by address and by workspace. `operator` is this
+     *     panel's own `admin.sign_in_failed` / `admin.totp_failed` entries over
+     *     the same span. No address, name or password is ever in an entry, so
+     *     there is nothing to mask: the trail records the address the attempt came
+     *     from and nothing about who it claimed to be.
+     */
+    get: operations['getPlatformFailedLogins'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/signups-by-ip': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Sign-ups by source address
+     * @description `status: not_available` — the sign-up does not keep the address it came
+     *     from (a deliberate privacy decision, design.md §C security), so there is
+     *     nothing to count and no column was added for it. The answer says so
+     *     rather than showing an empty list that reads as "no sign-ups".
+     */
+    get: operations['getPlatformSignupsByIp'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/impersonations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Impersonation sessions, newest first
+     * @description The same list as `GET /support/impersonations`, behind the Security
+     *     page's permission: who entered which workspace as whom, in which mode,
+     *     and how it ended. `active=true` keeps the open ones.
+     */
+    get: operations['listPlatformSecurityImpersonations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/abuse-counters': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Abuse counters from the tenant API's guards
+     * @description Each counter says whether its source is there: `available`, or
+     *     `not_installed` when the table it reads is not part of this database.
+     *     `invites` — workspaces that sent their daily invitation allowance today
+     *     (`member.invited` entries, UTC day). `widget_quota` — members who used
+     *     their whole per-member AI allowance today (`ai_customer_daily_usage`
+     *     against each workspace's default-brand setting). `widget_challenge` —
+     *     the human check is logged, not counted, so only the component's state is
+     *     shown. Workspaces appear by licence number; nothing they wrote does.
+     */
+    get: operations['getPlatformAbuseCounters'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/accounts': {
     parameters: {
       query?: never;
@@ -3242,6 +3397,111 @@ export interface components {
       generated_at: string;
       components: components['schemas']['PlatformComponentStatus'][];
     };
+    /**
+     * @description What an entry matches (`PLATFORM_BLOCKLIST_KINDS`, @siyahtus/types).
+     * @enum {string}
+     */
+    PlatformBlocklistKind: 'email' | 'domain' | 'ip';
+    PlatformBlocklistEntry: {
+      /** Format: uuid */
+      id: string;
+      kind: components['schemas']['PlatformBlocklistKind'];
+      /** @description Normalised — an address or domain in lower case, an IP in canonical form (a CIDR with its host bits zeroed). */
+      value: string;
+      reason: string | null;
+      /** Format: uuid */
+      created_by: string | null;
+      created_by_email: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    PlatformBlocklistList: {
+      data: components['schemas']['PlatformBlocklistEntry'][];
+      next_cursor: string | null;
+    };
+    PlatformBlocklistCreateRequest: {
+      kind: components['schemas']['PlatformBlocklistKind'];
+      value: string;
+      reason: string;
+    };
+    PlatformCounted: {
+      /** @description An address or a licence number */
+      key: string;
+      count: number;
+    };
+    PlatformFailedLogins: {
+      /** Format: date-time */
+      generated_at: string;
+      hours: number;
+      /** Format: date-time */
+      since: string;
+      tenant: {
+        live: {
+          /**
+           * @description `unavailable` when Redis could not be read.
+           * @enum {string}
+           */
+          status: 'available' | 'unavailable';
+          window_seconds: number;
+          /** @description Failures per window before the address is refused. */
+          limit: number;
+          addresses_total: number;
+          locked_total: number;
+          addresses: {
+            ip: string;
+            failures: number;
+            locked: boolean;
+          }[];
+          truncated: boolean;
+        };
+        history: {
+          total: number;
+          by_ip: components['schemas']['PlatformCounted'][];
+          by_workspace: components['schemas']['PlatformCounted'][];
+        };
+      };
+      operator: {
+        sign_in_failed: number;
+        totp_failed: number;
+        by_ip: components['schemas']['PlatformCounted'][];
+      };
+    };
+    PlatformSignupsByIp: {
+      /** @enum {string} */
+      status: 'available' | 'not_available';
+      days: number;
+      reason: string | null;
+      data: components['schemas']['PlatformCounted'][];
+    };
+    /**
+     * @description `available` — the source is there and counted; `not_installed` — the
+     *     table it reads is not part of this database; `not_available` — the
+     *     guard keeps no count to read.
+     * @enum {string}
+     */
+    PlatformAbuseCounterStatus: 'available' | 'not_installed' | 'not_available';
+    PlatformAbuseCounters: {
+      /** Format: date-time */
+      generated_at: string;
+      invites: {
+        status: components['schemas']['PlatformAbuseCounterStatus'];
+        limit_per_day: number;
+        workspaces_at_limit: number;
+        workspaces: components['schemas']['PlatformCounted'][];
+      };
+      widget_quota: {
+        status: components['schemas']['PlatformAbuseCounterStatus'];
+        /** @description The UTC day counted (YYYY-MM-DD). */
+        day: string;
+        members_at_cap: number;
+        workspaces_affected: number;
+        workspaces: components['schemas']['PlatformCounted'][];
+      };
+      widget_challenge: {
+        status: components['schemas']['PlatformAbuseCounterStatus'];
+        component: components['schemas']['PlatformComponentStatus'] | null;
+      };
+    };
     Error: {
       error: {
         /** @description One of `ERROR_TYPES` (`@siyahtus/types`). */
@@ -3416,6 +3676,8 @@ export interface components {
     AccountId: string;
     /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
     LicenseId: string;
+    /** @description The blocklist entry's id. Anything else is a 404, like an unknown one. */
+    BlocklistEntryId: string;
     /** @description The session's id. Anything else is a 404, like an unknown one. */
     ImpersonationId: string;
   };
@@ -5295,6 +5557,190 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformBlocklist: {
+    parameters: {
+      query?: {
+        kind?: components['schemas']['PlatformBlocklistKind'];
+        q?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBlocklistList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  addPlatformBlocklistEntry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformBlocklistCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description The entry */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBlocklistEntry'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  removePlatformBlocklistEntry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The blocklist entry's id. Anything else is a 404, like an unknown one. */
+        entryId: components['parameters']['BlocklistEntryId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformFailedLogins: {
+    parameters: {
+      query?: {
+        hours?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformFailedLogins'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformSignupsByIp: {
+    parameters: {
+      query?: {
+        days?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The answer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSignupsByIp'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformSecurityImpersonations: {
+    parameters: {
+      query?: {
+        active?: boolean;
+        license_id?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformAbuseCounters: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAbuseCounters'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
     };
   };
   listPlatformAccounts: {

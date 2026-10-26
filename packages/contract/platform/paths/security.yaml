@@ -1,0 +1,207 @@
+# The Security page (tm 389.16 · FR-ADMIN-22 · design.md §C security).
+# `x-platform-*` as in auth.yaml. Reads change nothing and write no audit
+# entry; the two blocklist mutations take a `reason` (3–500 characters) and are
+# each recorded once in the platform audit chain.
+#
+# Counts, addresses and identifiers only — a workspace's name, a message or a
+# customer's details are never in any of these answers.
+
+blocklist:
+  get:
+    tags: [Security]
+    operationId: listPlatformBlocklist
+    summary: The sign-up blocklist
+    description: |
+      Every entry of `platform_blocklist`, newest first: an exact address, a
+      domain (which also covers its subdomains) or an IP / CIDR. Keyset paging
+      on the creation time. `kind` keeps one kind; `q` keeps the entries whose
+      value contains the text.
+    x-platform-permission: security.read
+    parameters:
+      - name: kind
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBlocklistKind" }
+      - name: q
+        in: query
+        schema: { type: string, minLength: 1, maxLength: 320 }
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 512 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 200 }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBlocklistList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  post:
+    tags: [Security]
+    operationId: addPlatformBlocklistEntry
+    summary: Block an address, a domain or an IP range from signing up
+    description: |
+      The value is stored normalised: an address and a domain in lower case
+      (a leading `@` or `*.` on a domain is dropped), an IP in its canonical
+      form with the host bits of a CIDR zeroed (`10.0.0.5/24` is stored as
+      `10.0.0.0/24`; a bare address is its own range). The same range twice is
+      a 400 `validation` with `details.reason: already_listed`. The next sign-up is checked against
+      it — no cache sits between this write and the gate.
+
+      The `reason` is kept on the entry as well as in the audit chain.
+    x-platform-permission: security.manage
+    x-platform-audit: security.blocklist_added
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBlocklistCreateRequest" }
+    responses:
+      "201":
+        description: The entry
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBlocklistEntry" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+blocklistEntry:
+  delete:
+    tags: [Security]
+    operationId: removePlatformBlocklistEntry
+    summary: Lift a block
+    description: |
+      Removes the entry; the next sign-up it covered passes this gate. The body
+      carries the `reason`. An unknown id is a 404.
+    x-platform-permission: security.manage
+    x-platform-audit: security.blocklist_removed
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BlocklistEntryId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "204":
+        description: Removed
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+failedLogins:
+  get:
+    tags: [Security]
+    operationId: getPlatformFailedLogins
+    summary: Failed sign-ins, tenants and operators
+    description: |
+      Three views. `tenant.live` is the pre-authentication failure budget
+      (`rl:authfail:<ip>`, a 60-second window in Redis) read without spending
+      it: which addresses are failing now, and which are locked out.
+      `tenant.history` is the workspaces' own trail (`auth.login_failed`) over
+      the last `hours`, by address and by workspace. `operator` is this
+      panel's own `admin.sign_in_failed` / `admin.totp_failed` entries over
+      the same span. No address, name or password is ever in an entry, so
+      there is nothing to mask: the trail records the address the attempt came
+      from and nothing about who it claimed to be.
+    x-platform-permission: security.read
+    parameters:
+      - name: hours
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 168, default: 24 }
+    responses:
+      "200":
+        description: The counters
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformFailedLogins" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+signupsByIp:
+  get:
+    tags: [Security]
+    operationId: getPlatformSignupsByIp
+    summary: Sign-ups by source address
+    description: |
+      `status: not_available` — the sign-up does not keep the address it came
+      from (a deliberate privacy decision, design.md §C security), so there is
+      nothing to count and no column was added for it. The answer says so
+      rather than showing an empty list that reads as "no sign-ups".
+    x-platform-permission: security.read
+    parameters:
+      - name: days
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 90, default: 7 }
+    responses:
+      "200":
+        description: The answer
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSignupsByIp" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+impersonations:
+  get:
+    tags: [Security]
+    operationId: listPlatformSecurityImpersonations
+    summary: Impersonation sessions, newest first
+    description: |
+      The same list as `GET /support/impersonations`, behind the Security
+      page's permission: who entered which workspace as whom, in which mode,
+      and how it ended. `active=true` keeps the open ones.
+    x-platform-permission: security.read
+    parameters:
+      - name: active
+        in: query
+        schema: { type: boolean }
+      - name: license_id
+        in: query
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 512 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100 }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformImpersonationList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+abuseCounters:
+  get:
+    tags: [Security]
+    operationId: getPlatformAbuseCounters
+    summary: Abuse counters from the tenant API's guards
+    description: |
+      Each counter says whether its source is there: `available`, or
+      `not_installed` when the table it reads is not part of this database.
+      `invites` — workspaces that sent their daily invitation allowance today
+      (`member.invited` entries, UTC day). `widget_quota` — members who used
+      their whole per-member AI allowance today (`ai_customer_daily_usage`
+      against each workspace's default-brand setting). `widget_challenge` —
+      the human check is logged, not counted, so only the component's state is
+      shown. Workspaces appear by licence number; nothing they wrote does.
+    x-platform-permission: security.read
+    responses:
+      "200":
+        description: The counters
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAbuseCounters" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

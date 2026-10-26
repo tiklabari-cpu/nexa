@@ -454,3 +454,49 @@ test('enters a workspace as its owner, read-only: a tab of its own under the red
   await page.goto(`${ADMIN}/support`);
   await expect(page.getByText('No operator is inside a workspace right now.')).toBeVisible();
 });
+
+test('opens the Security page: blocks a domain with a reason, lifts it, every section answers and passes axe', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+
+  await page.goto(`${ADMIN}/security`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: 'Security', level: 1 })).toBeVisible();
+
+  for (const heading of [
+    'Sign-up blocklist',
+    'Failed sign-ins',
+    'Sign-ups by address',
+    'Abuse counters',
+    'Impersonation sessions',
+  ]) {
+    await expect(page.getByRole('heading', { name: heading, level: 2 })).toBeVisible();
+  }
+  // No section failed, and the sign-up address count says it is not kept rather than showing nothing.
+  await expect(page.getByText('This section could not be loaded')).toHaveCount(0);
+  await expect(page.getByText('does not keep the address it came from')).toBeVisible();
+
+  const blocklist = page.getByRole('region', { name: 'Sign-up blocklist' });
+  await blocklist.getByRole('button', { name: 'Block…' }).click();
+  const add = page.getByRole('dialog');
+  await add.getByLabel('Value').fill('*.E2E-Burner.test');
+  await add.getByLabel('Reason').fill('End-to-end check of the sign-up blocklist');
+  await add.getByRole('button', { name: 'Block' }).click();
+  // Stored the way the sign-up gate compares it.
+  await expect(blocklist.getByRole('cell', { name: 'e2e-burner.test', exact: true })).toBeVisible();
+
+  await blocklist.getByRole('button', { name: 'Lift the block on e2e-burner.test' }).click();
+  const lift = page.getByRole('dialog');
+  await lift.getByLabel('Reason').fill('End-to-end check done');
+  await lift.getByRole('button', { name: 'Lift' }).click();
+  await expect(blocklist.getByRole('cell', { name: 'e2e-burner.test', exact: true })).toHaveCount(
+    0,
+  );
+
+  await scanBothThemes(page, 'security', testInfo);
+});

@@ -78,3 +78,11 @@ export type PlatformOperationsUnverifiedSignups = Schemas['PlatformOperationsUnv
 export type PlatformOperationsPurgeResult = Schemas['PlatformOperationsPurgeResult'];
 export type PlatformOperationsJobs = Schemas['PlatformOperationsJobs'];
 export type PlatformOperationsComponents = Schemas['PlatformOperationsComponents'];
+
+export type PlatformBlocklistKind = Schemas['PlatformBlocklistKind'];
+export type PlatformBlocklistEntry = Schemas['PlatformBlocklistEntry'];
+export type PlatformBlocklistList = Schemas['PlatformBlocklistList'];
+export type PlatformFailedLogins = Schemas['PlatformFailedLogins'];
+export type PlatformSignupsByIp = Schemas['PlatformSignupsByIp'];
+export type PlatformAbuseCounters = Schemas['PlatformAbuseCounters'];
+export type PlatformCounted = Schemas['PlatformCounted'];

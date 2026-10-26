@@ -46,6 +46,7 @@ import platformHealthRoutes from './routes/platform/health.js';
 import platformMetaRoutes from './routes/platform/meta.js';
 import platformSettingsRoutes from './routes/platform/settings.js';
 import platformOperationsRoutes from './routes/platform/operations.js';
+import platformSecurityRoutes from './routes/platform/security.js';
 import platformSupportRoutes from './routes/platform/support.js';
 import platformWorkspacesRoutes from './routes/platform/workspaces.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
@@ -184,6 +185,7 @@ export async function buildPlatformServer({
       await api.register(platformAccountsRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformSettingsRoutes, { ...(now ? { now } : {}) });
       await api.register(platformOperationsRoutes, { env, ...(now ? { now } : {}) });
+      await api.register(platformSecurityRoutes, { env, ...(now ? { now } : {}) });
     },
     { prefix: PLATFORM_PREFIX },
   );

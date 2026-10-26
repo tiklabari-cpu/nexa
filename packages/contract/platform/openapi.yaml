@@ -71,6 +71,11 @@ tags:
       quoted belongs to; and "enter as the customer" (tm 389.15) — a
       time-boxed session as one member, read-only unless a superadmin asks
       otherwise, mailed to the workspace's Founders.
+  - name: Security
+    description: |
+      The Security page (tm 389.16): the sign-up blocklist, failed sign-ins,
+      sign-ups by address, impersonation sessions and the abuse counters of the
+      tenant API's guards. Addresses, identifiers and counts only.
 
 # The operator session (tm 389.4) — an opaque bearer token, not a JWT. Every
 # operation needs it unless it says `security: []`. What else it needs is in
@@ -207,6 +212,18 @@ paths:
     $ref: "./paths/support.yaml#/impersonation"
   /support/impersonations/{impersonationId}/end:
     $ref: "./paths/support.yaml#/impersonationEnd"
+  /security/blocklist:
+    $ref: "./paths/security.yaml#/blocklist"
+  /security/blocklist/{entryId}:
+    $ref: "./paths/security.yaml#/blocklistEntry"
+  /security/failed-logins:
+    $ref: "./paths/security.yaml#/failedLogins"
+  /security/signups-by-ip:
+    $ref: "./paths/security.yaml#/signupsByIp"
+  /security/impersonations:
+    $ref: "./paths/security.yaml#/impersonations"
+  /security/abuse-counters:
+    $ref: "./paths/security.yaml#/abuseCounters"
   /accounts:
     $ref: "./paths/accounts.yaml#/list"
   /accounts/{accountId}:
@@ -286,6 +303,12 @@ components:
       required: true
       description: The workspace's licence number. Anything else is a 404, like an unknown one.
       schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+    BlocklistEntryId:
+      name: entryId
+      in: path
+      required: true
+      description: The blocklist entry's id. Anything else is a 404, like an unknown one.
+      schema: { type: string }
     ImpersonationId:
       name: impersonationId
       in: path
@@ -2107,6 +2130,165 @@ components:
         components:
           type: array
           items: { $ref: "#/components/schemas/PlatformComponentStatus" }
+
+    PlatformBlocklistKind:
+      type: string
+      description: What an entry matches (`PLATFORM_BLOCKLIST_KINDS`, @siyahtus/types).
+      enum: [email, domain, ip]
+
+    PlatformBlocklistEntry:
+      type: object
+      required: [id, kind, value, reason, created_by, created_by_email, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/PlatformBlocklistKind" }
+        value:
+          type: string
+          description: Normalised — an address or domain in lower case, an IP in canonical form (a CIDR with its host bits zeroed).
+        reason: { type: ["string", "null"] }
+        created_by: { type: ["string", "null"], format: uuid }
+        created_by_email: { type: ["string", "null"] }
+        created_at: { type: string, format: date-time }
+
+    PlatformBlocklistList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformBlocklistEntry" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformBlocklistCreateRequest:
+      type: object
+      required: [kind, value, reason]
+      properties:
+        kind: { $ref: "#/components/schemas/PlatformBlocklistKind" }
+        value: { type: string, minLength: 1, maxLength: 320 }
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    PlatformCounted:
+      type: object
+      required: [key, count]
+      properties:
+        key: { type: string, description: An address or a licence number }
+        count: { type: integer, minimum: 0 }
+
+    PlatformFailedLogins:
+      type: object
+      required: [generated_at, hours, since, tenant, operator]
+      properties:
+        generated_at: { type: string, format: date-time }
+        hours: { type: integer }
+        since: { type: string, format: date-time }
+        tenant:
+          type: object
+          required: [live, history]
+          properties:
+            live:
+              type: object
+              required:
+                [status, window_seconds, limit, addresses_total, locked_total, addresses, truncated]
+              properties:
+                status:
+                  type: string
+                  description: "`unavailable` when Redis could not be read."
+                  enum: [available, unavailable]
+                window_seconds: { type: integer }
+                limit:
+                  { type: integer, description: Failures per window before the address is refused. }
+                addresses_total: { type: integer }
+                locked_total: { type: integer }
+                addresses:
+                  type: array
+                  items:
+                    type: object
+                    required: [ip, failures, locked]
+                    properties:
+                      ip: { type: string }
+                      failures: { type: integer }
+                      locked: { type: boolean }
+                truncated: { type: boolean }
+            history:
+              type: object
+              required: [total, by_ip, by_workspace]
+              properties:
+                total: { type: integer }
+                by_ip:
+                  type: array
+                  items: { $ref: "#/components/schemas/PlatformCounted" }
+                by_workspace:
+                  type: array
+                  items: { $ref: "#/components/schemas/PlatformCounted" }
+        operator:
+          type: object
+          required: [sign_in_failed, totp_failed, by_ip]
+          properties:
+            sign_in_failed: { type: integer }
+            totp_failed: { type: integer }
+            by_ip:
+              type: array
+              items: { $ref: "#/components/schemas/PlatformCounted" }
+
+    PlatformSignupsByIp:
+      type: object
+      required: [status, days, reason, data]
+      properties:
+        status:
+          type: string
+          enum: [available, not_available]
+        days: { type: integer }
+        reason: { type: ["string", "null"] }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformCounted" }
+
+    PlatformAbuseCounterStatus:
+      type: string
+      description: |
+        `available` — the source is there and counted; `not_installed` — the
+        table it reads is not part of this database; `not_available` — the
+        guard keeps no count to read.
+      enum: [available, not_installed, not_available]
+
+    PlatformAbuseCounters:
+      type: object
+      required: [generated_at, invites, widget_quota, widget_challenge]
+      properties:
+        generated_at: { type: string, format: date-time }
+        invites:
+          type: object
+          required: [status, limit_per_day, workspaces_at_limit, workspaces]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAbuseCounterStatus" }
+            limit_per_day: { type: integer }
+            workspaces_at_limit: { type: integer }
+            workspaces:
+              type: array
+              items: { $ref: "#/components/schemas/PlatformCounted" }
+        widget_quota:
+          type: object
+          required: [status, day, members_at_cap, workspaces_affected, workspaces]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAbuseCounterStatus" }
+            day: { type: string, description: The UTC day counted (YYYY-MM-DD). }
+            members_at_cap: { type: integer }
+            workspaces_affected: { type: integer }
+            workspaces:
+              type: array
+              items: { $ref: "#/components/schemas/PlatformCounted" }
+        widget_challenge:
+          type: object
+          required: [status, component]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAbuseCounterStatus" }
+            component:
+              oneOf:
+                - { $ref: "#/components/schemas/PlatformComponentStatus" }
+                - { type: "null" }
 
     Error:
       type: object

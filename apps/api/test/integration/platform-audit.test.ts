@@ -385,6 +385,20 @@ describe('the platform audit chain (tm 389.5)', () => {
     );
     ok(await request('POST', '/operations/unverified-signups/purge', { token, body: reason }));
 
+    // The Security page's two (tm 389.16): a block, then lifting it.
+    const blocked = ok(
+      await request('POST', '/security/blocklist', {
+        token,
+        body: { kind: 'domain', value: 'audit-chain.test', ...reason },
+      }),
+    );
+    ok(
+      await request('DELETE', `/security/blocklist/${blocked.json().id as string}`, {
+        token,
+        body: reason,
+      }),
+    );
+
     // "Enter as the customer" (tm 389.15), opened and ended — on B's owner: A is suspended by now
     // (cancelling a deletion keeps the suspension), and nobody can be entered as in it.
     const impersonation = ok(

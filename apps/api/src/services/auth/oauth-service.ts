@@ -107,6 +107,19 @@ function oauthError(code: string, message: string): ApiError {
 }
 
 /**
+ * The refusal of an account the root panel suspended (tm 389.11 · FR-ADMIN-11):
+ * `not_allowed` + a reason, like every other "you, specifically, may not"
+ * (§D195(4)). Given only to a caller who has just proved the password or holds
+ * the account's own code or refresh token — to anybody else the answer is the
+ * one an unknown account gets.
+ */
+export function accountSuspendedError(): ApiError {
+  return new ApiError('not_allowed', 'This account is suspended. Contact SiyahTuş support.', {
+    details: { reason: 'account_suspended' },
+  });
+}
+
+/**
  * Schemes that must never carry an authorization code, listed rather than
  * inferred.
  *
@@ -184,8 +197,23 @@ export class OauthService {
     const account = rows[0];
     const matches = await verifyPassword(password, account?.password_hash ?? null);
     if (!account || !matches) return null;
+    // After the password, so the refusal tells nothing to anybody who has not
+    // proved it; here rather than at each route, because every password
+    // sign-in — the workspace list and the authorization alike — comes through.
+    if (await this.isAccountSuspended(account.id)) throw accountSuspendedError();
 
     return { id: account.id, email: account.email, name: account.name };
+  }
+
+  /**
+   * Whether the root panel suspended this account (tm 389.11): one primary-key
+   * read through a SECURITY DEFINER function, because both callers run before
+   * any tenant context exists and row level security would hide the row.
+   */
+  async isAccountSuspended(accountId: string): Promise<boolean> {
+    const [row] = await this.db.$queryRaw<Array<{ suspended: boolean }>>`
+      SELECT auth_account_suspended(${accountId}::uuid) AS suspended`;
+    return row?.suspended === true;
   }
 
   /**
@@ -531,6 +559,13 @@ export class OauthService {
     rotatesFromId?: string;
   }): Promise<TokenGrant> {
     const familyId = input.familyId ?? crypto.randomUUID();
+
+    // A suspended account mints nothing (tm 389.11): the code exchange (a code
+    // minted the moment before the suspension, or by single sign-on, which
+    // never sees a password) and the refresh rotation both come through here.
+    // The suspension revokes the account's sessions as well; this is the door
+    // they would otherwise be reopened by.
+    if (await this.isAccountSuspended(input.accountId)) throw accountSuspendedError();
 
     // Re-derive the ceiling from the role the account holds *now* (SEC-2, tm
     // 146). Both grants funnel through here, so both are covered by one read:

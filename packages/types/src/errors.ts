@@ -118,6 +118,9 @@ export const ERROR_TYPES = [
   // `platform_workspace_state` (tm 389.10): a workspace action the
   // workspace's current state refuses (`details.reason` says which — a trial
   // to extend on a paid licence, a suspension to lift under a scheduled purge).
+  // `platform_account_state` (tm 389.11): the same for an account action — an
+  // erasure refused while the account is a workspace's only Founder.
+  'platform_account_state',
   'platform_last_superadmin',
   'platform_reason_required',
   'platform_recent_totp_required',
@@ -222,6 +225,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   // both surface as 404, never 403.
   not_found: 404,
   pending_requests_limit_reached: 429,
+  platform_account_state: 409,
   platform_last_superadmin: 409,
   platform_reason_required: 400,
   platform_recent_totp_required: 403,

@@ -65,7 +65,15 @@ interface ResolvedTokenRow {
 }
 
 export type TokenRejection =
-  'unknown' | 'revoked' | 'expired' | 'idle_expired' | 'license_closed' | 'membership_missing';
+  | 'unknown'
+  | 'revoked'
+  | 'expired'
+  | 'idle_expired'
+  | 'license_closed'
+  | 'membership_missing'
+  // The root panel suspended the person (tm 389.11): every token they hold, in
+  // every workspace, is refused — a 401 like the rest, the credential is dead.
+  | 'account_suspended';
 
 export type TokenResolution =
   /**
@@ -91,6 +99,8 @@ interface MembershipRow {
   version: number;
   /** Whether the token's client is the workspace's sign-in client (no scope list of its own). */
   sign_in_client: boolean;
+  /** `accounts.platform_suspended_at IS NOT NULL` (tm 389.11). */
+  account_suspended: boolean;
 }
 
 export class TokenService {
@@ -213,14 +223,20 @@ export class TokenService {
         const [membership] = await tx.$queryRaw<MembershipRow[]>`
           SELECT m.role, m.suspended, m.awaiting_approval,
                  l.permissions_version AS version,
-                 COALESCE(cardinality(c.scopes) = 0, false) AS sign_in_client
+                 COALESCE(cardinality(c.scopes) = 0, false) AS sign_in_client,
+                 a.platform_suspended_at IS NOT NULL AS account_suspended
             FROM agent_memberships m
             JOIN licenses l ON l.id = m.license_id
+            JOIN accounts a ON a.id = m.agent_id
             LEFT JOIN oauth_clients c ON c.id = ${row.client_id}
            WHERE m.license_id = ${row.license_id} AND m.agent_id = ${row.owner_id}::uuid`;
         if (!membership || membership.suspended || membership.awaiting_approval) {
           return { ok: false, reason: 'membership_missing' };
         }
+        // The person, not the membership (tm 389.11): one primary-key join in
+        // the statement this request runs anyway — `auth_resolve_token`'s row
+        // stays as it was. Every token they hold, personal ones included.
+        if (membership.account_suspended) return { ok: false, reason: 'account_suspended' };
         // Idle timeout is a *session* policy: it governs oauth access tokens — the
         // credential a browser sign-in mints and refreshes. Personal access and
         // bot tokens are named, long-lived credentials a human pasted into a

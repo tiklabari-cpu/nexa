@@ -90,6 +90,34 @@ describe('closed licences on the socket (tm 389.2)', () => {
     expect(errorOf(refused).details?.reason).toBeUndefined();
   });
 
+  it('refuses every token of an account the root panel suspended, and admits it once lifted (tm 389.11)', async () => {
+    const token = await agentToken();
+    await db.account.update({
+      where: { id: fx.a.agentAccountId },
+      data: { platformSuspendedAt: new Date(), platformSuspendedReason: 'account takeover review' },
+    });
+
+    const refused = await login(token);
+    expect(refused.success).toBe(false);
+    // The REST edge's answer to the same token: a dead credential, no reason.
+    expect(errorOf(refused).type).toBe('authentication');
+    expect(JSON.stringify(refused)).not.toContain('account takeover review');
+    // The owner of the same workspace is somebody else, and still in.
+    const ownerToken = await grantToken(db, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['chats--access:rw'],
+    });
+    expect((await login(ownerToken)).success).toBe(true);
+
+    await db.account.update({
+      where: { id: fx.a.agentAccountId },
+      data: { platformSuspendedAt: null, platformSuspendedReason: null },
+    });
+    expect((await login(token)).success).toBe(true);
+  });
+
   it('leaves the other workspace on the gateway untouched', async () => {
     await db.license.update({
       where: { id: fx.b.licenseId },

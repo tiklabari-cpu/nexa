@@ -47,3 +47,11 @@ export type PlatformWorkspaceImpersonationList = Schemas['PlatformWorkspaceImper
 export type PlatformWorkspaceAiSummary = Schemas['PlatformWorkspaceAiSummary'];
 export type PlatformWorkspaceAuditList = Schemas['PlatformWorkspaceAuditList'];
 export type PlatformSupportLookup = Schemas['PlatformSupportLookup'];
+
+export type PlatformAccountSummary = Schemas['PlatformAccountSummary'];
+export type PlatformAccountList = Schemas['PlatformAccountList'];
+export type PlatformAccount = Schemas['PlatformAccount'];
+export type PlatformAccountDetail = Schemas['PlatformAccountDetail'];
+export type PlatformAccountActionResult = Schemas['PlatformAccountActionResult'];
+export type PlatformAccountErased = Schemas['PlatformAccountErased'];
+export type PlatformAccountExport = Schemas['PlatformAccountExport'];

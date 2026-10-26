@@ -130,7 +130,10 @@ interface ResolvedTokenRow {
 
 /** The membership facts a member's socket is decided by, read in one statement. */
 interface MemberFacts {
-  /** Null when the membership is gone, suspended or still awaiting approval. */
+  /**
+   * Null when the membership is gone, suspended or still awaiting approval, or
+   * the account itself is suspended by the root panel (tm 389.11).
+   */
   role: string | null;
   version: number;
   sign_in_client: boolean;
@@ -462,9 +465,10 @@ export class SocketAuthenticator {
       organizationId,
       (tx) =>
         tx.$queryRaw<Array<{ role: string }>>`
-        SELECT role FROM agent_memberships
-        WHERE license_id = ${licenseId} AND agent_id = ${agentId}::uuid
-          AND NOT suspended AND NOT awaiting_approval
+        SELECT m.role FROM agent_memberships m
+          JOIN accounts a ON a.id = m.agent_id AND a.platform_suspended_at IS NULL
+        WHERE m.license_id = ${licenseId} AND m.agent_id = ${agentId}::uuid
+          AND NOT m.suspended AND NOT m.awaiting_approval
         LIMIT 1
       `,
     );
@@ -496,6 +500,10 @@ export class SocketAuthenticator {
           LEFT JOIN agent_memberships m
                  ON m.license_id = l.id AND m.agent_id = ${agentId}::uuid
                 AND NOT m.suspended AND NOT m.awaiting_approval
+                -- An account the root panel suspended (tm 389.11) holds no live
+                -- membership anywhere — the REST edge's account_suspended.
+                AND NOT EXISTS (SELECT 1 FROM accounts a
+                                 WHERE a.id = m.agent_id AND a.platform_suspended_at IS NOT NULL)
           LEFT JOIN oauth_clients c ON c.id = ${clientId}
          WHERE l.id = ${licenseId}
       `,

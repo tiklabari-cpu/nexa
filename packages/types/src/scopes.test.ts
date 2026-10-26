@@ -184,6 +184,8 @@ describe('error taxonomy', () => {
     'platform_reason_required',
     // A workspace action its state refuses (tm 389.10).
     'platform_workspace_state',
+    // An account action its state refuses (tm 389.11).
+    'platform_account_state',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

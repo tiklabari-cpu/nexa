@@ -44,6 +44,7 @@ export const common: Messages = {
   'common.errors.not_found': 'Bunu bulamadık.',
   'common.errors.pending_requests_limit_reached':
     'Zaten çok sayıda istek bekliyor — birazdan yeniden deneyin.',
+  'common.errors.platform_account_state': 'Hesabın şu anki durumu buna izin vermiyor.',
   'common.errors.platform_last_superadmin':
     'Bu değişiklik platformu etkin bir süper yöneticisiz bırakır.',
   'common.errors.platform_reason_required':

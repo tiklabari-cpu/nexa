@@ -49,6 +49,12 @@ tags:
       Every workspace and everything about it except its content (tm 389.9):
       organization, licence, members, brands, usage, subscription, invoices,
       sandbox, operator notes, impersonation history, AI counts.
+  - name: Accounts
+    description: |
+      The people behind the memberships (tm 389.11): search, detail, a new
+      verification link, a forced password reset, ending sessions and tokens,
+      a second-factor reset, a suspension in every workspace, an export of
+      their data, erasure.
   - name: Support
     description: |
       The support desk (tm 389.9): which workspace an identifier a customer
@@ -183,6 +189,28 @@ paths:
     $ref: "./paths/workspace-actions.yaml#/deleteCancel"
   /support/lookup:
     $ref: "./paths/support.yaml#/lookup"
+  /accounts:
+    $ref: "./paths/accounts.yaml#/list"
+  /accounts/{accountId}:
+    $ref: "./paths/accounts.yaml#/detail"
+  /accounts/{accountId}/resend-verification:
+    $ref: "./paths/accounts.yaml#/resendVerification"
+  /accounts/{accountId}/force-password-reset:
+    $ref: "./paths/accounts.yaml#/forcePasswordReset"
+  /accounts/{accountId}/revoke-sessions:
+    $ref: "./paths/accounts.yaml#/revokeSessions"
+  /accounts/{accountId}/revoke-tokens:
+    $ref: "./paths/accounts.yaml#/revokeTokens"
+  /accounts/{accountId}/reset-two-factor:
+    $ref: "./paths/accounts.yaml#/resetTwoFactor"
+  /accounts/{accountId}/suspend:
+    $ref: "./paths/accounts.yaml#/suspend"
+  /accounts/{accountId}/unsuspend:
+    $ref: "./paths/accounts.yaml#/unsuspend"
+  /accounts/{accountId}/export:
+    $ref: "./paths/accounts.yaml#/export"
+  /accounts/{accountId}/erase:
+    $ref: "./paths/accounts.yaml#/erase"
 
 components:
   securitySchemes:
@@ -202,6 +230,12 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      description: The account's id. Anything else is a 404, like an unknown one.
+      schema: { type: string }
     LicenseId:
       name: licenseId
       in: path
@@ -1455,6 +1489,222 @@ components:
             total: { type: integer }
             active: { type: integer }
 
+    PlatformAccountSummary:
+      type: object
+      required:
+        [id, email, name, created_at, email_verified_at, platform_suspended_at, membership_count]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        email_verified_at: { type: ["string", "null"], format: date-time }
+        platform_suspended_at: { type: ["string", "null"], format: date-time }
+        membership_count: { type: integer }
+
+    PlatformAccountList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformAccountSummary" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformAccountMembership:
+      type: object
+      required:
+        [
+          license_id,
+          organization_name,
+          role,
+          suspended,
+          awaiting_approval,
+          license_status,
+          sandbox,
+          two_factor_required,
+          joined_at,
+        ]
+      properties:
+        license_id: { type: string }
+        organization_name: { type: string }
+        role: { $ref: "#/components/schemas/PlatformMemberRole" }
+        suspended: { type: boolean, description: The membership, suspended by the workspace. }
+        awaiting_approval: { type: boolean }
+        license_status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
+        sandbox: { type: boolean }
+        two_factor_required: { type: boolean, description: The workspace requires a second factor. }
+        joined_at: { type: string, format: date-time }
+
+    PlatformAccount:
+      type: object
+      required:
+        [
+          id,
+          email,
+          name,
+          created_at,
+          email_verified_at,
+          last_seen_at,
+          last_sign_in_at,
+          password_set,
+          platform_suspended_at,
+          platform_suspended_reason,
+          two_factor,
+          credentials,
+          memberships,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        email_verified_at: { type: ["string", "null"], format: date-time }
+        last_seen_at: { type: ["string", "null"], format: date-time }
+        last_sign_in_at:
+          type: ["string", "null"]
+          format: date-time
+          description: When a session was last opened for the account.
+        password_set:
+          { type: boolean, description: False for an account that only signs in by SSO. }
+        platform_suspended_at: { type: ["string", "null"], format: date-time }
+        platform_suspended_reason:
+          type: ["string", "null"]
+          description: The operator's words — for the panel, shown to nobody else.
+        two_factor:
+          type: object
+          required: [enabled, enabled_at, recovery_codes_left]
+          properties:
+            enabled: { type: boolean }
+            enabled_at: { type: ["string", "null"], format: date-time }
+            recovery_codes_left: { type: integer }
+        credentials:
+          type: object
+          description: Live credentials, counted — never the tokens.
+          required: [sessions, personal_tokens]
+          properties:
+            sessions: { type: integer }
+            personal_tokens: { type: integer }
+        memberships:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformAccountMembership" }
+
+    PlatformAccountDetail:
+      type: object
+      required: [account]
+      properties:
+        account: { $ref: "#/components/schemas/PlatformAccount" }
+
+    PlatformAccountActionResult:
+      type: object
+      description: |
+        What an account action answers (tm 389.11): whether it changed anything
+        and the account as it now reads. `mail` on the actions that send one.
+      required: [unchanged, account]
+      properties:
+        unchanged: { type: boolean }
+        account: { $ref: "#/components/schemas/PlatformAccount" }
+        mail: { type: string, enum: [sent, failed] }
+
+    PlatformAccountEraseRequest:
+      type: object
+      required: [confirm_email, reason]
+      properties:
+        confirm_email:
+          type: string
+          maxLength: 320
+          description: The account's address, typed — it must match.
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformAccountErased:
+      type: object
+      required: [erased, account_id, license_ids]
+      properties:
+        erased: { type: boolean, enum: [true] }
+        account_id: { type: string, format: uuid }
+        license_ids:
+          type: array
+          description: The workspaces the person was a member of — each trail records it.
+          items: { type: string }
+
+    PlatformAccountExport:
+      type: object
+      description: |
+        The account's data (`format: siyahtus.account-export.v1`). No workspace
+        content — a workspace exports its own.
+      required: [format, generated_at, account, memberships, personal_tokens, audit_summary]
+      properties:
+        format: { type: string, enum: [siyahtus.account-export.v1] }
+        generated_at: { type: string, format: date-time }
+        account:
+          type: object
+          required:
+            [
+              id,
+              email,
+              name,
+              avatar_url,
+              created_at,
+              email_verified_at,
+              last_seen_at,
+              password_set,
+              suspended,
+              two_factor,
+            ]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string }
+            name: { type: string }
+            avatar_url: { type: ["string", "null"] }
+            created_at: { type: string, format: date-time }
+            email_verified_at: { type: ["string", "null"], format: date-time }
+            last_seen_at: { type: ["string", "null"], format: date-time }
+            password_set: { type: boolean }
+            suspended: { type: boolean }
+            two_factor:
+              type: object
+              required: [enabled, enabled_at]
+              properties:
+                enabled: { type: boolean }
+                enabled_at: { type: ["string", "null"], format: date-time }
+        memberships:
+          type: array
+          items:
+            type: object
+            required:
+              [license_id, organization_name, role, suspended, awaiting_approval, joined_at, locale]
+            properties:
+              license_id: { type: string }
+              organization_name: { type: string }
+              role: { type: string }
+              suspended: { type: boolean }
+              awaiting_approval: { type: boolean }
+              joined_at: { type: string, format: date-time }
+              locale: { type: ["string", "null"] }
+        personal_tokens:
+          type: array
+          items:
+            type: object
+            required: [name, license_id, created_at, last_used_at, expires_at, revoked_at]
+            properties:
+              name: { type: ["string", "null"] }
+              license_id: { type: string }
+              created_at: { type: string, format: date-time }
+              last_used_at: { type: ["string", "null"], format: date-time }
+              expires_at: { type: ["string", "null"], format: date-time }
+              revoked_at: { type: ["string", "null"], format: date-time }
+        audit_summary:
+          type: array
+          description: How many entries the person's own actions left in each workspace's trail.
+          items:
+            type: object
+            required: [license_id, entries, first_at, last_at]
+            properties:
+              license_id: { type: string }
+              entries: { type: integer }
+              first_at: { type: ["string", "null"], format: date-time }
+              last_at: { type: ["string", "null"], format: date-time }
+
     PlatformSupportLookup:
       type: object
       required: [data]
@@ -1534,7 +1784,8 @@ components:
     Conflict:
       description: |
         `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
-        `platform_workspace_state` (`details.reason`, tm 389.10) — the request was
+        `platform_workspace_state` (`details.reason`, tm 389.10) or
+        `platform_account_state` (`details.reason`, tm 389.11) — the request was
         fine, the state refused it.
       content:
         application/json:

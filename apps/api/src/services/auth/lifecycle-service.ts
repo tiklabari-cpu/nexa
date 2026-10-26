@@ -41,7 +41,8 @@ import { ROLE_RANK } from './principal.js';
 export const TRIAL_DAYS = 14;
 /** The default life of a sign-up verification link; `SIGNUP_VERIFICATION_TTL_HOURS` overrides it. */
 export const VERIFICATION_TTL_HOURS = 24;
-const RESET_TTL_MS = 60 * 60 * 1000; // one hour
+/** How long a password reset link works — the mail does not say, the link just stops. */
+export const RESET_TTL_MS = 60 * 60 * 1000; // one hour
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface Membership {

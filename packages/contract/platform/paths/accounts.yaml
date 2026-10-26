@@ -1,0 +1,248 @@
+# The people behind the memberships (tm 389.11 · FR-ADMIN-11 · design.md §C
+# accounts). `x-platform-*` as in auth.yaml.
+#
+# An account may belong to several workspaces, so every action reaches all of
+# them. Each takes a `reason` (3–500 characters) and is recorded in one
+# transaction with the change: once in the platform audit chain as
+# `account.<verb>` (with the reason) and, in every workspace the person
+# belongs to, as `platform.account_<verb>` (without it). Every action except
+# export and erase answers `PlatformAccountActionResult` — `unchanged` and the
+# account as it now reads; asking for what is already so is `unchanged: true`
+# and records nothing. A state that refuses an action is 409
+# `platform_account_state` with `details.reason` (`account_is_sole_owner`).
+# An id that is not a UUID is the same 404 as an unknown one.
+
+list:
+  get:
+    tags: [Accounts]
+    operationId: listPlatformAccounts
+    summary: Search accounts
+    description: |
+      Alphabetically by address, keyset on it. `q` matches an address exactly
+      or as a prefix, a name as a prefix, or an id exactly — prefixes, not
+      substrings. Without `q`, every account.
+    x-platform-permission: accounts.read
+    parameters:
+      - name: q
+        in: query
+        schema: { type: string, maxLength: 320 }
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 1024 }
+      - name: limit
+        in: query
+        description: 1–50; 25 when absent.
+        schema: { type: integer, minimum: 1 }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAccountList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+detail:
+  get:
+    tags: [Accounts]
+    operationId: getPlatformAccount
+    summary: One account
+    description: |
+      The profile, every membership with its role and its workspace's state,
+      the last sign-in, the second factor and live credential counts — never
+      a token, never a workspace's content.
+    x-platform-permission: accounts.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    responses:
+      "200":
+        description: The account
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAccountDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+resendVerification:
+  post:
+    tags: [Accounts]
+    operationId: resendPlatformAccountVerification
+    summary: Mail a new verification link
+    description: |
+      Spends the earlier link and mails a new one, as the person's own resend
+      does. A verified address is `unchanged` and gets no mail.
+    x-platform-permission: accounts.support
+    x-platform-audit: account.verification_resent
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: &reasonBody
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses: &actionResponses
+      "200":
+        description: The account after the action
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAccountActionResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+forcePasswordReset:
+  post:
+    tags: [Accounts]
+    operationId: forcePlatformAccountPasswordReset
+    summary: End every session and mail a password reset link
+    description: |
+      Every session and refresh token of the account ends in every workspace,
+      and a reset link is mailed (one hour). The password stays until the link
+      is used, which also ends the personal access tokens.
+    x-platform-permission: accounts.support
+    x-platform-audit: account.password_reset_forced
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+revokeSessions:
+  post:
+    tags: [Accounts]
+    operationId: revokePlatformAccountSessions
+    summary: Sign the person out everywhere
+    description: |
+      Every access, enrolment and refresh token a sign-in minted, in every
+      workspace. Personal access tokens stay — `revoke-tokens` ends those too.
+    x-platform-permission: accounts.support
+    x-platform-audit: account.sessions_revoked
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+revokeTokens:
+  post:
+    tags: [Accounts]
+    operationId: revokePlatformAccountTokens
+    summary: End every credential the person holds
+    description: Sessions and personal access tokens alike, in every workspace.
+    x-platform-permission: accounts.support
+    x-platform-audit: account.tokens_revoked
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+resetTwoFactor:
+  post:
+    tags: [Accounts]
+    operationId: resetPlatformAccountTwoFactor
+    summary: Remove the authenticator
+    description: |
+      The authenticator and its recovery codes go. The next sign-in asks for
+      no code — or, where a workspace requires a second factor, for a new one
+      to be set up first. Superadmin and a code younger than five minutes.
+    x-platform-permission: accounts.manage
+    x-platform-recent-totp: true
+    x-platform-audit: account.two_factor_reset
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+suspend:
+  post:
+    tags: [Accounts]
+    operationId: suspendPlatformAccount
+    summary: Suspend the account everywhere
+    description: |
+      Every session ends; until it is lifted the password is refused with 403
+      `not_allowed` (`details.reason: account_suspended`), every token the
+      person holds with 401, and the realtime gateway refuses the socket.
+      Memberships do not change. The reason stays with the platform.
+    x-platform-permission: accounts.manage
+    x-platform-audit: account.suspended
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+unsuspend:
+  post:
+    tags: [Accounts]
+    operationId: unsuspendPlatformAccount
+    summary: Lift the account's suspension
+    description: The person signs in again exactly where they were; ended sessions stay ended.
+    x-platform-permission: accounts.manage
+    x-platform-audit: account.unsuspended
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: *reasonBody
+    responses: *actionResponses
+
+export:
+  post:
+    tags: [Accounts]
+    operationId: exportPlatformAccount
+    summary: Export the account's data
+    description: |
+      What the platform holds about the person as a person (GDPR Art. 15/20):
+      profile, memberships, personal tokens' names and dates, and a count of
+      their trail in each workspace. Not a workspace's content and not the
+      operator's reason for a suspension. A POST so it is recorded.
+    x-platform-permission: accounts.manage
+    x-platform-audit: account.exported
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody: *reasonBody
+    responses:
+      "200":
+        description: The document
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAccountExport" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+erase:
+  post:
+    tags: [Accounts]
+    operationId: erasePlatformAccount
+    summary: Erase the account
+    description: |
+      Deletes the account and everything that hangs off it (memberships,
+      second factor, links, tokens); what the person wrote inside a workspace
+      stays with the workspace. `confirm_email` must be the address (400
+      `validation`, `details.reason: confirm_email_mismatch`). Refused while
+      the person is a workspace's Founder — 409 `platform_account_state`,
+      `details.reason: account_is_sole_owner`, `details.license_ids`; force
+      the ownership transfer first. Superadmin and a code younger than five
+      minutes.
+    x-platform-permission: accounts.manage
+    x-platform-recent-totp: true
+    x-platform-audit: account.erased
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/AccountId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAccountEraseRequest" }
+    responses:
+      "200":
+        description: Erased
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAccountErased" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }

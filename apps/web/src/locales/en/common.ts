@@ -57,6 +57,7 @@ export const common: Messages = {
   'common.errors.not_found': 'We could not find that.',
   'common.errors.pending_requests_limit_reached':
     'Too many requests are already waiting — try again shortly.',
+  'common.errors.platform_account_state': 'The account is not in a state that allows this.',
   'common.errors.platform_last_superadmin':
     'This would leave the platform without an active superadmin.',
   'common.errors.platform_reason_required':

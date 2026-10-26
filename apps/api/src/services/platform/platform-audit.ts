@@ -275,6 +275,13 @@ export interface PlatformAuditEntry {
   targetId?: string | null;
   /** The workspace the action concerns — writes its own trail too. */
   licenseId?: bigint | null;
+  /**
+   * More workspaces the action concerns, each of which gets the tenant half
+   * too — an account action reaches every workspace the person belongs to
+   * (tm 389.11). The platform row keeps `licenseId` (null for an account);
+   * the list belongs in the payload.
+   */
+  workspaces?: readonly bigint[];
   /** Required on every action outside {@link PLATFORM_SELF_ACTIONS}. */
   reason?: string | null;
   /** Identifiers, counts, changed field names — never values or secrets. */
@@ -487,6 +494,9 @@ export class PlatformAuditLog {
     if (licenseId === null && requiresWorkspace(entry.action)) {
       throw new TypeError(`${entry.action} needs the workspace it acts on`);
     }
+    if ((entry.workspaces?.length ?? 0) > 0 && tenantActionOf(entry.action) === null) {
+      throw new TypeError(`${entry.action} has no workspace wording and cannot name a workspace`);
+    }
     return { ...entry, reason };
   }
 
@@ -501,15 +511,20 @@ export class PlatformAuditLog {
     const licenseId = entry.licenseId ?? null;
     const payload = sanitizeAuditMetadata(entry.payload);
 
-    const tenantAction = licenseId === null ? null : tenantActionOf(entry.action);
-    if (licenseId !== null && tenantAction !== null) {
+    const tenantAction = tenantActionOf(entry.action);
+    // Ascending, so two writers naming overlapping workspaces take their
+    // heads in one order and cannot deadlock against each other.
+    const trails = [
+      ...new Set([...(licenseId === null ? [] : [licenseId]), ...(entry.workspaces ?? [])]),
+    ].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    for (const trail of tenantAction === null ? [] : trails) {
       // BYPASSRLS skips the policy, but the column-level context is still
       // what `siyahtus_current_license()` reads anywhere a trigger asks.
-      await tx.$executeRaw`SELECT set_config('app.current_license', ${licenseId.toString()}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.current_license', ${trail.toString()}, true)`;
       await writeAuditEntry(
         tx as unknown as TenantClient,
         {
-          licenseId,
+          licenseId: trail,
           chainSecret: this.#tenantChainSecret,
           actorId: entry.adminId,
           actorType: 'platform',
@@ -517,10 +532,10 @@ export class PlatformAuditLog {
           ip: entry.ip ?? null,
         },
         {
-          action: tenantAction,
+          action: tenantAction!,
           target:
             entry.targetType === 'workspace'
-              ? `license:${licenseId}`
+              ? `license:${trail}`
               : `${entry.targetType}:${entry.targetId ?? ''}`,
           metadata: { platform_seq: slot.seq.toString() },
         },

@@ -15766,7 +15766,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-26T08:34:00.714Z",
+        "updatedAt": "2026-10-26T08:36:07.362Z",
         "subtasks": [
           {
             "id": 1,
@@ -15937,7 +15937,7 @@
             ],
             "parentId": "389",
             "priority": "high",
-            "updatedAt": "2026-10-26T08:34:00.714Z"
+            "updatedAt": "2026-10-26T08:36:07.362Z"
           },
           {
             "id": 13,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-26T08:34:00.715Z",
+      "lastModified": "2026-10-26T08:36:07.363Z",
       "taskCount": 390,
       "completedCount": 327,
       "tags": [

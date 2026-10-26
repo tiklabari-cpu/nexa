@@ -3,7 +3,8 @@
  * Thread ID, a Chat ID, a ticket number or their email — and get the workspace it belongs to.
  *
  * The answer is a licence number and an organization name, never what was written: entering
- * the workspace to read it is impersonation (389.15), on the record. "Nothing found" covers
+ * the workspace to read it is impersonation (389.15), on the record — its open sessions are
+ * listed below the lookup, each with End. "Nothing found" covers
  * both an unknown identifier and text that is not one; the server does not tell them apart,
  * and neither does this page. "Thread ID" and "Chat ID" stay English in every locale (ID-01-S1).
  */
@@ -16,6 +17,7 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { api } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import type { PlatformSupportLookup } from '../../lib/platform-types.js';
+import { ActiveImpersonations } from './Impersonation.js';
 import {
   Cell,
   DataTable,
@@ -115,6 +117,9 @@ export function SupportPage(): ReactElement {
           <EmptyLine>{t('support.lookup.idle')}</EmptyLine>
         )}
       </Card>
+
+      {/* Open "enter as the customer" sessions, each with End (tm 389.15). */}
+      <ActiveImpersonations />
     </Page>
   );
 }

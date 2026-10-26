@@ -18,9 +18,27 @@ import fp from 'fastify-plugin';
 import type { Env } from '../config/env.js';
 import type { AuditActorType, AuditContext } from '../services/audit/audit-log.js';
 
-function actorOf(request: FastifyRequest): { actorId: string | null; actorType: AuditActorType } {
+interface Actor {
+  actorId: string | null;
+  actorType: AuditActorType;
+  /** The member a `platform` actor is signed in as — impersonation only. */
+  onBehalfOf?: string;
+}
+
+function actorOf(request: FastifyRequest): Actor {
   const principal = request.principal;
   if (!principal) return { actorId: null, actorType: 'system' };
+  // An operator signed in as the member from the root panel (tm 389.15 ·
+  // design §G): the entry names the operator as the actor and the member as
+  // who they acted for, so the workspace's trail never shows the member doing
+  // what SiyahTuş staff did in their name.
+  if (principal.kind === 'agent' && principal.impersonation) {
+    return {
+      actorId: principal.impersonation.adminId,
+      actorType: 'platform',
+      onBehalfOf: principal.accountId,
+    };
+  }
   if (principal.kind === 'agent') return { actorId: principal.accountId, actorType: 'agent' };
   if (principal.kind === 'bot') return { actorId: principal.botId, actorType: 'bot' };
   // An enrollment ticket (S11-2FA-k) names a person, and the two entries it can
@@ -57,7 +75,8 @@ async function auditPlugin(app: FastifyInstance, options: { env: Env }): Promise
   app.decorateRequest(
     'auditContext',
     function (this: FastifyRequest, overrides: Partial<AuditContext> = {}): AuditContext {
-      const { actorId, actorType } = actorOf(this);
+      const { actorId, actorType, onBehalfOf } = actorOf(this);
+      const resolvedType = overrides.actorType ?? actorType;
       return {
         chainSecret,
         // `as bigint` documents the contract: an authenticated route has a
@@ -66,7 +85,11 @@ async function auditPlugin(app: FastifyInstance, options: { env: Env }): Promise
         // loudly rather than writing an orphan row.
         licenseId: (overrides.licenseId ?? this.principal?.licenseId) as bigint,
         actorId: overrides.actorId !== undefined ? overrides.actorId : actorId,
-        actorType: overrides.actorType ?? actorType,
+        actorType: resolvedType,
+        // Only a `platform` entry speaks for somebody (`audit_log_on_behalf_of_check`):
+        // a route that names its own actor type drops the member with it.
+        onBehalfOf:
+          resolvedType === 'platform' ? (overrides.onBehalfOf ?? onBehalfOf ?? null) : null,
         requestId: overrides.requestId !== undefined ? overrides.requestId : this.id,
         ip: overrides.ip !== undefined ? overrides.ip : (this.ip ?? null),
       };

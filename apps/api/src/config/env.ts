@@ -233,6 +233,12 @@ export const envSchema = z.object({
   PLATFORM_SESSION_TTL: z.string().optional(),
   PLATFORM_IDLE_TTL: z.string().optional(),
   /**
+   * How long an operator's "enter as the customer" session lasts, in seconds
+   * (tm 389.15 · FR-ADMIN-21; 1800). Read by the platform process only —
+   * validated in `config/platform-env.ts` like the three above.
+   */
+  PLATFORM_IMPERSONATION_TTL: z.string().optional(),
+  /**
    * How many reverse-proxy hops in front of this process are trusted, and so
    * how far into `X-Forwarded-For` `request.ip` is allowed to read
    * (NFR-S9 · M-PROD-CFG-b). See `server.ts`, which hands it to Fastify.

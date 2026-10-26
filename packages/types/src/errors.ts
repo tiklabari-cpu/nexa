@@ -91,6 +91,16 @@ export const ERROR_TYPES = [
   'group_topic_role_taken',
   'group_unavailable',
   'groups_offline',
+  // SiyahTuş additions — "enter as the customer" (FR-ADMIN-21 · tm 389.15).
+  // An operator signed in as a member from the root panel asked for something
+  // the session does not allow: a write in a `read_only` session, or — in any
+  // mode — one of the routes no operator may take on a member's behalf
+  // (passwords, second factors, credentials, security, payment, the
+  // subscription, the BAA, erasure, the sandbox; `IMPERSONATION_FORBIDDEN_PATHS`,
+  // `details.category` says which). Both 403 and their own types, so the
+  // panel says "this session is read-only" rather than "you lack permission".
+  'impersonation_forbidden_path',
+  'impersonation_read_only',
   'internal',
   'license_expired',
   'limit_reached',
@@ -221,6 +231,8 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   group_topic_role_taken: 409,
   group_unavailable: 409,
   groups_offline: 409,
+  impersonation_forbidden_path: 403,
+  impersonation_read_only: 403,
   internal: 500,
   license_expired: 402,
   limit_reached: 429,

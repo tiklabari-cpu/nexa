@@ -68,7 +68,9 @@ tags:
   - name: Support
     description: |
       The support desk (tm 389.9): which workspace an identifier a customer
-      quoted belongs to. Impersonation arrives with 389.15.
+      quoted belongs to; and "enter as the customer" (tm 389.15) — a
+      time-boxed session as one member, read-only unless a superadmin asks
+      otherwise, mailed to the workspace's Founders.
 
 # The operator session (tm 389.4) — an opaque bearer token, not a JWT. Every
 # operation needs it unless it says `security: []`. What else it needs is in
@@ -199,6 +201,12 @@ paths:
     $ref: "./paths/workspace-actions.yaml#/deleteCancel"
   /support/lookup:
     $ref: "./paths/support.yaml#/lookup"
+  /support/impersonations:
+    $ref: "./paths/support.yaml#/impersonations"
+  /support/impersonations/{impersonationId}:
+    $ref: "./paths/support.yaml#/impersonation"
+  /support/impersonations/{impersonationId}/end:
+    $ref: "./paths/support.yaml#/impersonationEnd"
   /accounts:
     $ref: "./paths/accounts.yaml#/list"
   /accounts/{accountId}:
@@ -278,6 +286,12 @@ components:
       required: true
       description: The workspace's licence number. Anything else is a 404, like an unknown one.
       schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+    ImpersonationId:
+      name: impersonationId
+      in: path
+      required: true
+      description: The session's id. Anything else is a 404, like an unknown one.
+      schema: { type: string }
 
   schemas:
     PlatformRole:
@@ -1519,6 +1533,95 @@ components:
               ends_at: { type: string, format: date-time }
               ended_at: { type: ["string", "null"], format: date-time }
               end_reason: { type: ["string", "null"] }
+
+    PlatformImpersonationStartRequest:
+      type: object
+      required: [license_id, account_id, reason]
+      properties:
+        license_id: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+        account_id:
+          type: string
+          format: uuid
+          description: The member to enter as — a live member of the workspace.
+        mode:
+          type: string
+          enum: [read_only, full]
+          default: read_only
+        reason:
+          type: string
+          description: Why — recorded in the platform audit chain (tm 389.5).
+          minLength: 3
+          maxLength: 500
+
+    PlatformImpersonation:
+      type: object
+      required:
+        [
+          id,
+          license_id,
+          organization_name,
+          account_id,
+          account_email,
+          admin_id,
+          admin_email,
+          mode,
+          started_at,
+          ends_at,
+          ended_at,
+          end_reason,
+          active,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        license_id: { type: string }
+        organization_name: { type: ["string", "null"] }
+        account_id: { type: string, format: uuid }
+        account_email: { type: ["string", "null"] }
+        admin_id: { type: string, format: uuid }
+        admin_email: { type: ["string", "null"] }
+        mode: { type: string, enum: [read_only, full] }
+        started_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        ended_at: { type: ["string", "null"], format: date-time }
+        end_reason:
+          type: ["string", "null"]
+          enum: [ended_by_operator, ended_in_workspace, null]
+          description: Empty while open, and for a session whose window simply ran out.
+        active:
+          type: boolean
+          description: Not ended and its window not run out.
+
+    PlatformImpersonationStarted:
+      type: object
+      required: [impersonation, handoff_url, handoff_expires_at, mail]
+      properties:
+        impersonation: { $ref: "#/components/schemas/PlatformImpersonation" }
+        handoff_url:
+          type: string
+          description: |
+            `<WEB_APP_URL>/auth/impersonate#code=…` — open it in a new tab. Good
+            once, until `handoff_expires_at`; shown here and nowhere else.
+        handoff_expires_at: { type: string, format: date-time }
+        mail:
+          type: string
+          enum: [sent, failed, none]
+          description: The Founders' notice — `none` when the workspace has no Founder to tell.
+
+    PlatformImpersonationEnded:
+      type: object
+      required: [unchanged, impersonation]
+      properties:
+        unchanged: { type: boolean }
+        impersonation: { $ref: "#/components/schemas/PlatformImpersonation" }
+
+    PlatformImpersonationList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformImpersonation" }
+        next_cursor: { type: ["string", "null"] }
 
     PlatformWorkspaceAiSummary:
       type: object

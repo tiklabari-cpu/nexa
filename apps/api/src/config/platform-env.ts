@@ -11,6 +11,7 @@
  * Like `parseEnv`, every problem is collected before anything is thrown, so
  * whoever deploys learns all of them at once.
  */
+import { IMPERSONATION_TTL_DEFAULT_SECONDS } from '@siyahtus/types';
 import type { Env } from './env.js';
 import { parseOriginList, withPoolSize } from './env.js';
 import { parseAllowlistEntry } from '../lib/ip-allowlist.js';
@@ -34,6 +35,11 @@ export interface PlatformEnv {
   /** How long a session may sit without a request (`PLATFORM_IDLE_TTL`, 15 min). */
   idleTtlS: number;
   /**
+   * How long "enter as the customer" lasts (`PLATFORM_IMPERSONATION_TTL`,
+   * 30 min, tm 389.15). No extension: a longer look is a new session.
+   */
+  impersonationTtlS: number;
+  /**
    * `PLATFORM_SETTINGS_KEY` — the root the platform's sub-keys are derived
    * from (`lib/platform-keys.ts`); operator TOTP secrets are sealed under one.
    * Outside production an unset key falls back to {@link DEV_PLATFORM_SETTINGS_KEY}
@@ -52,6 +58,7 @@ export const PLATFORM_DEFAULTS = {
   rateLimitPerMin: 300,
   sessionTtlS: 28_800,
   idleTtlS: 900,
+  impersonationTtlS: IMPERSONATION_TTL_DEFAULT_SECONDS,
 } as const;
 
 /**
@@ -61,6 +68,13 @@ export const PLATFORM_DEFAULTS = {
  */
 const SESSION_TTL_RANGE = { min: 300, max: 604_800 } as const;
 const IDLE_TTL_MIN = 60;
+
+/**
+ * An impersonation session lasts between five minutes (long enough to look at
+ * anything) and two hours (an operator who needs longer opens a new one, and
+ * the workspace's Founders hear of it again).
+ */
+const IMPERSONATION_TTL_RANGE = { min: 300, max: 7_200 } as const;
 
 /**
  * The published development root key — what `.env.example` ships. Used only
@@ -203,6 +217,17 @@ export function platformEnvProblems(env: Env): string[] {
     problems.push('PLATFORM_IDLE_TTL cannot be longer than PLATFORM_SESSION_TTL.');
   }
 
+  const impersonationTtl = positiveInt(
+    env.PLATFORM_IMPERSONATION_TTL,
+    PLATFORM_DEFAULTS.impersonationTtlS,
+    IMPERSONATION_TTL_RANGE.max,
+  );
+  if (impersonationTtl === null || impersonationTtl < IMPERSONATION_TTL_RANGE.min) {
+    problems.push(
+      `PLATFORM_IMPERSONATION_TTL must be a whole number of seconds between ${IMPERSONATION_TTL_RANGE.min} and ${IMPERSONATION_TTL_RANGE.max}.`,
+    );
+  }
+
   const settingsKey = env.PLATFORM_SETTINGS_KEY?.trim();
   if (!settingsKey) {
     if (env.isProduction) {
@@ -272,6 +297,11 @@ export function assertPlatformEnv(env: Env): PlatformEnv {
       env.PLATFORM_IDLE_TTL,
       PLATFORM_DEFAULTS.idleTtlS,
       SESSION_TTL_RANGE.max,
+    )!,
+    impersonationTtlS: positiveInt(
+      env.PLATFORM_IMPERSONATION_TTL,
+      PLATFORM_DEFAULTS.impersonationTtlS,
+      IMPERSONATION_TTL_RANGE.max,
     )!,
     settingsKey: env.PLATFORM_SETTINGS_KEY?.trim() || DEV_PLATFORM_SETTINGS_KEY,
     warnings: platformEnvWarnings(env),

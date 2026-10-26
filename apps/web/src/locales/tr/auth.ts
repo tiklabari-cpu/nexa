@@ -165,6 +165,18 @@ export const auth: Messages = {
   'auth.legal.privacy': 'Gizlilik Politikası',
 
   // OAuth/SSO callback
+  // "Müşteri olarak gir" (tm 389.15): kök panelin tek kullanımlık bağlantısı buraya gelir.
+  'auth.impersonate.entering': 'Destek oturumu açılıyor…',
+  'auth.impersonate.noCode': 'Bu bağlantıda oturum kodu yok.',
+  'auth.impersonate.invalid': 'Bu bağlantı zaten kullanılmış ya da süresi dolmuş.',
+  'auth.impersonate.failed': 'Destek oturumu açılamadı.',
+  'auth.impersonate.again':
+    'Kök panelden yeni bir oturum başlatın — her bağlantı bir kez ve bir dakika içinde çalışır.',
+  'auth.impersonate.endedTitle': 'Destek oturumu bitti',
+  'auth.impersonate.ended': 'Oturumu bitirdiniz. Bu çalışma alanına erişimi kalmadı.',
+  'auth.impersonate.expired': 'Oturum sona erdi — süresi doldu ya da kök panelden bitirildi.',
+  'auth.impersonate.unreachable': 'Sunucuya ulaşılamadı. Yeniden denemek için sayfayı yenileyin.',
+  'auth.impersonate.closeTab': 'Bu sekmeyi kapatabilirsiniz.',
   'auth.callback.signingIn': 'Oturumunuz açılıyor…',
   'auth.callback.noCode': 'Bu oturum açma tamamlanmadı. Oturum açma sayfasından yeniden başlayın.',
   'auth.callback.genericFailure': 'Oturum açma başarısız oldu.',

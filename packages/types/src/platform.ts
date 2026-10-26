@@ -222,3 +222,190 @@ export const PLATFORM_JOB_RUN = 'job.run';
  * scheduler-enabled processes subscribe here, and `no_listener` stays true.
  */
 export const PLATFORM_JOB_CHANNEL = 'siyahtus:platform:ops:jobs';
+
+// --- "Enter as the customer" (tm 389.15 · FR-ADMIN-21 · design.md §G) ------
+
+/**
+ * How an operator is signed in as a member. `read_only` (the default) refuses
+ * every write; `full` acts as the member — superadmin only, with a fresh
+ * TOTP. Neither reaches past the member's own role: the session carries the
+ * member's role and the workspace's permission matrix, never more.
+ */
+export const IMPERSONATION_MODES = ['read_only', 'full'] as const;
+export type ImpersonationMode = (typeof IMPERSONATION_MODES)[number];
+
+export function isImpersonationMode(value: unknown): value is ImpersonationMode {
+  return typeof value === 'string' && (IMPERSONATION_MODES as readonly string[]).includes(value);
+}
+
+/**
+ * How long the one-time handoff code lasts: one browser redirect from the
+ * root panel to the workspace console, not a link anybody keeps.
+ */
+export const IMPERSONATION_HANDOFF_TTL_SECONDS = 60;
+
+/** A session's lifetime unless `PLATFORM_IMPERSONATION_TTL` says otherwise (30 min). */
+export const IMPERSONATION_TTL_DEFAULT_SECONDS = 1800;
+
+/**
+ * Why a session stopped before its window ran out: an operator ended it from
+ * the root panel, or the one signed in ended it from the workspace console's
+ * banner. A session whose window simply ran out keeps `end_reason` empty.
+ */
+export const IMPERSONATION_END_REASONS = ['ended_by_operator', 'ended_in_workspace'] as const;
+export type ImpersonationEndReason = (typeof IMPERSONATION_END_REASONS)[number];
+
+/**
+ * Where the workspace console redeems a handoff code: `#code=` in the
+ * fragment, so the code never reaches a server log, a proxy or a referrer.
+ */
+export const IMPERSONATION_CONSOLE_PATH = '/auth/impersonate';
+
+/** Why a route is closed to an operator signed in as a member, in any mode. */
+export type ImpersonationForbiddenCategory =
+  | 'sign_in'
+  | 'password'
+  | 'two_factor'
+  | 'credentials'
+  | 'security'
+  | 'membership'
+  | 'payment'
+  | 'subscription'
+  | 'baa'
+  | 'data_deletion'
+  | 'sandbox'
+  | 'data_egress'
+  | 'not_a_member_surface';
+
+export interface ImpersonationForbiddenRule {
+  /** Matched against the tenant route's path under `/api/v1`; a parameter is one segment. */
+  pattern: RegExp;
+  category: ImpersonationForbiddenCategory;
+}
+
+/**
+ * The writes no operator may make on a member's behalf, whatever the mode
+ * (requirements §3.10: passwords, second factors, personal and partner
+ * credentials, SCIM, security settings, payment, the subscription, the BAA,
+ * erasure, the sandbox). On top of the requirement's list: whatever gives
+ * somebody new standing access (invitations, roles, suspensions) or sends the
+ * workspace's data somewhere new (webhooks, SIEM, apps, share links,
+ * scheduled exports) — an operator who could do either could keep a door open
+ * after the session ends — and the sign-in and visitor surfaces, which a
+ * member's credential has no business presenting at all.
+ *
+ * Paths are the contract's, relative to `/api/v1`; `[^/]+` stands for a path
+ * parameter so `{customerId}` and Fastify's `:customerId` both match. Every
+ * mutating operation of the tenant contract is either here, in
+ * {@link IMPERSONATION_ALLOWED_WRITES} or one of {@link IMPERSONATION_EXIT_PATHS}
+ * (`apps/api/src/plugins/impersonation-gate.test.ts`), and this list wins
+ * where both match. A write in neither is refused too: a route added without
+ * a decision is closed.
+ */
+export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[] = [
+  {
+    pattern:
+      /^\/auth\/(login|authorize|token|signup|verify-email|verify-email\/resend|invitations\/accept|saml\/[^/]+\/acs|impersonation\/exchange)$/,
+    category: 'sign_in',
+  },
+  { pattern: /^\/auth\/password-reset(\/confirm)?$/, category: 'password' },
+  { pattern: /^\/auth\/2fa(\/(enroll|activate|recovery-codes))?$/, category: 'two_factor' },
+  { pattern: /^\/auth\/personal-access-tokens(\/[^/]+)?$/, category: 'credentials' },
+  { pattern: /^\/settings\/scim-tokens(\/[^/]+)?$/, category: 'credentials' },
+  { pattern: /^\/partner\/apps(\/.*)?$/, category: 'credentials' },
+  {
+    pattern: /^\/settings\/member-recognition(\/(rotate-key|revoke-all))?$/,
+    category: 'credentials',
+  },
+  { pattern: /^\/scim\/v2\//, category: 'credentials' },
+  { pattern: /^\/settings\/security$/, category: 'security' },
+  { pattern: /^\/settings\/ip-allowlist(\/[^/]+)?$/, category: 'security' },
+  { pattern: /^\/settings\/permissions$/, category: 'security' },
+  { pattern: /^\/settings\/sso(\/.*)?$/, category: 'security' },
+  { pattern: /^\/invitations(\/[^/]+)?$/, category: 'membership' },
+  { pattern: /^\/agents\/[^/]+\/(role|suspension)$/, category: 'membership' },
+  { pattern: /^\/billing\/(payment-method|api-packages|ai-packages)$/, category: 'payment' },
+  { pattern: /^\/billing\/subscription$/, category: 'subscription' },
+  { pattern: /^\/settings\/compliance\/baa$/, category: 'baa' },
+  { pattern: /^\/customers\/[^/]+\/erase$/, category: 'data_deletion' },
+  { pattern: /^\/settings\/retention$/, category: 'data_deletion' },
+  { pattern: /^\/settings\/sandbox(\/reset)?$/, category: 'sandbox' },
+  { pattern: /^\/webhooks(\/[^/]+)?$/, category: 'data_egress' },
+  { pattern: /^\/settings\/siem$/, category: 'data_egress' },
+  { pattern: /^\/settings\/apps\//, category: 'data_egress' },
+  { pattern: /^\/reports\/(share-links|scheduled-exports)(\/[^/]+)?$/, category: 'data_egress' },
+  { pattern: /^\/customer\//, category: 'not_a_member_surface' },
+  { pattern: /^\/channels\/[^/]+\/webhook$/, category: 'not_a_member_surface' },
+  { pattern: /^\/channels\/telegram\/webhook\/[^/]+$/, category: 'not_a_member_surface' },
+  { pattern: /^\/channels\/email\/inbound$/, category: 'not_a_member_surface' },
+];
+
+/**
+ * The writes a `full` session may make — the member's daily work, by
+ * resource. Named one resource at a time (the settings sections included) so a
+ * new resource is a decision somebody writes down here, not a door that opens
+ * on its own; {@link IMPERSONATION_FORBIDDEN_PATHS} still wins inside these.
+ */
+export const IMPERSONATION_ALLOWED_WRITES: readonly RegExp[] = [
+  /^\/chats(\/.*)?$/,
+  /^\/tickets(\/.*)?$/,
+  /^\/customers\/[^/]+(\/.*)?$/,
+  /^\/agents\/[^/]+\/[a-z-]+$/,
+  /^\/groups(\/.*)?$/,
+  /^\/brands(\/.*)?$/,
+  /^\/websites(\/.*)?$/,
+  /^\/channels\/(email\/addresses|[^/]+\/(connect|disconnect|messages))(\/.*)?$/,
+  /^\/campaigns(\/.*)?$/,
+  /^\/goals(\/.*)?$/,
+  /^\/handoff-routes(\/.*)?$/,
+  /^\/kb-(articles|categories|settings)(\/.*)?$/,
+  /^\/knowledge-(sources|tables)(\/.*)?$/,
+  /^\/skills(\/.*)?$/,
+  /^\/copilot\//,
+  /^\/palette\//,
+  /^\/mcp\/tools\/[^/]+$/,
+  /^\/ai-agents\//,
+  /^\/ai-guardrails\//,
+  /^\/ai-guidance(\/.*)?$/,
+  /^\/ai-handoffs\//,
+  /^\/ai-templates\//,
+  /^\/ai-access-info$/,
+  /^\/ai\//,
+  /^\/risk-flags(\/.*)?$/,
+  /^\/notifications\/devices(\/[^/]+)?$/,
+  /^\/onboarding\//,
+  /^\/uploads(\/.*)?$/,
+  /^\/settings\/(appearance|bots|canned-responses|chat-timeout|company|custom-fields|expertise|prechat|routing-rules|sales-tracker|sla|tags|ticket-email-templates|ticket-rules|trusted-domains|widget)(\/.*)?$/,
+];
+
+/**
+ * The writes even a `read_only` session makes: leaving. Signing out
+ * (`/auth/revoke`) and ending the session from the console's banner.
+ */
+export const IMPERSONATION_EXIT_PATHS: readonly string[] = [
+  '/auth/revoke',
+  '/auth/impersonation/end',
+];
+
+export type ImpersonationWriteVerdict =
+  | { verdict: 'exit' }
+  | { verdict: 'allowed' }
+  | { verdict: 'forbidden'; category: ImpersonationForbiddenCategory }
+  | { verdict: 'unclassified' };
+
+/**
+ * What an impersonation session may do with a write to `path` (relative to
+ * `/api/v1`, parameters in either spelling). Reads are not asked about: every
+ * mode reads what the member's role reads.
+ */
+export function impersonationWriteVerdict(path: string): ImpersonationWriteVerdict {
+  const normalized = path.replace(/\{[^/}]+\}|:[^/]+/g, 'x');
+  if (IMPERSONATION_EXIT_PATHS.includes(normalized)) return { verdict: 'exit' };
+  for (const rule of IMPERSONATION_FORBIDDEN_PATHS) {
+    if (rule.pattern.test(normalized)) return { verdict: 'forbidden', category: rule.category };
+  }
+  if (IMPERSONATION_ALLOWED_WRITES.some((pattern) => pattern.test(normalized))) {
+    return { verdict: 'allowed' };
+  }
+  return { verdict: 'unclassified' };
+}

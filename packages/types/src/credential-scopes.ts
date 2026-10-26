@@ -32,6 +32,11 @@
  *     against. It never gains: a scope the matrix lends the role cannot be
  *     minted into one at all ({@link delegableScopes}), because a token that
  *     outlived the loan would keep it.
+ *   - **impersonation** — an operator signed in as a member from the root
+ *     panel (tm 389.15 · FR-ADMIN-21). The token stores no list at all: it
+ *     holds exactly what the member's role holds in the matrix now, so the
+ *     operator sees what the member would and never more (requirements §3.10 —
+ *     the role is carried, not raised).
  *
  * Here rather than in `apps/api` for the reason `role-scopes.ts` is: the REST
  * edge (`token-service.ts`) and the RTM gateway (`apps/rtm/src/auth.ts`) resolve
@@ -41,8 +46,8 @@ import { scopesForRole, type CapabilityOverride, type CapabilityValue } from './
 import { defaultScopesForRole } from './role-scopes.js';
 import { effectiveScopes } from './scopes.js';
 
-/** Which of the three rules a member's credential follows — see the module comment. */
-export type CredentialGrant = 'session' | 'delegated' | 'personal';
+/** Which rule a member's credential follows — see the module comment. */
+export type CredentialGrant = 'session' | 'delegated' | 'personal' | 'impersonation';
 
 /**
  * The rule for a member's token. `kind` is `api_tokens.kind`; `signInClient` is
@@ -55,6 +60,7 @@ export type CredentialGrant = 'session' | 'delegated' | 'personal';
 export function credentialGrantFor(kind: string, signInClient: boolean): CredentialGrant {
   if (kind === 'oauth') return signInClient ? 'session' : 'delegated';
   if (kind === 'pat') return 'personal';
+  if (kind === 'impersonation') return 'impersonation';
   return 'delegated';
 }
 
@@ -80,6 +86,7 @@ export interface CredentialScopeInput {
  */
 export function scopesForCredential(input: CredentialScopeInput): string[] {
   const roleNow = scopesForRole(input.role, input.overrides);
+  if (input.grant === 'impersonation') return [...roleNow];
   const held = effectiveScopes(roleNow);
   if (input.grant === 'delegated') return input.stored.filter((scope) => held.has(scope));
 

@@ -608,6 +608,85 @@ export function ownershipTransferredMail(
   });
 }
 
+/**
+ * A SiyahTuş operator has entered the workspace as one of its members (tm
+ * 389.15 · FR-ADMIN-21): the Founders hear it when the session opens — who was
+ * entered as, whether anything could be changed, until when. Never the
+ * operator's reason (that stays in the platform's own trail) and never who
+ * the operator is beyond "the support team"; the workspace's audit log names
+ * the session. No mail when it ends (requirements §6.3).
+ */
+export function impersonationNoticeMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    memberEmail: string;
+    mode: 'read_only' | 'full';
+    endsAt: string;
+    minutes: number;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const window = duration(ctx.locale, input.minutes);
+  const readOnly = input.mode === 'read_only';
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `SiyahTuş destek ekibi ${input.workspaceName} çalışma alanınıza giriş yaptı`
+      : `SiyahTuş support has entered your workspace ${input.workspaceName}`,
+    preheader: t
+      ? `${input.memberEmail} olarak, ${input.endsAt} saatine kadar.`
+      : `As ${input.memberEmail}, until ${input.endsAt}.`,
+    icon: ICON.account,
+    heading: t ? 'Destek ekibi çalışma alanınızda' : 'Support is in your workspace',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: t
+          ? `SiyahTuş destek ekibinden biri, bir sorunu incelemek için ${input.workspaceName} çalışma alanına ${input.memberEmail} üyesi olarak giriş yaptı.`
+          : `Someone from the SiyahTuş support team has entered the workspace ${input.workspaceName} as the member ${input.memberEmail}, to look into an issue.`,
+      },
+      {
+        type: 'facts',
+        rows: [
+          [t ? 'Üye' : 'Member', input.memberEmail],
+          [
+            t ? 'Yetki' : 'Access',
+            readOnly
+              ? t
+                ? 'Salt okunur — hiçbir şey değiştirilemez'
+                : 'Read-only — nothing can be changed'
+              : t
+                ? 'Tam — üyenin rolüyle işlem yapabilir'
+                : 'Full — can act with the member’s role',
+          ],
+          [t ? 'Bitiş' : 'Ends', `${input.endsAt} (${window})`],
+        ],
+      },
+      {
+        type: 'paragraph',
+        text: t
+          ? 'Oturum sırasında yapılan her işlem, denetim kaydınızda SiyahTuş destek ekibinin adına ve bu üye için yapılmış olarak görünür. Parola, iki adımlı doğrulama, erişim anahtarları, güvenlik ayarları ve ödeme bu oturumdan değiştirilemez.'
+          : 'Anything done during the session appears in your audit log as done by the SiyahTuş support team on this member’s behalf. Passwords, two-step verification, access keys, security settings and payment cannot be changed from it.',
+      },
+      {
+        type: 'note',
+        text: t
+          ? 'Bu girişi beklemiyorsanız hemen destek ekibimize yazın.'
+          : 'If you did not expect this, write to our support team straight away.',
+      },
+    ],
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının Kurucusu olduğunuz için aldınız.'
+        : 'You received this email because you are the owner of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
 // --- Workspace mail ---------------------------------------------------------------
 
 export function ssoDomainChallengeMail(

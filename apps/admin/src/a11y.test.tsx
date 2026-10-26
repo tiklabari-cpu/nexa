@@ -6,7 +6,7 @@
  * What axe does see in jsdom is structure: names on controls, labels on inputs, landmarks,
  * heading order, ids, ARIA validity — which is where a copied component most often goes wrong.
  */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -201,6 +201,53 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
         within(dialog).getByRole('button', { name: locale === 'tr' ? 'Vazgeç' : 'Cancel' }),
       );
     }
+  });
+
+  it('finds nothing in the enter-as-customer dialog and its one-time link (tm 389.15)', async () => {
+    installFakePlatform();
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp('/workspaces/42');
+    if (locale === 'tr') {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByRole('heading', { name: 'Acme Gaming' });
+    await user.click(
+      screen.getByRole('button', {
+        name: locale === 'tr' ? 'Müşteri olarak gir' : 'Enter as customer',
+      }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    const member = within(dialog).getByLabelText(locale === 'tr' ? 'Üye' : 'Member');
+    // The member list arrives after a read.
+    await waitFor(() => expect(member).not.toBeDisabled());
+    await user.click(within(dialog).getByRole('radio', { name: locale === 'tr' ? /Tam/ : /Full/ }));
+    expect(await violations(document.body)).toEqual([]);
+
+    await user.selectOptions(member, '00000000-0000-4000-8000-0000000000b2');
+    await user.type(
+      within(dialog).getByLabelText(locale === 'tr' ? 'Gerekçe' : 'Reason'),
+      'Looking',
+    );
+    await user.type(
+      within(dialog).getByLabelText(locale === 'tr' ? 'Doğrulayıcı kodu' : 'Authenticator code'),
+      '123456',
+    );
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: locale === 'tr' ? 'Bağlantıyı oluştur' : 'Create the link',
+      }),
+    );
+    await screen.findByTestId('impersonation-handoff');
+    expect(await violations(document.body)).toEqual([]);
   });
 
   it('finds nothing on an account, its actions menu and the erasure dialog (tm 389.11)', async () => {

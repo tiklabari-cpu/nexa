@@ -98,6 +98,18 @@ export function principalLogContext(principal: Principal): LogContext {
   };
   switch (principal.kind) {
     case 'agent':
+      // An operator signed in as the member (tm 389.15): every line says so,
+      // and which operator and session, so a log search for the member's
+      // requests cannot mistake the operator's for theirs.
+      if (principal.impersonation) {
+        return {
+          ...workspace,
+          actor_id: principal.accountId,
+          platform_admin_id: principal.impersonation.adminId,
+          impersonation_session_id: principal.impersonation.sessionId,
+        };
+      }
+      return { ...workspace, actor_id: principal.accountId };
     case 'enrollment':
       return { ...workspace, actor_id: principal.accountId };
     case 'bot':

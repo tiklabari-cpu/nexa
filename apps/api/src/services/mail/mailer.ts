@@ -112,7 +112,10 @@ export interface Message {
     // deletion is scheduled, its ownership was moved by hand. Sent by the
     // platform process too — the workspace is often locked when they go.
     | 'workspace_purge_scheduled'
-    | 'ownership_transferred';
+    | 'ownership_transferred'
+    // A SiyahTuş operator entered the workspace as one of its members (tm
+    // 389.15) — the Founders' notice, sent by the platform process.
+    | 'impersonation_notice';
 }
 
 /**

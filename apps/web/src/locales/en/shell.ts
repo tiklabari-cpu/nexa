@@ -53,6 +53,14 @@ export const shell: Messages = {
   'shell.maintenance.body':
     'SiyahTuş is being maintained and is not available right now. Your data is safe.',
   'shell.maintenance.autoRetry': 'This page checks again by itself every minute.',
+  // A SiyahTuş operator signed in as this member (tm 389.15): the red band.
+  'shell.impersonation.label': 'Support session',
+  'shell.impersonation.readOnly': 'Signed in as {email} — read-only, nothing can be changed.',
+  'shell.impersonation.full':
+    'Signed in as {email} — full access: changes are made in this member’s name.',
+  'shell.impersonation.endsIn': 'Ends in {time}',
+  'shell.impersonation.end': 'End session',
+  'shell.impersonation.ending': 'Ending…',
   'shell.subscribe': 'Subscribe',
   'shell.trial.ended': 'Your trial has ended — subscribe to start new conversations.',
   // The public pilot's strip (tm 257.15): nothing is on sale there, so the way on

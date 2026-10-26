@@ -169,6 +169,19 @@ export const auth: Messages = {
   'auth.legal.privacy': 'Privacy Policy',
 
   // OAuth/SSO callback
+  // "Enter as the customer" (tm 389.15): the root panel's one-time link lands here.
+  'auth.impersonate.entering': 'Opening the support session…',
+  'auth.impersonate.noCode': 'This link carries no session code.',
+  'auth.impersonate.invalid': 'This link has already been used or has expired.',
+  'auth.impersonate.failed': 'The support session could not be opened.',
+  'auth.impersonate.again':
+    'Start a new session from the root panel — each link works once, for one minute.',
+  'auth.impersonate.endedTitle': 'Support session over',
+  'auth.impersonate.ended': 'You ended the session. Its access to this workspace is gone.',
+  'auth.impersonate.expired':
+    'The session has ended — its time ran out, or it was ended from the root panel.',
+  'auth.impersonate.unreachable': 'The server could not be reached. Reload this page to try again.',
+  'auth.impersonate.closeTab': 'You can close this tab.',
   'auth.callback.signingIn': 'Signing you in…',
   'auth.callback.noCode': 'This sign-in did not complete. Start again from the sign-in page.',
   'auth.callback.genericFailure': 'Sign-in failed.',

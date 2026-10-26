@@ -734,6 +734,10 @@ describe('the permission matrix over every documented route (tm 389.4 · (e))', 
 
     const mismatches: string[] = [];
     for (const role of PLATFORM_ROLES) {
+      // Every request comes from one address, and four roles over every documented route are
+      // more than `rl:platform:<ip>`'s 300 a minute (tm 389.15 took it past): each role's pass
+      // gets its own budget, so a 429 here is a real answer and not the suite's own volume.
+      await clearRateLimits(h.server.app);
       for (const op of ops) {
         const response = await send(op, tokens.get(role));
         const where = `${role} ${op.method.toUpperCase()} ${op.path} → ${response.statusCode} ${errorType(response) ?? ''}`;

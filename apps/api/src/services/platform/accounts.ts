@@ -33,6 +33,8 @@ export const ACCOUNT_LIST_MAX = 50;
 export const ACCOUNT_STATE_REASONS = [
   /** The account is the Founder of a workspace: transfer the ownership first. */
   'account_is_sole_owner',
+  /** The root panel suspended the person — nobody can be signed in as them (tm 389.15). */
+  'account_suspended',
 ] as const;
 export type AccountStateReason = (typeof ACCOUNT_STATE_REASONS)[number];
 

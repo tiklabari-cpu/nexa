@@ -168,6 +168,10 @@ paths:
     $ref: "./paths/auth.yaml#/token"
   /auth/revoke:
     $ref: "./paths/auth.yaml#/revoke"
+  /auth/impersonation/exchange:
+    $ref: "./paths/auth.yaml#/impersonationExchange"
+  /auth/impersonation/end:
+    $ref: "./paths/auth.yaml#/impersonationEnd"
   /auth/me:
     $ref: "./paths/auth.yaml#/me"
   /auth/sso/{connectionId}:
@@ -1297,6 +1301,53 @@ components:
         account_id: { type: string, format: uuid }
         license_id: { type: string }
         organization_id: { type: string, format: uuid }
+
+    ImpersonationState:
+      type: object
+      description: |
+        A SiyahTuş operator signed in as this member from the root panel
+        (FR-ADMIN-21 · tm 389.15). Who the operator is stays in the audit
+        trail (`actor_type: platform`); the console needs only the terms.
+      required: [session_id, mode, ends_at]
+      properties:
+        session_id: { type: string, format: uuid }
+        mode:
+          type: string
+          enum: [read_only, full]
+          description: |
+            `read_only` refuses every write but signing out and ending the
+            session; `full` acts as the member. Neither reaches past the
+            member's role.
+        ends_at:
+          type: string
+          format: date-time
+          description: When the session, and every token traded for it, stops working.
+
+    ImpersonationGrant:
+      type: object
+      required:
+        [
+          access_token,
+          token_type,
+          expires_in,
+          account_id,
+          license_id,
+          organization_id,
+          impersonation,
+        ]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_in:
+          type: integer
+          description: Seconds until `impersonation.ends_at`. There is no refresh token.
+        account_id:
+          type: string
+          format: uuid
+          description: The member the operator is signed in as.
+        license_id: { type: string }
+        organization_id: { type: string, format: uuid }
+        impersonation: { $ref: "#/components/schemas/ImpersonationState" }
 
     Chat:
       type: object
@@ -12863,6 +12914,8 @@ components:
         - group_topic_role_taken
         - group_unavailable
         - groups_offline
+        - impersonation_forbidden_path
+        - impersonation_read_only
         - internal
         - license_expired
         - limit_reached

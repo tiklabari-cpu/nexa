@@ -180,7 +180,7 @@ export async function buildPlatformServer({
       await api.register(platformAuditRoutes);
       await api.register(platformDashboardRoutes, { platform, ...(now ? { now } : {}) });
       await api.register(platformWorkspacesRoutes, { env, mailer, ...(now ? { now } : {}) });
-      await api.register(platformSupportRoutes);
+      await api.register(platformSupportRoutes, { env, platform, mailer });
       await api.register(platformAccountsRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformSettingsRoutes, { ...(now ? { now } : {}) });
       await api.register(platformOperationsRoutes, { env, ...(now ? { now } : {}) });

@@ -11,8 +11,11 @@
  * survives a reload — and that the page that results is accessible with the real stylesheet
  * (contrast is only decidable here: jsdom has no computed colour).
  *
- * The last one (tm 389.10 · FR-ADMIN-09) suspends a workspace from the panel and watches its
- * owner be turned away at the workspace panel's sign-in, then lifts it and watches them get in.
+ * One (tm 389.10 · FR-ADMIN-09) suspends a workspace from the panel and watches its owner be
+ * turned away at the workspace panel's sign-in, then lifts it and watches them get in. The last
+ * (tm 389.15 · FR-ADMIN-21) enters a workspace as its owner, read-only: the one-time link opens
+ * the workspace panel in a tab of its own under the red band, a write is refused, and "End
+ * session" closes it for good.
  *
  * The specs below are one story told in order (`serial`): the operator the first creates is the
  * one the rest sign in as. The bootstrap CLI refuses once any operator exists, so a retry of the
@@ -25,7 +28,7 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { Page, TestInfo } from '@playwright/test';
 import { assertNoBlockingViolations, scanScreen } from './a11y.js';
-import { API_BASE, expect, ownerAccessToken, test } from './fixtures.js';
+import { API_BASE, expect, ownerAccessToken, ownerAccessTokenFor, test } from './fixtures.js';
 import { STACK_ADMIN, STACK_API, USUAL_PORTS } from './stack-ports.js';
 import { nextTotpCode, stepOf, totpCode } from './totp.js';
 
@@ -352,4 +355,102 @@ test('opens the Operations page: every section answers from the real stack and p
   ).toHaveCount(12);
 
   await scanBothThemes(page, 'operations', testInfo);
+});
+
+test('enters a workspace as its owner, read-only: a tab of its own under the red band, a refused write, then "End session"', async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(180_000);
+
+  // A workspace of its own, set up past the first-run wizard — the seeded ones serve every other
+  // spec in parallel, and a session writes to its workspace's audit trail.
+  const unique = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
+  const owner = {
+    email: `owner-${unique}@impersonate.test`,
+    password: 'impersonate e2e password 1',
+    orgPrefix: `Impersonate Co ${unique}`,
+  };
+  const signup = await request.post(`${API_BASE}/auth/signup`, {
+    data: {
+      email: owner.email,
+      password: owner.password,
+      name: 'Robin Owner',
+      organization_name: owner.orgPrefix,
+    },
+  });
+  expect(signup.ok(), `signup → ${signup.status()}`).toBe(true);
+  const ownerToken = await ownerAccessTokenFor(request, owner);
+  const setUp = await request.post(`${API_BASE}/onboarding/complete`, {
+    headers: { authorization: `Bearer ${ownerToken}` },
+  });
+  expect(setUp.ok(), `onboarding/complete → ${setUp.status()}`).toBe(true);
+  const me = await request.get(`${API_BASE}/auth/me`, {
+    headers: { authorization: `Bearer ${ownerToken}` },
+  });
+  const { license_id: licenseId } = (await me.json()) as { license_id: string };
+
+  // The operator opens the workspace and asks for a read-only session as its owner.
+  await page.goto(`${ADMIN}/workspaces/${licenseId}`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: owner.orgPrefix, level: 1 })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Enter as customer' }).click();
+  const dialog = page.getByRole('dialog');
+  const member = dialog.getByLabel('Member', { exact: true });
+  const option = member.locator('option', { hasText: owner.email });
+  await expect(option).toHaveCount(1);
+  await member.selectOption((await option.getAttribute('value'))!);
+  await expect(dialog.getByRole('radio', { name: /Read-only/ })).toBeChecked();
+  await dialog.getByLabel('Reason').fill('e2e: the owner reports an empty inbox');
+  await dialog.getByRole('button', { name: 'Create the link' }).click();
+
+  const ready = page.getByTestId('impersonation-handoff');
+  await expect(ready).toContainText(`Read-only session as ${owner.email}.`);
+  await scanBothThemes(page, 'impersonation link', testInfo);
+
+  // The link opens the workspace panel in a tab of its own, signed in as the owner.
+  const opened = page.context().waitForEvent('page');
+  await ready.getByRole('link', { name: 'Open the workspace' }).click();
+  const tab = await opened;
+  const band = tab.getByRole('region', { name: 'Support session' });
+  await expect(band).toContainText(`Signed in as ${owner.email} — read-only`);
+  await expect(band).toContainText(/Ends in (29|30):\d\d/);
+  await expect(tab.getByRole('link', { name: 'Inbox' })).toBeVisible();
+  // The one-time code is out of the address bar.
+  expect(new URL(tab.url()).hash).toBe('');
+  assertNoBlockingViolations(
+    await scanScreen(tab, 'Console under a support session', testInfo, {
+      include: '[data-testid="impersonation-banner"]',
+    }),
+  );
+
+  // What the tab holds reads as the owner and writes nothing.
+  const stored = await tab.evaluate(() => sessionStorage.getItem('siyahtus.impersonation'));
+  const { token } = JSON.parse(stored!) as { token: string };
+  const write = await request.post(`${API_BASE}/settings/tags`, {
+    headers: { authorization: `Bearer ${token}` },
+    data: { name: 'from-support' },
+  });
+  expect(write.status()).toBe(403);
+  expect(((await write.json()) as { error: { type: string } }).error.type).toBe(
+    'impersonation_read_only',
+  );
+
+  // "End session": the tab says it is over, and what it held is dead.
+  await band.getByRole('button', { name: 'End session' }).click();
+  await expect(tab.getByTestId('impersonation-ended')).toContainText('You ended the session.');
+  await expect(band).toHaveCount(0);
+  const after = await request.get(`${API_BASE}/auth/me`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(after.status()).toBe(401);
+
+  // The root panel no longer lists it as open (opening the link closed the dialog).
+  await page.goto(`${ADMIN}/support`);
+  await expect(page.getByText('No operator is inside a workspace right now.')).toBeVisible();
 });

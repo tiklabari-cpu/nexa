@@ -434,7 +434,7 @@ describe('the platform pair (tm 389.3)', () => {
     ]);
   });
 
-  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), the settings page (tm 389.13), the Operations page (tm 389.14) called, and nothing else of the platform contract', () => {
+  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), the settings page (tm 389.13), the Operations page (tm 389.14), enter-as-customer and its open sessions (tm 389.15) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
@@ -483,6 +483,9 @@ describe('the platform pair (tm 389.3)', () => {
         'POST /workspaces/{licenseId}/delete/cancel',
         'GET /audit/workspaces/{licenseId}',
         'GET /support/lookup',
+        'GET /support/impersonations',
+        'POST /support/impersonations',
+        'POST /support/impersonations/{impersonationId}/end',
         'GET /accounts',
         'GET /accounts/{accountId}',
         'POST /accounts/{accountId}/resend-verification',

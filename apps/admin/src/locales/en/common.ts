@@ -40,6 +40,10 @@ export const common: Messages = {
     'Another team already handles this topic — clear it there first.',
   'common.errors.group_unavailable': 'That team cannot take this conversation right now.',
   'common.errors.groups_offline': 'Every team is offline right now.',
+  'common.errors.impersonation_forbidden_path':
+    'A support session cannot do this on a member’s behalf.',
+  'common.errors.impersonation_read_only':
+    'This is a read-only support session — nothing can be changed from it.',
   'common.errors.internal': 'Something went wrong on our side — try again.',
   'common.errors.license_expired': 'Your subscription has ended — renew it to continue.',
   'common.errors.limit_reached': 'You have reached the limit for your plan.',

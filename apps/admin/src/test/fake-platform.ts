@@ -12,6 +12,11 @@ import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
 import { handleSettings, initialSettingsState, type FakeSettingsState } from './fake-settings.js';
 import { handleOperations } from './fake-operations.js';
+import {
+  handleImpersonations,
+  initialImpersonationState,
+  type FakeImpersonationState,
+} from './fake-impersonations.js';
 
 export interface RecordedRequest {
   method: string;
@@ -517,6 +522,8 @@ export interface FakePlatform {
   override: (method: string, path: string, response: () => Response) => void;
   /** The settings surface's state (tm 389.13) — a test reads it back or ages the code. */
   settingsState: FakeSettingsState;
+  /** The support sessions opened against this fake (tm 389.15). */
+  impersonationState: FakeImpersonationState;
 }
 
 export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatform {
@@ -542,6 +549,10 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     soleOwner: options.accountSoleOwner ?? false,
   };
   const settingsState = initialSettingsState();
+  const impersonationState = initialImpersonationState({
+    id: WORKSPACE_ID,
+    members: WORKSPACE_MEMBERS.data,
+  });
   Object.assign(settingsState.settings, options.settings ?? {});
   settingsState.config = options.effectiveConfig ?? 'fresh';
   let issued = 0;
@@ -701,6 +712,17 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     if (settingsResponse) return settingsResponse;
     const operationsResponse = handleOperations(method, path, body, role, json, problem);
     if (operationsResponse) return operationsResponse;
+    const impersonationResponse = handleImpersonations(
+      method,
+      path,
+      body,
+      search,
+      role,
+      impersonationState,
+      json,
+      problem,
+    );
+    if (impersonationResponse) return impersonationResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);
   }
@@ -728,5 +750,6 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       overrides.set(`${method} ${path}`, response);
     },
     settingsState,
+    impersonationState,
   };
 }

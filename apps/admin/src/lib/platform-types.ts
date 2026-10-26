@@ -18,3 +18,9 @@ export type PlatformLoginRequest = Schemas['PlatformLoginRequest'];
 export type PlatformCodeRequest = Schemas['PlatformCodeRequest'];
 export type PlatformVerifyRequest = Schemas['PlatformVerifyRequest'];
 export type PlatformInviteAcceptRequest = Schemas['PlatformInviteAcceptRequest'];
+
+export type PlatformDashboardKpis = Schemas['PlatformDashboardKpis'];
+export type PlatformDashboardSignups = Schemas['PlatformDashboardSignups'];
+export type PlatformDashboardHealth = Schemas['PlatformDashboardHealth'];
+export type PlatformHealthSnapshot = Schemas['PlatformHealthSnapshot'];
+export type PlatformComponentStatus = Schemas['PlatformComponentStatus'];

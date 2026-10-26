@@ -411,13 +411,15 @@ const PLATFORM_TRACKED = [
   // shell ships the sign-in, and shows the recovery sheet once at enrolment, but nothing yet lets
   // a signed-in operator regenerate it or end their other sessions. No subtask names that screen
   // (HANDOFF tm 389.4/389.6 open item).
-  ...['POST /auth/recovery/regenerate', 'GET /auth/sessions', 'DELETE /auth/sessions'].map((op) => ({
-    op,
-    owner: 'tm 389.6',
-    reason:
-      "the operator's own security screen (tm 389.4) — recovery-sheet regeneration and their live " +
-      'sessions. The shell (tm 389.6) ships the sign-in only; no later subtask names this screen yet.',
-  })),
+  ...['POST /auth/recovery/regenerate', 'GET /auth/sessions', 'DELETE /auth/sessions'].map(
+    (op) => ({
+      op,
+      owner: 'tm 389.6',
+      reason:
+        "the operator's own security screen (tm 389.4) — recovery-sheet regeneration and their live " +
+        'sessions. The shell (tm 389.6) ships the sign-in only; no later subtask names this screen yet.',
+    }),
+  ),
   // Operator management (tm 389.4): the shell's Admins page is an empty skeleton since tm 389.6;
   // its content (list, invite, role, disable, reset) is named by no later subtask yet.
   ...[
@@ -456,7 +458,7 @@ const PLATFORM_TRACKED = [
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
-function pathMatcher(path) {
+function pathMatcher(path, { wholePath = false } = {}) {
   // One path segment: no quote, whitespace or slash. Matches `${chatId}` in a
   // template literal and `{chatId}` in the mobile client's typed literal alike.
   const PARAM = '[^\'"`\\s/]+';
@@ -464,7 +466,10 @@ function pathMatcher(path) {
     .split(/\{[^}]+\}/)
     .map((segment) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join(PARAM);
-  return new RegExp(literal + '(?![A-Za-z0-9_-])');
+  // `wholePath`: nor may the path be the tail of a longer one, so `/dashboard/health` is not a call
+  // to `/health` (tm 389.8). The platform client writes every path from a quote or backtick, so
+  // the guard is safe there; the tenant clients prefix some paths with a base, so it stays off.
+  return new RegExp((wholePath ? '(?<![A-Za-z0-9_-])' : '') + literal + '(?![A-Za-z0-9_-])');
 }
 
 /**
@@ -531,8 +536,8 @@ function stripComments(source) {
 /**
  * Which verbs the clients send to this path, and the first place each showed.
  */
-function verbsForPath(path, sources) {
-  const matcher = pathMatcher(path);
+function verbsForPath(path, sources, options) {
+  const matcher = pathMatcher(path, options);
   const seen = new Map();
 
   for (const { file, lines } of sources) {
@@ -612,7 +617,12 @@ function analyse(input = {}) {
     }
   }
 
-  const verbsByPath = new Map(paths.map((path) => [path, verbsForPath(path, sources)]));
+  const verbsByPath = new Map(
+    paths.map((path) => [
+      path,
+      verbsForPath(path, sources, { wholePath: input.wholePath === true }),
+    ]),
+  );
 
   const called = [];
   const uncalled = [];
@@ -685,6 +695,7 @@ function analysePlatform(input = {}) {
     headless: input.headless ?? PLATFORM_HEADLESS,
     indirect: input.indirect ?? [],
     tracked: input.tracked ?? PLATFORM_TRACKED,
+    wholePath: true,
   });
 }
 

@@ -11,6 +11,9 @@
  *
  * Depends on `database` and `redis`: every job reads through `app.db`, and
  * the leader lock lives in `app.redis`.
+ *
+ * It also starts the health publisher (tm 389.8): the same switch, the same
+ * lock mechanism, but not a job — see `services/ops/health-publisher.ts`.
  */
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
@@ -19,14 +22,18 @@ import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import type { RealtimePublisher } from '../services/realtime/publisher.js';
+import { HealthSnapshotPublisher } from '../services/ops/health-publisher.js';
 import { buildSchedulerJobs } from '../services/scheduler/jobs.js';
 import { Scheduler } from '../services/scheduler/scheduler.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import type { Telemetry } from '../telemetry/telemetry.js';
+import { VERSION } from '../version.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     scheduler: Scheduler;
+    /** The leader's 30-second health publication into Redis (tm 389.8); tests call `publish()`. */
+    opsHealth: HealthSnapshotPublisher;
   }
 }
 
@@ -78,7 +85,21 @@ async function schedulerPlugin(
   // Safe to call unconditionally: `start()` itself is the enabled check.
   scheduler.start();
 
+  const opsHealth = new HealthSnapshotPublisher({
+    db: app.db,
+    redis: app.redis,
+    env: options.env,
+    version: VERSION,
+    scheduler,
+    eventPartitions: app.eventPartitions,
+    logger: app.log,
+    enabled: options.env.schedulerEnabled,
+  });
+  app.decorate('opsHealth', opsHealth);
+  opsHealth.start();
+
   app.addHook('onClose', async () => {
+    await opsHealth.stop();
     await scheduler.stop();
   });
 }

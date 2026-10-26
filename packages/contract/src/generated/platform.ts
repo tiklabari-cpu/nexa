@@ -501,6 +501,81 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/dashboard/kpis': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Workspace counts, trials ending, sessions, usage and the payment queue
+     * @description Everything is deployment-wide (`siyahtus_platform` bypasses row-level
+     *     security) and sandboxes are not counted as workspaces. `trials_ending_7d`
+     *     is `trialing` workspaces whose trial ends in the next seven days.
+     *     `active_operator_sessions` counts verified operator sessions inside their
+     *     lifetime and idle window. `pending_payment_requests` is the manual crypto
+     *     queue's open requests, `0` until that queue exists. "Today" is the UTC day:
+     *     `ai_tokens_today` is the deployment-wide AI meter, `ai_resolutions_month`
+     *     and `api_calls_month` come from the current period's usage records.
+     */
+    get: operations['getPlatformDashboardKpis'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/dashboard/signups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * New workspaces per day
+     * @description One point per UTC day, oldest first, today included; days without a
+     *     sign-up are `0`. Sandboxes are not counted.
+     */
+    get: operations['getPlatformDashboardSignups'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/dashboard/health': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The tenant API's published health snapshot and the component record
+     * @description The tenant API's scheduler leader publishes its detailed health body to
+     *     Redis every 30 seconds with a 90-second expiry. `stale: true` with a
+     *     `snapshot` is a publication older than 90 seconds; `stale: true` with
+     *     `snapshot: null` is no publication at all (no tenant API leader is
+     *     reporting, or Redis cannot be read) — this route still answers 200,
+     *     because it is the screen that has to render when something is down.
+     *     `components` always lists every `OPS_COMPONENTS` key, `unknown` where
+     *     nothing has reported.
+     */
+    get: operations['getPlatformDashboardHealth'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/audit': {
     parameters: {
       query?: never;
@@ -981,7 +1056,8 @@ export interface components {
     /**
      * @description The narrow body — never version, latencies or provider names, which
      *     would be infrastructure detail for an anonymous caller. The detailed
-     *     view is the dashboard's (tm 389.8), behind an operator session.
+     *     view is the dashboard's (`GET /dashboard/health`, tm 389.8), behind an
+     *     operator session.
      */
     PlatformHealth: {
       /**
@@ -1001,6 +1077,130 @@ export interface components {
       version: string;
       /** @enum {string} */
       region: 'eu' | 'us';
+    };
+    PlatformDashboardKpis: {
+      /** Format: date-time */
+      generated_at: string;
+      workspaces: {
+        total: number;
+        /** @description Every licence status, `0` where there is none. */
+        by_status: {
+          trialing: number;
+          active: number;
+          past_due: number;
+          read_only: number;
+          canceled: number;
+          suspended: number;
+        };
+      };
+      trials_ending_7d: number;
+      active_operator_sessions: number;
+      pending_payment_requests: number;
+      usage: {
+        /** @description `yyyymmdd`, UTC. */
+        day: string;
+        ai_tokens_today: {
+          llm: number;
+          embedding: number;
+        };
+        /** @description `yyyymm`, UTC. */
+        period: string;
+        ai_resolutions_month: number;
+        api_calls_month: number;
+      };
+    };
+    PlatformDashboardSignups: {
+      days: number;
+      total: number;
+      data: {
+        /** Format: date */
+        date: string;
+        count: number;
+      }[];
+    };
+    PlatformDashboardDependency: {
+      /** @enum {string} */
+      status: 'up' | 'down';
+      latency_ms?: number;
+      error?: string;
+    };
+    /**
+     * @description The tenant API's admin `GET /health` body as its scheduler leader last
+     *     published it (`buildHealthSnapshot`).
+     */
+    PlatformHealthSnapshot: {
+      /** @enum {string} */
+      status: 'ok' | 'degraded';
+      /** @enum {string} */
+      service: 'api';
+      version: string;
+      region: string;
+      uptime_s: number;
+      dependencies: {
+        database: components['schemas']['PlatformDashboardDependency'];
+        redis: components['schemas']['PlatformDashboardDependency'];
+      };
+      scheduler: {
+        enabled: boolean;
+        jobs: {
+          name: string;
+          interval_ms: number;
+          enabled: boolean;
+          /** Format: date-time */
+          last_run_at: string | null;
+          /** @enum {string|null} */
+          last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
+          last_error_class?: string;
+        }[];
+      };
+      event_partitions: {
+        [key: string]: unknown;
+      };
+      ai_jobs: {
+        pending: number;
+        running: number;
+        oldest_age_s: number | null;
+      } | null;
+      providers: {
+        [key: string]: string;
+      };
+    };
+    PlatformComponentStatus: {
+      /**
+       * @description A key of `OPS_COMPONENTS` (@siyahtus/types).
+       * @enum {string}
+       */
+      key:
+        | 'mail'
+        | 'redis'
+        | 'db'
+        | 'scheduler'
+        | 'ai_jobs'
+        | 'knowledge_jobs'
+        | 'doc_worker'
+        | 'captcha'
+        | 'geoip'
+        | 'channel_whatsapp'
+        | 'channel_meta'
+        | 'webhooks';
+      /**
+       * @description `not_installed` — the module is not part of this deployment, not a
+       *     fault · `unknown` — nothing has reported it yet.
+       * @enum {string}
+       */
+      state: 'ok' | 'degraded' | 'down' | 'not_installed' | 'unknown';
+      detail: string | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    PlatformDashboardHealth: {
+      /** @description No snapshot, or one older than 90 seconds. */
+      stale: boolean;
+      /** Format: date-time */
+      generated_at: string | null;
+      age_s: number | null;
+      snapshot: components['schemas']['PlatformHealthSnapshot'] | null;
+      components: components['schemas']['PlatformComponentStatus'][];
     };
     Error: {
       error: {
@@ -1750,6 +1950,76 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformDashboardKpis: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The numbers, at `generated_at` */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDashboardKpis'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformDashboardSignups: {
+    parameters: {
+      query?: {
+        /** @description 1–90, default 30. */
+        days?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The series */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDashboardSignups'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformDashboardHealth: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Snapshot, staleness and components */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDashboardHealth'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
     };
   };
   listPlatformAudit: {

@@ -1,0 +1,198 @@
+/**
+ * The scheduler leader's 30-second health publication (tm 389.8 · FR-ADMIN-07).
+ *
+ * The platform process cannot ask the tenant API how it is — it shares no call
+ * path with it (design.md §A) — so the tenant API says, on a timer, into Redis:
+ * the detailed health body ({@link buildHealthSnapshot}) under
+ * `siyahtus:ops:health` with a 90-second expiry, and the component statuses
+ * the leader can judge for itself (mail, redis, db, scheduler) into the
+ * component record. The expiry is the whole staleness story: when the leader
+ * is gone nothing renews the key, and a missing key is what the dashboard
+ * reads as "the tenant API is not reporting".
+ *
+ * "Leader" is the same Redis lock the sweeps use (`JobLock`, a 27 s key for a
+ * 30 s interval): N API instances publish once between them, and when the
+ * holder dies another takes over within one interval. It is deliberately not a
+ * scheduler job — jobs are listed in the `/health` body and the interval
+ * environment, and an admin-visible job list that changed shape would break
+ * every monitor reading it.
+ */
+import type { PrismaClient } from '@prisma/client';
+import type { FastifyBaseLogger } from 'fastify';
+import type { OpsComponentState } from '@siyahtus/types';
+import { lastMailSend } from '../mail/delivery.js';
+import { JobLock, lockTtlMs, type LockRedis } from '../scheduler/lock.js';
+import { reportComponentStatus } from './component-status.js';
+import { OPS_HEALTH_KEY, OPS_HEALTH_TTL_S, type StoredHealthSnapshot } from './health-keys.js';
+import {
+  buildHealthSnapshot,
+  probeDependencies,
+  type BuildHealthSnapshotInput,
+  type HealthSnapshotBody,
+} from './health-snapshot.js';
+
+export const OPS_HEALTH_INTERVAL_MS = 30_000;
+export const OPS_HEALTH_LOCK = 'ops_health_snapshot';
+/** A send that failed this recently makes the `mail` component `degraded`. */
+export const MAIL_FAILURE_WINDOW_MS = 10 * 60_000;
+
+type PublisherRedis = LockRedis & {
+  ping(): Promise<unknown>;
+  set(key: string, value: string, ex: 'EX', seconds: number): Promise<unknown>;
+  hset(key: string, field: string, value: string): Promise<unknown>;
+};
+
+export interface HealthSnapshotPublisherOptions {
+  db: PrismaClient;
+  redis: PublisherRedis;
+  env: BuildHealthSnapshotInput['env'];
+  version: string;
+  scheduler: BuildHealthSnapshotInput['scheduler'];
+  eventPartitions: BuildHealthSnapshotInput['eventPartitions'];
+  logger: FastifyBaseLogger;
+  /** Whether this process publishes at all (`env.schedulerEnabled`). */
+  enabled: boolean;
+  now?: () => number;
+}
+
+export class HealthSnapshotPublisher {
+  readonly #options: HealthSnapshotPublisherOptions;
+  readonly #lock: JobLock;
+  readonly #startedAt: number;
+  #timer: NodeJS.Timeout | null = null;
+  #inFlight: Promise<unknown> | null = null;
+  #token: string | null = null;
+  #stopped = false;
+
+  constructor(options: HealthSnapshotPublisherOptions) {
+    this.#options = options;
+    this.#lock = new JobLock(options.redis);
+    this.#startedAt = (options.now ?? Date.now)();
+  }
+
+  start(): void {
+    if (!this.#options.enabled || this.#timer !== null || this.#stopped) return;
+    // The first publication comes quickly, so a fresh deployment's dashboard
+    // does not open on "not reporting" for half a minute.
+    this.#schedule(2_000);
+  }
+
+  async stop(): Promise<void> {
+    this.#stopped = true;
+    if (this.#timer !== null) clearTimeout(this.#timer);
+    this.#timer = null;
+    await this.#inFlight?.catch(() => undefined);
+    // Handed back so another instance publishes within its next tick instead
+    // of after this process's 27 s key runs out.
+    if (this.#token !== null) {
+      const token = this.#token;
+      this.#token = null;
+      await this.#lock.release(OPS_HEALTH_LOCK, token).catch(() => undefined);
+    }
+  }
+
+  /**
+   * One publication, lock or no lock — what a tick does once it holds the
+   * lock, and what a test calls. Returns what was written, or null when Redis
+   * would not take it (logged, never thrown).
+   */
+  async publish(): Promise<StoredHealthSnapshot | null> {
+    const { db, redis, logger } = this.#options;
+    const now = (this.#options.now ?? Date.now)();
+    try {
+      const probes = await probeDependencies(db, redis);
+      const health = await buildHealthSnapshot({
+        db,
+        env: this.#options.env,
+        version: this.#options.version,
+        uptimeS: Math.round((now - this.#startedAt) / 100) / 10,
+        probes,
+        scheduler: this.#options.scheduler,
+        eventPartitions: this.#options.eventPartitions,
+        logger,
+      });
+      const stored: StoredHealthSnapshot = { generated_at: new Date(now).toISOString(), health };
+      await redis.set(OPS_HEALTH_KEY, JSON.stringify(stored), 'EX', OPS_HEALTH_TTL_S);
+      await this.#reportComponents(health, stored.generated_at, now);
+      return stored;
+    } catch (error) {
+      logger.warn({ err: error }, 'health snapshot could not be published');
+      return null;
+    }
+  }
+
+  async #reportComponents(
+    health: HealthSnapshotBody,
+    updatedAt: string,
+    now: number,
+  ): Promise<void> {
+    const { redis, logger, env } = this.#options;
+    const put = (
+      key: Parameters<typeof reportComponentStatus>[1],
+      state: OpsComponentState,
+      detail: string | null,
+    ) => reportComponentStatus(redis, key, { state, detail, updatedAt }, logger);
+
+    const { database, redis: cache } = health.dependencies;
+    await put('db', database.status === 'up' ? 'ok' : 'down', latency(database.latency_ms));
+    await put('redis', cache.status === 'up' ? 'ok' : 'down', latency(cache.latency_ms));
+
+    const failing = health.scheduler.jobs
+      .filter((job) => job.enabled && job.last_status === 'error')
+      .map((job) => job.name);
+    await put(
+      'scheduler',
+      failing.length > 0 ? 'degraded' : 'ok',
+      failing.length > 0
+        ? `failing: ${failing.join(', ')}`
+        : `${health.scheduler.jobs.filter((job) => job.enabled).length} jobs`,
+    );
+
+    if (env.MAIL_PROVIDER === 'null') {
+      await put('mail', 'not_installed', 'MAIL_PROVIDER=null');
+    } else {
+      const last = lastMailSend();
+      const failed = last !== null && last.failed && now - last.at < MAIL_FAILURE_WINDOW_MS;
+      await put(
+        'mail',
+        failed ? 'degraded' : 'ok',
+        failed ? `last send failed (${env.MAIL_PROVIDER})` : env.MAIL_PROVIDER,
+      );
+    }
+  }
+
+  #schedule(delayMs: number): void {
+    if (this.#stopped) return;
+    this.#timer = setTimeout(() => {
+      this.#timer = null;
+      this.#inFlight = this.tick().finally(() => {
+        this.#inFlight = null;
+        this.#schedule(OPS_HEALTH_INTERVAL_MS);
+      });
+    }, delayMs);
+    // Losing a publication costs a yellow badge, not correctness — it must
+    // never be what keeps a process that is otherwise done alive.
+    this.#timer.unref();
+  }
+
+  /**
+   * One timer tick: take the leader lock and, holding it, publish. `skipped`
+   * means another instance holds it this interval; public so a test can play
+   * two instances against one Redis without waiting on timers.
+   */
+  async tick(): Promise<'published' | 'skipped' | 'failed'> {
+    try {
+      const token = await this.#lock.acquire(OPS_HEALTH_LOCK, lockTtlMs(OPS_HEALTH_INTERVAL_MS));
+      if (token === null) return 'skipped';
+      this.#token = token;
+      return (await this.publish()) === null ? 'failed' : 'published';
+    } catch (error) {
+      this.#options.logger.warn({ err: error }, 'health snapshot tick failed');
+      return 'failed';
+    }
+  }
+}
+
+function latency(ms: number | undefined): string | null {
+  return ms === undefined ? null : `${ms} ms`;
+}

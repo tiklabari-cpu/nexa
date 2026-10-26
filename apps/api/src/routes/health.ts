@@ -32,39 +32,16 @@
 import type { FastifyInstance } from 'fastify';
 import { roleAtLeast } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
-import { type AiJobsHealth, readAiJobsHealth } from '../services/ai/ai-jobs.js';
+import {
+  buildHealthSnapshot,
+  probe,
+  probeDependencies as probeDeps,
+  type DependencyHealth,
+} from '../services/ops/health-snapshot.js';
 
-export interface DependencyHealth {
-  status: 'up' | 'down';
-  latency_ms?: number;
-  error?: string;
-}
-
-const PROBE_TIMEOUT_MS = 2_000;
-
-/** One dependency check, bounded — shared with the platform process (tm 389.3). */
-export async function probe(
-  name: string,
-  check: () => Promise<unknown>,
-): Promise<DependencyHealth> {
-  const startedAt = performance.now();
-  try {
-    await Promise.race([
-      check(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`${name} probe timed out`)), PROBE_TIMEOUT_MS),
-      ),
-    ]);
-    return { status: 'up', latency_ms: Math.round((performance.now() - startedAt) * 100) / 100 };
-  } catch (error) {
-    return {
-      status: 'down',
-      latency_ms: Math.round((performance.now() - startedAt) * 100) / 100,
-      // Driver messages can carry connection strings — surface the class only.
-      error: error instanceof Error ? error.name : 'unknown error',
-    };
-  }
-}
+// Moved to `services/ops/health-snapshot.ts` (tm 389.8); re-exported so the
+// platform process's probes keep their import.
+export { probe, type DependencyHealth };
 
 export default async function healthRoutes(
   app: FastifyInstance,
@@ -84,13 +61,7 @@ export default async function healthRoutes(
    */
   const drainingBody = { status: 'draining' as const, service: 'api' };
 
-  async function probeDependencies() {
-    const [database, redis] = await Promise.all([
-      probe('database', () => app.db.$queryRaw`SELECT 1`),
-      probe('redis', () => app.redis.ping()),
-    ]);
-    return { database, redis, healthy: database.status === 'up' && redis.status === 'up' };
-  }
+  const probeDependencies = () => probeDeps(app.db, app.redis);
 
   // LIVENESS: no dependency touch, always 200 while the process is up. A
   // Postgres outage must not make an orchestrator kill this process — that
@@ -147,59 +118,17 @@ export default async function healthRoutes(
         return reply.status(healthy ? 200 : 503).send({ status, service: 'api' });
       }
 
-      // The durable AI job queue across every workspace (tm 289.5 · GV-02):
-      // how many replies are owed and how long the oldest has waited. Read
-      // only for an admin, and only when the database answered the probe.
-      // Body only — a queue that is behind does not stop this process serving,
-      // and a reading that fails or times out is `null`, not a 503.
-      let aiJobs: AiJobsHealth | null = null;
-      if (database.status === 'up') {
-        let timer: NodeJS.Timeout | undefined;
-        aiJobs = await Promise.race([
-          readAiJobsHealth(app.db),
-          new Promise<null>((resolve) => {
-            timer = setTimeout(() => resolve(null), PROBE_TIMEOUT_MS);
-          }),
-        ])
-          .catch((error: unknown) => {
-            request.log.warn({ err: error }, 'ai job queue could not be read for /health');
-            return null;
-          })
-          .finally(() => clearTimeout(timer));
-      }
-
-      return reply.status(healthy ? 200 : 503).send({
-        status,
-        service: 'api',
+      const body = await buildHealthSnapshot({
+        db: app.db,
+        env: options.env,
         version: options.version,
-        region: options.env.SIYAHTUS_REGION,
-        uptime_s: uptimeS(),
-        dependencies: { database, redis },
-        // Whether the five background sweeps are ticking in this process at all
-        // (M-SCHED-b · §D113/K1) — the failure this replaces was silent: a
-        // deployment with none of them running looked identical to one that had
-        // just found nothing to do.
-        scheduler: app.scheduler.snapshot(),
-        // Whether the months ahead have their `events` partitions (tm 255.14 ·
-        // §D187). The failure this replaces was silent too (§D131): the pass
-        // could not open a single month and said so only in a log line. Body
-        // only, never the status code — the process still serves, and a
-        // restart fixes nothing.
-        event_partitions: app.eventPartitions.snapshot(),
-        ai_jobs: aiJobs,
-        // Which implementation each mockable dependency currently runs (M-ENV-b ·
-        // §D113/K3) — read straight off the validated env, so this can never drift
-        // from what `server.ts` actually built the factories with.
-        providers: {
-          mail: options.env.MAIL_PROVIDER,
-          push: options.env.PUSH_PROVIDER,
-          storage: options.env.STORAGE_PROVIDER,
-          payment: options.env.STRIPE_PROVIDER,
-          siem: options.env.SIEM_PROVIDER,
-          llm: options.env.LLM_PROVIDER,
-          virus_scanner: options.env.VIRUS_SCANNER,
-        },
+        uptimeS: uptimeS(),
+        probes: { database, redis, healthy },
+        scheduler: app.scheduler,
+        eventPartitions: app.eventPartitions,
+        logger: request.log,
       });
+      return reply.status(healthy ? 200 : 503).send(body);
     },
   );
 }

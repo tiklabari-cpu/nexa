@@ -50,6 +50,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/auth/InvitePage.tsx',
   'src/features/auth/RecoveryCodesPage.tsx',
   'src/features/auth/SignInPage.tsx',
+  'src/features/dashboard/DashboardPage.tsx',
+  'src/features/dashboard/HealthSection.tsx',
   'src/features/placeholder/PlaceholderPage.tsx',
 ];
 

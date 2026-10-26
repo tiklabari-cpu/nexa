@@ -32,6 +32,89 @@ export interface FakePlatformOptions {
 
 const NOW = '2026-10-25T10:00:00.000Z';
 
+/** The dashboard's three reads (tm 389.8), in the shapes the contract documents. */
+export const DASHBOARD_KPIS = {
+  generated_at: NOW,
+  workspaces: {
+    total: 12,
+    by_status: { trialing: 5, active: 4, past_due: 1, read_only: 0, canceled: 1, suspended: 1 },
+  },
+  trials_ending_7d: 3,
+  active_operator_sessions: 2,
+  pending_payment_requests: 0,
+  usage: {
+    day: '20261025',
+    ai_tokens_today: { llm: 120_345, embedding: 8_000 },
+    period: '202610',
+    ai_resolutions_month: 41,
+    api_calls_month: 15_200,
+  },
+};
+
+export function dashboardSignups(days: number): Record<string, unknown> {
+  const data = Array.from({ length: days }, (_, index) => {
+    const at = new Date(Date.UTC(2026, 9, 25) - (days - 1 - index) * 86_400_000);
+    return { date: at.toISOString().slice(0, 10), count: index % 7 === 0 ? 2 : 0 };
+  });
+  return { days, total: data.reduce((sum, point) => sum + point.count, 0), data };
+}
+
+export const DASHBOARD_SNAPSHOT = {
+  status: 'ok',
+  service: 'api',
+  version: '0.1.0',
+  region: 'eu',
+  uptime_s: 3_725,
+  dependencies: {
+    database: { status: 'up', latency_ms: 1.4 },
+    redis: { status: 'up', latency_ms: 0.6 },
+  },
+  scheduler: {
+    enabled: true,
+    jobs: [
+      {
+        name: 'chat_timeout',
+        interval_ms: 60_000,
+        enabled: true,
+        last_run_at: NOW,
+        last_status: 'ok',
+      },
+      { name: 'sla', interval_ms: 60_000, enabled: true, last_run_at: NOW, last_status: 'ok' },
+    ],
+  },
+  event_partitions: {},
+  ai_jobs: { pending: 1, running: 0, oldest_age_s: 2.5 },
+  providers: { mail: 'file' },
+};
+
+export const DASHBOARD_COMPONENTS = [
+  ['mail', 'ok', 'file'],
+  ['redis', 'ok', '0.6 ms'],
+  ['db', 'ok', '1.4 ms'],
+  ['scheduler', 'ok', '2 jobs'],
+  ['ai_jobs', 'unknown', null],
+  ['knowledge_jobs', 'unknown', null],
+  ['doc_worker', 'unknown', null],
+  ['captcha', 'unknown', null],
+  ['geoip', 'not_installed', 'no database file'],
+  ['channel_whatsapp', 'unknown', null],
+  ['channel_meta', 'unknown', null],
+  ['webhooks', 'unknown', null],
+].map(([key, state, detail]) => ({
+  key,
+  state,
+  detail,
+  updated_at: state === 'unknown' ? null : NOW,
+}));
+
+export const DASHBOARD_HEALTH = {
+  stale: false,
+  generated_at: NOW,
+  age_s: 4.2,
+  snapshot: DASHBOARD_SNAPSHOT,
+  components: DASHBOARD_COMPONENTS,
+};
+
 function session(stage: 'password' | 'active'): Record<string, unknown> {
   return {
     id: '00000000-0000-4000-8000-000000000001',
@@ -108,7 +191,13 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     return null;
   }
 
-  function handle(method: string, path: string, headers: Headers, body: unknown): Response {
+  function handle(
+    method: string,
+    path: string,
+    headers: Headers,
+    body: unknown,
+    search: URLSearchParams,
+  ): Response {
     const override = overrides.get(`${method} ${path}`);
     if (override) return override();
 
@@ -204,6 +293,12 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       return json(200, me('active'));
     }
 
+    if (method === 'GET' && path === '/dashboard/kpis') return json(200, DASHBOARD_KPIS);
+    if (method === 'GET' && path === '/dashboard/signups') {
+      return json(200, dashboardSignups(Number(search.get('days') ?? 30)));
+    }
+    if (method === 'GET' && path === '/dashboard/health') return json(200, DASHBOARD_HEALTH);
+
     return problem(404, 'not_found', `${method} ${path}`);
   }
 
@@ -215,7 +310,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined;
     requests.push({ method, path, headers, body });
     if (!url.pathname.startsWith('/platform/v1')) return problem(404, 'not_found');
-    return handle(method, path, headers, body);
+    return handle(method, path, headers, body, url.searchParams);
   });
 
   return {

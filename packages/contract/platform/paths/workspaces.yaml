@@ -1,0 +1,333 @@
+# The workspace read surface (tm 389.9 · FR-ADMIN-08 · design.md §C workspaces).
+# `x-platform-*` as in auth.yaml. Everything here is a read except the note,
+# which is the one write this module has before 389.10's actions.
+#
+# Counts, states and identities only: no message, player, knowledge article or
+# ticket body ever leaves through these routes — a tenant's content is reached
+# by impersonation (389.15) and nowhere else (requirements §2). A workspace's
+# own audit trail is `GET /audit/workspaces/{licenseId}` (audit.yaml, tm 389.5).
+
+list:
+  get:
+    tags: [Workspaces]
+    operationId: listPlatformWorkspaces
+    summary: Every workspace, filtered and sorted, a keyset page at a time
+    description: |
+      Sandboxes are not listed (they are a second tenant of a listed
+      workspace — its `sandbox` tab). `q` matches the organization name or the
+      Kurucu's (owner's) email, case-insensitively and anywhere in the text,
+      or a licence number exactly. `plan` is the effective plan — the latest
+      subscription's, `growth` without one (`lib/entitlements.ts`). `sort`
+      is one key plus the licence number, so a page never repeats or skips a
+      row of the one before; a cursor from another sort or filter is a 400.
+    x-platform-permission: workspaces.read
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/PlatformLicenseStatus" }
+      - name: plan
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPlan" }
+      - name: region
+        in: query
+        schema: { type: string, enum: [eu, us] }
+      - name: trial_ends_before
+        in: query
+        description: Only workspaces whose trial ends before this instant (and has an end).
+        schema: { type: string, format: date-time }
+      - name: q
+        in: query
+        schema: { type: string, minLength: 1, maxLength: 200 }
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum: [created_desc, created_asc, name_asc, trial_ends_asc]
+          default: created_desc
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 512 }
+      - name: limit
+        in: query
+        description: 1–50, default 25; more is answered with 50.
+        schema: { type: integer, minimum: 1 }
+    responses:
+      "200":
+        description: A page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+workspace:
+  get:
+    tags: [Workspaces]
+    operationId: getPlatformWorkspace
+    summary: One workspace — organization, licence, Kurucu, counts, status history
+    description: |
+      A sandbox is readable here too (`license.sandbox_of_license_id`).
+      `status_history` is the platform audit chain's lifecycle entries for the
+      workspace (`workspace.*` that change its status), newest first, at most
+      20, plus its creation.
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The workspace
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+members:
+  get:
+    tags: [Workspaces]
+    operationId: listPlatformWorkspaceMembers
+    summary: The members and their roles
+    description: |
+      Name, email and role (`AGENT_ROLES`, @siyahtus/types — `team_lead`
+      included), Kurucu first. The email is shown for support work; there is
+      no export here (accounts are exported per account, 389.11).
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: Every member
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceMemberList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+brands:
+  get:
+    tags: [Workspaces]
+    operationId: listPlatformWorkspaceBrands
+    summary: The workspace's brands
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: Every brand, the default first
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceBrandList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+usage:
+  get:
+    tags: [Workspaces]
+    operationId: getPlatformWorkspaceUsage
+    summary: This period's meters, the last twelve periods and the daily AI series
+    description: |
+      `current` is the tenant's own `GET /billing/usage` summary.
+      `periods` are the usage records of the last twelve `yyyymm` periods,
+      newest first. `ai_daily` is the workspace's AI token meters
+      (`ai_daily_usage`) for the last `days` UTC days, oldest first, zero
+      days filled in.
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+      - name: days
+        in: query
+        description: 1–90, default 30.
+        schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+    responses:
+      "200":
+        description: The meters
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceUsage" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+subscription:
+  get:
+    tags: [Workspaces]
+    operationId: getPlatformWorkspaceSubscription
+    summary: The subscription, exactly as the workspace's own billing screen reads it
+    description: |
+      The tenant API's `GET /billing/subscription` body, built by the same
+      function (`services/billing/billing-views.ts`).
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The subscription view
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceSubscription" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+invoices:
+  get:
+    tags: [Workspaces]
+    operationId: listPlatformWorkspaceInvoices
+    summary: The invoices — the open period's estimate first, then every closed period
+    description: The tenant API's `GET /billing/invoices` body (`listInvoices`).
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The invoices
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceInvoiceList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+invoiceDownload:
+  get:
+    tags: [Workspaces]
+    operationId: downloadPlatformWorkspaceInvoice
+    summary: One period's invoice as CSV
+    description: |
+      The same file the workspace downloads. CSV today; the PDF arrives with
+      #383 (389.18).
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+      - name: period
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[0-9]{6}$" }
+    responses:
+      "200":
+        description: The CSV
+        content:
+          text/csv:
+            schema: { type: string }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+sandbox:
+  get:
+    tags: [Workspaces]
+    operationId: getPlatformWorkspaceSandbox
+    summary: The workspace's sandbox, or the workspace a sandbox belongs to
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The sandbox state
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceSandbox" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+notes:
+  get:
+    tags: [Workspaces]
+    operationId: listPlatformWorkspaceNotes
+    summary: The operators' notes about the workspace, newest first
+    description: Internal to the platform — the workspace never sees a note's text.
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 512 }
+      - name: limit
+        in: query
+        description: 1–50, default 25; more is answered with 50.
+        schema: { type: integer, minimum: 1 }
+    responses:
+      "200":
+        description: A page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceNoteList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+  post:
+    tags: [Workspaces]
+    operationId: addPlatformWorkspaceNote
+    summary: Add a note
+    description: |
+      Recorded as `workspace.note_added` in the platform chain and as
+      `platform.workspace_note_added` in the workspace's own trail — with the
+      note's id and length, never its text.
+    x-platform-permission: workspaces.support
+    x-platform-audit: workspace.note_added
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceNoteRequest" }
+    responses:
+      "201":
+        description: The note
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceNote" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+impersonations:
+  get:
+    tags: [Workspaces]
+    operationId: listPlatformWorkspaceImpersonations
+    summary: Who entered the workspace as one of its members, and when
+    description: The sessions 389.15 opens, newest first, at most 100. Empty until then.
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The sessions
+        content:
+          application/json:
+            schema:
+              { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceImpersonationList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+aiSummary:
+  get:
+    tags: [Workspaces]
+    operationId: getPlatformWorkspaceAiSummary
+    summary: The workspace's AI at a glance — counts only
+    description: |
+      How many AI agents it has and how many are switched on. 389.19 adds the
+      configuration history, guardrail and QA counts; never a prompt, an
+      instruction or a reply.
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The counts
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceAiSummary" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

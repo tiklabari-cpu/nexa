@@ -44,6 +44,15 @@ tags:
     description: |
       The platform audit chain (tm 389.5): every operator mutation and sign-in
       event, HMAC-chained, signed on export; a workspace's own trail, read-only.
+  - name: Workspaces
+    description: |
+      Every workspace and everything about it except its content (tm 389.9):
+      organization, licence, members, brands, usage, subscription, invoices,
+      sandbox, operator notes, impersonation history, AI counts.
+  - name: Support
+    description: |
+      The support desk (tm 389.9): which workspace an identifier a customer
+      quoted belongs to. Impersonation arrives with 389.15.
 
 # The operator session (tm 389.4) — an opaque bearer token, not a JWT. Every
 # operation needs it unless it says `security: []`. What else it needs is in
@@ -116,6 +125,32 @@ paths:
     $ref: "./paths/audit.yaml#/verify"
   /audit/workspaces/{licenseId}:
     $ref: "./paths/audit.yaml#/workspace"
+  /workspaces:
+    $ref: "./paths/workspaces.yaml#/list"
+  /workspaces/{licenseId}:
+    $ref: "./paths/workspaces.yaml#/workspace"
+  /workspaces/{licenseId}/members:
+    $ref: "./paths/workspaces.yaml#/members"
+  /workspaces/{licenseId}/brands:
+    $ref: "./paths/workspaces.yaml#/brands"
+  /workspaces/{licenseId}/usage:
+    $ref: "./paths/workspaces.yaml#/usage"
+  /workspaces/{licenseId}/subscription:
+    $ref: "./paths/workspaces.yaml#/subscription"
+  /workspaces/{licenseId}/invoices:
+    $ref: "./paths/workspaces.yaml#/invoices"
+  /workspaces/{licenseId}/invoices/{period}/download:
+    $ref: "./paths/workspaces.yaml#/invoiceDownload"
+  /workspaces/{licenseId}/sandbox:
+    $ref: "./paths/workspaces.yaml#/sandbox"
+  /workspaces/{licenseId}/notes:
+    $ref: "./paths/workspaces.yaml#/notes"
+  /workspaces/{licenseId}/impersonations:
+    $ref: "./paths/workspaces.yaml#/impersonations"
+  /workspaces/{licenseId}/ai-summary:
+    $ref: "./paths/workspaces.yaml#/aiSummary"
+  /support/lookup:
+    $ref: "./paths/support.yaml#/lookup"
 
 components:
   securitySchemes:
@@ -135,6 +170,12 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    LicenseId:
+      name: licenseId
+      in: path
+      required: true
+      description: The workspace's licence number. Anything else is a 404, like an unknown one.
+      schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
 
   schemas:
     PlatformRole:
@@ -856,6 +897,427 @@ components:
         components:
           type: array
           items: { $ref: "#/components/schemas/PlatformComponentStatus" }
+
+    PlatformLicenseStatus:
+      type: string
+      description: A licence status (`SUBSCRIPTION_STATUSES`, @siyahtus/types).
+      enum: [trialing, active, past_due, read_only, canceled, suspended]
+
+    PlatformPlan:
+      type: string
+      description: A plan id (`PLAN_IDS`, `services/billing/subscription-service.ts`).
+      enum: [growth, enterprise]
+
+    PlatformMemberRole:
+      type: string
+      description: A member's role (`AGENT_ROLES`, @siyahtus/types).
+      enum: [owner, viceowner, admin, team_lead, agent]
+
+    PlatformWorkspaceOwner:
+      type: object
+      description: The Kurucu (the `owner` member).
+      required: [account_id, name, email, email_verified_at]
+      properties:
+        account_id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string }
+        email_verified_at: { type: ["string", "null"], format: date-time }
+
+    PlatformWorkspaceSummary:
+      type: object
+      required:
+        [
+          license_id,
+          organization_name,
+          region,
+          status,
+          plan,
+          trial_ends_at,
+          created_at,
+          owner_email,
+          member_count,
+        ]
+      properties:
+        license_id: { type: string }
+        organization_name: { type: string }
+        region: { type: string, enum: [eu, us] }
+        status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
+        plan: { $ref: "#/components/schemas/PlatformPlan" }
+        trial_ends_at: { type: ["string", "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        owner_email: { type: ["string", "null"] }
+        member_count: { type: integer }
+
+    PlatformWorkspaceList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformWorkspaceSummary" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformWorkspaceDetail:
+      type: object
+      required: [workspace]
+      properties:
+        workspace:
+          type: object
+          required: [license_id, organization, license, owner, counts, status_history]
+          properties:
+            license_id: { type: string }
+            organization:
+              type: object
+              required: [id, name, region, timezone, sector, company_size, created_at]
+              properties:
+                id: { type: string, format: uuid }
+                name: { type: string }
+                region: { type: string, enum: [eu, us] }
+                timezone: { type: string }
+                sector: { type: ["string", "null"] }
+                company_size: { type: ["string", "null"] }
+                created_at: { type: string, format: date-time }
+            license:
+              type: object
+              required:
+                [
+                  status,
+                  plan,
+                  billing_cycle,
+                  trial_ends_at,
+                  suspended_at,
+                  suspended_reason,
+                  purge_scheduled_at,
+                  onboarding_completed_at,
+                  terms_accepted_at,
+                  sandbox_of_license_id,
+                  created_at,
+                ]
+              properties:
+                status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
+                plan: { $ref: "#/components/schemas/PlatformPlan" }
+                billing_cycle: { type: string, enum: [monthly, annual] }
+                trial_ends_at: { type: ["string", "null"], format: date-time }
+                suspended_at: { type: ["string", "null"], format: date-time }
+                suspended_reason: { type: ["string", "null"] }
+                purge_scheduled_at: { type: ["string", "null"], format: date-time }
+                onboarding_completed_at: { type: ["string", "null"], format: date-time }
+                terms_accepted_at: { type: ["string", "null"], format: date-time }
+                sandbox_of_license_id: { type: ["string", "null"] }
+                created_at: { type: string, format: date-time }
+            owner:
+              oneOf:
+                - { $ref: "#/components/schemas/PlatformWorkspaceOwner" }
+                - { type: "null" }
+            counts:
+              type: object
+              required: [members, brands, customers, chats, tickets, ai_agents]
+              properties:
+                members: { type: integer }
+                brands: { type: integer }
+                customers: { type: integer }
+                chats: { type: integer }
+                tickets: { type: integer }
+                ai_agents: { type: integer }
+            status_history:
+              type: array
+              items:
+                type: object
+                required: [action, at, admin_id, reason]
+                properties:
+                  action:
+                    type: string
+                    description: "`created`, or the platform audit action (`workspace.suspended`, …)."
+                  at: { type: string, format: date-time }
+                  admin_id: { type: ["string", "null"], format: uuid }
+                  reason: { type: ["string", "null"] }
+
+    PlatformWorkspaceMemberList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                account_id,
+                name,
+                email,
+                role,
+                suspended,
+                two_factor_enabled,
+                joined_at,
+                last_seen_at,
+              ]
+            properties:
+              account_id: { type: string, format: uuid }
+              name: { type: string }
+              email: { type: string }
+              role: { $ref: "#/components/schemas/PlatformMemberRole" }
+              suspended: { type: boolean }
+              two_factor_enabled: { type: boolean }
+              joined_at: { type: string, format: date-time }
+              last_seen_at: { type: ["string", "null"], format: date-time }
+
+    PlatformWorkspaceBrandList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [id, name, slug, is_default, created_at]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              slug: { type: string }
+              is_default: { type: boolean }
+              created_at: { type: string, format: date-time }
+
+    PlatformUsageMeter:
+      type: object
+      required: [used, included, overage, overage_cents, overage_unit, overage_unit_price_cents]
+      properties:
+        used: { type: integer }
+        included: { type: integer }
+        overage: { type: integer }
+        overage_cents: { type: integer }
+        overage_unit: { type: integer }
+        overage_unit_price_cents: { type: integer }
+
+    PlatformUsageSummary:
+      type: object
+      description: The tenant API's `GET /billing/usage` meters (`usageSummary`).
+      required: [period, ai_resolutions, api_calls]
+      properties:
+        period: { type: string, pattern: "^[0-9]{6}$" }
+        ai_resolutions: { $ref: "#/components/schemas/PlatformUsageMeter" }
+        api_calls: { $ref: "#/components/schemas/PlatformUsageMeter" }
+
+    PlatformWorkspaceUsage:
+      type: object
+      required: [current, periods, days, ai_daily]
+      properties:
+        current: { $ref: "#/components/schemas/PlatformUsageSummary" }
+        periods:
+          type: array
+          items:
+            type: object
+            required: [period, metric, quantity, included]
+            properties:
+              period: { type: string, pattern: "^[0-9]{6}$" }
+              metric: { type: string }
+              quantity: { type: integer }
+              included: { type: integer }
+        days: { type: integer }
+        ai_daily:
+          type: array
+          items:
+            type: object
+            required: [date, llm, embedding]
+            properties:
+              date: { type: string, format: date }
+              llm: { type: integer }
+              embedding: { type: integer }
+
+    PlatformWorkspaceSubscription:
+      type: object
+      description: The tenant API's `GET /billing/subscription` body (`buildSubscriptionView`).
+      required:
+        [
+          plan,
+          pricing,
+          billing_cycle,
+          status,
+          access,
+          trial,
+          seats,
+          min_seats,
+          unit_price_cents,
+          usage,
+          estimated_total_cents,
+          annual_savings_cents,
+          provider,
+        ]
+      properties:
+        plan: { $ref: "#/components/schemas/PlatformPlan" }
+        pricing: { type: string, enum: [listed, quoted] }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        status: { $ref: "#/components/schemas/PlatformLicenseStatus" }
+        access: { type: string, enum: [trialing, active, read_only] }
+        trial:
+          type: object
+          required: [ends_at, days_remaining]
+          properties:
+            ends_at: { type: ["string", "null"], format: date-time }
+            days_remaining: { type: ["integer", "null"] }
+        seats: { type: integer }
+        min_seats: { type: integer }
+        unit_price_cents: { type: integer }
+        usage: { $ref: "#/components/schemas/PlatformUsageSummary" }
+        estimated_total_cents: { type: integer }
+        annual_savings_cents: { type: integer }
+        provider: { type: string }
+
+    PlatformWorkspaceInvoiceList:
+      type: object
+      description: The tenant API's `GET /billing/invoices` body (`listInvoices`).
+      required: [invoices]
+      properties:
+        invoices:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                number,
+                period,
+                period_label,
+                period_start,
+                period_end,
+                issued_at,
+                origin,
+                status,
+                currency,
+                line_items,
+                subtotal_cents,
+                total_cents,
+              ]
+            properties:
+              number: { type: string }
+              period: { type: string, pattern: "^[0-9]{6}$" }
+              period_label: { type: string }
+              period_start: { type: string, format: date-time }
+              period_end: { type: string, format: date-time }
+              issued_at: { type: string, format: date-time }
+              origin: { type: string, enum: [issued, reconstructed, estimate] }
+              status: { type: string, enum: [paid, open, trial] }
+              currency: { type: string, enum: [usd] }
+              line_items:
+                type: array
+                items:
+                  type: object
+                  required: [description, amount_cents]
+                  additionalProperties: true
+                  properties:
+                    description: { type: string }
+                    amount_cents: { type: integer }
+              subtotal_cents: { type: integer }
+              total_cents: { type: integer }
+
+    PlatformWorkspaceSandbox:
+      type: object
+      required: [is_sandbox, sandbox_of_license_id, sandbox]
+      properties:
+        is_sandbox:
+          type: boolean
+          description: This licence is itself a sandbox (of `sandbox_of_license_id`).
+        sandbox_of_license_id: { type: ["string", "null"] }
+        sandbox:
+          description: The workspace's own sandbox, if it has one.
+          oneOf:
+            - type: object
+              required: [license_id, region, created_at, reset_at]
+              properties:
+                license_id: { type: string }
+                region: { type: string, enum: [eu, us] }
+                created_at: { type: string, format: date-time }
+                reset_at: { type: ["string", "null"], format: date-time }
+            - { type: "null" }
+
+    PlatformWorkspaceNoteRequest:
+      type: object
+      required: [body, reason]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 4000 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformWorkspaceNote:
+      type: object
+      required: [id, license_id, admin_id, admin_email, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        license_id: { type: string }
+        admin_id: { type: string, format: uuid }
+        admin_email: { type: ["string", "null"] }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+
+    PlatformWorkspaceNoteList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformWorkspaceNote" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformWorkspaceImpersonationList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                id,
+                admin_id,
+                admin_email,
+                account_id,
+                mode,
+                started_at,
+                ends_at,
+                ended_at,
+                end_reason,
+              ]
+            properties:
+              id: { type: string, format: uuid }
+              admin_id: { type: string, format: uuid }
+              admin_email: { type: ["string", "null"] }
+              account_id: { type: string, format: uuid }
+              mode: { type: string, enum: [read_only, full] }
+              started_at: { type: string, format: date-time }
+              ends_at: { type: string, format: date-time }
+              ended_at: { type: ["string", "null"], format: date-time }
+              end_reason: { type: ["string", "null"] }
+
+    PlatformWorkspaceAiSummary:
+      type: object
+      required: [ai_agents]
+      properties:
+        ai_agents:
+          type: object
+          required: [total, active]
+          properties:
+            total: { type: integer }
+            active: { type: integer }
+
+    PlatformSupportLookup:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, license_id, organization_name]
+            properties:
+              kind:
+                type: string
+                description: |
+                  What `q` matched: `thread_id` (a Thread ID, `chats.id`),
+                  `chat_id` (a Chat ID, `threads.id`), `ticket`, or
+                  `customer_email`.
+                enum: [thread_id, chat_id, ticket, customer_email]
+              license_id: { type: string }
+              organization_name: { type: string }
 
     Error:
       type: object

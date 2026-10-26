@@ -117,8 +117,18 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     await screen.findByText(locale === 'tr' ? 'Sağlıklı' : 'Healthy');
     expect(await violations(container)).toEqual([]);
 
-    // A page still waiting for its task: the second.
+    // The workspace list (the second entry, tm 389.9), then one workspace's overview.
     await user.click(within(screen.getByRole('navigation')).getAllByRole('link')[1]!);
+    const workspace = await screen.findByRole('link', { name: 'Acme Gaming' });
+    expect(await violations(container)).toEqual([]);
+    await user.click(workspace);
+    await screen.findByText('ayse@acme.example');
+    expect(await violations(container)).toEqual([]);
+
+    // A page still waiting for its task: the third. The shell's menu is the first navigation;
+    // the workspace's tabs are the second.
+    const menu = screen.getAllByRole('navigation')[0]!;
+    await user.click(within(menu).getAllByRole('link')[2]!);
     await screen.findByText(locale === 'tr' ? 'Burada henüz bir şey yok' : 'Nothing here yet');
     expect(await violations(container)).toEqual([]);
   });

@@ -412,7 +412,29 @@ describe('the platform pair (tm 389.3)', () => {
     expect(analysis.called.map((operation) => operation.op)).toEqual(['GET /dashboard/health']);
   });
 
-  it('finds the sign-in surface (tm 389.6) and the dashboard (tm 389.8) called, and nothing else of the platform contract', () => {
+  it('does not take a call to /audit/workspaces/{id} for a call to /audit, but does a query string', () => {
+    // Nor is the head of a longer path the path (tm 389.9); `?…` still ends it.
+    const spec = {
+      paths: {
+        '/audit': { get: {} },
+        '/audit/workspaces/{licenseId}': { get: {} },
+        '/workspaces': { get: {} },
+      },
+    };
+    const analysis = load().analysePlatform({
+      spec,
+      sources: corpus(
+        'apps/admin/src/features/workspaces/queries.ts',
+        'api.get(`/audit/workspaces/${licenseId}`);\napi.get(`/workspaces?${query}`);',
+      ),
+    });
+    expect(analysis.called.map((operation) => operation.op).sort()).toEqual([
+      'GET /audit/workspaces/{licenseId}',
+      'GET /workspaces',
+    ]);
+  });
+
+  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8) and the workspace pages (tm 389.9) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
@@ -429,6 +451,21 @@ describe('the platform pair (tm 389.3)', () => {
         'GET /dashboard/kpis',
         'GET /dashboard/signups',
         'GET /dashboard/health',
+        'GET /workspaces',
+        'GET /workspaces/{licenseId}',
+        'GET /workspaces/{licenseId}/members',
+        'GET /workspaces/{licenseId}/brands',
+        'GET /workspaces/{licenseId}/usage',
+        'GET /workspaces/{licenseId}/subscription',
+        'GET /workspaces/{licenseId}/invoices',
+        'GET /workspaces/{licenseId}/invoices/{period}/download',
+        'GET /workspaces/{licenseId}/sandbox',
+        'GET /workspaces/{licenseId}/notes',
+        'POST /workspaces/{licenseId}/notes',
+        'GET /workspaces/{licenseId}/impersonations',
+        'GET /workspaces/{licenseId}/ai-summary',
+        'GET /audit/workspaces/{licenseId}',
+        'GET /support/lookup',
       ].sort(),
     );
     // What the empty Admins/Audit pages and the operator's own security screen have no content

@@ -448,13 +448,6 @@ const PLATFORM_TRACKED = [
       'the platform audit chain (tm 389.5) — the Audit page (list, filters, signed export, verify), ' +
       'an empty skeleton in the admin shell since tm 389.6; its content is named by no later subtask yet.',
   })),
-  {
-    op: 'GET /audit/workspaces/{licenseId}',
-    owner: 'tm 389.9',
-    reason:
-      "a workspace's own audit trail, read-only (tm 389.5) — the workspace detail's audit tab " +
-      'that 389.9 builds.',
-  },
 ];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
@@ -469,7 +462,13 @@ function pathMatcher(path, { wholePath = false } = {}) {
   // `wholePath`: nor may the path be the tail of a longer one, so `/dashboard/health` is not a call
   // to `/health` (tm 389.8). The platform client writes every path from a quote or backtick, so
   // the guard is safe there; the tenant clients prefix some paths with a base, so it stays off.
-  return new RegExp((wholePath ? '(?<![A-Za-z0-9_-])' : '') + literal + '(?![A-Za-z0-9_-])');
+  // and in that mode a path is not the head of a longer one either: `/audit/workspaces/${id}` is
+  // not a call to `/audit` (tm 389.9).
+  return new RegExp(
+    (wholePath ? '(?<![A-Za-z0-9_-])' : '') +
+      literal +
+      (wholePath ? '(?![A-Za-z0-9_/-])' : '(?![A-Za-z0-9_-])'),
+  );
 }
 
 /**

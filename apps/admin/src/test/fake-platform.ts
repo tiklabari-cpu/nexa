@@ -135,6 +135,211 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/** The workspace surface (tm 389.9): two pages of list, one workspace with every tab. */
+export const WORKSPACE_ID = '42';
+
+export function workspaceRow(id: string, name: string): Record<string, unknown> {
+  return {
+    license_id: id,
+    organization_name: name,
+    region: 'eu',
+    status: 'trialing',
+    plan: 'growth',
+    trial_ends_at: '2026-11-01T00:00:00.000Z',
+    created_at: '2026-10-01T00:00:00.000Z',
+    owner_email: `owner-${id}@example.com`,
+    member_count: 3,
+  };
+}
+
+export const WORKSPACE_DETAIL = {
+  workspace: {
+    license_id: WORKSPACE_ID,
+    organization: {
+      id: '00000000-0000-4000-8000-000000000042',
+      name: 'Acme Gaming',
+      region: 'eu',
+      timezone: 'Europe/Istanbul',
+      sector: 'igaming',
+      company_size: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+    },
+    license: {
+      status: 'trialing',
+      plan: 'growth',
+      billing_cycle: 'monthly',
+      trial_ends_at: '2026-11-01T00:00:00.000Z',
+      suspended_at: null,
+      suspended_reason: null,
+      purge_scheduled_at: null,
+      onboarding_completed_at: null,
+      terms_accepted_at: null,
+      sandbox_of_license_id: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+    },
+    owner: {
+      account_id: '00000000-0000-4000-8000-0000000000b1',
+      name: 'Ayşe Kurucu',
+      email: 'ayse@acme.example',
+      email_verified_at: '2026-10-01T00:00:00.000Z',
+    },
+    counts: { members: 3, brands: 1, customers: 120, chats: 845, tickets: 12, ai_agents: 2 },
+    status_history: [
+      {
+        action: 'workspace.trial_extended',
+        at: '2026-10-20T10:00:00.000Z',
+        admin_id: '00000000-0000-4000-8000-0000000000aa',
+        reason: 'Asked for more time',
+      },
+      { action: 'created', at: '2026-10-01T00:00:00.000Z', admin_id: null, reason: null },
+    ],
+  },
+};
+
+export const WORKSPACE_MEMBERS = {
+  data: [
+    {
+      account_id: '00000000-0000-4000-8000-0000000000b1',
+      name: 'Ayşe Kurucu',
+      email: 'ayse@acme.example',
+      role: 'owner',
+      suspended: false,
+      two_factor_enabled: true,
+      joined_at: '2026-10-01T00:00:00.000Z',
+      last_seen_at: null,
+    },
+    {
+      account_id: '00000000-0000-4000-8000-0000000000b2',
+      name: 'Lead Person',
+      email: 'lead@acme.example',
+      role: 'team_lead',
+      suspended: false,
+      two_factor_enabled: false,
+      joined_at: '2026-10-02T00:00:00.000Z',
+      last_seen_at: null,
+    },
+  ],
+};
+
+export const SUPPORT_MATCH = {
+  data: [{ kind: 'thread_id', license_id: WORKSPACE_ID, organization_name: 'Acme Gaming' }],
+};
+
+function handleWorkspaces(
+  method: string,
+  path: string,
+  body: unknown,
+  search: URLSearchParams,
+  notes: Array<Record<string, unknown>>,
+  role: PlatformRole,
+): Response | null {
+  if (method === 'GET' && path === '/workspaces') {
+    if (search.get('cursor') === 'page-2') {
+      return json(200, { data: [workspaceRow('7', 'Zeta Bets')], next_cursor: null });
+    }
+    if (search.get('q') === 'nothing') return json(200, { data: [], next_cursor: null });
+    return json(200, {
+      data: [workspaceRow(WORKSPACE_ID, 'Acme Gaming'), workspaceRow('9', 'Beta Casino')],
+      next_cursor: 'page-2',
+    });
+  }
+  if (method === 'GET' && path === '/support/lookup') {
+    return search.get('q') === 'TJ1H8CFKRV'
+      ? json(200, SUPPORT_MATCH)
+      : problem(404, 'not_found', 'Nothing matches that identifier.');
+  }
+  const match = /^\/workspaces\/([^/]+)(\/.*)?$/.exec(path);
+  if (method === 'GET' && path.startsWith('/audit/workspaces/')) {
+    return json(200, {
+      items: [
+        {
+          id: '00000000-0000-4000-8000-0000000000c1',
+          action: 'billing.subscription_updated',
+          actor_id: null,
+          actor_type: 'agent',
+          target: null,
+          metadata: {},
+          ip: null,
+          created_at: '2026-10-20T10:00:00.000Z',
+        },
+      ],
+    });
+  }
+  if (!match) return null;
+  if (match[1] !== WORKSPACE_ID) return problem(404, 'not_found', 'Workspace not found.');
+  const tab = match[2] ?? '';
+  if (method === 'GET') {
+    switch (tab) {
+      case '':
+        return json(200, WORKSPACE_DETAIL);
+      case '/members':
+        return json(200, WORKSPACE_MEMBERS);
+      case '/brands':
+        return json(200, {
+          data: [
+            {
+              id: '00000000-0000-4000-8000-0000000000d1',
+              name: 'Acme',
+              slug: 'acme',
+              is_default: true,
+              created_at: '2026-10-01T00:00:00.000Z',
+            },
+          ],
+        });
+      case '/notes':
+        return json(200, { data: [...notes].reverse(), next_cursor: null });
+      case '/impersonations':
+        return json(200, { data: [] });
+      case '/ai-summary':
+        return json(200, { ai_agents: { total: 2, active: 1 } });
+      case '/invoices/202609/download':
+        return new Response('item,amount_cents\r\nSeats,9900\r\n', {
+          status: 200,
+          headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+        });
+      case '/invoices':
+        return json(200, {
+          invoices: [
+            {
+              number: 'SIYAHTUS-202609',
+              period: '202609',
+              period_label: 'September 2026',
+              period_start: '2026-09-01T00:00:00.000Z',
+              period_end: '2026-10-01T00:00:00.000Z',
+              issued_at: '2026-09-30T00:00:00.000Z',
+              origin: 'issued',
+              status: 'paid',
+              currency: 'usd',
+              line_items: [{ description: 'Seats', amount_cents: 9900 }],
+              subtotal_cents: 9900,
+              total_cents: 9900,
+            },
+          ],
+        });
+      default:
+        return null;
+    }
+  }
+  if (method === 'POST' && tab === '/notes') {
+    if (role !== 'superadmin' && role !== 'support') return problem(403, 'authorization');
+    const input = body as { body?: string; reason?: string };
+    if (!input.reason || input.reason.trim().length < 3) {
+      return problem(400, 'platform_reason_required');
+    }
+    const note = {
+      id: `00000000-0000-4000-8000-${String(notes.length + 1).padStart(12, '0')}`,
+      license_id: WORKSPACE_ID,
+      admin_id: '00000000-0000-4000-8000-0000000000aa',
+      admin_email: 'ops@example.com',
+      body: input.body,
+      created_at: NOW,
+    };
+    notes.push(note);
+    return json(201, note);
+  }
+  return null;
+}
+
 export function problem(
   status: number,
   type: string,
@@ -169,6 +374,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   const dead = new Set<string>();
   const overrides = new Map<string, () => Response>();
   const requests: RecordedRequest[] = [];
+  const notes: Array<Record<string, unknown>> = [];
   let issued = 0;
 
   const me = (stage: 'active'): Record<string, unknown> => ({
@@ -298,6 +504,9 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       return json(200, dashboardSignups(Number(search.get('days') ?? 30)));
     }
     if (method === 'GET' && path === '/dashboard/health') return json(200, DASHBOARD_HEALTH);
+
+    const workspaceResponse = handleWorkspaces(method, path, body, search, notes, role);
+    if (workspaceResponse) return workspaceResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);
   }

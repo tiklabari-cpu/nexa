@@ -676,6 +676,296 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/workspaces': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every workspace, filtered and sorted, a keyset page at a time
+     * @description Sandboxes are not listed (they are a second tenant of a listed
+     *     workspace — its `sandbox` tab). `q` matches the organization name or the
+     *     Kurucu's (owner's) email, case-insensitively and anywhere in the text,
+     *     or a licence number exactly. `plan` is the effective plan — the latest
+     *     subscription's, `growth` without one (`lib/entitlements.ts`). `sort`
+     *     is one key plus the licence number, so a page never repeats or skips a
+     *     row of the one before; a cursor from another sort or filter is a 400.
+     */
+    get: operations['listPlatformWorkspaces'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One workspace — organization, licence, Kurucu, counts, status history
+     * @description A sandbox is readable here too (`license.sandbox_of_license_id`).
+     *     `status_history` is the platform audit chain's lifecycle entries for the
+     *     workspace (`workspace.*` that change its status), newest first, at most
+     *     20, plus its creation.
+     */
+    get: operations['getPlatformWorkspace'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/members': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The members and their roles
+     * @description Name, email and role (`AGENT_ROLES`, @siyahtus/types — `team_lead`
+     *     included), Kurucu first. The email is shown for support work; there is
+     *     no export here (accounts are exported per account, 389.11).
+     */
+    get: operations['listPlatformWorkspaceMembers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/brands': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The workspace's brands */
+    get: operations['listPlatformWorkspaceBrands'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/usage': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * This period's meters, the last twelve periods and the daily AI series
+     * @description `current` is the tenant's own `GET /billing/usage` summary.
+     *     `periods` are the usage records of the last twelve `yyyymm` periods,
+     *     newest first. `ai_daily` is the workspace's AI token meters
+     *     (`ai_daily_usage`) for the last `days` UTC days, oldest first, zero
+     *     days filled in.
+     */
+    get: operations['getPlatformWorkspaceUsage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/subscription': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The subscription, exactly as the workspace's own billing screen reads it
+     * @description The tenant API's `GET /billing/subscription` body, built by the same
+     *     function (`services/billing/billing-views.ts`).
+     */
+    get: operations['getPlatformWorkspaceSubscription'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/invoices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The invoices — the open period's estimate first, then every closed period
+     * @description The tenant API's `GET /billing/invoices` body (`listInvoices`).
+     */
+    get: operations['listPlatformWorkspaceInvoices'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/invoices/{period}/download': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One period's invoice as CSV
+     * @description The same file the workspace downloads. CSV today; the PDF arrives with
+     *     #383 (389.18).
+     */
+    get: operations['downloadPlatformWorkspaceInvoice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/sandbox': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The workspace's sandbox, or the workspace a sandbox belongs to */
+    get: operations['getPlatformWorkspaceSandbox'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/notes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The operators' notes about the workspace, newest first
+     * @description Internal to the platform — the workspace never sees a note's text.
+     */
+    get: operations['listPlatformWorkspaceNotes'];
+    put?: never;
+    /**
+     * Add a note
+     * @description Recorded as `workspace.note_added` in the platform chain and as
+     *     `platform.workspace_note_added` in the workspace's own trail — with the
+     *     note's id and length, never its text.
+     */
+    post: operations['addPlatformWorkspaceNote'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/impersonations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Who entered the workspace as one of its members, and when
+     * @description The sessions 389.15 opens, newest first, at most 100. Empty until then.
+     */
+    get: operations['listPlatformWorkspaceImpersonations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/workspaces/{licenseId}/ai-summary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's AI at a glance — counts only
+     * @description How many AI agents it has and how many are switched on. 389.19 adds the
+     *     configuration history, guardrail and QA counts; never a prompt, an
+     *     instruction or a reply.
+     */
+    get: operations['getPlatformWorkspaceAiSummary'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/support/lookup': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Which workspace an identifier a customer quoted belongs to
+     * @description `q` is a Thread ID (`chats.id`), a Chat ID (`threads.id`), a ticket
+     *     number — the three are ten Crockford Base32 characters, case and
+     *     surrounding spaces forgiven — or a customer's email. The answer names
+     *     the workspace only (`license_id`, `organization_name`) and what `q`
+     *     matched (`kind`): never a message, a subject, a customer's name or
+     *     anything else the workspace wrote. An email can be a customer of
+     *     several workspaces, so `data` is a list.
+     *
+     *     Nothing about the answer tells "unknown" from "not an identifier":
+     *     both are the same 404, and every lookup runs the same four probes and
+     *     answers no sooner than a fixed floor, so the time taken does not say
+     *     which probe hit.
+     */
+    get: operations['lookupPlatformSupport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1202,6 +1492,284 @@ export interface components {
       snapshot: components['schemas']['PlatformHealthSnapshot'] | null;
       components: components['schemas']['PlatformComponentStatus'][];
     };
+    /**
+     * @description A licence status (`SUBSCRIPTION_STATUSES`, @siyahtus/types).
+     * @enum {string}
+     */
+    PlatformLicenseStatus:
+      'trialing' | 'active' | 'past_due' | 'read_only' | 'canceled' | 'suspended';
+    /**
+     * @description A plan id (`PLAN_IDS`, `services/billing/subscription-service.ts`).
+     * @enum {string}
+     */
+    PlatformPlan: 'growth' | 'enterprise';
+    /**
+     * @description A member's role (`AGENT_ROLES`, @siyahtus/types).
+     * @enum {string}
+     */
+    PlatformMemberRole: 'owner' | 'viceowner' | 'admin' | 'team_lead' | 'agent';
+    /** @description The Kurucu (the `owner` member). */
+    PlatformWorkspaceOwner: {
+      /** Format: uuid */
+      account_id: string;
+      name: string;
+      email: string;
+      /** Format: date-time */
+      email_verified_at: string | null;
+    };
+    PlatformWorkspaceSummary: {
+      license_id: string;
+      organization_name: string;
+      /** @enum {string} */
+      region: 'eu' | 'us';
+      status: components['schemas']['PlatformLicenseStatus'];
+      plan: components['schemas']['PlatformPlan'];
+      /** Format: date-time */
+      trial_ends_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      owner_email: string | null;
+      member_count: number;
+    };
+    PlatformWorkspaceList: {
+      data: components['schemas']['PlatformWorkspaceSummary'][];
+      next_cursor: string | null;
+    };
+    PlatformWorkspaceDetail: {
+      workspace: {
+        license_id: string;
+        organization: {
+          /** Format: uuid */
+          id: string;
+          name: string;
+          /** @enum {string} */
+          region: 'eu' | 'us';
+          timezone: string;
+          sector: string | null;
+          company_size: string | null;
+          /** Format: date-time */
+          created_at: string;
+        };
+        license: {
+          status: components['schemas']['PlatformLicenseStatus'];
+          plan: components['schemas']['PlatformPlan'];
+          /** @enum {string} */
+          billing_cycle: 'monthly' | 'annual';
+          /** Format: date-time */
+          trial_ends_at: string | null;
+          /** Format: date-time */
+          suspended_at: string | null;
+          suspended_reason: string | null;
+          /** Format: date-time */
+          purge_scheduled_at: string | null;
+          /** Format: date-time */
+          onboarding_completed_at: string | null;
+          /** Format: date-time */
+          terms_accepted_at: string | null;
+          sandbox_of_license_id: string | null;
+          /** Format: date-time */
+          created_at: string;
+        };
+        owner: components['schemas']['PlatformWorkspaceOwner'] | null;
+        counts: {
+          members: number;
+          brands: number;
+          customers: number;
+          chats: number;
+          tickets: number;
+          ai_agents: number;
+        };
+        status_history: {
+          /** @description `created`, or the platform audit action (`workspace.suspended`, …). */
+          action: string;
+          /** Format: date-time */
+          at: string;
+          /** Format: uuid */
+          admin_id: string | null;
+          reason: string | null;
+        }[];
+      };
+    };
+    PlatformWorkspaceMemberList: {
+      data: {
+        /** Format: uuid */
+        account_id: string;
+        name: string;
+        email: string;
+        role: components['schemas']['PlatformMemberRole'];
+        suspended: boolean;
+        two_factor_enabled: boolean;
+        /** Format: date-time */
+        joined_at: string;
+        /** Format: date-time */
+        last_seen_at: string | null;
+      }[];
+    };
+    PlatformWorkspaceBrandList: {
+      data: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        slug: string;
+        is_default: boolean;
+        /** Format: date-time */
+        created_at: string;
+      }[];
+    };
+    PlatformUsageMeter: {
+      used: number;
+      included: number;
+      overage: number;
+      overage_cents: number;
+      overage_unit: number;
+      overage_unit_price_cents: number;
+    };
+    /** @description The tenant API's `GET /billing/usage` meters (`usageSummary`). */
+    PlatformUsageSummary: {
+      period: string;
+      ai_resolutions: components['schemas']['PlatformUsageMeter'];
+      api_calls: components['schemas']['PlatformUsageMeter'];
+    };
+    PlatformWorkspaceUsage: {
+      current: components['schemas']['PlatformUsageSummary'];
+      periods: {
+        period: string;
+        metric: string;
+        quantity: number;
+        included: number;
+      }[];
+      days: number;
+      ai_daily: {
+        /** Format: date */
+        date: string;
+        llm: number;
+        embedding: number;
+      }[];
+    };
+    /** @description The tenant API's `GET /billing/subscription` body (`buildSubscriptionView`). */
+    PlatformWorkspaceSubscription: {
+      plan: components['schemas']['PlatformPlan'];
+      /** @enum {string} */
+      pricing: 'listed' | 'quoted';
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      status: components['schemas']['PlatformLicenseStatus'];
+      /** @enum {string} */
+      access: 'trialing' | 'active' | 'read_only';
+      trial: {
+        /** Format: date-time */
+        ends_at: string | null;
+        days_remaining: number | null;
+      };
+      seats: number;
+      min_seats: number;
+      unit_price_cents: number;
+      usage: components['schemas']['PlatformUsageSummary'];
+      estimated_total_cents: number;
+      annual_savings_cents: number;
+      provider: string;
+    };
+    /** @description The tenant API's `GET /billing/invoices` body (`listInvoices`). */
+    PlatformWorkspaceInvoiceList: {
+      invoices: {
+        number: string;
+        period: string;
+        period_label: string;
+        /** Format: date-time */
+        period_start: string;
+        /** Format: date-time */
+        period_end: string;
+        /** Format: date-time */
+        issued_at: string;
+        /** @enum {string} */
+        origin: 'issued' | 'reconstructed' | 'estimate';
+        /** @enum {string} */
+        status: 'paid' | 'open' | 'trial';
+        /** @enum {string} */
+        currency: 'usd';
+        line_items: ({
+          description: string;
+          amount_cents: number;
+        } & {
+          [key: string]: unknown;
+        })[];
+        subtotal_cents: number;
+        total_cents: number;
+      }[];
+    };
+    PlatformWorkspaceSandbox: {
+      /** @description This licence is itself a sandbox (of `sandbox_of_license_id`). */
+      is_sandbox: boolean;
+      sandbox_of_license_id: string | null;
+      /** @description The workspace's own sandbox, if it has one. */
+      sandbox: {
+        license_id: string;
+        /** @enum {string} */
+        region: 'eu' | 'us';
+        /** Format: date-time */
+        created_at: string;
+        /** Format: date-time */
+        reset_at: string | null;
+      } | null;
+    };
+    PlatformWorkspaceNoteRequest: {
+      body: string;
+      reason: string;
+    };
+    PlatformWorkspaceNote: {
+      /** Format: uuid */
+      id: string;
+      license_id: string;
+      /** Format: uuid */
+      admin_id: string;
+      admin_email: string | null;
+      body: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    PlatformWorkspaceNoteList: {
+      data: components['schemas']['PlatformWorkspaceNote'][];
+      next_cursor: string | null;
+    };
+    PlatformWorkspaceImpersonationList: {
+      data: {
+        /** Format: uuid */
+        id: string;
+        /** Format: uuid */
+        admin_id: string;
+        admin_email: string | null;
+        /** Format: uuid */
+        account_id: string;
+        /** @enum {string} */
+        mode: 'read_only' | 'full';
+        /** Format: date-time */
+        started_at: string;
+        /** Format: date-time */
+        ends_at: string;
+        /** Format: date-time */
+        ended_at: string | null;
+        end_reason: string | null;
+      }[];
+    };
+    PlatformWorkspaceAiSummary: {
+      ai_agents: {
+        total: number;
+        active: number;
+      };
+    };
+    PlatformSupportLookup: {
+      data: {
+        /**
+         * @description What `q` matched: `thread_id` (a Thread ID, `chats.id`),
+         *     `chat_id` (a Chat ID, `threads.id`), `ticket`, or
+         *     `customer_email`.
+         * @enum {string}
+         */
+        kind: 'thread_id' | 'chat_id' | 'ticket' | 'customer_email';
+        license_id: string;
+        organization_name: string;
+      }[];
+    };
     Error: {
       error: {
         /** @description One of `ERROR_TYPES` (`@siyahtus/types`). */
@@ -1297,6 +1865,8 @@ export interface components {
   parameters: {
     AdminId: string;
     InviteId: string;
+    /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+    LicenseId: string;
   };
   requestBodies: never;
   headers: never;
@@ -2137,6 +2707,393 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PlatformWorkspaceAuditList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformWorkspaces: {
+    parameters: {
+      query?: {
+        status?: components['schemas']['PlatformLicenseStatus'];
+        plan?: components['schemas']['PlatformPlan'];
+        region?: 'eu' | 'us';
+        /** @description Only workspaces whose trial ends before this instant (and has an end). */
+        trial_ends_before?: string;
+        q?: string;
+        sort?: 'created_desc' | 'created_asc' | 'name_asc' | 'trial_ends_asc';
+        cursor?: string;
+        /** @description 1–50, default 25; more is answered with 50. */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformWorkspaceMembers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every member */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceMemberList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformWorkspaceBrands: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every brand, the default first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceBrandList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformWorkspaceUsage: {
+    parameters: {
+      query?: {
+        /** @description 1–90, default 30. */
+        days?: number;
+      };
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The meters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceUsage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformWorkspaceSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The subscription view */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceSubscription'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformWorkspaceInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The invoices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceInvoiceList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  downloadPlatformWorkspaceInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+        period: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformWorkspaceSandbox: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The sandbox state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceSandbox'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformWorkspaceNotes: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        /** @description 1–50, default 25; more is answered with 50. */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceNoteList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  addPlatformWorkspaceNote: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformWorkspaceNoteRequest'];
+      };
+    };
+    responses: {
+      /** @description The note */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceNote'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformWorkspaceImpersonations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The sessions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceImpersonationList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformWorkspaceAiSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceAiSummary'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  lookupPlatformSupport: {
+    parameters: {
+      query: {
+        q: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspaces it belongs to */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSupportLookup'];
         };
       };
       400: components['responses']['BadRequest'];

@@ -1,0 +1,37 @@
+# The support desk (tm 389.9 · FR-ADMIN-10 · design.md §C support). The
+# impersonation routes (start/end/get) arrive with 389.15.
+
+lookup:
+  get:
+    tags: [Support]
+    operationId: lookupPlatformSupport
+    summary: Which workspace an identifier a customer quoted belongs to
+    description: |
+      `q` is a Thread ID (`chats.id`), a Chat ID (`threads.id`), a ticket
+      number — the three are ten Crockford Base32 characters, case and
+      surrounding spaces forgiven — or a customer's email. The answer names
+      the workspace only (`license_id`, `organization_name`) and what `q`
+      matched (`kind`): never a message, a subject, a customer's name or
+      anything else the workspace wrote. An email can be a customer of
+      several workspaces, so `data` is a list.
+
+      Nothing about the answer tells "unknown" from "not an identifier":
+      both are the same 404, and every lookup runs the same four probes and
+      answers no sooner than a fixed floor, so the time taken does not say
+      which probe hit.
+    x-platform-permission: workspaces.read
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 320 }
+    responses:
+      "200":
+        description: The workspaces it belongs to
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSupportLookup" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

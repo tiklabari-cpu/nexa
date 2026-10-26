@@ -33,6 +33,9 @@ export const common: Messages = {
     'Bu konuya zaten başka bir ekip bakıyor — önce oradan kaldırın.',
   'common.errors.group_unavailable': 'Bu ekip şu anda bu sohbeti alamıyor.',
   'common.errors.groups_offline': 'Şu anda tüm ekipler çevrimdışı.',
+  'common.errors.impersonation_forbidden_path': 'Destek oturumu bu işlemi bir üye adına yapamaz.',
+  'common.errors.impersonation_read_only':
+    'Bu salt okunur bir destek oturumu — buradan hiçbir şey değiştirilemez.',
   'common.errors.internal': 'Bizim tarafımızda bir şeyler ters gitti — yeniden deneyin.',
   'common.errors.license_expired': 'Aboneliğiniz sona erdi — devam etmek için yenileyin.',
   'common.errors.limit_reached': 'Paketinizin sınırına ulaştınız.',

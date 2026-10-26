@@ -277,10 +277,15 @@ export function buildRtmServer(
       // because the login was awaited — a socket that closed meanwhile has
       // already run its close handler, and tracking it now would renew a
       // socket nobody holds for as long as this process lives.
+      //
+      // Nor does an operator signed in as the member (tm 389.15): the person is
+      // not there, and routing chats to them because support looked at their
+      // inbox would be a lie the visitors pay for.
       if (
         presence &&
         connection.side === 'agent' &&
         principal.kind === 'agent' &&
+        !principal.impersonation &&
         registry.get(connection.id)
       ) {
         presence.opened(connection.id, {
@@ -768,6 +773,11 @@ function attach(params: {
   const idleTimer = setInterval(() => {
     if (Date.now() - connection.lastSeenAt > RTM_LIMITS.idleTimeoutMs) {
       ws.close(4408, 'idle timeout');
+    }
+    // An operator's session as a member (tm 389.15) closes with its window:
+    // the token stopped working at `endsAt`, and so does what it opened.
+    if (connection.impersonation && Date.now() >= connection.impersonation.endsAt.getTime()) {
+      ws.close(4401, 'session ended');
     }
   }, RTM_LIMITS.pingIntervalMs);
 

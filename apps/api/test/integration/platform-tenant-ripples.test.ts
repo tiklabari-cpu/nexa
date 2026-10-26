@@ -506,11 +506,17 @@ describe('platform ripples on the tenant side (tm 389.2)', () => {
       expect((await resolve())?.revoked_at).not.toBeNull();
     });
 
-    it('is not honoured by the tenant API until the impersonation gate exists (389.15)', async () => {
-      const { code } = await openSession(fx.a);
+    it('is honoured by the tenant API as the member, on the session’s terms, since the gate exists (389.15)', async () => {
+      const { code, sessionId } = await openSession(fx.a);
       const token = generateToken(32);
       await consume(code, token);
-      expect((await server.get('/auth/me', auth(token))).statusCode).toBe(401);
+      const me = await server.get('/auth/me', auth(token));
+      expect(me.statusCode, me.body).toBe(200);
+      expect(me.json()).toMatchObject({
+        account_id: fx.a.agentAccountId,
+        role: 'agent',
+        impersonation: { session_id: sessionId, mode: 'read_only' },
+      });
     });
 
     it('leaves the other token kinds resolving as they did', async () => {

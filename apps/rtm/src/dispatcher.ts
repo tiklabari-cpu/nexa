@@ -170,6 +170,7 @@ export class Dispatcher {
       groupIds: principal.groupIds,
       unrestricted: principal.unrestricted,
       authority: principal.authority,
+      impersonation: principal.impersonation ?? null,
     });
 
     // Requested subscriptions are applied at login so a client is live from its
@@ -259,6 +260,17 @@ export class Dispatcher {
         message,
         'not_allowed',
         'Customers send typing via the Customer API, not RTM.',
+      );
+    }
+
+    // An operator in a read-only session (tm 389.15) says nothing to a
+    // visitor: "is typing" is a write like any other, refused as the REST
+    // edge refuses one.
+    if (connection.impersonation?.mode === 'read_only') {
+      return this.#fail(
+        message,
+        'impersonation_read_only',
+        'This is a read-only support session: nothing can be sent from it.',
       );
     }
 

@@ -16,12 +16,14 @@ import {
   REGIONS,
   capabilitiesForRole,
   credentialGrantFor,
+  isImpersonationMode,
   isLicenseClosed,
   narrowsChatReach,
   scopesForCredential,
   servesRegion,
   type AgentRole,
   type CredentialGrant,
+  type ImpersonationMode,
   type LogContext,
   type PermissionMatrixCache,
   type Region,
@@ -61,6 +63,18 @@ export interface SocketPrincipal {
   unrestricted: boolean;
   /** A member's socket's basis for re-derivation; null for bots and customers. */
   authority: SocketAuthority | null;
+  /**
+   * A SiyahTuş operator signed in as this member from the root panel (tm
+   * 389.15): the session's mode and window. A `read_only` socket hears
+   * everything the member would and says nothing — no typing, no presence —
+   * and every socket of a session closes when its window does.
+   */
+  impersonation?: SocketImpersonation;
+}
+
+export interface SocketImpersonation {
+  mode: ImpersonationMode;
+  endsAt: Date;
 }
 
 /** The identity half of a log line written for this principal (ID-08 · `LOG_KEYS`). */
@@ -124,8 +138,9 @@ interface ResolvedTokenRow {
   license_status: string;
   /** The tenant root's own column — see the residency check in `authenticate`. */
   organization_region: string;
-  /** Set on `impersonation` tokens only (tm 389.2); this gateway opens none yet. */
+  /** Set on `impersonation` tokens only (tm 389.2): the session, its mode and operator. */
   impersonation_session_id?: string | null;
+  impersonation_mode?: string | null;
 }
 
 /** The membership facts a member's socket is decided by, read in one statement. */
@@ -199,9 +214,27 @@ export class SocketAuthenticator {
     // residency check three lines down exists to prevent.
     //
     // An allow-list rather than a deny-list, so the next kind somebody adds is
-    // closed here until it is deliberately opened.
-    if (row.kind !== 'pat' && row.kind !== 'oauth' && row.kind !== 'bot') {
+    // closed here until it is deliberately opened. `impersonation` was, in tm
+    // 389.15: an operator signed in as a member reads what the member reads,
+    // on the session's terms (below), exactly as the REST edge resolves it.
+    if (
+      row.kind !== 'pat' &&
+      row.kind !== 'oauth' &&
+      row.kind !== 'bot' &&
+      row.kind !== 'impersonation'
+    ) {
       return { ok: false, reason: 'unknown' };
+    }
+    let impersonation: SocketImpersonation | undefined;
+    if (row.kind === 'impersonation') {
+      // `auth_resolve_token` folded the session's end and window into
+      // `revoked_at` and `expires_at` above; a row missing its terms is one
+      // this gateway cannot bound.
+      if (!row.impersonation_session_id || !isImpersonationMode(row.impersonation_mode)) {
+        return { ok: false, reason: 'unknown' };
+      }
+      if (!row.expires_at) return { ok: false, reason: 'unknown' };
+      impersonation = { mode: row.impersonation_mode, endsAt: row.expires_at };
     }
     // Data residency (NFR-C4 · C4-b). The API refuses the same credential at its
     // own edge; this gateway is a *separate process* and would otherwise keep
@@ -278,6 +311,7 @@ export class SocketAuthenticator {
         groupIds: reach.groupIds,
         unrestricted: reach.unrestricted,
         authority: { ...authority, version: reach.version },
+        ...(impersonation ? { impersonation } : {}),
       },
     };
   }

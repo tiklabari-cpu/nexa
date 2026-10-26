@@ -20,6 +20,7 @@ import { baseFastifyOptions } from './lib/fastify-options.js';
 import { VERSION } from './version.js';
 import licenseGate from './plugins/license-gate.js';
 import maintenanceGate from './plugins/maintenance-gate.js';
+import impersonationGate from './plugins/impersonation-gate.js';
 import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
@@ -33,6 +34,7 @@ import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import scheduler from './plugins/scheduler.js';
 import authRoutes from './routes/auth.js';
+import impersonationRoutes from './routes/impersonation.js';
 import samlRoutes from './routes/saml.js';
 import scimRoutes from './routes/scim.js';
 import agentRoutes from './routes/agents.js';
@@ -522,6 +524,10 @@ export async function buildServer({
   // deployment in maintenance says so before anything about the caller.
   await app.register(maintenanceGate);
   await app.register(auth, { env });
+  // Right after `auth`, whose principal it reads: an operator signed in as a
+  // member (tm 389.15) is held to the session's terms before anything else
+  // looks at the request — and a refused write never parses its body.
+  await app.register(impersonationGate);
   // After `auth`, so its `onRequest` hook adds the route's chat, connection and
   // customer ids to a logger that already says whose request it is (ID-08).
   await app.register(logContext);
@@ -575,6 +581,7 @@ export async function buildServer({
       await api.register(healthRoutes, { env, version: VERSION });
       await api.register(deploymentRoutes, { env });
       await api.register(authRoutes, { env, mailer });
+      await api.register(impersonationRoutes);
       // Its own plugin scope, not part of `authRoutes`: the SAML response
       // arrives as a form post, and the content-type parser that reads it is
       // encapsulated here rather than loosened across the whole auth surface.

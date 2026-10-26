@@ -1313,6 +1313,98 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/support/impersonations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Impersonation sessions, newest first
+     * @description Every operator's sessions across the deployment — who entered which
+     *     workspace as whom, in which mode, and how it ended. `active=true` keeps
+     *     the open ones (not ended, window not run out); `license_id` keeps one
+     *     workspace's. Keyset paging on the start time.
+     */
+    get: operations['listPlatformImpersonations'];
+    put?: never;
+    /**
+     * Enter a workspace as one of its members
+     * @description Opens a session on one live member of one workspace and answers a
+     *     one-time `handoff_url` — the workspace console's
+     *     `/auth/impersonate#code=…`, good once, for 60 seconds. The browser that
+     *     opens it trades the code for a token of the member's (tenant
+     *     `POST /auth/impersonation/exchange`), bounded by this session: it
+     *     carries the member's role and never more, and stops working at
+     *     `ends_at` (`PLATFORM_IMPERSONATION_TTL`, 30 minutes) or when the session
+     *     is ended. There is no extension — open a new one.
+     *
+     *     `mode` is `read_only` unless asked otherwise: every write but signing
+     *     out answers `403 impersonation_read_only`. `full` acts as the member and
+     *     needs `support.impersonate_full` (superadmin) and a code younger than
+     *     five minutes (`403 platform_recent_totp_required`). In either mode the
+     *     routes no operator may take on a member's behalf stay closed
+     *     (`IMPERSONATION_FORBIDDEN_PATHS`).
+     *
+     *     The workspace's Founders are mailed (`impersonation_notice`) — who was
+     *     entered as, in which mode, until when; never the reason, which stays in
+     *     the platform chain. The handoff URL is in this answer only: the code is
+     *     stored as a digest and is not logged.
+     *
+     *     A workspace that is suspended or cancelled is 409
+     *     `platform_workspace_state` (`workspace_closed`); a member the root panel
+     *     suspended is 409 `platform_account_state` (`account_suspended`); an
+     *     unknown workspace, or somebody who is not a live member of it, is 404.
+     */
+    post: operations['startPlatformImpersonation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/support/impersonations/{impersonationId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One impersonation session */
+    get: operations['getPlatformImpersonation'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/support/impersonations/{impersonationId}/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End an impersonation session
+     * @description Closes the session (`end_reason: ended_by_operator`) and with it every
+     *     token it was traded for: the next request the workspace console makes
+     *     with one is a 401. Any operator who may start one may end one. A session
+     *     that has already ended — from here, from the console's banner, or by
+     *     running out — answers `unchanged: true` and records nothing.
+     */
+    post: operations['endPlatformImpersonation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/accounts': {
     parameters: {
       query?: never;
@@ -2762,6 +2854,71 @@ export interface components {
         end_reason: string | null;
       }[];
     };
+    PlatformImpersonationStartRequest: {
+      license_id: string;
+      /**
+       * Format: uuid
+       * @description The member to enter as — a live member of the workspace.
+       */
+      account_id: string;
+      /**
+       * @default read_only
+       * @enum {string}
+       */
+      mode: 'read_only' | 'full';
+      /** @description Why — recorded in the platform audit chain (tm 389.5). */
+      reason: string;
+    };
+    PlatformImpersonation: {
+      /** Format: uuid */
+      id: string;
+      license_id: string;
+      organization_name: string | null;
+      /** Format: uuid */
+      account_id: string;
+      account_email: string | null;
+      /** Format: uuid */
+      admin_id: string;
+      admin_email: string | null;
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      ends_at: string;
+      /** Format: date-time */
+      ended_at: string | null;
+      /**
+       * @description Empty while open, and for a session whose window simply ran out.
+       * @enum {string|null}
+       */
+      end_reason: 'ended_by_operator' | 'ended_in_workspace' | null;
+      /** @description Not ended and its window not run out. */
+      active: boolean;
+    };
+    PlatformImpersonationStarted: {
+      impersonation: components['schemas']['PlatformImpersonation'];
+      /**
+       * @description `<WEB_APP_URL>/auth/impersonate#code=…` — open it in a new tab. Good
+       *     once, until `handoff_expires_at`; shown here and nowhere else.
+       */
+      handoff_url: string;
+      /** Format: date-time */
+      handoff_expires_at: string;
+      /**
+       * @description The Founders' notice — `none` when the workspace has no Founder to tell.
+       * @enum {string}
+       */
+      mail: 'sent' | 'failed' | 'none';
+    };
+    PlatformImpersonationEnded: {
+      unchanged: boolean;
+      impersonation: components['schemas']['PlatformImpersonation'];
+    };
+    PlatformImpersonationList: {
+      data: components['schemas']['PlatformImpersonation'][];
+      next_cursor: string | null;
+    };
     PlatformWorkspaceAiSummary: {
       ai_agents: {
         total: number;
@@ -3259,6 +3416,8 @@ export interface components {
     AccountId: string;
     /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
     LicenseId: string;
+    /** @description The session's id. Anything else is a 404, like an unknown one. */
+    ImpersonationId: string;
   };
   requestBodies: never;
   headers: never;
@@ -5014,6 +5173,122 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PlatformSupportLookup'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformImpersonations: {
+    parameters: {
+      query?: {
+        active?: boolean;
+        license_id?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  startPlatformImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformImpersonationStartRequest'];
+      };
+    };
+    responses: {
+      /** @description The session, and the link that opens it */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationStarted'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The session's id. Anything else is a 404, like an unknown one. */
+        impersonationId: components['parameters']['ImpersonationId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            impersonation: components['schemas']['PlatformImpersonation'];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  endPlatformImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The session's id. Anything else is a 404, like an unknown one. */
+        impersonationId: components['parameters']['ImpersonationId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The session as it now reads */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationEnded'];
         };
       };
       400: components['responses']['BadRequest'];

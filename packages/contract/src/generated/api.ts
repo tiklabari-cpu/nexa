@@ -298,6 +298,69 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/impersonation/exchange': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Trade a root-panel handoff code for an impersonation session
+     * @description "Enter as the customer" (FR-ADMIN-21 · tm 389.15 · design.md §G). A
+     *     SiyahTuş operator opened a session on one member from the root panel;
+     *     the panel handed their browser `/auth/impersonate#code=…`, and the
+     *     console brings the code here. The code is good once, for 60 seconds,
+     *     and only while the session is open; anything else — spent, late,
+     *     unknown, a member the workspace has since removed — is the same `401`.
+     *
+     *     The token answered is an ordinary bearer token of the member, bounded
+     *     by the session: it carries the member's role and the workspace's
+     *     permission matrix (never more), stops working when the session ends or
+     *     its window (`ends_at`) runs out, and cannot be renewed — there is no
+     *     refresh token. In a `read_only` session every write answers `403
+     *     impersonation_read_only` except signing out and
+     *     `POST /auth/impersonation/end`; in either mode the routes no operator
+     *     may take on a member's behalf answer `403 impersonation_forbidden_path`.
+     *     Every audit entry the session writes names the operator
+     *     (`actor_type: platform`) and the member (`on_behalf_of`).
+     *
+     *     Public, with its own per-address rate bucket.
+     */
+    post: operations['exchangeImpersonationCode'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/impersonation/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End the impersonation session this token belongs to
+     * @description The console banner's "End session" (tm 389.15): the platform session
+     *     is closed (`end_reason: ended_in_workspace`), and with it every token
+     *     it was traded for — the next request with this one is a `401`. Open in
+     *     a `read_only` session like signing out. Only an impersonation token may
+     *     call it; any other credential gets `404`. Ending a session that has
+     *     already ended answers `200` with `ended: false`.
+     */
+    post: operations['endImpersonation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/me': {
     parameters: {
       query?: never;
@@ -11083,6 +11146,43 @@ export interface components {
       /** Format: uuid */
       organization_id?: string;
     };
+    /**
+     * @description A SiyahTuş operator signed in as this member from the root panel
+     *     (FR-ADMIN-21 · tm 389.15). Who the operator is stays in the audit
+     *     trail (`actor_type: platform`); the console needs only the terms.
+     */
+    ImpersonationState: {
+      /** Format: uuid */
+      session_id: string;
+      /**
+       * @description `read_only` refuses every write but signing out and ending the
+       *     session; `full` acts as the member. Neither reaches past the
+       *     member's role.
+       * @enum {string}
+       */
+      mode: 'read_only' | 'full';
+      /**
+       * Format: date-time
+       * @description When the session, and every token traded for it, stops working.
+       */
+      ends_at: string;
+    };
+    ImpersonationGrant: {
+      access_token: string;
+      /** @enum {string} */
+      token_type: 'Bearer';
+      /** @description Seconds until `impersonation.ends_at`. There is no refresh token. */
+      expires_in: number;
+      /**
+       * Format: uuid
+       * @description The member the operator is signed in as.
+       */
+      account_id: string;
+      license_id: string;
+      /** Format: uuid */
+      organization_id: string;
+      impersonation: components['schemas']['ImpersonationState'];
+    };
     Chat: {
       /**
        * @description Short base32 token, e.g. TJ1H8CFKRV. Panelde: Thread ID (günlük) —
@@ -19843,6 +19943,8 @@ export interface components {
       | 'group_topic_role_taken'
       | 'group_unavailable'
       | 'groups_offline'
+      | 'impersonation_forbidden_path'
+      | 'impersonation_read_only'
       | 'internal'
       | 'license_expired'
       | 'limit_reached'
@@ -20610,6 +20712,64 @@ export interface operations {
       };
     };
   };
+  exchangeImpersonationCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The impersonation session's bearer token */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ImpersonationGrant'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  endImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description The session is over */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @description False when the session had already ended. */
+            ended: boolean;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
   getCurrentPrincipal: {
     parameters: {
       query?: never;
@@ -20728,6 +20888,12 @@ export interface operations {
               /** @description Unused codes left. Which ones is never retrievable. */
               recovery_codes_remaining: number;
             };
+            /**
+             * @description Agent principals only, and only when a SiyahTuş operator is
+             *     signed in as this member from the root panel (tm 389.15).
+             *     The console paints its red banner from it. Absent otherwise.
+             */
+            impersonation?: components['schemas']['ImpersonationState'];
           };
         };
       };

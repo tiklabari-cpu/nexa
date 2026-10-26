@@ -13,6 +13,7 @@ import type { PrismaClient } from '@prisma/client';
 import {
   capabilitiesForRole,
   credentialGrantFor,
+  isImpersonationMode,
   isLicenseClosed,
   scopesForCredential,
   type AgentRole,
@@ -22,7 +23,11 @@ import {
 } from '@siyahtus/types';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
-import { ENROLLMENT_TICKET_SCOPES, type Principal } from './principal.js';
+import {
+  ENROLLMENT_TICKET_SCOPES,
+  type ImpersonationContext,
+  type Principal,
+} from './principal.js';
 
 /** v2-03 §8.6: at most 25 live access tokens per (client, user). */
 export const MAX_ACTIVE_TOKENS_PER_OWNER = 25;
@@ -39,9 +44,9 @@ export interface IssuedToken {
  * Every bearer credential this product mints, by what it is allowed to reach.
  *
  * `impersonation` (tm 389.2) is minted only by the SQL function
- * `auth_consume_impersonation_handoff`, never by {@link TokenService.issue},
- * and {@link TokenService.resolve} refuses it until the impersonation gate
- * (389.15) stands in front of it.
+ * `auth_consume_impersonation_handoff`, never by {@link TokenService.issue};
+ * {@link TokenService.resolve} reads it as the member it names, with the
+ * session's terms on the principal (tm 389.15).
  */
 export type TokenKind = 'pat' | 'oauth' | 'bot' | 'scim' | 'enrollment' | 'impersonation';
 
@@ -103,6 +108,17 @@ interface MembershipRow {
   account_suspended: boolean;
 }
 
+/**
+ * The session terms an impersonation row carries (`auth_resolve_token`'s last
+ * three columns, tm 389.2), or null when any of them is missing or unknown.
+ */
+function impersonationOf(row: ResolvedTokenRow): ImpersonationContext | null {
+  const { impersonation_session_id: sessionId, impersonation_admin_id: adminId } = row;
+  const mode = row.impersonation_mode;
+  if (!sessionId || !adminId || !isImpersonationMode(mode) || !row.expires_at) return null;
+  return { sessionId, adminId, mode, endsAt: row.expires_at };
+}
+
 export class TokenService {
   /** Tokens whose `last_used_at` stamp is on its way to the database — see touch(). */
   readonly #stamping = new Set<string>();
@@ -139,11 +155,13 @@ export class TokenService {
     if (isLicenseClosed(row.license_status)) {
       return { ok: false, reason: 'license_closed', licenseStatus: row.license_status };
     }
-    // Closed until the impersonation gate exists (389.15): resolved as the
-    // member it names, this token would carry their full role whatever mode
-    // the session was opened in. `unknown`, like any credential this process
-    // does not honour.
-    if (row.kind === 'impersonation') return { ok: false, reason: 'unknown' };
+    // An impersonation token (tm 389.15) is honoured only with its session's
+    // terms intact: a row missing any of them, or naming a mode this process
+    // does not know, is a credential it cannot bound — `unknown`, like any
+    // other it does not honour. `auth_resolve_token` has already folded the
+    // session's end and window into `revoked_at` and `expires_at` above.
+    const impersonation = row.kind === 'impersonation' ? impersonationOf(row) : undefined;
+    if (impersonation === null) return { ok: false, reason: 'unknown' };
 
     // The column is `TEXT` in the row type because that is what Postgres hands
     // back; the CHECK constraint on `organizations.region` is what makes the
@@ -295,6 +313,10 @@ export class TokenService {
         accountId: row.owner_id,
         licenseId: row.license_id,
         organizationId: row.organization_id,
+        // An operator signed in as this member (tm 389.15) is this member:
+        // the role just read, the matrix at the version just read — the
+        // `impersonation` grant below holds exactly the role's scopes, so the
+        // session can never reach past the person it stands in for.
         role: check.role,
         // Re-derived here against the role just read and the matrix at the
         // version just read: a sign-in session follows the matrix both ways, a
@@ -311,6 +333,7 @@ export class TokenService {
         capabilities: capabilitiesForRole(check.role, matrix.overrides),
         tokenId: row.id,
         tokenKind: row.kind,
+        ...(impersonation ? { impersonation } : {}),
       },
     };
   }

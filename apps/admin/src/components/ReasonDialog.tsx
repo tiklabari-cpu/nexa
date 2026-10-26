@@ -124,6 +124,13 @@ export function ReasonDialog({
     if (needsTotp && !requireTotp) codeRef.current?.focus();
   }, [needsTotp, requireTotp]);
 
+  // A choice inside the dialog can make the action destructive after it opened (tm 389.15:
+  // "Full" access) — the field appears then. It never goes away again: a code typed for a
+  // choice taken back is harmless, and a field that vanished mid-sentence is not.
+  useEffect(() => {
+    if (requireTotp) setNeedsTotp(true);
+  }, [requireTotp]);
+
   const requestClose = useCloseGuard({
     isDirty: form.isDirty || code !== '' || extraDirty,
     onClose: onCancel,

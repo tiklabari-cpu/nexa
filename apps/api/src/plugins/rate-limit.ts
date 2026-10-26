@@ -245,6 +245,13 @@ export function authFailureBucket(ip: string, env: Env): Bucket {
   };
 }
 
+/**
+ * Handoff codes one address may trade per minute (tm 389.15). A fixed number
+ * rather than an environment key: an operator opens a session a minute at
+ * most, and nothing about a deployment changes how many that is.
+ */
+export const IMPERSONATION_EXCHANGES_PER_MIN = 30;
+
 function bucketFor(request: FastifyRequest, env: Env): Bucket {
   const principal = request.principal;
 
@@ -300,6 +307,19 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
     return {
       key: `rl:token:${request.ip}`,
       limit: env.RATE_LIMIT_TOKEN_PER_MIN,
+      windowMs: 60_000,
+    };
+  }
+
+  // `POST /auth/impersonation/exchange` (tm 389.15): an operator's browser
+  // trading a root-panel handoff code. Its own per-address bucket, ahead of the
+  // principal buckets like the ones above, so it neither spends the anonymous
+  // budget sign-in and the widget share nor is spent by it. The code is 256
+  // random bits, so this bounds load, not guessing.
+  if (request.routeOptions.config.impersonationRateLimit) {
+    return {
+      key: `rl:impersonation:${request.ip}`,
+      limit: IMPERSONATION_EXCHANGES_PER_MIN,
       windowMs: 60_000,
     };
   }
@@ -574,6 +594,8 @@ declare module 'fastify' {
      * slot spent.
      */
     tokenRateLimit?: boolean;
+    /** `POST /auth/impersonation/exchange`'s own per-address bucket (tm 389.15). */
+    impersonationRateLimit?: boolean;
   }
 }
 

@@ -30,6 +30,7 @@ import { useNotifications } from '../features/notifications/useNotifications.js'
 import { CommandPalette } from './CommandPalette.js';
 import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
 import { MaintenancePage, NoticeBar } from './NoticeBar.js';
+import { ImpersonationBanner } from './ImpersonationBanner.js';
 import { useNotice } from '../lib/notice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { PresenceNotices } from './PresenceNotices.js';
@@ -81,6 +82,8 @@ export function AppShell(): ReactElement {
           >
             {t('shell.skipToContent')}
           </a>
+          {/* An operator signed in as this member (tm 389.15): first, above everything. */}
+          <ImpersonationBanner />
           <NoticeBar />
           <SandboxBadge />
           <TrialBanner />

@@ -20,6 +20,7 @@ import { Banner } from '../../components/ui/Banner.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { hasPermission, useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { ImpersonateButton } from '../support/Impersonation.js';
 import { useWorkspace } from './queries.js';
 import {
   WorkspaceActionDialog,
@@ -105,7 +106,15 @@ export function WorkspaceDetailPage(): ReactElement {
     <Page
       title={workspace?.organization.name ?? t('nav.workspaces')}
       description={t('workspaces.detail.description', { id: licenseId })}
-      actions={workspace ? <WorkspaceActionsMenu workspace={workspace} onSelect={select} /> : null}
+      actions={
+        workspace ? (
+          <div className="flex items-center gap-2">
+            {/* "Enter as the customer" (tm 389.15): read-only unless a superadmin asks. */}
+            <ImpersonateButton workspace={workspace} />
+            <WorkspaceActionsMenu workspace={workspace} onSelect={select} />
+          </div>
+        ) : null
+      }
     >
       {workspace && <WorkspaceStateBanners workspace={workspace} onSelect={select} />}
       {notice && (

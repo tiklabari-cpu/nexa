@@ -1,10 +1,13 @@
 import { useEffect, useRef, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
+import { ImpersonationBanner } from './components/ImpersonationBanner.js';
 import { LoadingPage } from './components/LoadingPage.js';
 import { NotFoundPage } from './components/NotFoundPage.js';
 import { PilotHidden } from './components/PilotHidden.js';
+import { IMPERSONATION_CONSOLE_PATH } from '@siyahtus/types';
 import { AuthCallbackPage } from './features/auth/AuthCallbackPage.js';
+import { ImpersonatePage, ImpersonationEndedPage } from './features/auth/ImpersonatePage.js';
 import { ReconnectingPage } from './features/auth/ReconnectingPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import {
@@ -40,6 +43,7 @@ export function App(): ReactElement {
   const status = useAuth((s) => s.status);
   const restore = useAuth((s) => s.restore);
   const agent = useAuth((s) => s.agent);
+  const impersonationEnded = useAuth((s) => s.impersonationEnded);
   /**
    * A shared report (FR-MOD-07.3.1) is read by somebody with no account, so it
    * has to sit outside every branch below — including the "restoring a session"
@@ -47,15 +51,23 @@ export function App(): ReactElement {
    * tries to refresh a token they do not have. The token itself is in the URL
    * fragment and is never touched here; the page reads it.
    */
-  const sharedReport = useLocation().pathname === SHARED_REPORT_PATH;
+  const { pathname } = useLocation();
+  const sharedReport = pathname === SHARED_REPORT_PATH;
+  /**
+   * "Enter as the customer" (tm 389.15) lands here with a one-time code. Like
+   * the shared report it sits outside the branches below, and nothing is
+   * restored first: this tab is about to become the member's, and the
+   * browser's own stored session belongs to its other tabs.
+   */
+  const impersonating = pathname === IMPERSONATION_CONSOLE_PATH;
   const reconnecting = status === 'reconnecting';
   const shell = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Not merely unnecessary on the shared page — a restore attempt would put a
     // refresh request in a log line belonging to a caller who is not a user.
-    if (status === 'unknown' && !sharedReport) void restore();
-  }, [status, restore, sharedReport]);
+    if (status === 'unknown' && !sharedReport && !impersonating) void restore();
+  }, [status, restore, sharedReport, impersonating]);
 
   // Out of reach while the session reconnects (tm 259.2): nothing typed or
   // clicked under the overlay could be sent. An attribute rather than a prop —
@@ -65,6 +77,7 @@ export function App(): ReactElement {
   }, [reconnecting]);
 
   if (sharedReport) return <SharedReportPage />;
+  if (impersonating && status !== 'signed-in') return <ImpersonatePage />;
 
   if (status === 'unknown') return <LoadingPage />;
 
@@ -81,6 +94,11 @@ export function App(): ReactElement {
   // away: `/join`, `/reset-password` and `/verify-email` a token from an email, and
   // `/auth/callback` the authorization code a federated sign-in just earned
   // (NFR-S11 · S11-i).
+  // An impersonation tab whose session is over has nothing to sign in to.
+  if (status !== 'signed-in' && !reconnecting && impersonationEnded) {
+    return <ImpersonationEndedPage reason={impersonationEnded} />;
+  }
+
   if (status !== 'signed-in' && !reconnecting) {
     return (
       <Routes>
@@ -117,10 +135,14 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
   // path leads to the wizard — deep-linking to a module cannot slip past setup.
   if (onboarding) {
     return (
-      <Routes>
-        <Route path="/app/onboarding" element={<OnboardingWizard />} />
-        <Route path="*" element={<Navigate to="/app/onboarding" replace />} />
-      </Routes>
+      <>
+        {/* The wizard is outside the shell, and a support session (tm 389.15) is never unmarked. */}
+        <ImpersonationBanner />
+        <Routes>
+          <Route path="/app/onboarding" element={<OnboardingWizard />} />
+          <Route path="*" element={<Navigate to="/app/onboarding" replace />} />
+        </Routes>
+      </>
     );
   }
 

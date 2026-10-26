@@ -989,7 +989,12 @@ export default async function authRoutes(
           // transcript, a scheduled report — is written in it. The panel sends
           // it with every request; this read happens on every load, so a write
           // is only needed when it changed.
-          const locale = headerLocale(request.headers[LOCALE_HEADER]);
+          // Not while an operator is signed in as them (tm 389.15): the
+          // operator's language is not the member's, and their mail would
+          // follow it.
+          const locale = principal.impersonation
+            ? null
+            : headerLocale(request.headers[LOCALE_HEADER]);
           if (membership && locale && membership.locale !== locale) {
             await tx.agentMembership.update({
               where: {
@@ -1043,6 +1048,17 @@ export default async function authRoutes(
           // were shown once and are not retrievable.
           recovery_codes_remaining: twoFactorStatus.recoveryCodesRemaining,
         },
+        // An operator signed in as this member (tm 389.15): the console's red
+        // banner and its countdown. Who the operator is stays in the trail.
+        ...(principal.impersonation
+          ? {
+              impersonation: {
+                session_id: principal.impersonation.sessionId,
+                mode: principal.impersonation.mode,
+                ends_at: principal.impersonation.endsAt.toISOString(),
+              },
+            }
+          : {}),
       });
     },
   );

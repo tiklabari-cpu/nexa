@@ -188,6 +188,10 @@ describe('error taxonomy', () => {
     'platform_account_state',
     // The root panel's maintenance mode (tm 389.13).
     'maintenance',
+    // An operator signed in as a member (tm 389.15): a write in a read-only
+    // session, and a route no operator may take on a member's behalf.
+    'impersonation_read_only',
+    'impersonation_forbidden_path',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

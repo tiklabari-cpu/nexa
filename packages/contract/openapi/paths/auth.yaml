@@ -333,6 +333,83 @@ revoke:
               properties:
                 revoked: { type: boolean }
 
+impersonationExchange:
+  post:
+    tags: [Auth]
+    operationId: exchangeImpersonationCode
+    summary: Trade a root-panel handoff code for an impersonation session
+    description: |
+      "Enter as the customer" (FR-ADMIN-21 · tm 389.15 · design.md §G). A
+      SiyahTuş operator opened a session on one member from the root panel;
+      the panel handed their browser `/auth/impersonate#code=…`, and the
+      console brings the code here. The code is good once, for 60 seconds,
+      and only while the session is open; anything else — spent, late,
+      unknown, a member the workspace has since removed — is the same `401`.
+
+      The token answered is an ordinary bearer token of the member, bounded
+      by the session: it carries the member's role and the workspace's
+      permission matrix (never more), stops working when the session ends or
+      its window (`ends_at`) runs out, and cannot be renewed — there is no
+      refresh token. In a `read_only` session every write answers `403
+      impersonation_read_only` except signing out and
+      `POST /auth/impersonation/end`; in either mode the routes no operator
+      may take on a member's behalf answer `403 impersonation_forbidden_path`.
+      Every audit entry the session writes names the operator
+      (`actor_type: platform`) and the member (`on_behalf_of`).
+
+      Public, with its own per-address rate bucket.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code]
+            properties:
+              code: { type: string, minLength: 1, maxLength: 128 }
+    responses:
+      "200":
+        description: The impersonation session's bearer token
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ImpersonationGrant" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+impersonationEnd:
+  post:
+    tags: [Auth]
+    operationId: endImpersonation
+    summary: End the impersonation session this token belongs to
+    description: |
+      The console banner's "End session" (tm 389.15): the platform session
+      is closed (`end_reason: ended_in_workspace`), and with it every token
+      it was traded for — the next request with this one is a `401`. Open in
+      a `read_only` session like signing out. Only an impersonation token may
+      call it; any other credential gets `404`. Ending a session that has
+      already ended answers `200` with `ended: false`.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { type: object }
+    responses:
+      "200":
+        description: The session is over
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ended]
+              properties:
+                ended:
+                  type: boolean
+                  description: False when the session had already ended.
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
 me:
   get:
     tags: [Auth]
@@ -455,6 +532,13 @@ me:
                     recovery_codes_remaining:
                       type: integer
                       description: Unused codes left. Which ones is never retrievable.
+                impersonation:
+                  allOf:
+                    - $ref: "../openapi.yaml#/components/schemas/ImpersonationState"
+                  description: |
+                    Agent principals only, and only when a SiyahTuş operator is
+                    signed in as this member from the root panel (tm 389.15).
+                    The console paints its red banner from it. Absent otherwise.
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
 
 twoFactorEnroll:

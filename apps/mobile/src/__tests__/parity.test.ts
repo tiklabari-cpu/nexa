@@ -1025,9 +1025,13 @@ describe('module parity matrix — what is still owed', () => {
       // announcement and maintenance mode, read anonymously by the web console
       // for its banner and its maintenance page. The app shows neither: a
       // maintenance refusal reaches it as the REST edge's 503 `maintenance`,
-      // like any other error. Nothing here re-scopes. (The impersonation
-      // exchange, tm 389.15, is the next +1.)
-      contractEndpoints: 302,
+      // like any other error. Nothing here re-scopes.
+      // 302 -> 304 with `/auth/impersonation/exchange` and
+      // `/auth/impersonation/end` (tm 389.15) — a SiyahTuş operator entering
+      // the web console as a member from the root panel, and the red banner's
+      // "End session". The root panel hands the code to a browser tab; the app
+      // is never signed in as anybody by an operator. Nothing here re-scopes.
+      contractEndpoints: 304,
       scopeBoundaries: 1,
     });
   });

@@ -103,7 +103,10 @@ describe('schema consumers report (§F.1/4)', () => {
     const orphans = analysis.orphans.map((o) => o.name);
     const via = new Map(analysis.viaFunction.map((v) => [v.name, v]));
 
-    for (const name of ['PasswordResetToken', 'AccountTwoFactor', 'TwoFactorRecoveryCode']) {
+    // `TwoFactorRecoveryCode` has had a direct reader since tm 389.11 (the root panel counts
+    // the codes left), so it is consumed outright rather than only through a function.
+    expect(orphans).not.toContain('TwoFactorRecoveryCode');
+    for (const name of ['PasswordResetToken', 'AccountTwoFactor']) {
       expect(orphans, name).not.toContain(name);
       const entry = via.get(name);
       expect(entry, name).toBeDefined();

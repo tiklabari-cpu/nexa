@@ -11,7 +11,7 @@ import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadPlatformOpenApiDocument } from '@siyahtus/contract';
 import { derivePlatformKey } from '../../src/lib/platform-keys.js';
-import { generateTotp } from '../../src/lib/totp.js';
+import { generateTotp, generateTotpSecret } from '../../src/lib/totp.js';
 import { buildPlatformServer, PLATFORM_PREFIX } from '../../src/platform-server.js';
 import {
   deriveChainKey,
@@ -332,6 +332,37 @@ describe('the platform audit chain (tm 389.5)', () => {
     });
     ok(await action('delete', { confirm_name: name }));
     ok(await action('delete/cancel'));
+
+    // Every account action (tm 389.11), on B's agent — A's agent owns A by now.
+    const person = fx.b.agentAccountId;
+    const onAccount = (path: string, body: Record<string, unknown> = {}) =>
+      request('POST', `/accounts/${person}/${path}`, { token, body: { ...body, ...reason } });
+    await owner.account.update({ where: { id: person }, data: { emailVerifiedAt: null } });
+    ok(await onAccount('resend-verification'));
+    ok(await onAccount('force-password-reset'));
+    await grantToken(owner, {
+      licenseId: fx.b.licenseId,
+      organizationId: fx.b.organizationId,
+      ownerId: person,
+      scopes: ['chats--all:ro'],
+      kind: 'oauth',
+    });
+    ok(await onAccount('revoke-sessions'));
+    await grantToken(owner, {
+      licenseId: fx.b.licenseId,
+      organizationId: fx.b.organizationId,
+      ownerId: person,
+      scopes: ['chats--all:ro'],
+    });
+    ok(await onAccount('revoke-tokens'));
+    await owner.accountTwoFactor.create({
+      data: { accountId: person, secret: generateTotpSecret(), activatedAt: new Date() },
+    });
+    ok(await onAccount('reset-two-factor'));
+    ok(await onAccount('suspend'));
+    ok(await onAccount('unsuspend'));
+    ok(await onAccount('export'));
+    ok(await onAccount('erase', { confirm_email: fx.b.agentEmail }));
 
     // The superadmin's own sessions.
     ok(await request('DELETE', '/auth/sessions', { token }));

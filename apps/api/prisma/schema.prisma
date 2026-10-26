@@ -307,6 +307,11 @@ model Account {
   /// link created (tm 282), until the link mailed to the address is opened with
   /// the password; SSO, SCIM and the seed are verified by this default.
   emailVerifiedAt DateTime? @default(now()) @map("email_verified_at") @db.Timestamptz(6)
+  /// Set by the root panel (tm 389.11): no sign-in, no token, no socket in any
+  /// workspace until it is lifted; the memberships stay. The platform's alone —
+  /// a trigger refuses the tenant role a change to either column.
+  platformSuspendedAt     DateTime? @map("platform_suspended_at") @db.Timestamptz(6)
+  platformSuspendedReason String?   @map("platform_suspended_reason")
 
   memberships        AgentMembership[]
   authorizationCodes OauthAuthorizationCode[]

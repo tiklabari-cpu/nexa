@@ -9,6 +9,7 @@
  */
 import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siyahtus/types';
 import { vi } from 'vitest';
+import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
 
 export interface RecordedRequest {
   method: string;
@@ -28,6 +29,8 @@ export interface FakePlatformOptions {
   /** The one recovery code the server accepts. */
   goodRecoveryCode?: string;
   password?: string;
+  /** The fake account (tm 389.11) is a workspace's Founder: erasure is refused. */
+  accountSoleOwner?: boolean;
 }
 
 const NOW = '2026-10-25T10:00:00.000Z';
@@ -526,6 +529,10 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     overrides: { ...EMPTY_OVERRIDES },
     cancelAtPeriodEnd: false,
   };
+  const accountState: { account: FakeAccount | null; soleOwner: boolean } = {
+    account: structuredClone(ACCOUNT_DETAIL),
+    soleOwner: options.accountSoleOwner ?? false,
+  };
   let issued = 0;
 
   const me = (stage: 'active'): Record<string, unknown> => ({
@@ -666,6 +673,18 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       workspaceState,
     );
     if (workspaceResponse) return workspaceResponse;
+
+    const accountResponse = handleAccounts(
+      method,
+      path,
+      body,
+      search,
+      role,
+      accountState,
+      json,
+      problem,
+    );
+    if (accountResponse) return accountResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);
   }

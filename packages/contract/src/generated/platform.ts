@@ -1313,6 +1313,249 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/accounts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Search accounts
+     * @description Alphabetically by address, keyset on it. `q` matches an address exactly
+     *     or as a prefix, a name as a prefix, or an id exactly — prefixes, not
+     *     substrings. Without `q`, every account.
+     */
+    get: operations['listPlatformAccounts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One account
+     * @description The profile, every membership with its role and its workspace's state,
+     *     the last sign-in, the second factor and live credential counts — never
+     *     a token, never a workspace's content.
+     */
+    get: operations['getPlatformAccount'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/resend-verification': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mail a new verification link
+     * @description Spends the earlier link and mails a new one, as the person's own resend
+     *     does. A verified address is `unchanged` and gets no mail.
+     */
+    post: operations['resendPlatformAccountVerification'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/force-password-reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End every session and mail a password reset link
+     * @description Every session and refresh token of the account ends in every workspace,
+     *     and a reset link is mailed (one hour). The password stays until the link
+     *     is used, which also ends the personal access tokens.
+     */
+    post: operations['forcePlatformAccountPasswordReset'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/revoke-sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sign the person out everywhere
+     * @description Every access, enrolment and refresh token a sign-in minted, in every
+     *     workspace. Personal access tokens stay — `revoke-tokens` ends those too.
+     */
+    post: operations['revokePlatformAccountSessions'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/revoke-tokens': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End every credential the person holds
+     * @description Sessions and personal access tokens alike, in every workspace.
+     */
+    post: operations['revokePlatformAccountTokens'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/reset-two-factor': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Remove the authenticator
+     * @description The authenticator and its recovery codes go. The next sign-in asks for
+     *     no code — or, where a workspace requires a second factor, for a new one
+     *     to be set up first. Superadmin and a code younger than five minutes.
+     */
+    post: operations['resetPlatformAccountTwoFactor'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/suspend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Suspend the account everywhere
+     * @description Every session ends; until it is lifted the password is refused with 403
+     *     `not_allowed` (`details.reason: account_suspended`), every token the
+     *     person holds with 401, and the realtime gateway refuses the socket.
+     *     Memberships do not change. The reason stays with the platform.
+     */
+    post: operations['suspendPlatformAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/unsuspend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Lift the account's suspension
+     * @description The person signs in again exactly where they were; ended sessions stay ended.
+     */
+    post: operations['unsuspendPlatformAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export the account's data
+     * @description What the platform holds about the person as a person (GDPR Art. 15/20):
+     *     profile, memberships, personal tokens' names and dates, and a count of
+     *     their trail in each workspace. Not a workspace's content and not the
+     *     operator's reason for a suspension. A POST so it is recorded.
+     */
+    post: operations['exportPlatformAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/accounts/{accountId}/erase': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Erase the account
+     * @description Deletes the account and everything that hangs off it (memberships,
+     *     second factor, links, tokens); what the person wrote inside a workspace
+     *     stays with the workspace. `confirm_email` must be the address (400
+     *     `validation`, `details.reason: confirm_email_mismatch`). Refused while
+     *     the person is a workspace's Founder — 409 `platform_account_state`,
+     *     `details.reason: account_is_sole_owner`, `details.license_ids`; force
+     *     the ownership transfer first. Superadmin and a code younger than five
+     *     minutes.
+     */
+    post: operations['erasePlatformAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2198,6 +2441,159 @@ export interface components {
         active: number;
       };
     };
+    PlatformAccountSummary: {
+      /** Format: uuid */
+      id: string;
+      email: string;
+      name: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      email_verified_at: string | null;
+      /** Format: date-time */
+      platform_suspended_at: string | null;
+      membership_count: number;
+    };
+    PlatformAccountList: {
+      data: components['schemas']['PlatformAccountSummary'][];
+      next_cursor: string | null;
+    };
+    PlatformAccountMembership: {
+      license_id: string;
+      organization_name: string;
+      role: components['schemas']['PlatformMemberRole'];
+      /** @description The membership */
+      suspended: boolean;
+      awaiting_approval: boolean;
+      license_status: components['schemas']['PlatformLicenseStatus'];
+      sandbox: boolean;
+      /** @description The workspace requires a second factor. */
+      two_factor_required: boolean;
+      /** Format: date-time */
+      joined_at: string;
+    };
+    PlatformAccount: {
+      /** Format: uuid */
+      id: string;
+      email: string;
+      name: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      email_verified_at: string | null;
+      /** Format: date-time */
+      last_seen_at: string | null;
+      /**
+       * Format: date-time
+       * @description When a session was last opened for the account.
+       */
+      last_sign_in_at: string | null;
+      /** @description False for an account that only signs in by SSO. */
+      password_set: boolean;
+      /** Format: date-time */
+      platform_suspended_at: string | null;
+      /** @description The operator's words — for the panel, shown to nobody else. */
+      platform_suspended_reason: string | null;
+      two_factor: {
+        enabled: boolean;
+        /** Format: date-time */
+        enabled_at: string | null;
+        recovery_codes_left: number;
+      };
+      /** @description Live credentials, counted — never the tokens. */
+      credentials: {
+        sessions: number;
+        personal_tokens: number;
+      };
+      memberships: components['schemas']['PlatformAccountMembership'][];
+    };
+    PlatformAccountDetail: {
+      account: components['schemas']['PlatformAccount'];
+    };
+    /**
+     * @description What an account action answers (tm 389.11): whether it changed anything
+     *     and the account as it now reads. `mail` on the actions that send one.
+     */
+    PlatformAccountActionResult: {
+      unchanged: boolean;
+      account: components['schemas']['PlatformAccount'];
+      /** @enum {string} */
+      mail?: 'sent' | 'failed';
+    };
+    PlatformAccountEraseRequest: {
+      /** @description The account's address, typed — it must match. */
+      confirm_email: string;
+      reason: string;
+    };
+    PlatformAccountErased: {
+      /** @enum {boolean} */
+      erased: true;
+      /** Format: uuid */
+      account_id: string;
+      /** @description The workspaces the person was a member of — each trail records it. */
+      license_ids: string[];
+    };
+    /**
+     * @description The account's data (`format: siyahtus.account-export.v1`). No workspace
+     *     content — a workspace exports its own.
+     */
+    PlatformAccountExport: {
+      /** @enum {string} */
+      format: 'siyahtus.account-export.v1';
+      /** Format: date-time */
+      generated_at: string;
+      account: {
+        /** Format: uuid */
+        id: string;
+        email: string;
+        name: string;
+        avatar_url: string | null;
+        /** Format: date-time */
+        created_at: string;
+        /** Format: date-time */
+        email_verified_at: string | null;
+        /** Format: date-time */
+        last_seen_at: string | null;
+        password_set: boolean;
+        suspended: boolean;
+        two_factor: {
+          enabled: boolean;
+          /** Format: date-time */
+          enabled_at: string | null;
+        };
+      };
+      memberships: {
+        license_id: string;
+        organization_name: string;
+        role: string;
+        suspended: boolean;
+        awaiting_approval: boolean;
+        /** Format: date-time */
+        joined_at: string;
+        locale: string | null;
+      }[];
+      personal_tokens: {
+        name: string | null;
+        license_id: string;
+        /** Format: date-time */
+        created_at: string;
+        /** Format: date-time */
+        last_used_at: string | null;
+        /** Format: date-time */
+        expires_at: string | null;
+        /** Format: date-time */
+        revoked_at: string | null;
+      }[];
+      /** @description How many entries the person's own actions left in each workspace's trail. */
+      audit_summary: {
+        license_id: string;
+        entries: number;
+        /** Format: date-time */
+        first_at: string | null;
+        /** Format: date-time */
+        last_at: string | null;
+      }[];
+    };
     PlatformSupportLookup: {
       data: {
         /**
@@ -2279,7 +2675,8 @@ export interface components {
     };
     /**
      * @description `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
-     *     `platform_workspace_state` (`details.reason`, tm 389.10) — the request was
+     *     `platform_workspace_state` (`details.reason`, tm 389.10) or
+     *     `platform_account_state` (`details.reason`, tm 389.11) — the request was
      *     fine, the state refused it.
      */
     Conflict: {
@@ -2307,6 +2704,8 @@ export interface components {
   parameters: {
     AdminId: string;
     InviteId: string;
+    /** @description The account's id. Anything else is a 404, like an unknown one. */
+    AccountId: string;
     /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
     LicenseId: string;
   };
@@ -4070,6 +4469,347 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformAccounts: {
+    parameters: {
+      query?: {
+        q?: string;
+        cursor?: string;
+        /** @description 1–50; 25 when absent. */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The account */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  resendPlatformAccountVerification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  forcePlatformAccountPasswordReset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  revokePlatformAccountSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  revokePlatformAccountTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  resetPlatformAccountTwoFactor: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  suspendPlatformAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  unsuspendPlatformAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  exportPlatformAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The document */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountExport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  erasePlatformAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The account's id. Anything else is a 404, like an unknown one. */
+        accountId: components['parameters']['AccountId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformAccountEraseRequest'];
+      };
+    };
+    responses: {
+      /** @description Erased */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccountErased'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
     };
   };
 }

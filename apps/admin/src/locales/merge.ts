@@ -12,7 +12,7 @@
  *    `i18n-coverage.test.ts`.
  *
  * The root panel starts with three namespaces (the dashboard, 389.8, is the fourth; support and
- * workspaces, 389.9, the fifth and sixth); each later page (389.8–389.20) adds its own
+ * workspaces, 389.9, the fifth and sixth; accounts, 389.11, the seventh); each later page (389.8–389.20) adds its own
  * here and in both locale folders, which keeps the windows that build them out of each
  * other's files.
  */
@@ -21,6 +21,7 @@
 export type Messages = Readonly<Record<string, string>>;
 
 export const NAMESPACES = [
+  'accounts',
   'auth',
   'common',
   'dashboard',
@@ -33,6 +34,7 @@ export type Namespace = (typeof NAMESPACES)[number];
 
 /** Which key prefixes each namespace file owns. `shell` also holds the side menu (`nav.*`). */
 export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
+  accounts: ['accounts.'],
   auth: ['auth.'],
   common: ['common.', 'ui.'],
   dashboard: ['dashboard.'],

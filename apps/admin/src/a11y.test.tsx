@@ -125,10 +125,15 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     await screen.findByText('ayse@acme.example');
     expect(await violations(container)).toEqual([]);
 
-    // A page still waiting for its task: the third. The shell's menu is the first navigation;
-    // the workspace's tabs are the second.
+    // The account search (the third entry, tm 389.11). The shell's menu is the first
+    // navigation; the workspace's tabs are the second.
     const menu = screen.getAllByRole('navigation')[0]!;
     await user.click(within(menu).getAllByRole('link')[2]!);
+    await screen.findByRole('link', { name: 'Lead Person' });
+    expect(await violations(container)).toEqual([]);
+
+    // A page still waiting for its task: the fourth.
+    await user.click(within(screen.getAllByRole('navigation')[0]!).getAllByRole('link')[3]!);
     await screen.findByText(locale === 'tr' ? 'Burada henüz bir şey yok' : 'Nothing here yet');
     expect(await violations(container)).toEqual([]);
   });
@@ -196,6 +201,35 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
         within(dialog).getByRole('button', { name: locale === 'tr' ? 'Vazgeç' : 'Cancel' }),
       );
     }
+  });
+
+  it('finds nothing on an account, its actions menu and the erasure dialog (tm 389.11)', async () => {
+    installFakePlatform();
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp('/accounts/00000000-0000-4000-8000-0000000000b2');
+    if (locale === 'tr') {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByRole('heading', { name: 'Lead Person' });
+    expect(await violations(document.body)).toEqual([]);
+    const menu = locale === 'tr' ? 'Eylemler' : 'Actions';
+    await user.click(screen.getByRole('button', { name: menu }));
+    expect(await violations(document.body)).toEqual([]);
+    await user.click(
+      screen.getByRole('button', { name: locale === 'tr' ? 'Hesabı sil' : 'Erase account' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByLabelText(locale === 'tr' ? 'Gerekçe' : 'Reason');
+    expect(await violations(document.body)).toEqual([]);
   });
 
   it('finds nothing in the reason dialog', async () => {

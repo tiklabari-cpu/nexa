@@ -140,11 +140,17 @@ export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+function assertTrialDays(trialDays: number): void {
+  if (!Number.isInteger(trialDays) || trialDays < 1) {
+    throw new RangeError(`trialDays must be a positive integer, got ${trialDays}`);
+  }
+}
+
 export class LifecycleService {
   readonly #db: PrismaClient;
   readonly #appUrl: string;
   readonly #consoleRedirect: string;
-  readonly #trialDays: number;
+  readonly #trialDays: number | (() => Promise<number>);
   readonly #verificationTtlMs: number;
 
   /**
@@ -152,7 +158,8 @@ export class LifecycleService {
    *   registers — `env.consoleRedirectUri`, i.e. server configuration and never
    *   anything a request carried (tm 255.17).
    * @param trialDays How long a new workspace's trial runs — `env.TRIAL_DAYS`
-   *   (tm 256.1). Same trust boundary as the redirect: configuration only.
+   *   (tm 256.1), or a function asked per workspace (the root panel's value,
+   *   tm 389.13). Same trust boundary as the redirect: configuration only.
    * @param verificationTtlHours How long a sign-up verification link works —
    *   `env.SIGNUP_VERIFICATION_TTL_HOURS` (tm 257.7).
    */
@@ -160,12 +167,10 @@ export class LifecycleService {
     db: PrismaClient,
     appUrl: string,
     consoleRedirect: string,
-    trialDays: number = TRIAL_DAYS,
+    trialDays: number | (() => Promise<number>) = TRIAL_DAYS,
     verificationTtlHours: number = VERIFICATION_TTL_HOURS,
   ) {
-    if (!Number.isInteger(trialDays) || trialDays < 1) {
-      throw new RangeError(`trialDays must be a positive integer, got ${trialDays}`);
-    }
+    if (typeof trialDays === 'number') assertTrialDays(trialDays);
     if (!Number.isInteger(verificationTtlHours) || verificationTtlHours < 1) {
       throw new RangeError(
         `verificationTtlHours must be a positive integer, got ${verificationTtlHours}`,
@@ -176,6 +181,14 @@ export class LifecycleService {
     this.#consoleRedirect = consoleRedirect;
     this.#trialDays = trialDays;
     this.#verificationTtlMs = verificationTtlHours * 60 * 60 * 1000;
+  }
+
+  /** The trial length a workspace created now gets. */
+  async #trialDaysNow(): Promise<number> {
+    if (typeof this.#trialDays === 'number') return this.#trialDays;
+    const days = await this.#trialDays();
+    assertTrialDays(days);
+    return days;
   }
 
   async signup(input: {
@@ -214,7 +227,7 @@ export class LifecycleService {
       created = await this.#db.$queryRaw`
         SELECT * FROM auth_signup(
           ${input.email}::citext, ${input.name}, ${passwordHash},
-          ${input.organizationName}, ${this.#trialDays}::int, ${input.region},
+          ${input.organizationName}, ${await this.#trialDaysNow()}::int, ${input.region},
           ${this.#consoleRedirect}, ${input.emailVerified ?? true}::boolean,
           ${input.termsVersion ?? null}::text
         )`;
@@ -341,7 +354,7 @@ export class LifecycleService {
       async (tx) => {
         const rows = await tx.$queryRaw<Array<{ reset_account: string }>>`
           SELECT * FROM auth_consume_password_reset(
-            ${hashToken(token)}, ${passwordHash}, ${this.#trialDays}::int)`;
+            ${hashToken(token)}, ${passwordHash}, ${await this.#trialDaysNow()}::int)`;
 
         const row = rows[0];
         if (!row) {
@@ -428,7 +441,7 @@ export class LifecycleService {
         const [verified] = await tx.$queryRaw<
           Array<{ verified_account: string; verified_email: string; verified_name: string }>
         >`SELECT * FROM auth_consume_email_verification(
-            ${hash}, ${pending.password_hash}, ${this.#trialDays}::int)`;
+            ${hash}, ${pending.password_hash}, ${await this.#trialDaysNow()}::int)`;
         if (!verified) return null;
 
         const joined = await this.#joinPending(tx, verified.verified_account);
@@ -674,7 +687,7 @@ export class LifecycleService {
         try {
           rows = await tx.$queryRaw`SELECT * FROM auth_accept_invitation(
               ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash},
-              ${this.#trialDays}::int, ${linkExpiresAt})`;
+              ${await this.#trialDaysNow()}::int, ${linkExpiresAt})`;
         } catch (error) {
           if (error instanceof Error && /siyahtus_password_required/.test(error.message)) {
             // The whole transaction rolls back with this throw, so the

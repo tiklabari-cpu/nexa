@@ -120,6 +120,33 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/deployment/notice': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The operators' announcement and maintenance mode
+     * @description Anonymous and the same for every caller, like `/deployment`, and
+     *     answered in maintenance mode too — it is how the panel learns that it
+     *     is in maintenance. The announcement is the root panel's, in English and
+     *     Turkish; it is `null` once its `until` has passed. `maintenance` is
+     *     `null` while maintenance mode is off.
+     *
+     *     The tenant API reads both from the root panel's settings, cached for
+     *     30 seconds and dropped at once when an operator changes them.
+     */
+    get: operations['getDeploymentNotice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/login': {
     parameters: {
       query?: never;
@@ -10866,6 +10893,45 @@ export interface components {
        */
       live_apps?: ('brevo' | 'freshdesk' | 'telegram')[];
     };
+    /**
+     * @description What the root panel's operators want every panel user to see (tm
+     *     389.13 · FR-ADMIN-15): an announcement, and maintenance mode while it
+     *     is on. `null` for either means nothing to show.
+     */
+    DeploymentNotice: {
+      announcement: components['schemas']['DeploymentAnnouncement'] | null;
+      maintenance: components['schemas']['DeploymentMaintenance'] | null;
+    };
+    /**
+     * @description The operator's announcement, in both languages the panel ships. It
+     *     stops being served once `until` has passed.
+     */
+    DeploymentAnnouncement: {
+      /** @enum {string} */
+      level: 'info' | 'warning' | 'critical';
+      en: string;
+      tr: string;
+      /**
+       * Format: date-time
+       * @description When it comes down by itself; `null` keeps it up.
+       */
+      until: string | null;
+    };
+    /**
+     * @description Maintenance mode. `full`: every request but health, this notice,
+     *     `/deployment` and signing out answers `503 maintenance`, and the
+     *     realtime gateway refuses sockets. `read_only`: reads and signing in
+     *     work, every other write answers `503 maintenance`.
+     */
+    DeploymentMaintenance: {
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      /** @description The operator's words; `null` uses the panel's own sentence. */
+      message: {
+        en: string;
+        tr: string;
+      } | null;
+    };
     DependencyHealth: {
       /** @enum {string} */
       status: 'up' | 'down';
@@ -19780,6 +19846,7 @@ export interface components {
       | 'internal'
       | 'license_expired'
       | 'limit_reached'
+      | 'maintenance'
       | 'message_rejected'
       | 'misdirected_request'
       | 'not_allowed'
@@ -20312,6 +20379,29 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['DeploymentConfig'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getDeploymentNotice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What to show. */
+      200: {
+        headers: {
+          /** @description `no-cache` — a change must be seen on the next read. */
+          'Cache-Control'?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeploymentNotice'];
         };
       };
       429: components['responses']['TooManyRequests'];

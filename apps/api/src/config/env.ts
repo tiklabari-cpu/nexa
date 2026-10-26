@@ -1346,6 +1346,12 @@ export type Env = Omit<z.infer<typeof envSchema>, 'APPS_LIVE_PROVIDERS'> & {
   schedulerEnabled: boolean;
   /** Resolved shutdown drain window in milliseconds (M-OPS-b). */
   shutdownDrainMs: number;
+  /**
+   * The schema keys the environment actually named, with a non-empty value —
+   * every other key runs on its default. What the root panel's effective
+   * configuration shows as `env` rather than `default` (tm 389.13).
+   */
+  explicitKeys: readonly string[];
 };
 
 /**
@@ -1939,5 +1945,9 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
     schedulerEnabled: env.SCHEDULER_ENABLED ?? env.NODE_ENV !== 'test',
     shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
+    explicitKeys: Object.keys(envSchema.shape).filter((key) => {
+      const value = source[key];
+      return typeof value === 'string' && value !== '';
+    }),
   };
 }

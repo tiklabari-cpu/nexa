@@ -232,6 +232,38 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     expect(await violations(document.body)).toEqual([]);
   });
 
+  it('finds nothing on the settings page, with an announcement open and the maintenance dialog (tm 389.13)', async () => {
+    installFakePlatform({
+      settings: {
+        announcement: { level: 'warning', en: 'Hello', tr: 'Merhaba', until: null },
+        maintenance: { enabled: true, mode: 'read_only', message: null },
+      },
+    });
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp('/settings');
+    if (locale === 'tr') {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByTestId('config-LLM_API_KEY');
+    expect(await violations(document.body)).toEqual([]);
+    await user.click(
+      screen.getByRole('button', {
+        name: locale === 'tr' ? 'Bakım modunu değiştir' : 'Change maintenance mode',
+      }),
+    );
+    await screen.findByRole('dialog');
+    expect(await violations(document.body)).toEqual([]);
+  });
+
   it('finds nothing on the Operations page and the dialogs it opens (tm 389.14)', async () => {
     installFakePlatform();
     setLocale(locale);

@@ -3,6 +3,7 @@ import { accounts } from './accounts.js';
 import { auth } from './auth.js';
 import { common } from './common.js';
 import { dashboard } from './dashboard.js';
+import { settings } from './settings.js';
 import { operations } from './operations.js';
 import { shell } from './shell.js';
 import { support } from './support.js';
@@ -13,6 +14,7 @@ export const trNamespaces: Record<Namespace, Messages> = {
   auth,
   common,
   dashboard,
+  settings,
   operations,
   shell,
   support,

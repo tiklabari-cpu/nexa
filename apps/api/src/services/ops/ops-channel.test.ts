@@ -7,7 +7,7 @@
  * `test/integration/platform-operations.test.ts`.
  */
 import { EventEmitter } from 'node:events';
-import { PLATFORM_OPS_CHANNEL } from '@siyahtus/types';
+import { PLATFORM_JOB_CHANNEL } from '@siyahtus/types';
 import type { Redis } from 'ioredis';
 import { describe, expect, it, vi } from 'vitest';
 import { recordingLogger } from '../../../test/helpers/scheduler.js';
@@ -151,14 +151,14 @@ describe('OpsChannel.handle', () => {
 });
 
 describe('OpsChannel.start', () => {
-  it('subscribes to the ops channel and hands its messages to the handler', async () => {
+  it('subscribes to the job channel and hands its messages to the handler', async () => {
     const { channel, subscriber, runNow } = setup();
     await channel.start();
     expect(subscriber.subscribe).toHaveBeenCalledTimes(1);
-    expect(subscriber.subscribe).toHaveBeenCalledWith(PLATFORM_OPS_CHANNEL);
+    expect(subscriber.subscribe).toHaveBeenCalledWith(PLATFORM_JOB_CHANNEL);
 
     subscriber.emit('message', 'some:other:channel', runMessage('siem'));
-    subscriber.emit('message', PLATFORM_OPS_CHANNEL, runMessage('siem'));
+    subscriber.emit('message', PLATFORM_JOB_CHANNEL, runMessage('siem'));
     await channel.stop();
 
     expect(runNow).toHaveBeenCalledTimes(1);

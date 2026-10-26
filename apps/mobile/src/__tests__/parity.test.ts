@@ -1021,7 +1021,13 @@ describe('module parity matrix — what is still owed', () => {
       // 300 -> 301 with `/tickets/{ticketId}/messages/{messageId}/attachments/
       // {attachmentKey}` (tm 357) — a file the player e-mailed, opened from the
       // same pane (HD-02). Nothing here re-scopes.
-      contractEndpoints: 301,
+      // 301 -> 302 with `/deployment/notice` (tm 389.13) — the root panel's
+      // announcement and maintenance mode, read anonymously by the web console
+      // for its banner and its maintenance page. The app shows neither: a
+      // maintenance refusal reaches it as the REST edge's 503 `maintenance`,
+      // like any other error. Nothing here re-scopes. (The impersonation
+      // exchange, tm 389.15, is the next +1.)
+      contractEndpoints: 302,
       scopeBoundaries: 1,
     });
   });

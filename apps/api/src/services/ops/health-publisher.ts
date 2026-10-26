@@ -16,12 +16,19 @@
  * scheduler job — jobs are listed in the `/health` body and the interval
  * environment, and an admin-visible job list that changed shape would break
  * every monitor reading it.
+ *
+ * The same tick publishes the effective configuration (tm 389.13 ·
+ * `effective-config.ts`) and re-writes maintenance mode for the realtime
+ * gateway from the database (`OPS_MAINTENANCE_KEY`), so a Redis that lost the
+ * root panel's write is right again within one interval.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
-import type { OpsComponentState } from '@siyahtus/types';
+import { OPS_CONFIG_KEY, OPS_MAINTENANCE_KEY, type OpsComponentState } from '@siyahtus/types';
+import type { Env } from '../../config/env.js';
 import { lastMailSend } from '../mail/delivery.js';
 import { JobLock, lockTtlMs, type LockRedis } from '../scheduler/lock.js';
+import type { PublicSettings } from '../platform/public-settings.js';
 import type { SchedulerDetail } from '../scheduler/types.js';
 import { reportComponentNotInstalled, reportComponentStatus } from './component-status.js';
 import {
@@ -30,6 +37,11 @@ import {
   webhooksProbe,
   type ComponentProbeResult,
 } from './component-probes.js';
+import {
+  buildEffectiveConfig,
+  OPS_CONFIG_TTL_S,
+  type StoredEffectiveConfig,
+} from './effective-config.js';
 import {
   OPS_HEALTH_KEY,
   OPS_HEALTH_TTL_S,
@@ -52,6 +64,8 @@ export const MAIL_FAILURE_WINDOW_MS = 10 * 60_000;
 type PublisherRedis = LockRedis & {
   ping(): Promise<unknown>;
   set(key: string, value: string, ex: 'EX', seconds: number): Promise<unknown>;
+  set(key: string, value: string): Promise<unknown>;
+  del(key: string): Promise<unknown>;
   hset(key: string, field: string, value: string): Promise<unknown>;
   hsetnx(key: string, field: string, value: string): Promise<unknown>;
 };
@@ -64,6 +78,12 @@ export interface HealthSnapshotPublisherOptions {
   scheduler: BuildHealthSnapshotInput['scheduler'];
   eventPartitions: BuildHealthSnapshotInput['eventPartitions'];
   logger: FastifyBaseLogger;
+  /**
+   * The effective configuration's inputs (tm 389.13): the whole parsed
+   * environment and the root panel's settings. Omitted, neither the
+   * configuration nor the maintenance key is written.
+   */
+  config?: { env: Env; settings: PublicSettings };
   /** The job table for the root panel's Operations page (tm 389.14); omitted, none is published. */
   schedulerDetail?: () => SchedulerDetail;
   /**
@@ -143,10 +163,33 @@ export class HealthSnapshotPublisher {
         await redis.set(OPS_SCHEDULER_KEY, JSON.stringify(detail), 'EX', OPS_HEALTH_TTL_S);
       }
       await this.#reportComponents(health, stored.generated_at, now);
+      await this.#publishConfig(stored.generated_at);
       return stored;
     } catch (error) {
       logger.warn({ err: error }, 'health snapshot could not be published');
       return null;
+    }
+  }
+
+  /** The effective configuration and the maintenance key — never a failed health publication. */
+  async #publishConfig(generatedAt: string): Promise<void> {
+    const { redis, logger, config } = this.#options;
+    if (!config) return;
+    try {
+      const settings = await config.settings.refresh();
+      const stored: StoredEffectiveConfig = {
+        generated_at: generatedAt,
+        entries: buildEffectiveConfig(config.env, settings),
+      };
+      await redis.set(OPS_CONFIG_KEY, JSON.stringify(stored), 'EX', OPS_CONFIG_TTL_S);
+      // No expiry: maintenance mode outlives the leader that wrote it.
+      if (settings.maintenance) {
+        await redis.set(OPS_MAINTENANCE_KEY, JSON.stringify({ mode: settings.maintenance.mode }));
+      } else {
+        await redis.del(OPS_MAINTENANCE_KEY);
+      }
+    } catch (error) {
+      logger.warn({ err: error }, 'effective configuration could not be published');
     }
   }
 

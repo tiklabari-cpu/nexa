@@ -106,6 +106,8 @@ async function schedulerPlugin(
     eventPartitions: app.eventPartitions,
     logger: app.log,
     enabled: options.env.schedulerEnabled,
+    // Decorated by `server.ts` before this plugin (tm 389.13).
+    config: { env: options.env, settings: app.publicSettings },
     schedulerDetail: () => scheduler.detail(),
     probes: [
       ...(options.geo ? [() => geoipProbe(options.geo!.status(), Date.now())] : []),

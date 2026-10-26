@@ -1556,6 +1556,92 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The deployment settings the root panel holds
+     * @description `null` is "not set here": the tenant API follows its own environment
+     *     (`SIGNUP_ENABLED`, `TRIAL_DAYS`) or shows nothing. What it actually
+     *     applies is in `GET /settings/effective-config`.
+     */
+    get: operations['getPlatformSettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change sign-up, the trial length or the announcement
+     * @description Only the keys present change; `null` removes the stored value. The
+     *     sign-up switch can only close what the environment opened: with
+     *     `SIGNUP_ENABLED=false` on the tenant API, `true` here does not open it
+     *     (the stricter of the two wins). The announcement needs both languages.
+     *     Superadmin only.
+     */
+    patch: operations['updatePlatformSettings'];
+    trace?: never;
+  };
+  '/settings/maintenance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Turn maintenance mode on or off
+     * @description `full`: the tenant API answers every request but health, the
+     *     deployment notice and signing out with `503 maintenance`, and the
+     *     realtime gateway closes its sockets and refuses new ones. `read_only`:
+     *     reads and signing in work, every other write answers `503 maintenance`.
+     *     The panel shows the operator's message, or its own. Superadmin and a
+     *     code younger than five minutes.
+     */
+    put: operations['setPlatformMaintenance'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/effective-config': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The tenant API's configuration as it runs
+     * @description The tenant API's scheduler leader publishes its parsed environment to
+     *     Redis every 30 seconds with a 90-second expiry; this process never reads
+     *     the tenant API's environment itself (it may be another container).
+     *     A key with a `SECRET`, `KEY`, `PASSWORD`, `PASS`, `TOKEN` or
+     *     `CREDENTIAL` word in its name (not a `_TTL` or `_PER_…` limit) shows
+     *     only `set` or `unset`, and a URL loses its user name, password and the
+     *     value of any query parameter named like a secret. Each entry says where
+     *     its value comes from: this panel's database (`db`), the environment
+     *     (`env`) or the built-in default (`default`). Shown here, set elsewhere:
+     *     `APPS_LIVE_PROVIDERS`, the Turnstile keys, `TICKET_MAIL_OUTBOUND`,
+     *     `PILOT_MODE`, `LLM_PROVIDER`. `stale: true` with no entries is no
+     *     publication at all — the route still answers 200.
+     */
+    get: operations['getPlatformEffectiveConfig'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/operations/scheduler': {
     parameters: {
       query?: never;
@@ -1593,7 +1679,7 @@ export interface paths {
     put?: never;
     /**
      * Run a scheduler job now
-     * @description Broadcasts `job.run` on `siyahtus:platform:ops`; exactly one tenant
+     * @description Broadcasts `job.run` on `siyahtus:platform:ops:jobs`; exactly one tenant
      *     process that is listening acts on it. The answer says only what the
      *     platform could know: `queued` (a process heard it — the outcome follows
      *     in the job table), `already_running` (the job's running marker is held;
@@ -3011,6 +3097,79 @@ export interface components {
           [key: string]: unknown;
         };
       };
+    };
+    /** @description One sentence in English and Turkish — both, always. */
+    PlatformNoticeText: {
+      en: string;
+      tr: string;
+    };
+    /**
+     * @description The banner every panel user sees (`NoticeBar`). It stops being served
+     *     once `until` has passed.
+     */
+    PlatformAnnouncement: {
+      /** @enum {string} */
+      level: 'info' | 'warning' | 'critical';
+      en: string;
+      tr: string;
+      /** Format: date-time */
+      until: string | null;
+    };
+    PlatformMaintenance: {
+      enabled: boolean;
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      message: components['schemas']['PlatformNoticeText'] | null;
+    };
+    /**
+     * @description What `platform_settings` holds for the tenant API; `null` is "not set
+     *     here". `updated_at` is the newest change among these keys.
+     */
+    PlatformDeploymentSettings: {
+      signup_enabled: boolean | null;
+      trial_days: number | null;
+      announcement: components['schemas']['PlatformAnnouncement'] | null;
+      maintenance: components['schemas']['PlatformMaintenance'] | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    /** @description At least one key besides `reason`; `null` removes the stored value. */
+    PlatformSettingsPatchRequest: {
+      reason: string;
+      signup_enabled?: boolean | null;
+      trial_days?: number | null;
+      announcement?: components['schemas']['PlatformAnnouncement'] | null;
+    };
+    PlatformMaintenanceRequest: {
+      reason: string;
+      enabled: boolean;
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      message?: components['schemas']['PlatformNoticeText'] | null;
+    };
+    PlatformEffectiveConfigEntry: {
+      /** @description The environment variable's name. */
+      key: string;
+      /**
+       * @description The value the tenant API runs with, as text; `set` / `unset` when
+       *     `redacted`; `null` for an optional key with no value.
+       */
+      value: string | null;
+      /** @enum {string} */
+      source: 'db' | 'env' | 'default';
+      /** @description A secret — only whether it is set is shown. */
+      redacted: boolean;
+      /** @description This panel can override it (`PATCH /settings`). */
+      panel: boolean;
+    };
+    PlatformEffectiveConfig: {
+      /** @description No publication, or one older than 90 seconds. */
+      stale: boolean;
+      /** Format: date-time */
+      generated_at: string | null;
+      age_s: number | null;
+      /** @description Alphabetical by key. */
+      entries: components['schemas']['PlatformEffectiveConfigEntry'][];
     };
   };
   responses: {
@@ -5202,6 +5361,104 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stored values */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDeploymentSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  updatePlatformSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformSettingsPatchRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored values after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDeploymentSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  setPlatformMaintenance: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformMaintenanceRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored values after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDeploymentSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformEffectiveConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The published configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformEffectiveConfig'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
     };
   };
   getPlatformOperationsScheduler: {

@@ -12,14 +12,14 @@
  * What lives in the tenant API's memory — the scheduler's job table — arrives
  * by Redis (`siyahtus:ops:scheduler`, published by the health leader with a
  * 90-second expiry), and a command goes the other way on
- * `siyahtus:platform:ops` (`services/ops/ops-channel.ts`). Both are
+ * `siyahtus:platform:ops:jobs` (`services/ops/ops-channel.ts`). Both are
  * best-effort in the same sense as the dashboard's health view: Redis down or a
  * missing publication answers `stale`, never an error, because this is the
  * page an operator opens when something is wrong.
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { PLATFORM_JOB_RUN, PLATFORM_OPS_CHANNEL } from '@siyahtus/types';
+import { PLATFORM_JOB_CHANNEL, PLATFORM_JOB_RUN } from '@siyahtus/types';
 import type { Redis } from 'ioredis';
 import { ApiError } from '../../lib/api-error.js';
 import {
@@ -251,7 +251,7 @@ export class PlatformOperations {
     }
 
     const listeners = await this.#redis.publish(
-      PLATFORM_OPS_CHANNEL,
+      PLATFORM_JOB_CHANNEL,
       JSON.stringify({ type: PLATFORM_JOB_RUN, name, request_id: requestId }),
     );
     return { request_id: requestId, result: listeners > 0 ? 'queued' : 'no_listener' };

@@ -56,6 +56,13 @@ export type PlatformAccountActionResult = Schemas['PlatformAccountActionResult']
 export type PlatformAccountErased = Schemas['PlatformAccountErased'];
 export type PlatformAccountExport = Schemas['PlatformAccountExport'];
 
+export type PlatformDeploymentSettings = Schemas['PlatformDeploymentSettings'];
+export type PlatformAnnouncement = Schemas['PlatformAnnouncement'];
+export type PlatformMaintenance = Schemas['PlatformMaintenance'];
+export type PlatformSettingsPatchRequest = Schemas['PlatformSettingsPatchRequest'];
+export type PlatformMaintenanceRequest = Schemas['PlatformMaintenanceRequest'];
+export type PlatformEffectiveConfig = Schemas['PlatformEffectiveConfig'];
+export type PlatformEffectiveConfigEntry = Schemas['PlatformEffectiveConfigEntry'];
 export type PlatformOperationsJob = Schemas['PlatformOperationsJob'];
 export type PlatformOperationsScheduler = Schemas['PlatformOperationsScheduler'];
 export type PlatformOperationsRunResult = Schemas['PlatformOperationsRunResult'];

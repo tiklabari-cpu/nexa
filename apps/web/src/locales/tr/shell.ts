@@ -43,6 +43,11 @@ export const shell: Messages = {
   'shell.narrow.mobileApp':
     'Telefonda sohbetleri yanıtlamak için SiyahTuş mobil uygulaması daha uygundur.',
   'shell.narrow.continue': 'Yine de devam et',
+  'shell.maintenance.readOnly':
+    'Bakım sürüyor — konsol şimdilik salt okunur, değişiklikler kaydedilmez.',
+  'shell.maintenance.title': 'Bakımdayız',
+  'shell.maintenance.body': 'SiyahTuş bakımda ve şu an kullanılamıyor. Verileriniz güvende.',
+  'shell.maintenance.autoRetry': 'Bu sayfa her dakika kendiliğinden yeniden kontrol eder.',
   'shell.subscribe': 'Abone Ol',
   'shell.trial.ended': 'Deneme süreniz sona erdi — yeni sohbetler başlatmak için abone olun.',
   'shell.pilotTrial.remaining.one':

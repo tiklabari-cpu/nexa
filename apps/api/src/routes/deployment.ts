@@ -19,9 +19,14 @@
  *
  * Its own rate limit bucket (`publicConfigRateLimit`): every page load reads
  * it, and in the shared anon bucket it would spend sign-in's budget.
+ *
+ * `signup_enabled` is the switch in force (tm 389.13): the environment's, unless
+ * the root panel closed it (`services/platform/public-settings.ts`). The root
+ * panel's announcement and maintenance mode have a route of their own,
+ * `GET /deployment/notice`, so this body keeps its shape.
  */
 import type { FastifyInstance } from 'fastify';
-import type { DeploymentConfig } from '@siyahtus/types';
+import type { DeploymentConfig, DeploymentNotice } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { liveAppIds } from '../services/apps/verifiers/registry.js';
 
@@ -35,10 +40,11 @@ export default async function deploymentRoutes(
     '/deployment',
     { config: { public: true, publicConfigRateLimit: true } },
     async (_request, reply) => {
+      const settings = await app.publicSettings.get();
       const body: DeploymentConfig = {
         pilot_mode: env.PILOT_MODE,
         contact_email: env.PILOT_CONTACT_EMAIL ?? null,
-        signup_enabled: env.SIGNUP_ENABLED,
+        signup_enabled: settings.signupEnabled,
         email_verification_required: env.SIGNUP_EMAIL_VERIFICATION,
         // The legal links (tm 257.9): public documents, shown on the sign-in,
         // sign-up and invitation pages before anyone has a session.
@@ -50,6 +56,18 @@ export default async function deploymentRoutes(
       };
       // A cache may keep it but must ask again: switching pilot mode off and
       // restarting has to be seen on the next read, not after a max-age.
+      return reply.header('Cache-Control', 'no-cache').send(body);
+    },
+  );
+
+  // Readable in maintenance mode (`plugins/maintenance-gate.ts`): it is how the
+  // panel learns it is in maintenance. The same bucket as above — every page
+  // load reads both.
+  app.get(
+    '/deployment/notice',
+    { config: { public: true, publicConfigRateLimit: true } },
+    async (_request, reply) => {
+      const body: DeploymentNotice = await app.publicSettings.notice();
       return reply.header('Cache-Control', 'no-cache').send(body);
     },
   );

@@ -38,3 +38,32 @@ deployment:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/DeploymentConfig" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# The root panel's announcement and maintenance mode (tm 389.13 · FR-ADMIN-15).
+# Its own path so `/deployment` keeps its shape.
+notice:
+  get:
+    tags: [System]
+    operationId: getDeploymentNotice
+    summary: The operators' announcement and maintenance mode
+    description: |
+      Anonymous and the same for every caller, like `/deployment`, and
+      answered in maintenance mode too — it is how the panel learns that it
+      is in maintenance. The announcement is the root panel's, in English and
+      Turkish; it is `null` once its `until` has passed. `maintenance` is
+      `null` while maintenance mode is off.
+
+      The tenant API reads both from the root panel's settings, cached for
+      30 seconds and dropped at once when an operator changes them.
+    security: []
+    responses:
+      "200":
+        description: What to show.
+        headers:
+          Cache-Control:
+            description: "`no-cache` — a change must be seen on the next read."
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DeploymentNotice" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

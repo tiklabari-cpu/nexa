@@ -165,6 +165,9 @@ export function isOpsComponentKey(value: unknown): value is OpsComponentKey {
  */
 export const PLATFORM_OPS_CHANNEL = 'siyahtus:platform:ops';
 
+/** A deployment setting changed (tm 389.13): every tenant process drops its copy. */
+export const PLATFORM_SETTINGS_CHANGED = 'settings.changed';
+
 export interface PlatformOpsMessage {
   type: string;
   /** The `platform_settings` keys that moved, where the sender says. */
@@ -187,8 +190,35 @@ export function parsePlatformOpsMessage(message: string): PlatformOpsMessage | n
 }
 
 /**
+ * Maintenance mode as the realtime gateway reads it (tm 389.13): JSON
+ * `{ "mode": "read_only" | "full" }`, absent while it is off. Written by the
+ * root panel when it changes and re-written from the database by the tenant
+ * API's scheduler leader, so a flushed Redis comes back within one interval.
+ */
+export const OPS_MAINTENANCE_KEY = 'siyahtus:ops:maintenance';
+
+/** The tenant API's effective configuration (FR-ADMIN-16), published by its leader. */
+export const OPS_CONFIG_KEY = 'siyahtus:ops:config';
+
+/**
+ * Where an effective setting comes from: the root panel's database row, the
+ * process environment, or the built-in default.
+ */
+export const EFFECTIVE_CONFIG_SOURCES = ['db', 'env', 'default'] as const;
+export type EffectiveConfigSource = (typeof EFFECTIVE_CONFIG_SOURCES)[number];
+
+/**
  * "Run this scheduler job now" (tm 389.14): `{ type: 'job.run', name, request_id }`.
  * Every tenant process whose scheduler is on hears it; the one that wins the
  * `request_id` claim runs the job (`services/ops/ops-channel.ts`).
  */
 export const PLATFORM_JOB_RUN = 'job.run';
+
+/**
+ * The channel "run now" travels on (tm 389.14), apart from
+ * {@link PLATFORM_OPS_CHANNEL}: every tenant API process and every RTM
+ * subscribes to that one for `settings.changed` (tm 389.13), so its
+ * `PUBLISH` count no longer says whether a scheduler heard. Only the
+ * scheduler-enabled processes subscribe here, and `no_listener` stays true.
+ */
+export const PLATFORM_JOB_CHANNEL = 'siyahtus:platform:ops:jobs';

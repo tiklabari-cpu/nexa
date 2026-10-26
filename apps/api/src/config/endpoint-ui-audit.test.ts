@@ -434,7 +434,7 @@ describe('the platform pair (tm 389.3)', () => {
     ]);
   });
 
-  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), the Operations page (tm 389.14) called, and nothing else of the platform contract', () => {
+  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), the settings page (tm 389.13), the Operations page (tm 389.14) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
@@ -494,6 +494,10 @@ describe('the platform pair (tm 389.3)', () => {
         'POST /accounts/{accountId}/unsuspend',
         'POST /accounts/{accountId}/export',
         'POST /accounts/{accountId}/erase',
+        'GET /settings',
+        'PATCH /settings',
+        'PUT /settings/maintenance',
+        'GET /settings/effective-config',
         'GET /operations/scheduler',
         'POST /operations/scheduler/{name}/run',
         'GET /operations/webhooks',

@@ -1,0 +1,112 @@
+# Deployment settings (tm 389.13 · FR-ADMIN-15/16 · design.md §B2, §C
+# settings). `x-platform-*` as in auth.yaml.
+#
+# What an operator sets here lives in `platform_settings`; the tenant API reads
+# it through `platform_public_settings()`, cached for 30 seconds, and drops its
+# copy at once when the change is announced on `siyahtus:platform:ops`
+# (`settings.changed`). A key that is not set (`null`) leaves the tenant API on
+# its environment value. Every change takes a `reason` and is recorded as
+# `settings.updated` or `settings.maintenance_changed`.
+
+settings:
+  get:
+    tags: [Settings]
+    operationId: getPlatformSettings
+    summary: The deployment settings the root panel holds
+    description: |
+      `null` is "not set here": the tenant API follows its own environment
+      (`SIGNUP_ENABLED`, `TRIAL_DAYS`) or shows nothing. What it actually
+      applies is in `GET /settings/effective-config`.
+    x-platform-permission: settings.read
+    responses:
+      "200":
+        description: The stored values
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformDeploymentSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  patch:
+    tags: [Settings]
+    operationId: updatePlatformSettings
+    summary: Change sign-up, the trial length or the announcement
+    description: |
+      Only the keys present change; `null` removes the stored value. The
+      sign-up switch can only close what the environment opened: with
+      `SIGNUP_ENABLED=false` on the tenant API, `true` here does not open it
+      (the stricter of the two wins). The announcement needs both languages.
+      Superadmin only.
+    x-platform-permission: settings.manage
+    x-platform-audit: settings.updated
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSettingsPatchRequest" }
+    responses:
+      "200":
+        description: The stored values after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformDeploymentSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+maintenance:
+  put:
+    tags: [Settings]
+    operationId: setPlatformMaintenance
+    summary: Turn maintenance mode on or off
+    description: |
+      `full`: the tenant API answers every request but health, the
+      deployment notice and signing out with `503 maintenance`, and the
+      realtime gateway closes its sockets and refuses new ones. `read_only`:
+      reads and signing in work, every other write answers `503 maintenance`.
+      The panel shows the operator's message, or its own. Superadmin and a
+      code younger than five minutes.
+    x-platform-permission: settings.manage
+    x-platform-recent-totp: true
+    x-platform-audit: settings.maintenance_changed
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformMaintenanceRequest" }
+    responses:
+      "200":
+        description: The stored values after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformDeploymentSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+effectiveConfig:
+  get:
+    tags: [Settings]
+    operationId: getPlatformEffectiveConfig
+    summary: The tenant API's configuration as it runs
+    description: |
+      The tenant API's scheduler leader publishes its parsed environment to
+      Redis every 30 seconds with a 90-second expiry; this process never reads
+      the tenant API's environment itself (it may be another container).
+      A key with a `SECRET`, `KEY`, `PASSWORD`, `PASS`, `TOKEN` or
+      `CREDENTIAL` word in its name (not a `_TTL` or `_PER_…` limit) shows
+      only `set` or `unset`, and a URL loses its user name, password and the
+      value of any query parameter named like a secret. Each entry says where
+      its value comes from: this panel's database (`db`), the environment
+      (`env`) or the built-in default (`default`). Shown here, set elsewhere:
+      `APPS_LIVE_PROVIDERS`, the Turnstile keys, `TICKET_MAIL_OUTBOUND`,
+      `PILOT_MODE`, `LLM_PROVIDER`. `stale: true` with no entries is no
+      publication at all — the route still answers 200.
+    x-platform-permission: settings.read
+    responses:
+      "200":
+        description: The published configuration
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformEffectiveConfig" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

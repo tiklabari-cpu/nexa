@@ -3,7 +3,7 @@
  * design.md §C operations).
  *
  *   GET  /operations/scheduler                 operations.read     the job table (the leader's publication)
- *   POST /operations/scheduler/{name}/run      operations.trigger  "run now" over `siyahtus:platform:ops`
+ *   POST /operations/scheduler/{name}/run      operations.trigger  "run now" over `siyahtus:platform:ops:jobs`
  *   GET  /operations/webhooks                  operations.read     delivery backlog and failure rate, all workspaces
  *   GET  /operations/siem                      operations.read     export status across workspaces
  *   GET  /operations/partitions                operations.read     `events` partitions and the months missing

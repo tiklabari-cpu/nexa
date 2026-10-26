@@ -364,6 +364,15 @@ describe('the platform audit chain (tm 389.5)', () => {
     ok(await onAccount('export'));
     ok(await onAccount('erase', { confirm_email: fx.b.agentEmail }));
 
+    // The deployment settings (tm 389.13): a change, and maintenance on and off again.
+    ok(await request('PATCH', '/settings', { token, body: { trial_days: 21, ...reason } }));
+    const maintenance = (enabled: boolean) =>
+      request('PUT', '/settings/maintenance', {
+        token,
+        body: { enabled, mode: 'read_only', ...reason },
+      });
+    ok(await maintenance(true));
+    ok(await maintenance(false));
     // The Operations page's three mutations (tm 389.14). No scheduler is listening in this
     // suite, so the run request is answered `no_listener` — and recorded all the same.
     ok(await request('POST', '/operations/scheduler/sla/run', { token, body: reason }));

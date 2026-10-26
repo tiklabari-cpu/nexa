@@ -19,6 +19,7 @@ import entitlementGate from './plugins/entitlement-gate.js';
 import { baseFastifyOptions } from './lib/fastify-options.js';
 import { VERSION } from './version.js';
 import licenseGate from './plugins/license-gate.js';
+import maintenanceGate from './plugins/maintenance-gate.js';
 import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
@@ -59,6 +60,10 @@ import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
 import { listenForAiCapsChanges } from './services/ai/ai-caps-events.js';
+import {
+  listenForPlatformSettingsChanges,
+  PublicSettings,
+} from './services/platform/public-settings.js';
 import { AiUsageAlerts } from './services/ai/ai-usage-alerts.js';
 import { RealtimePublisher } from './services/realtime/publisher.js';
 import { MeteredEmbeddings } from './services/ai/metered-embeddings.js';
@@ -346,6 +351,29 @@ export async function buildServer({
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  // The root panel's deployment settings (tm 389.13): sign-up, the trial
+  // length, the announcement and maintenance mode, cached for 30 seconds and
+  // dropped at once on `settings.changed`. Its own subscriber connection, like
+  // the AI caps' below, and never a reason not to boot: unread, the
+  // environment decides, and a missed announcement lands within the cache.
+  const publicSettings = new PublicSettings({
+    db: app.db,
+    env,
+    logger: app.log.child({ component: 'platform-settings' }),
+  });
+  app.decorate('publicSettings', publicSettings);
+  const platformOps = app.redis.duplicate({ connectionName: 'siyahtus-api-platform-ops' });
+  platformOps.on('error', (error) => {
+    app.log.error({ err: error }, 'redis siyahtus:platform:ops subscriber error');
+  });
+  await listenForPlatformSettingsChanges(platformOps, () => publicSettings.invalidate()).catch(
+    (error: unknown) => {
+      app.log.warn({ err: error }, 'settings.changed not subscribed; settings refresh every 30 s');
+    },
+  );
+  app.addHook('onClose', async () => {
+    await platformOps.quit().catch(() => platformOps.disconnect());
+  });
   // The widget's human check (tm 339.2 · GV-01): a provider that cannot work
   // leaves it off and says so, the boot goes on (owner, 2026-10-10).
   const captcha = resolveCaptcha(env, captchaFetch);
@@ -489,6 +517,10 @@ export async function buildServer({
   // back would silently restore the unbounded path, so `rate-limit.test.ts`
   // asserts the ordering by its effect rather than trusting this comment.
   await app.register(rateLimit, { env });
+  // Maintenance mode (tm 389.13): after the rate limiter, so a refused flood
+  // is still metered, and ahead of authentication and the licence gate — a
+  // deployment in maintenance says so before anything about the caller.
+  await app.register(maintenanceGate);
   await app.register(auth, { env });
   // After `auth`, so its `onRequest` hook adds the route's chat, connection and
   // customer ids to a logger that already says whose request it is (ID-08).

@@ -210,3 +210,13 @@ Diagnosis step 2 (`55P03`) and run the builder again once it has ended.
 Do not `CREATE OR REPLACE` `siyahtus_search_fold`: every index built on it stores
 its output, and a different body would leave them answering for the old fold.
 A different fold is a new function and a new index.
+
+## From the root panel
+
+Operations → **Event partitions** (root panel, tm 389.14) shows what the queries above show
+without a psql session: every partition of `events` with its estimated rows and size, the months
+of the runtime window that have none (`missing_months`) and whether `events_default` holds rows.
+"Open the window's partitions" runs `events_ensure_partition` for each month of the window
+(support or superadmin, with a reason; recorded as `operations.partition_ensured`). It cannot
+release a month the catch-all already holds rows for — that is the owner-run
+`events_release_default_month` above.

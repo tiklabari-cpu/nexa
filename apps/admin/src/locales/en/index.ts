@@ -3,6 +3,7 @@ import { accounts } from './accounts.js';
 import { auth } from './auth.js';
 import { common } from './common.js';
 import { dashboard } from './dashboard.js';
+import { operations } from './operations.js';
 import { shell } from './shell.js';
 import { support } from './support.js';
 import { workspaces } from './workspaces.js';
@@ -12,6 +13,7 @@ export const enNamespaces: Record<Namespace, Messages> = {
   auth,
   common,
   dashboard,
+  operations,
   shell,
   support,
   workspaces,

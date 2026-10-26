@@ -21,7 +21,7 @@ import type {
 } from '../../lib/platform-types.js';
 import { useHealth } from './queries.js';
 
-type BadgeState = PlatformComponentStatus['state'];
+export type BadgeState = PlatformComponentStatus['state'];
 
 const BADGE: Record<BadgeState, { glyph: string; style: string }> = {
   ok: { glyph: '●', style: 'bg-success/10 text-success' },
@@ -31,7 +31,7 @@ const BADGE: Record<BadgeState, { glyph: string; style: string }> = {
   unknown: { glyph: '?', style: 'bg-inset text-content-secondary' },
 };
 
-function StateBadge({ state, label }: { state: BadgeState; label: string }): ReactElement {
+export function StateBadge({ state, label }: { state: BadgeState; label: string }): ReactElement {
   const { glyph, style } = BADGE[state];
   return (
     <span
@@ -111,7 +111,7 @@ function SnapshotView({
   );
 }
 
-function Tile({
+export function Tile({
   label,
   badge,
   lines,

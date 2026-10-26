@@ -70,6 +70,36 @@ export async function reportComponentStatus(
   }
 }
 
+/**
+ * Say a component is not part of this build — but only while nobody has said
+ * anything about it (`HSETNX`). The health leader repeats this every half
+ * minute for modules that do not exist yet; once such a module reports for
+ * itself, the placeholder must not take its place back.
+ */
+export async function reportComponentNotInstalled(
+  redis: { hsetnx(key: string, field: string, value: string): Promise<unknown> },
+  key: OpsComponentKey,
+  detail: string,
+  logger?: { debug(object: object, message: string): void },
+): Promise<boolean> {
+  try {
+    if (!isOpsComponentKey(key)) return false;
+    await redis.hsetnx(
+      OPS_COMPONENTS_KEY,
+      key,
+      JSON.stringify({
+        state: 'not_installed',
+        detail: detail.trim().slice(0, COMPONENT_DETAIL_MAX) || null,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+    return true;
+  } catch (error) {
+    logger?.debug({ err: error, component: key }, 'component status could not be reported');
+    return false;
+  }
+}
+
 function parseField(key: OpsComponentKey, raw: string | undefined): ComponentStatus {
   const unknown: ComponentStatus = { key, state: 'unknown', detail: null, updated_at: null };
   if (raw === undefined) return unknown;

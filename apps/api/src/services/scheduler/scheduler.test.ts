@@ -689,3 +689,196 @@ describe('the log line a pass writes', () => {
     expect(log.at('debug').map((line) => line.payload['outcome'])).toContain('skipped');
   });
 });
+
+// ===========================================================================
+// Run now and the job table (tm 389.14)
+// ===========================================================================
+
+describe('runNow', () => {
+  it('runs the job in this process and says how it went', async () => {
+    const instance = scheduler();
+    const sla = counting('sla');
+    instance.register(sla.job);
+
+    const answer = await instance.runNow('sla');
+
+    expect(answer).toMatchObject({ result: 'finished', status: 'ok' });
+    expect(sla.runs()).toBe(1);
+    expect(instance.snapshot().jobs[0]?.last_status).toBe('ok');
+  });
+
+  it('works while the scheduler is off — the timers are not what it needs', async () => {
+    const instance = scheduler({ enabled: false });
+    const sla = counting('sla');
+    instance.register(sla.job);
+    instance.start();
+
+    expect(await instance.runNow('sla')).toMatchObject({ result: 'finished' });
+    expect(sla.runs()).toBe(1);
+  });
+
+  it('does not start a job that is executing — a second call is already_running', async () => {
+    const instance = scheduler();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sla = counting('sla', () => held);
+    instance.register(sla.job);
+
+    const first = instance.runNow('sla');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await instance.runNow('sla')).toEqual({ result: 'already_running' });
+
+    release();
+    expect(await first).toMatchObject({ result: 'finished', status: 'ok' });
+    expect(sla.runs()).toBe(1);
+    // The marker is handed back with the pass: the next request runs.
+    expect(await instance.runNow('sla')).toMatchObject({ result: 'finished' });
+    expect(sla.runs()).toBe(2);
+  });
+
+  it('keeps a timer pass off a job a manual run is executing', async () => {
+    const instance = scheduler();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sla = counting('sla', () => held);
+    instance.register(sla.job);
+    instance.start();
+
+    const manual = instance.runNow('sla');
+    await vi.advanceTimersByTimeAsync(INTERVAL);
+    // The timer fired, took the interval and found the work already under way.
+    expect(sla.runs()).toBe(1);
+    expect(instance.snapshot().jobs[0]?.last_status).toBe('skipped');
+
+    release();
+    await manual;
+  });
+
+  it('keeps a manual run off a job a timer pass is executing', async () => {
+    const instance = scheduler();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sla = counting('sla', () => held);
+    instance.register(sla.job);
+    instance.start();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL);
+    expect(sla.runs()).toBe(1);
+    expect(await instance.runNow('sla')).toEqual({ result: 'already_running' });
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it('refuses a name nobody registered and a job that is switched off', async () => {
+    const instance = scheduler();
+    const retention = counting('retention');
+    instance.register({ ...retention.job, enabled: false });
+
+    expect(await instance.runNow('nope')).toEqual({ result: 'unknown_job' });
+    expect(await instance.runNow('retention')).toEqual({ result: 'disabled' });
+    expect(retention.runs()).toBe(0);
+  });
+
+  it('contains a job that throws and reports its class, not its message', async () => {
+    const instance = scheduler();
+    instance.register({
+      name: 'sla',
+      intervalMs: INTERVAL,
+      run: async () => {
+        throw new RangeError('postgres://user:hunter2@db/siyahtus is unreachable');
+      },
+    });
+
+    const answer = await instance.runNow('sla');
+
+    expect(answer).toMatchObject({
+      result: 'finished',
+      status: 'error',
+      error_class: 'RangeError',
+    });
+    expect(JSON.stringify(answer)).not.toContain('hunter2');
+    // And the marker was handed back even though the job threw.
+    expect(await instance.runNow('sla')).toMatchObject({ status: 'error' });
+  });
+
+  it('rejects, running nothing, when the marker store cannot be reached', async () => {
+    const instance = scheduler();
+    const sla = counting('sla');
+    instance.register(sla.job);
+    redis.failWith = new Error('ECONNREFUSED');
+
+    await expect(instance.runNow('sla')).rejects.toThrow('ECONNREFUSED');
+    expect(sla.runs()).toBe(0);
+  });
+
+  it('is waited for by stop()', async () => {
+    const instance = scheduler();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    instance.register(counting('sla', () => held).job);
+
+    const manual = instance.runNow('sla');
+    await vi.advanceTimersByTimeAsync(0);
+    let stopped = false;
+    const stopping = instance.stop().then(() => {
+      stopped = true;
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(stopped).toBe(false);
+
+    release();
+    await manual;
+    await stopping;
+    expect(stopped).toBe(true);
+  });
+});
+
+describe('detail', () => {
+  it('adds the last duration and the next due time to the snapshot row', async () => {
+    vi.setSystemTime(new Date('2026-10-26T12:00:00.000Z'));
+    const instance = scheduler();
+    instance.register({
+      name: 'sla',
+      intervalMs: INTERVAL,
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      },
+    });
+    instance.register({ ...counting('retention').job, enabled: false });
+    instance.start();
+
+    expect(instance.detail().jobs[0]).toMatchObject({
+      name: 'sla',
+      last_duration_ms: null,
+      next_run_at: '2026-10-26T12:00:01.000Z',
+    });
+
+    await vi.advanceTimersByTimeAsync(INTERVAL + 40);
+    const [sla, retention] = instance.detail().jobs;
+    expect(sla).toMatchObject({ last_status: 'ok', last_duration_ms: 40 });
+    expect(sla?.next_run_at).toBe('2026-10-26T12:00:02.040Z');
+    // A switched-off job never has a next run.
+    expect(retention).toMatchObject({ enabled: false, last_status: 'disabled', next_run_at: null });
+  });
+
+  it('leaves the public snapshot exactly as it was', () => {
+    const instance = scheduler();
+    instance.register(counting('sla').job);
+    expect(Object.keys(instance.snapshot().jobs[0]!)).toEqual([
+      'name',
+      'interval_ms',
+      'enabled',
+      'last_run_at',
+      'last_status',
+    ]);
+  });
+});

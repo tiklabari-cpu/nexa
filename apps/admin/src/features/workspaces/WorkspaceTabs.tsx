@@ -731,17 +731,98 @@ export function AiTab({ licenseId }: { licenseId: string }): ReactElement {
   );
   return (
     <Loaded query={query}>
-      {(data) => (
-        <Card>
-          <Facts
-            items={[
-              { label: t('workspaces.ai.total'), value: formatCount(data.ai_agents.total) },
-              { label: t('workspaces.ai.active'), value: formatCount(data.ai_agents.active) },
-            ]}
-          />
-          <p className="px-4 pb-4 text-xs text-content-secondary">{t('workspaces.ai.later')}</p>
-        </Card>
-      )}
+      {(data) => {
+        // A section whose source has not shipped is "not available yet", never a zero.
+        const count = (status: string, value: number): string =>
+          status === 'not_installed'
+            ? t('workspaces.ai.notInstalled')
+            : (formatCount(value) ?? '0');
+        const rules = Object.entries(data.guardrail_hits.by_rule).sort(
+          (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+        );
+        const run = data.compliance_pack.last_run;
+        return (
+          <>
+            <Card>
+              <p className="px-4 pt-4 text-xs text-content-secondary">{t('workspaces.ai.intro')}</p>
+              <Facts
+                items={[
+                  { label: t('workspaces.ai.total'), value: formatCount(data.ai_agents.total) },
+                  { label: t('workspaces.ai.active'), value: formatCount(data.ai_agents.active) },
+                  {
+                    label: t('workspaces.ai.guidanceTotal'),
+                    value: count(data.guidance_rules.status, data.guidance_rules.total),
+                  },
+                  {
+                    label: t('workspaces.ai.guidanceActive'),
+                    value: count(data.guidance_rules.status, data.guidance_rules.active),
+                  },
+                  {
+                    label: t('workspaces.ai.configChanges'),
+                    value: count(data.config_changes.status, data.config_changes.last_30_days),
+                  },
+                  {
+                    label: t('workspaces.ai.hits'),
+                    value: count(data.guardrail_hits.status, data.guardrail_hits.last_30_days),
+                  },
+                  {
+                    label: t('workspaces.ai.qaReviewed'),
+                    value: count(data.qa.status, data.qa.reviewed_30_days),
+                  },
+                  {
+                    label: t('workspaces.ai.qaAwaiting'),
+                    value: count(data.qa.status, data.qa.awaiting_review),
+                  },
+                ]}
+              />
+              <p className="px-4 pb-4 text-sm">
+                <span className="text-content-secondary">{t('workspaces.ai.compliance')}: </span>
+                {run === null
+                  ? t('workspaces.ai.compliance.none')
+                  : t('workspaces.ai.compliance.line', {
+                      version: run.version,
+                      passed:
+                        run.passed === null
+                          ? t('workspaces.ai.compliance.unknown')
+                          : (formatCount(run.passed) ?? '0'),
+                      failed:
+                        run.failed === null
+                          ? t('workspaces.ai.compliance.unknown')
+                          : (formatCount(run.failed) ?? '0'),
+                      status: run.run_status,
+                    })}
+              </p>
+            </Card>
+            <Card>
+              <h3 className="px-4 pt-4 text-sm font-semibold">
+                {t('workspaces.ai.hitsByRule.heading')}
+              </h3>
+              {rules.length === 0 ? (
+                <EmptyLine>{t('workspaces.ai.hitsByRule.none')}</EmptyLine>
+              ) : (
+                <DataTable
+                  caption={t('workspaces.ai.hitsByRule.caption')}
+                  headers={[
+                    t('workspaces.ai.hitsByRule.rule'),
+                    t('workspaces.ai.hitsByRule.count'),
+                  ]}
+                >
+                  {rules.map(([rule, hits]) => (
+                    <tr key={rule}>
+                      <Cell>
+                        {rule === 'workspace_rule' || rule === 'forbidden_phrase'
+                          ? t(`workspaces.ai.hitsByRule.${rule}`)
+                          : rule}
+                      </Cell>
+                      <Cell>{formatCount(hits)}</Cell>
+                    </tr>
+                  ))}
+                </DataTable>
+              )}
+            </Card>
+          </>
+        );
+      }}
     </Loaded>
   );
 }

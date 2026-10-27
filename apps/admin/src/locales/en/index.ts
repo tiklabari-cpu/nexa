@@ -1,6 +1,7 @@
 import { mergeNamespaces, type Messages, type Namespace } from '../merge.js';
 import { accounts } from './accounts.js';
 import { admins } from './operator-alerts.js';
+import { ai } from './ai.js';
 import { auth } from './auth.js';
 import { common } from './common.js';
 import { dashboard } from './dashboard.js';
@@ -14,6 +15,7 @@ import { workspaces } from './workspaces.js';
 export const enNamespaces: Record<Namespace, Messages> = {
   accounts,
   admins,
+  ai,
   auth,
   common,
   dashboard,

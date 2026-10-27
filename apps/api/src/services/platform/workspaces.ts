@@ -660,14 +660,6 @@ export class PlatformWorkspaces {
       end_reason: row.endReason,
     }));
   }
-
-  async aiSummary(licenseId: bigint): Promise<{ ai_agents: { total: number; active: number } }> {
-    const [total, active] = await Promise.all([
-      this.#db.aiAgent.count({ where: { licenseId } }),
-      this.#db.aiAgent.count({ where: { licenseId, active: true } }),
-    ]);
-    return { ai_agents: { total, active } };
-  }
 }
 
 /**

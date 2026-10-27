@@ -14,7 +14,7 @@
  *   GET  /workspaces/{licenseId}/notes                 workspaces.read     keyset
  *   POST /workspaces/{licenseId}/notes                 workspaces.support  workspace.note_added
  *   GET  /workspaces/{licenseId}/impersonations        workspaces.read     389.15's sessions
- *   GET  /workspaces/{licenseId}/ai-summary            workspaces.read     counts (389.19 adds more)
+ *   GET  /workspaces/{licenseId}/ai-summary            workspaces.read     counts and states (389.19)
  *
  * The actions (tm 389.10 · FR-ADMIN-09), each `{reason}` and both audit trails:
  *
@@ -103,6 +103,7 @@ import {
   WORKSPACE_SORTS,
   WorkspaceCursorError,
 } from '../../services/platform/workspaces.js';
+import { PlatformAiCatalogs } from '../../services/platform/ai-catalogs.js';
 import { toCsv } from '../reports-export.js';
 import { parse } from './auth.js';
 
@@ -180,6 +181,10 @@ export default async function platformWorkspacesRoutes(
     env,
     ...(options.now ? { now: options.now } : {}),
   });
+  const aiCatalogs = new PlatformAiCatalogs(
+    app.platformDb,
+    options.now ? { now: options.now } : {},
+  );
   const clock = options.now ?? Date.now;
   const read = { platform: { permission: 'workspaces.read' as const } };
   const onWorkspace = (action: PlatformAuditAction): PlatformAuditRouteConfig => ({
@@ -343,7 +348,7 @@ export default async function platformWorkspacesRoutes(
 
   app.get('/workspaces/:licenseId/ai-summary', { config: read }, async (request) => {
     const tenant = await tenantOf(request);
-    return workspaces.aiSummary(tenant.licenseId);
+    return aiCatalogs.workspaceSummary(tenant.licenseId);
   });
 
   // --- Actions (tm 389.10) ---------------------------------------------------

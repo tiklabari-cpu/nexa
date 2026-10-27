@@ -151,6 +151,7 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'ai_settings.updated',
   'ai_settings.connection_tested',
   'ai_settings.reembed_started',
+  'ai_settings.crisis_drafts_updated',
   // "Enter as the customer" (389.15).
   'impersonation.started',
   'impersonation.ended',

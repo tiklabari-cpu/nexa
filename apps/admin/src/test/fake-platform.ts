@@ -17,6 +17,7 @@ import {
 } from './fake-alerts.js';
 import { handleSettings, initialSettingsState, type FakeSettingsState } from './fake-settings.js';
 import { handleOperations } from './fake-operations.js';
+import { AI_SUMMARY, handleAiCatalogs, initialAiState, type FakeAiState } from './fake-ai.js';
 import { handleSecurity, initialSecurityState, type FakeSecurityState } from './fake-security.js';
 import {
   handleImpersonations,
@@ -457,7 +458,7 @@ function handleWorkspaces(
       case '/impersonations':
         return json(200, { data: [] });
       case '/ai-summary':
-        return json(200, { ai_agents: { total: 2, active: 1 } });
+        return json(200, AI_SUMMARY);
       case '/invoices/202609/download':
         return new Response('item,amount_cents\r\nSeats,9900\r\n', {
           status: 200,
@@ -532,6 +533,8 @@ export interface FakePlatform {
   impersonationState: FakeImpersonationState;
   /** The blocklist and counters of the Security page (tm 389.16). */
   securityState: FakeSecurityState;
+  /** The AI catalogues and the crisis-text drafts (tm 389.19). */
+  aiState: FakeAiState;
   /** The operator's alert preferences (tm 389.20). */
   alertPrefsState: FakeAlertPrefsState;
 }
@@ -560,6 +563,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   };
   const settingsState = initialSettingsState();
   const securityState = initialSecurityState();
+  const aiState = initialAiState();
   const alertPrefsState = initialAlertPrefsState();
   const impersonationState = initialImpersonationState({
     id: WORKSPACE_ID,
@@ -745,6 +749,8 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       problem,
     );
     if (securityResponse) return securityResponse;
+    const aiResponse = handleAiCatalogs(method, path, body, search, role, aiState, json, problem);
+    if (aiResponse) return aiResponse;
     const impersonationResponse = handleImpersonations(
       method,
       path,
@@ -785,6 +791,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     settingsState,
     impersonationState,
     securityState,
+    aiState,
     alertPrefsState,
   };
 }

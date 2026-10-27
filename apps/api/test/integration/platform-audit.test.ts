@@ -401,6 +401,14 @@ describe('the platform audit chain (tm 389.5)', () => {
     ok(await request('POST', '/settings/ai/reembed', { token, body: reason }));
     await platform.app.platformAiOperations.idle();
 
+    // The AI catalogues' one write (tm 389.19): the crisis-text drafts.
+    ok(
+      await request('PUT', '/ai-catalogs/crisis-text-drafts', {
+        token,
+        body: { drafts: { TR: { en: 'Please call 183.' } }, ...reason },
+      }),
+    );
+
     // The Security page's two (tm 389.16): a block, then lifting it.
     const blocked = ok(
       await request('POST', '/security/blocklist', {

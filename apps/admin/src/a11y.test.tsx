@@ -301,6 +301,10 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
       await user.click(screen.getByRole('button', { name: 'Verify' }));
     }
     await screen.findByTestId('config-LLM_API_KEY');
+    // The AI providers section (tm 389.17), with its write-only key field.
+    await screen.findByRole('form', {
+      name: locale === 'tr' ? 'AI sağlayıcıları' : 'AI providers',
+    });
     expect(await violations(document.body)).toEqual([]);
     await user.click(
       screen.getByRole('button', {

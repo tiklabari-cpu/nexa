@@ -99,8 +99,11 @@ effectiveConfig:
       its value comes from: this panel's database (`db`), the environment
       (`env`) or the built-in default (`default`). Shown here, set elsewhere:
       `APPS_LIVE_PROVIDERS`, the Turnstile keys, `TICKET_MAIL_OUTBOUND`,
-      `PILOT_MODE`, `LLM_PROVIDER`. `stale: true` with no entries is no
-      publication at all — the route still answers 200.
+      `PILOT_MODE`, `LLM_PROVIDER`. The `LLM_*` / `EMBEDDING_*` / `AI_DAILY_*` /
+      `AI_PRICE_*` entries are the environment's; whether the tenant API uses
+      them or this panel's AI settings is `GET /settings/ai`'s `source`.
+      `stale: true` with no entries is no publication at all — the route
+      still answers 200.
     x-platform-permission: settings.read
     responses:
       "200":
@@ -110,3 +113,125 @@ effectiveConfig:
             schema: { $ref: "../openapi.yaml#/components/schemas/PlatformEffectiveConfig" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+ai:
+  get:
+    tags: [Settings]
+    operationId: getPlatformAiSettings
+    summary: The AI provider settings the root panel holds
+    description: |
+      `llm` / `embedding` `null` is "not set here": the tenant API builds
+      that provider from its environment (`LLM_*`, `EMBEDDING_*`), and
+      `source` says so. A stored API key is never returned — only its last
+      four characters (`api_key_last4`). `reembed` is the state of the last
+      re-embedding this panel started.
+    x-platform-permission: ai.read
+    responses:
+      "200":
+        description: The stored values
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAiSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  put:
+    tags: [Settings]
+    operationId: updatePlatformAiSettings
+    summary: Change the model, the embedding model, the daily caps or the prices
+    description: |
+      Only the keys present change; `null` removes the stored value and hands
+      that part back to the environment. Inside `llm` / `embedding`, an
+      absent `api_key` keeps the stored one, a string replaces it (sealed
+      with AES-256-GCM under a key derived from `PLATFORM_SETTINGS_KEY`) and
+      `null` removes it — the tenant API then uses `LLM_API_KEY` /
+      `EMBEDDING_API_KEY` if it has one. Refused with `400 validation`: a
+      remote provider without base URL, model or region; in production a
+      base URL that is not the OpenAI regional host of the declared region
+      (`api.openai.com` never), `mock` under `PILOT_MODE=true`, or a region
+      other than `SIYAHTUS_REGION` under `PILOT_MODE=true`; any embedding
+      width but 1536. Every tenant process rebuilds its providers on
+      `ai.settings_changed` within seconds, without a restart. A new
+      embedding provider or model answers `warning: reembed_required` — the
+      stored knowledge lives in the old space until it is re-embedded.
+      Superadmin and a code younger than five minutes; the audit entry names
+      the fields that changed (`changed`), never a key.
+    x-platform-permission: ai.manage
+    x-platform-recent-totp: true
+    x-platform-audit: ai_settings.updated
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAiSettingsRequest" }
+    responses:
+      "200":
+        description: The stored values after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAiSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+aiTestConnection:
+  post:
+    tags: [Settings]
+    operationId: testPlatformAiConnection
+    summary: Send one small request to the model or the embedding provider
+    description: |
+      Builds the provider the tenant API would build — the stored settings,
+      else this process's environment (`source`) — and sends one tiny
+      completion (or one embedding). The cost is counted on the deployment's
+      daily AI allowance, never a workspace's. `mock` answers at once and
+      succeeds. A failure is still a 200 with `ok: false` and the failure's
+      kind (`timeout`, `auth`, `rate_limited`, `network`…); the provider's
+      own message is not passed on. Three per minute per operator.
+    x-platform-permission: ai.manage
+    x-platform-audit: ai_settings.connection_tested
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAiConnectionTestRequest" }
+    responses:
+      "200":
+        description: What the provider answered, and how fast
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAiConnectionTest" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiReembed:
+  post:
+    tags: [Settings]
+    operationId: startPlatformAiReembed
+    summary: Re-embed every workspace's knowledge into the current embedding space
+    description: |
+      Starts `knowledge:reembed` in this process and answers at once: every
+      source still in another space is embedded again with the embedding
+      provider the tenant API uses, one source at a time, while questions
+      keep being answered from whatever has already moved. The cost is
+      counted on the deployment's daily allowance; when that is spent the run
+      stops with `capped: true` and can be started again after 00:00 UTC.
+      Progress is in `GET /settings/ai` (`reembed`). `409
+      platform_operation_running` while one is running. Superadmin.
+    x-platform-permission: operations.run
+    x-platform-audit: ai_settings.reembed_started
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "202":
+        description: Started; the state as it begins
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAiReembedStatus" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }

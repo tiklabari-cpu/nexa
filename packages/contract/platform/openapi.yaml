@@ -59,6 +59,8 @@ tags:
     description: |
       Deployment settings (tm 389.13): sign-up, the trial length, the
       announcement, maintenance mode, and the tenant API's effective configuration.
+      The AI provider settings (tm 389.17): model, embedding model, API keys
+      (write-only), daily caps, prices, a connection test and re-embedding.
   - name: Operations
     description: |
       The Operations page (tm 389.14): the scheduler's jobs and "run now", the
@@ -252,6 +254,12 @@ paths:
     $ref: "./paths/settings.yaml#/maintenance"
   /settings/effective-config:
     $ref: "./paths/settings.yaml#/effectiveConfig"
+  /settings/ai:
+    $ref: "./paths/settings.yaml#/ai"
+  /settings/ai/test-connection:
+    $ref: "./paths/settings.yaml#/aiTestConnection"
+  /settings/ai/reembed:
+    $ref: "./paths/settings.yaml#/aiReembed"
   /operations/scheduler:
     $ref: "./paths/operations.yaml#/scheduler"
   /operations/scheduler/{name}/run:
@@ -2421,6 +2429,235 @@ components:
           description: Alphabetical by key.
           items: { $ref: "#/components/schemas/PlatformEffectiveConfigEntry" }
 
+    PlatformAiLlmSettings:
+      type: object
+      description: |
+        The model settings as stored. `null` in a field is "not set here" —
+        for `timeout_ms` and `max_output_tokens` the environment's value
+        (`LLM_TIMEOUT_MS`, `LLM_MAX_OUTPUT_TOKENS`) applies. The key itself is
+        never returned.
+      required:
+        [
+          provider,
+          base_url,
+          model,
+          model_fast,
+          region,
+          timeout_ms,
+          max_output_tokens,
+          api_key_last4,
+        ]
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        model_fast:
+          type: ["string", "null"]
+          description: The model a `fast` call uses (classifying, summarising); `null` — `model`.
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        timeout_ms: { type: ["integer", "null"], minimum: 1000, maximum: 120000 }
+        max_output_tokens: { type: ["integer", "null"], minimum: 1, maximum: 16384 }
+        api_key_last4:
+          type: ["string", "null"]
+          description: The stored key's last four characters; `null` — no key stored here.
+
+    PlatformAiEmbeddingSettings:
+      type: object
+      description: The embedding provider as stored; `PlatformAiLlmSettings`' rules.
+      required: [provider, base_url, model, region, dimensions, api_key_last4]
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        dimensions:
+          type: integer
+          enum: [1536]
+          description: Fixed — `knowledge_chunks.embedding` is `vector(1536)`.
+        api_key_last4: { type: ["string", "null"] }
+
+    PlatformAiDailyCap:
+      type: object
+      required: [workspace, global]
+      additionalProperties: false
+      properties:
+        workspace:
+          type: integer
+          minimum: 1
+          description: Tokens a day for a workspace with no plan figure or override of its own.
+        global:
+          type: integer
+          minimum: 1
+          description: Tokens a day for the whole deployment.
+
+    PlatformAiDeploymentCaps:
+      type: object
+      description: |
+        The deployment's daily caps per meter, in place of the four
+        `AI_DAILY_*` settings. Stored under `ai.caps` beside the plans'
+        defaults (`plans`, tm 389.12), which this does not touch.
+      required: [llm, embedding]
+      additionalProperties: false
+      properties:
+        llm: { $ref: "#/components/schemas/PlatformAiDailyCap" }
+        embedding: { $ref: "#/components/schemas/PlatformAiDailyCap" }
+
+    PlatformAiPrices:
+      type: object
+      description: |
+        What the provider charges, in US dollars per million tokens — the AI
+        usage report's cost estimate, in place of the three `AI_PRICE_*`
+        settings. `null` — no estimate for that meter.
+      required: [llm_input_usd_per_mtok, llm_output_usd_per_mtok, embedding_usd_per_mtok]
+      additionalProperties: false
+      properties:
+        llm_input_usd_per_mtok: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+        llm_output_usd_per_mtok: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+        embedding_usd_per_mtok: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+
+    PlatformAiReembedStatus:
+      type: object
+      description: |
+        The last re-embedding this panel started. `idle` — none since Redis
+        last lost the record.
+      required: [state, started_at, finished_at, target, sources, chunks, failed, refused, capped]
+      properties:
+        state: { type: string, enum: [idle, running, finished, failed] }
+        started_at: { type: ["string", "null"], format: date-time }
+        finished_at: { type: ["string", "null"], format: date-time }
+        target:
+          type: ["string", "null"]
+          description: The embedding space moved into (`<provider>:<model>`).
+        sources: { type: integer, minimum: 0, description: Sources moved so far. }
+        chunks: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        refused: { type: integer, minimum: 0, description: Workspaces the residency rule kept out. }
+        capped:
+          type: boolean
+          description: The deployment's daily embedding allowance ran out; start again after 00:00 UTC.
+
+    PlatformAiSettingsSource:
+      type: object
+      required: [llm, embedding]
+      properties:
+        llm: { type: string, enum: [db, env] }
+        embedding: { type: string, enum: [db, env] }
+
+    PlatformAiSettings:
+      type: object
+      required: [llm, embedding, caps, prices, source, reembed, updated_at]
+      properties:
+        llm:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiLlmSettings" }
+            - { type: "null" }
+        embedding:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiEmbeddingSettings" }
+            - { type: "null" }
+        caps:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiDeploymentCaps" }
+            - { type: "null" }
+        prices:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiPrices" }
+            - { type: "null" }
+        source: { $ref: "#/components/schemas/PlatformAiSettingsSource" }
+        reembed: { $ref: "#/components/schemas/PlatformAiReembedStatus" }
+        updated_at: { type: ["string", "null"], format: date-time }
+        warning:
+          type: string
+          enum: [reembed_required]
+          description: |
+            `PUT` only — the embedding provider or model changed, so the stored
+            knowledge has to be re-embedded (`POST /settings/ai/reembed`).
+
+    PlatformAiLlmInput:
+      type: object
+      required: [provider]
+      additionalProperties: false
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"], maxLength: 500 }
+        model: { type: ["string", "null"], minLength: 1, maxLength: 200 }
+        model_fast: { type: ["string", "null"], minLength: 1, maxLength: 200 }
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        timeout_ms: { type: ["integer", "null"], minimum: 1000, maximum: 120000 }
+        max_output_tokens: { type: ["integer", "null"], minimum: 1, maximum: 16384 }
+        api_key:
+          type: ["string", "null"]
+          minLength: 8
+          maxLength: 500
+          writeOnly: true
+          description: Absent — keep the stored key; a string — replace it; `null` — remove it.
+
+    PlatformAiEmbeddingInput:
+      type: object
+      required: [provider]
+      additionalProperties: false
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"], maxLength: 500 }
+        model: { type: ["string", "null"], minLength: 1, maxLength: 200 }
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        dimensions: { type: integer, enum: [1536] }
+        api_key:
+          type: ["string", "null"]
+          minLength: 8
+          maxLength: 500
+          writeOnly: true
+
+    PlatformAiSettingsRequest:
+      type: object
+      description: At least one key besides `reason`; `null` removes the stored value.
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        llm:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiLlmInput" }
+            - { type: "null" }
+        embedding:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiEmbeddingInput" }
+            - { type: "null" }
+        caps:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiDeploymentCaps" }
+            - { type: "null" }
+        prices:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiPrices" }
+            - { type: "null" }
+
+    PlatformAiConnectionTestRequest:
+      type: object
+      required: [reason, target]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        target: { type: string, enum: [llm, embedding] }
+
+    PlatformAiConnectionTest:
+      type: object
+      required: [target, provider, source, model, ok, latency_ms, error]
+      properties:
+        target: { type: string, enum: [llm, embedding] }
+        provider: { type: string, enum: [mock, openai] }
+        source: { type: string, enum: [db, env] }
+        model: { type: ["string", "null"] }
+        ok: { type: boolean }
+        latency_ms: { type: integer, minimum: 0 }
+        error:
+          type: ["string", "null"]
+          description: |
+            The failure's kind (`timeout`, `auth`, `rate_limited`, `network`,
+            `bad_request`, `bad_response`, `provider_error`, `circuit_open`,
+            `no_answer`, `ai_daily_cap`, `misconfigured`) — never the
+            provider's message.
+
   responses:
     BadRequest:
       description: |
@@ -2458,8 +2695,9 @@ components:
       description: |
         `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
         `platform_workspace_state` (`details.reason`, tm 389.10) or
-        `platform_account_state` (`details.reason`, tm 389.11) — the request was
-        fine, the state refused it.
+        `platform_account_state` (`details.reason`, tm 389.11) or
+        `platform_operation_running` (tm 389.17) — the request was fine, the
+        state refused it.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

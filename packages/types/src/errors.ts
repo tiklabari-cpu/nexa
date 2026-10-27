@@ -136,8 +136,12 @@ export const ERROR_TYPES = [
   // to extend on a paid licence, a suspension to lift under a scheduled purge).
   // `platform_account_state` (tm 389.11): the same for an account action — an
   // erasure refused while the account is a workspace's only Founder.
+  // `platform_operation_running` (tm 389.17): a long operation the panel
+  // started — re-embedding the knowledge base — is still running, and a
+  // second one may not start beside it.
   'platform_account_state',
   'platform_last_superadmin',
+  'platform_operation_running',
   'platform_reason_required',
   'platform_recent_totp_required',
   'platform_totp_required',
@@ -246,6 +250,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   pending_requests_limit_reached: 429,
   platform_account_state: 409,
   platform_last_superadmin: 409,
+  platform_operation_running: 409,
   platform_reason_required: 400,
   platform_recent_totp_required: 403,
   platform_totp_required: 403,

@@ -5,6 +5,11 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '../../lib/auth-store.js';
 import type {
+  PlatformAiConnectionTest,
+  PlatformAiConnectionTestRequest,
+  PlatformAiReembedStatus,
+  PlatformAiSettings,
+  PlatformAiSettingsRequest,
   PlatformDeploymentSettings,
   PlatformEffectiveConfig,
   PlatformMaintenanceRequest,
@@ -54,5 +59,48 @@ export function useSetMaintenance() {
     mutationFn: (body: PlatformMaintenanceRequest) =>
       api.put<PlatformDeploymentSettings>('/settings/maintenance', body),
     onSuccess: store,
+  });
+}
+
+// --- AI settings (tm 389.17 · FR-ADMIN-17/19) ------------------------------------------------
+
+const AI_KEY = ['settings', 'ai'] as const;
+
+/** Read every five seconds while a re-embedding runs, so its progress moves on the page. */
+export function useAiSettings(): UseQueryResult<PlatformAiSettings> {
+  return useQuery({
+    queryKey: AI_KEY,
+    queryFn: () => api.get<PlatformAiSettings>('/settings/ai'),
+    refetchInterval: (query) => (query.state.data?.reembed.state === 'running' ? 5_000 : false),
+  });
+}
+
+export function useSaveAiSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PlatformAiSettingsRequest) =>
+      api.put<PlatformAiSettings>('/settings/ai', body),
+    onSuccess: async (settings) => {
+      client.setQueryData(AI_KEY, settings);
+      await client.invalidateQueries({ queryKey: ['settings', 'effective-config'] });
+    },
+  });
+}
+
+export function useTestAiConnection() {
+  return useMutation({
+    mutationFn: (body: PlatformAiConnectionTestRequest) =>
+      api.post<PlatformAiConnectionTest>('/settings/ai/test-connection', body),
+  });
+}
+
+export function useStartReembed() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { reason: string }) =>
+      api.post<PlatformAiReembedStatus>('/settings/ai/reembed', body),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: AI_KEY });
+    },
   });
 }

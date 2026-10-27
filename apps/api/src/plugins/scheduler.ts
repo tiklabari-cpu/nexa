@@ -22,6 +22,7 @@ import fp from 'fastify-plugin';
 import type { Redis } from 'ioredis';
 import type { Env } from '../config/env.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
+import type { InferenceProvider } from '../services/ai/inference.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import type { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -62,6 +63,8 @@ export interface SchedulerPluginOptions {
   publisher?: RealtimePublisher;
   /** The server's metered model, which titles the unresolved questions' clusters (tm 317.2). */
   llm?: MeteredLlm;
+  /** Where the two AI providers run now — the server's AI registry (tm 389.17). */
+  inference?: () => { llm: InferenceProvider; embedding: InferenceProvider };
   /** The visitor-country database, for the GeoIP tile (tm 389.14). */
   geo?: Pick<GeoLocator, 'status'>;
   /** Whether the widget's human check can run — a provider was resolved (tm 389.14). */
@@ -89,6 +92,7 @@ async function schedulerPlugin(
     ...(options.knowledge ? { knowledge: options.knowledge } : {}),
     ...(options.publisher ? { publisher: options.publisher } : {}),
     ...(options.llm ? { llm: options.llm } : {}),
+    ...(options.inference ? { inference: options.inference } : {}),
   })) {
     scheduler.register(job);
   }

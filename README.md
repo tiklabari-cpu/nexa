@@ -513,7 +513,11 @@ opaque session token that ends after `PLATFORM_IDLE_TTL` (900 s) idle or `PLATFO
 (`superadmin`, `support`, `billing`, `readonly`) and what each may do are one matrix,
 `PLATFORM_PERMISSIONS` in `@siyahtus/types`. `PLATFORM_IP_ALLOWLIST` (IPs/CIDRs) restricts the
 addresses the platform API admits; production requires `PLATFORM_SETTINGS_KEY`, which seals the
-operators' TOTP secrets.
+operators' TOTP secrets and the AI API keys of Settings › AI (tm 389.17). Those settings — model,
+embedding model, keys, daily caps, prices — override the tenant API's `LLM_*` / `EMBEDDING_*` /
+`AI_DAILY_*` / `AI_PRICE_*` part by part and reach every running tenant process on
+`ai.settings_changed` without a restart; with no row, or a key that does not open, the environment
+decides as before.
 
 Deployed (tm 389.7): the back office is the fifth public name, `admin.<domain>`, and the sixth
 service. In the pilot, `docker compose -f docker-compose.pilot.yml --profile platform up -d`

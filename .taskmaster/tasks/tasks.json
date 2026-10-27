@@ -15766,7 +15766,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-27T01:27:10.848Z",
+        "updatedAt": "2026-10-27T02:52:41.395Z",
         "subtasks": [
           {
             "id": 1,
@@ -16054,14 +16054,14 @@
             "description": "SiyahTuş ekibi panele bakmadan kritik durumları e-postayla öğrenir.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close). DoD kapısı CONVENTIONS.md §1 (entegrasyon testleri paralel, `pnpm test:gate` arka planda — log yolunu ilk satırdan al, bitince son satırları oku; turbo `--force` ve çıktıda \"0 cached\"; önce `docker info`; e2e ve db:migrate için kök .env source); git §2 (`feat/<slug>` → main, force-push yok); handoff §3; kapsam disiplini §5; migration §6.3; gereksinim etiketi §7 (test başlığında YALNIZ prd-uyum-denetimi.md Ek A kimlikleri — FR-ADMIN-nn kodları etiket DEĞİLDİR). Sınırlar CLAUDE.md: gerçek sır/anahtar, deploy, DNS, TLS, kart/ödeme yok; dış servisler mock; `pnpm db:reset` yasak (`SIYAHTUS_SEED_RESET=1 pnpm db:seed`).\n\nBAĞLAM (önce oku, sırayla): (1) docs/platform-admin/design.md — bu epiğin tek tasarım kaynağı (bölüm harfleri aşağıda); (2) docs/platform-admin/requirements.md — FR-ADMIN kodları ve kabul kriterleri; (3) docs/platform-admin/gorev-yerlesimi.md — hangi iş workspace panelinde, hangisi root panelde; (4) epik tm 389 details (Task Master) — sıra, ortak kurallar; (5) `head -60 HANDOFF.md` — önceki 389.x pencerelerinin notları; (6) PLAN.md §D218 (`grep -n \"D218\" PLAN.md`). Bu alt görevin tasarım bölümü: design.md §C (uyarılar), §B2 platform_alert_prefs.\n\nORTAK KURALLAR:\n- Platform rotaları YALNIZ platform-api sürecinde yüklenir; kiracı API (`buildServer`) `/platform/*` için 404 kalır (test: platform-rls/platform-isolation). Kiracı API'de boot'u durduran YENİ kural yok (sahip kuralı 2026-10-10): platform ayarı okunamazsa env ile devam + uyarı.\n- Her platform mutasyonu `{reason}` ister ve `platform_audit_log` zincirine yazar; kiracıya dokunanlar ayrıca kiracı `audit_log`'una `actor_type='platform'` ile (çift audit).\n- Kiracı içeriği (mesaj, oyuncu verisi, KB) platform ekranlarında ve platform API yanıtlarında YOK; yalnız sayı/durum/kimlik. Kiracı adına bakmak yalnız 389.15 impersonation ile.\n- Dağıtım sırları env'de kalır; panelde saklanan tek sır AI anahtarlarıdır (389.17, şifreli). Hiçbir yanıt/log/audit düz anahtar taşımaz.\n- Kontrat-first: `packages/contract/platform/openapi.yaml` → `pnpm contract:generate` → migration → servis + test → SPA. Kiracı kontratına yeni yol eklenirse `apps/mobile` parity sayısı yorumla bump edilir (hafıza: openapi-path-breaks-mobile-parity-count).\n- `prisma format` ÇALIŞTIRMA (ilgisiz modelleri hizalar); `prisma generate` dev API açıkken EPERM verebilir, TS istemcisi yine üretilir.\n- Türkçe metin (PLAN, HANDOFF, i18n) Write/Edit ile; heredoc ve `node -e` Türkçe karakteri bozar. Mutasyon testlerinde dosyayı turun başındaki kopyadan geri yükle (`git checkout --` değil).\n- Yeni web/admin bileşeni `t()` çağırıyorsa i18n kayıt listesine girer (apps/admin kendi `TRANSLATED_FILES`'ını taşır).\n- PLAN: tablo hücresine kanıt yazılmaz; FR-ADMIN maddeleri Ek A'da olmadığından req-coverage etiketi yazılmaz; kanıt HANDOFF bloğu + §D218 altına tek satır madde.\n- Döngü penceresi 10 dk komut tavanı: uzun komutlar `run_in_background`.\n\nAMAÇ: FR-ADMIN-24. `services/platform/alerts.ts`: 5 dk'da bir tarama (platform-api sürecinde `setInterval`, Redis kilidi `siyahtus:platform:alerts:lock` — birden çok kopyada tekil), uyarı türleri `trial_ending` (3 gün), `payment_request_waiting` (24 sa `requested`), `ai_cap_reached` (#283 `ai.cap_reached` olayı ya da `ai_daily_usage` tavan eşitliği), `health_red` (389.8 snapshot stale/kırmızı), `audit_chain_broken` (günlük verify), `purge_tomorrow`; tekilleştirme anahtarı (tür + hedef + gün) Redis'te 24 sa; e-posta `platform_alert` (en/tr, `messages.ts`) tercih eden adminlere (`platform_alert_prefs.kinds`); `GET/PUT /auth/me/alert-prefs`; SPA Admins › Uyarı tercihleri.\n\nKODDA BUGÜN (HEAD'de oku, satırlar kayabilir):\n- apps/api/src/services/mail/{mailer,templates/messages}.ts (backgroundMail platform sürecinde kayıtlı — 389.3).\n- apps/api/src/plugins/scheduler.ts leader lock (kalıp; platform sürecinde scheduler yok → küçük kilit yardımcısı).\n- 389.8 snapshot, 389.5 verify, 389.18 kuyruk, 389.12 ai caps.\n\nKARARLAR (pencere ölçülmüş gerekçeyle değiştirebilir):\n1) Günde en fazla 1 e-posta/tür/hedef; `critical` türler (audit_chain_broken, health_red) her taramada ama 1 sa tekil.\n2) Tercih yoksa superadmin'ler her türü alır (varsayılan açık), diğer roller kapalı.\n3) E-postada kiracı adı + kimlik; içerik yok.\n\nKAPSAM DIŞI: Slack/webhook uyarıları, kiracıya giden uyarılar (#283 %80 bildirimi kiracı işi).\nTUZAKLAR: Platform sürecinde scheduler plugin'i yok — kendi aralığı; test modunda `runAlertScanOnce()` export. Posta günlük tavanı (`mail_daily_usage` deployment satırı) uyarıları yutabilir — uyarılar ayrı sayaç ya da tavan dışı (karar: ayrı `platform` meter).",
             "testStrategy": "Taban: 389.14/389.16 yeşil. Kabul: entegrasyon — fixture (deneme 2 gün sonra biten kiracı, 25 sa bekleyen kripto talebi, stale snapshot) → `runAlertScanOnce()` 3 e-posta spool (en/tr tercihe göre), ikinci koşu 0 (tekil); zinciri boz → `audit_chain_broken`; tercih kapalı admin almaz; iki eşzamanlı tarama → tek set (kilit). SPA birim. Mutasyon: tekilleştirme anahtarını kaldır → ikinci koşu testi kırmızı. DoD: CONVENTIONS §1 tamamı — `pnpm test:gate` (arka planda; log son satırları `Tasks:`/`Failed:`/`exit`), `db:check-drift`, `contract:generate` sonrası generated temiz, `audit:req-coverage` exit 0, HANDOFF bloğu + PLAN §D218 altına tek satır kanıt maddesi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "389.14",
               "389.16"
             ],
             "parentId": "389",
             "priority": "high",
-            "updatedAt": "2026-10-27T01:27:10.848Z"
+            "updatedAt": "2026-10-27T02:52:41.395Z"
           },
           {
             "id": 21,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-27T01:27:10.848Z",
+      "lastModified": "2026-10-27T02:52:41.396Z",
       "taskCount": 390,
       "completedCount": 327,
       "tags": [

@@ -13521,7 +13521,7 @@
           "309"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-27T07:53:43.089Z",
+        "updatedAt": "2026-10-27T09:16:30.459Z",
         "subtasks": [
           {
             "id": 1,
@@ -13529,11 +13529,11 @@
             "description": "knowledge_pages, knowledge_jobs, kaynak alanları, page_id + kontrat (kırıcı yanıt) + tipler",
             "details": "Üst görev 312 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "db:check-drift; contract:generate.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "312",
             "priority": "medium",
-            "updatedAt": "2026-10-27T07:53:43.089Z"
+            "updatedAt": "2026-10-27T09:16:30.459Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-27T07:53:43.089Z",
+      "lastModified": "2026-10-27T09:16:30.459Z",
       "taskCount": 390,
       "completedCount": 330,
       "tags": [

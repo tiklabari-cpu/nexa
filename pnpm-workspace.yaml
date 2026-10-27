@@ -45,3 +45,11 @@ confirmModulesPurge: false
 # `deepmergeInto`) do not touch that call.
 overrides:
   "@prisma/config>deepmerge-ts": "^8.0.2"
+
+# pdfjs-dist (tm 313.2, the knowledge document worker) lists `@napi-rs/canvas` as optional:
+# pdf.js loads it to render pages to a canvas. The worker only reads text — it never renders —
+# so the native binary would be code a hostile PDF could reach and nothing ever needs. Without
+# it pdf.js logs one "Cannot load @napi-rs/canvas" warning (to the worker's discarded stdout)
+# and text extraction is unchanged.
+ignoredOptionalDependencies:
+  - "@napi-rs/canvas"

@@ -13521,7 +13521,7 @@
           "309"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-27T09:17:38.101Z",
+        "updatedAt": "2026-10-27T10:37:00.663Z",
         "subtasks": [
           {
             "id": 1,
@@ -13541,13 +13541,13 @@
             "description": "http-fetcher (SSRF), frontier, robots, sitemap, extract",
             "details": "XHIGH GEREKÇESİ: (1) SSRF + güvenilmeyen girdi.",
             "testStrategy": "Birim + SSRF negatif.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "312.1"
             ],
             "parentId": "312",
             "priority": "medium",
-            "updatedAt": "2026-10-27T09:17:38.101Z"
+            "updatedAt": "2026-10-27T10:37:00.663Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-27T09:17:38.101Z",
+      "lastModified": "2026-10-27T10:37:00.664Z",
       "taskCount": 390,
       "completedCount": 330,
       "tags": [

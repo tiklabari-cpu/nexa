@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { LogContext } from '@siyahtus/types';
-import type { SocketAuthority } from './auth.js';
+import type { SocketAuthority, SocketImpersonation } from './auth.js';
 
 export interface Connection {
   id: string;
@@ -32,6 +32,11 @@ export interface Connection {
    * bots, customers and a socket not yet logged in.
    */
   authority: SocketAuthority | null;
+  /**
+   * An operator signed in as the member (tm 389.15): the session's mode and
+   * window. Null for every other socket.
+   */
+  impersonation: SocketImpersonation | null;
   /**
    * Push actions this socket asked for. Empty means none: a client receives
    * only what it explicitly subscribed to, so adding a new push type cannot
@@ -64,6 +69,7 @@ export class ConnectionRegistry {
       groupIds: [],
       unrestricted: false,
       authority: null,
+      impersonation: null,
       subscriptions: new Set(),
       pendingRequests: 0,
       lastSeenAt: Date.now(),
@@ -87,6 +93,7 @@ export class ConnectionRegistry {
       groupIds?: number[];
       unrestricted?: boolean;
       authority?: SocketAuthority | null;
+      impersonation?: SocketImpersonation | null;
     },
   ): Connection | undefined {
     const connection = this.#byId.get(id);
@@ -98,6 +105,7 @@ export class ConnectionRegistry {
     connection.groupIds = actor.groupIds ?? [];
     connection.unrestricted = actor.unrestricted ?? false;
     connection.authority = actor.authority ?? null;
+    connection.impersonation = actor.impersonation ?? null;
     this.#index(this.#byActor, this.#actorKey(connection.organizationId, actor.actorId), id);
     return connection;
   }

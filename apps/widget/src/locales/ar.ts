@@ -51,6 +51,7 @@ export const ar: Record<string, string> = {
   privacy: 'الخصوصية',
   'typing.named': '{name} يكتب الآن…',
   'typing.generic': 'يكتب الآن…',
+  'human.connecting': 'جارٍ الاتصال…',
   'rating.menuLabel': 'خيارات أخرى',
   'rating.menuItem': 'قيّم هذه المحادثة',
   'rating.group': 'قيّم هذه المحادثة',

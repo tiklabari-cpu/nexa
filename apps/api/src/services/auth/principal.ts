@@ -7,7 +7,13 @@
  * treating widget traffic as an agent (I4 — a customer token must never reach
  * beyond the Customer Chat API).
  */
-import type { AgentRole, CapabilityKey, CapabilityValue, IdentityTrust } from '@siyahtus/types';
+import type {
+  AgentRole,
+  CapabilityKey,
+  CapabilityValue,
+  IdentityTrust,
+  ImpersonationMode,
+} from '@siyahtus/types';
 import type { TenantContext } from '../../lib/tenant.js';
 
 export interface AgentPrincipal {
@@ -25,12 +31,15 @@ export interface AgentPrincipal {
    */
   capabilities: Readonly<Record<CapabilityKey, CapabilityValue>>;
   tokenId: string;
-  tokenKind: 'pat' | 'oauth';
+  tokenKind: 'pat' | 'oauth' | 'impersonation';
   /**
    * Present when SiyahTuş staff are signed in as this member from the root
-   * panel (support impersonation, design §G). The type is tm 389.2's; the
-   * token kind that carries it is refused by `token-service.ts` until the
-   * impersonation gate (389.15) sets it and enforces `mode`.
+   * panel (support impersonation, design §G · tm 389.15), and only then —
+   * exactly when `tokenKind` is `impersonation`. The principal is otherwise
+   * the member's own: their role, the workspace's matrix, their reach.
+   * `plugins/impersonation-gate.ts` enforces `mode` and the forbidden paths;
+   * `plugins/audit.ts` records the operator as the actor and the member as
+   * `on_behalf_of`.
    */
   impersonation?: ImpersonationContext;
 }
@@ -40,7 +49,7 @@ export interface ImpersonationContext {
   /** `platform_impersonation_sessions.id`. */
   sessionId: string;
   /** `read_only` refuses every write; `full` acts as the member (TOTP-gated at the platform). */
-  mode: 'read_only' | 'full';
+  mode: ImpersonationMode;
   /** When the session (and with it the token) stops working. */
   endsAt: Date;
   /** The operator, `platform_admins.id` — the audit entry's `actor_id`. */

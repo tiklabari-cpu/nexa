@@ -34,8 +34,16 @@
 import { SpanStatusCode } from '@opentelemetry/api';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Telemetry } from '../../telemetry/telemetry.js';
-import { JobLock, lockTtlMs, type LockRedis } from './lock.js';
-import type { JobDefinition, JobSnapshot, JobStatus, SchedulerSnapshot } from './types.js';
+import { JobLock, lockTtlMs, RUNNING_TTL_MS, runningKey, type LockRedis } from './lock.js';
+import type {
+  JobDefinition,
+  JobDetail,
+  JobSnapshot,
+  JobStatus,
+  ManualRunResult,
+  SchedulerDetail,
+  SchedulerSnapshot,
+} from './types.js';
 
 /**
  * Consecutive failures before a job's log line moves from `warn` to `error`.
@@ -68,6 +76,10 @@ interface JobState {
   lastRunAt: number | null;
   lastStatus: JobStatus | null;
   lastErrorClass: string | null;
+  /** How long the last executed pass took (tm 389.14); null before one has. */
+  lastDurationMs: number | null;
+  /** When the armed timer fires, epoch ms; null while none is armed (tm 389.14). */
+  nextRunAt: number | null;
   consecutiveErrors: number;
   inFlight: Promise<unknown> | null;
   /**
@@ -119,6 +131,10 @@ export function errorClassOf(error: unknown): string {
 export class Scheduler {
   readonly #options: SchedulerOptions;
   readonly #lock: JobLock;
+  /** The "a pass is executing" marker, apart from the interval marker (`lock.ts`). */
+  readonly #running: JobLock;
+  /** Manual runs in progress, so `stop()` waits for them as it does for a timer's pass. */
+  readonly #manualRuns = new Set<Promise<unknown>>();
   readonly #random: () => number;
   readonly #jobs = new Map<string, JobState>();
   readonly #abort = new AbortController();
@@ -128,6 +144,7 @@ export class Scheduler {
   constructor(options: SchedulerOptions) {
     this.#options = options;
     this.#lock = new JobLock(options.redis);
+    this.#running = new JobLock(options.redis, runningKey);
     this.#random = options.random ?? Math.random;
   }
 
@@ -157,6 +174,8 @@ export class Scheduler {
       // looking like one that simply has not had its first pass yet.
       lastStatus: enabled ? null : 'disabled',
       lastErrorClass: null,
+      lastDurationMs: null,
+      nextRunAt: null,
       consecutiveErrors: 0,
       inFlight: null,
       heldToken: null,
@@ -223,8 +242,10 @@ export class Scheduler {
         clearTimeout(state.timer);
         state.timer = null;
       }
+      state.nextRunAt = null;
       if (state.inFlight !== null) inFlight.push(state.inFlight);
     }
+    inFlight.push(...this.#manualRuns);
     await Promise.allSettled(inFlight);
 
     await Promise.all(
@@ -252,6 +273,65 @@ export class Scheduler {
     };
   }
 
+  /**
+   * What the root panel's job table shows (tm 389.14): {@link snapshot} plus
+   * the last pass's duration and the next due time. This process's view only —
+   * on N instances each has its own timers, and the health leader publishes its.
+   */
+  detail(): SchedulerDetail {
+    const snapshot = this.snapshot();
+    const states = [...this.#jobs.values()];
+    return {
+      enabled: snapshot.enabled,
+      jobs: snapshot.jobs.map((row, index): JobDetail => {
+        const state = states[index]!;
+        return {
+          ...row,
+          last_duration_ms: state.lastDurationMs,
+          next_run_at: state.nextRunAt === null ? null : new Date(state.nextRunAt).toISOString(),
+        };
+      }),
+    };
+  }
+
+  /**
+   * Run `name` now, in this process (tm 389.14 · the root panel's "run now").
+   *
+   * Takes the job's running marker, not its interval marker: a manual run is
+   * an operator's decision and does not wait for — or use up — the interval.
+   * What it must not do is start on top of a pass that is executing, scheduled
+   * on any instance or manual, and the marker is exactly that: `already_running`
+   * and nothing is started. Resolves once the pass has finished; a Redis that
+   * cannot be reached rejects, with nothing run.
+   *
+   * A job registered `enabled: false` is not run on request either — the
+   * retention sweep arrives that way so that nothing hard-deletes data because
+   * somebody pressed a button without knowing the switch was off.
+   */
+  async runNow(name: string): Promise<ManualRunResult> {
+    const state = this.#jobs.get(name);
+    if (!state) return { result: 'unknown_job' };
+    if (state.definition.enabled === false || this.#stopped) return { result: 'disabled' };
+
+    const token = await this.#running.acquire(name, RUNNING_TTL_MS);
+    if (token === null) return { result: 'already_running' };
+
+    const run = this.#execute(state);
+    this.#manualRuns.add(run);
+    try {
+      const outcome = await run;
+      return {
+        result: 'finished',
+        status: outcome.status,
+        duration_ms: outcome.durationMs,
+        ...(outcome.errorClass ? { error_class: outcome.errorClass } : {}),
+      };
+    } finally {
+      this.#manualRuns.delete(run);
+      await this.#releaseRunning(name, token);
+    }
+  }
+
   #schedule(state: JobState, first: boolean): void {
     if (this.#stopped) return;
     const delay = nextDelayMs(
@@ -260,8 +340,10 @@ export class Scheduler {
       this.#random,
       first,
     );
+    state.nextRunAt = Date.now() + delay;
     state.timer = setTimeout(() => {
       state.timer = null;
+      state.nextRunAt = null;
       const pass = this.#pass(state)
         .catch((error: unknown) => {
           // `#pass` is written not to reject. This is the backstop that keeps
@@ -316,6 +398,41 @@ export class Scheduler {
       return;
     }
 
+    // The interval is ours; whether the work may start is the running marker's
+    // call (tm 389.14): a manual run from the root panel may be mid-pass.
+    let runToken: string | null;
+    try {
+      runToken = await this.#running.acquire(name, RUNNING_TTL_MS);
+    } catch (error) {
+      this.#record(state, 'error', error);
+      logger.warn(
+        { job: name, outcome: 'error', error_class: errorClassOf(error), err: error },
+        'scheduler could not reach the job lock — pass skipped',
+      );
+      return;
+    }
+    if (runToken === null) {
+      this.#record(state, 'skipped', null);
+      logger.debug({ job: name, outcome: 'skipped' }, 'scheduler job is already running');
+      return;
+    }
+    try {
+      await this.#execute(state);
+    } finally {
+      await this.#releaseRunning(name, runToken);
+    }
+  }
+
+  /**
+   * One execution of a job's work — the span, the log line and the bookkeeping
+   * — for a timer's pass and a manual run alike. Never rejects: a throwing job
+   * is recorded and reported, not propagated.
+   */
+  async #execute(
+    state: JobState,
+  ): Promise<{ status: 'ok' | 'error'; durationMs: number; errorClass?: string }> {
+    const { name } = state.definition;
+    const logger = this.#options.logger;
     const span = this.#options.telemetry?.tracer.startSpan(`scheduler.${name}`) ?? null;
     const startedAt = Date.now();
     try {
@@ -324,14 +441,17 @@ export class Scheduler {
         logger: logger.child({ job: name }),
       });
       const durationMs = Date.now() - startedAt;
+      state.lastDurationMs = durationMs;
       this.#record(state, 'ok', null);
       span?.setAttributes({ outcome: 'ok', duration_ms: durationMs });
       logger.info(
         { job: name, outcome: 'ok', duration_ms: durationMs, ...(outcome?.counts ?? {}) },
         'scheduler job ran',
       );
+      return { status: 'ok', durationMs };
     } catch (error) {
       const durationMs = Date.now() - startedAt;
+      state.lastDurationMs = durationMs;
       this.#record(state, 'error', error);
       span?.recordException(error instanceof Error ? error : new Error(String(error)));
       span?.setStatus({ code: SpanStatusCode.ERROR });
@@ -350,8 +470,21 @@ export class Scheduler {
       } else {
         logger.warn(payload, 'scheduler job failed');
       }
+      return { status: 'error', durationMs, errorClass: errorClassOf(error) };
     } finally {
       span?.end();
+    }
+  }
+
+  async #releaseRunning(job: string, token: string): Promise<void> {
+    try {
+      await this.#running.release(job, token);
+    } catch (error) {
+      // The marker's own TTL unparks the job; nothing else to do.
+      this.#options.logger.warn(
+        { job, err: error },
+        'scheduler could not release its running marker',
+      );
     }
   }
 

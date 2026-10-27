@@ -483,7 +483,9 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     // Never fatal. A person's last-seen stamp is not worth failing the request
     // they were making, so a failure is logged and swallowed; the same contract
     // `tokens.touch` holds one line above.
-    if (principal.kind === 'agent') {
+    // Not for an operator signed in as the member (tm 389.15): the stamp says
+    // the *person* was here, and they were not.
+    if (principal.kind === 'agent' && !principal.impersonation) {
       try {
         await lastSeen.record(principal.accountId, (at, staleBefore) =>
           request.withTenant((tx) =>

@@ -18,6 +18,11 @@ export const ERROR_TYPES = [
   // must stay with a person" — and kept narrow like `takeover_conflict`.
   'ai_mode_transition_refused',
   'ai_return_blocked',
+  // SiyahTuş addition — the workspace's AI agent (tm 390.1): a second
+  // customer-facing agent on a workspace that has one. v1 keeps one per
+  // workspace (a partial unique index); the screen answers "open the agent you
+  // have", which a generic `validation` cannot say. Kept narrow like `brand_exists`.
+  'ai_agent_exists',
   // SiyahTuş addition — compliance guardrails (AI-08 · tm 301.2). A customer-
   // facing AI agent switched on before the Founder approved its crisis text
   // (AI-08-S1): the request was fine and allowed, the agent's setup is what
@@ -91,9 +96,30 @@ export const ERROR_TYPES = [
   'group_topic_role_taken',
   'group_unavailable',
   'groups_offline',
+  // SiyahTuş additions — "enter as the customer" (FR-ADMIN-21 · tm 389.15).
+  // An operator signed in as a member from the root panel asked for something
+  // the session does not allow: a write in a `read_only` session, or — in any
+  // mode — one of the routes no operator may take on a member's behalf
+  // (passwords, second factors, credentials, security, payment, the
+  // subscription, the BAA, erasure, the sandbox; `IMPERSONATION_FORBIDDEN_PATHS`,
+  // `details.category` says which). Both 403 and their own types, so the
+  // panel says "this session is read-only" rather than "you lack permission".
+  'impersonation_forbidden_path',
+  'impersonation_read_only',
   'internal',
+  // SiyahTuş addition — website crawling (AI-17 · tm 312.3): a crawl asked for
+  // while the source's last one is still queued, running or waiting for the
+  // day's AI allowance. `details.job_id` names it, so the panel can follow it
+  // instead — kept narrow like `ai_test_run_in_progress`.
+  'knowledge_job_in_progress',
   'license_expired',
   'limit_reached',
+  // SiyahTuş addition — maintenance mode (FR-ADMIN-15 · tm 389.13). The root
+  // panel took the deployment down for maintenance: `full` refuses every
+  // request but health, the deployment notice and signing out; `read_only`
+  // refuses writes. 503, like `service_unavailable`, but its own type so a
+  // client shows the operator's maintenance page instead of retrying.
+  'maintenance',
   // SiyahTuş addition. A write refused for content reasons at the visitor edge —
   // the spam filter (FR-MOD-08.9.3). Deliberately generic: it does not name the
   // rule that fired, so an enveloped refusal cannot be used to probe the filter.
@@ -120,8 +146,12 @@ export const ERROR_TYPES = [
   // to extend on a paid licence, a suspension to lift under a scheduled purge).
   // `platform_account_state` (tm 389.11): the same for an account action — an
   // erasure refused while the account is a workspace's only Founder.
+  // `platform_operation_running` (tm 389.17): a long operation the panel
+  // started — re-embedding the knowledge base — is still running, and a
+  // second one may not start beside it.
   'platform_account_state',
   'platform_last_superadmin',
+  'platform_operation_running',
   'platform_reason_required',
   'platform_recent_totp_required',
   'platform_totp_required',
@@ -193,6 +223,7 @@ export type ErrorType = (typeof ERROR_TYPES)[number];
  */
 export const ERROR_STATUS: Record<ErrorType, number> = {
   account_exists: 409,
+  ai_agent_exists: 409,
   ai_guardrail_setup_incomplete: 409,
   ai_mode_transition_refused: 409,
   ai_return_blocked: 409,
@@ -215,9 +246,13 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   group_topic_role_taken: 409,
   group_unavailable: 409,
   groups_offline: 409,
+  impersonation_forbidden_path: 403,
+  impersonation_read_only: 403,
   internal: 500,
+  knowledge_job_in_progress: 409,
   license_expired: 402,
   limit_reached: 429,
+  maintenance: 503,
   message_rejected: 403,
   misdirected_request: 421,
   not_allowed: 403,
@@ -227,6 +262,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   pending_requests_limit_reached: 429,
   platform_account_state: 409,
   platform_last_superadmin: 409,
+  platform_operation_running: 409,
   platform_reason_required: 400,
   platform_recent_totp_required: 403,
   platform_totp_required: 403,

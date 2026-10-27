@@ -49,6 +49,7 @@ export const en: Record<string, string> = {
   privacy: 'Privacy',
   'typing.named': '{name} is typing…',
   'typing.generic': 'Typing…',
+  'human.connecting': 'Connecting…',
   'rating.menuLabel': 'More options',
   'rating.menuItem': 'Rate this chat',
   'rating.group': 'Rate this chat',

@@ -171,3 +171,30 @@ export const FOOTER: NavDestination[] = [
 ];
 
 export const NAV_DESTINATIONS: NavDestination[] = [...MODULES, ...FOOTER];
+
+/**
+ * A door the command palette offers that the rail does not (tm 390.2): the AI
+ * agent's General settings. The rail already has Playbook; this is the shorter
+ * way for someone who types "AI agent" (or "yapay zekâ", the way a Turkish
+ * admin says it). Keywords are literal and cover both spellings of the Turkish
+ * words, since the palette matches by plain lower-casing, not by folding.
+ */
+export const AI_AGENT_LINK: NavDestination = {
+  to: '/app/playbook?view=general',
+  labelKey: 'nav.aiAgent',
+  icon: '✦',
+  keywords: [
+    'ai agent',
+    'assistant',
+    'bot',
+    'persona',
+    'welcome message',
+    'yapay zeka',
+    'yapay zekâ',
+    'ajan',
+    'ajani',
+    'asistan',
+    'karşılama',
+  ],
+  scope: ['agents-bot--all:ro', 'agents-bot--all:rw'],
+};

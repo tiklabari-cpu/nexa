@@ -3,6 +3,7 @@ import type { Messages } from '../merge.js';
 /** Shared text — the ADR-06 error taxonomy rendered for a human. See the English file. */
 export const common: Messages = {
   'common.errors.account_exists': 'Bu e-posta adresine ait bir hesap zaten var.',
+  'common.errors.ai_agent_exists': 'Bu çalışma alanının zaten bir AI ajanı var.',
   'common.errors.ai_guardrail_setup_incomplete':
     'Kriz metni yazılıp çalışma alanı sahibi tarafından onaylanmadan AI ajanı yayına alınamaz.',
   'common.errors.ai_mode_transition_refused': 'Bu sohbeti AI yanıtlamıyor.',
@@ -33,9 +34,15 @@ export const common: Messages = {
     'Bu konuya zaten başka bir ekip bakıyor — önce oradan kaldırın.',
   'common.errors.group_unavailable': 'Bu ekip şu anda bu sohbeti alamıyor.',
   'common.errors.groups_offline': 'Şu anda tüm ekipler çevrimdışı.',
+  'common.errors.impersonation_forbidden_path': 'Destek oturumu bu işlemi bir üye adına yapamaz.',
+  'common.errors.impersonation_read_only':
+    'Bu salt okunur bir destek oturumu — buradan hiçbir şey değiştirilemez.',
   'common.errors.internal': 'Bizim tarafımızda bir şeyler ters gitti — yeniden deneyin.',
+  'common.errors.knowledge_job_in_progress':
+    'Bu kaynak zaten taranıyor — bitmesini bekleyin ya da taramayı durdurun.',
   'common.errors.license_expired': 'Aboneliğiniz sona erdi — devam etmek için yenileyin.',
   'common.errors.limit_reached': 'Paketinizin sınırına ulaştınız.',
+  'common.errors.maintenance': 'Hizmet bakımda. Lütfen daha sonra yeniden deneyin.',
   'common.errors.message_rejected': 'Bu mesaj reddedildi.',
   'common.errors.misdirected_request':
     'Bu istek yanlış yere gitti — sayfayı yenileyip tekrar deneyin.',
@@ -47,6 +54,7 @@ export const common: Messages = {
   'common.errors.platform_account_state': 'Hesabın şu anki durumu buna izin vermiyor.',
   'common.errors.platform_last_superadmin':
     'Bu değişiklik platformu etkin bir süper yöneticisiz bırakır.',
+  'common.errors.platform_operation_running': 'Bu işlem zaten çalışıyor — bitince yeniden deneyin.',
   'common.errors.platform_reason_required':
     'Bu işlemin gerekçesini yazın (3–500 karakter) — denetim kaydına girer.',
   'common.errors.platform_recent_totp_required':

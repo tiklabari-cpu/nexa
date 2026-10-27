@@ -197,8 +197,26 @@ export const workspaces: Messages = {
 
   'workspaces.ai.total': 'AI agents',
   'workspaces.ai.active': 'Switched on',
-  'workspaces.ai.later':
-    'Counts only. Configuration history, guardrail and quality figures arrive with the AI catalogues.',
+  'workspaces.ai.intro':
+    'Counts and states only: no instruction, conversation or scenario is shown. The last 30 days unless said otherwise.',
+  'workspaces.ai.notInstalled': 'Not available yet',
+  'workspaces.ai.guidanceTotal': 'Behaviour rules',
+  'workspaces.ai.guidanceActive': 'Behaviour rules switched on',
+  'workspaces.ai.configChanges': 'Configuration changes',
+  'workspaces.ai.hits': 'Guardrail triggers',
+  'workspaces.ai.hitsByRule.heading': 'Triggers by rule',
+  'workspaces.ai.hitsByRule.caption': 'Guardrail triggers by rule, last 30 days',
+  'workspaces.ai.hitsByRule.rule': 'Rule',
+  'workspaces.ai.hitsByRule.count': 'Triggers',
+  'workspaces.ai.hitsByRule.workspace_rule': 'Workspace’s own rules',
+  'workspaces.ai.hitsByRule.forbidden_phrase': 'Forbidden phrases',
+  'workspaces.ai.hitsByRule.none': 'No guardrail triggered.',
+  'workspaces.ai.qaReviewed': 'QA reviews',
+  'workspaces.ai.qaAwaiting': 'Awaiting review',
+  'workspaces.ai.compliance': 'Latest compliance run',
+  'workspaces.ai.compliance.none': 'No run has played the compliance pack yet.',
+  'workspaces.ai.compliance.line': 'Pack {version}: {passed} passed, {failed} failed ({status}).',
+  'workspaces.ai.compliance.unknown': '—',
 
   // The actions (tm 389.10).
   'workspaces.actions.menu': 'Actions',

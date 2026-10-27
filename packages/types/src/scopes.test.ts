@@ -152,6 +152,8 @@ describe('error taxonomy', () => {
     // answering it, and giving the AI a connection a risk flag keeps from it.
     'ai_mode_transition_refused',
     'ai_return_blocked',
+    // The workspace's AI agent (tm 390.1): a second customer-facing agent.
+    'ai_agent_exists',
     // Compliance guardrails (AI-08 · tm 301.2): switching a customer-facing AI
     // agent on before the Founder approved its crisis text.
     'ai_guardrail_setup_incomplete',
@@ -168,6 +170,8 @@ describe('error taxonomy', () => {
     'template_locked',
     // The AI test bench (AI-19 · tm 314.2): a second run while one is under way.
     'ai_test_run_in_progress',
+    // Website crawling (AI-17 · tm 312.3): a crawl while the source's last is under way.
+    'knowledge_job_in_progress',
     // Widget abuse protection (GV-01 · tm 339.2): a token or a conversation
     // opening that must first pass a human check.
     'challenge_required',
@@ -186,6 +190,14 @@ describe('error taxonomy', () => {
     'platform_workspace_state',
     // An account action its state refuses (tm 389.11).
     'platform_account_state',
+    // A panel operation still running — re-embedding (tm 389.17).
+    'platform_operation_running',
+    // The root panel's maintenance mode (tm 389.13).
+    'maintenance',
+    // An operator signed in as a member (tm 389.15): a write in a read-only
+    // session, and a route no operator may take on a member's behalf.
+    'impersonation_read_only',
+    'impersonation_forbidden_path',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

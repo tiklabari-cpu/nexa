@@ -380,8 +380,15 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
     for (const { tenant: key, agent, sources, topic, writer, scope } of LAYOUT) {
       const context = { licenseId: fx[key].licenseId, organizationId: fx[key].organizationId };
       if (!agents.has(agent)) {
+        // A workspace has one AI agent (tm 390.1): a tenant's first agent here
+        // is it, the rest are records of another kind. The reader's filter is
+        // by agent id (`readerScope`), so the walk is the same either way.
+        const first = !LAYOUT.slice(
+          0,
+          LAYOUT.findIndex((part) => part.agent === agent),
+        ).some((part) => part.tenant === key);
         const created = await owner.aiAgent.create({
-          data: { licenseId: context.licenseId, kind: 'ai_agent', name: agent },
+          data: { licenseId: context.licenseId, kind: first ? 'ai_agent' : 'copilot', name: agent },
           select: { id: true },
         });
         agents.set(agent, created.id);

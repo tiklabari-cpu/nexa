@@ -27,12 +27,80 @@ aiAgents:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+  post:
+    tags: [Playbook]
+    operationId: createAiAgent
+    summary: Add the workspace's AI agent
+    description: |
+      Creates the workspace's customer-facing AI agent (tm 390.1) — what the
+      Playbook's empty state calls. v1 keeps one per workspace: a second is
+      409 `ai_agent_exists`, held by a partial unique index, so two tabs
+      creating at once get one agent and one 409. Copilot's record is not
+      made here; it is made on first use.
+
+      The agent starts switched off (`active: false`): going live is
+      `PATCH /ai-agents/{aiAgentId}` with `active: true`, behind the same
+      readiness and crisis-text gates as any agent. Owners and admins only.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            additionalProperties: false
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              tone: { type: string, maxLength: 40, nullable: true }
+              avatar_url: { type: string, maxLength: 2048, nullable: true }
+              languages:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 20 }
+    responses:
+      "201":
+        description: Created, switched off
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiAgentDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: The workspace already has an AI agent (`ai_agent_exists`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 aiAgent:
   parameters:
     - name: aiAgentId
       in: path
       required: true
       schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiAgent
+    summary: One AI agent, with what it still needs to go live
+    description: |
+      The agent as the list shows it, plus `readiness` (tm 390.1): whether it
+      has indexed knowledge and an active skill with steps (FR-MOD-06.1, PRD
+      KK4 — the rule the panel's banner states) and, for the customer-facing
+      agent, what its crisis text still needs before it may be switched on
+      (AI-08-S1). Another workspace's agent is 404.
+    responses:
+      "200":
+        description: The agent
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiAgentDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
   patch:
     tags: [Playbook]
@@ -115,6 +183,19 @@ aiAgent:
                 maximum: 3
                 nullable: true
                 description: Questions one procedure message may ask (AI-07). Null goes back to 2.
+              welcome_message:
+                type: string
+                maxLength: 500
+                nullable: true
+                description: |
+                  The opening words before the agent's first reply (AI-29). The
+                  AI disclosure is added in front when missing. Null or blank
+                  clears it.
+              human_button_label:
+                type: string
+                maxLength: 40
+                nullable: true
+                description: The widget's "Talk to an agent" button text (AI-29-S1). Null or blank clears it.
     responses:
       "200":
         description: Updated
@@ -997,15 +1078,28 @@ knowledgeSources:
       so a source that exists is a source that can answer; when the embedding
       provider cannot index it the answer is a 503 and nothing is created.
 
-      A `website` source is crawled from `source_url` (the fetch is guarded
-      against private/internal targets — SSRF, NFR-S7); an `article` or a `faq`
-      indexes the `content` supplied. Exactly one of the two is required, per
-      `type`.
+      A `website` source is crawled from `source_url` (guarded against
+      private/internal targets — SSRF, NFR-S7 — here and on every fetch); an
+      `article` or a `faq` indexes the `content` supplied. Exactly one of
+      the two is required, per `type`.
 
       `type: file` is refused here with a 400. A file source carries bytes to
       check, a type to check them against and a budget to measure them by, none
       of which a pasted string has — so it is created through
       `POST /knowledge-sources/file` and nowhere else.
+
+      **How far a website is crawled (tm 312 · AI-17)** is `crawl_scope`,
+      `page_limit`, `include_paths` and `exclude_paths`, refused with a 400
+      for every other type. A website source without them is a single page,
+      at most 200 pages, every path. **Nothing is fetched in the request**
+      (tm 312.3): the reply is `status: crawling` with the crawl's job in
+      `job_id` and no chunks yet, and the job is followed at
+      `GET /knowledge-jobs/{jobId}`; its pages are
+      `GET /knowledge-sources/{sourceId}/pages`. A client reads `status` and
+      `job_id` rather than assuming either.
+
+      `brand_id` is the one brand a website belongs to, a shorthand for
+      `brand_ids: [brand_id]`; naming both is a 400 unless they agree.
 
       A new source counts as reviewed when it is added (`reviewed_at`).
       `owner_id` must name a member of this workspace; anyone else is a 400.
@@ -1081,6 +1175,36 @@ knowledgeSources:
                 description: |
                   Brands of this workspace whose conversations may use the
                   source; empty — every brand. Omitted — every brand.
+              brand_id:
+                type: string
+                format: uuid
+                description: |
+                  The one brand the source is for — `brand_ids: [brand_id]`.
+                  With `brand_ids` as well, the two must agree.
+              crawl_scope:
+                $ref: "../openapi.yaml#/components/schemas/CrawlScope"
+              page_limit:
+                type: integer
+                minimum: 1
+                maximum: 200
+                description: |
+                  The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+                  sources only. Omitted — 200.
+              include_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl keeps to; empty — every path. A prefix
+                  matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+                  `/bonuslar`). Repeats folded. Website sources only.
+              exclude_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl leaves out; exclusion wins over
+                  `include_paths`. Website sources only.
               valid_until:
                 type: string
                 format: date-time
@@ -1089,7 +1213,9 @@ knowledgeSources:
                   Past this moment the source answers nothing; null — no end.
     responses:
       "201":
-        description: Indexed
+        description: |
+          Created — indexed, or for a website with a crawl job under way
+          (`status: crawling`, `job_id`).
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
@@ -1372,9 +1498,13 @@ knowledgeSource:
       transaction opens; when the embedding provider cannot index it the edit
       is refused whole with a 503 and the source keeps its old text and chunks.
 
-      A new `source_url` is crawled through the same SSRF guard `POST
-      /knowledge-sources` uses (NFR-S7), before the transaction opens — a
-      refused URL leaves the source exactly as it was.
+      A new `source_url` passes the same SSRF guard `POST
+      /knowledge-sources` uses (NFR-S7) — a refused URL leaves the source
+      exactly as it was — and queues a crawl of it (tm 312.3): the reply is
+      `status: crawling` with the job in `job_id`, and the pages already in
+      the store answer until the crawl replaces them. A new URL while the
+      source's last crawl is still under way is a 409
+      `knowledge_job_in_progress` with that job in `details.job_id`.
 
       **`refresh_after_days` (FR-MOD-06.3.3, tm 198.4) schedules automatic
       re-crawls of a `website` source** — refused, like `source_url`, for
@@ -1382,6 +1512,12 @@ knowledgeSource:
       changing it) restarts the countdown from now; setting it to `null` turns
       automatic refresh back off. It never touches `content` or `chunk_count`
       by itself — only the freshness sweep or a real crawl does that.
+
+      **`crawl_scope`, `page_limit`, `include_paths` and `exclude_paths`
+      (tm 312 · AI-17)** say how far the next crawl of a `website` source
+      reaches — refused for every other type. Nothing is fetched or
+      re-indexed for them: the pages already in the store stay until the
+      next crawl, which leaves out what the new settings leave out.
 
       **`owner_id`, `language` and `review_interval_days` (tm 309.1) belong to
       every type.** None of them is re-indexed or changes what the AI says.
@@ -1424,6 +1560,30 @@ knowledgeSource:
                 description: |
                   Only for website sources; refused for the rest. Null turns
                   automatic refresh off.
+              crawl_scope:
+                $ref: "../openapi.yaml#/components/schemas/CrawlScope"
+              page_limit:
+                type: integer
+                minimum: 1
+                maximum: 200
+                description: |
+                  The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+                  sources only.
+              include_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl keeps to; empty — every path. A prefix
+                  matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+                  `/bonuslar`). Repeats folded. Website sources only.
+              exclude_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl leaves out; exclusion wins over
+                  `include_paths`. Website sources only.
               owner_id:
                 type: string
                 format: uuid
@@ -1477,6 +1637,7 @@ knowledgeSource:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
@@ -1523,10 +1684,14 @@ knowledgeSourceReindex:
       PUT/PATCH because it is an action with an outbound effect, not the
       assignment of a state a caller could have named.
 
-      For a `website` the stored URL is crawled again. For every other type the
-      text already held is chunked and embedded again — which is what makes a
-      source that indexed to nothing (an empty crawl, a chunker change)
-      recoverable without retyping it.
+      For a `website` a crawl of the stored URL is queued (tm 312.3), as
+      `POST /knowledge-sources/{sourceId}/crawl` queues it: the reply is the
+      source, `status: crawling` with the job in `job_id` — the one already
+      under way, when there is one — and nothing is fetched in the request.
+      Only the pages whose text changed are embedded again. For every other
+      type the text already held is chunked and embedded again — which is what
+      makes a source that indexed to nothing (a chunker change) recoverable
+      without retyping it.
 
       **The SSRF guard runs again on the stored URL** (NFR-S7). "It was checked
       when it was added" is exactly the assumption to refuse: the row is not the
@@ -1535,17 +1700,15 @@ knowledgeSourceReindex:
       fetch. A refused reindex is a 400 that leaves the source, its text and its
       chunks untouched — the stale answer is kept rather than replaced by
       nothing. (The DNS half of the guard — a public *name* that resolves to a
-      private address — belongs with a real fetcher and lives in
-      `assertPublicHttpUrlResolved`, where the webhook sender uses it; the crawl
-      in this build is a deterministic in-process stub that opens no socket, so
-      there is no resolved address to pin.)
+      private address — is the crawler's: `CRAWLER_PROVIDER=http` resolves
+      every hop through it and connects to the address it checked.)
 
       A successful reindex also restarts `next_refresh_at`'s countdown from
-      now, using whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
-      tm 198.4) — the freshness sweep and this endpoint are the same refresh,
-      whichever triggered it. A refresh the embedding provider cannot index is
-      a 503 that likewise leaves the source, its text and its chunks as they
-      were.
+      now — for a website, once its crawl ends — using whatever
+      `refresh_after_days` the source already has (FR-MOD-06.3.3, tm 198.4) —
+      the freshness sweep and this endpoint are the same refresh, whichever
+      triggered it. A refresh the embedding provider cannot index is a 503
+      that likewise leaves the source, its text and its chunks as they were.
     responses:
       "200":
         description: Re-fetched and re-indexed
@@ -1588,6 +1751,137 @@ knowledgeSourceReview:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ---------------------------------------------------------------------------
+# Website crawling (tm 312 · AI-17): written by tm 312.1, mounted with the job
+# runner by tm 312.3; the panel's detail drawer (tm 312.4) calls them.
+# ---------------------------------------------------------------------------
+
+knowledgeSourcePages:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: listKnowledgeSourcePages
+    summary: The pages a website source's crawls found
+    description: |
+      Every page the source's crawls found (tm 312 · AI-17), whatever became
+      of it, URL order. Unpaged: a source keeps at most 200 pages, and the
+      ones it found but skipped are bounded by the same crawl. Any other type
+      has none — an empty list, not a 400.
+    parameters:
+      - name: status
+        in: query
+        description: Only the pages with this status.
+        schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgePageStatus" }
+    responses:
+      "200":
+        description: Pages
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/KnowledgePage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeSourceCrawl:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: crawlKnowledgeSource
+    summary: Queue a crawl of a website source
+    description: |
+      Queues a `crawl` job for a `website` source (tm 312 · AI-17) — the
+      panel's "Crawl again" — and answers with it; nothing is fetched in the
+      request. The source is `crawling` until the job ends. The stored URL
+      passes the SSRF guard again before anything is queued (NFR-S7).
+
+      A source has at most one job under way: a second request while one is
+      `queued`, `running` or `waiting_budget` is a 409
+      `knowledge_job_in_progress` with that job's id in `details.job_id`.
+      Any other type is a 400 with `details.reason`
+      `knowledge_source_not_website`.
+    responses:
+      "202":
+        description: Queued
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeJob" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeJob:
+  parameters:
+    - name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getKnowledgeJob
+    summary: A knowledge job's progress
+    description: |
+      Where a crawl (or a document's processing) is (tm 312 · AI-17). The
+      panel polls it every 3 seconds while the job is under way.
+    responses:
+      "200":
+        description: The job
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeJob" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeJobCancel:
+  parameters:
+    - name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: cancelKnowledgeJob
+    summary: Stop a knowledge job
+    description: |
+      Stops a job under way (tm 312 · AI-17): it is `cancelled`, the runner
+      fetches nothing more for it, and the pages it already indexed stay —
+      they answer, and the source is `partial` or `ready` by what it has.
+      A job that has already ended is answered as it is: cancelling twice, or
+      a crawl that finished as the button was pressed, is not an error.
+    responses:
+      "200":
+        description: Cancelled, or already ended
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeJob" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

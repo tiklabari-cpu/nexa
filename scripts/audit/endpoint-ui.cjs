@@ -396,6 +396,14 @@ const PLATFORM_HEADLESS = [
       "platform-api's narrow dependency check, for a monitor pointed at `/health` on both " +
       'processes; the detailed view is the dashboard (tm 389.8).',
   },
+  {
+    op: 'GET /support/impersonations/{impersonationId}',
+    reason:
+      'one "enter as the customer" session by id (tm 389.15), an API-consumer read: an ' +
+      "operator's script following a platform audit entry's `impersonation` target. The panel " +
+      'needs no detail screen — the start and end answers, the open-sessions list on Support and ' +
+      "the workspace's Impersonations tab already carry every field of the record.",
+  },
 ];
 
 /**

@@ -43,7 +43,7 @@ const EXISTING: Skill = {
 function renderPage(): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/app/playbook?view=skills']}>
       <QueryClientProvider client={queryClient}>
         <PlaybookPage />
       </QueryClientProvider>

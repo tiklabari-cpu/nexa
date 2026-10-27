@@ -52,6 +52,7 @@ export const de: Record<string, string> = {
   privacy: 'Datenschutz',
   'typing.named': '{name} schreibt gerade…',
   'typing.generic': 'Schreibt gerade…',
+  'human.connecting': 'Verbinde…',
   'rating.menuLabel': 'Weitere Optionen',
   'rating.menuItem': 'Diesen Chat bewerten',
   'rating.group': 'Diesen Chat bewerten',

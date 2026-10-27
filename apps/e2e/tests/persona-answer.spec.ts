@@ -5,7 +5,7 @@
  * `ai-persona.test.ts` (integration) already proves the engine shapes a reply
  * from a persona written straight to the database, posted straight to
  * `/customer/chat/events`. What that cannot prove is the surface this field
- * exists for: an admin changes the Answer length select in the Profile tab
+ * exists for: an admin changes the Answer length select in the General settings tab
  * (the same tab `ai-agent.spec.ts`'s persona-edit test drives for the other two
  * fields), saves, and a real visitor in a real cross-origin widget gets a
  * measurably different reply — no direct database writes, no API shortcuts.
@@ -46,7 +46,7 @@ test.describe('persona — answer length, on a real customer (FR-MOD-06.4)', () 
     const question = `Where is my order — how long does ${marker} delivery take?`;
 
     // --- A knowledge source only this run's question can match --------------
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })
@@ -65,7 +65,7 @@ test.describe('persona — answer length, on a real customer (FR-MOD-06.4)', () 
     // the character budget the test measures), starting on "short" -----------
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
-      .getByRole('tab', { name: 'Profile' })
+      .getByRole('tab', { name: 'General settings' })
       .click();
     await agentPage.getByLabel('Tone').fill('');
     const english = agentPage.getByRole('switch', { name: 'English' });

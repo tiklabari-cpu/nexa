@@ -95,6 +95,8 @@ const STORE: KnowledgeSource[] = [
 ];
 
 beforeEach(() => {
+  // General is the landing tab (tm 390.2); these tests are about the Skills/Knowledge tabs.
+  window.history.replaceState(null, '', '/app/playbook?view=skills');
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
@@ -411,5 +413,32 @@ describe('adding a source with a scope (AI-14 · tm 309.3)', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Copilot' }));
 
     expect(screen.getByRole('button', { name: 'Add source' })).toBeDisabled();
+  });
+});
+
+describe('a website being crawled (AI-17 · tm 312.3)', () => {
+  it('says a crawl is under way, or kept only part of the site, instead of counting chunks', async () => {
+    await openKnowledge(userEvent.setup(), [
+      source({
+        id: 'src-crawling',
+        name: 'Help centre',
+        type: 'website',
+        status: 'crawling',
+        chunk_count: 0,
+      }),
+      source({
+        id: 'src-partial',
+        name: 'Bonus pages',
+        type: 'website',
+        status: 'partial',
+        chunk_count: 4,
+      }),
+      source({ id: 'src-ready', name: 'Return policy' }),
+    ]);
+
+    expect(within(row('Help centre')).getByText('Crawling…')).toBeInTheDocument();
+    expect(within(row('Help centre')).queryByText('Empty')).not.toBeInTheDocument();
+    expect(within(row('Bonus pages')).getByText('Partly crawled')).toBeInTheDocument();
+    expect(within(row('Return policy')).getByText('Indexed')).toBeInTheDocument();
   });
 });

@@ -10,6 +10,20 @@
 import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siyahtus/types';
 import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
+import {
+  handleAlertPrefs,
+  initialAlertPrefsState,
+  type FakeAlertPrefsState,
+} from './fake-alerts.js';
+import { handleSettings, initialSettingsState, type FakeSettingsState } from './fake-settings.js';
+import { handleOperations } from './fake-operations.js';
+import { AI_SUMMARY, handleAiCatalogs, initialAiState, type FakeAiState } from './fake-ai.js';
+import { handleSecurity, initialSecurityState, type FakeSecurityState } from './fake-security.js';
+import {
+  handleImpersonations,
+  initialImpersonationState,
+  type FakeImpersonationState,
+} from './fake-impersonations.js';
 import { handleBilling, initialBillingState } from './fake-billing.js';
 
 export interface RecordedRequest {
@@ -32,6 +46,10 @@ export interface FakePlatformOptions {
   password?: string;
   /** The fake account (tm 389.11) is a workspace's Founder: erasure is refused. */
   accountSoleOwner?: boolean;
+  /** The stored deployment settings (tm 389.13) the fake starts from. */
+  settings?: Partial<FakeSettingsState['settings']>;
+  /** `missing`: the tenant API has published no effective configuration. */
+  effectiveConfig?: FakeSettingsState['config'];
 }
 
 const NOW = '2026-10-25T10:00:00.000Z';
@@ -441,7 +459,7 @@ function handleWorkspaces(
       case '/impersonations':
         return json(200, { data: [] });
       case '/ai-summary':
-        return json(200, { ai_agents: { total: 2, active: 1 } });
+        return json(200, AI_SUMMARY);
       case '/invoices/202609/download':
         return new Response('item,amount_cents\r\nSeats,9900\r\n', {
           status: 200,
@@ -510,6 +528,16 @@ export interface FakePlatform {
   endSession: () => void;
   /** Answer `path` with a fixed response from now on. */
   override: (method: string, path: string, response: () => Response) => void;
+  /** The settings surface's state (tm 389.13) — a test reads it back or ages the code. */
+  settingsState: FakeSettingsState;
+  /** The support sessions opened against this fake (tm 389.15). */
+  impersonationState: FakeImpersonationState;
+  /** The blocklist and counters of the Security page (tm 389.16). */
+  securityState: FakeSecurityState;
+  /** The AI catalogues and the crisis-text drafts (tm 389.19). */
+  aiState: FakeAiState;
+  /** The operator's alert preferences (tm 389.20). */
+  alertPrefsState: FakeAlertPrefsState;
 }
 
 export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatform {
@@ -534,6 +562,16 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     account: structuredClone(ACCOUNT_DETAIL),
     soleOwner: options.accountSoleOwner ?? false,
   };
+  const settingsState = initialSettingsState();
+  const securityState = initialSecurityState();
+  const aiState = initialAiState();
+  const alertPrefsState = initialAlertPrefsState();
+  const impersonationState = initialImpersonationState({
+    id: WORKSPACE_ID,
+    members: WORKSPACE_MEMBERS.data,
+  });
+  Object.assign(settingsState.settings, options.settings ?? {});
+  settingsState.config = options.effectiveConfig ?? 'fresh';
   const billingState = initialBillingState();
   let issued = 0;
 
@@ -688,6 +726,45 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     );
     if (accountResponse) return accountResponse;
 
+    const alertPrefsResponse = handleAlertPrefs(
+      method,
+      path,
+      body,
+      role,
+      alertPrefsState,
+      json,
+      problem,
+    );
+    if (alertPrefsResponse) return alertPrefsResponse;
+    const settingsResponse = handleSettings(method, path, body, role, settingsState, json, problem);
+    if (settingsResponse) return settingsResponse;
+    const operationsResponse = handleOperations(method, path, body, role, json, problem);
+    if (operationsResponse) return operationsResponse;
+    const securityResponse = handleSecurity(
+      method,
+      path,
+      body,
+      search,
+      role,
+      securityState,
+      json,
+      problem,
+    );
+    if (securityResponse) return securityResponse;
+    const aiResponse = handleAiCatalogs(method, path, body, search, role, aiState, json, problem);
+    if (aiResponse) return aiResponse;
+    const impersonationResponse = handleImpersonations(
+      method,
+      path,
+      body,
+      search,
+      role,
+      impersonationState,
+      json,
+      problem,
+    );
+    if (impersonationResponse) return impersonationResponse;
+
     const billingResponse = handleBilling(
       method,
       path,
@@ -726,5 +803,10 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     override(method, path, response) {
       overrides.set(`${method} ${path}`, response);
     },
+    settingsState,
+    impersonationState,
+    securityState,
+    aiState,
+    alertPrefsState,
   };
 }

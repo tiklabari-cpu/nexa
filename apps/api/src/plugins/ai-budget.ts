@@ -64,22 +64,30 @@ declare module 'fastify' {
 
 export interface AiBudgetPluginOptions {
   budget: AiDailyBudget;
-  /** Whether any model this server calls is counted — false on `mock`. */
-  metered: boolean;
+  /**
+   * Whether any model this server calls is counted — false on `mock`. A
+   * function when the provider can change under a running server (the root
+   * panel's AI settings, tm 389.17); read on every check.
+   */
+  metered: boolean | (() => boolean);
   /**
    * The smallest call any model surface makes, in estimated tokens: the
    * reply's ceiling, `LLM_MAX_OUTPUT_TOKENS`. Every estimate is that plus a
    * prompt, so refusing below it never turns away a call that would fit.
    */
-  minimum: number;
+  minimum: number | (() => number);
 }
 
 async function aiBudgetPlugin(app: FastifyInstance, options: AiBudgetPluginOptions): Promise<void> {
-  const { budget, metered, minimum } = options;
+  const { budget } = options;
+  const metered = (): boolean =>
+    typeof options.metered === 'function' ? options.metered() : options.metered;
+  const minimum = (): number =>
+    typeof options.minimum === 'function' ? options.minimum() : options.minimum;
 
   app.decorate('requireAiBudget', async (tenant: TenantContext): Promise<void> => {
-    if (!metered) return;
-    await budget.check(tenant, 'llm', minimum);
+    if (!metered()) return;
+    await budget.check(tenant, 'llm', minimum());
   });
   app.decorateRequest('requireAiBudget', async function (this: FastifyRequest): Promise<void> {
     await app.requireAiBudget(this.tenant());
@@ -92,7 +100,7 @@ async function aiBudgetPlugin(app: FastifyInstance, options: AiBudgetPluginOptio
     // a caller without a principal, and there is no workspace to count.
     if (!request.principal) return;
     if (flag === 'simulation') {
-      if (metered) await budget.check(request.tenant(), 'llm_test', minimum);
+      if (metered()) await budget.check(request.tenant(), 'llm_test', minimum());
       return;
     }
     await request.requireAiBudget();

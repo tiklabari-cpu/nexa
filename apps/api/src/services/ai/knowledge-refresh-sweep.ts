@@ -2,54 +2,43 @@
  * The freshness sweep (FR-MOD-06.3.3, "expiry + automatic re-crawl" — the PRD
  * acceptance criterion's last unclosed piece, tm 198.4).
  *
- * A `website` source is crawled once and, until now, stays exactly as it was
- * crawled forever — no staleness threshold, no scheduled refresh. This sweep
- * is that: like `sla-sweep.ts` it walks every tenant through the shared
+ * A `website` source past its own `refresh_after_days` window is re-crawled:
+ * like `sla-sweep.ts` the sweep walks every tenant through the shared
  * SECURITY DEFINER enumerator (RLS-scoped, one workspace's sweep can neither
- * see nor touch another's sources) and re-crawls whichever `website` sources
- * are past their own `refresh_after_days` window — through the *same*
- * SSRF-guarded crawl path the manual reindex endpoint uses
- * (`knowledge-refresh.ts`'s `fetchRefreshedText`), not a second one.
+ * see nor touch another's sources) and, since tm 312.3, **queues a `refresh`
+ * job** for each due source — the same crawl the panel's "Crawl again"
+ * queues, worked through by the knowledge job runner
+ * (`crawler/job-runner.ts`), which embeds only the pages whose text changed.
+ * The sweep itself fetches nothing.
  *
  * A source with `refresh_after_days: null` (every source before this field
  * existed, and every source an admin has not opted into) is never selected:
  * `next_refresh_at` stays null forever, so the "due" query finds nothing for
- * it.
+ * it. A due source is moved a whole window on as it is queued, so the next
+ * pass does not queue it again while its crawl runs; the job's end counts the
+ * window from when it finished.
  *
- * **A failed refresh must not look like data loss.** If the crawl is refused
- * — the SSRF guard, or a URL that no longer names anything fetchable — the
- * source's old `content` and chunks are left exactly as they were; only
- * `last_refresh_error` moves, so the row can say *why* the last attempt did
- * not land. The next attempt is still scheduled from now, on the same
- * window, so a permanently broken URL is retried on the sweep's normal
- * cadence rather than hammered every tick.
+ * **A refused refresh must not look like data loss.** Two refusals are the
+ * sweep's, before anything is queued:
  *
- * **The embedding provider is the second thing that can refuse (tm 255.7),
- * and it is treated like the first.** The refreshed text is embedded before
- * the write transaction opens; when the provider cannot embed it the source
- * keeps its old text and chunks and `last_refresh_error` says so. And since no
- * request carries this work, the residency rule is asked here: a workspace
- * under a signed BAA whose content the embedding provider would take out of
- * its region is not refreshed at all (NFR-C4 · `inference.ts`).
+ *   - the stored URL is re-checked by the SSRF guard (NFR-S7) — the row is
+ *     not the request that created it;
+ *   - a workspace under a signed BAA whose content the embedding provider
+ *     would take out of its region is not refreshed at all (NFR-C4 ·
+ *     `inference.ts`) — no request carries this work, so the sweep asks.
  *
- * **The daily AI cap is the third (tm 257.20).** A refresh is counted against
- * its workspace's embedding allowance, like the same refresh pressed in the
- * panel. When today's cap cannot take it, the source keeps its text and
- * chunks, `last_refresh_error` says the allowance is used up, and the next
- * attempt is the next UTC midnight — when there is room again — rather than a
- * whole window away. The workspace's other due sources are deferred the same
- * way without being crawled (a page fetched only to be thrown away is an
- * outbound request for nothing), and every source after a deployment-wide
- * refusal is too.
+ * Either leaves the source's text and chunks as they were; only
+ * `last_refresh_error` moves, and the next attempt is scheduled a window
+ * away. The rest — the day's AI allowance, the provider failing, a page gone
+ * — is the runner's, under the same rule.
  */
 import type { PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
+import { assertPublicHttpUrl } from '../../lib/ssrf.js';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
-import { AiDailyCapError, nextUtcMidnight, type AiCapScope } from './ai-daily-budget.js';
+import { enqueueKnowledgeJob } from './crawler/jobs.js';
 import { inferenceAllowed, readInferenceResidency, type InferenceProvider } from './inference.js';
-import { computeNextRefreshAt, fetchRefreshedText } from './knowledge-refresh.js';
-import type { KnowledgeService, PreparedChunks } from './knowledge-service.js';
-import { EmbeddingProviderError } from './provider/embedding-error.js';
+import { computeNextRefreshAt } from './knowledge-refresh.js';
 
 /** What `last_refresh_error` says when the residency rule refused the refresh. */
 export const REFRESH_REFUSED_RESIDENCY =
@@ -60,10 +49,10 @@ export const REFRESH_DEFERRED_AI_CAP =
   "Not refreshed: today's AI allowance is used up. The previous text still answers; it is tried again after 00:00 UTC.";
 
 export interface KnowledgeRefreshSweeperOptions {
-  /** Indexes the refreshed text — the server's instance, or one the CLI builds from the env. */
-  knowledge: KnowledgeService;
-  /** Where that service's embedding provider runs (`resolveEmbeddingInferenceProvider`). */
+  /** Where the embedding provider runs (`resolveEmbeddingInferenceProvider`) — the residency gate. */
   embeddingInference: InferenceProvider;
+  /** Told when a crawl was queued — the server's runner, woken at once. */
+  onQueued?: () => void;
 }
 
 export interface TenantRefreshResult {
@@ -72,7 +61,9 @@ export interface TenantRefreshResult {
   organizationId: string;
   /** Website sources whose `next_refresh_at` was due this pass. */
   checked: number;
-  refreshed: number;
+  /** Crawls queued for them — or already under way. */
+  queued: number;
+  /** Refused before queueing (SSRF, residency). */
   failed: number;
 }
 
@@ -80,7 +71,7 @@ export interface KnowledgeRefreshReport {
   startedAt: string;
   finishedAt: string;
   tenants: TenantRefreshResult[];
-  totals: { tenants: number; checked: number; refreshed: number; failed: number };
+  totals: { tenants: number; checked: number; queued: number; failed: number };
 }
 
 interface TenantRow {
@@ -91,19 +82,18 @@ interface TenantRow {
 interface DueSource {
   id: string;
   sourceUrl: string | null;
-  content: string | null;
   refreshAfterDays: number | null;
 }
 
 export class KnowledgeRefreshSweeper {
   readonly #db: PrismaClient;
-  readonly #knowledge: KnowledgeService;
   readonly #embeddingInference: InferenceProvider;
+  readonly #onQueued: () => void;
 
   constructor(db: PrismaClient, options: KnowledgeRefreshSweeperOptions) {
     this.#db = db;
-    this.#knowledge = options.knowledge;
     this.#embeddingInference = options.embeddingInference;
+    this.#onQueued = options.onQueued ?? (() => {});
   }
 
   async run(options: { now?: Date } = {}): Promise<KnowledgeRefreshReport> {
@@ -111,11 +101,10 @@ export class KnowledgeRefreshSweeper {
     const startedAt = now.toISOString();
 
     const results: TenantRefreshResult[] = [];
-    // Set once the deployment's cap refuses a refresh: nothing after it fits today.
-    const pass = { deploymentCapped: false };
     for (const tenant of await this.#listTenants()) {
-      results.push(await this.#sweepTenant(tenant, now, pass));
+      results.push(await this.#sweepTenant(tenant, now));
     }
+    if (results.some((r) => r.queued > 0)) this.#onQueued();
 
     return {
       startedAt,
@@ -124,7 +113,7 @@ export class KnowledgeRefreshSweeper {
       totals: {
         tenants: results.length,
         checked: results.reduce((sum, r) => sum + r.checked, 0),
-        refreshed: results.reduce((sum, r) => sum + r.refreshed, 0),
+        queued: results.reduce((sum, r) => sum + r.queued, 0),
         failed: results.reduce((sum, r) => sum + r.failed, 0),
       },
     };
@@ -141,11 +130,7 @@ export class KnowledgeRefreshSweeper {
       SELECT license_id, organization_id FROM retention_list_tenants()`;
   }
 
-  async #sweepTenant(
-    tenant: TenantRow,
-    now: Date,
-    pass: { deploymentCapped: boolean },
-  ): Promise<TenantRefreshResult> {
+  async #sweepTenant(tenant: TenantRow, now: Date): Promise<TenantRefreshResult> {
     const context: TenantContext = {
       licenseId: tenant.license_id,
       organizationId: tenant.organization_id,
@@ -154,7 +139,7 @@ export class KnowledgeRefreshSweeper {
     const due = await withTenant(this.#db, context, (tx) =>
       tx.knowledgeSource.findMany({
         where: { type: 'website', refreshAfterDays: { not: null }, nextRefreshAt: { lte: now } },
-        select: { id: true, sourceUrl: true, content: true, refreshAfterDays: true },
+        select: { id: true, sourceUrl: true, refreshAfterDays: true },
       }),
     );
 
@@ -174,22 +159,16 @@ export class KnowledgeRefreshSweeper {
         );
       }));
 
-    let refreshed = 0;
+    let queued = 0;
     let failed = 0;
-    let workspaceCapped = false;
     for (const source of due) {
-      if (!allowed) {
-        await this.#recordFailure(context, source, now, REFRESH_REFUSED_RESIDENCY);
-        failed += 1;
-      } else if (workspaceCapped || pass.deploymentCapped) {
-        await this.#deferForCap(context, source, now);
+      const refusal = allowed ? refusedUrl(source.sourceUrl) : REFRESH_REFUSED_RESIDENCY;
+      if (refusal !== null) {
+        await this.#recordFailure(context, source, now, refusal);
         failed += 1;
       } else {
-        const outcome = await this.#refreshOne(context, source, now);
-        if (outcome === 'refreshed') refreshed += 1;
-        else failed += 1;
-        if (outcome === 'workspace') workspaceCapped = true;
-        if (outcome === 'global') pass.deploymentCapped = true;
+        await this.#queue(context, source, now);
+        queued += 1;
       }
     }
 
@@ -197,85 +176,33 @@ export class KnowledgeRefreshSweeper {
       licenseId: tenant.license_id.toString(),
       organizationId: tenant.organization_id,
       checked: due.length,
-      refreshed,
+      queued,
       failed,
     };
   }
 
-  /** `refreshed`, `failed`, or which daily AI cap refused it (`workspace` / `global`). */
-  async #refreshOne(
-    context: TenantContext,
-    source: DueSource,
-    now: Date,
-  ): Promise<'refreshed' | 'failed' | AiCapScope> {
-    let text: string;
-    try {
-      text = await fetchRefreshedText({
-        type: 'website',
-        sourceUrl: source.sourceUrl,
-        content: source.content,
-      });
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Could not refresh this source.';
-      await this.#recordFailure(context, source, now, message);
-      return 'failed';
-    }
-
-    // Embedded before the write transaction, like the crawl above (tm 255.7),
-    // and counted against the workspace's daily AI allowance (tm 257.20).
-    let prepared: PreparedChunks;
-    try {
-      prepared = await this.#knowledge.prepare(text, context);
-    } catch (error) {
-      if (error instanceof AiDailyCapError) {
-        await this.#deferForCap(context, source, now);
-        return error.scope;
-      }
-      if (!(error instanceof EmbeddingProviderError)) throw error;
-      await this.#recordFailure(
-        context,
-        source,
-        now,
-        `Not refreshed: the embedding provider did not answer (${error.kind}). The previous text still answers.`,
-      );
-      return 'failed';
-    }
-
+  /** The crawl, queued — or the one already under way kept — and the window moved on. */
+  async #queue(context: TenantContext, source: DueSource, now: Date): Promise<void> {
     await withTenant(this.#db, context, async (tx) => {
+      const job = await enqueueKnowledgeJob(tx, {
+        context,
+        sourceId: source.id,
+        kind: 'refresh',
+        requestedBy: null,
+      });
       await tx.knowledgeSource.updateMany({
         where: { id: source.id },
         data: {
-          content: text,
-          updatedAt: now,
-          lastRefreshError: null,
+          ...(job.created ? { status: 'crawling' } : {}),
           nextRefreshAt: computeNextRefreshAt(source.refreshAfterDays, now),
         },
       });
-      // Re-chunked chunks written in the same transaction as the content,
-      // exactly as the manual reindex endpoint does — a source that exists but
-      // answers from stale chunks is worse than one still stale.
-      await this.#knowledge.index(tx, context, source.id, prepared);
     });
-    return 'refreshed';
   }
 
   /**
-   * A refresh today's AI cap could not take: the text and chunks stay, the
-   * reason is recorded, and the next attempt is the next UTC midnight — when
-   * the day's allowance starts again — not a whole refresh window away.
-   */
-  async #deferForCap(context: TenantContext, source: DueSource, now: Date): Promise<void> {
-    await withTenant(this.#db, context, (tx) =>
-      tx.knowledgeSource.updateMany({
-        where: { id: source.id },
-        data: { lastRefreshError: REFRESH_DEFERRED_AI_CAP, nextRefreshAt: nextUtcMidnight(now) },
-      }),
-    );
-  }
-
-  /**
-   * A refresh that did not land: the source's text and chunks are untouched,
-   * only the reason and the next attempt move.
+   * A refresh refused before it was queued: the source's text and chunks are
+   * untouched, only the reason and the next attempt move.
    */
   async #recordFailure(
     context: TenantContext,
@@ -292,5 +219,16 @@ export class KnowledgeRefreshSweeper {
         },
       }),
     );
+  }
+}
+
+/** Why the stored URL may not be fetched (the SSRF guard's words), or null. */
+function refusedUrl(sourceUrl: string | null): string | null {
+  if (!sourceUrl) return 'This website source has no URL to crawl.';
+  try {
+    assertPublicHttpUrl(sourceUrl);
+    return null;
+  } catch (error) {
+    return error instanceof ApiError ? error.message : 'Could not refresh this source.';
   }
 }

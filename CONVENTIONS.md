@@ -67,7 +67,9 @@ bir "**Kalan** …" / "henüz yapılmadı" notunu kapatıyorsa, canlıda o notu 
 
 İstisna: **faz özet tablosu** (`| Faz | PRD | Genel durum | Must sayacı | Kapanış |`) bu
 kuralın dışındadır — oradaki hücre bir sayım kaynağıdır (`54 ✅ · 0 ◐`), panel `statedCounts`
-olarak okur. Ona dokunma.
+olarak okur. Ona dokunma. Hücre yalnız sayımı (kapanış hücresi tek satır damgayı) taşır; sayım
+tarihçesi hücreye değil §D'ye yazılır (2026-10-26 · §D365 — eski hücre tarihçesi
+`docs/archive/plan/PLAN-faz-tablosu-tarihce-2026-10-26.md`).
 
 Eski kanıt, §D sapmaları ve tarihçe `docs/archive/` altındadır:
 `grep -rn 'K07.7\|tm <id>\|D167\b' docs/archive` — arşivi baştan okuma.
@@ -114,7 +116,12 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   `pnpm test:gate birim entegrasyon`; önbelleksiz: `--force`. Tam kapı ~11 dk, pencerenin 10 dk
   komut tavanını aşabilir: arka planda koş, log yolu ilk satırda.
   **KURAL — kapı nasıl koşulur:** Tam kapı ~11 dk, tek komutta pencerenin 10 dk tavanını aşar.
-  Kapı (ve tam test/e2e/build) **her zaman `run_in_background` ile** koşulur. Arka planda da
+  Kapı (ve tam test/e2e/build) **her zaman `run_in_background` ile** koşulur ve sonucu aynı sırada
+  beklenir. Bunu metin değil mekanizma tutar (2026-10-26): `scripts/test-gate.mjs` koşarken
+  `.loop-logs/test-gate-<pid>.running` bırakır, döngü pencerelerindeki Stop kancası
+  (`.claude/hooks/gate-stop.sh`, yalnız `run-loop.sh`'ın açtığı pencerelerde) bu işaret varken
+  pencerenin sıra bitirmesini geri çevirir ve kapının sonucunu okumasını ister
+  (tm 311.2 / 389.3: kapı sürerken `blocked` döndürülmüştü). Arka planda da
   sorun çıkarsa kapı başlıklara bölünür ve her parçanın exit code'u ayrı yazılır:
   `pnpm test:gate build statik birim` ardından `pnpm test:gate entegrasyon` (~7 dk).
   **`--force` varsayılan DEĞİLDİR**; yalnız önbelleğe güvenmemek için somut bir neden varsa
@@ -150,7 +157,9 @@ Gerekçe/ölçümler ve eski yöntem ("Tarihçe — paralel parçalardan önce",
 
 ### 1.4 Kapının önkoşulları: iki sessiz tuzak (2026-08-31)
 
-- **Docker kapalıyken entegrasyon testleri ASILIR** (0 bayt çıktı). Kapıdan önce `docker info`.
+- **Docker kapalıyken entegrasyon testleri ASILIR** (0 bayt çıktı). `run-loop.sh` pencereyi
+  açmadan önce `docker info` + `docker compose up -d db redis` koşar ve geçmiyorsa pencere açmaz
+  (2026-10-26; 389.12 bu yüzden dört pencere kaybetmişti). Elle koşuda kural aynı: kapıdan önce `docker info`.
   Kapalıysa exe `%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`, sonra
   `docker compose up -d` (`siyahtus-db` 5433, `siyahtus-redis` 6380; psql kullanıcısı `siyahtus`;
   container'a yol geçerken `MSYS_NO_PATHCONV=1`).

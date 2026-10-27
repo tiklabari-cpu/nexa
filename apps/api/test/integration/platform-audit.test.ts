@@ -394,6 +394,93 @@ describe('the platform audit chain (tm 389.5)', () => {
     ok(await onAccount('export'));
     ok(await onAccount('erase', { confirm_email: fx.b.agentEmail }));
 
+    // The deployment settings (tm 389.13): a change, and maintenance on and off again.
+    ok(await request('PATCH', '/settings', { token, body: { trial_days: 21, ...reason } }));
+    const maintenance = (enabled: boolean) =>
+      request('PUT', '/settings/maintenance', {
+        token,
+        body: { enabled, mode: 'read_only', ...reason },
+      });
+    ok(await maintenance(true));
+    ok(await maintenance(false));
+    // The Operations page's three mutations (tm 389.14). No scheduler is listening in this
+    // suite, so the run request is answered `no_listener` — and recorded all the same.
+    ok(await request('POST', '/operations/scheduler/sla/run', { token, body: reason }));
+    ok(await request('POST', '/operations/partitions/ensure', { token, body: reason }));
+    ok(
+      await request('POST', '/auth/totp/reverify', {
+        token,
+        body: { code: nextCode(superadmin, clock) },
+      }),
+    );
+    ok(await request('POST', '/operations/unverified-signups/purge', { token, body: reason }));
+    // The AI settings' three (tm 389.17): a change (the stub — no key to keep out of the
+    // trail), a connection test and a re-embedding, waited for so the suite closes on it.
+    ok(
+      await request('PUT', '/settings/ai', {
+        token,
+        body: { llm: { provider: 'mock' }, ...reason },
+      }),
+    );
+    ok(
+      await request('POST', '/settings/ai/test-connection', {
+        token,
+        body: { target: 'llm', ...reason },
+      }),
+    );
+    ok(await request('POST', '/settings/ai/reembed', { token, body: reason }));
+    await platform.app.platformAiOperations.idle();
+
+    // The AI catalogues' one write (tm 389.19): the crisis-text drafts.
+    ok(
+      await request('PUT', '/ai-catalogs/crisis-text-drafts', {
+        token,
+        body: { drafts: { TR: { en: 'Please call 183.' } }, ...reason },
+      }),
+    );
+
+    // The Security page's two (tm 389.16): a block, then lifting it.
+    const blocked = ok(
+      await request('POST', '/security/blocklist', {
+        token,
+        body: { kind: 'domain', value: 'audit-chain.test', ...reason },
+      }),
+    );
+    ok(
+      await request('DELETE', `/security/blocklist/${blocked.json().id as string}`, {
+        token,
+        body: reason,
+      }),
+    );
+
+    // "Enter as the customer" (tm 389.15), opened and ended — on B's owner: A is suspended by now
+    // (cancelling a deletion keeps the suspension), and nobody can be entered as in it.
+    const impersonation = ok(
+      await request('POST', '/support/impersonations', {
+        token,
+        body: {
+          license_id: fx.b.licenseId.toString(),
+          account_id: fx.b.ownerAccountId,
+          mode: 'read_only',
+          ...reason,
+        },
+      }),
+    ).json() as { impersonation: { id: string } };
+    ok(
+      await request('POST', `/support/impersonations/${impersonation.impersonation.id}/end`, {
+        token,
+        body: reason,
+      }),
+    );
+
+    // The operator's own alert preferences (tm 389.20): a self action, no reason.
+    ok(
+      await request('PUT', '/auth/me/alert-prefs', {
+        token,
+        body: { kinds: ['health_red'], locale: 'en' },
+      }),
+    );
+
     // The superadmin's own sessions.
     ok(await request('DELETE', '/auth/sessions', { token }));
     ok(await request('POST', '/auth/logout', { token }));

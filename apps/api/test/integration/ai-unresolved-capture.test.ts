@@ -456,10 +456,11 @@ describe('unresolved questions â€” capture, masking, erasure, retention (AI-22 Â
         );
       await expect(write({ aiAgentId: agentB })).rejects.toThrow(/not this workspace/);
 
-      // Another agent's cluster of the same workspace is not this item's.
+      // Another agent's cluster of the same workspace is not this item's. A
+      // workspace has one AI agent (tm 390.1); its Copilot record is the other.
       const otherAgent = (
         await owner.aiAgent.create({
-          data: { licenseId: fx.a.licenseId, name: 'Cem', kind: 'ai_agent', active: true },
+          data: { licenseId: fx.a.licenseId, name: 'Copilot', kind: 'copilot', active: true },
           select: { id: true },
         })
       ).id;

@@ -15,6 +15,11 @@
  *      survive exactly as `POST …/reindex` leaves them on the same refusal —
  *      only `last_refresh_error` moves, and the next attempt is still
  *      scheduled rather than abandoned.
+ *
+ * Since tm 312.3 the sweep queues each due source's crawl and the server's
+ * knowledge job runner works it through ({@link crawl} below drives it); what
+ * the runner does with a page is `knowledge-job-runner.test.ts`'s.
+ *
  *   3. **RLS, not just a WHERE clause.** The sweep runs as `siyahtus_app`
  *      (`DATABASE_APP_URL`), the same role a request runs as, so a query that
  *      forgot to scope by tenant would be caught by the database refusing the
@@ -30,8 +35,6 @@ import {
   KnowledgeRefreshSweeper,
   REFRESH_REFUSED_RESIDENCY,
 } from '../../src/services/ai/knowledge-refresh-sweep.js';
-import { EmbeddingProviderError } from '../../src/services/ai/provider/embedding-error.js';
-import { FakeEmbeddingProvider } from '../helpers/fake-embedding-provider.js';
 import {
   grantToken,
   ownerClient,
@@ -57,9 +60,14 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
   /** The sweep as the scheduler builds it: the stub, in this process's region. */
   const sweeper = () =>
     new KnowledgeRefreshSweeper(appRole, {
-      knowledge,
       embeddingInference: resolveEmbeddingInferenceProvider(testEnv()),
     });
+
+  /** The crawls the sweep queued, worked through by the server's runner. */
+  async function crawl(): Promise<void> {
+    server.app.knowledgeJobs.wake();
+    await server.app.knowledgeJobs.idle();
+  }
 
   const auth = async (tenant: 'a' | 'b') => ({
     authorization: `Bearer ${await grantToken(owner, {
@@ -70,7 +78,13 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
     })}`,
   });
 
+  /** The workspace's AI agent — one per workspace (tm 390.1), made on first ask. */
   async function agentId(tenant: 'a' | 'b'): Promise<string> {
+    const existing = await owner.aiAgent.findFirst({
+      where: { licenseId: fx[tenant].licenseId, kind: 'ai_agent' },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
     const agent = await owner.aiAgent.create({
       data: { licenseId: fx[tenant].licenseId, kind: 'ai_agent', name: 'Ada' },
       select: { id: true },
@@ -149,13 +163,23 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
     await clearRateLimits(server.app);
   });
 
-  it('refreshes an overdue website source and reports it in the tally', async () => {
+  it('queues an overdue website source and reports it in the tally', async () => {
     const source = await createWebsite('a', await agentId('a'));
     await makeOverdue(source.id);
 
     const report = await sweeper().run();
+    expect(
+      await owner.knowledgeJob.count({ where: { sourceId: source.id, kind: 'refresh' } }),
+    ).toBe(1);
+    await crawl();
 
-    expect(report.totals).toEqual({ tenants: 2, checked: 1, refreshed: 1, failed: 0 });
+    expect(report.totals).toEqual({ tenants: 2, checked: 1, queued: 1, failed: 0 });
+    expect(
+      await owner.knowledgeJob.findFirstOrThrow({
+        where: { sourceId: source.id, kind: 'refresh' },
+        select: { status: true },
+      }),
+    ).toEqual({ status: 'done' });
     const after = await stored(source.id);
     expect(after.lastRefreshError).toBeNull();
     expect(after.nextRefreshAt?.getTime()).toBeGreaterThan(Date.now());
@@ -181,7 +205,8 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
 
     const report = await sweeper().run();
 
-    expect(report.totals).toEqual({ tenants: 2, checked: 0, refreshed: 0, failed: 0 });
+    expect(report.totals).toEqual({ tenants: 2, checked: 0, queued: 0, failed: 0 });
+    expect(await owner.knowledgeJob.count({ where: { kind: 'refresh' } })).toBe(0);
     const after = await Promise.all([stored(neverScheduled.id), stored(notYetDue.id)]);
     expect(after[0]).toEqual(before[0]);
     expect(after[1]).toEqual(before[1]);
@@ -201,8 +226,10 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
     expect(chunksBefore).toBeGreaterThan(0);
 
     const report = await sweeper().run();
+    await crawl();
 
-    expect(report.totals).toEqual({ tenants: 2, checked: 1, refreshed: 0, failed: 1 });
+    expect(report.totals).toEqual({ tenants: 2, checked: 1, queued: 0, failed: 1 });
+    expect(await owner.knowledgeJob.count({ where: { kind: 'refresh' } })).toBe(0);
     const after = await stored(source.id);
     // The claim a failed refresh makes is about content and chunks, not the
     // row's own `updated_at` — `lastRefreshError` genuinely changed, and
@@ -224,6 +251,7 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
     });
 
     await sweeper().run();
+    await crawl();
 
     expect((await stored(source.id)).lastRefreshError).toBeNull();
   });
@@ -243,11 +271,24 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
     await makeOverdue(sourceB.id);
 
     const report = await sweeper().run();
+    await crawl();
 
-    expect(report.totals).toEqual({ tenants: 2, checked: 2, refreshed: 2, failed: 0 });
+    expect(report.totals).toEqual({ tenants: 2, checked: 2, queued: 2, failed: 0 });
     const byLicense = new Map(report.tenants.map((t) => [t.licenseId, t]));
-    expect(byLicense.get(fx.a.licenseId.toString())).toMatchObject({ checked: 1, refreshed: 1 });
-    expect(byLicense.get(fx.b.licenseId.toString())).toMatchObject({ checked: 1, refreshed: 1 });
+    expect(byLicense.get(fx.a.licenseId.toString())).toMatchObject({ checked: 1, queued: 1 });
+    expect(byLicense.get(fx.b.licenseId.toString())).toMatchObject({ checked: 1, queued: 1 });
+    // Each job in its own workspace: neither tenant's refresh is filed under the other.
+    for (const [tenant, id] of [
+      ['a', sourceA.id],
+      ['b', sourceB.id],
+    ] as const) {
+      expect(
+        await owner.knowledgeJob.findFirstOrThrow({
+          where: { sourceId: id, kind: 'refresh' },
+          select: { licenseId: true, status: true },
+        }),
+      ).toEqual({ licenseId: fx[tenant].licenseId, status: 'done' });
+    }
 
     // Each tenant's retrieval still finds only its own refreshed page.
     const foundA = (await retrievedTexts('a', 'refunds')).join(' ');
@@ -265,30 +306,7 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
    * may not go, it does not go — no request carries this work, so the sweep
    * asks the residency rule itself (NFR-C4).
    */
-  describe('when the embedding provider cannot take the refresh (FR-MOD-06.3.2)', () => {
-    it('keeps the old content and chunks when the provider fails, and records why', async () => {
-      const source = await createWebsite('a', await agentId('a'));
-      await makeOverdue(source.id);
-      const before = await stored(source.id);
-      const chunksBefore = await chunkCount(source.id);
-      const failing = new FakeEmbeddingProvider({ fail: new EmbeddingProviderError('timeout') });
-
-      const report = await new KnowledgeRefreshSweeper(appRole, {
-        knowledge: new KnowledgeService({ embeddings: failing }),
-        embeddingInference: resolveEmbeddingInferenceProvider(testEnv()),
-      }).run();
-
-      expect(report.totals).toEqual({ tenants: 2, checked: 1, refreshed: 0, failed: 1 });
-      expect(failing.calls).toHaveLength(1);
-      const after = await stored(source.id);
-      expect(after.content).toBe(before.content);
-      expect(await chunkCount(source.id)).toBe(chunksBefore);
-      expect(after.lastRefreshError).toBe(
-        'Not refreshed: the embedding provider did not answer (timeout). The previous text still answers.',
-      );
-      expect(after.nextRefreshAt?.getTime()).toBeGreaterThan(Date.now());
-    });
-
+  describe('where the embedding provider may not take the refresh (FR-MOD-06.3.2)', () => {
     it('does not send a covered workspace’s content to an out-of-region provider (NFR-C4)', async () => {
       // A workspace under a signed BAA — which only a US workspace can hold
       // (`licenses_baa_requires_us_region`) — with an overdue website source.
@@ -329,17 +347,15 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
       );
       await makeOverdue(source.id);
       const chunksBefore = await chunkCount(source.id);
-      const embeddings = new FakeEmbeddingProvider();
 
       const report = await new KnowledgeRefreshSweeper(appRole, {
-        knowledge: new KnowledgeService({ embeddings }),
         embeddingInference: { id: 'openai', region: 'eu' },
       }).run();
 
       const covered = report.tenants.find((t) => t.licenseId === license.id.toString());
-      expect(covered).toMatchObject({ checked: 1, refreshed: 0, failed: 1 });
-      // Not crawled into, not embedded, not touched — only the reason moves.
-      expect(embeddings.calls).toHaveLength(0);
+      expect(covered).toMatchObject({ checked: 1, queued: 0, failed: 1 });
+      // Not queued, not crawled, not touched — only the reason moves.
+      expect(await owner.knowledgeJob.count({ where: { sourceId: source.id } })).toBe(0);
       const after = await stored(source.id);
       expect(after.content).toBe(content);
       expect(await chunkCount(source.id)).toBe(chunksBefore);

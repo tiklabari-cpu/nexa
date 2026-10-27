@@ -17,6 +17,7 @@
  * carries it.
  */
 import type { GuardrailPriority } from './guardrails.js';
+import type { HumanRequestVia } from './ai-disclosure.js';
 import type { HandoffReason } from './handoff.js';
 import type { SlotSource, SlotStatus } from './slots.js';
 
@@ -128,6 +129,8 @@ export interface AiHandoffCardView {
   output_check_flags: AiHandoffOutputFlag[];
   reason_codes: HandoffReason[];
   primary_reason: HandoffReason;
+  /** `button`: the player pressed "Talk to an agent" (tm 308 · AI-29); null otherwise. */
+  requested_via?: HumanRequestVia | null;
   risk_flags: string[];
   sentiment: AiHandoffSentiment | null;
   suggested_next_step: string | null;

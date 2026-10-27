@@ -358,3 +358,66 @@ describe('ProfileForm localisation (NFR-I18N2)', () => {
     expect(screen.getByRole('button', { name: 'Profili kaydet' })).toBeInTheDocument();
   });
 });
+
+describe('ProfileForm opening message and agent button (tm 308 · AI-29)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('shows the locked disclosure before the opening words, as the first reply will', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    const preview = screen.getByTestId('ai-opening-preview');
+    expect(preview).toHaveTextContent('Always first — cannot be removed');
+    expect(preview).toHaveTextContent('I am Ada, Brand’s AI assistant.');
+
+    await user.type(screen.getByLabelText('Opening message'), 'How can I help?');
+    expect(preview).toHaveTextContent('I am Ada, Brand’s AI assistant. How can I help?');
+    // Words that drop the sentence do not drop it from the preview either.
+    await user.clear(screen.getByLabelText('Opening message'));
+    await user.type(screen.getByLabelText('Opening message'), 'Hi!');
+    expect(preview).toHaveTextContent('I am Ada, Brand’s AI assistant. Hi!');
+  });
+
+  it('PATCHes the opening words and the button text, and clears them with null', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, welcome_message: 'Hello.', human_button_label: null });
+
+    await user.clear(screen.getByLabelText('Opening message'));
+    await user.type(screen.getByLabelText('Text of the “Talk to an agent” button'), 'Live support');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({ welcome_message: null, human_button_label: 'Live support' }),
+    );
+  });
+
+  it('sends neither when only the name changed', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.type(screen.getByLabelText('Name'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    const body = api.patch.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('welcome_message');
+    expect(body).not.toHaveProperty('human_button_label');
+  });
+
+  it('says the sentence in Turkish for a Turkish console', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <ProfileForm agent={AGENT} canEdit onSaved={() => {}} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByTestId('ai-opening-preview')).toHaveTextContent(
+      "Ada, Marka'nın yapay zekâ asistanıyım.",
+    );
+    expect(screen.getByLabelText('“Temsilciyle görüş” butonunun metni')).toHaveAttribute(
+      'placeholder',
+      'Temsilciyle görüş',
+    );
+  });
+});

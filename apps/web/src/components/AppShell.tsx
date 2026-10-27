@@ -29,6 +29,9 @@ import { useRealtime } from '../features/inbox/useInbox.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
 import { CommandPalette } from './CommandPalette.js';
 import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
+import { MaintenancePage, NoticeBar } from './NoticeBar.js';
+import { ImpersonationBanner } from './ImpersonationBanner.js';
+import { useNotice } from '../lib/notice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { PresenceNotices } from './PresenceNotices.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
@@ -43,6 +46,7 @@ const MAIN_ID = 'main';
 export function AppShell(): ReactElement {
   const t = useTranslate();
   const narrow = useNarrowScreenNotice();
+  const { maintenance } = useNotice();
   // Mounted the first time it is shown, then kept: a window that narrows later
   // hides the console behind the notice rather than unmounting it, so a draft,
   // an open chat or a scroll position survive a turned tablet (tm 259.25 · O6).
@@ -55,6 +59,10 @@ export function AppShell(): ReactElement {
     if (noticeWasShown.current && !narrow.show) document.getElementById(MAIN_ID)?.focus();
     noticeWasShown.current = narrow.show;
   }, [narrow.show]);
+
+  // Full maintenance (tm 389.13): nothing in the console would work, so it is
+  // not drawn; the notice is polled, and the console returns when it ends.
+  if (maintenance?.mode === 'full') return <MaintenancePage />;
 
   return (
     <>
@@ -74,6 +82,9 @@ export function AppShell(): ReactElement {
           >
             {t('shell.skipToContent')}
           </a>
+          {/* An operator signed in as this member (tm 389.15): first, above everything. */}
+          <ImpersonationBanner />
+          <NoticeBar />
           <SandboxBadge />
           <TrialBanner />
           {/* Why your availability changed, and chats a lead must look at (WG-03). */}
@@ -582,9 +593,10 @@ interface RosterCount {
  * two "add a worker" flows (a teammate, a team) and the rail is where an
  * agent already reached for the first, so it grows into a menu rather than
  * gaining a second rail entry. A third item — creating an AI agent from
- * here — is deliberately not offered: `POST /ai-agents` does not exist yet
- * (`routes/playbook.ts` only lists and patches), so there is nothing this
- * menu could open for it (`#### K04.1` in PLAN.md has the fuller record).
+ * here — is deliberately not offered: `POST /ai-agents` exists now (tm 390), but
+ * a workspace has at most one AI agent and its creation lives on the empty
+ * Playbook › AI Agent screen, so a "+" item would be a second door to a one-time
+ * act (`#### K04.1` in PLAN.md has the fuller record).
  *
  * Each item gates on the same permission its own screen already enforces —
  * Invite on `canInvite` (IconRail, mirrors the server's `accounts--all:rw`),

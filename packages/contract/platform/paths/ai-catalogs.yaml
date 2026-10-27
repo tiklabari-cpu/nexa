@@ -1,0 +1,184 @@
+# The AI catalogues page (tm 389.19 · FR-ADMIN-23 · design.md §C ai-catalogs).
+# `x-platform-*` as in auth.yaml. Every read is `ai.read` and writes nothing; the
+# one mutation, the crisis-text drafts, is `ai.manage` (superadmin), takes a
+# `reason` and is recorded once in the platform audit chain.
+#
+# What the platform ships is shown, not edited (editing a catalogue is F2): the
+# G1–G19 rules, the iGaming template pack, the compliance scenario pack, the QA
+# rubric, the tool catalogue. A catalogue whose source has not shipped answers
+# `status: not_installed` with no items, never an empty list passed off as a
+# fact. A workspace's content — a procedure's text, a scenario's turns, a
+# message — is in none of these answers: counts, keys, versions and states only.
+
+guardrails:
+  get:
+    tags: [AI catalogues]
+    operationId: getPlatformGuardrailCatalog
+    summary: The locked G1–G19 rules and their catalogue version
+    description: |
+      `PLATFORM_GUARDRAILS_VERSION` and, per rule, what it is and what it does:
+      title and prompt line in both languages, category, action, target team,
+      priority, the flag it raises, whether it needs a risk flag first, which
+      workspace text it reads, and how many lexicon patterns it holds on each
+      side per language (the patterns themselves stay in code).
+    x-platform-permission: ai.read
+    responses:
+      "200":
+        description: The catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformGuardrailCatalog" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+crisisTextDrafts:
+  get:
+    tags: [AI catalogues]
+    operationId: getPlatformCrisisTextDrafts
+    summary: The crisis-text drafts, per country
+    description: |
+      The texts the platform suggests for the responsible-gaming hand-over
+      (AI-08-S1), `platform_settings.ai.crisis_text_drafts`. A workspace is
+      offered the one for its country as "use the platform's draft"; it edits
+      and approves it itself, nothing is published for it. `version` is 0 and
+      `drafts` empty while nothing has been saved.
+    x-platform-permission: ai.read
+    responses:
+      "200":
+        description: The stored drafts
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCrisisTextDrafts" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  put:
+    tags: [AI catalogues]
+    operationId: updatePlatformCrisisTextDrafts
+    summary: Replace the crisis-text drafts
+    description: |
+      The whole map is replaced: a country or language left out is removed. Each
+      text is plain text of 1–1000 characters (no HTML, no control characters)
+      under an upper-case ISO 3166-1 country code and the language `en` or
+      `tr`; at most 60 countries. A body equal to what is stored changes
+      nothing and records nothing. The audit entry names the countries added,
+      changed and removed — never a text.
+    x-platform-permission: ai.manage
+    x-platform-audit: ai_settings.crisis_drafts_updated
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCrisisTextDraftsRequest" }
+    responses:
+      "200":
+        description: The stored drafts after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCrisisTextDrafts" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+templates:
+  get:
+    tags: [AI catalogues]
+    operationId: getPlatformTemplateCatalog
+    summary: The iGaming template pack — version and keys
+    description: |
+      The pack (`igaming_core`) with its package version, and each template's
+      key, name, version, whether it is locked, its scenario count and how many
+      things a workspace must fill in. The procedure text stays in code.
+    x-platform-permission: ai.read
+    responses:
+      "200":
+        description: The catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformTemplateCatalog" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+templateInstalls:
+  get:
+    tags: [AI catalogues]
+    operationId: listPlatformTemplateInstalls
+    summary: Per workspace, how many template copies are installed and live
+    description: |
+      One row per workspace that holds at least one installed template copy,
+      most copies first (then licence number). `installed` counts the copies,
+      `active` the ones switched on (published for the AI to use), `outdated`
+      those behind the pack's current version of that template. Counts only —
+      no copy's text. Keyset paging on the (installed, licence) pair.
+    x-platform-permission: ai.read
+    parameters:
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 512 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 200 }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformTemplateInstallList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+compliancePack:
+  get:
+    tags: [AI catalogues]
+    operationId: getPlatformCompliancePack
+    summary: The locked compliance scenario pack — version and scenario keys
+    description: |
+      `AI_COMPLIANCE_PACK_VERSION`, its size and the scenario keys
+      (`compliance:G3:tr`) with the rule and language each one plays. The
+      scenarios' turns stay in code.
+    x-platform-permission: ai.read
+    responses:
+      "200":
+        description: The catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCompliancePack" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+qaRubric:
+  get:
+    tags: [AI catalogues]
+    operationId: getPlatformQaRubric
+    summary: The rubric the AI judge scores by
+    description: |
+      The criteria in the judge's order, which of them apply only to a
+      conversation handed over, and the 1–5 scale. The QA queue (tm 319) has
+      not shipped: its review settings are not here.
+    x-platform-permission: ai.read
+    responses:
+      "200":
+        description: The rubric
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformQaRubric" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+tools:
+  get:
+    tags: [AI catalogues]
+    operationId: getPlatformToolCatalog
+    summary: The tool (integration) catalogue
+    description: |
+      `status: not_installed` until the tool slot ships (tm 321); then its
+      catalogue version and keys.
+    x-platform-permission: ai.read
+    responses:
+      "200":
+        description: The catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformToolCatalog" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

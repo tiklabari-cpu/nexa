@@ -39,10 +39,7 @@ import {
 } from '../../src/services/ai/ai-daily-budget.js';
 import type { InferenceProvider } from '../../src/services/ai/inference.js';
 import { KnowledgeReembedder } from '../../src/services/ai/knowledge-reembed.js';
-import {
-  KnowledgeRefreshSweeper,
-  REFRESH_DEFERRED_AI_CAP,
-} from '../../src/services/ai/knowledge-refresh-sweep.js';
+import { KnowledgeRefreshSweeper } from '../../src/services/ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../../src/services/ai/knowledge-service.js';
 import { MeteredEmbeddings } from '../../src/services/ai/metered-embeddings.js';
 import { embeddingSpace } from '../../src/services/ai/provider/embedding-provider.js';
@@ -152,7 +149,13 @@ describe('daily AI caps on the embedding meter (tm 257.20)', () => {
     })}`,
   });
 
+  /** The workspace's AI agent — one per workspace (tm 390.1), made on first ask. */
   async function aiAgent(tenant: 'a' | 'b'): Promise<string> {
+    const existing = await owner.aiAgent.findFirst({
+      where: { licenseId: fx[tenant].licenseId, kind: 'ai_agent' },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
     const agent = await owner.aiAgent.create({
       data: { licenseId: fx[tenant].licenseId, kind: 'ai_agent', name: 'Ada' },
       select: { id: true },
@@ -223,6 +226,31 @@ describe('daily AI caps on the embedding meter (tm 257.20)', () => {
     expect(response.statusCode).toBe(201);
     return response.json() as SourceView;
   };
+
+  /**
+   * Makes a website's pages look changed since their crawl, so the next one
+   * embeds them again (tm 312.3) — the mock site's text never changes.
+   */
+  async function changePages(ids: string[]): Promise<void> {
+    await owner.knowledgePage.updateMany({
+      where: { sourceId: { in: ids } },
+      data: { contentHash: '0'.repeat(64) },
+    });
+  }
+
+  /** The crawls queued so far, worked through by the server's runner. */
+  async function crawl(): Promise<void> {
+    server.app.knowledgeJobs.wake();
+    await server.app.knowledgeJobs.idle();
+  }
+
+  async function refreshJobs(ids: string[]) {
+    return owner.knowledgeJob.findMany({
+      where: { sourceId: { in: ids }, kind: 'refresh' },
+      orderBy: { createdAt: 'asc' },
+      select: { sourceId: true, status: true, availableAt: true },
+    });
+  }
 
   /** Opts a source into automatic refresh and backdates it, so a sweep finds it due. */
   async function makeDue(id: string): Promise<void> {
@@ -324,16 +352,6 @@ describe('daily AI caps on the embedding meter (tm 257.20)', () => {
             name: 'New',
             type: 'article',
             content: 'Opening hours are 9 to 5.',
-          },
-          headers,
-        ),
-        website: await server.post(
-          '/knowledge-sources',
-          {
-            ai_agent_id: agent,
-            name: 'Help',
-            type: 'website',
-            source_url: 'https://help.example.com/returns',
           },
           headers,
         ),
@@ -607,84 +625,64 @@ describe('daily AI caps on the embedding meter (tm 257.20)', () => {
   // ==========================================================================
 
   describe('the freshness sweep', () => {
-    const warnings: Array<Record<string, unknown>> = [];
-
-    /** The sweep as the scheduler builds it: the server's provider, metered over the app role. */
-    const sweeper = () =>
-      new KnowledgeRefreshSweeper(appRole, {
-        knowledge: new KnowledgeService({
-          embeddings: new MeteredEmbeddings(
-            new OpenAiEmbeddingProvider(
-              {
-                baseUrl: EMBEDDING_ENV.EMBEDDING_API_BASE_URL,
-                model: EMBEDDING_ENV.EMBEDDING_MODEL,
-                apiKey: EMBEDDING_ENV.EMBEDDING_API_KEY,
-                timeoutMs: 10_000,
-              },
-              { fetchImpl: net.impl, logger: quiet },
-            ),
-            new AiDailyBudget(appRole, aiDailyCaps(testEnv(CAPS_ENV)), {
-              logger: { warn: (details) => warnings.push(details), error: () => {} },
-            }),
-          ),
-        }),
-        embeddingInference: IN_REGION,
-      });
-
-    beforeEach(() => {
-      warnings.length = 0;
-    });
+    /**
+     * The sweep as the scheduler builds it. Since tm 312.3 it queues each due
+     * crawl; the server's runner embeds the changed pages with the server's
+     * provider, metered like a request.
+     */
+    const sweeper = () => new KnowledgeRefreshSweeper(appRole, { embeddingInference: IN_REGION });
 
     async function stored(id: string) {
       return owner.knowledgeSource.findUniqueOrThrow({
         where: { id },
-        select: { content: true, lastRefreshError: true, nextRefreshAt: true },
+        select: { content: true, status: true },
       });
     }
 
-    it('defers a due refresh at the cap: the reason recorded, text and chunks kept, the next attempt at 00:00 UTC, nothing asked', async () => {
+    it('parks a due crawl at the cap: waiting until 00:00 UTC, text and chunks kept, nothing asked', async () => {
       const agent = await aiAgent('a');
       const headers = await auth('a');
       const first = await createWebsite(agent, headers, 'refunds');
       const second = await createWebsite(agent, headers, 'delivery');
-      await makeDue(first.id);
-      await makeDue(second.id);
-      const before = await Promise.all([first.id, second.id].map((id) => stored(id)));
-      const chunksBefore = await Promise.all([first.id, second.id].map((id) => chunkTexts(id)));
+      const ids = [first.id, second.id];
+      for (const id of ids) await makeDue(id);
+      await changePages(ids);
+      const before = await Promise.all(ids.map((id) => stored(id)));
+      const chunksBefore = await Promise.all(ids.map((id) => chunkTexts(id)));
       await fill(fx.a.licenseId, CAP);
       net.calls.length = 0;
 
-      const now = new Date();
-      const report = await sweeper().run({ now });
+      const report = await sweeper().run();
+      await crawl();
 
-      expect(report.totals).toMatchObject({ checked: 2, refreshed: 0, failed: 2 });
-      for (const [index, id] of [first.id, second.id].entries()) {
-        expect(await stored(id)).toEqual({
-          content: before[index]!.content,
-          lastRefreshError: REFRESH_DEFERRED_AI_CAP,
-          nextRefreshAt: nextUtcMidnight(now),
-        });
+      expect(report.totals).toMatchObject({ checked: 2, queued: 2, failed: 0 });
+      const jobs = await refreshJobs(ids);
+      expect(jobs.map((job) => job.status)).toEqual(['waiting_budget', 'waiting_budget']);
+      for (const job of jobs) {
+        expect(job.availableAt.getTime()).toBe(nextUtcMidnight(new Date()).getTime());
+      }
+      for (const [index, id] of ids.entries()) {
+        expect(await stored(id)).toEqual({ content: before[index]!.content, status: 'crawling' });
         expect(await chunkTexts(id)).toEqual(chunksBefore[index]);
       }
       expect(net.calls).toHaveLength(0);
-      // Refused once; the second source was deferred without being crawled or asked.
-      expect(capLines(warnings)).toEqual([
-        { license_id: fx.a.licenseId.toString(), meter: 'embedding', scope: 'workspace' },
-      ]);
       expect(await usage(fx.a.licenseId)).toEqual({ reserved: 0, used: CAP });
     });
 
-    it('refreshes under the cap and counts it on the workspace', async () => {
+    it('refreshes the changed pages under the cap and counts them on the workspace', async () => {
       const agent = await aiAgent('a');
       const source = await createWebsite(agent, await auth('a'), 'refunds');
       await makeDue(source.id);
+      await changePages([source.id]);
       const spent = (await usage(fx.a.licenseId))!.used;
       net.calls.length = 0;
 
       const report = await sweeper().run();
+      await crawl();
 
-      expect(report.totals).toMatchObject({ checked: 1, refreshed: 1, failed: 0 });
-      expect((await stored(source.id)).lastRefreshError).toBeNull();
+      expect(report.totals).toMatchObject({ checked: 1, queued: 1, failed: 0 });
+      expect((await refreshJobs([source.id])).map((job) => job.status)).toEqual(['done']);
+      expect((await stored(source.id)).status).toBe('ready');
       expect(inputsSent()).toBeGreaterThan(0);
       expect(await usage(fx.a.licenseId)).toEqual({
         reserved: 0,
@@ -851,13 +849,14 @@ describe('daily AI caps on the embedding meter (tm 257.20)', () => {
     });
 
     it(
-      'defers a capped workspace’s refresh and counts another’s, on the rows the API spends from',
+      'queues the due crawls from its own process; the API’s runner parks the capped one and counts the other',
       { timeout: 120_000 },
       async () => {
         const capped = await createWebsite(await aiAgent('a'), await auth('a'), 'refunds');
         const open = await createWebsite(await aiAgent('b'), await auth('b'), 'delivery');
         await makeDue(capped.id);
         await makeDue(open.id);
+        await changePages([capped.id, open.id]);
         await fill(fx.a.licenseId, CAP);
         const spentByB = (await usage(fx.b.licenseId))!.used;
         const deployment = (await usage(null))!.used;
@@ -881,16 +880,24 @@ describe('daily AI caps on the embedding meter (tm 257.20)', () => {
           },
         );
 
-        const sources = await owner.knowledgeSource.findMany({
-          where: { id: { in: [capped.id, open.id] } },
-          select: { id: true, lastRefreshError: true },
+        // The process queued both crawls and embedded nothing itself.
+        expect(received.flat()).toHaveLength(0);
+        expect((await refreshJobs([capped.id, open.id])).map((job) => job.status)).toEqual([
+          'queued',
+          'queued',
+        ]);
+
+        // The API's runner works them: A's waits for midnight, B's is spent on B.
+        net.calls.length = 0;
+        await crawl();
+        const jobs = new Map(
+          (await refreshJobs([capped.id, open.id])).map((job) => [job.sourceId, job.status]),
+        );
+        expect(Object.fromEntries(jobs)).toEqual({
+          [capped.id]: 'waiting_budget',
+          [open.id]: 'done',
         });
-        expect(Object.fromEntries(sources.map((s) => [s.id, s.lastRefreshError]))).toEqual({
-          [capped.id]: REFRESH_DEFERRED_AI_CAP,
-          [open.id]: null,
-        });
-        // Only B's text reached the provider, and B paid for it on its own row.
-        const inputs = received.flat().length;
+        const inputs = inputsSent();
         expect(inputs).toBeGreaterThan(0);
         expect(await usage(fx.b.licenseId)).toEqual({
           reserved: 0,

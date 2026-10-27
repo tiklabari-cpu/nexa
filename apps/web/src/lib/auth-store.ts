@@ -93,7 +93,35 @@ export interface CurrentAgent {
    * older server, which reads as the built-in Inter.
    */
   appearance?: PanelAppearance;
+  /**
+   * A SiyahTuş operator is signed in as this member from the root panel (tm
+   * 389.15): the red banner's mode and countdown. Absent for everybody else.
+   */
+  impersonation?: ImpersonationState;
 }
+
+/** `GET /auth/me`'s `impersonation` — the session's terms, never who the operator is. */
+export interface ImpersonationState {
+  session_id: string;
+  mode: 'read_only' | 'full';
+  ends_at: string;
+}
+
+/** What `POST /auth/impersonation/exchange` answers. There is no refresh token. */
+interface ImpersonationGrant {
+  access_token: string;
+  expires_in: number;
+  account_id: string;
+  license_id: string;
+  impersonation: ImpersonationState;
+}
+
+/**
+ * How an impersonation tab's session came to an end, for the page that says
+ * so (tm 389.15): the operator ended it, its window ran out (or the root panel
+ * ended it), or the server could not be reached to resume it after a reload.
+ */
+export type ImpersonationEnd = 'ended' | 'expired' | 'unreachable';
 
 /** What `POST /auth/2fa/enroll` hands back — the authenticator app's half. */
 export interface TwoFactorEnrollment {
@@ -132,8 +160,23 @@ interface AuthState {
    * set by a sign-out, nor by a page load that finds a dead token.
    */
   sessionEnded: boolean;
+  /**
+   * Set once an impersonation tab's session is over (tm 389.15) — the console
+   * shows "this support session has ended" there rather than a sign-in form
+   * the operator has no credentials for. Null in every other case.
+   */
+  impersonationEnded: ImpersonationEnd | null;
 
   restore: () => Promise<void>;
+  /**
+   * "Enter as the customer" (tm 389.15): trade the root panel's one-time code
+   * for an impersonation token and sign this tab in with it. The session
+   * lives in this tab only (`sessionStorage`): it never touches the stored
+   * refresh token, never renews, and never shares its token with sibling tabs.
+   */
+  startImpersonation: (code: string) => Promise<void>;
+  /** The banner's countdown ran out: forget the session here (the server already has). */
+  expireImpersonation: () => void;
   /**
    * Spend the stored refresh token for a new access token — the only place
    * that does, for the restore, the timer and every refused request alike.
@@ -234,6 +277,13 @@ interface AuthState {
 }
 
 const REFRESH_KEY = 'siyahtus.refresh_token';
+/**
+ * An impersonation tab's token and when it stops working (tm 389.15).
+ * `sessionStorage`: the session is this tab's alone, survives its reloads, and
+ * is gone with it — a second tab of the same browser is not signed in as the
+ * member, and its own session (if any) is never disturbed.
+ */
+const IMPERSONATION_KEY = 'siyahtus.impersonation';
 const CLIENT_ID_KEY = 'siyahtus.client_id';
 const BRAND_KEY = 'siyahtus.brand_id';
 const REDIRECT_URI = `${window.location.origin}/auth/callback`;
@@ -532,6 +582,72 @@ export const useAuth = create<AuthState>((set, get) => {
    */
   let waiters: Array<(token: string | null) => void> = [];
 
+  // --- An operator signed in as a member (tm 389.15) -----------------------
+  //
+  // An impersonation token is not a session of this browser: there is no
+  // refresh token to spend, nothing to renew, and nothing to share with the
+  // sibling tabs — none of the machinery above runs for it. It is held in this
+  // tab's `sessionStorage` until the session ends, and the end is final.
+
+  /** This tab is signed in as a member by an operator. */
+  let impersonating = false;
+
+  function readImpersonation(): { token: string; endsAt: number } | null {
+    const raw = readSession(IMPERSONATION_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { token?: unknown; endsAt?: unknown };
+      if (typeof parsed.token === 'string' && typeof parsed.endsAt === 'number') {
+        return { token: parsed.token, endsAt: parsed.endsAt };
+      }
+    } catch {
+      // Unreadable: treated as no session below, and forgotten.
+    }
+    writeSession(IMPERSONATION_KEY, null);
+    return null;
+  }
+
+  /** Forget the impersonation in this tab, and say how it ended. */
+  function dropImpersonation(reason: ImpersonationEnd): void {
+    const { agent } = get();
+    // What the operator typed in the member's name stays nowhere after them.
+    if (agent) clearAllDrafts({ licenseId: agent.license_id, accountId: agent.account_id });
+    writeSession(IMPERSONATION_KEY, null);
+    impersonating = false;
+    forgetSession(false);
+    set({ impersonationEnded: reason });
+  }
+
+  /** A reload of an impersonation tab: the stored token, if it still works. */
+  async function resumeImpersonation(stored: { token: string; endsAt: number }): Promise<void> {
+    if (stored.endsAt <= Date.now()) {
+      writeSession(IMPERSONATION_KEY, null);
+      set({ status: 'signed-out', impersonationEnded: 'expired' });
+      return;
+    }
+    impersonating = true;
+    try {
+      const agent = await loadAgent(stored.token);
+      set({
+        accessToken: stored.token,
+        agent,
+        status: 'signed-in',
+        reconnect: null,
+        sessionEnded: false,
+        impersonationEnded: null,
+      });
+    } catch (error) {
+      impersonating = false;
+      if (isRefusal(error)) {
+        writeSession(IMPERSONATION_KEY, null);
+        set({ status: 'signed-out', impersonationEnded: 'expired' });
+        return;
+      }
+      // Kept: a reload once the server answers picks the session up again.
+      set({ status: 'signed-out', impersonationEnded: 'unreachable' });
+    }
+  }
+
   function startKeeping(): void {
     if (keeping) return;
     keeping = true;
@@ -789,6 +905,10 @@ export const useAuth = create<AuthState>((set, get) => {
    * reconnecting after it had been — say so on the sign-in page.
    */
   function endSession(): void {
+    if (impersonating) {
+      dropImpersonation('expired');
+      return;
+    }
     forgetSession(get().agent !== null);
   }
 
@@ -864,6 +984,13 @@ export const useAuth = create<AuthState>((set, get) => {
 
   /** The body of {@link AuthState.restore}, wrapped by the single-flight above. */
   async function runRestore(): Promise<void> {
+    // An impersonation tab comes back as the member, and only as the member:
+    // the browser's own stored session (if any) belongs to other tabs.
+    const impersonation = readImpersonation();
+    if (impersonation) {
+      await resumeImpersonation(impersonation);
+      return;
+    }
     if (!readStored(REFRESH_KEY) || !readStored(CLIENT_ID_KEY)) {
       set({ status: 'signed-out' });
       return;
@@ -890,6 +1017,7 @@ export const useAuth = create<AuthState>((set, get) => {
     error: null,
     busy: false,
     sessionEnded: false,
+    impersonationEnded: null,
 
     restore() {
       // See `restoring` above: overlapping callers share one rotation instead
@@ -901,6 +1029,12 @@ export const useAuth = create<AuthState>((set, get) => {
     },
 
     refreshSession(stale) {
+      // An impersonation token cannot be renewed (tm 389.15): refused, the
+      // session is over — its window ran out, or the root panel ended it.
+      if (impersonating) {
+        dropImpersonation('expired');
+        return Promise.resolve(null);
+      }
       const current = get().accessToken;
       if (stale !== undefined && current !== null && current !== stale) {
         return Promise.resolve(current);
@@ -1104,7 +1238,62 @@ export const useAuth = create<AuthState>((set, get) => {
       }
     },
 
+    async startImpersonation(code) {
+      set({ busy: true, error: null });
+      try {
+        // Whatever this tab held, it is not renewed from here on.
+        generation += 1;
+        stopKeeping();
+        const grant = await anonymous.post<ImpersonationGrant>('/auth/impersonation/exchange', {
+          code,
+        });
+        writeSession(
+          IMPERSONATION_KEY,
+          JSON.stringify({
+            token: grant.access_token,
+            endsAt: Date.parse(grant.impersonation.ends_at),
+          }),
+        );
+        impersonating = true;
+        const agent = await loadAgent(grant.access_token);
+        set({
+          accessToken: grant.access_token,
+          agent,
+          status: 'signed-in',
+          reconnect: null,
+          error: null,
+          sessionEnded: false,
+          impersonationEnded: null,
+        });
+      } catch (error) {
+        impersonating = false;
+        writeSession(IMPERSONATION_KEY, null);
+        set({ error: authFailureCode(error, 'impersonation_failed') });
+        throw error;
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    expireImpersonation() {
+      if (impersonating) dropImpersonation('expired');
+    },
+
     async signOut() {
+      // An operator ending their session as a member (tm 389.15): the server
+      // closes the platform session, and with it every token it was traded
+      // for. The browser's own stored session is not this tab's to revoke.
+      if (impersonating) {
+        const { accessToken } = get();
+        generation += 1;
+        if (accessToken) {
+          await new ApiClient({ getAccessToken: () => accessToken })
+            .post('/auth/impersonation/end')
+            .catch(() => undefined);
+        }
+        dropImpersonation('ended');
+        return;
+      }
       const refreshToken = readStored(REFRESH_KEY);
       const { accessToken, agent } = get();
       // Drafts are kept for the agent who wrote them and for no one after they

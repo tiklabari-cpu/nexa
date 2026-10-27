@@ -103,6 +103,7 @@ export const settings: Messages = {
   'settings.nav.section.compliance': 'Data region and compliance',
   'settings.nav.section.dataRetention': 'Data retention',
   'settings.nav.section.aiUsage': 'AI usage',
+  'settings.nav.section.aiAgent': 'AI Agent',
   'settings.nav.section.auditLog': 'Audit log',
   'settings.nav.section.siem': 'SIEM export',
   'settings.nav.section.billing': 'Subscription and invoices',

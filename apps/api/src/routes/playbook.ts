@@ -15,7 +15,11 @@ import {
   AI_ASSIGNMENT_MODES,
   AI_STALL_TIMEOUT_SECONDS_MAX,
   AI_STALL_TIMEOUT_SECONDS_MIN,
+  AI_WELCOME_MESSAGE_MAX,
   ANSWER_LENGTHS,
+  HUMAN_BUTTON_LABEL_MAX,
+  readAiWelcome,
+  readHumanButtonLabel,
   BATCH_WINDOW_SECONDS_MAX,
   DAILY_MEMORY_RECALLS,
   DEFAULT_AI_ASSIGNMENT_MODE,
@@ -27,6 +31,7 @@ import {
   readPersonaStyle,
   fallbackTakenProblem,
   guardrailSetupProblem,
+  type GuardrailSetupProblem,
   readClarifyThresholds,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   DEFAULT_SKILL_MODE,
@@ -35,6 +40,13 @@ import {
   HANDOFF_TRIGGER_BOUNDS,
   HANDOFF_TRIGGER_LOCKED_REASON,
   DEFAULT_KNOWLEDGE_LIST_AUDIENCE,
+  CRAWL_SCOPES,
+  DEFAULT_CRAWL_SCOPE,
+  KNOWLEDGE_CRAWL_PATHS,
+  KNOWLEDGE_JOB_ACTIVE_STATUSES,
+  KNOWLEDGE_PAGE_STATUSES,
+  KNOWLEDGE_PAGE_LIMIT,
+  normalizeCrawlPaths,
   KNOWLEDGE_AUDIENCES,
   KNOWLEDGE_LIST_AUDIENCES,
   KNOWLEDGE_REVIEW_INTERVAL_DAYS,
@@ -126,9 +138,15 @@ import {
   type BulkCrawlLimits,
   type BulkCrawlRefusal,
 } from '../services/ai/knowledge-bulk-crawl.js';
-import { crawl } from '../services/ai/web-crawler.js';
+import {
+  enqueueKnowledgeJob,
+  KNOWLEDGE_JOB_SELECT,
+  knowledgeJobInProgress,
+  serialiseKnowledgeJob,
+} from '../services/ai/crawler/jobs.js';
+import { settleCrawledSource } from '../services/ai/crawler/job-runner.js';
 import { ProcedureExamples, storeProcedureExamples } from '../services/ai/procedure-examples.js';
-import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
+import { computeNextRefreshAt } from '../services/ai/knowledge-refresh.js';
 import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
@@ -287,6 +305,48 @@ const sourceScopeFields = {
 };
 
 /**
+ * A list of URL path prefixes (tm 312 · AI-17) in the one spelling a source
+ * keeps (`normalizeCrawlPaths`); an entry that is not a path prefix is a 400.
+ */
+const crawlPaths = z
+  .array(z.string())
+  .max(KNOWLEDGE_CRAWL_PATHS.maxCount)
+  .transform((paths, ctx) => {
+    const kept = normalizeCrawlPaths(paths);
+    if (kept === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `expected path prefixes starting with "/", at most ${KNOWLEDGE_CRAWL_PATHS.maxLength} characters, with no query, fragment, wildcard or space`,
+      });
+      return z.NEVER;
+    }
+    return kept;
+  });
+
+/**
+ * How far a website source's crawl reaches (tm 312 · AI-17), on a create and
+ * an edit. Only a website is crawled, so each is refused — never dropped — for
+ * the other types ({@link refuseCrawlSettings}).
+ */
+const crawlSettingsFields = {
+  crawl_scope: z.enum(CRAWL_SCOPES).optional(),
+  page_limit: z
+    .number()
+    .int()
+    .min(KNOWLEDGE_PAGE_LIMIT.min)
+    .max(KNOWLEDGE_PAGE_LIMIT.max)
+    .optional(),
+  include_paths: crawlPaths.optional(),
+  exclude_paths: crawlPaths.optional(),
+};
+const CRAWL_SETTINGS = ['crawl_scope', 'page_limit', 'include_paths', 'exclude_paths'] as const;
+
+/** The crawl setting a body names, if it names one — the field to refuse for a source that is not a website. */
+function namedCrawlSetting(body: Partial<Record<(typeof CRAWL_SETTINGS)[number], unknown>>) {
+  return CRAWL_SETTINGS.find((field) => body[field] !== undefined);
+}
+
+/**
  * A website source is crawled from a URL; an `article` or a `faq` indexes the
  * text the admin pasted. So exactly one of `source_url` (website) or `content`
  * (the rest) is required — enforced here rather than left for the handler to
@@ -309,8 +369,30 @@ const createSourceBody = z
     type: z.enum(['website', 'file', 'article', 'faq']).default('article'),
     ...sourceMetaFields,
     ...sourceScopeFields,
+    ...crawlSettingsFields,
+    /** The one brand a website belongs to (AI-17): `brand_ids: [brand_id]`. */
+    brand_id: uuid.optional(),
   })
   .superRefine((body, ctx) => {
+    const crawlSetting = namedCrawlSetting(body);
+    if (crawlSetting !== undefined && body.type !== 'website') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [crawlSetting],
+        message: 'only a website source is crawled',
+      });
+    }
+    if (
+      body.brand_id !== undefined &&
+      body.brand_ids !== undefined &&
+      (body.brand_ids.length !== 1 || body.brand_ids[0] !== body.brand_id.toLowerCase())
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['brand_id'],
+        message: 'brand_id and brand_ids name different brands',
+      });
+    }
     if (body.type === 'file') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -332,7 +414,11 @@ const createSourceBody = z
         message: 'content is required',
       });
     }
-  });
+  })
+  // `brand_id` is a shorthand: from here on the source's brands are `brand_ids`.
+  .transform(({ brand_id, ...body }) =>
+    brand_id === undefined ? body : { ...body, brand_ids: [brand_id.toLowerCase()] },
+  );
 
 /**
  * The upload body (FR-MOD-06.3.2, "File").
@@ -403,6 +489,7 @@ const updateSourceBody = z
     refresh_after_days: z.number().int().min(1).max(365).nullable().optional(),
     ...sourceMetaFields,
     ...sourceScopeFields,
+    ...crawlSettingsFields,
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -546,6 +633,19 @@ function echoCell(value: string | undefined): string | null {
   return trimmed.length > ECHO_MAX ? `${trimmed.slice(0, ECHO_MAX)}…` : trimmed;
 }
 
+// The empty state's form (tm 390.1): a name, and optionally the persona's
+// tone, face and languages. Strict, unlike the PATCH: a create that drops a
+// key it does not know (`active`, `instruction`) would answer 201 for a
+// request it did not carry out.
+const createAgentBody = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    tone: z.string().trim().max(40).nullable().optional(),
+    avatar_url: z.string().trim().max(2048).nullable().optional(),
+    languages: z.array(z.string().trim().min(1).max(20)).max(20).optional(),
+  })
+  .strict();
+
 const updateAgentBody = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
@@ -589,6 +689,9 @@ const updateAgentBody = z
       .max(MAX_QUESTIONS_PER_MESSAGE_MAX)
       .nullable()
       .optional(),
+    // The opening words and the button's wording (tm 308 · AI-29); null or blank clears.
+    welcome_message: z.string().max(AI_WELCOME_MESSAGE_MAX).nullable().optional(),
+    human_button_label: z.string().max(HUMAN_BUTTON_LABEL_MAX).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -916,9 +1019,64 @@ export default async function playbookRoutes(
     return reply.send({ items: agents.map(serialiseAgent) });
   });
 
+  // The workspace's customer-facing agent (tm 390.1) — the Playbook's empty
+  // state. One per workspace in v1, held by the partial unique index
+  // `ai_agents_one_per_license` rather than a read-then-write, so two tabs
+  // creating at once get one agent and one 409. Created switched off: going
+  // live is the PATCH below, behind the crisis-text gate.
+  app.post(
+    '/ai-agents',
+    { config: { scopes: WRITE, minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(createAgentBody, request.body);
+      const tenant = request.tenant();
+      try {
+        const created = await request.withTenant(async (tx) => {
+          const agent = await tx.aiAgent.create({
+            data: {
+              licenseId: tenant.licenseId,
+              kind: 'ai_agent',
+              name: body.name,
+              active: false,
+              ...(body.tone !== undefined ? { tone: body.tone } : {}),
+              ...(body.avatar_url !== undefined ? { avatarUrl: body.avatar_url } : {}),
+              ...(body.languages !== undefined ? { languages: body.languages } : {}),
+            },
+            include: { _count: { select: { skills: true } } },
+          });
+          return { ...serialiseAgent(agent), readiness: await agentReadiness(tx, agent) };
+        });
+        return reply.status(201).send(created);
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ApiError('ai_agent_exists', 'This workspace already has an AI agent.');
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.get<{ Params: { aiAgentId: string } }>(
+    '/ai-agents/:aiAgentId',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.aiAgentId);
+      const detail = await request.withTenant(async (tx) => {
+        const agent = await tx.aiAgent.findFirst({
+          where: { id },
+          include: { _count: { select: { skills: true } } },
+        });
+        if (!agent) throw ApiError.notFound('AI agent not found.');
+        return { ...serialiseAgent(agent), readiness: await agentReadiness(tx, agent) };
+      });
+      return reply.send(detail);
+    },
+  );
+
   app.patch<{ Params: { aiAgentId: string } }>(
     '/ai-agents/:aiAgentId',
-    { config: { scopes: WRITE } },
+    // An agent's broad PAT carries the scope; the role gate refuses it (tm 390.1).
+    { config: { scopes: WRITE, minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(uuid, request.params.aiAgentId);
       const body = parse(updateAgentBody, request.body);
@@ -964,7 +1122,9 @@ export default async function playbookRoutes(
           body.clarify_thresholds !== undefined ||
           body.address_form !== undefined ||
           body.emoji !== undefined ||
-          body.max_questions_per_message !== undefined
+          body.max_questions_per_message !== undefined ||
+          body.welcome_message !== undefined ||
+          body.human_button_label !== undefined
         ) {
           const current =
             existing.persona &&
@@ -996,6 +1156,16 @@ export default async function playbookRoutes(
           for (const [key, value] of style) {
             if (value === null) delete next[key];
             else if (value !== undefined) next[key] = value;
+          }
+          const words: Array<[string, string | null | undefined]> = [
+            ['welcome', body.welcome_message],
+            ['humanButtonLabel', body.human_button_label],
+          ];
+          for (const [key, value] of words) {
+            if (value === undefined) continue;
+            const text = value?.trim() ?? '';
+            if (text === '') delete next[key];
+            else next[key] = text;
           }
           persona = next as Prisma.InputJsonValue;
         }
@@ -1562,7 +1732,7 @@ export default async function playbookRoutes(
           ...(query.owner_id === undefined ? {} : { ownerId: query.owner_id }),
         },
         orderBy: { updatedAt: 'desc' },
-        include: { _count: { select: { chunks: true } } },
+        include: { _count: { select: { chunks: true } }, jobs: ACTIVE_JOB },
       });
       // Due a review is arithmetic on two columns, and the list is unpaged, so
       // it is decided here, with the same function the reply's
@@ -1603,23 +1773,22 @@ export default async function playbookRoutes(
         await requireSourceScope(tx, body);
       });
 
-      // A website is crawled *before* the transaction: the SSRF guard rejects a
-      // private/internal target with a 400 (`source_url` never reaches a fetcher),
-      // and the fetch+parse — even mocked — has no business holding a DB row open.
-      let content = body.content ?? '';
-      let sourceUrl: string | null = null;
-      if (body.type === 'website') {
-        const url = assertPublicHttpUrl(body.source_url ?? '');
-        const page = await crawl(url);
-        content = page.text;
-        sourceUrl = url.toString();
-      }
+      // A website is not fetched in the request (tm 312.3 · AI-17): the URL
+      // passes the SSRF guard here — a private/internal target is a 400 with
+      // nothing written — and its crawl is a job the runner works through after
+      // the 201 (`services/ai/crawler/job-runner.ts`), every fetch guarded again.
+      const content = body.type === 'website' ? '' : (body.content ?? '');
+      const sourceUrl =
+        body.type === 'website' ? assertPublicHttpUrl(body.source_url ?? '').toString() : null;
 
-      // Embedded before the transaction as well, for the crawl's reason: the
-      // provider is a network call with its own timeout (tm 255.7). A refusal
-      // is a 503 with nothing written; a call today's AI cap cannot take is a
-      // 429 `ai_daily_cap` with nothing written (tm 257.20).
-      const prepared = await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
+      // Embedded before the transaction: the provider is a network call with
+      // its own timeout (tm 255.7). A refusal is a 503 with nothing written; a
+      // call today's AI cap cannot take is a 429 `ai_daily_cap` with nothing
+      // written (tm 257.20). A website's pages are embedded by its job.
+      const prepared =
+        body.type === 'website'
+          ? null
+          : await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
 
       const created = await request.withTenant(async (tx) => {
         // Again inside the write: the agent may have been deleted meanwhile,
@@ -1635,22 +1804,49 @@ export default async function playbookRoutes(
           name: body.name,
           content,
           sourceUrl,
-          status: 'indexing',
+          status: prepared === null ? 'crawling' : 'indexing',
           addedBy,
           ...meta,
           ...scoped,
+          ...(body.type === 'website' ? websiteCrawlSettings(body) : {}),
         });
+        const names = await creatorNamesByIds(tx, [addedBy, source.ownerId]);
+
+        // A website's crawl is queued in the same transaction as the source:
+        // a source that says `crawling` always has the job that will end it.
+        if (prepared === null) {
+          const job = await enqueueKnowledgeJob(tx, {
+            context: tenant,
+            sourceId: source.id,
+            kind: 'crawl',
+            requestedBy: addedBy,
+          });
+          return { source, chunks: 0, jobId: job.id, names };
+        }
 
         // Indexed in the same transaction: a source that exists but is not
         // searchable looks ready and answers nothing.
         const chunks = await knowledge.index(tx, tenant, source.id, prepared);
-
-        return { source, chunks, names: await creatorNamesByIds(tx, [addedBy, source.ownerId]) };
+        return { source, chunks, jobId: null, names };
       });
 
+      if (created.jobId !== null) {
+        app.knowledgeJobs.wake();
+        return reply
+          .status(201)
+          .send(
+            serialiseSource(
+              { ...created.source, jobs: [{ id: created.jobId }] },
+              { status: 'crawling', chunks: 0 },
+              created.names,
+            ),
+          );
+      }
       return reply
         .status(201)
-        .send(serialiseIndexedSource(created.source, created.chunks, created.names));
+        .send(
+          serialiseIndexedSource({ ...created.source, jobs: [] }, created.chunks, created.names),
+        );
     },
   );
 
@@ -1742,9 +1938,12 @@ export default async function playbookRoutes(
         return { source, chunks, names: await creatorNamesByIds(tx, [addedBy, source.ownerId]) };
       });
 
+      // A file is indexed in this request; it has no job.
       return reply
         .status(201)
-        .send(serialiseIndexedSource(created.source, created.chunks, created.names));
+        .send(
+          serialiseIndexedSource({ ...created.source, jobs: [] }, created.chunks, created.names),
+        );
     },
   );
 
@@ -2138,6 +2337,7 @@ export default async function playbookRoutes(
       if (!existing) throw ApiError.notFound('Knowledge source not found.');
 
       const isWebsite = existing.type === 'website';
+      const principal = request.requirePrincipal();
       if (body.content !== undefined && (isWebsite || existing.type === 'file')) {
         throw ApiError.validation(
           `content: a ${existing.type} source's text comes from ${
@@ -2153,16 +2353,18 @@ export default async function playbookRoutes(
           'refresh_after_days: only a website source can be scheduled for automatic refresh.',
         );
       }
-
-      // Crawled outside the transaction, and refused before it: a private or
-      // non-http target never reaches the fetcher and never touches the row.
-      let text: string | null = body.content ?? null;
-      let sourceUrl: string | null = null;
-      if (body.source_url !== undefined) {
-        const url = assertPublicHttpUrl(body.source_url);
-        text = (await crawl(url)).text;
-        sourceUrl = url.toString();
+      const crawlSetting = namedCrawlSetting(body);
+      if (crawlSetting !== undefined && !isWebsite) {
+        throw ApiError.validation(`${crawlSetting}: only a website source is crawled.`);
       }
+
+      // A new URL is refused before the transaction when the SSRF guard says
+      // so — a private or non-http target never touches the row — and crawled
+      // by a job after the reply (tm 312.3): the pages in the store answer
+      // until then.
+      const text: string | null = body.content ?? null;
+      const sourceUrl =
+        body.source_url === undefined ? null : assertPublicHttpUrl(body.source_url).toString();
       const prepared =
         text === null ? null : await knowledge.prepare(text, tenant).catch(refuseUnembeddable);
 
@@ -2196,11 +2398,16 @@ export default async function playbookRoutes(
           {
             ...(body.name === undefined ? {} : { name: body.name }),
             ...(text === null ? {} : { content: text }),
-            ...(sourceUrl === null ? {} : { sourceUrl }),
+            ...(sourceUrl === null ? {} : { sourceUrl, status: 'crawling' }),
             ...(refreshAfterDaysChanged ? { refreshAfterDays: body.refresh_after_days } : {}),
             ...(recomputeSchedule
               ? { nextRefreshAt: computeNextRefreshAt(effectiveRefreshAfterDays, now) }
               : {}),
+            // Settings for the next crawl: nothing is fetched for them.
+            ...(body.crawl_scope === undefined ? {} : { crawlScope: body.crawl_scope }),
+            ...(body.page_limit === undefined ? {} : { pageLimit: body.page_limit }),
+            ...(body.include_paths === undefined ? {} : { includePaths: body.include_paths }),
+            ...(body.exclude_paths === undefined ? {} : { excludePaths: body.exclude_paths }),
             ...meta,
             ...scoped,
           },
@@ -2212,6 +2419,18 @@ export default async function playbookRoutes(
         // existed.
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
+        // The new URL's crawl, queued with the edit; one already under way would
+        // crawl the old one, so the edit waits for it (the whole write rolls back).
+        if (sourceUrl !== null) {
+          const job = await enqueueKnowledgeJob(tx, {
+            context: tenant,
+            sourceId: id,
+            kind: 'crawl',
+            requestedBy: principal.kind === 'agent' ? principal.accountId : null,
+          });
+          if (!job.created) throw knowledgeJobInProgress(job.id);
+        }
+
         // The new chunks are written in the same transaction as the update, so
         // the source can never be readable as edited while still answering from
         // the text it replaced. Untouched text needs no rebuild — chunks hold
@@ -2221,7 +2440,10 @@ export default async function playbookRoutes(
             ? await tx.knowledgeChunk.count({ where: { sourceId: id } })
             : await knowledge.index(tx, tenant, id, prepared);
 
-        const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
+        const source = await tx.knowledgeSource.findFirstOrThrow({
+          where: { id },
+          include: { jobs: ACTIVE_JOB },
+        });
         return {
           source,
           chunks,
@@ -2229,7 +2451,18 @@ export default async function playbookRoutes(
         };
       });
 
-      return reply.send(serialiseIndexedSource(updated.source, updated.chunks, updated.names));
+      if (sourceUrl !== null) app.knowledgeJobs.wake();
+      // A website says what its crawls left (`crawling`, `partial`…), not
+      // what its chunk count suggests.
+      return reply.send(
+        isWebsite
+          ? serialiseSource(
+              updated.source,
+              { status: updated.source.status, chunks: updated.chunks },
+              updated.names,
+            )
+          : serialiseIndexedSource(updated.source, updated.chunks, updated.names),
+      );
     },
   );
 
@@ -2286,11 +2519,14 @@ export default async function playbookRoutes(
       if (!existing) throw ApiError.notFound('Knowledge source not found.');
       refuseTableRowOwned(existing);
 
-      // Re-checked, not trusted from creation — and outside the transaction,
-      // so a refusal costs no row lock and writes nothing. Same crawl path
-      // the freshness sweep uses (`knowledge-refresh.ts`), so there is one
-      // SSRF gate for "refresh this source", not two.
-      const text = await fetchRefreshedText(existing);
+      // A website's refresh is its crawl, queued (tm 312.3) — the one already
+      // under way when there is one — with the stored URL re-checked first,
+      // not trusted from creation: a refusal writes nothing.
+      if (existing.type === 'website') {
+        const queued = await queueCrawl(request, id, existing.sourceUrl);
+        return reply.send(serialiseStoredSource(queued.source, queued.names));
+      }
+      const text = existing.content ?? '';
       // And embedded before the transaction too; a refusal keeps the stale
       // answer, exactly as a refused crawl does (tm 255.7).
       const prepared = await knowledge.prepare(text, tenant).catch(refuseUnembeddable);
@@ -2312,7 +2548,10 @@ export default async function playbookRoutes(
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
         const chunks = await knowledge.index(tx, tenant, id, prepared);
-        const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
+        const source = await tx.knowledgeSource.findFirstOrThrow({
+          where: { id },
+          include: { jobs: ACTIVE_JOB },
+        });
         return {
           source,
           chunks,
@@ -2323,6 +2562,161 @@ export default async function playbookRoutes(
       return reply.send(
         serialiseIndexedSource(refreshed.source, refreshed.chunks, refreshed.names),
       );
+    },
+  );
+
+  /**
+   * Queue a website source's crawl (tm 312.3 · AI-17), from the stored URL
+   * re-checked by the SSRF guard first (NFR-S7) — the row is not the request
+   * that created it. One under way is a 409 naming it; the panel follows the
+   * job instead.
+   */
+  async function queueCrawl(
+    request: FastifyRequest,
+    id: string,
+    storedUrl: string | null,
+  ): Promise<{
+    source: Parameters<typeof serialiseStoredSource>[0];
+    names: ReadonlyMap<string, string>;
+    created: boolean;
+    jobId: string;
+  }> {
+    if (!storedUrl) throw ApiError.validation('This website source has no URL to crawl.');
+    assertPublicHttpUrl(storedUrl);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
+    const queued = await request.withTenant(async (tx) => {
+      const job = await enqueueKnowledgeJob(tx, {
+        context: tenant,
+        sourceId: id,
+        kind: 'crawl',
+        requestedBy: principal.kind === 'agent' ? principal.accountId : null,
+      });
+      if (job.created) {
+        await tx.knowledgeSource.updateMany({ where: { id }, data: { status: 'crawling' } });
+      }
+      const source = await tx.knowledgeSource.findFirstOrThrow({
+        where: { id },
+        include: { _count: { select: { chunks: true } }, jobs: ACTIVE_JOB },
+      });
+      return {
+        source,
+        created: job.created,
+        jobId: job.id,
+        names: await creatorNamesByIds(tx, [source.addedBy, source.ownerId]),
+      };
+    });
+    if (queued.created) app.knowledgeJobs.wake();
+    return queued;
+  }
+
+  /**
+   * The pages a website source's crawls found (tm 312.3 · AI-17), whatever
+   * became of each — the detail drawer's table. Any other type has none.
+   */
+  app.get<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId/pages',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const query = parse(
+        z.object({ status: z.enum(KNOWLEDGE_PAGE_STATUSES).optional() }),
+        request.query ?? {},
+      );
+      const pages = await request.withTenant(async (tx) => {
+        const source = await tx.knowledgeSource.findFirst({ where: { id }, select: { id: true } });
+        if (!source) throw ApiError.notFound('Knowledge source not found.');
+        return tx.knowledgePage.findMany({
+          where: { sourceId: id, ...(query.status === undefined ? {} : { status: query.status }) },
+          orderBy: { url: 'asc' },
+        });
+      });
+      return reply.send({
+        items: pages.map((page) => ({
+          id: page.id,
+          url: page.url,
+          title: page.title,
+          lang: page.lang,
+          status: page.status,
+          http_status: page.httpStatus,
+          error: page.error,
+          depth: page.depth,
+          chunk_count: page.chunkCount,
+          fetched_at: page.fetchedAt ? page.fetchedAt.toISOString() : null,
+          changed_at: page.changedAt ? page.changedAt.toISOString() : null,
+        })),
+      });
+    },
+  );
+
+  /** "Crawl again" (tm 312.3 · AI-17): a website source's crawl, queued; 202 with the job. */
+  app.post<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId/crawl',
+    { config: { scopes: WRITE } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const existing = await request.withTenant((tx) =>
+        tx.knowledgeSource.findFirst({ where: { id }, select: { type: true, sourceUrl: true } }),
+      );
+      if (!existing) throw ApiError.notFound('Knowledge source not found.');
+      if (existing.type !== 'website') {
+        throw ApiError.validation('Only a website source is crawled.', {
+          reason: 'knowledge_source_not_website',
+        });
+      }
+      const queued = await queueCrawl(request, id, existing.sourceUrl);
+      if (!queued.created) throw knowledgeJobInProgress(queued.jobId);
+      const job = await request.withTenant((tx) =>
+        tx.knowledgeJob.findFirstOrThrow({
+          where: { id: queued.jobId },
+          select: KNOWLEDGE_JOB_SELECT,
+        }),
+      );
+      return reply.status(202).send(serialiseKnowledgeJob(job));
+    },
+  );
+
+  /** A knowledge job's progress (tm 312.3 · AI-17) — the drawer polls it every 3 s. */
+  app.get<{ Params: { jobId: string } }>(
+    '/knowledge-jobs/:jobId',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.jobId);
+      const job = await request.withTenant((tx) =>
+        tx.knowledgeJob.findFirst({ where: { id }, select: KNOWLEDGE_JOB_SELECT }),
+      );
+      if (!job) throw ApiError.notFound('Knowledge job not found.');
+      return reply.send(serialiseKnowledgeJob(job));
+    },
+  );
+
+  /**
+   * Stop a job under way (tm 312.3 · AI-17). The runner's next write is
+   * fenced out (its claim no longer holds a `running` job) and its fetch in
+   * flight is dropped; the pages already indexed stay, and the source says
+   * what it has. An ended job is answered as it is.
+   */
+  app.post<{ Params: { jobId: string } }>(
+    '/knowledge-jobs/:jobId/cancel',
+    { config: { scopes: WRITE } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.jobId);
+      const job = await request.withTenant(async (tx) => {
+        const found = await tx.knowledgeJob.findFirst({
+          where: { id },
+          select: { sourceId: true },
+        });
+        if (!found) throw ApiError.notFound('Knowledge job not found.');
+        const now = new Date();
+        const { count } = await tx.knowledgeJob.updateMany({
+          where: { id, status: { in: [...KNOWLEDGE_JOB_ACTIVE_STATUSES] } },
+          data: { status: 'cancelled', leaseUntil: null, finishedAt: now, frontier: [] },
+        });
+        if (count > 0) await settleCrawledSource(tx, found.sourceId, now);
+        return tx.knowledgeJob.findFirstOrThrow({ where: { id }, select: KNOWLEDGE_JOB_SELECT });
+      });
+      app.knowledgeJobs.abort(id);
+      return reply.send(serialiseKnowledgeJob(job));
     },
   );
 
@@ -2353,7 +2747,7 @@ export default async function playbookRoutes(
         }
         const source = await tx.knowledgeSource.findFirstOrThrow({
           where: { id },
-          include: { _count: { select: { chunks: true } } },
+          include: { _count: { select: { chunks: true } }, jobs: ACTIVE_JOB },
         });
         return { source, names: await creatorNamesByIds(tx, [source.addedBy, source.ownerId]) };
       });
@@ -2451,6 +2845,42 @@ interface SourceRow {
   brandIds: string[];
   validUntil: Date | null;
   kbArticleId: string | null;
+  crawlScope: string | null;
+  pageLimit: number | null;
+  includePaths: string[];
+  excludePaths: string[];
+  lastCrawledAt: Date | null;
+  pageCount: number;
+  /** The source's job under way, if any ({@link ACTIVE_JOB}). */
+  jobs: ReadonlyArray<{ id: string }>;
+}
+
+/**
+ * A source's job under way (tm 312 · AI-17) — `job_id` on every source reply.
+ * At most one exists (`knowledge_jobs_one_active_per_source`).
+ */
+const ACTIVE_JOB = {
+  where: { status: { in: [...KNOWLEDGE_JOB_ACTIVE_STATUSES] } },
+  select: { id: true },
+  take: 1,
+} satisfies Prisma.KnowledgeSource$jobsArgs;
+
+/**
+ * A new website source's crawl settings, what the body left out filled in: a
+ * single page, at most `KNOWLEDGE_PAGE_LIMIT.default` pages, every path.
+ */
+function websiteCrawlSettings(body: {
+  crawl_scope?: (typeof CRAWL_SCOPES)[number];
+  page_limit?: number;
+  include_paths?: string[];
+  exclude_paths?: string[];
+}) {
+  return {
+    crawlScope: body.crawl_scope ?? DEFAULT_CRAWL_SCOPE,
+    pageLimit: body.page_limit ?? KNOWLEDGE_PAGE_LIMIT.default,
+    includePaths: body.include_paths ?? [],
+    excludePaths: body.exclude_paths ?? [],
+  };
 }
 
 function serialiseSource(
@@ -2484,6 +2914,16 @@ function serialiseSource(
     brand_ids: source.brandIds,
     valid_until: source.validUntil ? source.validUntil.toISOString() : null,
     kb_article_id: source.kbArticleId,
+    // A website source added before tm 312 has no settings stored: it was a
+    // single page, and the default limit is what it would be crawled under.
+    crawl_scope: source.type === 'website' ? (source.crawlScope ?? DEFAULT_CRAWL_SCOPE) : null,
+    page_limit:
+      source.type === 'website' ? (source.pageLimit ?? KNOWLEDGE_PAGE_LIMIT.default) : null,
+    include_paths: source.includePaths,
+    exclude_paths: source.excludePaths,
+    last_crawled_at: source.lastCrawledAt ? source.lastCrawledAt.toISOString() : null,
+    page_count: source.pageCount,
+    job_id: source.jobs[0]?.id ?? null,
   };
 }
 
@@ -2707,6 +3147,64 @@ function mergeNoAnswer(
   };
 }
 
+/**
+ * What the agent still needs (`GET /ai-agents/{id}`, tm 390.1). `ready` is the
+ * panel's rule (FR-MOD-06.1, PRD KK4 — `apps/web` `readiness.ts`, which reads
+ * the same two lists): an indexed source the agent may answer players from
+ * (`/knowledge-sources`' default list, narrowed to this agent) AND one of its
+ * skills active with steps — a procedure's in its definition. The crisis-text
+ * gate is reported apart: it refuses the switch, not the readiness.
+ */
+async function agentReadiness(
+  tx: TenantClient,
+  agent: { id: string; kind: string },
+): Promise<{
+  ready: boolean;
+  has_knowledge: boolean;
+  has_skill: boolean;
+  guardrail_problem: GuardrailSetupProblem | null;
+}> {
+  // One after another: the three reads share the request's transaction.
+  const source = await tx.knowledgeSource.findFirst({
+    where: {
+      type: { not: KNOWLEDGE_TABLE_SOURCE_TYPE },
+      audiences: { has: 'ai_agent' },
+      OR: [{ aiAgentIds: { isEmpty: true } }, { aiAgentIds: { has: agent.id } }],
+      chunks: { some: {} },
+    },
+    select: { id: true },
+  });
+  const skills = await tx.skill.findMany({
+    where: { aiAgentId: agent.id, kind: 'ai_agent', active: true },
+    select: { mode: true, steps: true, procedure: true },
+  });
+  // Copilot never talks to a player, so no crisis text gates it.
+  const guardrail =
+    agent.kind === 'ai_agent'
+      ? await tx.aiGuardrailSettings.findUnique({
+          where: { aiAgentId: agent.id },
+          select: { crisisText: true, approvedAt: true },
+        })
+      : undefined;
+  const hasSteps = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
+  const hasSkill = skills.some((skill) =>
+    skill.mode === 'procedure'
+      ? hasSteps(
+          skill.procedure && typeof skill.procedure === 'object' && !Array.isArray(skill.procedure)
+            ? (skill.procedure as Record<string, unknown>)['steps']
+            : undefined,
+        )
+      : hasSteps(skill.steps),
+  );
+  const hasKnowledge = source !== null;
+  return {
+    ready: hasKnowledge && hasSkill,
+    has_knowledge: hasKnowledge,
+    has_skill: hasSkill,
+    guardrail_problem: guardrail === undefined ? null : guardrailSetupProblem(guardrail),
+  };
+}
+
 function serialiseAgent(agent: {
   id: string;
   name: string;
@@ -2738,6 +3236,8 @@ function serialiseAgent(agent: {
     address_form: style.addressForm,
     emoji: style.emoji,
     max_questions_per_message: style.maxQuestionsPerMessage,
+    welcome_message: readAiWelcome(persona),
+    human_button_label: readHumanButtonLabel(persona),
     active: agent.active,
     skills_count: agent._count.skills,
   };

@@ -3,15 +3,20 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AccountsSection } from './features/accounts/AccountsSection.js';
 import { BillingPage } from './features/billing/BillingPage.js';
+import { AdminsPage } from './features/admins/AdminsPage.js';
 import { LoadingPage } from './components/LoadingPage.js';
 import { NotFoundPage } from './components/NotFoundPage.js';
 import { RequirePermission } from './components/RequirePermission.js';
 import { ChallengePage } from './features/auth/ChallengePage.js';
 import { DashboardPage } from './features/dashboard/DashboardPage.js';
 import { InvitePage } from './features/auth/InvitePage.js';
+import { OperationsPage } from './features/operations/OperationsPage.js';
 import { RecoveryCodesPage } from './features/auth/RecoveryCodesPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
+import { AiPage } from './features/ai/AiPage.js';
 import { PlaceholderPage } from './features/placeholder/PlaceholderPage.js';
+import { SecurityPage } from './features/security/SecurityPage.js';
+import { SettingsPage } from './features/settings/SettingsPage.js';
 import { SupportPage } from './features/support/SupportPage.js';
 import { UsageSection } from './features/usage/UsageSection.js';
 import { WorkspacesSection } from './features/workspaces/WorkspacesSection.js';
@@ -90,8 +95,18 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <BillingPage />;
     case 'usage':
       return <UsageSection />;
+    case 'admins':
+      return <AdminsPage />;
+    case 'settings':
+      return <SettingsPage />;
+    case 'operations':
+      return <OperationsPage />;
+    case 'security':
+      return <SecurityPage />;
     case 'support':
       return <SupportPage />;
+    case 'ai':
+      return <AiPage />;
     default:
       return <PlaceholderPage item={item} />;
   }

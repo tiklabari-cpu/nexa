@@ -110,7 +110,38 @@ export const playbook: Messages = {
   'playbook.actions.browseTemplates': 'Şablonlara göz at',
   'playbook.actions.newSkill': 'Yeni beceri',
   'playbook.tabs.performance': 'Performans',
-  'playbook.tabs.profile': 'Profil',
+  'playbook.tabs.general': 'Genel ayarlar',
+  'playbook.tabs.behaviour': 'Davranış',
+  // "AI ajanı ekle" (CreateAiAgentCard.tsx, tm 390.2)
+  'playbook.create.title': 'AI ajanı ekle',
+  'playbook.create.description':
+    'Asistana bir ad ve isterseniz bir ton verin. Kapalı başlar; ne zaman yayına gireceğine siz karar verirsiniz.',
+  'playbook.create.name': 'Ad',
+  'playbook.create.namePlaceholder': 'Destek asistanı',
+  'playbook.create.nameRequired': 'AI ajanına bir ad verin.',
+  'playbook.create.tone': 'Ton',
+  'playbook.create.tonePlaceholder': 'Samimi ve kısa',
+  'playbook.create.submit': 'AI ajanı ekle',
+  'playbook.create.noAgentTitle': 'Henüz AI ajanı yok',
+  'playbook.create.askAdmin':
+    'AI ajanını eklemesi için bu çalışma alanının bir yöneticisine başvurun.',
+  // Yayına girmeden önce kalanlar (SetupSteps.tsx)
+  'playbook.setup.title': 'Kurulum adımları',
+  'playbook.setup.knowledge': 'Yanıtlarını dayandıracağı bir bilgi kaynağı ekleyin',
+  'playbook.setup.skill': 'Adımları olan etkin bir beceri ekleyin',
+  'playbook.setup.open': 'Aç',
+  'playbook.setup.done': 'Tamamlandı',
+  'playbook.setup.todo': 'Henüz tamamlanmadı',
+  // Widget karşılama mesajı (WelcomeMessageCard.tsx)
+  'playbook.welcome.title': 'Karşılama mesajı',
+  'playbook.welcome.description': 'Ziyaretçinin sohbet widget’ında asistandan gördüğü ilk mesaj.',
+  'playbook.welcome.titleLabel': 'Başlık',
+  'playbook.welcome.textLabel': 'Mesaj',
+  'playbook.welcome.save': 'Karşılama mesajını kaydet',
+  'playbook.welcome.saved': 'Kaydedildi',
+  'playbook.welcome.perBrand': 'Her markanın kendi karşılama mesajı vardır.',
+  'playbook.welcome.readOnly': 'Karşılama mesajını görebilir ama değiştiremezsiniz.',
+  'playbook.welcome.goToWidget': 'Widget ayarlarına git',
   'playbook.tabs.skills': 'Beceriler',
   'playbook.tabs.knowledge': 'Bilgi',
   'playbook.tabs.kb': 'Genel Bilgi Bankası',
@@ -239,6 +270,126 @@ export const playbook: Messages = {
   'playbook.knowledge.noneInTab': 'Henüz {type} kaynağı yok.',
   'playbook.knowledge.indexed': 'Dizinlendi',
   'playbook.knowledge.empty': 'Boş',
+  'playbook.knowledge.statusCrawling': 'Taranıyor…',
+  'playbook.knowledge.statusPartial': 'Kısmen tarandı',
+
+  // Website crawl — add-form settings, detail drawer (tm 312.4 · AI-17).
+  'playbook.knowledge.crawl.legend': 'Tarama ayarları',
+  'playbook.knowledge.crawl.scope': 'Tarama kapsamı',
+  'playbook.knowledge.crawl.scope.single': 'Yalnız bu sayfa',
+  'playbook.knowledge.crawl.scope.all': 'Bu sayfa ve altındaki her şey',
+  'playbook.knowledge.crawl.scope.sitemap': 'Site haritasındaki sayfalar',
+  'playbook.knowledge.crawl.scope.singleHelp':
+    'Yalnız yukarıdaki adres okunur. Sitenin başka hiçbir yeri getirilmez.',
+  'playbook.knowledge.crawl.scope.allHelp':
+    'Adresin altındaki sayfalar; site haritasından ya da bağlantıları {depth} düzeye kadar izleyerek bulunur. Başka siteler ve başka sunucular hiçbir zaman izlenmez.',
+  'playbook.knowledge.crawl.scope.sitemapHelp':
+    'Yalnız sitenin site haritasının listelediği, adresin altındaki sayfalar. Bağlantılar izlenmez.',
+  'playbook.knowledge.crawl.pageLimit': 'Sayfa sınırı',
+  'playbook.knowledge.crawl.pageLimitHelp':
+    'Bu kaynak için en çok {max} sayfa; bir çalışma alanı toplam {workspace} taranmış sayfa tutar.',
+  'playbook.knowledge.crawl.pageLimitError': '{min} ile {max} arasında bir tam sayı girin.',
+  'playbook.knowledge.crawl.include': 'Yalnız bu yollar',
+  'playbook.knowledge.crawl.includeHelp':
+    'Her satıra bir yol, örneğin /yardim. Boş bırakılırsa her yol taranır.',
+  'playbook.knowledge.crawl.exclude': 'Bu yolları atla',
+  'playbook.knowledge.crawl.excludeHelp':
+    'Her satıra bir yol. Yol, altındaki her şeyi de atlar ve soldaki listeye üstün gelir.',
+  'playbook.knowledge.crawl.pathsError':
+    'Her satır / ile başlamalı; boşluk, ? # ya da * içermemeli.',
+  'playbook.knowledge.crawl.refresh': 'Yenileme sıklığı (gün)',
+  'playbook.knowledge.crawl.refreshHelp':
+    'İsteğe bağlı. Bu aralıkla yeniden taranır; yalnız metni değişen sayfalar yeniden dizinlenir. {min} ile {max} gün.',
+  'playbook.knowledge.crawl.refreshError':
+    '{min} ile {max} arasında bir tam sayı girin ya da boş bırakın.',
+  'playbook.knowledge.crawl.authorized': 'Bu siteyi taramaya yetkiliyim.',
+  'playbook.knowledge.crawl.refreshNotSet':
+    'Kaynak eklendi ama yenileme takvimi kaydedilemedi: {reason}',
+  'playbook.knowledge.crawl.details': 'Ayrıntılar',
+  'playbook.knowledge.crawl.detailsAria': '{name} tarama ayrıntıları',
+  'playbook.knowledge.crawl.drawerTitle': '{name} taraması',
+  'playbook.knowledge.crawl.pagesKept': 'Depodaki sayfalar',
+  'playbook.knowledge.crawl.lastCrawled': 'Son tarama',
+  'playbook.knowledge.crawl.never': 'Henüz yok',
+  'playbook.knowledge.crawl.includeSummary': 'Yalnız bu yollar: {paths}',
+  'playbook.knowledge.crawl.excludeSummary': 'Atlanan yollar: {paths}',
+  'playbook.knowledge.crawl.crawlAgain': 'Yeniden tara',
+  'playbook.knowledge.crawl.cancel': 'Taramayı durdur',
+  'playbook.knowledge.crawl.excludedNote':
+    'Hariç tutuldu. Sonraki tarama bu sayfayı getirmez ve metni o zaman silinir.',
+  'playbook.knowledge.crawl.problemsLabel': 'Bakılması gereken sayfalar',
+  'playbook.knowledge.crawl.filter': 'Göster',
+  'playbook.knowledge.crawl.filterAll': 'Tüm sayfalar',
+  'playbook.knowledge.crawl.noPages': 'Henüz sayfa yok. Tarama buldukça burada görünür.',
+  'playbook.knowledge.crawl.noPagesFiltered': 'Bu durumda sayfa yok.',
+  'playbook.knowledge.crawl.tableLabel': 'Taramanın bulduğu sayfalar',
+  'playbook.knowledge.crawl.colPage': 'Sayfa',
+  'playbook.knowledge.crawl.colStatus': 'Durum',
+  'playbook.knowledge.crawl.colChunks': 'Parça',
+  'playbook.knowledge.crawl.colFetched': 'Getirilme',
+  'playbook.knowledge.crawl.excludePage': 'Hariç tut',
+  'playbook.knowledge.crawl.excludeAria': '{path} sayfasını sonraki taramadan hariç tut',
+  'playbook.knowledge.crawl.close': 'Kapat',
+  'playbook.knowledge.crawl.job.label': 'Tarama ilerlemesi',
+  'playbook.knowledge.crawl.job.progressLabel': 'Taranan sayfalar',
+  'playbook.knowledge.crawl.job.unreadable': 'Taramanın ilerlemesi okunamadı.',
+  'playbook.knowledge.crawl.job.queued': 'Sırası bekleniyor…',
+  'playbook.knowledge.crawl.job.running': 'Taranıyor…',
+  'playbook.knowledge.crawl.job.waiting_budget': 'Duraklatıldı: bugünkü AI hakkı doldu',
+  'playbook.knowledge.crawl.job.done': 'Tarama bitti',
+  'playbook.knowledge.crawl.job.failed': 'Tarama başarısız oldu',
+  'playbook.knowledge.crawl.job.cancelled': 'Tarama durduruldu',
+  'playbook.knowledge.crawl.job.counts':
+    '{discovered} sayfadan {done} tanesi bitti · {ok} dizinlendi · {unchanged} değişmedi · {skipped} atlandı · {failed} başarısız · {removed} kaldırıldı',
+  'playbook.knowledge.crawl.job.resumesAt': '{date} sonrasında devam eder.',
+  'playbook.knowledge.crawl.page.ok': 'Dizinlendi',
+  'playbook.knowledge.crawl.page.unchanged': 'Değişmedi',
+  'playbook.knowledge.crawl.page.skipped_scope': 'Kapsam dışı',
+  'playbook.knowledge.crawl.page.robots_disallowed': 'robots.txt yasaklıyor',
+  'playbook.knowledge.crawl.page.blocked': 'Site engelledi',
+  'playbook.knowledge.crawl.page.needs_js': 'JavaScript gerekiyor',
+  'playbook.knowledge.crawl.page.error': 'Başarısız',
+  'playbook.knowledge.crawl.page.removed': 'Kaldırıldı',
+  'playbook.knowledge.crawl.page.blockedHint':
+    'Site bot doğrulaması gösteriyor. Site sahibinden tarayıcıya izin vermesini isteyin ya da metni elle ekleyin.',
+  'playbook.knowledge.crawl.page.needsJsHint':
+    'Metin JavaScript ile çiziliyor, tarayıcı JavaScript çalıştırmaz. Bu sayfanın metnini elle ekleyin.',
+  'playbook.knowledge.crawl.error.ssrf_refused':
+    'Adres özel ya da iç ağa ait olduğu için getirilmedi.',
+  'playbook.knowledge.crawl.error.dns_failed': 'Sunucu adı bulunamadı.',
+  'playbook.knowledge.crawl.error.timeout': 'Site zamanında yanıt vermedi.',
+  'playbook.knowledge.crawl.error.too_large': 'Sayfa çok büyük.',
+  'playbook.knowledge.crawl.error.compression_ratio':
+    'Sayfa açılınca şüpheli ölçüde şişti, bu yüzden bırakıldı.',
+  'playbook.knowledge.crawl.error.unsupported_encoding':
+    'Sayfa, tarayıcının okuyamadığı bir kodlama kullanıyor.',
+  'playbook.knowledge.crawl.error.network': 'Bağlantı kurulamadı.',
+  'playbook.knowledge.crawl.error.tls': 'Sitenin sertifikası doğrulanamadı.',
+  'playbook.knowledge.crawl.error.redirect_limit': 'Çok fazla yönlendirme.',
+  'playbook.knowledge.crawl.error.redirect_invalid':
+    'Yönlendirme kullanılabilir bir yere gitmiyor.',
+  'playbook.knowledge.crawl.error.redirect_out_of_scope':
+    'Taramanın kapsamı dışındaki bir sayfaya yönlendiriyor.',
+  'playbook.knowledge.crawl.error.not_html': 'Web sayfası değil (örneğin bir PDF ya da görsel).',
+  'playbook.knowledge.crawl.error.cancelled': 'Tarama durduruldu.',
+  'playbook.knowledge.crawl.error.bot_wall': 'Site bot doğrulaması gösterdi.',
+  'playbook.knowledge.crawl.error.empty_page': 'Sayfada okunabilir metin yok.',
+  'playbook.knowledge.crawl.error.gone': 'Sayfa artık yok (404 ya da 410).',
+  'playbook.knowledge.crawl.error.out_of_scope': 'Sayfa artık taramanın kapsamı dışında.',
+  'playbook.knowledge.crawl.error.robots_unreachable':
+    'Sitenin robots.txt dosyası okunamadı, bu yüzden hiçbir sayfa getirilmedi.',
+  'playbook.knowledge.crawl.error.job_bytes_limit': 'Tarama toplam boyut sınırında durdu.',
+  'playbook.knowledge.crawl.error.workspace_page_limit':
+    'Çalışma alanının taranmış sayfa sınırına ulaşıldı.',
+  'playbook.knowledge.crawl.error.residency_refused':
+    'Bu çalışma alanının veri bölgesinde dizinlemeye izin yok.',
+  'playbook.knowledge.crawl.error.invalid_url': 'Kaynağın adresi geçerli bir web adresi değil.',
+  'playbook.knowledge.crawl.error.not_website': 'Bu kaynak bir web sitesi değil.',
+  'playbook.knowledge.crawl.error.unsupported_kind': 'Bu tür iş desteklenmiyor.',
+  'playbook.knowledge.crawl.error.internal': 'Bizim tarafta bir sorun oluştu.',
+  'playbook.knowledge.crawl.error.http': 'Site HTTP {status} ile yanıt verdi.',
+  'playbook.knowledge.crawl.error.unknown': 'Neden: {code}',
+
   'playbook.knowledge.delete': 'Sil',
 
   // Satır aksiyonları — “…” menüsü ve arkasındaki iki diyalog
@@ -535,6 +686,17 @@ export const playbook: Messages = {
   'playbook.profile.maxQuestionsDefault': 'Varsayılan (2)',
   'playbook.profile.styleHint':
     'Hitap ve emoji modelden istenir, yanıt bunlara uymazsa çalışma kaydında işaretlenir; soru sınırını prosedürün kendisi uygular.',
+  'playbook.profile.opening': 'Açılış mesajı ve temsilci butonu',
+  'playbook.profile.openingLocked': 'Her zaman başta — kaldırılamaz',
+  'playbook.profile.openingBrand': 'Marka',
+  'playbook.profile.openingHint':
+    'AI’ın bir görüşmedeki ilk yanıtı bu cümleyle, ardından sizin mesajınızla başlar. “Marka”, oyuncunun geldiği marka ya da çalışma alanının adıdır. Mesajınızda bu cümle yoksa başa eklenir.',
+  'playbook.profile.welcome': 'Açılış mesajı',
+  'playbook.profile.welcomePlaceholder': 'Size nasıl yardımcı olabilirim?',
+  'playbook.profile.humanButton': '“Temsilciyle görüş” butonunun metni',
+  'playbook.profile.humanButtonDefault': 'Temsilciyle görüş',
+  'playbook.profile.humanButtonHint':
+    'Widget bu butonu AI yanıt verdiği sürece gösterir; gizlenemez, yalnız metni değiştirilebilir.',
   'playbook.profile.save': 'Profili kaydet',
   'playbook.profile.saving': 'Kaydediliyor…',
   'playbook.profile.previewTitle': 'Önizleme',
@@ -545,7 +707,7 @@ export const playbook: Messages = {
   'playbook.profile.noneYet': 'Henüz yok',
   'playbook.profile.noAgentTitle': 'AI ajanı yok',
   'playbook.profile.noAgentDescription':
-    'Bu çalışma alanında bir AI ajanı oluşturulduğunda kişiliği burada düzenlenir.',
+    'Önce Genel ayarlar sekmesinden AI ajanını ekleyin; bu sekme ajan oluştuktan sonra düzenlenir.',
 
   // AI performance (AiPerformance.tsx)
   'playbook.performance.noAccessTitle': 'Performansa erişim yok',

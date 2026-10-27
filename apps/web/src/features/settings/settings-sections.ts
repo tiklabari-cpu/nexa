@@ -1,5 +1,5 @@
 import { hasAnyScope } from '@siyahtus/types';
-import { FOOTER } from '../../components/navigation.js';
+import { FOOTER, MODULES } from '../../components/navigation.js';
 
 /**
  * The Settings navigation catalogue (FR-MOD-08.1 · tm 255.10).
@@ -105,6 +105,7 @@ export const SETTINGS_GROUPS: readonly { key: SettingsGroupKey; labelKey: string
 ];
 
 const BILLING_DESTINATION = FOOTER.find((d) => d.to === '/app/billing');
+const PLAYBOOK_DESTINATION = MODULES.find((d) => d.to === '/app/playbook');
 
 export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
   // 08.2–08.4 — the ungrouped head
@@ -142,6 +143,16 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     scope: ['brands--all:ro', 'brands--all:rw'],
     file: 'Brands',
     keywords: ['multi-brand', 'brand switcher'],
+  },
+  // The AI agent's one home is Playbook › AI Agent (tm 390); this is a door to its
+  // General settings, not a second screen. Gated as the Playbook rail entry is.
+  {
+    slug: 'ai-agent',
+    group: 'general',
+    labelKey: 'settings.nav.section.aiAgent',
+    scope: PLAYBOOK_DESTINATION?.scope ?? ['agents-bot--all:ro', 'agents-bot--all:rw'],
+    to: '/app/playbook?view=general',
+    keywords: ['ai', 'assistant', 'bot', 'persona', 'playbook', 'yapay zeka', 'yapay zekâ', 'ajan'],
   },
 
   // 08.5 — Channels

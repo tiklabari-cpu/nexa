@@ -1021,7 +1021,26 @@ describe('module parity matrix — what is still owed', () => {
       // 300 -> 301 with `/tickets/{ticketId}/messages/{messageId}/attachments/
       // {attachmentKey}` (tm 357) — a file the player e-mailed, opened from the
       // same pane (HD-02). Nothing here re-scopes.
-      contractEndpoints: 301,
+      // 301 -> 302 with `/deployment/notice` (tm 389.13) — the root panel's
+      // announcement and maintenance mode, read anonymously by the web console
+      // for its banner and its maintenance page. The app shows neither: a
+      // maintenance refusal reaches it as the REST edge's 503 `maintenance`,
+      // like any other error. Nothing here re-scopes.
+      // 302 -> 304 with `/auth/impersonation/exchange` and
+      // `/auth/impersonation/end` (tm 389.15) — a SiyahTuş operator entering
+      // the web console as a member from the root panel, and the red banner's
+      // "End session". The root panel hands the code to a browser tab; the app
+      // is never signed in as anybody by an operator. Nothing here re-scopes.
+      // 304 -> 305 with `/customer/chat/request-human` (tm 308) — the widget's
+      // "Talk to an agent" while the AI answers a visitor (AI-29). A visitor's
+      // surface; the app is an agent's, and nothing here re-scopes.
+      // 305 -> 309 with `/knowledge-sources/{sourceId}/pages`,
+      // `/knowledge-sources/{sourceId}/crawl`, `/knowledge-jobs/{jobId}` and
+      // `/knowledge-jobs/{jobId}/cancel` (tm 312.3) — a website source's
+      // crawl, its pages and its job (AI-17), read by the web panel's detail
+      // drawer (tm 312.4). Knowledge is configured in the web console; the app
+      // has no knowledge screen, and nothing here re-scopes.
+      contractEndpoints: 309,
       scopeBoundaries: 1,
     });
   });

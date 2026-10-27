@@ -41,6 +41,11 @@ export interface DispatcherDeps {
   onAuthenticated: (connection: Connection, principal: SocketPrincipal) => Promise<void>;
   /** Per-connection message budget, from RATE_LIMIT_RTM_PER_SEC. */
   messagesPerSecond: number;
+  /**
+   * Whether the root panel put the deployment in `full` maintenance (tm
+   * 389.13 · `maintenance.ts`): `login` is then refused. Omitted, never.
+   */
+  inMaintenance?: () => boolean;
 }
 
 export class Dispatcher {
@@ -94,6 +99,16 @@ export class Dispatcher {
       return encodeError(message.request_id, 'login', {
         type: 'not_allowed',
         message: 'This socket is already authenticated.',
+      });
+    }
+
+    // Maintenance (tm 389.13): the REST edge's 503 `maintenance`, before the
+    // credential is even looked at — there is nothing to sign in to.
+    if (this.deps.inMaintenance?.()) {
+      return encodeError(message.request_id, 'login', {
+        type: 'maintenance',
+        message: 'This service is down for maintenance. Please try again later.',
+        details: { mode: 'full' },
       });
     }
 
@@ -155,6 +170,7 @@ export class Dispatcher {
       groupIds: principal.groupIds,
       unrestricted: principal.unrestricted,
       authority: principal.authority,
+      impersonation: principal.impersonation ?? null,
     });
 
     // Requested subscriptions are applied at login so a client is live from its
@@ -244,6 +260,17 @@ export class Dispatcher {
         message,
         'not_allowed',
         'Customers send typing via the Customer API, not RTM.',
+      );
+    }
+
+    // An operator in a read-only session (tm 389.15) says nothing to a
+    // visitor: "is typing" is a write like any other, refused as the REST
+    // edge refuses one.
+    if (connection.impersonation?.mode === 'read_only') {
+      return this.#fail(
+        message,
+        'impersonation_read_only',
+        'This is a read-only support session: nothing can be sent from it.',
       );
     }
 

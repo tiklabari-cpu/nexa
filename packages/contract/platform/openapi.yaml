@@ -49,6 +49,12 @@ tags:
       Every workspace and everything about it except its content (tm 389.9):
       organization, licence, members, brands, usage, subscription, invoices,
       sandbox, operator notes, impersonation history, AI counts.
+  - name: AI catalogues
+    description: |
+      What the platform ships for the AI and how workspaces use it (tm 389.19):
+      the G1-G19 rules, the crisis-text drafts, the iGaming template pack and
+      its installs, the compliance scenario pack, the QA rubric, the tool
+      catalogue. Keys, versions and counts - never a workspace's content.
   - name: Accounts
     description: |
       The people behind the memberships (tm 389.11): search, detail, a new
@@ -64,10 +70,29 @@ tags:
       Usage across every workspace (tm 389.12) and the daily AI allowance: the
       deployment's counters, the heaviest workspaces, one workspace's caps and
       their override, each plan's default.
+  - name: Settings
+    description: |
+      Deployment settings (tm 389.13): sign-up, the trial length, the
+      announcement, maintenance mode, and the tenant API's effective configuration.
+      The AI provider settings (tm 389.17): model, embedding model, API keys
+      (write-only), daily caps, prices, a connection test and re-embedding.
+  - name: Operations
+    description: |
+      The Operations page (tm 389.14): the scheduler's jobs and "run now", the
+      webhook backlog, SIEM export status, the `events` partitions, expired
+      unverified sign-ups, the job queues and the component record. Counts and
+      states only.
   - name: Support
     description: |
       The support desk (tm 389.9): which workspace an identifier a customer
-      quoted belongs to. Impersonation arrives with 389.15.
+      quoted belongs to; and "enter as the customer" (tm 389.15) — a
+      time-boxed session as one member, read-only unless a superadmin asks
+      otherwise, mailed to the workspace's Founders.
+  - name: Security
+    description: |
+      The Security page (tm 389.16): the sign-up blocklist, failed sign-ins,
+      sign-ups by address, impersonation sessions and the abuse counters of the
+      tenant API's guards. Addresses, identifiers and counts only.
 
 # The operator session (tm 389.4) — an opaque bearer token, not a JWT. Every
 # operation needs it unless it says `security: []`. What else it needs is in
@@ -102,6 +127,8 @@ paths:
     $ref: "./paths/auth.yaml#/recoveryRegenerate"
   /auth/me:
     $ref: "./paths/auth.yaml#/me"
+  /auth/me/alert-prefs:
+    $ref: "./paths/auth.yaml#/alertPrefs"
   /auth/sessions:
     $ref: "./paths/auth.yaml#/sessions"
   /auth/logout:
@@ -198,6 +225,24 @@ paths:
     $ref: "./paths/workspace-actions.yaml#/deleteCancel"
   /support/lookup:
     $ref: "./paths/support.yaml#/lookup"
+  /support/impersonations:
+    $ref: "./paths/support.yaml#/impersonations"
+  /support/impersonations/{impersonationId}:
+    $ref: "./paths/support.yaml#/impersonation"
+  /support/impersonations/{impersonationId}/end:
+    $ref: "./paths/support.yaml#/impersonationEnd"
+  /security/blocklist:
+    $ref: "./paths/security.yaml#/blocklist"
+  /security/blocklist/{entryId}:
+    $ref: "./paths/security.yaml#/blocklistEntry"
+  /security/failed-logins:
+    $ref: "./paths/security.yaml#/failedLogins"
+  /security/signups-by-ip:
+    $ref: "./paths/security.yaml#/signupsByIp"
+  /security/impersonations:
+    $ref: "./paths/security.yaml#/impersonations"
+  /security/abuse-counters:
+    $ref: "./paths/security.yaml#/abuseCounters"
   /accounts:
     $ref: "./paths/accounts.yaml#/list"
   /accounts/{accountId}:
@@ -246,6 +291,52 @@ paths:
     $ref: "./paths/usage.yaml#/aiCaps"
   /settings/ai-caps:
     $ref: "./paths/usage.yaml#/planCaps"
+  /settings:
+    $ref: "./paths/settings.yaml#/settings"
+  /settings/maintenance:
+    $ref: "./paths/settings.yaml#/maintenance"
+  /settings/effective-config:
+    $ref: "./paths/settings.yaml#/effectiveConfig"
+  /settings/ai:
+    $ref: "./paths/settings.yaml#/ai"
+  /settings/ai/test-connection:
+    $ref: "./paths/settings.yaml#/aiTestConnection"
+  /settings/ai/reembed:
+    $ref: "./paths/settings.yaml#/aiReembed"
+  /ai-catalogs/guardrails:
+    $ref: "./paths/ai-catalogs.yaml#/guardrails"
+  /ai-catalogs/crisis-text-drafts:
+    $ref: "./paths/ai-catalogs.yaml#/crisisTextDrafts"
+  /ai-catalogs/templates:
+    $ref: "./paths/ai-catalogs.yaml#/templates"
+  /ai-catalogs/templates/installs:
+    $ref: "./paths/ai-catalogs.yaml#/templateInstalls"
+  /ai-catalogs/compliance-pack:
+    $ref: "./paths/ai-catalogs.yaml#/compliancePack"
+  /ai-catalogs/qa-rubric:
+    $ref: "./paths/ai-catalogs.yaml#/qaRubric"
+  /ai-catalogs/tools:
+    $ref: "./paths/ai-catalogs.yaml#/tools"
+  /operations/scheduler:
+    $ref: "./paths/operations.yaml#/scheduler"
+  /operations/scheduler/{name}/run:
+    $ref: "./paths/operations.yaml#/runJob"
+  /operations/webhooks:
+    $ref: "./paths/operations.yaml#/webhooks"
+  /operations/siem:
+    $ref: "./paths/operations.yaml#/siem"
+  /operations/partitions:
+    $ref: "./paths/operations.yaml#/partitions"
+  /operations/partitions/ensure:
+    $ref: "./paths/operations.yaml#/ensurePartitions"
+  /operations/unverified-signups:
+    $ref: "./paths/operations.yaml#/unverifiedSignups"
+  /operations/unverified-signups/purge:
+    $ref: "./paths/operations.yaml#/purgeUnverifiedSignups"
+  /operations/jobs:
+    $ref: "./paths/operations.yaml#/jobs"
+  /operations/components:
+    $ref: "./paths/operations.yaml#/componentRecord"
 
 components:
   securitySchemes:
@@ -277,6 +368,18 @@ components:
       required: true
       description: The workspace's licence number. Anything else is a 404, like an unknown one.
       schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+    BlocklistEntryId:
+      name: entryId
+      in: path
+      required: true
+      description: The blocklist entry's id. Anything else is a 404, like an unknown one.
+      schema: { type: string }
+    ImpersonationId:
+      name: impersonationId
+      in: path
+      required: true
+      description: The session's id. Anything else is a 404, like an unknown one.
+      schema: { type: string }
 
   schemas:
     PlatformRole:
@@ -310,6 +413,7 @@ components:
         - usage.manage
         - settings.manage
         - ai.manage
+        - operations.trigger
         - operations.run
         - security.manage
         - support.impersonate
@@ -518,6 +622,54 @@ components:
       properties:
         ended: { type: integer, description: How many sessions ended. }
 
+    PlatformAlertKind:
+      type: string
+      description: |
+        What the platform scan mails operators about (tm 389.20): a trial that ends
+        within three days, a payment request waiting over 24 hours, a workspace at
+        its daily AI cap, a red or stale health snapshot, a platform audit chain that
+        no longer verifies, a workspace deleted tomorrow.
+      enum:
+        - trial_ending
+        - payment_request_waiting
+        - ai_cap_reached
+        - health_red
+        - audit_chain_broken
+        - purge_tomorrow
+
+    PlatformAlertPrefs:
+      type: object
+      required: [kinds, locale, customized, available]
+      properties:
+        kinds:
+          type: array
+          description: |
+            The kinds this operator is mailed. Until they save a choice a superadmin
+            gets every kind and the other roles none (`customized` is false).
+          items: { $ref: "#/components/schemas/PlatformAlertKind" }
+        locale:
+          type: string
+          enum: [en, tr]
+          description: The language of the alert mail.
+        customized: { type: boolean }
+        available:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformAlertKind" }
+
+    PlatformAlertPrefsUpdate:
+      type: object
+      required: [kinds, locale]
+      additionalProperties: false
+      properties:
+        kinds:
+          type: array
+          maxItems: 6
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/PlatformAlertKind" }
+        locale:
+          type: string
+          enum: [en, tr]
+
     PlatformAdmin:
       type: object
       required:
@@ -601,6 +753,7 @@ components:
         - admin.totp_reverified
         - admin.recovery_codes_regenerated
         - admin.other_sessions_ended
+        - admin.alert_prefs_changed
         - admin.signed_out
         - admin.invited
         - admin.invite_revoked
@@ -652,11 +805,14 @@ components:
         - ai_settings.updated
         - ai_settings.connection_tested
         - ai_settings.reembed_started
+        - ai_settings.crisis_drafts_updated
         - impersonation.started
         - impersonation.ended
         - security.blocklist_added
         - security.blocklist_removed
         - security.unverified_signups_purged
+        - operations.job_run_requested
+        - operations.partition_ensured
 
     PlatformAuditTarget:
       type: string
@@ -675,6 +831,9 @@ components:
         - settings
         - blocklist
         - impersonation
+        - job
+        - partition
+        - signup
 
     PlatformAuditEntry:
       type: object
@@ -1513,9 +1672,102 @@ components:
               ended_at: { type: ["string", "null"], format: date-time }
               end_reason: { type: ["string", "null"] }
 
+    PlatformImpersonationStartRequest:
+      type: object
+      required: [license_id, account_id, reason]
+      properties:
+        license_id: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+        account_id:
+          type: string
+          format: uuid
+          description: The member to enter as — a live member of the workspace.
+        mode:
+          type: string
+          enum: [read_only, full]
+          default: read_only
+        reason:
+          type: string
+          description: Why — recorded in the platform audit chain (tm 389.5).
+          minLength: 3
+          maxLength: 500
+
+    PlatformImpersonation:
+      type: object
+      required:
+        [
+          id,
+          license_id,
+          organization_name,
+          account_id,
+          account_email,
+          admin_id,
+          admin_email,
+          mode,
+          started_at,
+          ends_at,
+          ended_at,
+          end_reason,
+          active,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        license_id: { type: string }
+        organization_name: { type: ["string", "null"] }
+        account_id: { type: string, format: uuid }
+        account_email: { type: ["string", "null"] }
+        admin_id: { type: string, format: uuid }
+        admin_email: { type: ["string", "null"] }
+        mode: { type: string, enum: [read_only, full] }
+        started_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        ended_at: { type: ["string", "null"], format: date-time }
+        end_reason:
+          type: ["string", "null"]
+          enum: [ended_by_operator, ended_in_workspace, null]
+          description: Empty while open, and for a session whose window simply ran out.
+        active:
+          type: boolean
+          description: Not ended and its window not run out.
+
+    PlatformImpersonationStarted:
+      type: object
+      required: [impersonation, handoff_url, handoff_expires_at, mail]
+      properties:
+        impersonation: { $ref: "#/components/schemas/PlatformImpersonation" }
+        handoff_url:
+          type: string
+          description: |
+            `<WEB_APP_URL>/auth/impersonate#code=…` — open it in a new tab. Good
+            once, until `handoff_expires_at`; shown here and nowhere else.
+        handoff_expires_at: { type: string, format: date-time }
+        mail:
+          type: string
+          enum: [sent, failed, none]
+          description: The Founders' notice — `none` when the workspace has no Founder to tell.
+
+    PlatformImpersonationEnded:
+      type: object
+      required: [unchanged, impersonation]
+      properties:
+        unchanged: { type: boolean }
+        impersonation: { $ref: "#/components/schemas/PlatformImpersonation" }
+
+    PlatformImpersonationList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformImpersonation" }
+        next_cursor: { type: ["string", "null"] }
+
     PlatformWorkspaceAiSummary:
       type: object
-      required: [ai_agents]
+      description: |
+        The workspace's AI at a glance - counts and states, never a rule's
+        text, a conversation or a scenario. A section whose table has not
+        shipped is `status: not_installed`, not a zero.
+      required: [ai_agents, guidance_rules, config_changes, guardrail_hits, qa, compliance_pack]
       properties:
         ai_agents:
           type: object
@@ -1523,6 +1775,254 @@ components:
           properties:
             total: { type: integer }
             active: { type: integer }
+        guidance_rules:
+          type: object
+          required: [status, total, active]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            total: { type: integer }
+            active: { type: integer }
+        config_changes:
+          type: object
+          description: Changes to the AI configuration in the last 30 days (tm 315).
+          required: [status, last_30_days]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            last_30_days: { type: integer }
+        guardrail_hits:
+          type: object
+          description: |
+            Guardrail triggers in the last 30 days, by rule: `G1`-`G19` for the
+            platform's, `workspace_rule` and `forbidden_phrase` for the
+            workspace's own.
+          required: [status, last_30_days, by_rule]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            last_30_days: { type: integer }
+            by_rule:
+              type: object
+              additionalProperties: { type: integer }
+        qa:
+          type: object
+          description: The QA queue's counts (tm 319).
+          required: [status, reviewed_30_days, awaiting_review]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            reviewed_30_days: { type: integer }
+            awaiting_review: { type: integer }
+        compliance_pack:
+          type: object
+          description: The workspace's latest run that played the compliance pack.
+          required: [status, last_run]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            last_run:
+              oneOf:
+                - type: "null"
+                - type: object
+                  required: [version, run_status, passed, failed, finished_at]
+                  properties:
+                    version: { type: string }
+                    run_status: { type: string }
+                    passed: { type: ["integer", "null"] }
+                    failed: { type: ["integer", "null"] }
+                    finished_at: { type: ["string", "null"], format: date-time }
+
+    PlatformAiCatalogStatus:
+      type: string
+      description: |
+        `not_installed` - the table or catalogue behind it has not shipped yet
+        (`AI_CATALOG_STATUSES`, @siyahtus/types).
+      enum: [available, not_installed]
+
+    PlatformGuardrailLang:
+      type: object
+      required: [tr, en]
+      properties:
+        tr: { type: string }
+        en: { type: string }
+
+    PlatformGuardrailPatternCounts:
+      type: object
+      description: Lexicon patterns per language (0 where the rule has none on that side).
+      required: [tr, en]
+      properties:
+        tr: { type: integer }
+        en: { type: integer }
+
+    PlatformGuardrailCatalogItem:
+      type: object
+      required:
+        - id
+        - title
+        - prompt
+        - category
+        - action
+        - target
+        - priority
+        - handoff_reason
+        - risk_flag
+        - applies_when
+        - tenant_text
+        - lexicon_alone
+        - stages
+        - input_patterns
+        - output_patterns
+      properties:
+        id: { type: string, pattern: "^G[0-9]{1,2}$" }
+        title: { $ref: "#/components/schemas/PlatformGuardrailLang" }
+        prompt: { $ref: "#/components/schemas/PlatformGuardrailLang" }
+        category: { type: string }
+        action: { type: string }
+        target: { type: ["string", "null"] }
+        priority: { type: string }
+        handoff_reason: { type: ["string", "null"] }
+        risk_flag: { type: ["string", "null"] }
+        applies_when: { type: string, enum: [always, risk_flagged] }
+        tenant_text: { type: ["string", "null"] }
+        lexicon_alone: { type: boolean }
+        stages:
+          type: array
+          items: { type: string, enum: [input, output] }
+        input_patterns: { $ref: "#/components/schemas/PlatformGuardrailPatternCounts" }
+        output_patterns: { $ref: "#/components/schemas/PlatformGuardrailPatternCounts" }
+
+    PlatformGuardrailCatalog:
+      type: object
+      required: [version, count, items]
+      properties:
+        version: { type: string, description: PLATFORM_GUARDRAILS_VERSION }
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformGuardrailCatalogItem" }
+
+    PlatformCrisisTextMap:
+      type: object
+      description: |
+        Country (upper-case ISO 3166-1 alpha-2) to its texts, per language;
+        a language may be missing.
+      additionalProperties:
+        type: object
+        properties:
+          en: { type: string, minLength: 1, maxLength: 1000 }
+          tr: { type: string, minLength: 1, maxLength: 1000 }
+        additionalProperties: false
+
+    PlatformCrisisTextDrafts:
+      type: object
+      required: [drafts, version, updated_at, max_length]
+      properties:
+        drafts: { $ref: "#/components/schemas/PlatformCrisisTextMap" }
+        version: { type: integer, minimum: 0 }
+        updated_at: { type: ["string", "null"], format: date-time }
+        max_length: { type: integer }
+
+    PlatformCrisisTextDraftsRequest:
+      type: object
+      required: [reason, drafts]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        drafts: { $ref: "#/components/schemas/PlatformCrisisTextMap" }
+
+    PlatformTemplateCatalogItem:
+      type: object
+      required: [key, name, version, locked, scenario_count, tenant_must_fill_count]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        locked: { type: boolean }
+        scenario_count: { type: integer }
+        tenant_must_fill_count: { type: integer }
+
+    PlatformTemplateCatalog:
+      type: object
+      required: [pack, items]
+      properties:
+        pack:
+          type: object
+          required: [key, version, industry, lang, template_count]
+          properties:
+            key: { type: string }
+            version: { type: string, description: The templates package version. }
+            industry: { type: string }
+            lang: { type: string }
+            template_count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformTemplateCatalogItem" }
+
+    PlatformTemplateInstall:
+      type: object
+      required: [license_id, workspace_name, installed, active, outdated]
+      properties:
+        license_id: { type: string }
+        workspace_name: { type: string }
+        installed: { type: integer }
+        active: { type: integer }
+        outdated: { type: integer }
+
+    PlatformTemplateInstallList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformTemplateInstall" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformCompliancePack:
+      type: object
+      required: [version, size, items]
+      properties:
+        version: { type: string, description: AI_COMPLIANCE_PACK_VERSION }
+        size: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required: [key, guardrail, language]
+            properties:
+              key: { type: string }
+              guardrail: { type: string }
+              language: { type: string }
+
+    PlatformQaRubric:
+      type: object
+      required: [status, version, scale, items]
+      properties:
+        status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+        version: { type: ["string", "null"] }
+        scale:
+          type: object
+          required: [min, max]
+          properties:
+            min: { type: integer }
+            max: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required: [key, handoff_only]
+            properties:
+              key: { type: string }
+              handoff_only: { type: boolean }
+
+    PlatformToolCatalog:
+      type: object
+      required: [status, version, items]
+      properties:
+        status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+        version: { type: ["string", "null"] }
+        items:
+          type: array
+          items:
+            type: object
+            required: [key]
+            properties:
+              key: { type: string }
 
     PlatformAccountSummary:
       type: object
@@ -2167,6 +2667,401 @@ components:
         unchanged: { type: boolean }
         caps: { $ref: "#/components/schemas/PlatformPlanAiCaps" }
 
+    PlatformOperationsJob:
+      type: object
+      required:
+        - name
+        - interval_ms
+        - enabled
+        - last_run_at
+        - last_status
+        - last_duration_ms
+        - next_run_at
+        - running
+        - last_manual
+      properties:
+        name: { type: string }
+        interval_ms: { type: integer }
+        enabled:
+          type: boolean
+          description: '`false`: registered but switched off — it never runs, and "run now" is refused.'
+        last_run_at:
+          type: ["string", "null"]
+          format: date-time
+          description: When the job last ticked on the publishing process, whatever came of it.
+        last_status:
+          type: ["string", "null"]
+          enum: [ok, skipped, error, disabled, null]
+        last_error_class:
+          type: string
+          description: The error's class, never its message.
+        last_duration_ms: { type: ["integer", "null"] }
+        next_run_at: { type: ["string", "null"], format: date-time }
+        running:
+          type: boolean
+          description: A pass is executing right now, on some instance.
+        last_manual:
+          oneOf:
+            - $ref: "#/components/schemas/PlatformOperationsManualRun"
+            - { type: "null" }
+
+    PlatformOperationsManualRun:
+      type: object
+      required: [at, result, status, duration_ms, error_class]
+      properties:
+        at: { type: string, format: date-time }
+        result:
+          type: string
+          enum: [finished, already_running, disabled, unknown_job]
+        status:
+          type: ["string", "null"]
+          enum: [ok, error, null]
+        duration_ms: { type: ["integer", "null"] }
+        error_class: { type: ["string", "null"] }
+
+    PlatformOperationsScheduler:
+      type: object
+      required: [stale, generated_at, enabled, jobs]
+      properties:
+        stale: { type: boolean }
+        generated_at: { type: ["string", "null"], format: date-time }
+        enabled:
+          type: ["boolean", "null"]
+          description: Whether the publishing process runs its jobs (`SCHEDULER_ENABLED`).
+        jobs:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformOperationsJob" }
+
+    PlatformOperationsRunResult:
+      type: object
+      required: [name, request_id, result]
+      properties:
+        name: { type: string }
+        request_id: { type: string, format: uuid }
+        result:
+          type: string
+          description: |
+            `queued` — a process heard the request · `already_running` — the
+            job's running marker is held · `disabled` — the job is switched off ·
+            `no_listener` — no scheduler is subscribed.
+          enum: [queued, already_running, disabled, no_listener]
+
+    PlatformOperationsWebhooks:
+      type: object
+      required: [generated_at, window_hours, pending, overdue, oldest_pending_age_s, last_window]
+      properties:
+        generated_at: { type: string, format: date-time }
+        window_hours: { type: integer }
+        pending: { type: integer }
+        overdue: { type: integer }
+        oldest_pending_age_s: { type: ["number", "null"] }
+        last_window:
+          type: object
+          required: [delivered, failed, exhausted, failure_rate, workspaces_failing]
+          properties:
+            delivered: { type: integer }
+            failed: { type: integer }
+            exhausted: { type: integer }
+            failure_rate:
+              type: ["number", "null"]
+              description: (failed + exhausted) / (delivered + failed + exhausted); null with none.
+            workspaces_failing: { type: integer }
+
+    PlatformOperationsSiem:
+      type: object
+      required:
+        - generated_at
+        - provider
+        - workspaces_enabled
+        - workspaces_stalled
+        - last_run_at
+        - last_exported_at
+        - exported_total
+      properties:
+        generated_at: { type: string, format: date-time }
+        provider: { type: string }
+        workspaces_enabled: { type: integer }
+        workspaces_stalled: { type: integer }
+        last_run_at: { type: ["string", "null"], format: date-time }
+        last_exported_at: { type: ["string", "null"], format: date-time }
+        exported_total: { type: integer }
+
+    PlatformOperationsPartition:
+      type: object
+      required: [name, month, default, est_rows, size_bytes]
+      properties:
+        name: { type: string }
+        month: { type: ["string", "null"], description: "`YYYY-MM`; null for the catch-all." }
+        default: { type: boolean }
+        est_rows: { type: integer }
+        size_bytes: { type: integer }
+
+    PlatformOperationsPartitions:
+      type: object
+      required: [generated_at, window, partitions, missing_months, default_has_rows]
+      properties:
+        generated_at: { type: string, format: date-time }
+        window:
+          type: object
+          required: [behind, ahead]
+          properties:
+            behind: { type: integer }
+            ahead: { type: integer }
+        partitions:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformOperationsPartition" }
+        missing_months:
+          type: array
+          items: { type: string }
+        default_has_rows:
+          type: ["boolean", "null"]
+          description: Null where the catch-all could not be read.
+
+    PlatformOperationsEnsureRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+        month:
+          type: string
+          pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+          description: One month to open; the whole runtime window when absent.
+
+    PlatformOperationsEnsureResult:
+      type: object
+      required: [ensured, failed]
+      properties:
+        ensured:
+          type: array
+          items:
+            type: object
+            required: [month, name]
+            properties:
+              month: { type: string }
+              name: { type: string }
+        failed:
+          type: array
+          items:
+            type: object
+            required: [month, error_code]
+            properties:
+              month: { type: string }
+              error_code: { type: string, description: The SQLSTATE. }
+
+    PlatformOperationsUnverifiedSignups:
+      type: object
+      required: [generated_at, ttl_hours, total, older_than_ttl, oldest_age_s]
+      properties:
+        generated_at: { type: string, format: date-time }
+        ttl_hours: { type: integer }
+        total: { type: integer }
+        older_than_ttl: { type: integer }
+        oldest_age_s: { type: ["integer", "null"] }
+
+    PlatformOperationsPurgeResult:
+      type: object
+      required: [purged, batches, ttl_hours]
+      properties:
+        purged: { type: integer }
+        batches: { type: integer }
+        ttl_hours: { type: integer }
+
+    PlatformOperationsQueue:
+      type: object
+      required: [key, state, counts, oldest_unfinished_age_s]
+      properties:
+        key:
+          type: string
+          enum: [ai_jobs, knowledge_jobs, doc_worker]
+        state:
+          type: string
+          description: "`not_installed` — no table, no query · `unreadable` — the table exists but could not be read."
+          enum: [ok, not_installed, unreadable]
+        counts:
+          type: ["object", "null"]
+          additionalProperties: { type: integer }
+        oldest_unfinished_age_s: { type: ["number", "null"] }
+
+    PlatformOperationsJobs:
+      type: object
+      required: [generated_at, queues]
+      properties:
+        generated_at: { type: string, format: date-time }
+        queues:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformOperationsQueue" }
+
+    PlatformOperationsComponents:
+      type: object
+      required: [generated_at, components]
+      properties:
+        generated_at: { type: string, format: date-time }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformComponentStatus" }
+
+    PlatformBlocklistKind:
+      type: string
+      description: What an entry matches (`PLATFORM_BLOCKLIST_KINDS`, @siyahtus/types).
+      enum: [email, domain, ip]
+
+    PlatformBlocklistEntry:
+      type: object
+      required: [id, kind, value, reason, created_by, created_by_email, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/PlatformBlocklistKind" }
+        value:
+          type: string
+          description: Normalised — an address or domain in lower case, an IP in canonical form (a CIDR with its host bits zeroed).
+        reason: { type: ["string", "null"] }
+        created_by: { type: ["string", "null"], format: uuid }
+        created_by_email: { type: ["string", "null"] }
+        created_at: { type: string, format: date-time }
+
+    PlatformBlocklistList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformBlocklistEntry" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformBlocklistCreateRequest:
+      type: object
+      required: [kind, value, reason]
+      properties:
+        kind: { $ref: "#/components/schemas/PlatformBlocklistKind" }
+        value: { type: string, minLength: 1, maxLength: 320 }
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    PlatformCounted:
+      type: object
+      required: [key, count]
+      properties:
+        key: { type: string, description: An address or a licence number }
+        count: { type: integer, minimum: 0 }
+
+    PlatformFailedLogins:
+      type: object
+      required: [generated_at, hours, since, tenant, operator]
+      properties:
+        generated_at: { type: string, format: date-time }
+        hours: { type: integer }
+        since: { type: string, format: date-time }
+        tenant:
+          type: object
+          required: [live, history]
+          properties:
+            live:
+              type: object
+              required:
+                [status, window_seconds, limit, addresses_total, locked_total, addresses, truncated]
+              properties:
+                status:
+                  type: string
+                  description: "`unavailable` when Redis could not be read."
+                  enum: [available, unavailable]
+                window_seconds: { type: integer }
+                limit:
+                  { type: integer, description: Failures per window before the address is refused. }
+                addresses_total: { type: integer }
+                locked_total: { type: integer }
+                addresses:
+                  type: array
+                  items:
+                    type: object
+                    required: [ip, failures, locked]
+                    properties:
+                      ip: { type: string }
+                      failures: { type: integer }
+                      locked: { type: boolean }
+                truncated: { type: boolean }
+            history:
+              type: object
+              required: [total, by_ip, by_workspace]
+              properties:
+                total: { type: integer }
+                by_ip:
+                  type: array
+                  items: { $ref: "#/components/schemas/PlatformCounted" }
+                by_workspace:
+                  type: array
+                  items: { $ref: "#/components/schemas/PlatformCounted" }
+        operator:
+          type: object
+          required: [sign_in_failed, totp_failed, by_ip]
+          properties:
+            sign_in_failed: { type: integer }
+            totp_failed: { type: integer }
+            by_ip:
+              type: array
+              items: { $ref: "#/components/schemas/PlatformCounted" }
+
+    PlatformSignupsByIp:
+      type: object
+      required: [status, days, reason, data]
+      properties:
+        status:
+          type: string
+          enum: [available, not_available]
+        days: { type: integer }
+        reason: { type: ["string", "null"] }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformCounted" }
+
+    PlatformAbuseCounterStatus:
+      type: string
+      description: |
+        `available` — the source is there and counted; `not_installed` — the
+        table it reads is not part of this database; `not_available` — the
+        guard keeps no count to read.
+      enum: [available, not_installed, not_available]
+
+    PlatformAbuseCounters:
+      type: object
+      required: [generated_at, invites, widget_quota, widget_challenge]
+      properties:
+        generated_at: { type: string, format: date-time }
+        invites:
+          type: object
+          required: [status, limit_per_day, workspaces_at_limit, workspaces]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAbuseCounterStatus" }
+            limit_per_day: { type: integer }
+            workspaces_at_limit: { type: integer }
+            workspaces:
+              type: array
+              items: { $ref: "#/components/schemas/PlatformCounted" }
+        widget_quota:
+          type: object
+          required: [status, day, members_at_cap, workspaces_affected, workspaces]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAbuseCounterStatus" }
+            day: { type: string, description: The UTC day counted (YYYY-MM-DD). }
+            members_at_cap: { type: integer }
+            workspaces_affected: { type: integer }
+            workspaces:
+              type: array
+              items: { $ref: "#/components/schemas/PlatformCounted" }
+        widget_challenge:
+          type: object
+          required: [status, component]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAbuseCounterStatus" }
+            component:
+              oneOf:
+                - { $ref: "#/components/schemas/PlatformComponentStatus" }
+                - { type: "null" }
+
     Error:
       type: object
       required: [error]
@@ -2187,6 +3082,345 @@ components:
             details:
               type: object
               additionalProperties: true
+
+    PlatformNoticeText:
+      type: object
+      description: One sentence in English and Turkish — both, always.
+      required: [en, tr]
+      additionalProperties: false
+      properties:
+        en: { type: string, minLength: 1, maxLength: 500 }
+        tr: { type: string, minLength: 1, maxLength: 500 }
+
+    PlatformAnnouncement:
+      type: object
+      description: |
+        The banner every panel user sees (`NoticeBar`). It stops being served
+        once `until` has passed.
+      required: [level, en, tr, until]
+      additionalProperties: false
+      properties:
+        level: { type: string, enum: [info, warning, critical] }
+        en: { type: string, minLength: 1, maxLength: 500 }
+        tr: { type: string, minLength: 1, maxLength: 500 }
+        until: { type: ["string", "null"], format: date-time }
+
+    PlatformMaintenance:
+      type: object
+      required: [enabled, mode, message]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+        mode: { type: string, enum: [read_only, full] }
+        message:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformNoticeText" }
+            - { type: "null" }
+
+    PlatformDeploymentSettings:
+      type: object
+      description: |
+        What `platform_settings` holds for the tenant API; `null` is "not set
+        here". `updated_at` is the newest change among these keys.
+      required: [signup_enabled, trial_days, announcement, maintenance, updated_at]
+      properties:
+        signup_enabled: { type: ["boolean", "null"] }
+        trial_days: { type: ["integer", "null"], minimum: 1, maximum: 365 }
+        announcement:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAnnouncement" }
+            - { type: "null" }
+        maintenance:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformMaintenance" }
+            - { type: "null" }
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformSettingsPatchRequest:
+      type: object
+      description: At least one key besides `reason`; `null` removes the stored value.
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        signup_enabled: { type: ["boolean", "null"] }
+        trial_days: { type: ["integer", "null"], minimum: 1, maximum: 365 }
+        announcement:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAnnouncement" }
+            - { type: "null" }
+
+    PlatformMaintenanceRequest:
+      type: object
+      required: [reason, enabled, mode]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        enabled: { type: boolean }
+        mode: { type: string, enum: [read_only, full] }
+        message:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformNoticeText" }
+            - { type: "null" }
+
+    PlatformEffectiveConfigEntry:
+      type: object
+      required: [key, value, source, redacted, panel]
+      properties:
+        key: { type: string, description: The environment variable's name. }
+        value:
+          type: ["string", "null"]
+          description: |
+            The value the tenant API runs with, as text; `set` / `unset` when
+            `redacted`; `null` for an optional key with no value.
+        source: { type: string, enum: [db, env, default] }
+        redacted: { type: boolean, description: A secret — only whether it is set is shown. }
+        panel:
+          type: boolean
+          description: This panel can override it (`PATCH /settings`).
+
+    PlatformEffectiveConfig:
+      type: object
+      required: [stale, generated_at, age_s, entries]
+      properties:
+        stale:
+          type: boolean
+          description: No publication, or one older than 90 seconds.
+        generated_at: { type: ["string", "null"], format: date-time }
+        age_s: { type: ["number", "null"] }
+        entries:
+          type: array
+          description: Alphabetical by key.
+          items: { $ref: "#/components/schemas/PlatformEffectiveConfigEntry" }
+
+    PlatformAiLlmSettings:
+      type: object
+      description: |
+        The model settings as stored. `null` in a field is "not set here" —
+        for `timeout_ms` and `max_output_tokens` the environment's value
+        (`LLM_TIMEOUT_MS`, `LLM_MAX_OUTPUT_TOKENS`) applies. The key itself is
+        never returned.
+      required:
+        [
+          provider,
+          base_url,
+          model,
+          model_fast,
+          region,
+          timeout_ms,
+          max_output_tokens,
+          api_key_last4,
+        ]
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        model_fast:
+          type: ["string", "null"]
+          description: The model a `fast` call uses (classifying, summarising); `null` — `model`.
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        timeout_ms: { type: ["integer", "null"], minimum: 1000, maximum: 120000 }
+        max_output_tokens: { type: ["integer", "null"], minimum: 1, maximum: 16384 }
+        api_key_last4:
+          type: ["string", "null"]
+          description: The stored key's last four characters; `null` — no key stored here.
+
+    PlatformAiEmbeddingSettings:
+      type: object
+      description: The embedding provider as stored; `PlatformAiLlmSettings`' rules.
+      required: [provider, base_url, model, region, dimensions, api_key_last4]
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        dimensions:
+          type: integer
+          enum: [1536]
+          description: Fixed — `knowledge_chunks.embedding` is `vector(1536)`.
+        api_key_last4: { type: ["string", "null"] }
+
+    PlatformAiDailyCap:
+      type: object
+      required: [workspace, global]
+      additionalProperties: false
+      properties:
+        workspace:
+          type: integer
+          minimum: 1
+          description: Tokens a day for a workspace with no plan figure or override of its own.
+        global:
+          type: integer
+          minimum: 1
+          description: Tokens a day for the whole deployment.
+
+    PlatformAiDeploymentCaps:
+      type: object
+      description: |
+        The deployment's daily caps per meter, in place of the four
+        `AI_DAILY_*` settings. Stored under `ai.caps` beside the plans'
+        defaults (`plans`, tm 389.12), which this does not touch.
+      required: [llm, embedding]
+      additionalProperties: false
+      properties:
+        llm: { $ref: "#/components/schemas/PlatformAiDailyCap" }
+        embedding: { $ref: "#/components/schemas/PlatformAiDailyCap" }
+
+    PlatformAiPrices:
+      type: object
+      description: |
+        What the provider charges, in US dollars per million tokens — the AI
+        usage report's cost estimate, in place of the three `AI_PRICE_*`
+        settings. `null` — no estimate for that meter.
+      required: [llm_input_usd_per_mtok, llm_output_usd_per_mtok, embedding_usd_per_mtok]
+      additionalProperties: false
+      properties:
+        llm_input_usd_per_mtok: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+        llm_output_usd_per_mtok: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+        embedding_usd_per_mtok: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+
+    PlatformAiReembedStatus:
+      type: object
+      description: |
+        The last re-embedding this panel started. `idle` — none since Redis
+        last lost the record.
+      required: [state, started_at, finished_at, target, sources, chunks, failed, refused, capped]
+      properties:
+        state: { type: string, enum: [idle, running, finished, failed] }
+        started_at: { type: ["string", "null"], format: date-time }
+        finished_at: { type: ["string", "null"], format: date-time }
+        target:
+          type: ["string", "null"]
+          description: The embedding space moved into (`<provider>:<model>`).
+        sources: { type: integer, minimum: 0, description: Sources moved so far. }
+        chunks: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        refused: { type: integer, minimum: 0, description: Workspaces the residency rule kept out. }
+        capped:
+          type: boolean
+          description: The deployment's daily embedding allowance ran out; start again after 00:00 UTC.
+
+    PlatformAiSettingsSource:
+      type: object
+      required: [llm, embedding]
+      properties:
+        llm: { type: string, enum: [db, env] }
+        embedding: { type: string, enum: [db, env] }
+
+    PlatformAiSettings:
+      type: object
+      required: [llm, embedding, caps, prices, source, reembed, updated_at]
+      properties:
+        llm:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiLlmSettings" }
+            - { type: "null" }
+        embedding:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiEmbeddingSettings" }
+            - { type: "null" }
+        caps:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiDeploymentCaps" }
+            - { type: "null" }
+        prices:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiPrices" }
+            - { type: "null" }
+        source: { $ref: "#/components/schemas/PlatformAiSettingsSource" }
+        reembed: { $ref: "#/components/schemas/PlatformAiReembedStatus" }
+        updated_at: { type: ["string", "null"], format: date-time }
+        warning:
+          type: string
+          enum: [reembed_required]
+          description: |
+            `PUT` only — the embedding provider or model changed, so the stored
+            knowledge has to be re-embedded (`POST /settings/ai/reembed`).
+
+    PlatformAiLlmInput:
+      type: object
+      required: [provider]
+      additionalProperties: false
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"], maxLength: 500 }
+        model: { type: ["string", "null"], minLength: 1, maxLength: 200 }
+        model_fast: { type: ["string", "null"], minLength: 1, maxLength: 200 }
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        timeout_ms: { type: ["integer", "null"], minimum: 1000, maximum: 120000 }
+        max_output_tokens: { type: ["integer", "null"], minimum: 1, maximum: 16384 }
+        api_key:
+          type: ["string", "null"]
+          minLength: 8
+          maxLength: 500
+          writeOnly: true
+          description: Absent — keep the stored key; a string — replace it; `null` — remove it.
+
+    PlatformAiEmbeddingInput:
+      type: object
+      required: [provider]
+      additionalProperties: false
+      properties:
+        provider: { type: string, enum: [mock, openai] }
+        base_url: { type: ["string", "null"], maxLength: 500 }
+        model: { type: ["string", "null"], minLength: 1, maxLength: 200 }
+        region: { type: ["string", "null"], enum: [eu, us, null] }
+        dimensions: { type: integer, enum: [1536] }
+        api_key:
+          type: ["string", "null"]
+          minLength: 8
+          maxLength: 500
+          writeOnly: true
+
+    PlatformAiSettingsRequest:
+      type: object
+      description: At least one key besides `reason`; `null` removes the stored value.
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        llm:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiLlmInput" }
+            - { type: "null" }
+        embedding:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiEmbeddingInput" }
+            - { type: "null" }
+        caps:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiDeploymentCaps" }
+            - { type: "null" }
+        prices:
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformAiPrices" }
+            - { type: "null" }
+
+    PlatformAiConnectionTestRequest:
+      type: object
+      required: [reason, target]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        target: { type: string, enum: [llm, embedding] }
+
+    PlatformAiConnectionTest:
+      type: object
+      required: [target, provider, source, model, ok, latency_ms, error]
+      properties:
+        target: { type: string, enum: [llm, embedding] }
+        provider: { type: string, enum: [mock, openai] }
+        source: { type: string, enum: [db, env] }
+        model: { type: ["string", "null"] }
+        ok: { type: boolean }
+        latency_ms: { type: integer, minimum: 0 }
+        error:
+          type: ["string", "null"]
+          description: |
+            The failure's kind (`timeout`, `auth`, `rate_limited`, `network`,
+            `bad_request`, `bad_response`, `provider_error`, `circuit_open`,
+            `no_answer`, `ai_daily_cap`, `misconfigured`) — never the
+            provider's message.
 
   responses:
     BadRequest:
@@ -2225,8 +3459,9 @@ components:
       description: |
         `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
         `platform_workspace_state` (`details.reason`, tm 389.10) or
-        `platform_account_state` (`details.reason`, tm 389.11) — the request was
-        fine, the state refused it.
+        `platform_account_state` (`details.reason`, tm 389.11) or
+        `platform_operation_running` (tm 389.17) — the request was fine, the
+        state refused it.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

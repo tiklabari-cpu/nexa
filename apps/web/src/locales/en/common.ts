@@ -17,6 +17,7 @@ import type { Messages } from '../merge.js';
  */
 export const common: Messages = {
   'common.errors.account_exists': 'That email address already has an account.',
+  'common.errors.ai_agent_exists': 'This workspace already has an AI agent.',
   'common.errors.ai_guardrail_setup_incomplete':
     'The AI agent cannot go live until its crisis text is written and approved by the owner.',
   'common.errors.ai_mode_transition_refused': 'The AI is not answering this conversation.',
@@ -47,9 +48,16 @@ export const common: Messages = {
     'Another team already handles this topic — clear it there first.',
   'common.errors.group_unavailable': 'That team cannot take this conversation right now.',
   'common.errors.groups_offline': 'Every team is offline right now.',
+  'common.errors.impersonation_forbidden_path':
+    'A support session cannot do this on a member’s behalf.',
+  'common.errors.impersonation_read_only':
+    'This is a read-only support session — nothing can be changed from it.',
   'common.errors.internal': 'Something went wrong on our side — try again.',
+  'common.errors.knowledge_job_in_progress':
+    'This source is already being crawled — wait for it to finish or cancel it.',
   'common.errors.license_expired': 'Your subscription has ended — renew it to continue.',
   'common.errors.limit_reached': 'You have reached the limit for your plan.',
+  'common.errors.maintenance': 'The service is down for maintenance. Please try again later.',
   'common.errors.message_rejected': 'That message was rejected.',
   'common.errors.misdirected_request': 'That request went to the wrong place — reload and retry.',
   'common.errors.network': 'Could not reach the server — check your connection.',
@@ -60,6 +68,8 @@ export const common: Messages = {
   'common.errors.platform_account_state': 'The account is not in a state that allows this.',
   'common.errors.platform_last_superadmin':
     'This would leave the platform without an active superadmin.',
+  'common.errors.platform_operation_running':
+    'This operation is already running — try again once it has finished.',
   'common.errors.platform_reason_required':
     'Say why you are doing this (3 to 500 characters) — it goes into the audit log.',
   'common.errors.platform_recent_totp_required':

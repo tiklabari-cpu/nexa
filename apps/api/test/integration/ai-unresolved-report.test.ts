@@ -555,9 +555,10 @@ describe('the unresolved questions report’s endpoints (tm 317.3 · AI-22)', ()
     it('refuses a merge of a cluster into itself, of another agent’s or another space’s, or of one that is not there — and merges nothing', async () => {
       const keep = await makeCluster(ws, { itemCount: 2 });
       const fine = await makeCluster(ws, { itemCount: 1 });
+      // One AI agent per workspace (tm 390.1): the other agent is its Copilot record.
       const otherAgent = (
         await owner.aiAgent.create({
-          data: { licenseId: ws.licenseId, name: 'İkinci', kind: 'ai_agent', active: true },
+          data: { licenseId: ws.licenseId, name: 'Copilot', kind: 'copilot', active: true },
           select: { id: true },
         })
       ).id;
@@ -675,9 +676,10 @@ describe('the unresolved questions report’s endpoints (tm 317.3 · AI-22)', ()
 
     it('refuses a locked template copy, another agent’s procedure and a bad body', async () => {
       const locked = await makeSkill(ws, { locked: true });
+      // One AI agent per workspace (tm 390.1): the other agent is its Copilot record.
       const otherAgent = (
         await owner.aiAgent.create({
-          data: { licenseId: ws.licenseId, name: 'İkinci', kind: 'ai_agent', active: true },
+          data: { licenseId: ws.licenseId, name: 'Copilot', kind: 'copilot', active: true },
           select: { id: true },
         })
       ).id;

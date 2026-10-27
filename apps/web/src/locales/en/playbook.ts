@@ -117,7 +117,38 @@ export const playbook: Messages = {
   'playbook.actions.browseTemplates': 'Browse templates',
   'playbook.actions.newSkill': 'New skill',
   'playbook.tabs.performance': 'Performance',
-  'playbook.tabs.profile': 'Profile',
+  'playbook.tabs.general': 'General settings',
+  'playbook.tabs.behaviour': 'Behaviour',
+  // "Add an AI agent" (CreateAiAgentCard.tsx, tm 390.2)
+  'playbook.create.title': 'Add an AI agent',
+  'playbook.create.description':
+    'Give the assistant a name and, if you like, a tone. It starts switched off — you choose when it goes live.',
+  'playbook.create.name': 'Name',
+  'playbook.create.namePlaceholder': 'Support assistant',
+  'playbook.create.nameRequired': 'Give the AI agent a name.',
+  'playbook.create.tone': 'Tone',
+  'playbook.create.tonePlaceholder': 'Friendly and concise',
+  'playbook.create.submit': 'Add AI agent',
+  'playbook.create.noAgentTitle': 'No AI agent yet',
+  'playbook.create.askAdmin': 'Ask an admin of this workspace to add the AI agent.',
+  // What is left before it can go live (SetupSteps.tsx)
+  'playbook.setup.title': 'Set-up steps',
+  'playbook.setup.knowledge': 'Add a knowledge source for it to answer from',
+  'playbook.setup.skill': 'Add an active skill with steps',
+  'playbook.setup.open': 'Open',
+  'playbook.setup.done': 'Done',
+  'playbook.setup.todo': 'Not done yet',
+  // The widget welcome message (WelcomeMessageCard.tsx)
+  'playbook.welcome.title': 'Welcome message',
+  'playbook.welcome.description':
+    'The first message a visitor sees from the assistant in the chat widget.',
+  'playbook.welcome.titleLabel': 'Title',
+  'playbook.welcome.textLabel': 'Message',
+  'playbook.welcome.save': 'Save welcome message',
+  'playbook.welcome.saved': 'Saved',
+  'playbook.welcome.perBrand': 'Each brand has its own welcome message.',
+  'playbook.welcome.readOnly': 'You can read the welcome message but not change it.',
+  'playbook.welcome.goToWidget': 'Go to widget settings',
   'playbook.tabs.skills': 'Skills',
   'playbook.tabs.knowledge': 'Knowledge',
   'playbook.tabs.kb': 'Public KB',
@@ -242,6 +273,125 @@ export const playbook: Messages = {
   'playbook.knowledge.noneInTab': 'No {type} sources yet.',
   'playbook.knowledge.indexed': 'Indexed',
   'playbook.knowledge.empty': 'Empty',
+  'playbook.knowledge.statusCrawling': 'Crawling…',
+  'playbook.knowledge.statusPartial': 'Partly crawled',
+
+  // Website crawl — add-form settings, detail drawer (tm 312.4 · AI-17).
+  'playbook.knowledge.crawl.legend': 'Crawl settings',
+  'playbook.knowledge.crawl.scope': 'Crawl scope',
+  'playbook.knowledge.crawl.scope.single': 'This page only',
+  'playbook.knowledge.crawl.scope.all': 'This page and everything under it',
+  'playbook.knowledge.crawl.scope.sitemap': 'Pages listed in the sitemap',
+  'playbook.knowledge.crawl.scope.singleHelp':
+    'Only the address above is read. Nothing else on the site is fetched.',
+  'playbook.knowledge.crawl.scope.allHelp':
+    'Pages under the address, found from the sitemap or by following links up to {depth} levels deep. Other sites and other hosts are never followed.',
+  'playbook.knowledge.crawl.scope.sitemapHelp':
+    'Only pages the site’s sitemap lists, under the address. Links are not followed.',
+  'playbook.knowledge.crawl.pageLimit': 'Page limit',
+  'playbook.knowledge.crawl.pageLimitHelp':
+    'Up to {max} pages for this source; a workspace keeps {workspace} crawled pages in all.',
+  'playbook.knowledge.crawl.pageLimitError': 'Enter a whole number from {min} to {max}.',
+  'playbook.knowledge.crawl.include': 'Only these paths',
+  'playbook.knowledge.crawl.includeHelp':
+    'One path per line, for example /help. Empty means every path.',
+  'playbook.knowledge.crawl.exclude': 'Skip these paths',
+  'playbook.knowledge.crawl.excludeHelp':
+    'One path per line. A path also skips everything under it, and wins over the list on the left.',
+  'playbook.knowledge.crawl.pathsError':
+    'Each line must start with / and have no spaces, ? # or *.',
+  'playbook.knowledge.crawl.refresh': 'Refresh every (days)',
+  'playbook.knowledge.crawl.refreshHelp':
+    'Optional. Re-crawls on this schedule; only pages whose text changed are indexed again. {min} to {max} days.',
+  'playbook.knowledge.crawl.refreshError':
+    'Enter a whole number from {min} to {max}, or leave it empty.',
+  'playbook.knowledge.crawl.authorized': 'I am authorised to crawl this site.',
+  'playbook.knowledge.crawl.refreshNotSet':
+    'The source was added, but the refresh schedule was not saved: {reason}',
+  'playbook.knowledge.crawl.details': 'Details',
+  'playbook.knowledge.crawl.detailsAria': 'Crawl details for {name}',
+  'playbook.knowledge.crawl.drawerTitle': 'Crawl of {name}',
+  'playbook.knowledge.crawl.pagesKept': 'Pages in the store',
+  'playbook.knowledge.crawl.lastCrawled': 'Last crawled',
+  'playbook.knowledge.crawl.never': 'Not yet',
+  'playbook.knowledge.crawl.includeSummary': 'Only these paths: {paths}',
+  'playbook.knowledge.crawl.excludeSummary': 'Skipped paths: {paths}',
+  'playbook.knowledge.crawl.crawlAgain': 'Crawl again',
+  'playbook.knowledge.crawl.cancel': 'Stop crawl',
+  'playbook.knowledge.crawl.excludedNote':
+    'Left out. The next crawl will not fetch it and its text is dropped then.',
+  'playbook.knowledge.crawl.problemsLabel': 'Pages that need a look',
+  'playbook.knowledge.crawl.filter': 'Show',
+  'playbook.knowledge.crawl.filterAll': 'All pages',
+  'playbook.knowledge.crawl.noPages': 'No pages yet. They appear here as the crawl finds them.',
+  'playbook.knowledge.crawl.noPagesFiltered': 'No pages with this status.',
+  'playbook.knowledge.crawl.tableLabel': 'Pages found by the crawl',
+  'playbook.knowledge.crawl.colPage': 'Page',
+  'playbook.knowledge.crawl.colStatus': 'Status',
+  'playbook.knowledge.crawl.colChunks': 'Chunks',
+  'playbook.knowledge.crawl.colFetched': 'Fetched',
+  'playbook.knowledge.crawl.excludePage': 'Leave out',
+  'playbook.knowledge.crawl.excludeAria': 'Leave out {path} from the next crawl',
+  'playbook.knowledge.crawl.close': 'Close',
+  'playbook.knowledge.crawl.job.label': 'Crawl progress',
+  'playbook.knowledge.crawl.job.progressLabel': 'Pages crawled',
+  'playbook.knowledge.crawl.job.unreadable': 'The crawl’s progress could not be read.',
+  'playbook.knowledge.crawl.job.queued': 'Waiting for its turn…',
+  'playbook.knowledge.crawl.job.running': 'Crawling…',
+  'playbook.knowledge.crawl.job.waiting_budget': 'Paused: today’s AI allowance is used up',
+  'playbook.knowledge.crawl.job.done': 'Crawl finished',
+  'playbook.knowledge.crawl.job.failed': 'Crawl failed',
+  'playbook.knowledge.crawl.job.cancelled': 'Crawl stopped',
+  'playbook.knowledge.crawl.job.counts':
+    '{done} of {discovered} pages · {ok} indexed · {unchanged} unchanged · {skipped} skipped · {failed} failed · {removed} removed',
+  'playbook.knowledge.crawl.job.resumesAt': 'It continues after {date}.',
+  'playbook.knowledge.crawl.page.ok': 'Indexed',
+  'playbook.knowledge.crawl.page.unchanged': 'Unchanged',
+  'playbook.knowledge.crawl.page.skipped_scope': 'Out of scope',
+  'playbook.knowledge.crawl.page.robots_disallowed': 'Blocked by robots.txt',
+  'playbook.knowledge.crawl.page.blocked': 'Blocked by the site',
+  'playbook.knowledge.crawl.page.needs_js': 'Needs JavaScript',
+  'playbook.knowledge.crawl.page.error': 'Failed',
+  'playbook.knowledge.crawl.page.removed': 'Removed',
+  'playbook.knowledge.crawl.page.blockedHint':
+    'The site shows a bot check. Ask its owner to allow the crawler, or add the text by hand.',
+  'playbook.knowledge.crawl.page.needsJsHint':
+    'The text is drawn by JavaScript, which the crawler does not run. Add this page’s text by hand.',
+  'playbook.knowledge.crawl.error.ssrf_refused':
+    'The address is private or internal, so it was not fetched.',
+  'playbook.knowledge.crawl.error.dns_failed': 'The host name could not be found.',
+  'playbook.knowledge.crawl.error.timeout': 'The site did not answer in time.',
+  'playbook.knowledge.crawl.error.too_large': 'The page is too large.',
+  'playbook.knowledge.crawl.error.compression_ratio':
+    'The page expands suspiciously when decompressed, so it was dropped.',
+  'playbook.knowledge.crawl.error.unsupported_encoding':
+    'The page uses an encoding the crawler cannot read.',
+  'playbook.knowledge.crawl.error.network': 'The connection failed.',
+  'playbook.knowledge.crawl.error.tls': 'The site’s certificate could not be verified.',
+  'playbook.knowledge.crawl.error.redirect_limit': 'Too many redirects.',
+  'playbook.knowledge.crawl.error.redirect_invalid': 'The redirect points nowhere usable.',
+  'playbook.knowledge.crawl.error.redirect_out_of_scope':
+    'Redirects to a page outside the crawl’s scope.',
+  'playbook.knowledge.crawl.error.not_html': 'Not a web page (a PDF or an image, for example).',
+  'playbook.knowledge.crawl.error.cancelled': 'The crawl was stopped.',
+  'playbook.knowledge.crawl.error.bot_wall': 'The site showed a bot check.',
+  'playbook.knowledge.crawl.error.empty_page': 'The page has no readable text.',
+  'playbook.knowledge.crawl.error.gone': 'The page no longer exists (404 or 410).',
+  'playbook.knowledge.crawl.error.out_of_scope': 'The page is outside the crawl’s scope now.',
+  'playbook.knowledge.crawl.error.robots_unreachable':
+    'The site’s robots.txt could not be read, so no page was fetched.',
+  'playbook.knowledge.crawl.error.job_bytes_limit': 'The crawl stopped at its total size limit.',
+  'playbook.knowledge.crawl.error.workspace_page_limit':
+    'The workspace’s crawled-page limit is reached.',
+  'playbook.knowledge.crawl.error.residency_refused':
+    'Indexing is not allowed in this workspace’s data region.',
+  'playbook.knowledge.crawl.error.invalid_url': 'The source’s address is not a valid web address.',
+  'playbook.knowledge.crawl.error.not_website': 'This source is not a website.',
+  'playbook.knowledge.crawl.error.unsupported_kind': 'This kind of job is not supported.',
+  'playbook.knowledge.crawl.error.internal': 'Something went wrong on our side.',
+  'playbook.knowledge.crawl.error.http': 'The site answered with HTTP {status}.',
+  'playbook.knowledge.crawl.error.unknown': 'Reason: {code}',
+
   'playbook.knowledge.delete': 'Delete',
 
   // Row actions — the “…” menu, and the two dialogs behind it
@@ -539,6 +689,17 @@ export const playbook: Messages = {
   'playbook.profile.maxQuestionsDefault': 'Default (2)',
   'playbook.profile.styleHint':
     'The form of address and emoji are asked of the model and flagged in the run log when a reply ignores them; the question limit is enforced by the procedure itself.',
+  'playbook.profile.opening': 'Opening message and agent button',
+  'playbook.profile.openingLocked': 'Always first — cannot be removed',
+  'playbook.profile.openingBrand': 'Brand',
+  'playbook.profile.openingHint':
+    'The AI’s first reply in a conversation opens with this sentence, then your message. “Brand” is the brand the player came through, or the workspace name. If your message leaves the sentence out, it is added in front.',
+  'playbook.profile.welcome': 'Opening message',
+  'playbook.profile.welcomePlaceholder': 'How can I help you today?',
+  'playbook.profile.humanButton': 'Text of the “Talk to an agent” button',
+  'playbook.profile.humanButtonDefault': 'Talk to an agent',
+  'playbook.profile.humanButtonHint':
+    'The widget shows the button for as long as the AI is answering; it cannot be hidden, only reworded.',
   'playbook.profile.save': 'Save profile',
   'playbook.profile.saving': 'Saving…',
   'playbook.profile.previewTitle': 'Preview',
@@ -549,7 +710,7 @@ export const playbook: Messages = {
   'playbook.profile.noneYet': 'None yet',
   'playbook.profile.noAgentTitle': 'No AI agent',
   'playbook.profile.noAgentDescription':
-    'Once an AI agent exists on this workspace, its persona is edited here.',
+    'Add the AI agent on the General settings tab first; this tab is edited once it exists.',
 
   // AI performance (AiPerformance.tsx)
   'playbook.performance.noAccessTitle': 'No access to performance',

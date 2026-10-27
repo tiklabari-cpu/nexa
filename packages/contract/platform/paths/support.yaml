@@ -1,5 +1,5 @@
-# The support desk (tm 389.9 · FR-ADMIN-10 · design.md §C support). The
-# impersonation routes (start/end/get) arrive with 389.15.
+# The support desk (tm 389.9 · FR-ADMIN-10 · design.md §C support) and "enter
+# as the customer" (tm 389.15 · FR-ADMIN-21 · design.md §G).
 
 lookup:
   get:
@@ -31,6 +31,141 @@ lookup:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSupportLookup" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+impersonations:
+  get:
+    tags: [Support]
+    operationId: listPlatformImpersonations
+    summary: Impersonation sessions, newest first
+    description: |
+      Every operator's sessions across the deployment — who entered which
+      workspace as whom, in which mode, and how it ended. `active=true` keeps
+      the open ones (not ended, window not run out); `license_id` keeps one
+      workspace's. Keyset paging on the start time.
+    x-platform-permission: workspaces.read
+    parameters:
+      - name: active
+        in: query
+        schema: { type: boolean }
+      - name: license_id
+        in: query
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 512 }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100 }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformImpersonationList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  post:
+    tags: [Support]
+    operationId: startPlatformImpersonation
+    summary: Enter a workspace as one of its members
+    description: |
+      Opens a session on one live member of one workspace and answers a
+      one-time `handoff_url` — the workspace console's
+      `/auth/impersonate#code=…`, good once, for 60 seconds. The browser that
+      opens it trades the code for a token of the member's (tenant
+      `POST /auth/impersonation/exchange`), bounded by this session: it
+      carries the member's role and never more, and stops working at
+      `ends_at` (`PLATFORM_IMPERSONATION_TTL`, 30 minutes) or when the session
+      is ended. There is no extension — open a new one.
+
+      `mode` is `read_only` unless asked otherwise: every write but signing
+      out answers `403 impersonation_read_only`. `full` acts as the member and
+      needs `support.impersonate_full` (superadmin) and a code younger than
+      five minutes (`403 platform_recent_totp_required`). In either mode the
+      routes no operator may take on a member's behalf stay closed
+      (`IMPERSONATION_FORBIDDEN_PATHS`).
+
+      The workspace's Founders are mailed (`impersonation_notice`) — who was
+      entered as, in which mode, until when; never the reason, which stays in
+      the platform chain. The handoff URL is in this answer only: the code is
+      stored as a digest and is not logged.
+
+      A workspace that is suspended or cancelled is 409
+      `platform_workspace_state` (`workspace_closed`); a member the root panel
+      suspended is 409 `platform_account_state` (`account_suspended`); an
+      unknown workspace, or somebody who is not a live member of it, is 404.
+    x-platform-permission: support.impersonate
+    x-platform-audit: impersonation.started
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformImpersonationStartRequest" }
+    responses:
+      "201":
+        description: The session, and the link that opens it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformImpersonationStarted" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+impersonation:
+  get:
+    tags: [Support]
+    operationId: getPlatformImpersonation
+    summary: One impersonation session
+    x-platform-permission: workspaces.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ImpersonationId"
+    responses:
+      "200":
+        description: The session
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [impersonation]
+              properties:
+                impersonation: { $ref: "../openapi.yaml#/components/schemas/PlatformImpersonation" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+impersonationEnd:
+  post:
+    tags: [Support]
+    operationId: endPlatformImpersonation
+    summary: End an impersonation session
+    description: |
+      Closes the session (`end_reason: ended_by_operator`) and with it every
+      token it was traded for: the next request the workspace console makes
+      with one is a 401. Any operator who may start one may end one. A session
+      that has already ended — from here, from the console's banner, or by
+      running out — answers `unchanged: true` and records nothing.
+    x-platform-permission: support.impersonate
+    x-platform-audit: impersonation.ended
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ImpersonationId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: The session as it now reads
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformImpersonationEnded" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

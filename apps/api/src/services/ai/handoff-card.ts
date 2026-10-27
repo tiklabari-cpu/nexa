@@ -182,6 +182,7 @@ export class HandoffCardService implements HandoffCardWriter {
         attachments: card.attachments.map((attachment) => ({ ...attachment })),
         targetGroupId: card.targetGroupId === null ? null : BigInt(card.targetGroupId),
         priority: card.priority,
+        requestedVia: context.requestedVia ?? null,
         cardText: card.cardText,
         configVersionId: conversation?.configVersionId ?? null,
       },

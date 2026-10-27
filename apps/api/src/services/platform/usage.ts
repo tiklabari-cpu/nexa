@@ -12,8 +12,9 @@
  * function the tenant's budget resolves with (`resolveAiCaps`), so the panel
  * cannot show a cap the workspace is not held to. The plan defaults are the
  * panel's (`platform_settings` `ai.caps`, `ai-plan-caps.ts`) over the plan
- * catalogue's; the deployment's are the environment's, which this process
- * shares with the tenant API.
+ * catalogue's; the deployment's are the panel's own when set (389.17,
+ * `ai.caps.deployment` in the same row), else the environment's — the order
+ * the tenant API resolves them in.
  *
  * **A change is announced, not waited for** (decision 5): the route publishes
  * `ai.caps_changed` after its commit — the licence, or `*` for a plan default —
@@ -163,24 +164,21 @@ export interface PlatformUsageOptions {
 
 export class PlatformUsage {
   readonly #db: PrismaClient;
-  readonly #deployment: AiDailyCaps;
+  /** The environment's `AI_DAILY_*`: the deployment's caps while the panel stores none. */
+  readonly #envDeployment: AiDailyCaps;
   readonly #now: () => number;
 
   constructor(db: PrismaClient, options: PlatformUsageOptions) {
     this.#db = db;
-    this.#deployment = aiDailyCaps(options.env);
+    this.#envDeployment = aiDailyCaps(options.env);
     this.#now = options.now ?? Date.now;
-  }
-
-  get deployment(): AiDailyCaps {
-    return this.#deployment;
   }
 
   async global(days: number) {
     const now = this.#now();
     const window = dayWindow(now, days);
     const period = currentPeriod(new Date(now));
-    const [daily, records] = await Promise.all([
+    const [daily, records, setting] = await Promise.all([
       this.#db.aiDailyUsage.findMany({
         where: {
           licenseId: null,
@@ -194,7 +192,9 @@ export class PlatformUsage {
         where: { period },
         _sum: { quantity: true },
       }),
+      readPlanCapSetting(this.#db),
     ]);
+    const deployment = setting.deployment ?? this.#envDeployment;
     const at = new Map(daily.map((row) => [`${row.day}:${row.meter}`, row]));
     const todayKey = window.at(-1)!.key;
     const counter = (meter: AiLiveMeter): Counter => {
@@ -202,7 +202,7 @@ export class PlatformUsage {
       return {
         used: Number(row?.used ?? 0n),
         reserved: Number(row?.reserved ?? 0n),
-        cap: this.#deployment[meter].global,
+        cap: deployment[meter].global,
       };
     };
     const metric = (name: string) =>
@@ -227,7 +227,7 @@ export class PlatformUsage {
     const now = this.#now();
     if (meter === 'llm' || meter === 'embedding') {
       const day = utcDayKey(new Date(now));
-      const [rows, { defaults }] = await Promise.all([
+      const [rows, setting] = await Promise.all([
         this.#db.$queryRaw<
           Array<
             CapColumns & {
@@ -251,11 +251,12 @@ export class PlatformUsage {
            LIMIT ${top}`,
         readPlanCapSetting(this.#db),
       ]);
+      const deployment = setting.deployment ?? this.#envDeployment;
       return {
         meter,
         window: `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`,
         data: rows.map((row) => {
-          const cap = capLayers(row, row.plan, defaults, this.#deployment, now)[meter].effective;
+          const cap = capLayers(row, row.plan, setting.defaults, deployment, now)[meter].effective;
           const used = Number(row.used);
           return {
             license_id: row.license_id.toString(),
@@ -308,7 +309,7 @@ export class PlatformUsage {
   /** One workspace's caps, today's counters and its last 30 days — or null for an unknown licence. */
   async workspace(licenseId: bigint, db: PrismaClient | Tx = this.#db) {
     const now = this.#now();
-    const [license, planRows, { defaults }] = await Promise.all([
+    const [license, planRows, setting] = await Promise.all([
       db.license.findUnique({
         where: { id: licenseId },
         select: {
@@ -329,7 +330,8 @@ export class PlatformUsage {
     ]);
     if (!license) return null;
     const plan = planRows[0]?.plan ?? TRIAL_PLAN;
-    const caps = capLayers(license, plan, defaults, this.#deployment, now);
+    const deployment = setting.deployment ?? this.#envDeployment;
+    const caps = capLayers(license, plan, setting.defaults, deployment, now);
 
     const window = dayWindow(now, WORKSPACE_USAGE_DAYS);
     const daily = await db.aiDailyUsage.findMany({
@@ -374,7 +376,8 @@ export class PlatformUsage {
 
   /** The plans' defaults as the panel shows them: set, catalogue, deployment. */
   async planCaps(db: PrismaClient | Tx = this.#db) {
-    const { row, defaults } = await readPlanCapSetting(db);
+    const { row, defaults, deployment: stored } = await readPlanCapSetting(db);
+    const deployment = stored ?? this.#envDeployment;
     return {
       plans: PLAN_IDS.map((plan) => ({
         plan,
@@ -382,8 +385,8 @@ export class PlatformUsage {
         catalogue: aiDailyTokensForPlan(plan),
       })),
       deployment: {
-        llm: this.#deployment.llm.workspace,
-        embedding: this.#deployment.embedding.workspace,
+        llm: deployment.llm.workspace,
+        embedding: deployment.embedding.workspace,
       },
       updated_at: row?.updatedAt.toISOString() ?? null,
     };

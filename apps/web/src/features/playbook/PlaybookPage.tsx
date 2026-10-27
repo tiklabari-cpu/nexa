@@ -11,6 +11,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
+import { useInRouterContext, useSearchParams } from 'react-router-dom';
 import { KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -30,6 +31,10 @@ import { SkillEditor } from './SkillEditor.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
 import { GuidanceRules } from './GuidanceRules.js';
 import { ProfileForm } from './ProfileForm.js';
+import { CreateAiAgentCard } from './CreateAiAgentCard.js';
+import { SetupSteps } from './SetupSteps.js';
+import { WelcomeMessageCard } from './WelcomeMessageCard.js';
+import { PLAYBOOK_TABS, resolveView, type PlaybookView } from './playbook-tabs.js';
 import { GuardrailsPage } from './GuardrailsPage.js';
 import { HandoffSettings } from './HandoffSettings.js';
 import { AiPerformance } from './AiPerformance.js';
@@ -39,6 +44,14 @@ import { IGAMING_CATEGORY, galleryStartsOnIgaming } from './ai-templates.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
 import { KnowledgeSourceActions } from './KnowledgeSourceActions.js';
+import { KnowledgeCrawlFields } from './KnowledgeCrawlFields.js';
+import { KnowledgeSourceDrawer } from './KnowledgeSourceDrawer.js';
+import {
+  crawlCreateBody,
+  crawlIsValid,
+  crawlRefreshDays,
+  defaultCrawlValue,
+} from './knowledge-crawl.js';
 import { KnowledgeRowMeta } from './KnowledgeRowMeta.js';
 import {
   KnowledgeScopeFields,
@@ -88,44 +101,6 @@ import {
 } from './knowledge-tabs.js';
 
 /**
- * The faces of the AI agent (FR-MOD-06.1), in the order the tabs read. `kb` is
- * the Public KB surface (PUBKB-g) — the self-service article list, distinct
- * from the AI's own `knowledge` (what it answers a customer from).
- */
-type PlaybookView =
-  | 'performance'
-  | 'unresolved'
-  | 'profile'
-  | 'guardrails'
-  | 'skills'
-  | 'knowledge'
-  | 'tables'
-  | 'kb'
-  | 'test';
-const VIEW_TABS: readonly PlaybookView[] = [
-  'performance',
-  'unresolved',
-  'profile',
-  'guardrails',
-  'skills',
-  'knowledge',
-  'tables',
-  'kb',
-  'test',
-];
-const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
-  performance: 'playbook.tabs.performance',
-  unresolved: 'playbook.tabs.unresolved',
-  profile: 'playbook.tabs.profile',
-  guardrails: 'playbook.tabs.guardrails',
-  skills: 'playbook.tabs.skills',
-  knowledge: 'playbook.tabs.knowledge',
-  tables: 'playbook.tabs.tables',
-  kb: 'playbook.tabs.kb',
-  test: 'playbook.tabs.test',
-};
-
-/**
  * The tabs split the list the way an admin reasons about it: what the AI runs
  * (✦), what a workspace automation runs (⚡), and what is not on yet (Drafts).
  * The glyphs are decorative — the visible word is what a screen reader reads.
@@ -167,7 +142,63 @@ const OWNER_LABEL_KEYS: Record<string, string> = {
   'Unknown owner': 'playbook.skills.filterOwnerUnknown',
 };
 
+/**
+ * The page. Inside the app's router the tab follows `?view=` (Settings › AI Agent
+ * and the command palette link to `/app/playbook?view=general`, and a click on a
+ * tab writes it back); rendered bare, as most tests do, it reads the address once.
+ */
+/** How often the knowledge list looks again while a website is being crawled. */
+const CRAWL_POLL_MS = 3_000;
+
+/**
+ * A source's badge: a website being crawled says so (tm 312.3 · AI-17), one
+ * whose last crawl kept some pages and lost others says that; the rest are
+ * indexed or empty by their chunks.
+ */
+function knowledgeStatusDot(
+  source: Pick<KnowledgeSource, 'status' | 'chunk_count'>,
+  t: ReturnType<typeof useTranslate>,
+): { tone: 'success' | 'warning' | 'info'; label: string } {
+  if (source.status === 'crawling')
+    return { tone: 'info', label: t('playbook.knowledge.statusCrawling') };
+  if (source.status === 'partial') {
+    return { tone: 'warning', label: t('playbook.knowledge.statusPartial') };
+  }
+  return source.chunk_count > 0
+    ? { tone: 'success', label: t('playbook.knowledge.indexed') }
+    : { tone: 'warning', label: t('playbook.knowledge.empty') };
+}
+
 export function PlaybookPage(): ReactElement {
+  return useInRouterContext() ? <RoutedPlaybookPage /> : <PlaybookPageBody />;
+}
+
+function RoutedPlaybookPage(): ReactElement {
+  const [params, setParams] = useSearchParams();
+  return (
+    <PlaybookPageBody
+      requestedView={params.get('view')}
+      onViewChange={(next) =>
+        setParams(
+          (current) => {
+            const copy = new URLSearchParams(current);
+            copy.set('view', next);
+            return copy;
+          },
+          { replace: true },
+        )
+      }
+    />
+  );
+}
+
+function PlaybookPageBody({
+  requestedView = new URLSearchParams(window.location.search).get('view'),
+  onViewChange,
+}: {
+  requestedView?: string | null;
+  onViewChange?: (view: PlaybookView) => void;
+}): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
@@ -178,13 +209,24 @@ export function PlaybookPage(): ReactElement {
   // member has neither scope in the default matrix, so the tab is not drawn.
   const canSeeTests = canEdit || scopes.includes('agents-bot--all:ro');
   // The unresolved questions (tm 317.3 · AI-22) read the same configuration scope.
-  const viewTabs = VIEW_TABS.filter(
-    (tabId) => (tabId !== 'test' && tabId !== 'unresolved') || canSeeTests,
-  );
+  const viewTabs = PLAYBOOK_TABS.filter((tab) => !tab.needsConfigScope || canSeeTests);
 
-  // The AI Agent surface is one place with four tabs (FR-MOD-06.1). Skills is the
-  // landing tab — the thing an admin opens the Playbook to do.
-  const [view, setView] = useState<PlaybookView>('skills');
+  // The AI Agent surface is one place with a tab per face (FR-MOD-06.1). General
+  // is the landing tab (tm 390): with an agent it is the persona, without one the
+  // "add an AI agent" card. The onboarding's `?gallery=` link still lands on Skills.
+  const wantsGallery = new URLSearchParams(window.location.search).has('gallery');
+  const [view, setViewState] = useState<PlaybookView>(
+    () => resolveView(requestedView) ?? (wantsGallery ? 'skills' : 'general'),
+  );
+  // A link followed while the page is already open (the palette, Settings) moves the tab.
+  useEffect(() => {
+    const requested = resolveView(requestedView);
+    if (requested) setViewState(requested);
+  }, [requestedView]);
+  const setView = (next: PlaybookView): void => {
+    setViewState(next);
+    onViewChange?.(next);
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // "New skill" opens a blank editor; the skill exists on the server only once
   // its first Save posts it (O12), so a click nobody follows up leaves nothing behind.
@@ -456,7 +498,7 @@ export function PlaybookPage(): ReactElement {
             aria-label={t('playbook.page.tabsLabel')}
             className="flex gap-1 border-b border-border"
           >
-            {viewTabs.map((tabId) => {
+            {viewTabs.map(({ id: tabId, labelKey }) => {
               const active = view === tabId;
               return (
                 <button
@@ -473,7 +515,7 @@ export function PlaybookPage(): ReactElement {
                       : 'border-transparent text-content-secondary hover:text-content'
                   }`}
                 >
-                  {t(VIEW_TAB_LABEL_KEYS[tabId])}
+                  {t(labelKey)}
                 </button>
               );
             })}
@@ -484,23 +526,52 @@ export function PlaybookPage(): ReactElement {
               <AiPerformance agentActive={aiAgent?.active ?? false} canRead={canViewReports} />
             )}
 
-            {view === 'profile' &&
+            {view === 'general' &&
               (aiAgent ? (
                 <div className="flex flex-col gap-4">
+                  <SetupSteps readiness={readiness} canEdit={canEdit} onOpen={setView} />
                   <ProfileForm
                     key={aiAgent.id}
                     agent={aiAgent}
                     canEdit={canEdit}
                     onSaved={invalidate}
                   />
-                  {/* AI-07: the behaviour rules ride with the persona; tm 390 moves both to one tab. */}
+                  <WelcomeMessageCard canEdit={scopes.includes('access_rules:rw')} />
+                </div>
+              ) : (
+                // Until the first fetch lands there is no telling "none" from "not yet".
+                !agents.isPending && (
+                  <CreateAiAgentCard
+                    canCreate={canEdit}
+                    onCreated={(created) => {
+                      queryClient.setQueryData<{ items: AiAgent[] }>(
+                        ['playbook', 'ai-agents'],
+                        (old) => ({
+                          items: [
+                            created,
+                            ...(old?.items ?? []).filter((a) => a.id !== created.id),
+                          ],
+                        }),
+                      );
+                      setView('general');
+                      invalidate();
+                    }}
+                    onExists={invalidate}
+                  />
+                )
+              ))}
+
+            {view === 'behaviour' &&
+              (aiAgent ? (
+                <div className="flex flex-col gap-4">
+                  {/* AI-07: the behaviour rules — the "general instruction" is the first of them. */}
                   <GuidanceRules
                     key={`guidance-${aiAgent.id}`}
                     agent={aiAgent}
                     skills={(skills.data?.items ?? []).map(({ id, name }) => ({ id, name }))}
                     canEdit={canEdit}
                   />
-                  {/* AI-09: when, what and where the agent hands over; tm 390 moves it to the Behaviour tab. */}
+                  {/* AI-09: when, what and where the agent hands over. */}
                   <HandoffSettings
                     key={`handoff-${aiAgent.id}`}
                     agent={aiAgent}
@@ -1009,6 +1080,10 @@ function KnowledgePanel({
   // what the server picks anyway, so a form left alone sends the body it always sent.
   const [scope, setScope] = useState(() => scopeValueOf());
   const [scopeOpen, setScopeOpen] = useState(false);
+  // How far the next website is crawled, and whether the admin may crawl it (tm 312.4).
+  const [crawl, setCrawl] = useState(defaultCrawlValue);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [controls, setControls] = useState<KnowledgeScopeControls>(DEFAULT_SCOPE_CONTROLS);
   const { brands, members } = useKnowledgeScopeOptions();
 
@@ -1019,6 +1094,12 @@ function KnowledgePanel({
   const sources = useQuery({
     queryKey: ['playbook', 'knowledge-store'],
     queryFn: () => api.get<{ items: KnowledgeSource[] }>('/knowledge-sources?audience=all'),
+    // A website is crawled after it is added (tm 312.3 · AI-17): the list
+    // looks again every few seconds while a crawl is under way.
+    refetchInterval: (query) =>
+      query.state.data?.items.some((source) => source.status === 'crawling')
+        ? CRAWL_POLL_MS
+        : false,
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['playbook'] });
@@ -1035,7 +1116,9 @@ function KnowledgePanel({
         ai_agent_id: aiAgentId,
         name: body.name,
         type: body.type,
-        ...(body.type === 'website' ? { source_url: body.sourceUrl } : { content: body.content }),
+        ...(body.type === 'website'
+          ? { source_url: body.sourceUrl, ...crawlCreateBody(crawl) }
+          : { content: body.content }),
         ...scopeCreateBody(scope),
       }),
     onSuccess: invalidate,
@@ -1070,6 +1153,7 @@ function KnowledgePanel({
           : required(t('playbook.knowledge.formContentRequiredError')),
     },
     onSubmit: async (values, { setSubmitError, reset }) => {
+      setNotice(null);
       try {
         if (isFile) {
           // Unreachable from the UI (Add source stays disabled until a file is
@@ -1078,15 +1162,31 @@ function KnowledgePanel({
           await uploadFile.mutateAsync({ name: values.name.trim(), file: upload });
           clearUpload();
         } else {
-          await create.mutateAsync({
+          const created = await create.mutateAsync({
             name: values.name.trim(),
             type: sourceType,
             sourceUrl: values.sourceUrl.trim(),
             content: values.content.trim(),
           });
+          // The create body has no refresh interval (it is the source's PATCH),
+          // so a schedule is set right after the source exists. The source is
+          // already added by then: a refusal here is a note, not a failed add.
+          const days = isWebsite ? crawlRefreshDays(crawl) : null;
+          if (days !== null) {
+            try {
+              await api.patch<KnowledgeSource>(`/knowledge-sources/${created.id}`, {
+                refresh_after_days: days,
+              });
+            } catch (error) {
+              setNotice(
+                t('playbook.knowledge.crawl.refreshNotSet', { reason: t(errorMessageKey(error)) }),
+              );
+            }
+          }
         }
         reset();
         setScope(scopeValueOf());
+        setCrawl(defaultCrawlValue());
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
@@ -1121,6 +1221,8 @@ function KnowledgePanel({
   const contentError = form.errorFor('content');
 
   const allItems = sources.data?.items ?? [];
+  // Read from the list rather than held, so the drawer shows the row as the poll last saw it.
+  const detailSource = detailId ? allItems.find((item) => item.id === detailId) : undefined;
   const now = new Date();
   const counts = countSourcesByTab(allItems);
   // The kind tab cuts first, the scope controls second: the tab counts stay the
@@ -1263,6 +1365,10 @@ function KnowledgePanel({
               </label>
             )}
 
+            {isWebsite && (
+              <KnowledgeCrawlFields idPrefix="source" value={crawl} onChange={setCrawl} />
+            )}
+
             <div className="flex flex-col gap-2">
               <button
                 type="button"
@@ -1285,7 +1391,12 @@ function KnowledgePanel({
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={!form.canSubmit || (isFile && !upload) || !scopeIsValid(scope, true)}
+                disabled={
+                  !form.canSubmit ||
+                  (isFile && !upload) ||
+                  (isWebsite && !crawlIsValid(crawl)) ||
+                  !scopeIsValid(scope, true)
+                }
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
                 {form.isSubmitting
@@ -1297,6 +1408,11 @@ function KnowledgePanel({
               {form.submitError && (
                 <span role="alert" className="text-2xs text-danger">
                   {form.submitError}
+                </span>
+              )}
+              {notice && (
+                <span role="status" className="text-2xs text-content-secondary">
+                  {notice}
                 </span>
               )}
             </div>
@@ -1389,20 +1505,32 @@ function KnowledgePanel({
                     </p>
                   )}
                 </div>
-                <StatusDot
-                  tone={source.chunk_count > 0 ? 'success' : 'warning'}
-                  label={
-                    source.chunk_count > 0
-                      ? t('playbook.knowledge.indexed')
-                      : t('playbook.knowledge.empty')
-                  }
-                />
+                <StatusDot {...knowledgeStatusDot(source, t)} />
+                {source.type === 'website' && (
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(source.id)}
+                    aria-label={t('playbook.knowledge.crawl.detailsAria', { name: source.name })}
+                    className="rounded-md border border-border px-2 py-1 text-2xs leading-4 text-content-secondary transition-colors hover:bg-surface-2"
+                  >
+                    {t('playbook.knowledge.crawl.details')}
+                  </button>
+                )}
                 {canEdit && <KnowledgeSourceActions source={source} onChanged={invalidate} />}
               </li>
             ))}
           </ul>
         )}
       </Card>
+
+      {detailSource && (
+        <KnowledgeSourceDrawer
+          source={detailSource}
+          canEdit={canEdit}
+          onClose={() => setDetailId(null)}
+          onChanged={invalidate}
+        />
+      )}
     </Section>
   );
 }

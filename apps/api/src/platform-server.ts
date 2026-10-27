@@ -24,6 +24,7 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
+import { PrismaClient } from '@prisma/client';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Env } from './config/env.js';
 import { assertPlatformEnv, type PlatformEnv } from './config/platform-env.js';
@@ -46,9 +47,16 @@ import platformAuthRoutes from './routes/platform/auth.js';
 import platformDashboardRoutes from './routes/platform/dashboard.js';
 import platformHealthRoutes from './routes/platform/health.js';
 import platformMetaRoutes from './routes/platform/meta.js';
+import platformSettingsRoutes from './routes/platform/settings.js';
+import platformAiCatalogsRoutes from './routes/platform/ai-catalogs.js';
+import platformAiSettingsRoutes from './routes/platform/ai-settings.js';
+import { PlatformAiOperations } from './services/platform/ai-operations.js';
+import platformOperationsRoutes from './routes/platform/operations.js';
+import platformSecurityRoutes from './routes/platform/security.js';
 import platformSupportRoutes from './routes/platform/support.js';
 import platformWorkspacesRoutes from './routes/platform/workspaces.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
+import { PlatformAlertScanner } from './services/platform/alerts.js';
 import { WorkspacePurgeRunner } from './services/platform/workspace-purge.js';
 import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
 import { VERSION } from './version.js';
@@ -59,6 +67,10 @@ declare module 'fastify' {
   interface FastifyInstance {
     /** The purge job (tm 389.10) — `run()` plays one pass in a test. */
     workspacePurge: WorkspacePurgeRunner;
+    /** The operator alert scan (tm 389.20) — `runAlertScanOnce()` plays one pass in a test. */
+    platformAlerts: PlatformAlertScanner;
+    /** The AI page's connection test and re-embedding (tm 389.17) — `idle()` waits for a run. */
+    platformAiOperations: PlatformAiOperations;
   }
 }
 
@@ -80,6 +92,11 @@ export interface BuildPlatformServerOptions {
    * since the epoch. `Date.now` unless a test moves time.
    */
   now?: () => number;
+  /**
+   * How the AI page's connection test and re-embedding reach the provider
+   * (tm 389.17). Omitted, the global `fetch`; a test passes a recorder.
+   */
+  aiFetch?: typeof fetch;
 }
 
 export async function buildPlatformServer({
@@ -89,6 +106,7 @@ export async function buildPlatformServer({
   telemetry,
   logStream,
   now,
+  aiFetch,
 }: BuildPlatformServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -145,6 +163,25 @@ export async function buildPlatformServer({
   await app.register(platformRateLimit, { env, platform });
   await app.register(platformAuth, { env, platform, ...(now ? { now } : {}) });
   await app.register(platformAudit, { env, platform, ...(now ? { now } : {}) });
+  // The AI page's connection test and re-embedding (tm 389.17), over the
+  // runtime role, opened on first use: the daily budget's functions and the
+  // knowledge rows are `siyahtus_app`'s, not this process's role's. Drained
+  // on close, so a re-embedding is not cut off mid-source by a test teardown.
+  let runtimeDb: PrismaClient | null = null;
+  const aiOperations = new PlatformAiOperations({
+    runtimeDb: () => (runtimeDb ??= new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl })),
+    redis: app.redis,
+    env,
+    rootKey: platform.settingsKey,
+    logger: app.log.child({ component: 'ai-settings' }),
+    ...(aiFetch ? { fetchImpl: aiFetch } : {}),
+    ...(now ? { now } : {}),
+  });
+  app.decorate('platformAiOperations', aiOperations);
+  app.addHook('onClose', async () => {
+    await aiOperations.idle();
+    await runtimeDb?.$disconnect();
+  });
 
   for (const warning of platform.warnings) app.log.warn({ event: 'platform.env_warning' }, warning);
 
@@ -167,6 +204,29 @@ export async function buildPlatformServer({
     await workspacePurge.stop();
   });
 
+  // Operator alerts (tm 389.20): a scan every five minutes, here for the same
+  // reason as the purge — the platform process holds the audit chain it
+  // verifies and the mailer the alerts go out by. Redis-locked, so N replicas
+  // scan once between them.
+  const platformAlerts = new PlatformAlertScanner({
+    db: app.platformDb,
+    redis: app.redis,
+    mailer,
+    audit: app.platformAuditLog,
+    logger: app.log.child({ component: 'platform_alerts' }),
+    adminOrigin: platform.adminOrigin,
+    env,
+    enabled: env.schedulerEnabled,
+    ...(now ? { now } : {}),
+  });
+  app.decorate('platformAlerts', platformAlerts);
+  app.addHook('onReady', async () => {
+    platformAlerts.start();
+  });
+  app.addHook('onClose', async () => {
+    await platformAlerts.stop();
+  });
+
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
   });
@@ -180,10 +240,15 @@ export async function buildPlatformServer({
       await api.register(platformAuditRoutes);
       await api.register(platformDashboardRoutes, { platform, ...(now ? { now } : {}) });
       await api.register(platformWorkspacesRoutes, { env, mailer, ...(now ? { now } : {}) });
-      await api.register(platformSupportRoutes);
+      await api.register(platformSupportRoutes, { env, platform, mailer });
       await api.register(platformAccountsRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformBillingRoutes, { env, ...(now ? { now } : {}) });
       await api.register(platformUsageRoutes, { env, ...(now ? { now } : {}) });
+      await api.register(platformSettingsRoutes, { ...(now ? { now } : {}) });
+      await api.register(platformAiSettingsRoutes, { env, platform, operations: aiOperations });
+      await api.register(platformAiCatalogsRoutes, { ...(now ? { now } : {}) });
+      await api.register(platformOperationsRoutes, { env, ...(now ? { now } : {}) });
+      await api.register(platformSecurityRoutes, { env, ...(now ? { now } : {}) });
     },
     { prefix: PLATFORM_PREFIX },
   );

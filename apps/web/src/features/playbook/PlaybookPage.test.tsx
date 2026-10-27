@@ -61,6 +61,8 @@ function renderPage(): void {
 }
 
 beforeEach(() => {
+  // General is the landing tab (tm 390.2); these tests are about the Skills/Knowledge tabs.
+  window.history.replaceState(null, '', '/app/playbook?view=skills');
   api.get.mockReset();
   api.post.mockReset();
   // `agent` must be a real, stable object: `useAuth((s) => s.agent?.scopes ?? [])`

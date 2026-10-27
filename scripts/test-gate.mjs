@@ -41,7 +41,14 @@
  * log tail is printed under the table. Exit code is 1 if any step failed.
  */
 import { spawn } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -119,6 +126,30 @@ const PHASES = [['build'], ['statik', 'birim'], ['entegrasyon'], ['e2e']];
 const logDir = join(tmpdir(), 'siyahtus-test-gate', new Date().toISOString().replace(/[:.]/g, '-'));
 mkdirSync(logDir, { recursive: true });
 
+// "Running" marker (2026-10-26, CONVENTIONS §1.3): the loop's Stop hook
+// (`.claude/hooks/gate-stop.sh`) refuses to let a window end while a gate is still
+// running — tm 311.2 and 389.3 returned `blocked` mid-gate. Written here so it exists
+// however the gate was started (run_in_background, nohup, foreground); removed on
+// every exit path. A stale one (dead pid or > 90 min) is dropped by the hook itself.
+const markerDir = join(root, '.loop-logs');
+mkdirSync(markerDir, { recursive: true });
+const marker = join(markerDir, `test-gate-${process.pid}.running`);
+writeFileSync(marker, `${new Date().toISOString()} ${args.join(' ')}\n`);
+const removeMarker = () => {
+  try {
+    unlinkSync(marker);
+  } catch {
+    /* already gone */
+  }
+};
+process.on('exit', removeMarker);
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    removeMarker();
+    process.exit(130);
+  });
+}
+
 function runStep(heading, step) {
   const log = join(logDir, `${heading}-${step.name.replace(/[^\w.-]/g, '_')}.log`);
   const out = createWriteStream(log);
@@ -177,7 +208,8 @@ for (const phase of PHASES) {
     const reason = skipReason(h);
     if (reason) {
       console.log(`[test-gate] ${h} ATLANDI (${reason})`);
-      for (const step of STEPS[h]) results.push({ heading: h, step: step.name, code: 0, seconds: 0, skipped: reason });
+      for (const step of STEPS[h])
+        results.push({ heading: h, step: step.name, code: 0, seconds: 0, skipped: reason });
     } else {
       runs.push(...STEPS[h].map((step) => runStep(h, step)));
     }
@@ -193,7 +225,8 @@ function rerunHints(log) {
   const byPackage = new Map();
   const text = readFileSync(log, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
   for (const line of text.split(/\r?\n/)) {
-    const m = /^(?:(@siyahtus\/[\w-]+):[\w:-]+:\s+)?FAIL\s+(\S+\.test\.tsx?)/.exec(line.trim()) ??
+    const m =
+      /^(?:(@siyahtus\/[\w-]+):[\w:-]+:\s+)?FAIL\s+(\S+\.test\.tsx?)/.exec(line.trim()) ??
       /^(@siyahtus\/[\w-]+):[\w:-]+:\s+FAIL\s+(\S+\.test\.tsx?)/.exec(line.trim());
     if (!m) continue;
     const pkg = m[1] ?? '@siyahtus/api';
@@ -214,7 +247,11 @@ console.log('');
 console.log('══════════════ test-gate ══════════════');
 for (const r of results) {
   const label = `${r.heading} › ${r.step}`.padEnd(width);
-  const verdict = r.skipped ? `ATLANDI (${r.skipped})` : r.code === 0 ? 'OK  ' : `RED (exit ${r.code})`;
+  const verdict = r.skipped
+    ? `ATLANDI (${r.skipped})`
+    : r.code === 0
+      ? 'OK  '
+      : `RED (exit ${r.code})`;
   console.log(`  ${label}  ${verdict}  ${r.skipped ? '' : formatDuration(r.seconds).padStart(7)}`);
 }
 console.log(
@@ -229,12 +266,18 @@ for (const r of failed) {
   console.log(lines.slice(-80).join('\n'));
 }
 
-const hints = failed.flatMap((r) => (r.heading === 'birim' || r.heading === 'entegrasyon' ? rerunHints(r.log) : []));
+const hints = failed.flatMap((r) =>
+  r.heading === 'birim' || r.heading === 'entegrasyon' ? rerunHints(r.log) : [],
+);
 if (hints.length > 0) {
   console.log('');
-  console.log('----- Kırmızı dosyaları tek tek yeniden koş (özel veritabanıyla; tam kapıyı beklemeden) -----');
+  console.log(
+    '----- Kırmızı dosyaları tek tek yeniden koş (özel veritabanıyla; tam kapıyı beklemeden) -----',
+  );
   for (const h of [...new Set(hints)]) console.log(`  ${h}`);
-  console.log('  Hepsi yeşilse kapıyı yeniden başlat; e2e yalnız o koşuda ve yalnız entegrasyon yeşilse koşar.');
+  console.log(
+    '  Hepsi yeşilse kapıyı yeniden başlat; e2e yalnız o koşuda ve yalnız entegrasyon yeşilse koşar.',
+  );
 }
 
 process.exitCode = failed.length === 0 ? 0 : 1;

@@ -36,6 +36,7 @@ import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
 import { TRIAL_PLAN } from '../../lib/entitlements.js';
 import { AI_CAPS_SETTING_KEY, parsePlanAiCaps, planAiDailyTokens } from '../ai/ai-plan-caps.js';
+import { parseDeploymentCaps } from '../ai/ai-settings.js';
 import {
   INVOICE_CURRENCY,
   invoiceCsvRows,
@@ -191,10 +192,17 @@ function periodBefore(period: string, count: number): string {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-/** The plans' AI figures as the panel set them (`platform_settings` `ai.caps`). */
+/**
+ * The plans' AI figures as the panel set them (`platform_settings` `ai.caps`), and the
+ * deployment's own when 389.17 stored them in the same row (null: the environment's).
+ */
 export async function readPlanCapSetting(db: PrismaClient | Tx) {
   const row = await db.platformSetting.findUnique({ where: { key: AI_CAPS_SETTING_KEY } });
-  return { row, defaults: parsePlanAiCaps(row?.value ?? null) };
+  return {
+    row,
+    defaults: parsePlanAiCaps(row?.value ?? null),
+    deployment: parseDeploymentCaps(row?.value ?? null),
+  };
 }
 
 interface CreditRowRaw {

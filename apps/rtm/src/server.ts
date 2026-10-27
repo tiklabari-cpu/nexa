@@ -24,6 +24,11 @@ import { ConnectionRegistry, connectionLogContext, type Connection } from './con
 import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
 import {
+  listenForMaintenanceChanges,
+  MAINTENANCE_CLOSE_CODE,
+  MaintenanceWatch,
+} from './maintenance.js';
+import {
   AUTHORITY_SWEEP_MS,
   AuthorityRefresher,
   listenForPermissionsChanges,
@@ -182,7 +187,8 @@ export function buildRtmServer(
     maxRetriesPerRequest: 3,
     retryStrategy: (attempt) => Math.min(attempt * 200, 3_000),
   });
-  // A fourth connection, for `permissions.changed` alone (tm 325.3): the fan-out
+  // A fourth connection, for `permissions.changed` (tm 325.3) and the root
+  // panel's `siyahtus:platform:ops` (tm 389.13): the fan-out
   // subscriber parses every message on its connection as a bus envelope, and a
   // subscribed client can do nothing else. Never a reason not to serve — without
   // it the sweep below still catches every change within its interval.
@@ -225,6 +231,18 @@ export function buildRtmServer(
     });
   }, AUTHORITY_SWEEP_MS);
   authoritySweep.unref();
+  // Maintenance mode (tm 389.13): on the command connection for the read, on
+  // the permissions subscriber for the announcement — that connection takes
+  // the root panel's `siyahtus:platform:ops` channel too, and each listener
+  // reads only its own channel.
+  const maintenance = new MaintenanceWatch(commands, log, () =>
+    registry.closeAll(MAINTENANCE_CLOSE_CODE, 'maintenance'),
+  );
+  void maintenance.refresh();
+  maintenance.start();
+  listenForMaintenanceChanges(permissionsSubscriber, maintenance).catch((error: unknown) => {
+    log.warn({ err: error }, 'settings.changed not subscribed; maintenance is re-read every 30 s');
+  });
   const sync = new SyncService(db);
   // Typing flags are written on the command connection: a subscriber-mode client
   // may issue no other commands, so it cannot be reused for a `SET`.
@@ -252,16 +270,22 @@ export function buildRtmServer(
     conflictPublisher,
     log,
     messagesPerSecond: env.RATE_LIMIT_RTM_PER_SEC,
+    inMaintenance: () => maintenance.full,
     onAuthenticated: async (connection: Connection, principal: SocketPrincipal) => {
       // Only a member's agent socket says a person is there: a bot has no
       // membership, a visitor no routing status. Checked against the registry
       // because the login was awaited — a socket that closed meanwhile has
       // already run its close handler, and tracking it now would renew a
       // socket nobody holds for as long as this process lives.
+      //
+      // Nor does an operator signed in as the member (tm 389.15): the person is
+      // not there, and routing chats to them because support looked at their
+      // inbox would be a lie the visitors pay for.
       if (
         presence &&
         connection.side === 'agent' &&
         principal.kind === 'agent' &&
+        !principal.impersonation &&
         registry.get(connection.id)
       ) {
         presence.opened(connection.id, {
@@ -501,6 +525,7 @@ export function buildRtmServer(
       }
 
       clearInterval(authoritySweep);
+      maintenance.stop();
       registry.closeAll(1001, 'server shutting down');
       await closeSockets(wss);
       // After the sockets: each close above recorded itself (the agent comes
@@ -748,6 +773,11 @@ function attach(params: {
   const idleTimer = setInterval(() => {
     if (Date.now() - connection.lastSeenAt > RTM_LIMITS.idleTimeoutMs) {
       ws.close(4408, 'idle timeout');
+    }
+    // An operator's session as a member (tm 389.15) closes with its window:
+    // the token stopped working at `endsAt`, and so does what it opened.
+    if (connection.impersonation && Date.now() >= connection.impersonation.endsAt.getTime()) {
+      ws.close(4401, 'session ended');
     }
   }, RTM_LIMITS.pingIntervalMs);
 

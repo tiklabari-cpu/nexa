@@ -78,6 +78,24 @@ export function lockKey(job: string): string {
   return `${LOCK_KEY_PREFIX}${job}`;
 }
 
+/**
+ * The "a pass is executing right now" marker (tm 389.14) — a second key per
+ * job, apart from the interval marker above. The interval key outlives its
+ * pass on purpose, so it cannot tell "running" from "ran a minute ago"; this
+ * one is held for the duration of the work only, by a scheduled pass and by a
+ * manual run alike, which is what keeps the root panel's "run now" from
+ * starting a job on top of itself. Its TTL is a safety net for a holder that
+ * died mid-pass, not a schedule.
+ */
+export const RUNNING_KEY_PREFIX = 'siyahtus:sched-running:';
+
+/** How long a crashed holder can park a job's running marker. */
+export const RUNNING_TTL_MS = 15 * 60_000;
+
+export function runningKey(job: string): string {
+  return `${RUNNING_KEY_PREFIX}${job}`;
+}
+
 export function lockTtlMs(intervalMs: number): number {
   return Math.max(MIN_LOCK_TTL_MS, Math.floor(intervalMs * LOCK_TTL_FRACTION));
 }
@@ -99,7 +117,10 @@ export interface LockRedis {
 }
 
 export class JobLock {
-  constructor(private readonly redis: LockRedis) {}
+  constructor(
+    private readonly redis: LockRedis,
+    private readonly keyOf: (job: string) => string = lockKey,
+  ) {}
 
   /**
    * Take this job's interval, or return null because somebody else has it.
@@ -110,7 +131,7 @@ export class JobLock {
    */
   async acquire(job: string, ttlMs: number): Promise<string | null> {
     const token = randomUUID();
-    const result = await this.redis.set(lockKey(job), token, 'PX', ttlMs, 'NX');
+    const result = await this.redis.set(this.keyOf(job), token, 'PX', ttlMs, 'NX');
     return result === 'OK' ? token : null;
   }
 
@@ -119,7 +140,7 @@ export class JobLock {
     // Plain EVAL rather than the SCRIPT LOAD / EVALSHA dance the rate limiter
     // does: that one runs on every request, this one runs when a process is
     // shutting down.
-    const deleted = await this.redis.eval(RELEASE_LUA, 1, lockKey(job), token);
+    const deleted = await this.redis.eval(RELEASE_LUA, 1, this.keyOf(job), token);
     return deleted === 1;
   }
 }

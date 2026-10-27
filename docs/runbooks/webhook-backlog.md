@@ -94,3 +94,11 @@ All queries via `make psql` (dev stack) or the demo stack's `db` container.
 - If the root cause was the scheduler not running, confirm `scheduler.jobs[]`
   for `webhook_redelivery` shows a recent `last_run_at` with `last_status: "ok"`
   before closing the incident.
+
+## From the root panel
+
+Operations → **Webhook deliveries** (root panel, tm 389.14) shows the first query's answer across
+every workspace without a psql session: deliveries owed a retry, those more than ten minutes past
+due, the oldest's age, and the last 24 hours' failure rate. **Scheduler jobs** lists
+`webhook_redelivery` with its last run, duration and error class, and "Run now" asks a scheduler
+process to sweep once outside its timetable (support or superadmin, with a reason).

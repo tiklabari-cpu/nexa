@@ -296,6 +296,10 @@ function signupFailureMessage(failure: unknown, t: TFunction): string {
   if (failure.type === 'not_allowed' && failure.details?.['reason'] === 'signup_closed') {
     return t('auth.signup.errorSignupClosed');
   }
+  // The root panel's blocklist (tm 389.13): retrying cannot work either.
+  if (failure.type === 'not_allowed' && failure.details?.['reason'] === 'signup_blocked') {
+    return t('auth.signup.errorSignupBlocked');
+  }
 
   // Terms of service (tm 257.9). Two different asks, so two sentences: an
   // unticked box is ticked; a stale version means the terms changed under an

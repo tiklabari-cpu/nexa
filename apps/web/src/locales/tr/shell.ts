@@ -43,6 +43,20 @@ export const shell: Messages = {
   'shell.narrow.mobileApp':
     'Telefonda sohbetleri yanıtlamak için SiyahTuş mobil uygulaması daha uygundur.',
   'shell.narrow.continue': 'Yine de devam et',
+  'shell.maintenance.readOnly':
+    'Bakım sürüyor — konsol şimdilik salt okunur, değişiklikler kaydedilmez.',
+  'shell.maintenance.title': 'Bakımdayız',
+  'shell.maintenance.body': 'SiyahTuş bakımda ve şu an kullanılamıyor. Verileriniz güvende.',
+  'shell.maintenance.autoRetry': 'Bu sayfa her dakika kendiliğinden yeniden kontrol eder.',
+  // Bir SiyahTuş operatörü bu üye olarak giriş yaptı (tm 389.15): kırmızı şerit.
+  'shell.impersonation.label': 'Destek oturumu',
+  'shell.impersonation.readOnly':
+    '{email} olarak giriş yapıldı — salt okunur, hiçbir şey değiştirilemez.',
+  'shell.impersonation.full':
+    '{email} olarak giriş yapıldı — tam erişim: değişiklikler bu üye adına yapılır.',
+  'shell.impersonation.endsIn': 'Kalan süre {time}',
+  'shell.impersonation.end': 'Oturumu bitir',
+  'shell.impersonation.ending': 'Bitiriliyor…',
   'shell.subscribe': 'Abone Ol',
   'shell.trial.ended': 'Deneme süreniz sona erdi — yeni sohbetler başlatmak için abone olun.',
   'shell.pilotTrial.remaining.one':
@@ -136,6 +150,7 @@ export const shell: Messages = {
   'nav.customers': 'Müşteriler',
   'nav.team': 'Ekip',
   'nav.playbook': 'Senaryolar',
+  'nav.aiAgent': 'AI Ajanı',
   'nav.reports': 'Raporlar',
   'nav.billing': 'Faturalandırma',
   'nav.settings': 'Ayarlar',

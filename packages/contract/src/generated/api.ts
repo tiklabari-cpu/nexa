@@ -120,6 +120,33 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/deployment/notice': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The operators' announcement and maintenance mode
+     * @description Anonymous and the same for every caller, like `/deployment`, and
+     *     answered in maintenance mode too — it is how the panel learns that it
+     *     is in maintenance. The announcement is the root panel's, in English and
+     *     Turkish; it is `null` once its `until` has passed. `maintenance` is
+     *     `null` while maintenance mode is off.
+     *
+     *     The tenant API reads both from the root panel's settings, cached for
+     *     30 seconds and dropped at once when an operator changes them.
+     */
+    get: operations['getDeploymentNotice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/login': {
     parameters: {
       query?: never;
@@ -265,6 +292,69 @@ export interface paths {
      *     real would turn the endpoint into an oracle.
      */
     post: operations['revokeToken'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/impersonation/exchange': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Trade a root-panel handoff code for an impersonation session
+     * @description "Enter as the customer" (FR-ADMIN-21 · tm 389.15 · design.md §G). A
+     *     SiyahTuş operator opened a session on one member from the root panel;
+     *     the panel handed their browser `/auth/impersonate#code=…`, and the
+     *     console brings the code here. The code is good once, for 60 seconds,
+     *     and only while the session is open; anything else — spent, late,
+     *     unknown, a member the workspace has since removed — is the same `401`.
+     *
+     *     The token answered is an ordinary bearer token of the member, bounded
+     *     by the session: it carries the member's role and the workspace's
+     *     permission matrix (never more), stops working when the session ends or
+     *     its window (`ends_at`) runs out, and cannot be renewed — there is no
+     *     refresh token. In a `read_only` session every write answers `403
+     *     impersonation_read_only` except signing out and
+     *     `POST /auth/impersonation/end`; in either mode the routes no operator
+     *     may take on a member's behalf answer `403 impersonation_forbidden_path`.
+     *     Every audit entry the session writes names the operator
+     *     (`actor_type: platform`) and the member (`on_behalf_of`).
+     *
+     *     Public, with its own per-address rate bucket.
+     */
+    post: operations['exchangeImpersonationCode'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/impersonation/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End the impersonation session this token belongs to
+     * @description The console banner's "End session" (tm 389.15): the platform session
+     *     is closed (`end_reason: ended_in_workspace`), and with it every token
+     *     it was traded for — the next request with this one is a `401`. Open in
+     *     a `read_only` session like signing out. Only an impersonation token may
+     *     call it; any other credential gets `404`. Ending a session that has
+     *     already ended answers `200` with `ended: false`.
+     */
+    post: operations['endImpersonation'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1916,6 +2006,36 @@ export interface paths {
      *     panel is not an error.
      */
     post: operations['sendCustomerTyping'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/chat/request-human': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ask for a person instead of the AI ("Talk to an agent")
+     * @description The widget's always-visible button while the AI answers the connection
+     *     (AI-29 · G16). The AI hands the connection over at once — no clarifying
+     *     question, the press is the request — with reason `player_request`, to
+     *     the team its routes give (AI-12), and says nothing more (AI-11). The
+     *     player is told a person is coming, or, when nobody at the target is
+     *     accepting chats, the after-hours text; the conversation waits in the
+     *     queue either way and is never dropped.
+     *
+     *     Idempotent: a connection a person or the queue has already is answered
+     *     with its owner and `requested: false`, and two presses at once hand it
+     *     over once. Limited per visitor (GV-01): 429 with `Retry-After`.
+     */
+    post: operations['requestCustomerHuman'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3580,7 +3700,19 @@ export interface paths {
     /** AI agents on the licence */
     get: operations['listAiAgents'];
     put?: never;
-    post?: never;
+    /**
+     * Add the workspace's AI agent
+     * @description Creates the workspace's customer-facing AI agent (tm 390.1) — what the
+     *     Playbook's empty state calls. v1 keeps one per workspace: a second is
+     *     409 `ai_agent_exists`, held by a partial unique index, so two tabs
+     *     creating at once get one agent and one 409. Copilot's record is not
+     *     made here; it is made on first use.
+     *
+     *     The agent starts switched off (`active: false`): going live is
+     *     `PATCH /ai-agents/{aiAgentId}` with `active: true`, behind the same
+     *     readiness and crisis-text gates as any agent. Owners and admins only.
+     */
+    post: operations['createAiAgent'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3596,7 +3728,15 @@ export interface paths {
       };
       cookie?: never;
     };
-    get?: never;
+    /**
+     * One AI agent, with what it still needs to go live
+     * @description The agent as the list shows it, plus `readiness` (tm 390.1): whether it
+     *     has indexed knowledge and an active skill with steps (FR-MOD-06.1, PRD
+     *     KK4 — the rule the panel's banner states) and, for the customer-facing
+     *     agent, what its crisis text still needs before it may be switched on
+     *     (AI-08-S1). Another workspace's agent is 404.
+     */
+    get: operations['getAiAgent'];
     put?: never;
     post?: never;
     delete?: never;
@@ -4263,15 +4403,28 @@ export interface paths {
      *     so a source that exists is a source that can answer; when the embedding
      *     provider cannot index it the answer is a 503 and nothing is created.
      *
-     *     A `website` source is crawled from `source_url` (the fetch is guarded
-     *     against private/internal targets — SSRF, NFR-S7); an `article` or a `faq`
-     *     indexes the `content` supplied. Exactly one of the two is required, per
-     *     `type`.
+     *     A `website` source is crawled from `source_url` (guarded against
+     *     private/internal targets — SSRF, NFR-S7 — here and on every fetch); an
+     *     `article` or a `faq` indexes the `content` supplied. Exactly one of
+     *     the two is required, per `type`.
      *
      *     `type: file` is refused here with a 400. A file source carries bytes to
      *     check, a type to check them against and a budget to measure them by, none
      *     of which a pasted string has — so it is created through
      *     `POST /knowledge-sources/file` and nowhere else.
+     *
+     *     **How far a website is crawled (tm 312 · AI-17)** is `crawl_scope`,
+     *     `page_limit`, `include_paths` and `exclude_paths`, refused with a 400
+     *     for every other type. A website source without them is a single page,
+     *     at most 200 pages, every path. **Nothing is fetched in the request**
+     *     (tm 312.3): the reply is `status: crawling` with the crawl's job in
+     *     `job_id` and no chunks yet, and the job is followed at
+     *     `GET /knowledge-jobs/{jobId}`; its pages are
+     *     `GET /knowledge-sources/{sourceId}/pages`. A client reads `status` and
+     *     `job_id` rather than assuming either.
+     *
+     *     `brand_id` is the one brand a website belongs to, a shorthand for
+     *     `brand_ids: [brand_id]`; naming both is a 400 unless they agree.
      *
      *     A new source counts as reviewed when it is added (`reviewed_at`).
      *     `owner_id` must name a member of this workspace; anyone else is a 400.
@@ -4467,9 +4620,13 @@ export interface paths {
      *     transaction opens; when the embedding provider cannot index it the edit
      *     is refused whole with a 503 and the source keeps its old text and chunks.
      *
-     *     A new `source_url` is crawled through the same SSRF guard `POST
-     *     /knowledge-sources` uses (NFR-S7), before the transaction opens — a
-     *     refused URL leaves the source exactly as it was.
+     *     A new `source_url` passes the same SSRF guard `POST
+     *     /knowledge-sources` uses (NFR-S7) — a refused URL leaves the source
+     *     exactly as it was — and queues a crawl of it (tm 312.3): the reply is
+     *     `status: crawling` with the job in `job_id`, and the pages already in
+     *     the store answer until the crawl replaces them. A new URL while the
+     *     source's last crawl is still under way is a 409
+     *     `knowledge_job_in_progress` with that job in `details.job_id`.
      *
      *     **`refresh_after_days` (FR-MOD-06.3.3, tm 198.4) schedules automatic
      *     re-crawls of a `website` source** — refused, like `source_url`, for
@@ -4477,6 +4634,12 @@ export interface paths {
      *     changing it) restarts the countdown from now; setting it to `null` turns
      *     automatic refresh back off. It never touches `content` or `chunk_count`
      *     by itself — only the freshness sweep or a real crawl does that.
+     *
+     *     **`crawl_scope`, `page_limit`, `include_paths` and `exclude_paths`
+     *     (tm 312 · AI-17)** say how far the next crawl of a `website` source
+     *     reaches — refused for every other type. Nothing is fetched or
+     *     re-indexed for them: the pages already in the store stay until the
+     *     next crawl, which leaves out what the new settings leave out.
      *
      *     **`owner_id`, `language` and `review_interval_days` (tm 309.1) belong to
      *     every type.** None of them is re-indexed or changes what the AI says.
@@ -4522,10 +4685,14 @@ export interface paths {
      *     PUT/PATCH because it is an action with an outbound effect, not the
      *     assignment of a state a caller could have named.
      *
-     *     For a `website` the stored URL is crawled again. For every other type the
-     *     text already held is chunked and embedded again — which is what makes a
-     *     source that indexed to nothing (an empty crawl, a chunker change)
-     *     recoverable without retyping it.
+     *     For a `website` a crawl of the stored URL is queued (tm 312.3), as
+     *     `POST /knowledge-sources/{sourceId}/crawl` queues it: the reply is the
+     *     source, `status: crawling` with the job in `job_id` — the one already
+     *     under way, when there is one — and nothing is fetched in the request.
+     *     Only the pages whose text changed are embedded again. For every other
+     *     type the text already held is chunked and embedded again — which is what
+     *     makes a source that indexed to nothing (a chunker change) recoverable
+     *     without retyping it.
      *
      *     **The SSRF guard runs again on the stored URL** (NFR-S7). "It was checked
      *     when it was added" is exactly the assumption to refuse: the row is not the
@@ -4534,17 +4701,15 @@ export interface paths {
      *     fetch. A refused reindex is a 400 that leaves the source, its text and its
      *     chunks untouched — the stale answer is kept rather than replaced by
      *     nothing. (The DNS half of the guard — a public *name* that resolves to a
-     *     private address — belongs with a real fetcher and lives in
-     *     `assertPublicHttpUrlResolved`, where the webhook sender uses it; the crawl
-     *     in this build is a deterministic in-process stub that opens no socket, so
-     *     there is no resolved address to pin.)
+     *     private address — is the crawler's: `CRAWLER_PROVIDER=http` resolves
+     *     every hop through it and connects to the address it checked.)
      *
      *     A successful reindex also restarts `next_refresh_at`'s countdown from
-     *     now, using whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
-     *     tm 198.4) — the freshness sweep and this endpoint are the same refresh,
-     *     whichever triggered it. A refresh the embedding provider cannot index is
-     *     a 503 that likewise leaves the source, its text and its chunks as they
-     *     were.
+     *     now — for a website, once its crawl ends — using whatever
+     *     `refresh_after_days` the source already has (FR-MOD-06.3.3, tm 198.4) —
+     *     the freshness sweep and this endpoint are the same refresh, whichever
+     *     triggered it. A refresh the embedding provider cannot index is a 503
+     *     that likewise leaves the source, its text and its chunks as they were.
      */
     post: operations['reindexKnowledgeSource'];
     delete?: never;
@@ -4579,6 +4744,111 @@ export interface paths {
      *     leaves `reviewed_at` where it was.
      */
     post: operations['reviewKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-sources/{sourceId}/pages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * The pages a website source's crawls found
+     * @description Every page the source's crawls found (tm 312 · AI-17), whatever became
+     *     of it, URL order. Unpaged: a source keeps at most 200 pages, and the
+     *     ones it found but skipped are bounded by the same crawl. Any other type
+     *     has none — an empty list, not a 400.
+     */
+    get: operations['listKnowledgeSourcePages'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-sources/{sourceId}/crawl': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Queue a crawl of a website source
+     * @description Queues a `crawl` job for a `website` source (tm 312 · AI-17) — the
+     *     panel's "Crawl again" — and answers with it; nothing is fetched in the
+     *     request. The source is `crawling` until the job ends. The stored URL
+     *     passes the SSRF guard again before anything is queued (NFR-S7).
+     *
+     *     A source has at most one job under way: a second request while one is
+     *     `queued`, `running` or `waiting_budget` is a 409
+     *     `knowledge_job_in_progress` with that job's id in `details.job_id`.
+     *     Any other type is a 400 with `details.reason`
+     *     `knowledge_source_not_website`.
+     */
+    post: operations['crawlKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-jobs/{jobId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * A knowledge job's progress
+     * @description Where a crawl (or a document's processing) is (tm 312 · AI-17). The
+     *     panel polls it every 3 seconds while the job is under way.
+     */
+    get: operations['getKnowledgeJob'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-jobs/{jobId}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop a knowledge job
+     * @description Stops a job under way (tm 312 · AI-17): it is `cancelled`, the runner
+     *     fetches nothing more for it, and the pages it already indexed stay —
+     *     they answer, and the source is `partial` or `ready` by what it has.
+     *     A job that has already ended is answered as it is: cancelling twice, or
+     *     a crawl that finished as the button was pressed, is not an error.
+     */
+    post: operations['cancelKnowledgeJob'];
     delete?: never;
     options?: never;
     head?: never;
@@ -10866,6 +11136,45 @@ export interface components {
        */
       live_apps?: ('brevo' | 'freshdesk' | 'telegram')[];
     };
+    /**
+     * @description What the root panel's operators want every panel user to see (tm
+     *     389.13 · FR-ADMIN-15): an announcement, and maintenance mode while it
+     *     is on. `null` for either means nothing to show.
+     */
+    DeploymentNotice: {
+      announcement: components['schemas']['DeploymentAnnouncement'] | null;
+      maintenance: components['schemas']['DeploymentMaintenance'] | null;
+    };
+    /**
+     * @description The operator's announcement, in both languages the panel ships. It
+     *     stops being served once `until` has passed.
+     */
+    DeploymentAnnouncement: {
+      /** @enum {string} */
+      level: 'info' | 'warning' | 'critical';
+      en: string;
+      tr: string;
+      /**
+       * Format: date-time
+       * @description When it comes down by itself; `null` keeps it up.
+       */
+      until: string | null;
+    };
+    /**
+     * @description Maintenance mode. `full`: every request but health, this notice,
+     *     `/deployment` and signing out answers `503 maintenance`, and the
+     *     realtime gateway refuses sockets. `read_only`: reads and signing in
+     *     work, every other write answers `503 maintenance`.
+     */
+    DeploymentMaintenance: {
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      /** @description The operator's words; `null` uses the panel's own sentence. */
+      message: {
+        en: string;
+        tr: string;
+      } | null;
+    };
     DependencyHealth: {
       /** @enum {string} */
       status: 'up' | 'down';
@@ -11016,6 +11325,43 @@ export interface components {
       license_id: string;
       /** Format: uuid */
       organization_id?: string;
+    };
+    /**
+     * @description A SiyahTuş operator signed in as this member from the root panel
+     *     (FR-ADMIN-21 · tm 389.15). Who the operator is stays in the audit
+     *     trail (`actor_type: platform`); the console needs only the terms.
+     */
+    ImpersonationState: {
+      /** Format: uuid */
+      session_id: string;
+      /**
+       * @description `read_only` refuses every write but signing out and ending the
+       *     session; `full` acts as the member. Neither reaches past the
+       *     member's role.
+       * @enum {string}
+       */
+      mode: 'read_only' | 'full';
+      /**
+       * Format: date-time
+       * @description When the session, and every token traded for it, stops working.
+       */
+      ends_at: string;
+    };
+    ImpersonationGrant: {
+      access_token: string;
+      /** @enum {string} */
+      token_type: 'Bearer';
+      /** @description Seconds until `impersonation.ends_at`. There is no refresh token. */
+      expires_in: number;
+      /**
+       * Format: uuid
+       * @description The member the operator is signed in as.
+       */
+      account_id: string;
+      license_id: string;
+      /** Format: uuid */
+      organization_id: string;
+      impersonation: components['schemas']['ImpersonationState'];
     };
     Chat: {
       /**
@@ -11438,8 +11784,42 @@ export interface components {
        *     applied by the procedure itself. Null: the default, 2.
        */
       max_questions_per_message?: number | null;
+      /**
+       * @description The agent's opening words, said before its first reply on a
+       *     connection (AI-29 · A-11). The disclosure "{name}, {brand}'s AI
+       *     assistant" goes first whatever this says — added when the text
+       *     does not carry it — and cannot be removed (G16). Null: the
+       *     disclosure alone.
+       */
+      welcome_message?: string | null;
+      /**
+       * @description The widget's "Talk to an agent" button in the workspace's words
+       *     (AI-29-S1). The button itself cannot be hidden. Null: the widget's.
+       */
+      human_button_label?: string | null;
       active: boolean;
       skills_count?: number;
+    };
+    /** @description One agent (`GET /ai-agents/{aiAgentId}`, `POST /ai-agents`) — the list's fields plus `readiness`. */
+    AiAgentDetail: components['schemas']['AiAgent'] & {
+      readiness: components['schemas']['AiAgentReadiness'];
+    };
+    /**
+     * @description What the agent still needs (tm 390.1). `ready` is the panel's rule
+     *     (FR-MOD-06.1, PRD KK4): indexed knowledge it may answer from AND an
+     *     active skill with steps. `guardrail_problem` is the separate gate on
+     *     switching a customer-facing agent on (AI-08-S1, `409
+     *     ai_guardrail_setup_incomplete`); null when the crisis text is
+     *     approved, and always null for Copilot.
+     */
+    AiAgentReadiness: {
+      ready: boolean;
+      /** @description A knowledge source this agent may answer players from has at least one indexed chunk. */
+      has_knowledge: boolean;
+      /** @description One of this agent's skills is active and has at least one step. */
+      has_skill: boolean;
+      /** @enum {string|null} */
+      guardrail_problem: 'crisis_text_missing' | 'crisis_text_not_approved' | null;
     };
     /**
      * @description What a behaviour rule is about (AI-07); the editor groups by it.
@@ -11765,6 +12145,12 @@ export interface components {
       /** @description Every reason the AI handed over for, most severe first. */
       reason_codes: string[];
       primary_reason: string;
+      /**
+       * @description `button`: the player pressed "Talk to an agent" (AI-29). Null: the
+       *     AI's own decision, or what the player wrote.
+       * @enum {string|null}
+       */
+      requested_via?: 'button' | null;
       risk_flags: string[];
       /** @enum {string|null} */
       sentiment: 'positive' | 'neutral' | 'negative' | 'angry' | null;
@@ -13978,9 +14364,45 @@ export interface components {
       name: string;
       /** @enum {string} */
       type: 'website' | 'file' | 'article' | 'faq';
+      /**
+       * @description `ready` — indexed; `empty` — indexed to nothing; `indexing` —
+       *     text waiting to be indexed; `crawling` — a website's crawl job
+       *     is under way (`job_id`); `partial` — the last crawl finished
+       *     with pages that failed (its pages list says which); `failed`.
+       */
       status: string;
       /** @description The crawled URL */
       source_url?: string | null;
+      /**
+       * @description How far the website is crawled (tm 312 · AI-17); null for the
+       *     other types.
+       */
+      crawl_scope?: components['schemas']['CrawlScope'] | null;
+      /** @description The most pages one crawl keeps; null for the other types. */
+      page_limit?: number | null;
+      /** @description Path prefixes the crawl keeps to; empty — every path. */
+      include_paths?: string[];
+      /** @description Path prefixes the crawl leaves out. */
+      exclude_paths?: string[];
+      /**
+       * Format: date-time
+       * @description When the last crawl job finished, whatever came of it; null until
+       *     one has (a website crawled in the request before tm 312.3 has
+       *     none).
+       */
+      last_crawled_at?: string | null;
+      /**
+       * @description Pages the last crawl left in the store (`ok` + `unchanged`);
+       *     0 for the other types.
+       */
+      page_count?: number;
+      /**
+       * Format: uuid
+       * @description The source's job under way (`queued`, `running` or
+       *     `waiting_budget`) — follow it at `GET /knowledge-jobs/{jobId}`;
+       *     null when there is none.
+       */
+      job_id?: string | null;
       chunk_count: number;
       /** Format: date-time */
       updated_at?: string;
@@ -14095,6 +14517,119 @@ export interface components {
        *     other source.
        */
       kb_article_id?: string | null;
+    };
+    /**
+     * @description How far a website source's crawl reaches (tm 312 · AI-17,
+     *     `@siyahtus/types` `CRAWL_SCOPES`): `single` — the URL given and
+     *     nothing else; `all` — every page under it, from its sitemap or, with
+     *     none, by following links (depth 3); `sitemap` — the pages its sitemap
+     *     lists. Always the same host and below the URL's path, within
+     *     `include_paths`/`exclude_paths`, robots.txt and `page_limit`.
+     * @enum {string}
+     */
+    CrawlScope: 'single' | 'all' | 'sitemap';
+    /**
+     * @description What became of one crawled page (`KNOWLEDGE_PAGE_STATUSES`): `ok` —
+     *     fetched and indexed; `unchanged` — same text as the last crawl, not
+     *     embedded again; `skipped_scope` — outside the scope or path lists;
+     *     `robots_disallowed` — robots.txt forbids it, never fetched; `blocked`
+     *     — a bot wall; `needs_js` — its text is drawn by JavaScript, which the
+     *     crawler does not run; `error` — the fetch failed (`error` says why);
+     *     `removed` — gone (two 404/410 in a row) or out of scope since, its
+     *     chunks deleted. Only `ok` and `unchanged` pages answer.
+     * @enum {string}
+     */
+    KnowledgePageStatus:
+      | 'ok'
+      | 'unchanged'
+      | 'skipped_scope'
+      | 'robots_disallowed'
+      | 'blocked'
+      | 'needs_js'
+      | 'error'
+      | 'removed';
+    /** @description One page of a website source's crawl (tm 312 · AI-17). */
+    KnowledgePage: {
+      /** Format: uuid */
+      id: string;
+      /** @description The page's URL in its normalised spelling. */
+      url: string;
+      title?: string | null;
+      /** @description The page's `<html lang>`, as a primary subtag. */
+      lang?: string | null;
+      status: components['schemas']['KnowledgePageStatus'];
+      http_status?: number | null;
+      /**
+       * @description A snake_case code saying why the page is `error` or `blocked`
+       *     (`fetch_timeout`, `too_large`, `ssrf_refused`…) — the panel words it.
+       */
+      error?: string | null;
+      /** @description Links from the start URL. */
+      depth?: number;
+      chunk_count: number;
+      /** Format: date-time */
+      fetched_at?: string | null;
+      /**
+       * Format: date-time
+       * @description When the page's text last changed — the "review what changed" list.
+       */
+      changed_at?: string | null;
+    };
+    /**
+     * @description `crawl` — a website's first or a manual crawl; `refresh` — the
+     *     freshness sweep's re-crawl; `document` — a large document's parse and
+     *     index (AI-18).
+     * @enum {string}
+     */
+    KnowledgeJobKind: 'crawl' | 'refresh' | 'document';
+    /**
+     * @description `queued` → `running` → `done` | `failed`; `waiting_budget` — the
+     *     day's AI allowance ran out mid-job, it resumes after UTC midnight from
+     *     where it stopped, the pages indexed so far already answering;
+     *     `cancelled` by a person. A source has at most one job under way
+     *     (`queued`, `running`, `waiting_budget`).
+     * @enum {string}
+     */
+    KnowledgeJobStatus: 'queued' | 'running' | 'waiting_budget' | 'done' | 'failed' | 'cancelled';
+    /**
+     * @description A knowledge job (tm 312 · AI-17), worked through in the background —
+     *     the panel polls it for a crawl's progress.
+     */
+    KnowledgeJob: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      source_id: string;
+      kind: components['schemas']['KnowledgeJobKind'];
+      status: components['schemas']['KnowledgeJobStatus'];
+      /**
+       * @description Progress. `discovered` grows as the crawl finds pages;
+       *     `done` = `ok` + `unchanged` + `skipped` + `failed` + `removed`.
+       */
+      pages: {
+        discovered: number;
+        done: number;
+        ok: number;
+        unchanged: number;
+        /** @description `skipped_scope` and `robots_disallowed` pages. */
+        skipped: number;
+        /** @description `error`, `blocked` and `needs_js` pages. */
+        failed: number;
+        removed: number;
+      };
+      /** @description A snake_case code — why the job failed or stopped. */
+      error?: string | null;
+      /**
+       * Format: date-time
+       * @description A `waiting_budget` job resumes at this moment (UTC midnight).
+       */
+      available_at?: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      started_at?: string | null;
+      /** Format: date-time */
+      finished_at?: string | null;
     };
     /**
      * @description One CSV data row's verdict. `line` is the row's 1-based position among
@@ -19665,6 +20200,39 @@ export interface components {
       } | null;
       /** @description Customer-visible events only. Internal notes never appear. */
       events: components['schemas']['Event'][];
+      /**
+       * @description Who has the open connection (AI-29): `human` a person is assigned,
+       *     `queue` it waits for one, `ai` the AI answers it. The widget shows
+       *     "Talk to an agent" while it is `ai`; the workspace cannot hide it.
+       *     Null with no open connection.
+       * @enum {string|null}
+       */
+      owner?: 'ai' | 'human' | 'queue' | null;
+      /**
+       * @description Whether anyone in the workspace is accepting chats now — what a
+       *     press of the button would be told (AI-29-S2).
+       */
+      human_available?: boolean;
+      /**
+       * @description The words on the button: the workspace's own, else the default in
+       *     the language the visitor opened the conversation in. Null with no
+       *     open connection.
+       */
+      human_button_label?: string | null;
+    };
+    CustomerHumanRequest: {
+      /**
+       * @description Who has the connection now.
+       * @enum {string}
+       */
+      owner: 'ai' | 'human' | 'queue';
+      /** @description Whether anyone at the hand-over's team is accepting chats; false is after hours. */
+      human_available: boolean;
+      /**
+       * @description True when this request handed the connection over; false when a
+       *     person or the queue had it already (or another press was doing it).
+       */
+      requested: boolean;
     };
     /**
      * @description One completed order, as the widget snippet reports it (FR-MOD-13.5).
@@ -19757,6 +20325,7 @@ export interface components {
      * @enum {string}
      */
     ErrorType:
+      | 'ai_agent_exists'
       | 'ai_guardrail_setup_incomplete'
       | 'ai_mode_transition_refused'
       | 'ai_return_blocked'
@@ -19777,9 +20346,13 @@ export interface components {
       | 'group_topic_role_taken'
       | 'group_unavailable'
       | 'groups_offline'
+      | 'impersonation_forbidden_path'
+      | 'impersonation_read_only'
       | 'internal'
+      | 'knowledge_job_in_progress'
       | 'license_expired'
       | 'limit_reached'
+      | 'maintenance'
       | 'message_rejected'
       | 'misdirected_request'
       | 'not_allowed'
@@ -20317,6 +20890,29 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getDeploymentNotice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What to show. */
+      200: {
+        headers: {
+          /** @description `no-cache` — a change must be seen on the next read. */
+          'Cache-Control'?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeploymentNotice'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   login: {
     parameters: {
       query?: never;
@@ -20520,6 +21116,64 @@ export interface operations {
       };
     };
   };
+  exchangeImpersonationCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The impersonation session's bearer token */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ImpersonationGrant'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  endImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description The session is over */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @description False when the session had already ended. */
+            ended: boolean;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
   getCurrentPrincipal: {
     parameters: {
       query?: never;
@@ -20638,6 +21292,12 @@ export interface operations {
               /** @description Unused codes left. Which ones is never retrievable. */
               recovery_codes_remaining: number;
             };
+            /**
+             * @description Agent principals only, and only when a SiyahTuş operator is
+             *     signed in as this member from the root panel (tm 389.15).
+             *     The console paints its red banner from it. Absent otherwise.
+             */
+            impersonation?: components['schemas']['ImpersonationState'];
           };
         };
       };
@@ -23083,6 +23743,49 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  requestCustomerHuman: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * @description How the player asked; the button is the only way today.
+           * @enum {string}
+           */
+          reason?: 'button';
+        };
+      };
+    };
+    responses: {
+      /** @description The connection's owner after the request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerHumanRequest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      /** @description There is no open conversation to hand over */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   closeCustomerChat: {
     parameters: {
       query?: never;
@@ -25359,6 +26062,75 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  createAiAgent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          tone?: string | null;
+          avatar_url?: string | null;
+          languages?: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description Created, switched off */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiAgentDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description The workspace already has an AI agent (`ai_agent_exists`) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiAgent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The agent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiAgentDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   updateAiAgent: {
     parameters: {
       query?: never;
@@ -25410,6 +26182,14 @@ export interface operations {
           emoji?: 'none' | 'few' | null;
           /** @description Questions one procedure message may ask (AI-07). Null goes back to 2. */
           max_questions_per_message?: number | null;
+          /**
+           * @description The opening words before the agent's first reply (AI-29). The
+           *     AI disclosure is added in front when missing. Null or blank
+           *     clears it.
+           */
+          welcome_message?: string | null;
+          /** @description The widget's "Talk to an agent" button text (AI-29-S1). Null or blank clears it. */
+          human_button_label?: string | null;
         };
       };
     };
@@ -26819,6 +27599,29 @@ export interface operations {
            */
           brand_ids?: string[];
           /**
+           * Format: uuid
+           * @description The one brand the source is for — `brand_ids: [brand_id]`.
+           *     With `brand_ids` as well, the two must agree.
+           */
+          brand_id?: string;
+          crawl_scope?: components['schemas']['CrawlScope'];
+          /**
+           * @description The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+           *     sources only. Omitted — 200.
+           */
+          page_limit?: number;
+          /**
+           * @description URL path prefixes the crawl keeps to; empty — every path. A prefix
+           *     matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+           *     `/bonuslar`). Repeats folded. Website sources only.
+           */
+          include_paths?: string[];
+          /**
+           * @description URL path prefixes the crawl leaves out; exclusion wins over
+           *     `include_paths`. Website sources only.
+           */
+          exclude_paths?: string[];
+          /**
            * Format: date-time
            * @description Past this moment the source answers nothing; null — no end.
            */
@@ -26827,7 +27630,10 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Indexed */
+      /**
+       * @description Created — indexed, or for a website with a crawl job under way
+       *     (`status: crawling`, `job_id`).
+       */
       201: {
         headers: {
           [name: string]: unknown;
@@ -27029,6 +27835,23 @@ export interface operations {
            *     automatic refresh off.
            */
           refresh_after_days?: number | null;
+          crawl_scope?: components['schemas']['CrawlScope'];
+          /**
+           * @description The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+           *     sources only.
+           */
+          page_limit?: number;
+          /**
+           * @description URL path prefixes the crawl keeps to; empty — every path. A prefix
+           *     matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+           *     `/bonuslar`). Repeats folded. Website sources only.
+           */
+          include_paths?: string[];
+          /**
+           * @description URL path prefixes the crawl leaves out; exclusion wins over
+           *     `include_paths`. Website sources only.
+           */
+          exclude_paths?: string[];
           /**
            * Format: uuid
            * @description A member of this workspace; null makes the source unowned.
@@ -27075,6 +27898,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
     };
@@ -27125,6 +27949,117 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listKnowledgeSourcePages: {
+    parameters: {
+      query?: {
+        /** @description Only the pages with this status. */
+        status?: components['schemas']['KnowledgePageStatus'];
+      };
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Pages */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['KnowledgePage'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  crawlKnowledgeSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Queued */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeJob'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getKnowledgeJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeJob'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  cancelKnowledgeJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Cancelled, or already ended */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeJob'];
         };
       };
       401: components['responses']['Unauthorized'];

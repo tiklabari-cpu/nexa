@@ -12,6 +12,9 @@ import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
 import aiBudget from './plugins/ai-budget.js';
 import aiJobs, { type AiJobDiscovery } from './plugins/ai-jobs.js';
+import knowledgeJobs from './plugins/knowledge-jobs.js';
+import type { CrawlFetcher } from './services/ai/crawler/fetcher.js';
+import { crawlerProviderWarning } from './services/ai/crawler/provider.js';
 import aiTesting from './plugins/ai-testing.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
@@ -19,6 +22,8 @@ import entitlementGate from './plugins/entitlement-gate.js';
 import { baseFastifyOptions } from './lib/fastify-options.js';
 import { VERSION } from './version.js';
 import licenseGate from './plugins/license-gate.js';
+import maintenanceGate from './plugins/maintenance-gate.js';
+import impersonationGate from './plugins/impersonation-gate.js';
 import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
@@ -32,6 +37,7 @@ import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import scheduler from './plugins/scheduler.js';
 import authRoutes from './routes/auth.js';
+import impersonationRoutes from './routes/impersonation.js';
 import samlRoutes from './routes/saml.js';
 import scimRoutes from './routes/scim.js';
 import agentRoutes from './routes/agents.js';
@@ -55,15 +61,24 @@ import { AbuseGuard } from './services/security/abuse-guard.js';
 import { resolveCaptcha } from './services/security/captcha.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
-import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
+import type { LlmProvider } from './services/ai/provider/llm-provider.js';
+import {
+  AiProviderRegistry,
+  listenForAiSettingsChanges,
+  readAiSettingsForTenant,
+} from './services/ai/provider/llm-registry.js';
+import { aiSettingsRootKey } from './services/ai/ai-settings.js';
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
 import { listenForAiCapsChanges } from './services/ai/ai-caps-events.js';
+import {
+  listenForPlatformSettingsChanges,
+  PublicSettings,
+} from './services/platform/public-settings.js';
 import { AiUsageAlerts } from './services/ai/ai-usage-alerts.js';
 import { RealtimePublisher } from './services/realtime/publisher.js';
 import { MeteredEmbeddings } from './services/ai/metered-embeddings.js';
 import { MeteredLlm } from './services/ai/metered-llm.js';
-import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
 import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import { RiskFlagAnnouncer } from './services/risk/risk-announce.js';
@@ -197,6 +212,12 @@ export interface BuildServerOptions {
    */
   accessInfoHttp?: SafeHttp;
   /**
+   * The AI's disclosure on its first reply (tm 308 · AI-29). On; the
+   * integration helper turns it off for the suites about something else,
+   * since it changes every first reply's text.
+   */
+  aiDisclosure?: boolean;
+  /**
    * How the AI job worker finds jobs it was not woken for (tm 289.5,
    * `plugins/ai-jobs.ts`). Omitted, `shared`: the poll and the doorbell, so
    * any process answers any visitor message. The test fixture passes
@@ -215,6 +236,12 @@ export interface BuildServerOptions {
    * test reaches Cloudflare.
    */
   captchaFetch?: (input: string, init: RequestInit) => Promise<Response>;
+  /**
+   * Who fetches a website knowledge source's pages (tm 312.3 · AI-17).
+   * Omitted, `CRAWLER_PROVIDER`'s; a test passes a mock site
+   * (`createMockCrawlFetcher`) or the real fetcher with a stubbed resolver.
+   */
+  crawlFetcher?: CrawlFetcher;
 }
 
 export async function buildServer({
@@ -233,7 +260,9 @@ export async function buildServer({
   appsHttp,
   appsEndpoints,
   accessInfoHttp,
+  aiDisclosure = true,
   aiJobDiscovery,
+  crawlFetcher,
   geo: injectedGeo,
   captchaFetch,
 }: BuildServerOptions): Promise<FastifyInstance> {
@@ -264,6 +293,10 @@ export async function buildServer({
     if (created.warning) app.log.warn({ event: 'geoip.disabled' }, created.warning);
     geo = created.locator;
   }
+  // A pilot crawling with the mock indexes an invented page for every site
+  // (tm 312.3 · AI-17): said at boot, never a refusal (owner, 2026-10-10).
+  const crawlerWarning = crawlerProviderWarning(env);
+  if (crawlerWarning) app.log.warn({ event: 'crawler.mock_in_pilot' }, crawlerWarning);
   app.decorate('geo', geo);
 
   // The provider is chosen by the setting that names it, not by `NODE_ENV`
@@ -278,39 +311,6 @@ export async function buildServer({
     createMailer(env.MAIL_PROVIDER, {
       ...env.mail,
       logger: app.log.child({ component: 'mailer' }),
-    });
-  // After the app for the mailer's reason: the `openai` adapter logs its
-  // retries, failures and circuit changes through this logger (tm 255.6).
-  const llm =
-    injectedLlm ??
-    createLlmProvider(env.LLM_PROVIDER, env.llm, {
-      logger: app.log.child({ component: 'llm' }),
-      ...(llmFetch ? { fetchImpl: llmFetch } : {}),
-    });
-  // Copilot's own instance of the same provider (tm 257.5 · ADR
-  // `pilot-public-readiness.md` K-h). The circuit breaker lives on the
-  // instance, so sharing one would let five failed summaries — long
-  // transcripts are the likeliest to time out — hand every visitor's next
-  // question to a human for thirty seconds. Same settings, same logger
-  // component; `surface` tells the two apart in the log. Embeddings are
-  // shared on purpose (below): a reply draft's question is one short query,
-  // and the knowledge it searches was indexed by that one provider.
-  const copilotLlm =
-    injectedCopilotLlm ??
-    injectedLlm ??
-    createLlmProvider(env.LLM_PROVIDER, env.llm, {
-      logger: app.log.child({ component: 'llm', surface: 'copilot' }),
-      ...(llmFetch ? { fetchImpl: llmFetch } : {}),
-    });
-  // One provider and one knowledge service for the whole process (tm 255.7):
-  // the customer path, the playbook and copilot routes and the freshness sweep
-  // all index and search through it, so they write and read one space and
-  // share one circuit breaker. Before, each built its own over the stub.
-  const embeddings =
-    injectedEmbeddings ??
-    createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding, {
-      logger: app.log.child({ component: 'embedding' }),
-      ...(embeddingFetch ? { fetchImpl: embeddingFetch } : {}),
     });
 
   await app.register(errorHandler);
@@ -346,6 +346,68 @@ export async function buildServer({
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  // The root panel's deployment settings (tm 389.13): sign-up, the trial
+  // length, the announcement and maintenance mode, cached for 30 seconds and
+  // dropped at once on `settings.changed`. Its own subscriber connection, like
+  // the AI caps' below, and never a reason not to boot: unread, the
+  // environment decides, and a missed announcement lands within the cache.
+  const publicSettings = new PublicSettings({
+    db: app.db,
+    env,
+    logger: app.log.child({ component: 'platform-settings' }),
+  });
+  app.decorate('publicSettings', publicSettings);
+  const platformOps = app.redis.duplicate({ connectionName: 'siyahtus-api-platform-ops' });
+  platformOps.on('error', (error) => {
+    app.log.error({ err: error }, 'redis siyahtus:platform:ops subscriber error');
+  });
+  await listenForPlatformSettingsChanges(platformOps, () => publicSettings.invalidate()).catch(
+    (error: unknown) => {
+      app.log.warn({ err: error }, 'settings.changed not subscribed; settings refresh every 30 s');
+    },
+  );
+  // Who writes AI text and who embeds (tm 389.17 · FR-ADMIN-18): a registry
+  // that builds them from the root panel's AI settings, else the environment,
+  // and rebuilds them on `ai.settings_changed` without a restart. Everything
+  // below holds the registry's facades. Copilot keeps an instance of its own
+  // (tm 257.5 · ADR `pilot-public-readiness.md` K-h): the circuit breaker
+  // lives on the instance, so sharing one would let five failed summaries —
+  // long transcripts are the likeliest to time out — hand every visitor's
+  // next question to a human for thirty seconds. Embeddings are shared on
+  // purpose (tm 255.7): one space for every writer and reader. A test's
+  // injected instances are pinned and answer whatever the settings say.
+  const aiProviders = await AiProviderRegistry.create({
+    env,
+    rootKey: aiSettingsRootKey(env),
+    read: () => readAiSettingsForTenant(app.db),
+    logger: app.log.child({ component: 'ai-settings' }),
+    ...(llmFetch ? { llmFetch } : {}),
+    ...(embeddingFetch ? { embeddingFetch } : {}),
+    pinned: {
+      ...(injectedLlm ? { visitor: injectedLlm } : {}),
+      ...((injectedCopilotLlm ?? injectedLlm)
+        ? { copilot: injectedCopilotLlm ?? injectedLlm }
+        : {}),
+      ...(injectedEmbeddings ? { embeddings: injectedEmbeddings } : {}),
+    },
+  });
+  app.decorate('aiProviders', aiProviders);
+  aiProviders.start();
+  await listenForAiSettingsChanges(platformOps, () => void aiProviders.reload()).catch(
+    (error: unknown) => {
+      app.log.warn(
+        { err: error },
+        'ai.settings_changed not subscribed; AI settings refresh every minute',
+      );
+    },
+  );
+  app.addHook('onClose', async () => {
+    await aiProviders.stop();
+    await platformOps.quit().catch(() => platformOps.disconnect());
+  });
+  const llm = aiProviders.llm('visitor');
+  const copilotLlm = aiProviders.llm('copilot');
+  const embeddings = aiProviders.embeddings();
   // The widget's human check (tm 339.2 · GV-01): a provider that cannot work
   // leaves it off and says so, the boot goes on (owner, 2026-10-10).
   const captcha = resolveCaptcha(env, captchaFetch);
@@ -367,6 +429,8 @@ export async function buildServer({
   // allowance. On `mock` nothing is counted.
   const aiDailyBudget = new AiDailyBudget(app.db, aiDailyCaps(env), {
     logger: app.log.child({ component: 'ai-budget' }),
+    // The root panel's deployment caps when set (tm 389.17), else these.
+    deploymentCaps: () => aiProviders.config().caps,
   });
   // A workspace's caps are its licence's override, its plan's and then the
   // deployment's (tm 283.2), cached for a minute; a change announced on
@@ -452,6 +516,9 @@ export async function buildServer({
     knowledge,
     publisher: new RealtimePublisher(app.redis, app.log),
     llm: meteredLlm,
+    inference: () => aiProviders.inference(),
+    geo,
+    captchaUsable: captcha.verifier !== null,
   });
   // Mail a response must not wait for — the password reset's (tm 255.4), so its
   // answer cannot depend on the carrier, and since tm 256.4 the assignee notice,
@@ -476,6 +543,16 @@ export async function buildServer({
     ...(accessInfoHttp ? { accessInfoHttp } : {}),
     ...(aiJobDiscovery ? { discovery: aiJobDiscovery } : {}),
   });
+  // The knowledge job runner (tm 312.3 · AI-17): the website crawls the
+  // routes and the freshness sweep queue, found the way the AI job worker
+  // finds its jobs. After `database`, for its drain on close.
+  await app.register(knowledgeJobs, {
+    env,
+    knowledge,
+    embeddingInference: () => aiProviders.inference().embedding,
+    ...(crawlFetcher ? { fetcher: crawlFetcher } : {}),
+    ...(aiJobDiscovery ? { discovery: aiJobDiscovery } : {}),
+  });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
   // phase in registration order — so this is what puts the rate limiter's
@@ -487,7 +564,15 @@ export async function buildServer({
   // back would silently restore the unbounded path, so `rate-limit.test.ts`
   // asserts the ordering by its effect rather than trusting this comment.
   await app.register(rateLimit, { env });
+  // Maintenance mode (tm 389.13): after the rate limiter, so a refused flood
+  // is still metered, and ahead of authentication and the licence gate — a
+  // deployment in maintenance says so before anything about the caller.
+  await app.register(maintenanceGate);
   await app.register(auth, { env });
+  // Right after `auth`, whose principal it reads: an operator signed in as a
+  // member (tm 389.15) is held to the session's terms before anything else
+  // looks at the request — and a refused write never parses its body.
+  await app.register(impersonationGate);
   // After `auth`, so its `onRequest` hook adds the route's chat, connection and
   // customer ids to a logger that already says whose request it is (ID-08).
   await app.register(logContext);
@@ -497,7 +582,7 @@ export async function buildServer({
   await app.register(pendingAudit, { env });
   // After `audit`, which it writes through, and before the routes that declare
   // `aiInference` (NFR-C4 · C4-e).
-  await app.register(aiResidency, { env });
+  await app.register(aiResidency, { env, inference: () => aiProviders.inference() });
   await app.register(licenseGate, { pilotMode: env.PILOT_MODE });
   // After the licence gate, so an expired trial is told it is read-only rather
   // than told what its plan does not include — the first is the reason it
@@ -513,8 +598,8 @@ export async function buildServer({
   // handler that would call a model.
   await app.register(aiBudget, {
     budget: aiDailyBudget,
-    metered: meteredLlm.metered || meteredCopilotLlm.metered,
-    minimum: env.LLM_MAX_OUTPUT_TOKENS,
+    metered: () => meteredLlm.metered || meteredCopilotLlm.metered,
+    minimum: () => aiProviders.config().llm.maxOutputTokens,
   });
   // The public pilot's refusals (tm 257.13). Registered after the three gates
   // above but it answers before all of them: it hooks `onRequest`, which runs
@@ -541,6 +626,7 @@ export async function buildServer({
       await api.register(healthRoutes, { env, version: VERSION });
       await api.register(deploymentRoutes, { env });
       await api.register(authRoutes, { env, mailer });
+      await api.register(impersonationRoutes);
       // Its own plugin scope, not part of `authRoutes`: the SAML response
       // arrives as a form post, and the content-type parser that reads it is
       // encapsulated here rather than loosened across the whole auth surface.
@@ -568,6 +654,7 @@ export async function buildServer({
         llm: meteredLlm,
         knowledge,
         ...(accessInfoHttp ? { accessInfoHttp } : {}),
+        aiDisclosure,
       });
       await api.register(customerDirectoryRoutes);
       await api.register(memberRecognitionRoutes);
@@ -634,7 +721,11 @@ export async function buildServer({
         ...(appsEndpoints ? { appsEndpoints } : {}),
       });
       await api.register(auditLogRoutes, { env });
-      await api.register(aiUsageRoutes, { env, budget: aiDailyBudget });
+      await api.register(aiUsageRoutes, {
+        env,
+        budget: aiDailyBudget,
+        prices: () => aiProviders.config().prices,
+      });
     },
     { prefix: API_PREFIX },
   );

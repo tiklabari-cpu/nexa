@@ -55,6 +55,21 @@ const KNOWN_UNMODELLABLE = [
     reason: 'pgvector hnsw index — Prisma cannot express index access methods',
   },
   {
+    // Created as `ON ai_agents(license_id) WHERE kind = 'ai_agent'` in
+    // 20261108090000_ai_agent_one_per_workspace (tm 390.1).
+    pattern: /CREATE UNIQUE INDEX "ai_agents_one_per_license" ON "public"\."ai_agents"/,
+    reason:
+      'partial unique index (one customer-facing AI agent per workspace) — Prisma cannot express a WHERE predicate',
+  },
+  {
+    // Created as `ON knowledge_jobs(source_id) WHERE status IN ('queued',
+    // 'running', 'waiting_budget')` in 20261110090000_knowledge_crawl (tm 312.1).
+    pattern:
+      /CREATE UNIQUE INDEX "knowledge_jobs_one_active_per_source" ON "public"\."knowledge_jobs"/,
+    reason:
+      'partial unique index (one knowledge job under way per source) — Prisma cannot express a WHERE predicate',
+  },
+  {
     // Created as `ON brands(license_id) WHERE is_default` in 20260802100000_brands.
     pattern: /CREATE UNIQUE INDEX "brands_one_default_per_license" ON "public"\."brands"/,
     reason:

@@ -1,0 +1,22 @@
+-- One customer-facing AI agent per workspace (tm 390.1 · PLAN §D218 kararı 5).
+--
+-- `POST /ai-agents` is the first way a workspace makes its own AI agent; until
+-- now only the demo seed wrote one (one per licence), and Copilot's record is
+-- made on first use (`ensureCopilotAgentId`). v1 is one agent per workspace —
+-- the panel, the widget's persona and every "the workspace's agent" lookup
+-- (`knowledgeFilingOf`, the hand-over settings) read one — so the database
+-- holds it: a second insert gets 23505 (Prisma P2002), which the route turns
+-- into 409 `ai_agent_exists`. A read-then-write would let two tabs both pass.
+--
+-- PARTIAL on `kind = 'ai_agent'`: Copilot (`kind = 'copilot'`) is not a
+-- customer-facing agent and is left out. Measured before writing it
+-- (2026-10-27): no licence of the dev database or the seed has two
+-- `ai_agent` rows, and no released code can make a second one — the seed
+-- writes one per licence and the API had no create — so the index cannot
+-- fail on existing rows, and no older replica can violate it (CONVENTIONS
+-- §6.3). Postgres has no NOT VALID for a unique index; none is needed.
+--
+-- A plain build, not CONCURRENTLY: `ai_agents` holds a row or two per
+-- workspace and is written only from the settings screen. Prisma cannot
+-- express the WHERE; `scripts/check-drift.ts` allows it by name.
+CREATE UNIQUE INDEX "ai_agents_one_per_license" ON "ai_agents" ("license_id") WHERE kind = 'ai_agent';

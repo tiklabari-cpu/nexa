@@ -55,6 +55,7 @@ describe('assertPlatformEnv (tm 389.3)', () => {
       ipAllowlist: [],
       sessionTtlS: 28_800,
       idleTtlS: 900,
+      impersonationTtlS: 1800,
       settingsKey: DEV_PLATFORM_SETTINGS_KEY,
       warnings: [expect.stringMatching(/PLATFORM_SETTINGS_KEY is unset/)],
     });
@@ -177,6 +178,22 @@ describe('the operator sign-in settings (tm 389.4)', () => {
     expect(
       platformEnvProblems(envWith({ PLATFORM_SESSION_TTL: '600', PLATFORM_IDLE_TTL: '900' })),
     ).toEqual([expect.stringMatching(/cannot be longer than PLATFORM_SESSION_TTL/)]);
+  });
+
+  it('reads how long "enter as the customer" lasts, between five minutes and two hours (tm 389.15)', () => {
+    expect(
+      assertPlatformEnv(envWith({ PLATFORM_IMPERSONATION_TTL: '600' })).impersonationTtlS,
+    ).toBe(600);
+    for (const refused of ['299', '7201', '30m', '0']) {
+      expect(
+        platformEnvProblems(envWith({ PLATFORM_IMPERSONATION_TTL: refused })),
+        refused,
+      ).toEqual([
+        expect.stringMatching(/PLATFORM_IMPERSONATION_TTL must be a whole number of seconds/),
+      ]);
+    }
+    // Refused for the platform process only: the tenant API boots whatever it says.
+    expect(envWith({ PLATFORM_IMPERSONATION_TTL: '30m' }).API_PORT).toBe(4000);
   });
 
   it('in production requires a real settings key, and warns about an empty allow-list', () => {

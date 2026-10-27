@@ -81,3 +81,33 @@ export interface SchedulerSnapshot {
   enabled: boolean;
   jobs: JobSnapshot[];
 }
+
+/**
+ * One row of the root panel's job table (tm 389.14): the `/health` row plus
+ * what an operator asks next — how long the last pass took and when the next
+ * one is due. Published by the health leader (`siyahtus:ops:scheduler`),
+ * never part of the public `/health` body.
+ */
+export interface JobDetail extends JobSnapshot {
+  /** How long the last pass that ran took; null before one has run. */
+  last_duration_ms: number | null;
+  /** When this process's timer fires next, ISO-8601; null when the job is off. */
+  next_run_at: string | null;
+}
+
+export interface SchedulerDetail {
+  enabled: boolean;
+  jobs: JobDetail[];
+}
+
+/**
+ * What {@link Scheduler.runNow} answers.
+ *
+ * - `finished`        — it ran here, to `ok` or `error`.
+ * - `already_running` — a pass (scheduled or manual) holds the job's running marker.
+ * - `unknown_job`     — nothing registered under that name in this process.
+ * - `disabled`        — registered but switched off (`enabled: false`); never run on request.
+ */
+export type ManualRunResult =
+  | { result: 'finished'; status: 'ok' | 'error'; duration_ms: number; error_class?: string }
+  | { result: 'already_running' | 'unknown_job' | 'disabled' };

@@ -24,6 +24,7 @@ import {
 } from '../services/ai/provider/provider-hosts.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
 import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
+import { CRAWLER_PROVIDERS } from '../services/ai/crawler/provider.js';
 import { MAIL_PROVIDERS, type MailerOptions } from '../services/mail/mailer.js';
 import { SMTP_DEFAULT_TIMEOUT_MS } from '../services/mail/smtp-mailer.js';
 import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
@@ -232,6 +233,12 @@ export const envSchema = z.object({
   PLATFORM_IP_ALLOWLIST: z.string().optional(),
   PLATFORM_SESSION_TTL: z.string().optional(),
   PLATFORM_IDLE_TTL: z.string().optional(),
+  /**
+   * How long an operator's "enter as the customer" session lasts, in seconds
+   * (tm 389.15 · FR-ADMIN-21; 1800). Read by the platform process only —
+   * validated in `config/platform-env.ts` like the three above.
+   */
+  PLATFORM_IMPERSONATION_TTL: z.string().optional(),
   /**
    * How many reverse-proxy hops in front of this process are trusted, and so
    * how far into `X-Forwarded-For` `request.ip` is allowed to read
@@ -1129,6 +1136,15 @@ export const envSchema = z.object({
    */
   STRIPE_PROVIDER: z.enum(PAYMENT_PROVIDERS).default('mock'),
   /**
+   * Who fetches a website knowledge source's pages (tm 312.3 · AI-17). `mock`
+   * — no network, every page the same deterministic text; the default, a
+   * locked decision, so every test and demo crawls without egress. `http` —
+   * the real crawler, every hop through the SSRF guard
+   * (`services/ai/crawler/http-fetcher.ts`). Production under `PILOT_MODE` on
+   * `mock` is warned at boot (`crawlerProviderWarning`), not refused.
+   */
+  CRAWLER_PROVIDER: z.enum(CRAWLER_PROVIDERS).default('mock'),
+  /**
    * Upload virus scanning (FR-MOD-08.9.4). `mock` flags the EICAR test file and
    * passes the rest; `unavailable` is always-down, for exercising the fail-closed
    * path in tests and drills. A real ClamAV provider slots in here later.
@@ -1346,6 +1362,12 @@ export type Env = Omit<z.infer<typeof envSchema>, 'APPS_LIVE_PROVIDERS'> & {
   schedulerEnabled: boolean;
   /** Resolved shutdown drain window in milliseconds (M-OPS-b). */
   shutdownDrainMs: number;
+  /**
+   * The schema keys the environment actually named, with a non-empty value —
+   * every other key runs on its default. What the root panel's effective
+   * configuration shows as `env` rather than `default` (tm 389.13).
+   */
+  explicitKeys: readonly string[];
 };
 
 /**
@@ -1939,5 +1961,9 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
     schedulerEnabled: env.SCHEDULER_ENABLED ?? env.NODE_ENV !== 'test',
     shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
+    explicitKeys: Object.keys(envSchema.shape).filter((key) => {
+      const value = source[key];
+      return typeof value === 'string' && value !== '';
+    }),
   };
 }

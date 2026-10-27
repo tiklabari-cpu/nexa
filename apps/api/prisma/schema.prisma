@@ -2121,6 +2121,9 @@ model AiAgent {
   unresolvedItems   AiUnresolvedItem[]
   unresolvedGroups  AiUnresolvedCluster[]
 
+  // One `kind = 'ai_agent'` row per licence (tm 390.1): the partial unique
+  // index `ai_agents_one_per_license` lives in the migration — Prisma cannot
+  // express its WHERE. A second `POST /ai-agents` is 409 `ai_agent_exists`.
   @@index([licenseId, kind])
   @@map("ai_agents")
 }
@@ -2505,6 +2508,9 @@ model AiHandoff {
   targetGroupId         BigInt?   @map("target_group_id")
   /// `GUARDRAIL_PRIORITIES`.
   priority              String
+  /// `HUMAN_REQUEST_VIAS` (tm 308 · AI-29): `button` when the player pressed
+  /// "Talk to an agent"; null otherwise. CHECK in the migration.
+  requestedVia          String?   @map("requested_via")
   cardText              String    @map("card_text")
   configVersionId       String?   @map("config_version_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -3044,12 +3050,31 @@ model KnowledgeSource {
   /// (services/ai/knowledge-refresh.ts), so this is a status to read, not a
   /// sign that anything was lost.
   lastRefreshError   String?   @map("last_refresh_error")
+  /// How far a `website` source's crawl reaches (`CRAWL_SCOPES`, tm 312 ·
+  /// AI-17). Null on every other type, and on a website source added before
+  /// the column existed — read as `single`, which is what it was crawled as.
+  crawlScope         String?   @map("crawl_scope")
+  /// The most pages one crawl of a `website` source keeps
+  /// (`KNOWLEDGE_PAGE_LIMIT`); null on the other types, read as the default.
+  pageLimit          Int?      @map("page_limit")
+  /// URL path prefixes a crawl keeps to (empty — every path) and leaves out
+  /// (`crawlPathInScope`); exclusion wins. Website sources only.
+  includePaths       String[]  @default([]) @map("include_paths")
+  excludePaths       String[]  @default([]) @map("exclude_paths")
+  /// When the source's last crawl job finished, whatever came of it.
+  lastCrawledAt      DateTime? @map("last_crawled_at") @db.Timestamptz(6)
+  /// Pages the last crawl left in the store (`ok` + `unchanged`) — kept on
+  /// the row by the job runner, so the list and the workspace-wide page cap
+  /// read a column rather than counting `knowledge_pages`.
+  pageCount          Int       @default(0) @map("page_count")
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   aiAgent   AiAgent          @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
   kbArticle KbArticle?       @relation(fields: [kbArticleId], references: [id], onDelete: Cascade)
   chunks    KnowledgeChunk[]
+  pages     KnowledgePage[]
+  jobs      KnowledgeJob[]
 
   @@index([aiAgentId, type])
   @@index([licenseId])
@@ -3082,13 +3107,113 @@ model KnowledgeChunk {
   embeddingSpace String                       @default("mock:lexical-v1") @map("embedding_space")
   tokenCount     Int?                         @map("token_count")
   position       Int                          @default(0)
+  /// The crawled page the chunk was cut from (tm 312 · AI-17), so a changed
+  /// page's chunks are replaced and a removed page's deleted without touching
+  /// the rest of its source. Null for every chunk that is not a crawled
+  /// page's — and for a website source's chunks indexed before page tracking.
+  pageId         String?                      @map("page_id") @db.Uuid
   createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
 
   source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  page   KnowledgePage?  @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@index([sourceId, position])
   @@index([licenseId])
+  @@index([pageId])
   @@map("knowledge_chunks")
+}
+
+/// One page of a website source's crawl (tm 312 · AI-17): the URL in the
+/// normalised spelling the frontier keeps, what became of it
+/// (`KNOWLEDGE_PAGE_STATUSES`) and the hash of its extracted text — a
+/// re-crawl whose hash matches embeds nothing. One row per source and URL
+/// (`url_hash` = sha256 of `url`, hex). Never holds the page's text: that
+/// is its chunks. RLS per licence; the CHECKs live in
+/// `20261110090000_knowledge_crawl`.
+model KnowledgePage {
+  id          String    @id @default(uuid()) @db.Uuid
+  licenseId   BigInt    @map("license_id")
+  sourceId    String    @map("source_id") @db.Uuid
+  url         String
+  urlHash     String    @map("url_hash") @db.Char(64)
+  title       String?
+  /// The page's `<html lang>`, as a primary subtag; null when it said none.
+  lang        String?
+  /// sha256 of the extracted text, hex; null until a fetch produced text.
+  contentHash String?   @map("content_hash") @db.Char(64)
+  /// `KNOWLEDGE_PAGE_STATUSES`.
+  status      String
+  httpStatus  Int?      @map("http_status")
+  /// A snake_case code (`fetch_timeout`, `ssrf_refused`…) — never page text.
+  error       String?
+  /// Links from the start URL (0 = the start URL or a sitemap entry).
+  depth       Int       @default(0)
+  /// Consecutive 404/410 answers; two make the page `removed`.
+  missCount   Int       @default(0) @map("miss_count")
+  chunkCount  Int       @default(0) @map("chunk_count")
+  fetchedAt   DateTime? @map("fetched_at") @db.Timestamptz(6)
+  /// When `content_hash` last changed — the "review what changed" list.
+  changedAt   DateTime? @map("changed_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  source KnowledgeSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  chunks KnowledgeChunk[]
+
+  @@unique([sourceId, urlHash])
+  @@index([sourceId, status])
+  @@index([licenseId])
+  @@map("knowledge_pages")
+}
+
+/// A knowledge job (tm 312 · AI-17): a website source's crawl or re-crawl —
+/// later a large document's parse (AI-18) — worked through by a background
+/// runner (tm 312.3), never by the request that asked for it. `frontier` is
+/// what is left to fetch, so a job stopped by the day's AI allowance
+/// (`waiting_budget`) or a restart resumes where it was. A source has at most
+/// one job under way (`knowledge_jobs_one_active_per_source`, a partial
+/// unique index Prisma cannot express). RLS per licence.
+model KnowledgeJob {
+  id              String    @id @default(uuid()) @db.Uuid
+  licenseId       BigInt    @map("license_id")
+  /// The licence's organization, so the runner can open the job's tenant
+  /// context without a lookup (the `ai_jobs` shape).
+  organizationId  String    @map("organization_id") @db.Uuid
+  sourceId        String    @map("source_id") @db.Uuid
+  /// `KNOWLEDGE_JOB_KINDS`.
+  kind            String
+  /// `KNOWLEDGE_JOB_STATUSES`.
+  status          String    @default("queued")
+  /// URLs still to fetch, with their depth — the runner's to shape.
+  frontier        Json      @default("[]")
+  pagesDiscovered Int       @default(0) @map("pages_discovered")
+  pagesDone       Int       @default(0) @map("pages_done")
+  pagesOk         Int       @default(0) @map("pages_ok")
+  pagesUnchanged  Int       @default(0) @map("pages_unchanged")
+  pagesSkipped    Int       @default(0) @map("pages_skipped")
+  pagesFailed     Int       @default(0) @map("pages_failed")
+  pagesRemoved    Int       @default(0) @map("pages_removed")
+  bytesFetched    BigInt    @default(0) @map("bytes_fetched")
+  /// Soft reference to `accounts.id`; null when the sweep queued it.
+  requestedBy     String?   @map("requested_by") @db.Uuid
+  /// Not claimable before this — a `waiting_budget` job's UTC midnight.
+  availableAt     DateTime  @default(now()) @map("available_at") @db.Timestamptz(6)
+  /// Set while `running`: another runner may take the job once it passes.
+  leaseUntil      DateTime? @map("lease_until") @db.Timestamptz(6)
+  attempts        Int       @default(0)
+  /// A snake_case code — why the job failed or was stopped.
+  error           String?
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  startedAt       DateTime? @map("started_at") @db.Timestamptz(6)
+  finishedAt      DateTime? @map("finished_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([sourceId, createdAt])
+  @@index([licenseId])
+  @@map("knowledge_jobs")
 }
 
 // ---------------------------------------------------------------------------
@@ -5232,6 +5357,9 @@ model PlatformCredit {
 model PlatformAlertPrefs {
   adminId   String   @id @map("admin_id") @db.Uuid
   kinds     String[] @default([])
+  /// `en` or `tr` (tm 389.20); null reads as English. A CHECK keeps it to those two,
+  /// which Prisma cannot model.
+  locale    String?
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)

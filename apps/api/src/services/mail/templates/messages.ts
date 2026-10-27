@@ -608,6 +608,282 @@ export function ownershipTransferredMail(
   });
 }
 
+/**
+ * A SiyahTuş operator has entered the workspace as one of its members (tm
+ * 389.15 · FR-ADMIN-21): the Founders hear it when the session opens — who was
+ * entered as, whether anything could be changed, until when. Never the
+ * operator's reason (that stays in the platform's own trail) and never who
+ * the operator is beyond "the support team"; the workspace's audit log names
+ * the session. No mail when it ends (requirements §6.3).
+ */
+export function impersonationNoticeMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    memberEmail: string;
+    mode: 'read_only' | 'full';
+    endsAt: string;
+    minutes: number;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const window = duration(ctx.locale, input.minutes);
+  const readOnly = input.mode === 'read_only';
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `SiyahTuş destek ekibi ${input.workspaceName} çalışma alanınıza giriş yaptı`
+      : `SiyahTuş support has entered your workspace ${input.workspaceName}`,
+    preheader: t
+      ? `${input.memberEmail} olarak, ${input.endsAt} saatine kadar.`
+      : `As ${input.memberEmail}, until ${input.endsAt}.`,
+    icon: ICON.account,
+    heading: t ? 'Destek ekibi çalışma alanınızda' : 'Support is in your workspace',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: t
+          ? `SiyahTuş destek ekibinden biri, bir sorunu incelemek için ${input.workspaceName} çalışma alanına ${input.memberEmail} üyesi olarak giriş yaptı.`
+          : `Someone from the SiyahTuş support team has entered the workspace ${input.workspaceName} as the member ${input.memberEmail}, to look into an issue.`,
+      },
+      {
+        type: 'facts',
+        rows: [
+          [t ? 'Üye' : 'Member', input.memberEmail],
+          [
+            t ? 'Yetki' : 'Access',
+            readOnly
+              ? t
+                ? 'Salt okunur — hiçbir şey değiştirilemez'
+                : 'Read-only — nothing can be changed'
+              : t
+                ? 'Tam — üyenin rolüyle işlem yapabilir'
+                : 'Full — can act with the member’s role',
+          ],
+          [t ? 'Bitiş' : 'Ends', `${input.endsAt} (${window})`],
+        ],
+      },
+      {
+        type: 'paragraph',
+        text: t
+          ? 'Oturum sırasında yapılan her işlem, denetim kaydınızda SiyahTuş destek ekibinin adına ve bu üye için yapılmış olarak görünür. Parola, iki adımlı doğrulama, erişim anahtarları, güvenlik ayarları ve ödeme bu oturumdan değiştirilemez.'
+          : 'Anything done during the session appears in your audit log as done by the SiyahTuş support team on this member’s behalf. Passwords, two-step verification, access keys, security settings and payment cannot be changed from it.',
+      },
+      {
+        type: 'note',
+        text: t
+          ? 'Bu girişi beklemiyorsanız hemen destek ekibimize yazın.'
+          : 'If you did not expect this, write to our support team straight away.',
+      },
+    ],
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının Kurucusu olduğunuz için aldınız.'
+        : 'You received this email because you are the owner of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
+ * What an operator alert is about (tm 389.20 · FR-ADMIN-24). Names, ids,
+ * numbers and times only — never a message, a player or an article: the
+ * platform's mail carries what its screens carry.
+ */
+export type PlatformAlertMailInput =
+  | { kind: 'trial_ending'; workspaceName: string; workspaceId: string; endsAt: Date }
+  | {
+      kind: 'payment_request_waiting';
+      workspaceName: string;
+      workspaceId: string;
+      requestedAt: Date;
+      waitingHours: number;
+    }
+  | {
+      kind: 'ai_cap_reached';
+      workspaceName: string;
+      workspaceId: string;
+      meter: 'llm' | 'embedding';
+      used: number;
+      cap: number;
+    }
+  | { kind: 'health_red'; reason: 'stale' | 'degraded'; ageSeconds: number | null; detail: string }
+  | { kind: 'audit_chain_broken'; findings: number; firstSeq: string | null; checked: number }
+  | { kind: 'purge_tomorrow'; workspaceName: string; workspaceId: string; purgeAt: Date };
+
+/**
+ * The operator alert (tm 389.20 · FR-ADMIN-24): one condition on one target,
+ * mailed to the operators who asked for it. `panelUrl` is the admin SPA's
+ * page for the thing — absent, the mail still says everything it knows.
+ */
+export function platformAlertMail(
+  ctx: MailContext,
+  input: PlatformAlertMailInput,
+  panelUrl: string | null,
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const when = (date: Date): string => `${formatDateTime(date, ctx.locale, 'UTC')} UTC`;
+  const number = (value: number): string =>
+    new Intl.NumberFormat(t ? 'tr-TR' : 'en-US').format(value);
+  let subject: string;
+  let preheader: string;
+  let heading: string;
+  let paragraph: string;
+  let rows: Array<readonly [string, string]>;
+  let action: string;
+  switch (input.kind) {
+    case 'trial_ending':
+      subject = t
+        ? `Deneme süresi bitiyor: ${input.workspaceName}`
+        : `Trial ending: ${input.workspaceName}`;
+      preheader = t ? 'Deneme süresi üç gün içinde bitiyor.' : 'The trial ends within three days.';
+      heading = t ? 'Bir deneme süresi bitiyor' : 'A trial is about to end';
+      paragraph = t
+        ? `${input.workspaceName} çalışma alanının deneme süresi ${when(input.endsAt)} tarihinde bitiyor. O zamana kadar bir plan seçilmezse çalışma alanı kapanır.`
+        : `The trial of ${input.workspaceName} ends on ${when(input.endsAt)}. If no plan is chosen by then, the workspace closes.`;
+      rows = [
+        [t ? 'Çalışma alanı' : 'Workspace', `${input.workspaceName} (#${input.workspaceId})`],
+        [t ? 'Bitiş' : 'Ends', when(input.endsAt)],
+      ];
+      action = t ? 'Çalışma alanını aç' : 'Open the workspace';
+      break;
+    case 'payment_request_waiting': {
+      const hours = hoursText(ctx.locale, input.waitingHours);
+      subject = t
+        ? `Ödeme talebi bekliyor: ${input.workspaceName}`
+        : `Payment request waiting: ${input.workspaceName}`;
+      preheader = t ? `${input.waitingHours} saattir işlenmeyi bekliyor.` : `Waiting for ${hours}.`;
+      heading = t ? 'Bir ödeme talebi bekliyor' : 'A payment request is waiting';
+      paragraph = t
+        ? `${input.workspaceName} çalışma alanının ödeme talebi ${input.waitingHours} saattir bir operatörün işlemesini bekliyor.`
+        : `A payment request from ${input.workspaceName} has been waiting ${hours} for an operator.`;
+      rows = [
+        [t ? 'Çalışma alanı' : 'Workspace', `${input.workspaceName} (#${input.workspaceId})`],
+        [t ? 'Talep zamanı' : 'Requested', when(input.requestedAt)],
+      ];
+      action = t ? 'Ödeme kuyruğunu aç' : 'Open the payment queue';
+      break;
+    }
+    case 'ai_cap_reached':
+      subject = t
+        ? `Yapay zekâ kotası doldu: ${input.workspaceName}`
+        : `AI allowance reached: ${input.workspaceName}`;
+      preheader = t
+        ? 'Çalışma alanının bugünkü kotası bitti.'
+        : "The workspace's allowance for today is used up.";
+      heading = t ? 'Bir çalışma alanı kotasına ulaştı' : 'A workspace reached its AI allowance';
+      paragraph = t
+        ? `${input.workspaceName} çalışma alanının bugünkü yapay zekâ kotası doldu; kota gece yarısı (UTC) yenilenir. Beklememesi gerekiyorsa kotayı panelden yükseltebilirsiniz.`
+        : `${input.workspaceName} has used all of today's AI allowance; it renews at midnight UTC. Raise the cap from the panel if it should not wait.`;
+      rows = [
+        [t ? 'Çalışma alanı' : 'Workspace', `${input.workspaceName} (#${input.workspaceId})`],
+        [
+          t ? 'Sayaç' : 'Meter',
+          input.meter === 'llm'
+            ? t
+              ? 'Dil modeli'
+              : 'Language model'
+            : t
+              ? 'Bilgi arama (embedding)'
+              : 'Knowledge search (embedding)',
+        ],
+        [
+          t ? 'Bugün' : 'Today',
+          t
+            ? `${number(input.used)} / ${number(input.cap)} token`
+            : `${number(input.used)} / ${number(input.cap)} tokens`,
+        ],
+      ];
+      action = t ? 'Kullanımı aç' : 'Open usage';
+      break;
+    case 'health_red':
+      subject = t ? 'Sağlık durumu kırmızı' : 'Platform health is red';
+      preheader =
+        input.reason === 'stale'
+          ? t
+            ? 'Sağlık anlık görüntüsü artık yenilenmiyor.'
+            : 'The health snapshot is no longer refreshed.'
+          : t
+            ? 'Bir bağımlılık ya da bileşen sağlıksız.'
+            : 'A dependency or component is unhealthy.';
+      heading = t ? 'Sağlık kontrolü kırmızı' : 'The health check is red';
+      paragraph =
+        input.reason === 'stale'
+          ? t
+            ? 'Kiracı API lideri sağlık anlık görüntüsünü yayımlamıyor: son yayın çok eski ya da hiç yok. Kiracı API düşmüş olabilir.'
+            : 'The tenant API leader is not publishing the health snapshot: the last one is too old or missing. The tenant API may be down.'
+          : t
+            ? `Sağlık anlık görüntüsü "degraded" bildiriyor: ${input.detail}.`
+            : `The health snapshot reports "degraded": ${input.detail}.`;
+      rows = [
+        [t ? 'Durum' : 'State', input.reason],
+        ...(input.ageSeconds === null
+          ? []
+          : [[t ? 'Yaş' : 'Age', `${Math.round(input.ageSeconds)} s`] as const]),
+      ];
+      action = t ? 'Sağlık sayfasını aç' : 'Open the health view';
+      break;
+    case 'audit_chain_broken':
+      subject = t ? 'Denetim zinciri doğrulanamadı' : 'The audit chain no longer verifies';
+      preheader = t
+        ? 'Platform denetim zincirinde bozulma bulundu.'
+        : 'The platform audit chain has a break.';
+      heading = t ? 'Denetim zinciri bozuk' : 'The audit chain is broken';
+      paragraph = t
+        ? `Günlük doğrulama platform denetim zincirinde ${input.findings} bulgu buldu. Bir kayıt değiştirilmiş ya da silinmiş olabilir; ayrıntı için zinciri panelden doğrulayın.`
+        : `The daily check found ${input.findings} finding${input.findings === 1 ? '' : 's'} in the platform audit chain. An entry may have been altered or removed; verify the chain from the panel for the detail.`;
+      rows = [
+        [t ? 'Bulgu' : 'Findings', number(input.findings)],
+        [t ? 'İlk sıra' : 'First sequence', input.firstSeq ?? '-'],
+        [t ? 'Denetlenen' : 'Checked', number(input.checked)],
+      ];
+      action = t ? 'Denetim kaydını aç' : 'Open the audit log';
+      break;
+    case 'purge_tomorrow':
+      subject = t
+        ? `Yarın silinecek: ${input.workspaceName}`
+        : `Deleted tomorrow: ${input.workspaceName}`;
+      preheader = t
+        ? 'Çalışma alanının kalıcı silme tarihi yarın.'
+        : "The workspace's deletion date is tomorrow.";
+      heading = t ? 'Bir çalışma alanı yarın silinecek' : 'A workspace is deleted tomorrow';
+      paragraph = t
+        ? `${input.workspaceName} çalışma alanının verileri ${when(input.purgeAt)} tarihinde kalıcı olarak silinecek. Bu istenmiyorsa silme o zamandan önce iptal edilmelidir.`
+        : `The data of ${input.workspaceName} is deleted for good on ${when(input.purgeAt)}. If that should not happen, cancel the deletion before then.`;
+      rows = [
+        [t ? 'Çalışma alanı' : 'Workspace', `${input.workspaceName} (#${input.workspaceId})`],
+        [t ? 'Silme' : 'Deletion', when(input.purgeAt)],
+      ];
+      action = t ? 'Çalışma alanını aç' : 'Open the workspace';
+      break;
+  }
+  const blocks: EmailBlock[] = [
+    { type: 'paragraph', text: paragraph },
+    { type: 'facts', rows },
+  ];
+  if (panelUrl) {
+    blocks.push({ type: 'button', label: action, url: panelUrl, fallback: fallback(ctx) });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: 'SiyahTuş Platform',
+    subject: `[OPS] ${subject}`,
+    preheader,
+    icon: ICON.alarm,
+    heading,
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı platform uyarılarını açtığınız için aldınız; tercihleri yönetim panelinde değiştirebilirsiniz.'
+        : 'You received this email because you turned platform alerts on; you can change that in the admin panel.',
+      signature(ctx),
+    ],
+  });
+}
+
 // --- Workspace mail ---------------------------------------------------------------
 
 export function ssoDomainChallengeMail(

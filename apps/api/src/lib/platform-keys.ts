@@ -20,6 +20,8 @@ export const PLATFORM_KEY_INFO = {
   totpSecret: 'siyahtus/platform/totp-secret/v1',
   /** HMAC-SHA256 over every `platform_audit_log` entry and signed export (tm 389.5). */
   auditChain: 'siyahtus/platform/audit-chain/v1',
+  /** AES-256-GCM over the AI API keys in `platform_settings` `ai.llm` / `ai.embedding` (tm 389.17). */
+  aiApiKey: 'siyahtus/platform/ai-api-key/v1',
 } as const;
 
 export type PlatformKeyPurpose = keyof typeof PLATFORM_KEY_INFO;

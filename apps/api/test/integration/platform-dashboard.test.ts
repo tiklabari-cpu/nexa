@@ -256,7 +256,7 @@ describe('the platform dashboard (tm 389.8)', () => {
       expect(health.components.every((c: { state: string }) => c.state === 'unknown')).toBe(true);
     });
 
-    it('serves the leader’s publication fresh, with the four components it judges itself', async () => {
+    it('serves the leader’s publication fresh, with the components it judges itself', async () => {
       const stored = await tenant.app.opsHealth.publish();
       expect(stored).not.toBeNull();
 
@@ -279,7 +279,11 @@ describe('the platform dashboard (tm 389.8)', () => {
         scheduler: 'ok',
         mail: 'not_installed',
       });
-      expect(byKey['geoip']).toBe('unknown');
+      // Since tm 389.14 the leader also judges the modules it can see — and marks the ones this
+      // build does not contain — so a publication leaves none of the twelve unreported. The test
+      // server has no GeoIP file and says so.
+      expect(byKey['geoip']).toBe('not_installed');
+      expect(Object.values(byKey)).not.toContain('unknown');
     });
 
     it('carries the admin health body’s fields, in its order', async () => {

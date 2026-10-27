@@ -90,6 +90,7 @@ export const settings: Messages = {
   'settings.nav.section.compliance': 'Veri bölgesi ve uyumluluk',
   'settings.nav.section.dataRetention': 'Veri saklama',
   'settings.nav.section.aiUsage': 'Yapay zekâ kullanımı',
+  'settings.nav.section.aiAgent': 'AI Ajanı',
   'settings.nav.section.auditLog': 'Denetim günlüğü',
   'settings.nav.section.siem': 'SIEM dışa aktarımı',
   'settings.nav.section.billing': 'Abonelik ve faturalar',

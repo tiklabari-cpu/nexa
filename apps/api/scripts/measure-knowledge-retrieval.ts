@@ -310,12 +310,17 @@ async function main(): Promise<number> {
       return { id: source.id, paragraphs };
     }
 
+    const seenTenants = new Set<bigint>();
     for (const [tenant, chunks, rung] of [
       ...RUNGS.map((size) => [tenantA, size, size] as const),
       [tenantB, NOISE, 0] as const,
     ]) {
+      // One AI agent per workspace (tm 390.1): a tenant's later rungs file under
+      // records of another kind. Retrieval narrows by agent id, so it reads the same.
+      const kind = seenTenants.has(tenant.licenseId) ? 'copilot' : 'ai_agent';
+      seenTenants.add(tenant.licenseId);
       const agent = await owner.aiAgent.create({
-        data: { licenseId: tenant.licenseId, name: `Agent ${chunks}` },
+        data: { licenseId: tenant.licenseId, kind, name: `Agent ${chunks}` },
         select: { id: true },
       });
       const questions: string[] = [];

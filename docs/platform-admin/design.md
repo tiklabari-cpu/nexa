@@ -24,8 +24,14 @@ görevlerinin "KODDA BUGÜN / KARARLAR" kutularının ortak kaynağıdır; satı
   genelleştirilmiş, `audit-export`); `routes/health.ts:143-177` → `services/ops/health-snapshot.ts`;
   `routes/reports.ts:444-496` → `services/billing/billing-views.ts`.
 - **Süreçler arası:** senkron çağrı yok; paylaşılan durum Postgres; komutlar Redis pub/sub
-  `siyahtus:platform:ops` (`job.run`, `settings.changed`, `ai.settings_changed`,
-  `health.publish`), kiracı API'de yalnız scheduler lideri dinler. Sağlık anlık görüntüsü
+  `siyahtus:platform:ops` (`settings.changed`, `ai.settings_changed`, `health.publish`; her kiracı
+  API süreci ve RTM dinler) ve `siyahtus:platform:ops:jobs` (yalnız `job.run`; kiracı API'de
+  zamanlayıcısı açık her süreç dinler — ayrı kanal, çünkü `PUBLISH` sayısı `no_listener`'ı
+  söyler ve genel kanalı tm 389.13'ten beri her süreç dinliyor); `job.run` isteğini
+  `request_id` talep anahtarını (`SET … NX`) ilk alan süreç işler — "lider" kilidi her yarım
+  dakikada bırakılıp yeniden alındığı için lider-dinler tasarımı boşluklu olurdu (tm 389.14;
+  iş ayrıca `siyahtus:sched-running:<ad>` çalışıyor işaretini taşır, panel `already_running`'i
+  oradan söyler; sonuç `siyahtus:ops:job-runs`, iş tablosu `siyahtus:ops:scheduler`). Sağlık anlık görüntüsü
   `siyahtus:ops:health` (lider, 30 sn). **Bileşen durum kaydı** `siyahtus:ops:components` (Redis
   hash; `services/ops/component-status.ts reportComponentStatus(key, {state: ok|degraded|down|
 not_installed, detail, updatedAt})` — kiracı API bileşenleri isteğe bağlı çağırır; 389.14 mevcut
@@ -75,15 +81,16 @@ Aynı DO bloğu `infra/db/init/00-extensions.sql`'e; `infra/db/pilot/20-platform
 | `platform_blocklist`              | id, kind email\|domain\|ip, value, reason, created_by, created_at                                                                                                                                |
 | `platform_impersonation_sessions` | id, admin_id, license_id, account_id (hedef üye), mode read_only\|full, handoff_code_hash, handoff_expires_at, started_at, ends_at, ended_at, end_reason                                         |
 | `platform_credits`                | id, license_id, amount_minor, currency, reason, admin_id, invoice_id?, created_at                                                                                                                |
-| `platform_alert_prefs`            | admin_id PK, kinds text[]                                                                                                                                                                        |
+| `platform_alert_prefs`            | admin_id PK, kinds text[], locale en                                                                                                                                                             | tr (389.20) |
 
 `platform_settings` anahtarları: `signup_enabled`, `trial_days`, `announcement {en,tr,level,
 until}`, `maintenance {enabled, mode read_only|full, message}`, `billing.swift_bank_details`,
 `billing.providers {swift_manual, crypto_manual, stripe}`, `billing.issuer_profile`,
 `ai.llm {provider, base_url, model, model_fast, region, timeout_ms, max_output_tokens,
 api_key_ciphertext, api_key_last4}`, `ai.embedding {provider, base_url, model, dimensions:1536,
-api_key_ciphertext, api_key_last4}`, `ai.caps {global_daily_tokens, per_workspace_daily_tokens,
-per_workspace_daily_calls}`, `ai.prices {model: {input_per_1k, output_per_1k}}`,
+api_key_ciphertext, api_key_last4}`, `ai.caps {deployment: {llm|embedding: {workspace, global}}, plans: {…}}` (389.17 writes
+`deployment` — in place of the four `AI_DAILY_*`; `plans` is 389.12's), `ai.prices
+{llm_input_usd_per_mtok, llm_output_usd_per_mtok, embedding_usd_per_mtok}` (in place of `AI_PRICE_*`),
 `ai.crisis_text_drafts {TR: …, GB: …}`.
 
 Kiracı API'nin çağırdığı SECURITY DEFINER'lar (EXECUTE → `siyahtus_app`; hepsi `platform_*`
@@ -125,7 +132,7 @@ Bundle `--entry/--out` parametreli, `dist/platform-openapi.json`, `src/generated
 
 | Modül       | Uçlar (özet)                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| auth        | login (aşamalı), totp enroll/activate/verify/reverify, recovery regenerate, me, sessions, logout, invite/accept                                                                                                                                                                                                                                                                                           |
+| auth        | login (aşamalı), totp enroll/activate/verify/reverify, recovery regenerate, me, **me/alert-prefs (GET/PUT, 389.20)**, sessions, logout, invite/accept                                                                                                                                                                                                                                                     |
 | admins      | CRUD, davet, rol, disable/enable, reset-two-factor, revoke-sessions                                                                                                                                                                                                                                                                                                                                       |
 | dashboard   | kpis, signups timeline, health (+components)                                                                                                                                                                                                                                                                                                                                                              |
 | workspaces  | list, detail, members, brands, usage, subscription, invoices(+download), audit, sandbox, notes, impersonations, ai-summary; eylemler extend-trial, activate, set-plan, suspend/unsuspend [totp], set-read-only/set-active, cancel/resume, overrides, ai-caps, resend-owner-verification, sandbox/reset, force-ownership-transfer [superadmin+totp], delete [superadmin+totp] / delete/cancel, purge-queue |

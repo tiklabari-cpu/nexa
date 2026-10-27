@@ -60,7 +60,11 @@
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import { AiDailyBudget, aiDailyCaps } from '../ai/ai-daily-budget.js';
-import { resolveEmbeddingInferenceProvider, resolveInferenceProvider } from '../ai/inference.js';
+import {
+  resolveEmbeddingInferenceProvider,
+  resolveInferenceProvider,
+  type InferenceProvider,
+} from '../ai/inference.js';
 import { KbArticleKnowledgeSweeper } from '../ai/kb-article-knowledge.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
@@ -153,6 +157,12 @@ export interface SchedulerJobsOptions {
    * provider, metered over `db`.
    */
   llm?: LlmProvider | MeteredLlm;
+  /**
+   * Where the two providers run, as the NFR-C4 gate reads it (tm 389.17): the
+   * server's AI registry, which the root panel can change without a restart.
+   * Omitted, the environment's.
+   */
+  inference?: () => { llm: InferenceProvider; embedding: InferenceProvider };
 }
 
 /**
@@ -167,6 +177,10 @@ export function buildSchedulerJobs({
   automations,
   publisher,
   llm,
+  inference = () => ({
+    llm: resolveInferenceProvider(env),
+    embedding: resolveEmbeddingInferenceProvider(env),
+  }),
   knowledge = new KnowledgeService({
     embeddings: createMeteredEmbeddings(db, env),
     retrievalThreshold: env.RETRIEVAL_THRESHOLD,
@@ -338,11 +352,8 @@ export function buildSchedulerJobs({
       name: 'knowledge_refresh',
       intervalMs: intervals.knowledge_refresh,
       async run() {
-        const embeddingInference = resolveEmbeddingInferenceProvider(env);
-        const report = await new KnowledgeRefreshSweeper(db, {
-          knowledge,
-          embeddingInference,
-        }).run();
+        const embeddingInference = inference().embedding;
+        const report = await new KnowledgeRefreshSweeper(db, { embeddingInference }).run();
         const articles = await new KbArticleKnowledgeSweeper(db, {
           knowledge,
           embeddingInference,
@@ -356,7 +367,7 @@ export function buildSchedulerJobs({
           counts: {
             tenants: report.totals.tenants,
             checked: report.totals.checked,
-            refreshed: report.totals.refreshed,
+            queued: report.totals.queued,
             failed: report.totals.failed,
             kb_checked: articles.totals.checked,
             kb_synced: articles.totals.synced,
@@ -479,8 +490,8 @@ export function buildSchedulerJobs({
             timeoutMs: env.LLM_TIMEOUT_MS,
             maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
           },
-          llmInference: resolveInferenceProvider(env),
-          embeddingInference: resolveEmbeddingInferenceProvider(env),
+          llmInference: inference().llm,
+          embeddingInference: inference().embedding,
           publisher: publisher ?? null,
           logger: context.logger,
         }).run({ signal: context.signal });

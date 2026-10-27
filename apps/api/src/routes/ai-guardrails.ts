@@ -45,10 +45,13 @@ import {
   GUIDANCE_SCOPE_IDS_MAX,
   PLATFORM_GUARDRAILS,
   PLATFORM_GUARDRAILS_VERSION,
+  countryOfTimezone,
+  crisisDraftLangOf,
   foldGuardrailText,
   forbiddenPhraseProblem,
   guardrailSetupProblem,
   isGuardrailId,
+  pickCrisisTextDraft,
   readGuardrailHitRuleKey,
   readGuidanceScope,
   type ForbiddenPhraseMatch,
@@ -309,7 +312,38 @@ function serialisePlatformRule(rule: PlatformGuardrail) {
   };
 }
 
-function serialiseSettings(aiAgentId: string, row: AiGuardrailSettings | null) {
+/**
+ * The crisis text the platform suggests for this workspace's country (AI-08-S1,
+ * tm 389.19): a draft to copy into the workspace's own text, never applied and
+ * never approved for it. The country is the one the workspace's time zone
+ * says (`countryOfTimezone`); no country, no draft for it, no row, or an
+ * unreadable setting all read as none — the page works without it.
+ */
+async function platformCrisisDraft(
+  request: FastifyRequest,
+  tx: TenantClient,
+): Promise<string | null> {
+  const organization = await tx.organization.findUnique({
+    where: { id: request.tenant().organizationId },
+    select: { timezone: true },
+  });
+  const country = countryOfTimezone(organization?.timezone);
+  if (country === null) return null;
+  const rows = await tx.$queryRaw<Array<{ crisis_text_drafts: unknown }>>`
+    SELECT crisis_text_drafts FROM platform_ai_settings()`;
+  const header = request.headers['accept-language'];
+  return pickCrisisTextDraft(
+    rows[0]?.crisis_text_drafts,
+    country,
+    crisisDraftLangOf(typeof header === 'string' ? header : undefined),
+  );
+}
+
+function serialiseSettings(
+  aiAgentId: string,
+  row: AiGuardrailSettings | null,
+  draft: string | null,
+) {
   return {
     ai_agent_id: aiAgentId,
     crisis_text: row?.crisisText ?? null,
@@ -318,9 +352,8 @@ function serialiseSettings(aiAgentId: string, row: AiGuardrailSettings | null) {
     crisis_text_approved: Boolean(row?.approvedAt),
     approved_by: row?.approvedBy ?? null,
     approved_at: row?.approvedAt?.toISOString() ?? null,
-    // The platform's suggested text for the workspace's country (AI-08-S1) is
-    // the root panel's (tm 389.19); until it exists there is none to offer.
-    crisis_text_draft: null,
+    // The platform's suggested text for the workspace's country (AI-08-S1).
+    crisis_text_draft: draft,
     setup_problem: guardrailSetupProblem(
       row ? { crisisText: row.crisisText, approvedAt: row.approvedAt } : null,
     ),
@@ -477,11 +510,14 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
 
   app.get('/ai-guardrails/settings', { config: { scopes: READ } }, async (request, reply) => {
     const { ai_agent_id: aiAgentId } = parse(settingsQuery, request.query);
-    const row = await request.withTenant(async (tx) => {
+    const { row, draft } = await request.withTenant(async (tx) => {
       await requireCustomerFacingAgent(tx, aiAgentId);
-      return tx.aiGuardrailSettings.findUnique({ where: { aiAgentId } });
+      return {
+        row: await tx.aiGuardrailSettings.findUnique({ where: { aiAgentId } }),
+        draft: await platformCrisisDraft(request, tx),
+      };
     });
-    return reply.send(serialiseSettings(aiAgentId, row));
+    return reply.send(serialiseSettings(aiAgentId, row, draft));
   });
 
   app.put('/ai-guardrails/settings', { config: founderWrite() }, async (request, reply) => {
@@ -489,7 +525,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
     const tenant = request.tenant();
     const actor = actorOf(request.requirePrincipal());
 
-    const row = await request.withTenant(async (tx) => {
+    const { row, draft } = await request.withTenant(async (tx) => {
       await requireCustomerFacingAgent(tx, input.ai_agent_id);
       const stored = await tx.aiGuardrailSettings.findUnique({
         where: { aiAgentId: input.ai_agent_id },
@@ -522,13 +558,14 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
       };
       // The insert half carries the text the approval is of: Postgres checks
       // the row an upsert would insert before it finds the conflict.
-      return upsertGuardrailSettingsDraft(
+      const saved = await upsertGuardrailSettingsDraft(
         tx,
         { aiAgentId: input.ai_agent_id, licenseId: tenant.licenseId, ...fields, crisisText },
         fields,
       );
+      return { row: saved, draft: await platformCrisisDraft(request, tx) };
     });
-    return reply.send(serialiseSettings(input.ai_agent_id, row));
+    return reply.send(serialiseSettings(input.ai_agent_id, row, draft));
   });
 
   // --- Workspace rules -----------------------------------------------------

@@ -42,7 +42,18 @@ import {
   inferenceLeavesRegion,
   resolveEmbeddingInferenceProvider,
   resolveInferenceProvider,
+  type InferenceProvider,
 } from '../services/ai/inference.js';
+
+export interface AiResidencyOptions {
+  env: Env;
+  /**
+   * The two providers as they are now (tm 389.17): the server passes its AI
+   * registry's, which the root panel can change without a restart. Omitted,
+   * the environment's, resolved once.
+   */
+  inference?: () => { llm: InferenceProvider; embedding: InferenceProvider };
+}
 
 /** Who is about to send a workspace's content to a model, when it is not a request. */
 export interface AiInferenceCaller {
@@ -82,13 +93,12 @@ declare module 'fastify' {
   }
 }
 
-async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
-  // The model first: when both are out of region, the entry names the one
-  // this gate has always reported.
-  const providers = [
-    { kind: 'llm', ...resolveInferenceProvider(options.env) },
-    { kind: 'embedding', ...resolveEmbeddingInferenceProvider(options.env) },
-  ] as const;
+async function aiResidencyPlugin(app: FastifyInstance, options: AiResidencyOptions): Promise<void> {
+  const fromEnv = {
+    llm: resolveInferenceProvider(options.env),
+    embedding: resolveEmbeddingInferenceProvider(options.env),
+  };
+  const current = options.inference ?? (() => fromEnv);
 
   app.decorate('requireAiInference', async (caller: AiInferenceCaller): Promise<void> => {
     const workspaceRegion = caller.region;
@@ -96,6 +106,13 @@ async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): P
     // The common case, and deliberately first: in-region providers raise no
     // question for anyone, covered or not, so nothing is read and nothing is
     // recorded.
+    // The model first: when both are out of region, the entry names the one
+    // this gate has always reported.
+    const { llm, embedding } = current();
+    const providers = [
+      { kind: 'llm', ...llm },
+      { kind: 'embedding', ...embedding },
+    ] as const;
     const provider = providers.find((candidate) =>
       inferenceLeavesRegion(candidate, workspaceRegion),
     );

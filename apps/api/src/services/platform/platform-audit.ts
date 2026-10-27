@@ -70,6 +70,7 @@ export const PLATFORM_AUDIT_DOMAINS = [
   'ai_settings',
   'impersonation',
   'security',
+  'operations',
 ] as const;
 
 /**
@@ -92,6 +93,7 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'admin.totp_reverified',
   'admin.recovery_codes_regenerated',
   'admin.other_sessions_ended',
+  'admin.alert_prefs_changed',
   'admin.signed_out',
   // Operator management.
   'admin.invited',
@@ -149,6 +151,7 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'ai_settings.updated',
   'ai_settings.connection_tested',
   'ai_settings.reembed_started',
+  'ai_settings.crisis_drafts_updated',
   // "Enter as the customer" (389.15).
   'impersonation.started',
   'impersonation.ended',
@@ -156,6 +159,9 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'security.blocklist_added',
   'security.blocklist_removed',
   'security.unverified_signups_purged',
+  // Operations (389.14): the panel's "run now" and a partition opened by hand.
+  'operations.job_run_requested',
+  'operations.partition_ensured',
 ] as const;
 
 export type PlatformAuditAction = (typeof PLATFORM_AUDIT_ACTIONS)[number];
@@ -173,6 +179,7 @@ export const PLATFORM_SELF_ACTIONS: ReadonlySet<PlatformAuditAction> = new Set([
   'admin.totp_reverified',
   'admin.recovery_codes_regenerated',
   'admin.other_sessions_ended',
+  'admin.alert_prefs_changed',
   'admin.signed_out',
 ]);
 
@@ -239,6 +246,9 @@ export const PLATFORM_AUDIT_TARGETS = [
   'settings',
   'blocklist',
   'impersonation',
+  'job',
+  'partition',
+  'signup',
 ] as const;
 
 export type PlatformAuditTarget = (typeof PLATFORM_AUDIT_TARGETS)[number];

@@ -265,6 +265,22 @@ describe('SignUpPage closed sign-up', () => {
     );
   });
 
+  it('says an address the root panel blocked cannot sign up, without inviting a retry (tm 389.13)', async () => {
+    closedSignup({ reason: 'signup_blocked' });
+    renderAt(<SignUpPage />);
+    await fill({
+      workspace: 'Workspace name',
+      name: 'Your name',
+      email: 'Email',
+      password: 'Password',
+      submit: 'Create workspace',
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Sign-up is not available for this address.');
+    expect(alert).not.toHaveTextContent('invite you');
+  });
+
   it('keeps the generic message for any other not_allowed refusal', async () => {
     // Keyed on the reason, not on the status: a 403 for something else must
     // not tell the person sign-up is closed.

@@ -36,6 +36,9 @@ export async function startTestServer(
   const app = await buildServer({
     env: testEnv(overrides),
     aiJobDiscovery: 'in_process',
+    // The AI's disclosure (tm 308) changes every first reply's text: off for
+    // the suites about something else; `ai-request-human` turns it on.
+    aiDisclosure: false,
     ...build,
   });
   await app.ready();
@@ -56,6 +59,9 @@ export async function startTestServer(
     // A queued test run is played after its 202 (tm 314.2): the suite reads
     // its results the way the Test tab reads them once it has finished.
     await app.aiTestRuns.idle();
+    // A website source is crawled after its 201 (tm 312.3): the suite reads
+    // its pages and chunks the way the panel reads them once the job is done.
+    await app.knowledgeJobs.idle();
     // A counted model call tells the AI usage alerts after it settles, and they
     // run beside the response (tm 283.3); a suite that resets the database
     // next must not TRUNCATE under their transaction.

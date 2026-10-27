@@ -264,6 +264,44 @@ describe('credentialGrantFor', () => {
     expect(credentialGrantFor('bot', true)).toBe('delegated');
     expect(credentialGrantFor('something-new', true)).toBe('delegated');
   });
+
+  it('reads an impersonation token by its own rule, whatever the client (tm 389.15)', () => {
+    expect(credentialGrantFor('impersonation', false)).toBe('impersonation');
+    expect(credentialGrantFor('impersonation', true)).toBe('impersonation');
+  });
+});
+
+describe('an operator signed in as a member (tm 389.15)', () => {
+  const sorted = (scopes: readonly string[]) => [...scopes].sort();
+
+  it('holds exactly what the member’s role holds now, whatever the row stores', () => {
+    for (const role of AGENT_ROLES) {
+      for (const stored of STORED) {
+        expect(sorted(resolve('impersonation', role, stored))).toEqual(
+          sorted(defaultScopesForRole(role)),
+        );
+      }
+    }
+  });
+
+  it('follows the matrix both ways, like the member would', () => {
+    const reports = [set('agent', 'reports.view', 'all')];
+    expect(resolve('impersonation', 'agent', [], reports)).toContain('reports_read');
+    const webhooksOff = resolve(
+      'impersonation',
+      'admin',
+      [],
+      [set('admin', 'settings.webhooks', 'off')],
+    );
+    expect(webhooksOff).not.toContain('webhooks--all:rw');
+    expect(webhooksOff).toContain('reports_read');
+  });
+
+  it('never reaches past the member’s role — an agent is not an admin', () => {
+    expect(sorted(resolve('impersonation', 'agent', ADMIN_SCOPES))).toEqual(
+      sorted(defaultScopesForRole('agent')),
+    );
+  });
 });
 
 describe('narrowsChatReach', () => {

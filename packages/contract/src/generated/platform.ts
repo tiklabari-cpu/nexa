@@ -259,6 +259,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/me/alert-prefs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Which operator alerts this operator is mailed
+     * @description The scan mails an operator only the kinds listed here. With no saved choice a
+     *     superadmin is mailed every kind and the other roles none.
+     */
+    get: operations['getPlatformAlertPrefs'];
+    /**
+     * Choose which operator alerts to be mailed, and in which language
+     * @description Replaces the operator's choice. An empty `kinds` is a choice too — no alert
+     *     mail at all. The operator's own setting: no reason, one entry in the chain.
+     */
+    put: operations['putPlatformAlertPrefs'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/sessions': {
     parameters: {
       query?: never;
@@ -922,9 +948,11 @@ export interface paths {
     };
     /**
      * The workspace's AI at a glance — counts only
-     * @description How many AI agents it has and how many are switched on. 389.19 adds the
-     *     configuration history, guardrail and QA counts; never a prompt, an
-     *     instruction or a reply.
+     * @description How many AI agents it has and how many are switched on, how many
+     *     guidance rules, the configuration changes and guardrail triggers of the
+     *     last 30 days (the latter by rule), the QA queue's counts and the latest
+     *     compliance-pack run. A section whose table has not shipped answers
+     *     `status: not_installed`. Never a prompt, an instruction or a reply.
      */
     get: operations['getPlatformWorkspaceAiSummary'];
     put?: never;
@@ -1305,6 +1333,253 @@ export interface paths {
      *     which probe hit.
      */
     get: operations['lookupPlatformSupport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/support/impersonations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Impersonation sessions, newest first
+     * @description Every operator's sessions across the deployment — who entered which
+     *     workspace as whom, in which mode, and how it ended. `active=true` keeps
+     *     the open ones (not ended, window not run out); `license_id` keeps one
+     *     workspace's. Keyset paging on the start time.
+     */
+    get: operations['listPlatformImpersonations'];
+    put?: never;
+    /**
+     * Enter a workspace as one of its members
+     * @description Opens a session on one live member of one workspace and answers a
+     *     one-time `handoff_url` — the workspace console's
+     *     `/auth/impersonate#code=…`, good once, for 60 seconds. The browser that
+     *     opens it trades the code for a token of the member's (tenant
+     *     `POST /auth/impersonation/exchange`), bounded by this session: it
+     *     carries the member's role and never more, and stops working at
+     *     `ends_at` (`PLATFORM_IMPERSONATION_TTL`, 30 minutes) or when the session
+     *     is ended. There is no extension — open a new one.
+     *
+     *     `mode` is `read_only` unless asked otherwise: every write but signing
+     *     out answers `403 impersonation_read_only`. `full` acts as the member and
+     *     needs `support.impersonate_full` (superadmin) and a code younger than
+     *     five minutes (`403 platform_recent_totp_required`). In either mode the
+     *     routes no operator may take on a member's behalf stay closed
+     *     (`IMPERSONATION_FORBIDDEN_PATHS`).
+     *
+     *     The workspace's Founders are mailed (`impersonation_notice`) — who was
+     *     entered as, in which mode, until when; never the reason, which stays in
+     *     the platform chain. The handoff URL is in this answer only: the code is
+     *     stored as a digest and is not logged.
+     *
+     *     A workspace that is suspended or cancelled is 409
+     *     `platform_workspace_state` (`workspace_closed`); a member the root panel
+     *     suspended is 409 `platform_account_state` (`account_suspended`); an
+     *     unknown workspace, or somebody who is not a live member of it, is 404.
+     */
+    post: operations['startPlatformImpersonation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/support/impersonations/{impersonationId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One impersonation session */
+    get: operations['getPlatformImpersonation'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/support/impersonations/{impersonationId}/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End an impersonation session
+     * @description Closes the session (`end_reason: ended_by_operator`) and with it every
+     *     token it was traded for: the next request the workspace console makes
+     *     with one is a 401. Any operator who may start one may end one. A session
+     *     that has already ended — from here, from the console's banner, or by
+     *     running out — answers `unchanged: true` and records nothing.
+     */
+    post: operations['endPlatformImpersonation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/blocklist': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The sign-up blocklist
+     * @description Every entry of `platform_blocklist`, newest first: an exact address, a
+     *     domain (which also covers its subdomains) or an IP / CIDR. Keyset paging
+     *     on the creation time. `kind` keeps one kind; `q` keeps the entries whose
+     *     value contains the text.
+     */
+    get: operations['listPlatformBlocklist'];
+    put?: never;
+    /**
+     * Block an address, a domain or an IP range from signing up
+     * @description The value is stored normalised: an address and a domain in lower case
+     *     (a leading `@` or `*.` on a domain is dropped), an IP in its canonical
+     *     form with the host bits of a CIDR zeroed (`10.0.0.5/24` is stored as
+     *     `10.0.0.0/24`; a bare address is its own range). The same range twice is
+     *     a 400 `validation` with `details.reason: already_listed`. The next sign-up is checked against
+     *     it — no cache sits between this write and the gate.
+     *
+     *     The `reason` is kept on the entry as well as in the audit chain.
+     */
+    post: operations['addPlatformBlocklistEntry'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/blocklist/{entryId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Lift a block
+     * @description Removes the entry; the next sign-up it covered passes this gate. The body
+     *     carries the `reason`. An unknown id is a 404.
+     */
+    delete: operations['removePlatformBlocklistEntry'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/failed-logins': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Failed sign-ins, tenants and operators
+     * @description Three views. `tenant.live` is the pre-authentication failure budget
+     *     (`rl:authfail:<ip>`, a 60-second window in Redis) read without spending
+     *     it: which addresses are failing now, and which are locked out.
+     *     `tenant.history` is the workspaces' own trail (`auth.login_failed`) over
+     *     the last `hours`, by address and by workspace. `operator` is this
+     *     panel's own `admin.sign_in_failed` / `admin.totp_failed` entries over
+     *     the same span. No address, name or password is ever in an entry, so
+     *     there is nothing to mask: the trail records the address the attempt came
+     *     from and nothing about who it claimed to be.
+     */
+    get: operations['getPlatformFailedLogins'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/signups-by-ip': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Sign-ups by source address
+     * @description `status: not_available` — the sign-up does not keep the address it came
+     *     from (a deliberate privacy decision, design.md §C security), so there is
+     *     nothing to count and no column was added for it. The answer says so
+     *     rather than showing an empty list that reads as "no sign-ups".
+     */
+    get: operations['getPlatformSignupsByIp'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/impersonations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Impersonation sessions, newest first
+     * @description The same list as `GET /support/impersonations`, behind the Security
+     *     page's permission: who entered which workspace as whom, in which mode,
+     *     and how it ended. `active=true` keeps the open ones.
+     */
+    get: operations['listPlatformSecurityImpersonations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/security/abuse-counters': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Abuse counters from the tenant API's guards
+     * @description Each counter says whether its source is there: `available`, or
+     *     `not_installed` when the table it reads is not part of this database.
+     *     `invites` — workspaces that sent their daily invitation allowance today
+     *     (`member.invited` entries, UTC day). `widget_quota` — members who used
+     *     their whole per-member AI allowance today (`ai_customer_daily_usage`
+     *     against each workspace's default-brand setting). `widget_challenge` —
+     *     the human check is logged, not counted, so only the component's state is
+     *     shown. Workspaces appear by licence number; nothing they wrote does.
+     */
+    get: operations['getPlatformAbuseCounters'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1859,6 +2134,594 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The deployment settings the root panel holds
+     * @description `null` is "not set here": the tenant API follows its own environment
+     *     (`SIGNUP_ENABLED`, `TRIAL_DAYS`) or shows nothing. What it actually
+     *     applies is in `GET /settings/effective-config`.
+     */
+    get: operations['getPlatformSettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change sign-up, the trial length or the announcement
+     * @description Only the keys present change; `null` removes the stored value. The
+     *     sign-up switch can only close what the environment opened: with
+     *     `SIGNUP_ENABLED=false` on the tenant API, `true` here does not open it
+     *     (the stricter of the two wins). The announcement needs both languages.
+     *     Superadmin only.
+     */
+    patch: operations['updatePlatformSettings'];
+    trace?: never;
+  };
+  '/settings/maintenance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Turn maintenance mode on or off
+     * @description `full`: the tenant API answers every request but health, the
+     *     deployment notice and signing out with `503 maintenance`, and the
+     *     realtime gateway closes its sockets and refuses new ones. `read_only`:
+     *     reads and signing in work, every other write answers `503 maintenance`.
+     *     The panel shows the operator's message, or its own. Superadmin and a
+     *     code younger than five minutes.
+     */
+    put: operations['setPlatformMaintenance'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/effective-config': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The tenant API's configuration as it runs
+     * @description The tenant API's scheduler leader publishes its parsed environment to
+     *     Redis every 30 seconds with a 90-second expiry; this process never reads
+     *     the tenant API's environment itself (it may be another container).
+     *     A key with a `SECRET`, `KEY`, `PASSWORD`, `PASS`, `TOKEN` or
+     *     `CREDENTIAL` word in its name (not a `_TTL` or `_PER_…` limit) shows
+     *     only `set` or `unset`, and a URL loses its user name, password and the
+     *     value of any query parameter named like a secret. Each entry says where
+     *     its value comes from: this panel's database (`db`), the environment
+     *     (`env`) or the built-in default (`default`). Shown here, set elsewhere:
+     *     `APPS_LIVE_PROVIDERS`, the Turnstile keys, `TICKET_MAIL_OUTBOUND`,
+     *     `PILOT_MODE`, `LLM_PROVIDER`. The `LLM_*` / `EMBEDDING_*` / `AI_DAILY_*` /
+     *     `AI_PRICE_*` entries are the environment's; whether the tenant API uses
+     *     them or this panel's AI settings is `GET /settings/ai`'s `source`.
+     *     `stale: true` with no entries is no publication at all — the route
+     *     still answers 200.
+     */
+    get: operations['getPlatformEffectiveConfig'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ai': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The AI provider settings the root panel holds
+     * @description `llm` / `embedding` `null` is "not set here": the tenant API builds
+     *     that provider from its environment (`LLM_*`, `EMBEDDING_*`), and
+     *     `source` says so. A stored API key is never returned — only its last
+     *     four characters (`api_key_last4`). `reembed` is the state of the last
+     *     re-embedding this panel started.
+     */
+    get: operations['getPlatformAiSettings'];
+    /**
+     * Change the model, the embedding model, the daily caps or the prices
+     * @description Only the keys present change; `null` removes the stored value and hands
+     *     that part back to the environment. Inside `llm` / `embedding`, an
+     *     absent `api_key` keeps the stored one, a string replaces it (sealed
+     *     with AES-256-GCM under a key derived from `PLATFORM_SETTINGS_KEY`) and
+     *     `null` removes it — the tenant API then uses `LLM_API_KEY` /
+     *     `EMBEDDING_API_KEY` if it has one. Refused with `400 validation`: a
+     *     remote provider without base URL, model or region; in production a
+     *     base URL that is not the OpenAI regional host of the declared region
+     *     (`api.openai.com` never), `mock` under `PILOT_MODE=true`, or a region
+     *     other than `SIYAHTUS_REGION` under `PILOT_MODE=true`; any embedding
+     *     width but 1536. Every tenant process rebuilds its providers on
+     *     `ai.settings_changed` within seconds, without a restart. A new
+     *     embedding provider or model answers `warning: reembed_required` — the
+     *     stored knowledge lives in the old space until it is re-embedded.
+     *     Superadmin and a code younger than five minutes; the audit entry names
+     *     the fields that changed (`changed`), never a key.
+     */
+    put: operations['updatePlatformAiSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ai/test-connection': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send one small request to the model or the embedding provider
+     * @description Builds the provider the tenant API would build — the stored settings,
+     *     else this process's environment (`source`) — and sends one tiny
+     *     completion (or one embedding). The cost is counted on the deployment's
+     *     daily AI allowance, never a workspace's. `mock` answers at once and
+     *     succeeds. A failure is still a 200 with `ok: false` and the failure's
+     *     kind (`timeout`, `auth`, `rate_limited`, `network`…); the provider's
+     *     own message is not passed on. Three per minute per operator.
+     */
+    post: operations['testPlatformAiConnection'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ai/reembed': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Re-embed every workspace's knowledge into the current embedding space
+     * @description Starts `knowledge:reembed` in this process and answers at once: every
+     *     source still in another space is embedded again with the embedding
+     *     provider the tenant API uses, one source at a time, while questions
+     *     keep being answered from whatever has already moved. The cost is
+     *     counted on the deployment's daily allowance; when that is spent the run
+     *     stops with `capped: true` and can be started again after 00:00 UTC.
+     *     Progress is in `GET /settings/ai` (`reembed`). `409
+     *     platform_operation_running` while one is running. Superadmin.
+     */
+    post: operations['startPlatformAiReembed'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/guardrails': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The locked G1–G19 rules and their catalogue version
+     * @description `PLATFORM_GUARDRAILS_VERSION` and, per rule, what it is and what it does:
+     *     title and prompt line in both languages, category, action, target team,
+     *     priority, the flag it raises, whether it needs a risk flag first, which
+     *     workspace text it reads, and how many lexicon patterns it holds on each
+     *     side per language (the patterns themselves stay in code).
+     */
+    get: operations['getPlatformGuardrailCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/crisis-text-drafts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The crisis-text drafts, per country
+     * @description The texts the platform suggests for the responsible-gaming hand-over
+     *     (AI-08-S1), `platform_settings.ai.crisis_text_drafts`. A workspace is
+     *     offered the one for its country as "use the platform's draft"; it edits
+     *     and approves it itself, nothing is published for it. `version` is 0 and
+     *     `drafts` empty while nothing has been saved.
+     */
+    get: operations['getPlatformCrisisTextDrafts'];
+    /**
+     * Replace the crisis-text drafts
+     * @description The whole map is replaced: a country or language left out is removed. Each
+     *     text is plain text of 1–1000 characters (no HTML, no control characters)
+     *     under an upper-case ISO 3166-1 country code and the language `en` or
+     *     `tr`; at most 60 countries. A body equal to what is stored changes
+     *     nothing and records nothing. The audit entry names the countries added,
+     *     changed and removed — never a text.
+     */
+    put: operations['updatePlatformCrisisTextDrafts'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The iGaming template pack — version and keys
+     * @description The pack (`igaming_core`) with its package version, and each template's
+     *     key, name, version, whether it is locked, its scenario count and how many
+     *     things a workspace must fill in. The procedure text stays in code.
+     */
+    get: operations['getPlatformTemplateCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/templates/installs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Per workspace, how many template copies are installed and live
+     * @description One row per workspace that holds at least one installed template copy,
+     *     most copies first (then licence number). `installed` counts the copies,
+     *     `active` the ones switched on (published for the AI to use), `outdated`
+     *     those behind the pack's current version of that template. Counts only —
+     *     no copy's text. Keyset paging on the (installed, licence) pair.
+     */
+    get: operations['listPlatformTemplateInstalls'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/compliance-pack': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The locked compliance scenario pack — version and scenario keys
+     * @description `AI_COMPLIANCE_PACK_VERSION`, its size and the scenario keys
+     *     (`compliance:G3:tr`) with the rule and language each one plays. The
+     *     scenarios' turns stay in code.
+     */
+    get: operations['getPlatformCompliancePack'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/qa-rubric': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The rubric the AI judge scores by
+     * @description The criteria in the judge's order, which of them apply only to a
+     *     conversation handed over, and the 1–5 scale. The QA queue (tm 319) has
+     *     not shipped: its review settings are not here.
+     */
+    get: operations['getPlatformQaRubric'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/tools': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The tool (integration) catalogue
+     * @description `status: not_installed` until the tool slot ships (tm 321); then its
+     *     catalogue version and keys.
+     */
+    get: operations['getPlatformToolCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/scheduler': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The scheduler's jobs
+     * @description The tenant API's scheduler leader publishes its job table to Redis every
+     *     30 seconds with a 90-second expiry. `stale: true` with `jobs: []` is no
+     *     publication at all (no tenant API is reporting, or Redis cannot be read);
+     *     `stale: true` with jobs is a publication older than 90 seconds. The page
+     *     is the one an operator opens when something is wrong, so it answers 200
+     *     either way. `running` is read live from the job's running marker;
+     *     `last_manual` is the outcome of the last "run now", wherever it ran.
+     */
+    get: operations['getPlatformOperationsScheduler'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/scheduler/{name}/run': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a scheduler job now
+     * @description Broadcasts `job.run` on `siyahtus:platform:ops:jobs`; exactly one tenant
+     *     process that is listening acts on it. The answer says only what the
+     *     platform could know: `queued` (a process heard it — the outcome follows
+     *     in the job table), `already_running` (the job's running marker is held;
+     *     nothing is started), `disabled` (the job is registered but switched off,
+     *     e.g. retention without `RETENTION_ENABLED`) or `no_listener` (no
+     *     scheduler is subscribed). A job the leader does not list is 404.
+     */
+    post: operations['runPlatformSchedulerJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/webhooks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Webhook delivery backlog across workspaces
+     * @description `webhook_deliveries` counted over every workspace: deliveries owed a
+     *     retry now, those more than ten minutes past due, the oldest's age, and
+     *     the last 24 hours' outcomes with the failure rate. No URL, payload or
+     *     workspace is named.
+     */
+    get: operations['getPlatformOperationsWebhooks'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/siem': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * SIEM export status across workspaces
+     * @description `siem_export_cursors` summarised: how many workspaces export, how many of
+     *     those are stalled (never delivered, or silent for 24 hours), when the sink
+     *     last ran and last shipped an entry, and the running total.
+     */
+    get: operations['getPlatformOperationsSiem'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/partitions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The `events` partitions
+     * @description Every partition of `events` with its estimated rows and size,
+     *     the months of the runtime window (one behind, three ahead) that have no
+     *     partition, and whether the catch-all `events_default` holds rows — the
+     *     condition under which a month can no longer be opened
+     *     (docs/runbooks/event-partitions.md).
+     */
+    get: operations['getPlatformOperationsPartitions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/partitions/ensure': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open `events` partitions
+     * @description `events_ensure_partition` for `month` (`YYYY-MM`, within 60 months of the
+     *     current one) or, without it, for every month of the runtime window. One
+     *     statement per month: a blocked month is listed in `failed` with its
+     *     SQLSTATE and costs the others nothing.
+     */
+    post: operations['ensurePlatformPartitions'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/unverified-signups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Unverified accounts a purge would look at
+     * @description Accounts whose address was never verified, and how many of them are older
+     *     than `ttl_hours` — the larger of `UNVERIFIED_SIGNUP_TTL_HOURS` and seven
+     *     days. Which of those the purge may actually delete is the database
+     *     function's decision (a verification link still alive, a second membership,
+     *     a customer's chat each keep one).
+     */
+    get: operations['getPlatformOperationsUnverifiedSignups'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/unverified-signups/purge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Purge expired unverified sign-ups
+     * @description Runs `purge_unverified_signups` — the function the scheduler's
+     *     `unverified_signups` job calls — in batches of 50, at most 20, for
+     *     accounts older than `ttl_hours`. Younger than seven days is never
+     *     touched. Superadmin and a code younger than five minutes.
+     */
+    post: operations['purgePlatformUnverifiedSignups'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The job queues
+     * @description `ai_jobs` (tm 289), `knowledge_jobs` (tm 312) and the document worker
+     *     (tm 313): rows per state and the oldest unfinished one's age, where the
+     *     table exists. A queue whose table does not exist is `not_installed` and
+     *     no statement is run against it.
+     */
+    get: operations['getPlatformOperationsJobs'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/operations/components': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The component record
+     * @description Every `OPS_COMPONENTS` key in order, `unknown` where nothing has reported.
+     *     The same record as the dashboard's health grid.
+     */
+    get: operations['getPlatformOperationsComponents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1894,6 +2757,7 @@ export interface components {
       | 'usage.manage'
       | 'settings.manage'
       | 'ai.manage'
+      | 'operations.trigger'
       | 'operations.run'
       | 'security.manage'
       | 'support.impersonate'
@@ -2026,6 +2890,39 @@ export interface components {
       /** @description How many sessions ended. */
       ended: number;
     };
+    /**
+     * @description What the platform scan mails operators about (tm 389.20): a trial that ends
+     *     within three days, a payment request waiting over 24 hours, a workspace at
+     *     its daily AI cap, a red or stale health snapshot, a platform audit chain that
+     *     no longer verifies, a workspace deleted tomorrow.
+     * @enum {string}
+     */
+    PlatformAlertKind:
+      | 'trial_ending'
+      | 'payment_request_waiting'
+      | 'ai_cap_reached'
+      | 'health_red'
+      | 'audit_chain_broken'
+      | 'purge_tomorrow';
+    PlatformAlertPrefs: {
+      /**
+       * @description The kinds this operator is mailed. Until they save a choice a superadmin
+       *     gets every kind and the other roles none (`customized` is false).
+       */
+      kinds: components['schemas']['PlatformAlertKind'][];
+      /**
+       * @description The language of the alert mail.
+       * @enum {string}
+       */
+      locale: 'en' | 'tr';
+      customized: boolean;
+      available: components['schemas']['PlatformAlertKind'][];
+    };
+    PlatformAlertPrefsUpdate: {
+      kinds: components['schemas']['PlatformAlertKind'][];
+      /** @enum {string} */
+      locale: 'en' | 'tr';
+    };
     PlatformAdmin: {
       /** Format: uuid */
       id: string;
@@ -2088,6 +2985,7 @@ export interface components {
       | 'admin.totp_reverified'
       | 'admin.recovery_codes_regenerated'
       | 'admin.other_sessions_ended'
+      | 'admin.alert_prefs_changed'
       | 'admin.signed_out'
       | 'admin.invited'
       | 'admin.invite_revoked'
@@ -2139,11 +3037,14 @@ export interface components {
       | 'ai_settings.updated'
       | 'ai_settings.connection_tested'
       | 'ai_settings.reembed_started'
+      | 'ai_settings.crisis_drafts_updated'
       | 'impersonation.started'
       | 'impersonation.ended'
       | 'security.blocklist_added'
       | 'security.blocklist_removed'
-      | 'security.unverified_signups_purged';
+      | 'security.unverified_signups_purged'
+      | 'operations.job_run_requested'
+      | 'operations.partition_ensured';
     /**
      * @description What an entry is about (`target_type`).
      * @enum {string}
@@ -2161,7 +3062,10 @@ export interface components {
       | 'credit'
       | 'settings'
       | 'blocklist'
-      | 'impersonation';
+      | 'impersonation'
+      | 'job'
+      | 'partition'
+      | 'signup';
     PlatformAuditEntry: {
       /** @description The entry's gapless position in the chain (a decimal integer). */
       chain_seq: string;
@@ -2738,11 +3642,240 @@ export interface components {
         end_reason: string | null;
       }[];
     };
+    PlatformImpersonationStartRequest: {
+      license_id: string;
+      /**
+       * Format: uuid
+       * @description The member to enter as — a live member of the workspace.
+       */
+      account_id: string;
+      /**
+       * @default read_only
+       * @enum {string}
+       */
+      mode: 'read_only' | 'full';
+      /** @description Why — recorded in the platform audit chain (tm 389.5). */
+      reason: string;
+    };
+    PlatformImpersonation: {
+      /** Format: uuid */
+      id: string;
+      license_id: string;
+      organization_name: string | null;
+      /** Format: uuid */
+      account_id: string;
+      account_email: string | null;
+      /** Format: uuid */
+      admin_id: string;
+      admin_email: string | null;
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      ends_at: string;
+      /** Format: date-time */
+      ended_at: string | null;
+      /**
+       * @description Empty while open, and for a session whose window simply ran out.
+       * @enum {string|null}
+       */
+      end_reason: 'ended_by_operator' | 'ended_in_workspace' | null;
+      /** @description Not ended and its window not run out. */
+      active: boolean;
+    };
+    PlatformImpersonationStarted: {
+      impersonation: components['schemas']['PlatformImpersonation'];
+      /**
+       * @description `<WEB_APP_URL>/auth/impersonate#code=…` — open it in a new tab. Good
+       *     once, until `handoff_expires_at`; shown here and nowhere else.
+       */
+      handoff_url: string;
+      /** Format: date-time */
+      handoff_expires_at: string;
+      /**
+       * @description The Founders' notice — `none` when the workspace has no Founder to tell.
+       * @enum {string}
+       */
+      mail: 'sent' | 'failed' | 'none';
+    };
+    PlatformImpersonationEnded: {
+      unchanged: boolean;
+      impersonation: components['schemas']['PlatformImpersonation'];
+    };
+    PlatformImpersonationList: {
+      data: components['schemas']['PlatformImpersonation'][];
+      next_cursor: string | null;
+    };
+    /**
+     * @description The workspace's AI at a glance - counts and states, never a rule's
+     *     text, a conversation or a scenario. A section whose table has not
+     *     shipped is `status: not_installed`, not a zero.
+     */
     PlatformWorkspaceAiSummary: {
       ai_agents: {
         total: number;
         active: number;
       };
+      guidance_rules: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        total: number;
+        active: number;
+      };
+      /** @description Changes to the AI configuration in the last 30 days (tm 315). */
+      config_changes: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        last_30_days: number;
+      };
+      /**
+       * @description Guardrail triggers in the last 30 days, by rule: `G1`-`G19` for the
+       *     platform's, `workspace_rule` and `forbidden_phrase` for the
+       *     workspace's own.
+       */
+      guardrail_hits: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        last_30_days: number;
+        by_rule: {
+          [key: string]: number;
+        };
+      };
+      /** @description The QA queue's counts (tm 319). */
+      qa: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        reviewed_30_days: number;
+        awaiting_review: number;
+      };
+      /** @description The workspace's latest run that played the compliance pack. */
+      compliance_pack: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        last_run: null | {
+          version: string;
+          run_status: string;
+          passed: number | null;
+          failed: number | null;
+          /** Format: date-time */
+          finished_at: string | null;
+        };
+      };
+    };
+    /**
+     * @description `not_installed` - the table or catalogue behind it has not shipped yet
+     *     (`AI_CATALOG_STATUSES`, @siyahtus/types).
+     * @enum {string}
+     */
+    PlatformAiCatalogStatus: 'available' | 'not_installed';
+    PlatformGuardrailLang: {
+      tr: string;
+      en: string;
+    };
+    /** @description Lexicon patterns per language (0 where the rule has none on that side). */
+    PlatformGuardrailPatternCounts: {
+      tr: number;
+      en: number;
+    };
+    PlatformGuardrailCatalogItem: {
+      id: string;
+      title: components['schemas']['PlatformGuardrailLang'];
+      prompt: components['schemas']['PlatformGuardrailLang'];
+      category: string;
+      action: string;
+      target: string | null;
+      priority: string;
+      handoff_reason: string | null;
+      risk_flag: string | null;
+      /** @enum {string} */
+      applies_when: 'always' | 'risk_flagged';
+      tenant_text: string | null;
+      lexicon_alone: boolean;
+      stages: ('input' | 'output')[];
+      input_patterns: components['schemas']['PlatformGuardrailPatternCounts'];
+      output_patterns: components['schemas']['PlatformGuardrailPatternCounts'];
+    };
+    PlatformGuardrailCatalog: {
+      /** @description PLATFORM_GUARDRAILS_VERSION */
+      version: string;
+      count: number;
+      items: components['schemas']['PlatformGuardrailCatalogItem'][];
+    };
+    /**
+     * @description Country (upper-case ISO 3166-1 alpha-2) to its texts, per language;
+     *     a language may be missing.
+     */
+    PlatformCrisisTextMap: {
+      [key: string]: {
+        en?: string;
+        tr?: string;
+      };
+    };
+    PlatformCrisisTextDrafts: {
+      drafts: components['schemas']['PlatformCrisisTextMap'];
+      version: number;
+      /** Format: date-time */
+      updated_at: string | null;
+      max_length: number;
+    };
+    PlatformCrisisTextDraftsRequest: {
+      reason: string;
+      drafts: components['schemas']['PlatformCrisisTextMap'];
+    };
+    PlatformTemplateCatalogItem: {
+      key: string;
+      name: string;
+      version: number;
+      locked: boolean;
+      scenario_count: number;
+      tenant_must_fill_count: number;
+    };
+    PlatformTemplateCatalog: {
+      pack: {
+        key: string;
+        /** @description The templates package version. */
+        version: string;
+        industry: string;
+        lang: string;
+        template_count: number;
+      };
+      items: components['schemas']['PlatformTemplateCatalogItem'][];
+    };
+    PlatformTemplateInstall: {
+      license_id: string;
+      workspace_name: string;
+      installed: number;
+      active: number;
+      outdated: number;
+    };
+    PlatformTemplateInstallList: {
+      data: components['schemas']['PlatformTemplateInstall'][];
+      next_cursor: string | null;
+    };
+    PlatformCompliancePack: {
+      /** @description AI_COMPLIANCE_PACK_VERSION */
+      version: string;
+      size: number;
+      items: {
+        key: string;
+        guardrail: string;
+        language: string;
+      }[];
+    };
+    PlatformQaRubric: {
+      status: components['schemas']['PlatformAiCatalogStatus'];
+      version: string | null;
+      scale: {
+        min: number;
+        max: number;
+      };
+      items: {
+        key: string;
+        handoff_only: boolean;
+      }[];
+    };
+    PlatformToolCatalog: {
+      status: components['schemas']['PlatformAiCatalogStatus'];
+      version: string | null;
+      items: {
+        key: string;
+      }[];
     };
     PlatformAccountSummary: {
       /** Format: uuid */
@@ -3164,6 +4297,262 @@ export interface components {
       unchanged: boolean;
       caps: components['schemas']['PlatformPlanAiCaps'];
     };
+    PlatformOperationsJob: {
+      name: string;
+      interval_ms: number;
+      /** @description `false`: registered but switched off — it never runs, and "run now" is refused. */
+      enabled: boolean;
+      /**
+       * Format: date-time
+       * @description When the job last ticked on the publishing process, whatever came of it.
+       */
+      last_run_at: string | null;
+      /** @enum {string|null} */
+      last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
+      /** @description The error's class, never its message. */
+      last_error_class?: string;
+      last_duration_ms: number | null;
+      /** Format: date-time */
+      next_run_at: string | null;
+      /** @description A pass is executing right now, on some instance. */
+      running: boolean;
+      last_manual: components['schemas']['PlatformOperationsManualRun'] | null;
+    };
+    PlatformOperationsManualRun: {
+      /** Format: date-time */
+      at: string;
+      /** @enum {string} */
+      result: 'finished' | 'already_running' | 'disabled' | 'unknown_job';
+      /** @enum {string|null} */
+      status: 'ok' | 'error' | null;
+      duration_ms: number | null;
+      error_class: string | null;
+    };
+    PlatformOperationsScheduler: {
+      stale: boolean;
+      /** Format: date-time */
+      generated_at: string | null;
+      /** @description Whether the publishing process runs its jobs (`SCHEDULER_ENABLED`). */
+      enabled: boolean | null;
+      jobs: components['schemas']['PlatformOperationsJob'][];
+    };
+    PlatformOperationsRunResult: {
+      name: string;
+      /** Format: uuid */
+      request_id: string;
+      /**
+       * @description `queued` — a process heard the request · `already_running` — the
+       *     job's running marker is held · `disabled` — the job is switched off ·
+       *     `no_listener` — no scheduler is subscribed.
+       * @enum {string}
+       */
+      result: 'queued' | 'already_running' | 'disabled' | 'no_listener';
+    };
+    PlatformOperationsWebhooks: {
+      /** Format: date-time */
+      generated_at: string;
+      window_hours: number;
+      pending: number;
+      overdue: number;
+      oldest_pending_age_s: number | null;
+      last_window: {
+        delivered: number;
+        failed: number;
+        exhausted: number;
+        /** @description (failed + exhausted) / (delivered + failed + exhausted); null with none. */
+        failure_rate: number | null;
+        workspaces_failing: number;
+      };
+    };
+    PlatformOperationsSiem: {
+      /** Format: date-time */
+      generated_at: string;
+      provider: string;
+      workspaces_enabled: number;
+      workspaces_stalled: number;
+      /** Format: date-time */
+      last_run_at: string | null;
+      /** Format: date-time */
+      last_exported_at: string | null;
+      exported_total: number;
+    };
+    PlatformOperationsPartition: {
+      name: string;
+      /** @description `YYYY-MM`; null for the catch-all. */
+      month: string | null;
+      default: boolean;
+      est_rows: number;
+      size_bytes: number;
+    };
+    PlatformOperationsPartitions: {
+      /** Format: date-time */
+      generated_at: string;
+      window: {
+        behind: number;
+        ahead: number;
+      };
+      partitions: components['schemas']['PlatformOperationsPartition'][];
+      missing_months: string[];
+      /** @description Null where the catch-all could not be read. */
+      default_has_rows: boolean | null;
+    };
+    PlatformOperationsEnsureRequest: {
+      reason: string;
+      /** @description One month to open; the whole runtime window when absent. */
+      month?: string;
+    };
+    PlatformOperationsEnsureResult: {
+      ensured: {
+        month: string;
+        name: string;
+      }[];
+      failed: {
+        month: string;
+        /** @description The SQLSTATE. */
+        error_code: string;
+      }[];
+    };
+    PlatformOperationsUnverifiedSignups: {
+      /** Format: date-time */
+      generated_at: string;
+      ttl_hours: number;
+      total: number;
+      older_than_ttl: number;
+      oldest_age_s: number | null;
+    };
+    PlatformOperationsPurgeResult: {
+      purged: number;
+      batches: number;
+      ttl_hours: number;
+    };
+    PlatformOperationsQueue: {
+      /** @enum {string} */
+      key: 'ai_jobs' | 'knowledge_jobs' | 'doc_worker';
+      /**
+       * @description `not_installed` — no table, no query · `unreadable` — the table exists but could not be read.
+       * @enum {string}
+       */
+      state: 'ok' | 'not_installed' | 'unreadable';
+      counts: {
+        [key: string]: number;
+      } | null;
+      oldest_unfinished_age_s: number | null;
+    };
+    PlatformOperationsJobs: {
+      /** Format: date-time */
+      generated_at: string;
+      queues: components['schemas']['PlatformOperationsQueue'][];
+    };
+    PlatformOperationsComponents: {
+      /** Format: date-time */
+      generated_at: string;
+      components: components['schemas']['PlatformComponentStatus'][];
+    };
+    /**
+     * @description What an entry matches (`PLATFORM_BLOCKLIST_KINDS`, @siyahtus/types).
+     * @enum {string}
+     */
+    PlatformBlocklistKind: 'email' | 'domain' | 'ip';
+    PlatformBlocklistEntry: {
+      /** Format: uuid */
+      id: string;
+      kind: components['schemas']['PlatformBlocklistKind'];
+      /** @description Normalised — an address or domain in lower case, an IP in canonical form (a CIDR with its host bits zeroed). */
+      value: string;
+      reason: string | null;
+      /** Format: uuid */
+      created_by: string | null;
+      created_by_email: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    PlatformBlocklistList: {
+      data: components['schemas']['PlatformBlocklistEntry'][];
+      next_cursor: string | null;
+    };
+    PlatformBlocklistCreateRequest: {
+      kind: components['schemas']['PlatformBlocklistKind'];
+      value: string;
+      reason: string;
+    };
+    PlatformCounted: {
+      /** @description An address or a licence number */
+      key: string;
+      count: number;
+    };
+    PlatformFailedLogins: {
+      /** Format: date-time */
+      generated_at: string;
+      hours: number;
+      /** Format: date-time */
+      since: string;
+      tenant: {
+        live: {
+          /**
+           * @description `unavailable` when Redis could not be read.
+           * @enum {string}
+           */
+          status: 'available' | 'unavailable';
+          window_seconds: number;
+          /** @description Failures per window before the address is refused. */
+          limit: number;
+          addresses_total: number;
+          locked_total: number;
+          addresses: {
+            ip: string;
+            failures: number;
+            locked: boolean;
+          }[];
+          truncated: boolean;
+        };
+        history: {
+          total: number;
+          by_ip: components['schemas']['PlatformCounted'][];
+          by_workspace: components['schemas']['PlatformCounted'][];
+        };
+      };
+      operator: {
+        sign_in_failed: number;
+        totp_failed: number;
+        by_ip: components['schemas']['PlatformCounted'][];
+      };
+    };
+    PlatformSignupsByIp: {
+      /** @enum {string} */
+      status: 'available' | 'not_available';
+      days: number;
+      reason: string | null;
+      data: components['schemas']['PlatformCounted'][];
+    };
+    /**
+     * @description `available` — the source is there and counted; `not_installed` — the
+     *     table it reads is not part of this database; `not_available` — the
+     *     guard keeps no count to read.
+     * @enum {string}
+     */
+    PlatformAbuseCounterStatus: 'available' | 'not_installed' | 'not_available';
+    PlatformAbuseCounters: {
+      /** Format: date-time */
+      generated_at: string;
+      invites: {
+        status: components['schemas']['PlatformAbuseCounterStatus'];
+        limit_per_day: number;
+        workspaces_at_limit: number;
+        workspaces: components['schemas']['PlatformCounted'][];
+      };
+      widget_quota: {
+        status: components['schemas']['PlatformAbuseCounterStatus'];
+        /** @description The UTC day counted (YYYY-MM-DD). */
+        day: string;
+        members_at_cap: number;
+        workspaces_affected: number;
+        workspaces: components['schemas']['PlatformCounted'][];
+      };
+      widget_challenge: {
+        status: components['schemas']['PlatformAbuseCounterStatus'];
+        component: components['schemas']['PlatformComponentStatus'] | null;
+      };
+    };
     Error: {
       error: {
         /** @description One of `ERROR_TYPES` (`@siyahtus/types`). */
@@ -3176,6 +4565,238 @@ export interface components {
           [key: string]: unknown;
         };
       };
+    };
+    /** @description One sentence in English and Turkish — both, always. */
+    PlatformNoticeText: {
+      en: string;
+      tr: string;
+    };
+    /**
+     * @description The banner every panel user sees (`NoticeBar`). It stops being served
+     *     once `until` has passed.
+     */
+    PlatformAnnouncement: {
+      /** @enum {string} */
+      level: 'info' | 'warning' | 'critical';
+      en: string;
+      tr: string;
+      /** Format: date-time */
+      until: string | null;
+    };
+    PlatformMaintenance: {
+      enabled: boolean;
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      message: components['schemas']['PlatformNoticeText'] | null;
+    };
+    /**
+     * @description What `platform_settings` holds for the tenant API; `null` is "not set
+     *     here". `updated_at` is the newest change among these keys.
+     */
+    PlatformDeploymentSettings: {
+      signup_enabled: boolean | null;
+      trial_days: number | null;
+      announcement: components['schemas']['PlatformAnnouncement'] | null;
+      maintenance: components['schemas']['PlatformMaintenance'] | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    /** @description At least one key besides `reason`; `null` removes the stored value. */
+    PlatformSettingsPatchRequest: {
+      reason: string;
+      signup_enabled?: boolean | null;
+      trial_days?: number | null;
+      announcement?: components['schemas']['PlatformAnnouncement'] | null;
+    };
+    PlatformMaintenanceRequest: {
+      reason: string;
+      enabled: boolean;
+      /** @enum {string} */
+      mode: 'read_only' | 'full';
+      message?: components['schemas']['PlatformNoticeText'] | null;
+    };
+    PlatformEffectiveConfigEntry: {
+      /** @description The environment variable's name. */
+      key: string;
+      /**
+       * @description The value the tenant API runs with, as text; `set` / `unset` when
+       *     `redacted`; `null` for an optional key with no value.
+       */
+      value: string | null;
+      /** @enum {string} */
+      source: 'db' | 'env' | 'default';
+      /** @description A secret — only whether it is set is shown. */
+      redacted: boolean;
+      /** @description This panel can override it (`PATCH /settings`). */
+      panel: boolean;
+    };
+    PlatformEffectiveConfig: {
+      /** @description No publication, or one older than 90 seconds. */
+      stale: boolean;
+      /** Format: date-time */
+      generated_at: string | null;
+      age_s: number | null;
+      /** @description Alphabetical by key. */
+      entries: components['schemas']['PlatformEffectiveConfigEntry'][];
+    };
+    /**
+     * @description The model settings as stored. `null` in a field is "not set here" —
+     *     for `timeout_ms` and `max_output_tokens` the environment's value
+     *     (`LLM_TIMEOUT_MS`, `LLM_MAX_OUTPUT_TOKENS`) applies. The key itself is
+     *     never returned.
+     */
+    PlatformAiLlmSettings: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url: string | null;
+      model: string | null;
+      /** @description The model a `fast` call uses (classifying, summarising); `null` — `model`. */
+      model_fast: string | null;
+      /** @enum {string|null} */
+      region: 'eu' | 'us' | null;
+      timeout_ms: number | null;
+      max_output_tokens: number | null;
+      /** @description The stored key's last four characters; `null` — no key stored here. */
+      api_key_last4: string | null;
+    };
+    /** @description The embedding provider as stored; `PlatformAiLlmSettings`' rules. */
+    PlatformAiEmbeddingSettings: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url: string | null;
+      model: string | null;
+      /** @enum {string|null} */
+      region: 'eu' | 'us' | null;
+      /**
+       * @description Fixed — `knowledge_chunks.embedding` is `vector(1536)`.
+       * @enum {integer}
+       */
+      dimensions: 1536;
+      api_key_last4: string | null;
+    };
+    PlatformAiDailyCap: {
+      /** @description Tokens a day for a workspace with no plan figure or override of its own. */
+      workspace: number;
+      /** @description Tokens a day for the whole deployment. */
+      global: number;
+    };
+    /**
+     * @description The deployment's daily caps per meter, in place of the four
+     *     `AI_DAILY_*` settings. Stored under `ai.caps` beside the plans'
+     *     defaults (`plans`, tm 389.12), which this does not touch.
+     */
+    PlatformAiDeploymentCaps: {
+      llm: components['schemas']['PlatformAiDailyCap'];
+      embedding: components['schemas']['PlatformAiDailyCap'];
+    };
+    /**
+     * @description What the provider charges, in US dollars per million tokens — the AI
+     *     usage report's cost estimate, in place of the three `AI_PRICE_*`
+     *     settings. `null` — no estimate for that meter.
+     */
+    PlatformAiPrices: {
+      llm_input_usd_per_mtok: number | null;
+      llm_output_usd_per_mtok: number | null;
+      embedding_usd_per_mtok: number | null;
+    };
+    /**
+     * @description The last re-embedding this panel started. `idle` — none since Redis
+     *     last lost the record.
+     */
+    PlatformAiReembedStatus: {
+      /** @enum {string} */
+      state: 'idle' | 'running' | 'finished' | 'failed';
+      /** Format: date-time */
+      started_at: string | null;
+      /** Format: date-time */
+      finished_at: string | null;
+      /** @description The embedding space moved into (`<provider>:<model>`). */
+      target: string | null;
+      /** @description Sources moved so far. */
+      sources: number;
+      chunks: number;
+      failed: number;
+      /** @description Workspaces the residency rule kept out. */
+      refused: number;
+      /** @description The deployment's daily embedding allowance ran out; start again after 00:00 UTC. */
+      capped: boolean;
+    };
+    PlatformAiSettingsSource: {
+      /** @enum {string} */
+      llm: 'db' | 'env';
+      /** @enum {string} */
+      embedding: 'db' | 'env';
+    };
+    PlatformAiSettings: {
+      llm: components['schemas']['PlatformAiLlmSettings'] | null;
+      embedding: components['schemas']['PlatformAiEmbeddingSettings'] | null;
+      caps: components['schemas']['PlatformAiDeploymentCaps'] | null;
+      prices: components['schemas']['PlatformAiPrices'] | null;
+      source: components['schemas']['PlatformAiSettingsSource'];
+      reembed: components['schemas']['PlatformAiReembedStatus'];
+      /** Format: date-time */
+      updated_at: string | null;
+      /**
+       * @description `PUT` only — the embedding provider or model changed, so the stored
+       *     knowledge has to be re-embedded (`POST /settings/ai/reembed`).
+       * @enum {string}
+       */
+      warning?: 'reembed_required';
+    };
+    PlatformAiLlmInput: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url?: string | null;
+      model?: string | null;
+      model_fast?: string | null;
+      /** @enum {string|null} */
+      region?: 'eu' | 'us' | null;
+      timeout_ms?: number | null;
+      max_output_tokens?: number | null;
+      /** @description Absent — keep the stored key; a string — replace it; `null` — remove it. */
+      api_key?: string | null;
+    };
+    PlatformAiEmbeddingInput: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url?: string | null;
+      model?: string | null;
+      /** @enum {string|null} */
+      region?: 'eu' | 'us' | null;
+      /** @enum {integer} */
+      dimensions?: 1536;
+      api_key?: string | null;
+    };
+    /** @description At least one key besides `reason`; `null` removes the stored value. */
+    PlatformAiSettingsRequest: {
+      reason: string;
+      llm?: components['schemas']['PlatformAiLlmInput'] | null;
+      embedding?: components['schemas']['PlatformAiEmbeddingInput'] | null;
+      caps?: components['schemas']['PlatformAiDeploymentCaps'] | null;
+      prices?: components['schemas']['PlatformAiPrices'] | null;
+    };
+    PlatformAiConnectionTestRequest: {
+      reason: string;
+      /** @enum {string} */
+      target: 'llm' | 'embedding';
+    };
+    PlatformAiConnectionTest: {
+      /** @enum {string} */
+      target: 'llm' | 'embedding';
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      /** @enum {string} */
+      source: 'db' | 'env';
+      model: string | null;
+      ok: boolean;
+      latency_ms: number;
+      /**
+       * @description The failure's kind (`timeout`, `auth`, `rate_limited`, `network`,
+       *     `bad_request`, `bad_response`, `provider_error`, `circuit_open`,
+       *     `no_answer`, `ai_daily_cap`, `misconfigured`) — never the
+       *     provider's message.
+       */
+      error: string | null;
     };
   };
   responses: {
@@ -3233,8 +4854,9 @@ export interface components {
     /**
      * @description `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
      *     `platform_workspace_state` (`details.reason`, tm 389.10) or
-     *     `platform_account_state` (`details.reason`, tm 389.11) — the request was
-     *     fine, the state refused it.
+     *     `platform_account_state` (`details.reason`, tm 389.11) or
+     *     `platform_operation_running` (tm 389.17) — the request was fine, the
+     *     state refused it.
      */
     Conflict: {
       headers: {
@@ -3265,6 +4887,10 @@ export interface components {
     AccountId: string;
     /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
     LicenseId: string;
+    /** @description The blocklist entry's id. Anything else is a 404, like an unknown one. */
+    BlocklistEntryId: string;
+    /** @description The session's id. Anything else is a 404, like an unknown one. */
+    ImpersonationId: string;
   };
   requestBodies: never;
   headers: never;
@@ -3547,6 +5173,55 @@ export interface operations {
           'application/json': components['schemas']['PlatformMe'];
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformAlertPrefs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The operator's alert preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAlertPrefs'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  putPlatformAlertPrefs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformAlertPrefsUpdate'];
+      };
+    };
+    responses: {
+      /** @description The saved preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAlertPrefs'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
     };
@@ -5028,6 +6703,306 @@ export interface operations {
       404: components['responses']['NotFound'];
     };
   };
+  listPlatformImpersonations: {
+    parameters: {
+      query?: {
+        active?: boolean;
+        license_id?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  startPlatformImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformImpersonationStartRequest'];
+      };
+    };
+    responses: {
+      /** @description The session, and the link that opens it */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationStarted'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The session's id. Anything else is a 404, like an unknown one. */
+        impersonationId: components['parameters']['ImpersonationId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            impersonation: components['schemas']['PlatformImpersonation'];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  endPlatformImpersonation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The session's id. Anything else is a 404, like an unknown one. */
+        impersonationId: components['parameters']['ImpersonationId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The session as it now reads */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationEnded'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformBlocklist: {
+    parameters: {
+      query?: {
+        kind?: components['schemas']['PlatformBlocklistKind'];
+        q?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBlocklistList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  addPlatformBlocklistEntry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformBlocklistCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description The entry */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBlocklistEntry'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  removePlatformBlocklistEntry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The blocklist entry's id. Anything else is a 404, like an unknown one. */
+        entryId: components['parameters']['BlocklistEntryId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformFailedLogins: {
+    parameters: {
+      query?: {
+        hours?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformFailedLogins'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformSignupsByIp: {
+    parameters: {
+      query?: {
+        days?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The answer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSignupsByIp'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformSecurityImpersonations: {
+    parameters: {
+      query?: {
+        active?: boolean;
+        license_id?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformImpersonationList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformAbuseCounters: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAbuseCounters'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
   listPlatformAccounts: {
     parameters: {
       query?: {
@@ -5759,6 +7734,632 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stored values */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDeploymentSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  updatePlatformSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformSettingsPatchRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored values after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDeploymentSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  setPlatformMaintenance: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformMaintenanceRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored values after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDeploymentSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformEffectiveConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The published configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformEffectiveConfig'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformAiSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stored values */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  updatePlatformAiSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformAiSettingsRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored values after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  testPlatformAiConnection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformAiConnectionTestRequest'];
+      };
+    };
+    responses: {
+      /** @description What the provider answered, and how fast */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiConnectionTest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  startPlatformAiReembed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Started; the state as it begins */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiReembedStatus'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformGuardrailCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformGuardrailCatalog'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformCrisisTextDrafts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stored drafts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCrisisTextDrafts'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  updatePlatformCrisisTextDrafts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformCrisisTextDraftsRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored drafts after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCrisisTextDrafts'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformTemplateCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTemplateCatalog'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformTemplateInstalls: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTemplateInstallList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformCompliancePack: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCompliancePack'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformQaRubric: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rubric */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformQaRubric'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformToolCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformToolCatalog'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsScheduler: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job table */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsScheduler'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  runPlatformSchedulerJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        name: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description What the request came to */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsRunResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformOperationsWebhooks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The backlog */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsWebhooks'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsSiem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsSiem'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsPartitions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The partitions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsPartitions'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  ensurePlatformPartitions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformOperationsEnsureRequest'];
+      };
+    };
+    responses: {
+      /** @description Which months are open now, which could not be */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsEnsureResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsUnverifiedSignups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The counts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsUnverifiedSignups'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  purgePlatformUnverifiedSignups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description How many went */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsPurgeResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsJobs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The queues */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsJobs'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformOperationsComponents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The components */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformOperationsComponents'];
+        };
+      };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
     };

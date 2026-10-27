@@ -24,7 +24,7 @@ const MEMBER = { email: 'agent2@acme.localhost', password: DEMO.password } as co
 test.describe.configure({ mode: 'serial' });
 
 async function openTab(page: Page): Promise<void> {
-  await page.goto('/app/playbook');
+  await page.goto('/app/playbook?view=skills');
   await page
     .getByRole('tablist', { name: 'AI Agent' })
     .getByRole('tab', { name: 'Unresolved questions' })
@@ -36,7 +36,7 @@ test.describe('Unresolved questions (AI-22)', () => {
   test('the tab sits beside Performance and reads the report with the filters it is given', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' }).getByRole('tab');
     // The tabs are drawn once the signed-in agent and the AI agent are known.
     await expect(tabs.filter({ hasText: 'Unresolved questions' })).toBeVisible();
@@ -91,7 +91,7 @@ test.describe('Unresolved questions (AI-22)', () => {
     const member = await context.newPage();
     try {
       await signInAs(member, MEMBER.email, MEMBER.password);
-      await member.goto('/app/playbook');
+      await member.goto('/app/playbook?view=skills');
       await expect(member.getByRole('navigation').first()).toBeVisible();
       await expect(member.getByRole('tab', { name: 'Unresolved questions' })).toHaveCount(0);
       await expect(member.getByRole('region', { name: 'Unresolved questions' })).toHaveCount(0);

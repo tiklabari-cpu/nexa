@@ -3670,7 +3670,19 @@ export interface paths {
     /** AI agents on the licence */
     get: operations['listAiAgents'];
     put?: never;
-    post?: never;
+    /**
+     * Add the workspace's AI agent
+     * @description Creates the workspace's customer-facing AI agent (tm 390.1) — what the
+     *     Playbook's empty state calls. v1 keeps one per workspace: a second is
+     *     409 `ai_agent_exists`, held by a partial unique index, so two tabs
+     *     creating at once get one agent and one 409. Copilot's record is not
+     *     made here; it is made on first use.
+     *
+     *     The agent starts switched off (`active: false`): going live is
+     *     `PATCH /ai-agents/{aiAgentId}` with `active: true`, behind the same
+     *     readiness and crisis-text gates as any agent. Owners and admins only.
+     */
+    post: operations['createAiAgent'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3686,7 +3698,15 @@ export interface paths {
       };
       cookie?: never;
     };
-    get?: never;
+    /**
+     * One AI agent, with what it still needs to go live
+     * @description The agent as the list shows it, plus `readiness` (tm 390.1): whether it
+     *     has indexed knowledge and an active skill with steps (FR-MOD-06.1, PRD
+     *     KK4 — the rule the panel's banner states) and, for the customer-facing
+     *     agent, what its crisis text still needs before it may be switched on
+     *     (AI-08-S1). Another workspace's agent is 404.
+     */
+    get: operations['getAiAgent'];
     put?: never;
     post?: never;
     delete?: never;
@@ -11606,6 +11626,27 @@ export interface components {
       max_questions_per_message?: number | null;
       active: boolean;
       skills_count?: number;
+    };
+    /** @description One agent (`GET /ai-agents/{aiAgentId}`, `POST /ai-agents`) — the list's fields plus `readiness`. */
+    AiAgentDetail: components['schemas']['AiAgent'] & {
+      readiness: components['schemas']['AiAgentReadiness'];
+    };
+    /**
+     * @description What the agent still needs (tm 390.1). `ready` is the panel's rule
+     *     (FR-MOD-06.1, PRD KK4): indexed knowledge it may answer from AND an
+     *     active skill with steps. `guardrail_problem` is the separate gate on
+     *     switching a customer-facing agent on (AI-08-S1, `409
+     *     ai_guardrail_setup_incomplete`); null when the crisis text is
+     *     approved, and always null for Copilot.
+     */
+    AiAgentReadiness: {
+      ready: boolean;
+      /** @description A knowledge source this agent may answer players from has at least one indexed chunk. */
+      has_knowledge: boolean;
+      /** @description One of this agent's skills is active and has at least one step. */
+      has_skill: boolean;
+      /** @enum {string|null} */
+      guardrail_problem: 'crisis_text_missing' | 'crisis_text_not_approved' | null;
     };
     /**
      * @description What a behaviour rule is about (AI-07); the editor groups by it.
@@ -19923,6 +19964,7 @@ export interface components {
      * @enum {string}
      */
     ErrorType:
+      | 'ai_agent_exists'
       | 'ai_guardrail_setup_incomplete'
       | 'ai_mode_transition_refused'
       | 'ai_return_blocked'
@@ -25612,6 +25654,75 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiAgent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          tone?: string | null;
+          avatar_url?: string | null;
+          languages?: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description Created, switched off */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiAgentDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description The workspace already has an AI agent (`ai_agent_exists`) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiAgent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The agent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiAgentDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

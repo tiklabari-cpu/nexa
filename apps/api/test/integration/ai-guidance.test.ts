@@ -450,19 +450,18 @@ describe('behaviour rules (AI-07 · tm 299.1)', () => {
         where: { id: copilotId },
         data: { instruction: 'Copilot notu.' },
       });
-      const empty = await owner.aiAgent.create({
-        data: { licenseId: fx.a.licenseId, name: 'Boş', kind: 'ai_agent', instruction: '   ' },
-        select: { id: true },
-      });
-      // Scoped to this test's workspace: the statement is the migration's, the rows are ours.
+      // A blank instruction makes no rule. One AI agent per workspace (tm 390.1):
+      // the blank one is the other workspace's.
+      await owner.aiAgent.update({ where: { id: foreignAgentId }, data: { instruction: '   ' } });
+      // Scoped to this test's workspaces: the statement is the migration's, the rows are ours.
       const move = readFileSync(MIGRATION, 'utf8');
       const statement = move
         .slice(move.indexOf('INSERT INTO ai_guidance_rules'))
         .replace(
           "WHERE a.kind = 'ai_agent'",
-          `WHERE a.license_id = ${fx.a.licenseId.toString()} AND a.kind = 'ai_agent'`,
+          `WHERE a.license_id IN (${fx.a.licenseId.toString()}, ${fx.b.licenseId.toString()}) AND a.kind = 'ai_agent'`,
         );
-      expect(statement).toContain(`a.license_id = ${fx.a.licenseId.toString()}`);
+      expect(statement).toContain(`a.license_id IN (${fx.a.licenseId.toString()}`);
       await owner.$executeRawUnsafe(statement);
 
       const rules = await owner.aiGuidanceRule.findMany({
@@ -505,7 +504,9 @@ describe('behaviour rules (AI-07 · tm 299.1)', () => {
       ]);
       expect(rules.map((rule) => rule.body).join('')).toBe(long);
       expect(
-        await owner.aiGuidanceRule.count({ where: { aiAgentId: { in: [copilotId, empty.id] } } }),
+        await owner.aiGuidanceRule.count({
+          where: { aiAgentId: { in: [copilotId, foreignAgentId] } },
+        }),
       ).toBe(0);
     });
   });

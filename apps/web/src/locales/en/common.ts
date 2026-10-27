@@ -17,6 +17,7 @@ import type { Messages } from '../merge.js';
  */
 export const common: Messages = {
   'common.errors.account_exists': 'That email address already has an account.',
+  'common.errors.ai_agent_exists': 'This workspace already has an AI agent.',
   'common.errors.ai_guardrail_setup_incomplete':
     'The AI agent cannot go live until its crisis text is written and approved by the owner.',
   'common.errors.ai_mode_transition_refused': 'The AI is not answering this conversation.',

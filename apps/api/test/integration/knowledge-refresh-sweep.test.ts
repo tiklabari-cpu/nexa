@@ -70,7 +70,13 @@ describe('knowledge-source freshness sweep (FR-MOD-06.3.3)', () => {
     })}`,
   });
 
+  /** The workspace's AI agent — one per workspace (tm 390.1), made on first ask. */
   async function agentId(tenant: 'a' | 'b'): Promise<string> {
+    const existing = await owner.aiAgent.findFirst({
+      where: { licenseId: fx[tenant].licenseId, kind: 'ai_agent' },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
     const agent = await owner.aiAgent.create({
       data: { licenseId: fx[tenant].licenseId, kind: 'ai_agent', name: 'Ada' },
       select: { id: true },

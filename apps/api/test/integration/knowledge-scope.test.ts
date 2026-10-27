@@ -215,9 +215,11 @@ describe('the single knowledge store — move and read (AI-14 · K11 · tm 309.2
 
   describe('one filter, said twice — the types and the SQL agree', () => {
     it('admits exactly the sources knowledgeSourceServes admits, for every reader, on both searches', async () => {
+      // Another agent's id for the filter to tell apart. A workspace has one AI
+      // agent (tm 390.1), so Bea is a record of another kind; the filter reads ids.
       const bea = (
         await owner.aiAgent.create({
-          data: { licenseId: fx.a.licenseId, kind: 'ai_agent', name: 'Bea' },
+          data: { licenseId: fx.a.licenseId, kind: 'copilot', name: 'Bea' },
           select: { id: true },
         })
       ).id;

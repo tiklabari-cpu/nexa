@@ -264,10 +264,16 @@ const BRAND_LIST_TABLES: ReadonlyArray<{
     table: 'knowledge_sources',
     reader: 'KnowledgeService.search — the AI agent answering a player (readerScope)',
     plant: async (db, at) => {
-      const agent = await db.aiAgent.create({
-        data: { licenseId: at.licenseId, kind: 'ai_agent', name: 'Ada' },
-        select: { id: true },
-      });
+      // The workspace's one AI agent (tm 390.1), made by the first plant.
+      const agent =
+        (await db.aiAgent.findFirst({
+          where: { licenseId: at.licenseId, kind: 'ai_agent' },
+          select: { id: true },
+        })) ??
+        (await db.aiAgent.create({
+          data: { licenseId: at.licenseId, kind: 'ai_agent', name: 'Ada' },
+          select: { id: true },
+        }));
       const source = await db.knowledgeSource.create({
         data: {
           aiAgentId: agent.id,

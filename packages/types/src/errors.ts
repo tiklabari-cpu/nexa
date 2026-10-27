@@ -18,6 +18,11 @@ export const ERROR_TYPES = [
   // must stay with a person" — and kept narrow like `takeover_conflict`.
   'ai_mode_transition_refused',
   'ai_return_blocked',
+  // SiyahTuş addition — the workspace's AI agent (tm 390.1): a second
+  // customer-facing agent on a workspace that has one. v1 keeps one per
+  // workspace (a partial unique index); the screen answers "open the agent you
+  // have", which a generic `validation` cannot say. Kept narrow like `brand_exists`.
+  'ai_agent_exists',
   // SiyahTuş addition — compliance guardrails (AI-08 · tm 301.2). A customer-
   // facing AI agent switched on before the Founder approved its crisis text
   // (AI-08-S1): the request was fine and allowed, the agent's setup is what
@@ -213,6 +218,7 @@ export type ErrorType = (typeof ERROR_TYPES)[number];
  */
 export const ERROR_STATUS: Record<ErrorType, number> = {
   account_exists: 409,
+  ai_agent_exists: 409,
   ai_guardrail_setup_incomplete: 409,
   ai_mode_transition_refused: 409,
   ai_return_blocked: 409,

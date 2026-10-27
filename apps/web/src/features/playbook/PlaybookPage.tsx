@@ -44,6 +44,14 @@ import { IGAMING_CATEGORY, galleryStartsOnIgaming } from './ai-templates.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
 import { KnowledgeSourceActions } from './KnowledgeSourceActions.js';
+import { KnowledgeCrawlFields } from './KnowledgeCrawlFields.js';
+import { KnowledgeSourceDrawer } from './KnowledgeSourceDrawer.js';
+import {
+  crawlCreateBody,
+  crawlIsValid,
+  crawlRefreshDays,
+  defaultCrawlValue,
+} from './knowledge-crawl.js';
 import { KnowledgeRowMeta } from './KnowledgeRowMeta.js';
 import {
   KnowledgeScopeFields,
@@ -1072,6 +1080,10 @@ function KnowledgePanel({
   // what the server picks anyway, so a form left alone sends the body it always sent.
   const [scope, setScope] = useState(() => scopeValueOf());
   const [scopeOpen, setScopeOpen] = useState(false);
+  // How far the next website is crawled, and whether the admin may crawl it (tm 312.4).
+  const [crawl, setCrawl] = useState(defaultCrawlValue);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [controls, setControls] = useState<KnowledgeScopeControls>(DEFAULT_SCOPE_CONTROLS);
   const { brands, members } = useKnowledgeScopeOptions();
 
@@ -1104,7 +1116,9 @@ function KnowledgePanel({
         ai_agent_id: aiAgentId,
         name: body.name,
         type: body.type,
-        ...(body.type === 'website' ? { source_url: body.sourceUrl } : { content: body.content }),
+        ...(body.type === 'website'
+          ? { source_url: body.sourceUrl, ...crawlCreateBody(crawl) }
+          : { content: body.content }),
         ...scopeCreateBody(scope),
       }),
     onSuccess: invalidate,
@@ -1139,6 +1153,7 @@ function KnowledgePanel({
           : required(t('playbook.knowledge.formContentRequiredError')),
     },
     onSubmit: async (values, { setSubmitError, reset }) => {
+      setNotice(null);
       try {
         if (isFile) {
           // Unreachable from the UI (Add source stays disabled until a file is
@@ -1147,15 +1162,31 @@ function KnowledgePanel({
           await uploadFile.mutateAsync({ name: values.name.trim(), file: upload });
           clearUpload();
         } else {
-          await create.mutateAsync({
+          const created = await create.mutateAsync({
             name: values.name.trim(),
             type: sourceType,
             sourceUrl: values.sourceUrl.trim(),
             content: values.content.trim(),
           });
+          // The create body has no refresh interval (it is the source's PATCH),
+          // so a schedule is set right after the source exists. The source is
+          // already added by then: a refusal here is a note, not a failed add.
+          const days = isWebsite ? crawlRefreshDays(crawl) : null;
+          if (days !== null) {
+            try {
+              await api.patch<KnowledgeSource>(`/knowledge-sources/${created.id}`, {
+                refresh_after_days: days,
+              });
+            } catch (error) {
+              setNotice(
+                t('playbook.knowledge.crawl.refreshNotSet', { reason: t(errorMessageKey(error)) }),
+              );
+            }
+          }
         }
         reset();
         setScope(scopeValueOf());
+        setCrawl(defaultCrawlValue());
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
@@ -1190,6 +1221,8 @@ function KnowledgePanel({
   const contentError = form.errorFor('content');
 
   const allItems = sources.data?.items ?? [];
+  // Read from the list rather than held, so the drawer shows the row as the poll last saw it.
+  const detailSource = detailId ? allItems.find((item) => item.id === detailId) : undefined;
   const now = new Date();
   const counts = countSourcesByTab(allItems);
   // The kind tab cuts first, the scope controls second: the tab counts stay the
@@ -1332,6 +1365,10 @@ function KnowledgePanel({
               </label>
             )}
 
+            {isWebsite && (
+              <KnowledgeCrawlFields idPrefix="source" value={crawl} onChange={setCrawl} />
+            )}
+
             <div className="flex flex-col gap-2">
               <button
                 type="button"
@@ -1354,7 +1391,12 @@ function KnowledgePanel({
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={!form.canSubmit || (isFile && !upload) || !scopeIsValid(scope, true)}
+                disabled={
+                  !form.canSubmit ||
+                  (isFile && !upload) ||
+                  (isWebsite && !crawlIsValid(crawl)) ||
+                  !scopeIsValid(scope, true)
+                }
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
                 {form.isSubmitting
@@ -1366,6 +1408,11 @@ function KnowledgePanel({
               {form.submitError && (
                 <span role="alert" className="text-2xs text-danger">
                   {form.submitError}
+                </span>
+              )}
+              {notice && (
+                <span role="status" className="text-2xs text-content-secondary">
+                  {notice}
                 </span>
               )}
             </div>
@@ -1459,12 +1506,31 @@ function KnowledgePanel({
                   )}
                 </div>
                 <StatusDot {...knowledgeStatusDot(source, t)} />
+                {source.type === 'website' && (
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(source.id)}
+                    aria-label={t('playbook.knowledge.crawl.detailsAria', { name: source.name })}
+                    className="rounded-md border border-border px-2 py-1 text-2xs leading-4 text-content-secondary transition-colors hover:bg-surface-2"
+                  >
+                    {t('playbook.knowledge.crawl.details')}
+                  </button>
+                )}
                 {canEdit && <KnowledgeSourceActions source={source} onChanged={invalidate} />}
               </li>
             ))}
           </ul>
         )}
       </Card>
+
+      {detailSource && (
+        <KnowledgeSourceDrawer
+          source={detailSource}
+          canEdit={canEdit}
+          onClose={() => setDetailId(null)}
+          onChanged={invalidate}
+        />
+      )}
     </Section>
   );
 }

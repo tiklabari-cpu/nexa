@@ -5,6 +5,13 @@
 
 ---
 
+## tm 276 — ADR-PAYMENT-PROVIDERS: ADR-13a eki — ödeme yolları `swift_manual` (elle) + `crypto_manual` ("Adres isteyin", TXID) + `stripe` adaptörü yalnız mock/sandbox — done — 2026-10-27 UTC
+
+- **Yapıldı (dal `feat/adr-payment-providers`, kod YOK):** PLAN §0 ADR tablosunun altına ADR-13a eki (ADR-13 satırı değişmedi, CLAUDE.md sınırı açıkça tekrar edildi), karar dosyası `docs/adr/payment-providers.md`, §D366, K10.3 ℹ maddesi. BL-01/02/03 bağlı: tm 382 → `276`, 383/384 382 üzerinden (mevcut bağımlılıklar, değiştirilmedi).
+- **Doğrulama:** yalnız doküman. `pnpm test:gate build statik birim` exit 0 (1m35); `pnpm test:gate --e2e` **exit 0** (32m11: entegrasyon api 5621/5621, e2e 0 kırmızı / 0 flaky); `audit:req-coverage` exit 0; migration/kontrat yok (`db:check-drift`/`contract:generate` etkisiz). e2e'nin yeniden yazdığı `kanit/*.png` geri alındı.
+- **Varsayımlar:** `stripe` görünürlüğü varsayılan kapalı; USDT tutarı USD cent'ten 1:1, para birimi USD (BL-01 soru 3); anahtarı olmayan Stripe açılışı engellemez (uyarı + gizli). 05'teki `env.ts:973` kaymış, `STRIPE_PROVIDER` artık `env.ts:1136`.
+- **Sonraki pencere (tm 382 / 389.18):** 389.20 taraması ve root özet sayfası `crypto_payment_requests` + `status IN ('pending','requested')` okuyor (`alerts.ts:342-352`, `dashboard.ts:170`) — tablo/durum adı farklıysa aynı commit'te uydur. Repoya gerçek IBAN, cüzdan adresi ya da Stripe anahtarı (sandbox dahil) girmez; CI'da Stripe'a ağ çağrısı yok.
+
 ## tm 390.2 — AGENT-WEB: Playbook › AI Agent yeni düzeni — `playbook-tabs.ts` sekme kaydı, `general`/`behaviour` sekmeleri, "AI ajanı ekle" kartı (`POST /ai-agents`), kurulum adımları + widget karşılama mesajı, Ayarlar › AI Agent girişi, komut paleti — tm 390 2/2 — done — 2026-10-27 UTC
 
 - **Yapıldı (dal `feat/ai-agent-web`, migration/kontrat YOK):** `PLAYBOOK_TABS` tek yerde (Genel ayarlar · Davranış · Uyum Korumaları · Beceriler · Bilgi · Tablolar · Genel BB · Test · Performans · Çözülemeyenler; yeni sekme = bir satır + bir panel). `profile` → `general`, `?view=profile` geriye dönük eşlenir; yönlendirici içinde sekme `?view=` adresiyle okunur/yazılır (yönlendiricisiz testlerde adres bir kez okunur). Açılış sekmesi `general`: ajan yoksa `CreateAiAgentCard` (ad + ton → `POST /ai-agents`; 409 listeyi yeniler; yetkisize "yöneticiye başvurun"), varsa persona + `SetupSteps` (readiness kuralı) + `WelcomeMessageCard`. `behaviour` = `GuidanceRules` + `HandoffSettings` (kimlik SABİT). Ayarlar › AI Agent = `settings-sections.ts` `ai-agent` (`to: /app/playbook?view=general`, Playbook kapsamı), palet = `navigation.ts` `AI_AGENT_LINK`.

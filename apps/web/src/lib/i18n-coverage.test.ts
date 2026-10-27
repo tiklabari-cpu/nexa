@@ -175,6 +175,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/playbook/BulkImportForm.tsx',
   'src/features/playbook/BulkImportResults.tsx',
   'src/features/playbook/KnowledgeSourceActions.tsx',
+  'src/features/playbook/KnowledgeCrawlFields.tsx',
+  'src/features/playbook/KnowledgeSourceDrawer.tsx',
   'src/features/playbook/KnowledgeScopeFields.tsx',
   'src/features/playbook/KnowledgeRowMeta.tsx',
   'src/features/playbook/tables/AccessInfoCard.tsx',

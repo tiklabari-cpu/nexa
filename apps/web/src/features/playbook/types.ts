@@ -3,6 +3,7 @@ import type {
   AnswerLength,
   Cond,
   ClarifyThresholds,
+  CrawlScope,
   DailyMemorySettings,
   EmojiUse,
   ForbiddenPhraseAction,
@@ -13,6 +14,9 @@ import type {
   GuidanceCategory,
   GuidanceScope,
   KnowledgeAudience,
+  KnowledgeJobKind,
+  KnowledgeJobStatus,
+  KnowledgePageStatus,
   ProcedureProblemDetails,
   SkillMode,
   SkillProcedureBody,
@@ -300,6 +304,44 @@ export interface StepProblem {
   type?: string;
 }
 
+/** One page of a website source's crawl (`GET /knowledge-sources/{id}/pages`). */
+export interface KnowledgePage {
+  id: string;
+  url: string;
+  title?: string | null;
+  lang?: string | null;
+  status: KnowledgePageStatus;
+  http_status?: number | null;
+  /** A snake_case code saying why the page is `error` or `blocked`. */
+  error?: string | null;
+  depth?: number;
+  chunk_count: number;
+  fetched_at?: string | null;
+  changed_at?: string | null;
+}
+
+/** A knowledge job's progress (`GET /knowledge-jobs/{id}`). */
+export interface KnowledgeJob {
+  id: string;
+  source_id: string;
+  kind: KnowledgeJobKind;
+  status: KnowledgeJobStatus;
+  pages: {
+    discovered: number;
+    done: number;
+    ok: number;
+    unchanged: number;
+    skipped: number;
+    failed: number;
+    removed: number;
+  };
+  error?: string | null;
+  available_at?: string;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
 export interface KnowledgeSource {
   id: string;
   ai_agent_id: string;
@@ -316,6 +358,19 @@ export interface KnowledgeSource {
   next_refresh_at: string | null;
   /** Why the last refresh attempt failed, if it did. Cleared on the next success. */
   last_refresh_error: string | null;
+  /**
+   * How a website is crawled (tm 312 · AI-17). Optional because a list from a
+   * release that predates the crawler omits them; null for the other types.
+   */
+  crawl_scope?: CrawlScope | null;
+  page_limit?: number | null;
+  include_paths?: string[];
+  exclude_paths?: string[];
+  last_crawled_at?: string | null;
+  /** Pages the last crawl left in the store (`ok` + `unchanged`). */
+  page_count?: number;
+  /** The source's crawl under way, followed at `GET /knowledge-jobs/{id}`; null when none. */
+  job_id?: string | null;
   /**
    * Who is the store's scope for (tm 309 · AI-14). Optional because a list from
    * a release that predates the single store omits them; they read as the

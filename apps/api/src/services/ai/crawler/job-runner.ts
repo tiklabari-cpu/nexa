@@ -512,8 +512,19 @@ export class KnowledgeCrawler {
     };
 
     if (claim.kind === 'document') {
-      // AI-18's large documents arrive with their own runner.
-      await endWith(this.#db, claim, { status: 'failed', error: 'unsupported_kind' });
+      // A PDF or Word document (tm 313 · AI-18) is read by the document
+      // worker, which arrives with its job branch (tm 313.2–313.3). Until
+      // then the job ends `unsupported_kind` and its source `failed` — not
+      // through `settleCrawledSource`, whose page counts and crawl dates are
+      // a website's.
+      await withTenant(this.#db, claim.context, async (tx) => {
+        if (await endJobClaim(tx, claim, { status: 'failed', error: 'unsupported_kind' })) {
+          await tx.knowledgeSource.updateMany({
+            where: { id: claim.sourceId, status: 'processing' },
+            data: { status: 'failed' },
+          });
+        }
+      });
       return;
     }
     const source = read.source;

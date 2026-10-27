@@ -172,6 +172,8 @@ describe('error taxonomy', () => {
     'ai_test_run_in_progress',
     // Website crawling (AI-17 · tm 312.3): a crawl while the source's last is under way.
     'knowledge_job_in_progress',
+    // PDF/Word knowledge (AI-18 · tm 313.1): the same file added twice.
+    'knowledge_source_exists',
     // Widget abuse protection (GV-01 · tm 339.2): a token or a conversation
     // opening that must first pass a human check.
     'challenge_required',

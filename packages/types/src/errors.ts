@@ -112,6 +112,10 @@ export const ERROR_TYPES = [
   // day's AI allowance. `details.job_id` names it, so the panel can follow it
   // instead — kept narrow like `ai_test_run_in_progress`.
   'knowledge_job_in_progress',
+  // SiyahTuş addition — PDF/Word knowledge (AI-18 · tm 313.1): the same file
+  // added to the workspace's knowledge a second time. `details.source_id` names
+  // the source that already holds it, so the panel can open that one instead.
+  'knowledge_source_exists',
   'license_expired',
   'limit_reached',
   // SiyahTuş addition — maintenance mode (FR-ADMIN-15 · tm 389.13). The root
@@ -250,6 +254,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   impersonation_read_only: 403,
   internal: 500,
   knowledge_job_in_progress: 409,
+  knowledge_source_exists: 409,
   license_expired: 402,
   limit_reached: 429,
   maintenance: 503,

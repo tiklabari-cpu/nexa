@@ -3065,8 +3065,18 @@ model KnowledgeSource {
   lastCrawledAt      DateTime? @map("last_crawled_at") @db.Timestamptz(6)
   /// Pages the last crawl left in the store (`ok` + `unchanged`) — kept on
   /// the row by the job runner, so the list and the workspace-wide page cap
-  /// read a column rather than counting `knowledge_pages`.
+  /// read a column rather than counting `knowledge_pages`. For a PDF/Word
+  /// document (tm 313 · AI-18), its page count once read.
   pageCount          Int       @default(0) @map("page_count")
+  /// The uploaded PDF/Word original (tm 313 · AI-18-S2): its object-store key
+  /// (`<licence>-k-<uuid>.pdf|.docx`, which `GET /uploads/{key}` never
+  /// serves), its type as read from the bytes, its length and its sha256
+  /// (hex). All four or none; only a `file` source has them. One source per
+  /// file per workspace (`knowledge_source_exists`).
+  fileKey            String?   @unique @map("file_key")
+  fileMime           String?   @map("file_mime")
+  fileSize           Int?      @map("file_size")
+  fileSha256         String?   @map("file_sha256") @db.Char(64)
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -3076,6 +3086,7 @@ model KnowledgeSource {
   pages     KnowledgePage[]
   jobs      KnowledgeJob[]
 
+  @@unique([licenseId, fileSha256])
   @@index([aiAgentId, type])
   @@index([licenseId])
   @@index([type, nextRefreshAt])
@@ -3112,6 +3123,12 @@ model KnowledgeChunk {
   /// the rest of its source. Null for every chunk that is not a crawled
   /// page's — and for a website source's chunks indexed before page tracking.
   pageId         String?                      @map("page_id") @db.Uuid
+  /// The pages of a PDF/Word document the chunk was cut from, 1-based and
+  /// inclusive (tm 313 · AI-18) — what an answer cites. Both or neither.
+  pageFrom       Int?                         @map("page_from")
+  pageTo         Int?                         @map("page_to")
+  /// The document heading the chunk sits under, when it had one.
+  heading        String?
   createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
 
   source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)

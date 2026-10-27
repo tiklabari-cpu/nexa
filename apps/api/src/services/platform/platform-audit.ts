@@ -93,6 +93,7 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'admin.totp_reverified',
   'admin.recovery_codes_regenerated',
   'admin.other_sessions_ended',
+  'admin.alert_prefs_changed',
   'admin.signed_out',
   // Operator management.
   'admin.invited',
@@ -177,6 +178,7 @@ export const PLATFORM_SELF_ACTIONS: ReadonlySet<PlatformAuditAction> = new Set([
   'admin.totp_reverified',
   'admin.recovery_codes_regenerated',
   'admin.other_sessions_ended',
+  'admin.alert_prefs_changed',
   'admin.signed_out',
 ]);
 

@@ -435,6 +435,14 @@ describe('the platform audit chain (tm 389.5)', () => {
       }),
     );
 
+    // The operator's own alert preferences (tm 389.20): a self action, no reason.
+    ok(
+      await request('PUT', '/auth/me/alert-prefs', {
+        token,
+        body: { kinds: ['health_red'], locale: 'en' },
+      }),
+    );
+
     // The superadmin's own sessions.
     ok(await request('DELETE', '/auth/sessions', { token }));
     ok(await request('POST', '/auth/logout', { token }));

@@ -115,7 +115,10 @@ export interface Message {
     | 'ownership_transferred'
     // A SiyahTuş operator entered the workspace as one of its members (tm
     // 389.15) — the Founders' notice, sent by the platform process.
-    | 'impersonation_notice';
+    | 'impersonation_notice'
+    // An operator alert from the platform scan (tm 389.20 · FR-ADMIN-24) — to the
+    // SiyahTuş team, never to a workspace; the platform carrier has no daily caps.
+    | 'platform_alert';
 }
 
 /**

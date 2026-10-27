@@ -10,6 +10,11 @@
 import { platformPermissionsFor, platformRoleHas, type PlatformRole } from '@siyahtus/types';
 import { vi } from 'vitest';
 import { ACCOUNT_DETAIL, handleAccounts, type FakeAccount } from './fake-accounts.js';
+import {
+  handleAlertPrefs,
+  initialAlertPrefsState,
+  type FakeAlertPrefsState,
+} from './fake-alerts.js';
 import { handleSettings, initialSettingsState, type FakeSettingsState } from './fake-settings.js';
 import { handleOperations } from './fake-operations.js';
 import { handleSecurity, initialSecurityState, type FakeSecurityState } from './fake-security.js';
@@ -527,6 +532,8 @@ export interface FakePlatform {
   impersonationState: FakeImpersonationState;
   /** The blocklist and counters of the Security page (tm 389.16). */
   securityState: FakeSecurityState;
+  /** The operator's alert preferences (tm 389.20). */
+  alertPrefsState: FakeAlertPrefsState;
 }
 
 export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatform {
@@ -553,6 +560,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   };
   const settingsState = initialSettingsState();
   const securityState = initialSecurityState();
+  const alertPrefsState = initialAlertPrefsState();
   const impersonationState = initialImpersonationState({
     id: WORKSPACE_ID,
     members: WORKSPACE_MEMBERS.data,
@@ -712,6 +720,16 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     );
     if (accountResponse) return accountResponse;
 
+    const alertPrefsResponse = handleAlertPrefs(
+      method,
+      path,
+      body,
+      role,
+      alertPrefsState,
+      json,
+      problem,
+    );
+    if (alertPrefsResponse) return alertPrefsResponse;
     const settingsResponse = handleSettings(method, path, body, role, settingsState, json, problem);
     if (settingsResponse) return settingsResponse;
     const operationsResponse = handleOperations(method, path, body, role, json, problem);
@@ -767,5 +785,6 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     settingsState,
     impersonationState,
     securityState,
+    alertPrefsState,
   };
 }

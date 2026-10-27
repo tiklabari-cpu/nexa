@@ -259,6 +259,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/me/alert-prefs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Which operator alerts this operator is mailed
+     * @description The scan mails an operator only the kinds listed here. With no saved choice a
+     *     superadmin is mailed every kind and the other roles none.
+     */
+    get: operations['getPlatformAlertPrefs'];
+    /**
+     * Choose which operator alerts to be mailed, and in which language
+     * @description Replaces the operator's choice. An empty `kinds` is a choice too — no alert
+     *     mail at all. The operator's own setting: no reason, one entry in the chain.
+     */
+    put: operations['putPlatformAlertPrefs'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/sessions': {
     parameters: {
       query?: never;
@@ -2391,6 +2417,39 @@ export interface components {
       /** @description How many sessions ended. */
       ended: number;
     };
+    /**
+     * @description What the platform scan mails operators about (tm 389.20): a trial that ends
+     *     within three days, a payment request waiting over 24 hours, a workspace at
+     *     its daily AI cap, a red or stale health snapshot, a platform audit chain that
+     *     no longer verifies, a workspace deleted tomorrow.
+     * @enum {string}
+     */
+    PlatformAlertKind:
+      | 'trial_ending'
+      | 'payment_request_waiting'
+      | 'ai_cap_reached'
+      | 'health_red'
+      | 'audit_chain_broken'
+      | 'purge_tomorrow';
+    PlatformAlertPrefs: {
+      /**
+       * @description The kinds this operator is mailed. Until they save a choice a superadmin
+       *     gets every kind and the other roles none (`customized` is false).
+       */
+      kinds: components['schemas']['PlatformAlertKind'][];
+      /**
+       * @description The language of the alert mail.
+       * @enum {string}
+       */
+      locale: 'en' | 'tr';
+      customized: boolean;
+      available: components['schemas']['PlatformAlertKind'][];
+    };
+    PlatformAlertPrefsUpdate: {
+      kinds: components['schemas']['PlatformAlertKind'][];
+      /** @enum {string} */
+      locale: 'en' | 'tr';
+    };
     PlatformAdmin: {
       /** Format: uuid */
       id: string;
@@ -2453,6 +2512,7 @@ export interface components {
       | 'admin.totp_reverified'
       | 'admin.recovery_codes_regenerated'
       | 'admin.other_sessions_ended'
+      | 'admin.alert_prefs_changed'
       | 'admin.signed_out'
       | 'admin.invited'
       | 'admin.invite_revoked'
@@ -4221,6 +4281,55 @@ export interface operations {
           'application/json': components['schemas']['PlatformMe'];
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformAlertPrefs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The operator's alert preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAlertPrefs'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  putPlatformAlertPrefs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformAlertPrefsUpdate'];
+      };
+    };
+    responses: {
+      /** @description The saved preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAlertPrefs'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
     };

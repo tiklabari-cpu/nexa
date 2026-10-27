@@ -91,3 +91,7 @@ export type PlatformFailedLogins = Schemas['PlatformFailedLogins'];
 export type PlatformSignupsByIp = Schemas['PlatformSignupsByIp'];
 export type PlatformAbuseCounters = Schemas['PlatformAbuseCounters'];
 export type PlatformCounted = Schemas['PlatformCounted'];
+
+export type PlatformAlertKind = Schemas['PlatformAlertKind'];
+export type PlatformAlertPrefs = Schemas['PlatformAlertPrefs'];
+export type PlatformAlertPrefsUpdate = Schemas['PlatformAlertPrefsUpdate'];

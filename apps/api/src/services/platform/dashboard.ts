@@ -221,7 +221,8 @@ export class PlatformDashboard {
   }
 }
 
-function parseStored(raw: string | null): StoredHealthSnapshot | null {
+/** The leader's publication as stored, or null when absent or unreadable (the alert scan reads it too, tm 389.20). */
+export function parseStored(raw: string | null): StoredHealthSnapshot | null {
   if (raw === null) return null;
   try {
     const value = JSON.parse(raw) as Partial<StoredHealthSnapshot>;

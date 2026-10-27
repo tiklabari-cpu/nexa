@@ -193,6 +193,47 @@ me:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
 
+alertPrefs:
+  get:
+    tags: [Auth]
+    operationId: getPlatformAlertPrefs
+    summary: Which operator alerts this operator is mailed
+    description: |
+      The scan mails an operator only the kinds listed here. With no saved choice a
+      superadmin is mailed every kind and the other roles none.
+    x-platform-permission: self
+    responses:
+      "200":
+        description: The operator's alert preferences
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAlertPrefs" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  put:
+    tags: [Auth]
+    operationId: putPlatformAlertPrefs
+    x-platform-audit: admin.alert_prefs_changed
+    summary: Choose which operator alerts to be mailed, and in which language
+    description: |
+      Replaces the operator's choice. An empty `kinds` is a choice too — no alert
+      mail at all. The operator's own setting: no reason, one entry in the chain.
+    x-platform-permission: self
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAlertPrefsUpdate" }
+    responses:
+      "200":
+        description: The saved preferences
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformAlertPrefs" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
 sessions:
   get:
     tags: [Auth]

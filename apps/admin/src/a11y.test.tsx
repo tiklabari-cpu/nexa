@@ -12,6 +12,7 @@ import axe from 'axe-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ReasonDialog } from './components/ReasonDialog.js';
 import { useAuth } from './lib/auth-store.js';
+import { NAV_ITEMS } from './lib/navigation.js';
 import { setLocale } from './test/i18n.js';
 import { installFakePlatform, renderApp, resetSession } from './test/render-app.js';
 
@@ -27,6 +28,10 @@ async function violations(container: HTMLElement): Promise<string[]> {
       `${violation.id}: ${violation.help} — ${violation.nodes.map((node) => node.target.join(' ')).join(' | ')}`,
   );
 }
+
+// The page address from the menu table: a literal page path would read as an API call to the
+// endpoint-ui audit.
+const ADMINS_PATH = NAV_ITEMS.find((item) => item.id === 'admins')!.path;
 
 async function signInAs(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.type(await screen.findByLabelText('Email'), 'ops@example.com');
@@ -392,6 +397,32 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     await user.click(screen.getByRole('button', { name: locale === 'tr' ? 'Engelle…' : 'Block…' }));
     const add = await screen.findByRole('dialog');
     await within(add).findByLabelText(locale === 'tr' ? 'Gerekçe' : 'Reason');
+    expect(await violations(document.body)).toEqual([]);
+  });
+
+  it('finds nothing on the Admins page and its alert preferences (tm 389.20)', async () => {
+    installFakePlatform();
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp(ADMINS_PATH);
+    if (locale === 'tr') {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByRole('heading', {
+      name: locale === 'tr' ? 'Yöneticiler' : 'Admins',
+      level: 1,
+    });
+    await screen.findByRole('form', {
+      name: locale === 'tr' ? 'Uyarı e-postaları' : 'Alert e-mails',
+    });
     expect(await violations(document.body)).toEqual([]);
   });
 

@@ -746,6 +746,32 @@ describe('platform billing and usage (tm 389.12)', () => {
       expect(plans.data[0]!.ai_daily_tokens).toEqual({ llm: 250_000, embedding: null });
     });
 
+    it('shows the deployment’s caps the AI settings stored (tm 389.17) as the last layer, over the environment’s', async () => {
+      await owner.platformSetting.create({
+        data: {
+          key: 'ai.caps',
+          value: {
+            deployment: {
+              llm: { workspace: 120_000, global: 3_000_000 },
+              embedding: { workspace: 80_000, global: 2_000_000 },
+            },
+          },
+        },
+      });
+      const planCaps = await ok<{ deployment: unknown }>(call('GET', '/settings/ai-caps'));
+      expect(planCaps.deployment).toEqual({ llm: 120_000, embedding: 80_000 });
+      const detail = await ok<{ caps: { llm: Record<string, unknown> } }>(
+        call('GET', `/usage/workspaces/${fx.a.licenseId}`),
+      );
+      expect(detail.caps.llm).toMatchObject({
+        effective: 120_000,
+        source: 'deployment',
+        deployment: 120_000,
+      });
+      const global = await ok<{ today: { llm: { cap: number } } }>(call('GET', '/usage/global'));
+      expect(global.today.llm.cap).toBe(3_000_000);
+    });
+
     it('reports the deployment’s own counter apart from the workspaces’, and the heaviest workspaces with their caps — names and numbers only', async () => {
       await seedUsage(null, 900_000);
       await seedUsage(fx.a.licenseId, 150_000);

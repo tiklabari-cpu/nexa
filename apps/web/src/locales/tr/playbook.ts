@@ -566,6 +566,17 @@ export const playbook: Messages = {
   'playbook.profile.maxQuestionsDefault': 'Varsayılan (2)',
   'playbook.profile.styleHint':
     'Hitap ve emoji modelden istenir, yanıt bunlara uymazsa çalışma kaydında işaretlenir; soru sınırını prosedürün kendisi uygular.',
+  'playbook.profile.opening': 'Açılış mesajı ve temsilci butonu',
+  'playbook.profile.openingLocked': 'Her zaman başta — kaldırılamaz',
+  'playbook.profile.openingBrand': 'Marka',
+  'playbook.profile.openingHint':
+    'AI’ın bir görüşmedeki ilk yanıtı bu cümleyle, ardından sizin mesajınızla başlar. “Marka”, oyuncunun geldiği marka ya da çalışma alanının adıdır. Mesajınızda bu cümle yoksa başa eklenir.',
+  'playbook.profile.welcome': 'Açılış mesajı',
+  'playbook.profile.welcomePlaceholder': 'Size nasıl yardımcı olabilirim?',
+  'playbook.profile.humanButton': '“Temsilciyle görüş” butonunun metni',
+  'playbook.profile.humanButtonDefault': 'Temsilciyle görüş',
+  'playbook.profile.humanButtonHint':
+    'Widget bu butonu AI yanıt verdiği sürece gösterir; gizlenemez, yalnız metni değiştirilebilir.',
   'playbook.profile.save': 'Profili kaydet',
   'playbook.profile.saving': 'Kaydediliyor…',
   'playbook.profile.previewTitle': 'Önizleme',

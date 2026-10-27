@@ -2012,6 +2012,36 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat/request-human': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ask for a person instead of the AI ("Talk to an agent")
+     * @description The widget's always-visible button while the AI answers the connection
+     *     (AI-29 · G16). The AI hands the connection over at once — no clarifying
+     *     question, the press is the request — with reason `player_request`, to
+     *     the team its routes give (AI-12), and says nothing more (AI-11). The
+     *     player is told a person is coming, or, when nobody at the target is
+     *     accepting chats, the after-hours text; the conversation waits in the
+     *     queue either way and is never dropped.
+     *
+     *     Idempotent: a connection a person or the queue has already is answered
+     *     with its owner and `requested: false`, and two presses at once hand it
+     *     over once. Limited per visitor (GV-01): 429 with `Retry-After`.
+     */
+    post: operations['requestCustomerHuman'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/chat/close': {
     parameters: {
       query?: never;
@@ -11624,6 +11654,19 @@ export interface components {
        *     applied by the procedure itself. Null: the default, 2.
        */
       max_questions_per_message?: number | null;
+      /**
+       * @description The agent's opening words, said before its first reply on a
+       *     connection (AI-29 · A-11). The disclosure "{name}, {brand}'s AI
+       *     assistant" goes first whatever this says — added when the text
+       *     does not carry it — and cannot be removed (G16). Null: the
+       *     disclosure alone.
+       */
+      welcome_message?: string | null;
+      /**
+       * @description The widget's "Talk to an agent" button in the workspace's words
+       *     (AI-29-S1). The button itself cannot be hidden. Null: the widget's.
+       */
+      human_button_label?: string | null;
       active: boolean;
       skills_count?: number;
     };
@@ -11972,6 +12015,12 @@ export interface components {
       /** @description Every reason the AI handed over for, most severe first. */
       reason_codes: string[];
       primary_reason: string;
+      /**
+       * @description `button`: the player pressed "Talk to an agent" (AI-29). Null: the
+       *     AI's own decision, or what the player wrote.
+       * @enum {string|null}
+       */
+      requested_via?: 'button' | null;
       risk_flags: string[];
       /** @enum {string|null} */
       sentiment: 'positive' | 'neutral' | 'negative' | 'angry' | null;
@@ -19872,6 +19921,39 @@ export interface components {
       } | null;
       /** @description Customer-visible events only. Internal notes never appear. */
       events: components['schemas']['Event'][];
+      /**
+       * @description Who has the open connection (AI-29): `human` a person is assigned,
+       *     `queue` it waits for one, `ai` the AI answers it. The widget shows
+       *     "Talk to an agent" while it is `ai`; the workspace cannot hide it.
+       *     Null with no open connection.
+       * @enum {string|null}
+       */
+      owner?: 'ai' | 'human' | 'queue' | null;
+      /**
+       * @description Whether anyone in the workspace is accepting chats now — what a
+       *     press of the button would be told (AI-29-S2).
+       */
+      human_available?: boolean;
+      /**
+       * @description The words on the button: the workspace's own, else the default in
+       *     the language the visitor opened the conversation in. Null with no
+       *     open connection.
+       */
+      human_button_label?: string | null;
+    };
+    CustomerHumanRequest: {
+      /**
+       * @description Who has the connection now.
+       * @enum {string}
+       */
+      owner: 'ai' | 'human' | 'queue';
+      /** @description Whether anyone at the hand-over's team is accepting chats; false is after hours. */
+      human_available: boolean;
+      /**
+       * @description True when this request handed the connection over; false when a
+       *     person or the queue had it already (or another press was doing it).
+       */
+      requested: boolean;
     };
     /**
      * @description One completed order, as the widget snippet reports it (FR-MOD-13.5).
@@ -23381,6 +23463,49 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  requestCustomerHuman: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * @description How the player asked; the button is the only way today.
+           * @enum {string}
+           */
+          reason?: 'button';
+        };
+      };
+    };
+    responses: {
+      /** @description The connection's owner after the request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerHumanRequest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      /** @description There is no open conversation to hand over */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   closeCustomerChat: {
     parameters: {
       query?: never;
@@ -25777,6 +25902,14 @@ export interface operations {
           emoji?: 'none' | 'few' | null;
           /** @description Questions one procedure message may ask (AI-07). Null goes back to 2. */
           max_questions_per_message?: number | null;
+          /**
+           * @description The opening words before the agent's first reply (AI-29). The
+           *     AI disclosure is added in front when missing. Null or blank
+           *     clears it.
+           */
+          welcome_message?: string | null;
+          /** @description The widget's "Talk to an agent" button text (AI-29-S1). Null or blank clears it. */
+          human_button_label?: string | null;
         };
       };
     };

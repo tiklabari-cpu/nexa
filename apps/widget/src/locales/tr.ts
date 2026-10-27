@@ -49,6 +49,7 @@ export const tr: Record<string, string> = {
   privacy: 'Gizlilik',
   'typing.named': '{name} yazıyor…',
   'typing.generic': 'Yazıyor…',
+  'human.connecting': 'Temsilci bağlanıyor…',
   'rating.menuLabel': 'Diğer seçenekler',
   'rating.menuItem': 'Bu sohbeti değerlendir',
   'rating.group': 'Bu sohbeti değerlendir',

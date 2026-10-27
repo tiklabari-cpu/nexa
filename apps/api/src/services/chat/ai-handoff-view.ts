@@ -72,6 +72,7 @@ export function serialiseAiHandoff(
     ),
     reason_codes: row.reasonCodes.filter((code): code is HandoffReason => isHandoffReason(code)),
     primary_reason: row.primaryReason as HandoffReason,
+    requested_via: row.requestedVia === 'button' ? 'button' : null,
     risk_flags: [...row.riskFlags],
     sentiment: (row.sentiment as AiHandoffSentiment | null) ?? null,
     suggested_next_step: textOrNull(row.suggestedNextStep),

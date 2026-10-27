@@ -435,7 +435,8 @@ describe('one answer to what the visitor said (AI-01 §4–§7 · tm 292.4)', ()
           timeoutMs: 20_000,
           maxPromptChars: 16_000,
         }),
-        { batchWindowMs },
+        // The disclosure (tm 308) would open the first reply: off, as on the test server.
+        { batchWindowMs, disclosure: false },
       );
     }
 

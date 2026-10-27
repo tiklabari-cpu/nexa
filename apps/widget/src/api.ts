@@ -95,6 +95,22 @@ export interface WidgetState {
    */
   campaign: { id: string; message: string } | null;
   events: WidgetEvent[];
+  /**
+   * Who has the open connection (tm 308 · AI-29): "Talk to an agent" shows
+   * while it is `ai`. Absent from a server predating it: no button.
+   */
+  owner?: 'ai' | 'human' | 'queue' | null;
+  /** Whether anyone is accepting chats now. */
+  human_available?: boolean;
+  /** The button's words, resolved by the server (the workspace's or its default). */
+  human_button_label?: string | null;
+}
+
+/** What a press of "Talk to an agent" left the connection with (tm 308). */
+export interface HumanRequestResult {
+  owner: 'ai' | 'human' | 'queue';
+  human_available: boolean;
+  requested: boolean;
 }
 
 export class WidgetApi {
@@ -515,6 +531,11 @@ export class WidgetApi {
 
   async close(): Promise<void> {
     await this.#request('POST', '/customer/chat/close');
+  }
+
+  /** "Talk to an agent" (tm 308 · AI-29): the AI hands the connection to a person. */
+  async requestHuman(): Promise<HumanRequestResult> {
+    return this.#request('POST', '/customer/chat/request-human', { reason: 'button' });
   }
 
   /**

@@ -301,6 +301,16 @@ interface State {
    */
   closed: boolean;
   /**
+   * Who has the open connection (tm 308 · AI-29): "Talk to an agent" shows
+   * while it is `ai` — the workspace may reword it, never hide it. Null with
+   * no open connection, or from a server predating it.
+   */
+  owner: 'ai' | 'human' | 'queue' | null;
+  /** The button's words, as the server resolved them; null: no button. */
+  humanButtonLabel: string | null;
+  /** A press is on its way: the button says "Connecting you to an agent…" and waits. */
+  humanRequesting: boolean;
+  /**
    * The licence's file-sharing switch (FR-MOD-08.9.4), from the last token
    * mint. Starts `true` — the attach button's own default state, so nothing
    * changes before the first connect — and only ever narrows once the server
@@ -455,6 +465,9 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     rating: null,
     ratingSubmitting: false,
     closed: false,
+    owner: null,
+    humanButtonLabel: null,
+    humanRequesting: false,
     fileSharingEnabled: true,
   };
 
@@ -586,6 +599,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     renderedCount = 0;
     applyAppearance();
     renderConnection();
+    renderHumanButton();
     if (pendingChallenge) renderChallenge();
     resize();
     if (state.open && focusInside) (state.prechat ? firstPrechatInput() : ui.input).focus();
@@ -696,6 +710,48 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     ui.typing.textContent = state.agent
       ? t('typing.named', { name: state.agent.name })
       : t('typing.generic');
+  }
+
+  /** The poll's word on who has the connection (tm 308 · AI-29). */
+  function noteOwner(snapshot: WidgetState): void {
+    state.owner = snapshot.owner ?? null;
+    state.humanButtonLabel = snapshot.human_button_label ?? null;
+  }
+
+  /**
+   * "Talk to an agent" (tm 308 · AI-29 §2, §5): shown while the AI has the
+   * open connection — a person assigned or the queue hides it — and while a
+   * press is on its way, when it says so and waits. A real `<button>`, so
+   * the keyboard reaches it and a screen reader names it by its words.
+   */
+  function renderHumanButton(): void {
+    const label = state.humanButtonLabel;
+    ui.humanButton.hidden =
+      state.closed || !state.chatId || !label || !(state.humanRequesting || state.owner === 'ai');
+    ui.humanButton.disabled = state.humanRequesting;
+    ui.humanButton.textContent = state.humanRequesting ? t('human.connecting') : (label ?? '');
+  }
+
+  /**
+   * The press: the AI hands the connection to a person (`POST
+   * /customer/chat/request-human`). The answer's owner hides the button; the
+   * hand-over's words reach the transcript with the next poll or push.
+   */
+  async function requestHuman(): Promise<void> {
+    if (state.humanRequesting) return;
+    state.humanRequesting = true;
+    renderHumanButton();
+    try {
+      const result = await api.requestHuman();
+      state.owner = result.owner;
+      state.error = null;
+    } catch {
+      state.error = t('error.connect');
+    } finally {
+      state.humanRequesting = false;
+    }
+    renderHumanButton();
+    renderStatus();
   }
 
   // --- Composer emoji picker (FR-MOD-11.4) ----------------------------------
@@ -1580,6 +1636,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       noteTranscriptCursor();
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
+      noteOwner(snapshot);
       state.fileSharingEnabled = api.fileSharingEnabled;
       // Never overwrite a campaign already waiting to be seen — the server
       // will not offer this one again either way (at-most-once), so there is
@@ -1605,6 +1662,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       renderStatus();
       renderHeader();
       renderTyping();
+      renderHumanButton();
       renderPostChat();
       renderRating();
       renderClosed();
@@ -1922,6 +1980,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       noteTranscriptCursor();
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
+      noteOwner(snapshot);
       // Same rule as `mint`: a campaign already waiting to be seen is not
       // replaced by whatever the next poll offers.
       if (snapshot.campaign && !state.campaign) {
@@ -1931,6 +1990,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       renderStatus();
       renderHeader();
       renderTyping();
+      renderHumanButton();
       renderPostChat();
       renderRating();
       renderClosed();
@@ -2076,6 +2136,12 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // A reply that lands with the panel shut is exactly what the badge is for
     // (FR-MOD-11.1) — and now it can land without a poll having fetched it.
     syncUnread();
+
+    // The AI spoke while the last poll named someone else (tm 308 · AI-29): with
+    // a socket the next poll is half a minute off, so ask now who has the
+    // connection — the server's word, not a guess from the author — and
+    // "Talk to an agent" appears with the reply rather than after it.
+    if (isAiMessage(event) && state.owner !== 'ai' && !state.humanRequesting) void refresh();
   }
 
   /**
@@ -2339,6 +2405,9 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // Stays open after copying: the confirmation is the item's own label.
     ui.menuCopy.addEventListener('click', () => {
       void copySupportNumber();
+    });
+    ui.humanButton.addEventListener('click', () => {
+      void requestHuman();
     });
     ui.menuRate.addEventListener('click', () => {
       menuOpen = false;
@@ -2634,6 +2703,8 @@ interface Ui {
   welcomeBubble: HTMLElement;
   prechatIntro: HTMLElement;
   typing: HTMLElement;
+  /** "Talk to an agent" while the AI answers (tm 308 · AI-29). */
+  humanButton: HTMLButtonElement;
   status: HTMLElement;
   /** "Connection lost, reconnecting…" under the header (tm 259.11); hidden while connected. */
   connection: HTMLElement;
@@ -2879,6 +2950,14 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   typing.hidden = true;
   typing.setAttribute('role', 'status');
   typing.setAttribute('aria-live', 'polite');
+
+  // "Talk to an agent" (tm 308 · AI-29): above the composer, the whole width,
+  // so it never overflows a narrow panel. Hidden until a poll says the AI has
+  // the connection.
+  const humanButton = doc.createElement('button');
+  humanButton.type = 'button';
+  humanButton.className = 'nx-human';
+  humanButton.hidden = true;
 
   const status = doc.createElement('p');
   status.className = 'nx-status';
@@ -3226,6 +3305,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     endConfirm,
     transcript,
     typing,
+    humanButton,
     status,
     // Form before rating: the workspace's own questions come first, so a
     // visitor who votes and closes the panel has still been asked them.
@@ -3303,6 +3383,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     welcomeBubble,
     prechatIntro,
     typing,
+    humanButton,
     status,
     connection,
     chip,
@@ -4447,15 +4528,15 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .nx-prechat-check input { accent-color: var(--nx-brand); width: 18px; height: 18px; margin: 0; }
 /* The full-width call to action of every form. */
-.nx-prechat-submit, .nx-offline-submit, .nx-postchat-submit {
+.nx-prechat-submit, .nx-offline-submit, .nx-postchat-submit,.nx-human {
   min-height: 44px; width: 100%; padding: 0 16px; border: 0; border-radius: 12px;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   background: var(--nx-cta); color: var(--nx-on-brand);
   font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .nx-prechat-submit::after { width: 16px; height: 16px; -webkit-mask-image: var(--nx-icon-send); mask-image: var(--nx-icon-send); }
-.nx-prechat-submit:hover, .nx-offline-submit:hover, .nx-postchat-submit:hover { filter: brightness(1.07); }
-.nx-offline-submit:disabled, .nx-postchat-submit:disabled { opacity: .5; cursor: default; filter: none; }
+.nx-prechat-submit:hover, .nx-offline-submit:hover, .nx-postchat-submit:hover, .nx-human:hover { filter: brightness(1.07); }
+.nx-offline-submit:disabled, .nx-postchat-submit:disabled, .nx-human:disabled { opacity: .5; cursor: default; filter: none; }
 
 /* ===== The human check (tm 339.3) ======================================== */
 /* Takes the panel's body while the API wants a check; the provider's control
@@ -4575,6 +4656,7 @@ button { -webkit-tap-highlight-color: transparent; }
   margin: 0; padding: 0 16px 10px; background: var(--nx-surface-2);
   font-size: 12px; font-weight: 500; color: var(--nx-muted);
 }
+.nx-human{width:auto;margin:4px 12px 0}
 .nx-typing::before {
   content: ""; flex: none; width: 52px; height: 34px;
   border-radius: 16px; border-end-start-radius: 4px;

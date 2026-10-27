@@ -183,6 +183,19 @@ aiAgent:
                 maximum: 3
                 nullable: true
                 description: Questions one procedure message may ask (AI-07). Null goes back to 2.
+              welcome_message:
+                type: string
+                maxLength: 500
+                nullable: true
+                description: |
+                  The opening words before the agent's first reply (AI-29). The
+                  AI disclosure is added in front when missing. Null or blank
+                  clears it.
+              human_button_label:
+                type: string
+                maxLength: 40
+                nullable: true
+                description: The widget's "Talk to an agent" button text (AI-29-S1). Null or blank clears it.
     responses:
       "200":
         description: Updated

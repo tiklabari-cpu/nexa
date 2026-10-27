@@ -85,6 +85,9 @@ export interface AiAgent {
   address_form?: AddressForm | null;
   emoji?: EmojiUse | null;
   max_questions_per_message?: number | null;
+  /** The opening words after the AI disclosure, and the button's wording (tm 308 · AI-29); null is unset. */
+  welcome_message?: string | null;
+  human_button_label?: string | null;
   active: boolean;
   skills_count: number;
 }

@@ -17,6 +17,8 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
   isIdentityTrust,
+  readHumanButtonLabel,
+  humanButtonText,
   REFERRER_MAX_LENGTH,
   SALES_TRACKER_EXTERNAL_ORDER_ID_MAX_LENGTH,
   SALES_TRACKER_EXTERNAL_ORDER_ID_RE,
@@ -46,6 +48,7 @@ import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.j
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
+import { HumanRequestService } from '../services/ai/human-request.js';
 import type { AiJobRun } from '../services/ai/ai-job-worker.js';
 import {
   AI_JOB_MAX_UNFINISHED_PER_CHAT,
@@ -178,6 +181,11 @@ const leaveTicketSchema = z
   })
   .strict();
 
+const requestHumanSchema = z.object({ reason: z.literal('button').optional() }).strict();
+
+/** Presses of "Talk to an agent" one visitor may make in an hour (GV-01). */
+const HUMAN_REQUESTS_PER_HOUR = 10;
+
 const typingSchema = z.object({
   is_typing: z.boolean(),
   // The in-progress text shown to the agent as a sneak-peek. Capped here as well
@@ -303,6 +311,7 @@ export default async function customerRoutes(
     llm,
     knowledge,
     accessInfoHttp,
+    aiDisclosure = true,
   }: {
     env: Env;
     push: PushProvider;
@@ -325,6 +334,8 @@ export default async function customerRoutes(
      * pinned to a local HTTPS fake.
      */
     accessInfoHttp?: SafeHttp;
+    /** The AI's disclosure on its first reply (tm 308 · AI-29); `buildServer`'s. */
+    aiDisclosure?: boolean;
   },
 ): Promise<void> {
   const publisher = new RealtimePublisher(app.redis, app.log);
@@ -376,9 +387,11 @@ export default async function customerRoutes(
       },
       // The flags a hand-over raises are pushed, delivered and mailed (tm 302.2).
       riskFlags: app.riskFlags,
+      disclosure: aiDisclosure,
     },
   );
   const ruleBots = new RuleBotResponder(chats);
+  const humanRequests = new HumanRequestService(app.db, app.redis, chats, publisher);
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
 
   /**
@@ -676,7 +689,7 @@ export default async function customerRoutes(
           where: { id: principal.customerId },
           // `bannedAt` is not for the widget — it feeds the campaign delivery
           // decision below, which gets it free by riding on this read.
-          select: { name: true, email: true, bannedAt: true },
+          select: { name: true, email: true, bannedAt: true, locale: true },
         }),
       ]);
 
@@ -711,7 +724,21 @@ export default async function customerRoutes(
         now,
       );
 
-      return { chat, agentsOnline, customer, responder, campaign };
+      // Who has the open connection (tm 308 · AI-29): the widget's "Talk to an
+      // agent" shows while it is the AI's, in the agent's words when it set any.
+      const latest = chat?.threads[0];
+      const owned =
+        latest?.active === true
+          ? await HumanRequestService.ownerOf(tx, { chatId: latest.chatId, threadId: latest.id })
+          : null;
+      const aiAgent = await tx.aiAgent.findFirst({
+        where: { active: true, kind: 'ai_agent' },
+        orderBy: { createdAt: 'asc' },
+        select: { persona: true },
+      });
+      const humanButtonLabel = readHumanButtonLabel(aiAgent?.persona ?? null);
+
+      return { chat, agentsOnline, customer, responder, campaign, owned, humanButtonLabel };
     });
     if (state.chat) {
       bindChatLogContext(request, {
@@ -759,8 +786,75 @@ export default async function customerRoutes(
       // it for their own list ("Q4 winback"), not for the visitor to read.
       campaign: state.campaign,
       events: events.items,
+      owner: state.owned?.owner ?? null,
+      human_available: state.agentsOnline > 0,
+      // Resolved here, in the language the visitor opened the conversation in,
+      // so the widget's bundle carries no default (NFR-P3).
+      human_button_label: state.owned
+        ? humanButtonText(state.humanButtonLabel, state.customer?.locale)
+        : null,
     });
   });
+
+  /**
+   * "Talk to an agent" (tm 308 · AI-29): the AI hands the open connection to a
+   * person at once, reason `player_request` — see `HumanRequestService`. A
+   * connection a person or the queue has already answers with its owner, and
+   * two presses at once hand over once. Its own per-visitor budget (GV-01): a
+   * press is cheap to send and each one that lands moves a conversation.
+   */
+  app.post(
+    '/customer/chat/request-human',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+      parse(requestHumanSchema, request.body ?? {});
+
+      let allowed = true;
+      try {
+        const decision = await app.rateLimiter.consume(
+          `rl:human-request:${principal.organizationId}:${principal.customerId}`,
+          HUMAN_REQUESTS_PER_HOUR,
+          3_600_000,
+        );
+        allowed = decision.allowed;
+        if (!allowed) {
+          throw ApiError.tooManyRequests(
+            Math.max(1, Math.ceil(decision.resetMs / 1000)),
+            'Too many requests for an agent — try again later.',
+          );
+        }
+      } catch (error) {
+        if (!allowed) throw error;
+        request.log.error({ err: error }, 'human request budget unavailable — allowing the press');
+      }
+
+      const thread = await request.withTenant((tx) =>
+        tx.thread.findFirst({
+          where: { active: true, chat: { customerId: principal.customerId, active: true } },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, chatId: true },
+        }),
+      );
+      if (!thread) {
+        throw new ApiError('chat_inactive', 'There is no open conversation to hand over.');
+      }
+      bindChatLogContext(request, { chatId: thread.chatId, threadId: thread.id });
+
+      const outcome = await humanRequests.request({
+        tenant: request.tenant(),
+        customerId: principal.customerId,
+        ref: { chatId: thread.chatId, threadId: thread.id },
+        log: request.log,
+      });
+      return reply.send({
+        owner: outcome.owner,
+        human_available: outcome.humanAvailable,
+        requested: outcome.requested,
+      });
+    },
+  );
 
   /**
    * Send a message, opening a conversation if there is not one already.

@@ -50,6 +50,7 @@ export const es: Record<string, string> = {
   privacy: 'Privacidad',
   'typing.named': '{name} está escribiendo…',
   'typing.generic': 'Escribiendo…',
+  'human.connecting': 'Conectando…',
   'rating.menuLabel': 'Más opciones',
   'rating.menuItem': 'Valorar este chat',
   'rating.group': 'Valorar este chat',

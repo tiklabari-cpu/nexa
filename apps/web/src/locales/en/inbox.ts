@@ -634,6 +634,7 @@ export const inbox: Messages = {
   'inbox.handoffCard.section': 'AI hand-over',
   'inbox.handoffCard.ariaLabel': 'AI hand-over card',
   'inbox.handoffCard.reason': 'Why it was handed over',
+  'inbox.handoffCard.viaButton': 'The player pressed “Talk to an agent”',
   'inbox.handoffCard.moreReasons.one': '(+{count} more)',
   'inbox.handoffCard.moreReasons.other': '(+{count} more)',
   'inbox.handoffCard.player': 'Player',

@@ -51,6 +51,7 @@ export const it: Record<string, string> = {
   privacy: 'Privacy',
   'typing.named': '{name} sta scrivendo…',
   'typing.generic': 'Sta scrivendo…',
+  'human.connecting': 'Connessione…',
   'rating.menuLabel': 'Altre opzioni',
   'rating.menuItem': 'Valuta questa chat',
   'rating.group': 'Valuta questa chat',

@@ -13590,7 +13590,7 @@
           "312"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-27T18:48:42.054Z",
+        "updatedAt": "2026-10-27T20:46:13.546Z",
         "subtasks": [
           {
             "id": 1,
@@ -13598,11 +13598,11 @@
             "description": "Kontrat + migration + /uploads knowledge_document (özel önek, virüs, sihirli bayt, sha256 409)",
             "details": "Üst görev 313 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon; EICAR.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "313",
             "priority": "medium",
-            "updatedAt": "2026-10-27T18:48:42.054Z"
+            "updatedAt": "2026-10-27T20:46:13.546Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-27T18:48:42.055Z",
+      "lastModified": "2026-10-27T20:46:13.546Z",
       "taskCount": 390,
       "completedCount": 331,
       "tags": [

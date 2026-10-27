@@ -19,7 +19,11 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { PLATFORM_JOB_CHANNEL, PLATFORM_JOB_RUN } from '@siyahtus/types';
+import {
+  KNOWLEDGE_JOB_ACTIVE_STATUSES,
+  PLATFORM_JOB_CHANNEL,
+  PLATFORM_JOB_RUN,
+} from '@siyahtus/types';
 import type { Redis } from 'ioredis';
 import { ApiError } from '../../lib/api-error.js';
 import {
@@ -157,10 +161,28 @@ export interface JobsView {
   queues: QueueView[];
 }
 
+interface QueueTable {
+  name: string;
+  /** The column a job's state is in — `ai_jobs.state`, `knowledge_jobs.status`. */
+  stateColumn: string;
+  /** The states of a job not yet finished: the oldest of them is the queue's age. */
+  unfinished: readonly string[];
+}
+
 /** The queues, and the table behind each — `null`: no table, the worker reports for itself. */
-const QUEUES: ReadonlyArray<{ key: QueueView['key']; table: string | null }> = [
-  { key: 'ai_jobs', table: 'ai_jobs' },
-  { key: 'knowledge_jobs', table: 'knowledge_jobs' },
+const QUEUES: ReadonlyArray<{ key: QueueView['key']; table: QueueTable | null }> = [
+  {
+    key: 'ai_jobs',
+    table: { name: 'ai_jobs', stateColumn: 'state', unfinished: ['pending', 'running'] },
+  },
+  {
+    key: 'knowledge_jobs',
+    table: {
+      name: 'knowledge_jobs',
+      stateColumn: 'status',
+      unfinished: KNOWLEDGE_JOB_ACTIVE_STATUSES,
+    },
+  },
   { key: 'doc_worker', table: null },
 ];
 
@@ -477,7 +499,7 @@ export class PlatformOperations {
     return { generated_at: new Date(this.#options.now()).toISOString(), queues };
   }
 
-  async #queue(key: QueueView['key'], table: string | null): Promise<QueueView> {
+  async #queue(key: QueueView['key'], table: QueueTable | null): Promise<QueueView> {
     const notInstalled: QueueView = {
       key,
       state: 'not_installed',
@@ -488,22 +510,22 @@ export class PlatformOperations {
     // The table is looked up first, so a queue that does not exist yet costs a
     // catalogue read and never a failed statement.
     const [exists] = await this.#db.$queryRaw<Array<{ present: boolean }>>`
-      SELECT to_regclass(${`public.${table}`}) IS NOT NULL AS present`;
+      SELECT to_regclass(${`public.${table.name}`}) IS NOT NULL AS present`;
     if (!exists?.present) return notInstalled;
     try {
       // `table` is one of the constants above, never request input.
       const rows = await this.#db.$queryRawUnsafe<
         Array<{ state: string; n: number; oldest_s: number | null }>
       >(
-        `SELECT state, count(*)::int AS n,
+        `SELECT "${table.stateColumn}" AS state, count(*)::int AS n,
                 extract(epoch FROM (now() - min(created_at)))::float8 AS oldest_s
-           FROM "${table}" GROUP BY state`,
+           FROM "${table.name}" GROUP BY 1`,
       );
       const counts: Record<string, number> = {};
       let oldest: number | null = null;
       for (const row of rows) {
         counts[row.state] = row.n;
-        if (['pending', 'running'].includes(row.state) && row.oldest_s !== null) {
+        if (table.unfinished.includes(row.state) && row.oldest_s !== null) {
           oldest = Math.max(oldest ?? 0, row.oldest_s);
         }
       }

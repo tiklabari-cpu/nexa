@@ -62,6 +62,14 @@ const KNOWN_UNMODELLABLE = [
       'partial unique index (one customer-facing AI agent per workspace) — Prisma cannot express a WHERE predicate',
   },
   {
+    // Created as `ON knowledge_jobs(source_id) WHERE status IN ('queued',
+    // 'running', 'waiting_budget')` in 20261110090000_knowledge_crawl (tm 312.1).
+    pattern:
+      /CREATE UNIQUE INDEX "knowledge_jobs_one_active_per_source" ON "public"\."knowledge_jobs"/,
+    reason:
+      'partial unique index (one knowledge job under way per source) — Prisma cannot express a WHERE predicate',
+  },
+  {
     // Created as `ON brands(license_id) WHERE is_default` in 20260802100000_brands.
     pattern: /CREATE UNIQUE INDEX "brands_one_default_per_license" ON "public"\."brands"/,
     reason:

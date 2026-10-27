@@ -5441,9 +5441,57 @@ components:
             `ai_agent_ids`.
         name: { type: string }
         type: { type: string, enum: [website, file, article, faq] }
-        status: { type: string }
+        status:
+          type: string
+          description: |
+            `ready` — indexed; `empty` — indexed to nothing; `indexing` —
+            text waiting to be indexed; `crawling` — a website's crawl job
+            is under way (`job_id`); `partial` — the last crawl finished
+            with pages that failed (its pages list says which); `failed`.
         source_url:
           { type: string, nullable: true, description: The crawled URL, for website sources. }
+        crawl_scope:
+          allOf: [{ $ref: "#/components/schemas/CrawlScope" }]
+          nullable: true
+          description: |
+            How far the website is crawled (tm 312 · AI-17); null for the
+            other types.
+        page_limit:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 200
+          description: The most pages one crawl keeps; null for the other types.
+        include_paths:
+          type: array
+          items: { type: string }
+          description: Path prefixes the crawl keeps to; empty — every path.
+        exclude_paths:
+          type: array
+          items: { type: string }
+          description: Path prefixes the crawl leaves out.
+        last_crawled_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the last crawl job finished, whatever came of it; null until
+            one has (a website crawled in the request before tm 312.3 has
+            none).
+        page_count:
+          type: integer
+          minimum: 0
+          description: |
+            Pages the last crawl left in the store (`ok` + `unchanged`);
+            0 for the other types.
+        job_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            The source's job under way (`queued`, `running` or
+            `waiting_budget`) — follow it at `GET /knowledge-jobs/{jobId}`;
+            null when there is none.
         chunk_count: { type: integer }
         updated_at: { type: string, format: date-time }
         added_by_name:
@@ -5575,6 +5623,121 @@ components:
             audiences are switched off or it is deleted. Edit those through
             the article; only the meta fields are edited here. Null for every
             other source.
+
+    CrawlScope:
+      type: string
+      enum: [single, all, sitemap]
+      description: |
+        How far a website source's crawl reaches (tm 312 · AI-17,
+        `@siyahtus/types` `CRAWL_SCOPES`): `single` — the URL given and
+        nothing else; `all` — every page under it, from its sitemap or, with
+        none, by following links (depth 3); `sitemap` — the pages its sitemap
+        lists. Always the same host and below the URL's path, within
+        `include_paths`/`exclude_paths`, robots.txt and `page_limit`.
+
+    KnowledgePageStatus:
+      type: string
+      enum: [ok, unchanged, skipped_scope, robots_disallowed, blocked, needs_js, error, removed]
+      description: |
+        What became of one crawled page (`KNOWLEDGE_PAGE_STATUSES`): `ok` —
+        fetched and indexed; `unchanged` — same text as the last crawl, not
+        embedded again; `skipped_scope` — outside the scope or path lists;
+        `robots_disallowed` — robots.txt forbids it, never fetched; `blocked`
+        — a bot wall; `needs_js` — its text is drawn by JavaScript, which the
+        crawler does not run; `error` — the fetch failed (`error` says why);
+        `removed` — gone (two 404/410 in a row) or out of scope since, its
+        chunks deleted. Only `ok` and `unchanged` pages answer.
+
+    KnowledgePage:
+      type: object
+      description: One page of a website source's crawl (tm 312 · AI-17).
+      required: [id, url, status, chunk_count]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, description: The page's URL in its normalised spelling. }
+        title: { type: string, nullable: true }
+        lang:
+          type: string
+          nullable: true
+          pattern: "^[a-z]{2,3}$"
+          description: The page's `<html lang>`, as a primary subtag.
+        status: { $ref: "#/components/schemas/KnowledgePageStatus" }
+        http_status: { type: integer, nullable: true }
+        error:
+          type: string
+          nullable: true
+          description: |
+            A snake_case code saying why the page is `error` or `blocked`
+            (`fetch_timeout`, `too_large`, `ssrf_refused`…) — the panel words it.
+        depth: { type: integer, minimum: 0, description: Links from the start URL. }
+        chunk_count: { type: integer, minimum: 0 }
+        fetched_at: { type: string, format: date-time, nullable: true }
+        changed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the page's text last changed — the "review what changed" list.
+
+    KnowledgeJobKind:
+      type: string
+      enum: [crawl, refresh, document]
+      description: |
+        `crawl` — a website's first or a manual crawl; `refresh` — the
+        freshness sweep's re-crawl; `document` — a large document's parse and
+        index (AI-18).
+
+    KnowledgeJobStatus:
+      type: string
+      enum: [queued, running, waiting_budget, done, failed, cancelled]
+      description: |
+        `queued` → `running` → `done` | `failed`; `waiting_budget` — the
+        day's AI allowance ran out mid-job, it resumes after UTC midnight from
+        where it stopped, the pages indexed so far already answering;
+        `cancelled` by a person. A source has at most one job under way
+        (`queued`, `running`, `waiting_budget`).
+
+    KnowledgeJob:
+      type: object
+      description: |
+        A knowledge job (tm 312 · AI-17), worked through in the background —
+        the panel polls it for a crawl's progress.
+      required: [id, source_id, kind, status, pages, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        source_id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/KnowledgeJobKind" }
+        status: { $ref: "#/components/schemas/KnowledgeJobStatus" }
+        pages:
+          type: object
+          description: |
+            Progress. `discovered` grows as the crawl finds pages;
+            `done` = `ok` + `unchanged` + `skipped` + `failed` + `removed`.
+          required: [discovered, done, ok, unchanged, skipped, failed, removed]
+          properties:
+            discovered: { type: integer, minimum: 0 }
+            done: { type: integer, minimum: 0 }
+            ok: { type: integer, minimum: 0 }
+            unchanged: { type: integer, minimum: 0 }
+            skipped:
+              type: integer
+              minimum: 0
+              description: "`skipped_scope` and `robots_disallowed` pages."
+            failed:
+              type: integer
+              minimum: 0
+              description: "`error`, `blocked` and `needs_js` pages."
+            removed: { type: integer, minimum: 0 }
+        error:
+          type: string
+          nullable: true
+          description: A snake_case code — why the job failed or stopped.
+        available_at:
+          type: string
+          format: date-time
+          description: A `waiting_budget` job resumes at this moment (UTC midnight).
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
 
     KnowledgeBulkRowResult:
       type: object

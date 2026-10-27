@@ -54,6 +54,7 @@ export * from './mobile-auth.js';
 export * from './notifications.js';
 export * from './push.js';
 export * from './company.js';
+export * from './knowledge-crawl.js';
 export * from './knowledge-file.js';
 export * from './knowledge-store.js';
 export * from './knowledge-tables.js';

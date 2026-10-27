@@ -707,7 +707,7 @@ describe('the platform Operations page (tm 389.14)', () => {
   });
 
   describe('(i) job queues', () => {
-    it('counts ai_jobs rows by state and reports tables that do not exist as not_installed', async () => {
+    it('counts ai_jobs rows by state and reports a queue with no table as not_installed', async () => {
       const chatId = 'c00000000900';
       await owner.chat.create({
         data: { id: chatId, licenseId: fx.a.licenseId, customerId: fx.a.customerId, active: false },
@@ -749,42 +749,77 @@ describe('the platform Operations page (tm 389.14)', () => {
       expect(queues.map((queue) => queue.key)).toEqual(['ai_jobs', 'knowledge_jobs', 'doc_worker']);
       expect(queues[0]).toMatchObject({ state: 'ok', counts: { pending: 2 } });
       expect(queues[0]!.oldest_unfinished_age_s).toBeGreaterThan(3 * 3600 - 60);
+      // The knowledge queue's table exists since tm 312.1, empty here.
       expect(queues[1]).toEqual({
         key: 'knowledge_jobs',
-        state: 'not_installed',
-        counts: null,
+        state: 'ok',
+        counts: {},
         oldest_unfinished_age_s: null,
       });
       expect(queues[2]).toMatchObject({ key: 'doc_worker', state: 'not_installed' });
     });
 
-    it('counts a queue table once it exists', async () => {
-      await owner.$executeRawUnsafe(
-        `CREATE TABLE knowledge_jobs (id serial PRIMARY KEY, state text NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
-      );
-      try {
-        await owner.$executeRawUnsafe(
-          `INSERT INTO knowledge_jobs (state, created_at) VALUES ('pending', now() - interval '2 hours'), ('pending', now()), ('done', now())`,
-        );
-        const { queues } = (await get('/operations/jobs')).json() as {
-          queues: Array<{
-            key: string;
-            state: string;
-            counts: Record<string, number> | null;
-            oldest_unfinished_age_s: number | null;
-          }>;
-        };
-        const knowledge = queues.find((queue) => queue.key === 'knowledge_jobs')!;
-        expect(knowledge).toMatchObject({ state: 'ok', counts: { pending: 2, done: 1 } });
-        expect(knowledge.oldest_unfinished_age_s).toBeGreaterThan(2 * 3600 - 60);
-      } finally {
-        await owner.$executeRawUnsafe('DROP TABLE knowledge_jobs');
-      }
+    it('counts knowledge_jobs by status, its age from the oldest job under way (tm 312.1)', async () => {
+      const source = await owner.knowledgeSource.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          aiAgentId: (
+            await owner.aiAgent.create({
+              data: { licenseId: fx.a.licenseId, kind: 'ai_agent', name: 'Ada' },
+              select: { id: true },
+            })
+          ).id,
+          type: 'website',
+          name: 'Site',
+          sourceUrl: 'https://example.com/',
+        },
+        select: { id: true },
+      });
+      const job = (data: Record<string, unknown>) =>
+        owner.knowledgeJob.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            organizationId: fx.a.organizationId,
+            sourceId: source.id,
+            kind: 'crawl',
+            ...data,
+          },
+        });
+      // Finished jobs are history: the oldest of them is older than the job
+      // waiting for the budget, and must not be the queue's age.
+      await job({
+        status: 'done',
+        createdAt: new Date(Date.now() - 5 * HOUR),
+        finishedAt: new Date(),
+      });
+      await job({
+        status: 'failed',
+        createdAt: new Date(Date.now() - 4 * HOUR),
+        finishedAt: new Date(),
+      });
+      await job({ status: 'waiting_budget', createdAt: new Date(Date.now() - 2 * HOUR) });
+
+      const { queues } = (await get('/operations/jobs')).json() as {
+        queues: Array<{
+          key: string;
+          state: string;
+          counts: Record<string, number> | null;
+          oldest_unfinished_age_s: number | null;
+        }>;
+      };
+      const knowledge = queues.find((queue) => queue.key === 'knowledge_jobs')!;
+      expect(knowledge).toMatchObject({
+        state: 'ok',
+        counts: { done: 1, failed: 1, waiting_budget: 1 },
+      });
+      expect(knowledge.oldest_unfinished_age_s).toBeGreaterThan(2 * 3600 - 60);
+      expect(knowledge.oldest_unfinished_age_s).toBeLessThan(3 * 3600);
     });
 
     it('calls a table it cannot read unreadable instead of failing the page', async () => {
+      // A private database (with-test-datastores): the rename is this run's alone.
       await owner.$executeRawUnsafe(
-        `CREATE TABLE knowledge_jobs (id serial PRIMARY KEY, note text)`,
+        `ALTER TABLE knowledge_jobs RENAME COLUMN status TO status_gone`,
       );
       try {
         const { queues } = (await get('/operations/jobs')).json() as {
@@ -792,7 +827,9 @@ describe('the platform Operations page (tm 389.14)', () => {
         };
         expect(queues.find((queue) => queue.key === 'knowledge_jobs')?.state).toBe('unreadable');
       } finally {
-        await owner.$executeRawUnsafe('DROP TABLE knowledge_jobs');
+        await owner.$executeRawUnsafe(
+          `ALTER TABLE knowledge_jobs RENAME COLUMN status_gone TO status`,
+        );
       }
     });
   });

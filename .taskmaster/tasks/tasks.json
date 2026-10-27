@@ -16113,7 +16113,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-10-27T02:53:47.338Z",
+        "updatedAt": "2026-10-27T04:03:44.786Z",
         "subtasks": [
           {
             "id": 1,
@@ -16121,11 +16121,11 @@
             "description": "AI ajanı API: POST/GET/PATCH /ai-agents (instruction) + tek ajan kısmi tekili + mobil parity",
             "details": "Üst görev AMAÇ (1) ve (5), KARARLAR 2–3: kontrat POST/GET /ai-agents + PATCH instruction (prompt'a GİRMEZ); kısmi tekil (license_id) WHERE kind='ai_agent' (önce seed ölçümü, gerekirse NOT VALID yolu), ikinci → 409 ai_agent_exists, Assumption PLAN §D218; mobil tipler + parity 224→226 yorumla (389.13/389.15 sıra tuzağı HANDOFF'a). Ayrıntı ve kabul maddeleri: üst görev #390 details (tek kaynak).",
             "testStrategy": "Entegrasyon + mobil parity; `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "390",
             "priority": "high",
-            "updatedAt": "2026-10-27T02:53:47.338Z"
+            "updatedAt": "2026-10-27T04:03:44.786Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-27T02:53:47.339Z",
+      "lastModified": "2026-10-27T04:03:44.787Z",
       "taskCount": 390,
       "completedCount": 327,
       "tags": [

@@ -13,7 +13,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { licenseOfStoredKey } from './upload-url.js';
+import { storedObjectPath } from './upload-url.js';
 
 /**
  * Re-exported where it has always been imported from. It is declared next to
@@ -141,13 +141,13 @@ export class LocalStore implements ObjectStore {
   }
 
   #pathFor(key: string): string {
-    const license = licenseOfStoredKey(key);
-    if (license === null) {
+    const relative = storedObjectPath(key);
+    if (relative === null) {
       throw new Error('refusing to touch a key that is not in our own format');
     }
     // Keys are flat so they fit one path parameter; on disk they still fan out
     // per licence, so no directory ends up with every file in the system.
-    const path = resolve(join(this.#root, String(license), key));
+    const path = resolve(join(this.#root, ...relative.split('/')));
     if (path !== this.#root && !path.startsWith(this.#root + sep)) {
       throw new Error('refusing a path that escapes the storage root');
     }

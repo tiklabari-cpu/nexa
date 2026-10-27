@@ -15,6 +15,17 @@ issueUpload:
       file of exactly the declared type and length, for `UPLOAD_URL_TTL`
       seconds. `file_url` is what belongs on the event as `attachment_url`; it
       does not expire and is authorised by session instead.
+
+      **`purpose: knowledge_document`** (tm 313 · AI-18) asks for a PDF or Word
+      document for the knowledge base instead. The conversation's file-sharing
+      rules do not apply to it — they govern what a chat may carry; this is
+      the knowledge editor's own upload, so it needs the
+      `agents-bot--all:rw` scope, and a customer or a member without that
+      scope is refused (403). Only `application/pdf` and the DOCX type are
+      granted (400, `details.reason` `unsupported_type`), up to 20 MiB (400,
+      `file_too_large`). The grant carries `upload_id` and no `file_url`: the
+      document is stored under a key `GET /uploads/{key}` never serves, and
+      `POST /knowledge-sources/document` is what takes `upload_id`.
     requestBody:
       required: true
       content:
@@ -32,6 +43,13 @@ issueUpload:
                   never becomes a path segment.
               content_type: { type: string, maxLength: 255, example: image/png }
               size_bytes: { type: integer, minimum: 1, example: 20480 }
+              purpose:
+                type: string
+                enum: [attachment, knowledge_document]
+                default: attachment
+                description: |
+                  `attachment` — a file in a conversation (the default);
+                  `knowledge_document` — a PDF or DOCX for the knowledge base.
     responses:
       "201":
         description: Permission granted
@@ -41,13 +59,18 @@ issueUpload:
       "400":
         description: |
           The type is not in `allowed_file_types`, or the size is above the
-          licence ceiling. `details` carries the rule that refused it.
+          licence ceiling. `details` carries the rule that refused it. For a
+          `knowledge_document`, `details.reason` is `unsupported_type` or
+          `file_too_large`.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403":
-        description: File sharing is switched off for this licence
+        description: |
+          File sharing is switched off for this licence; or, for a
+          `knowledge_document`, the caller is not a member holding
+          `agents-bot--all:rw`.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
@@ -99,6 +122,14 @@ uploadObject:
 
       Every rejection answers the same way. Telling a caller which part of a
       forgery failed is how a forgery gets refined.
+
+      The bytes are virus-scanned before anything is stored; a scanner that
+      cannot be reached refuses the upload (503) rather than storing it
+      unscanned. A `knowledge_document`'s type is then read from its bytes —
+      `%PDF-` at the first byte, or a ZIP listing `word/document.xml` and no
+      VBA project — and must be the type the grant was for: anything else
+      (a renamed executable, a `.docm`) is a 400 with `details.reason`
+      `unsupported_type`, and nothing is stored.
     security: []
     parameters:
       - { name: content_type, in: query, required: true, schema: { type: string } }
@@ -117,14 +148,29 @@ uploadObject:
           application/json:
             schema:
               type: object
-              required: [file_url, size_bytes, checksum_sha256]
+              required: [upload_id, size_bytes, checksum_sha256]
               properties:
-                file_url: { type: string }
+                upload_id: { type: string, description: The stored key, as in the grant. }
+                file_url:
+                  type: string
+                  description: Where an attachment is readable; absent for a `knowledge_document`.
                 size_bytes: { type: integer }
                 checksum_sha256: { type: string }
-      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "400":
+        description: |
+          The virus scan refused the file (`details.reason` `virus_detected`),
+          or a `knowledge_document`'s bytes are not the document type granted
+          (`unsupported_type`). Nothing was stored.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "403":
         description: The URL is expired, forged, or does not match the bytes sent
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "503":
+        description: The virus scanner could not be reached; nothing was stored.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
@@ -141,6 +187,10 @@ uploadObject:
       Served as `content-disposition: attachment` with `nosniff`. An allowed
       `text/plain` rendered inline in our own origin would be stored XSS given
       away for free.
+
+      A knowledge document's key (`purpose: knowledge_document`) is not an
+      attachment and answers `404` here, for every caller: its original is
+      reached only through `GET /knowledge-sources/{sourceId}/file`.
     responses:
       "200":
         description: The file
@@ -148,5 +198,45 @@ uploadObject:
           application/octet-stream:
             schema: { type: string, format: binary }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeFile:
+  parameters:
+    - name: key
+      in: path
+      required: true
+      schema: { type: string }
+      description: A knowledge document's key, from the link `GET /knowledge-sources/{sourceId}/file` issued.
+  get:
+    tags: [Uploads]
+    operationId: getKnowledgeFile
+    summary: Download a knowledge document's original through a signed link
+    description: |
+      Follows a link `GET /knowledge-sources/{sourceId}/file` issued (tm 313 ·
+      AI-18-S2). Authorised by the signature, not a session — a browser
+      following a link sends no bearer token — and narrower than one: one
+      document, one filename, five minutes. Every refusal (a forged or changed
+      link, an expired one, a key that is not a knowledge document's) is the
+      same 403; an object that is no longer stored is a 404.
+
+      Served as `content-disposition: attachment` with `nosniff` and
+      `cache-control: no-store`, never inline.
+    security: []
+    parameters:
+      - { name: filename, in: query, required: true, schema: { type: string } }
+      - { name: expires_at, in: query, required: true, schema: { type: integer } }
+      - { name: signature, in: query, required: true, schema: { type: string } }
+    responses:
+      "200":
+        description: The original file
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      "403":
+        description: The link is forged, changed or expired
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

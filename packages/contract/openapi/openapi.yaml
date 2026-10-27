@@ -418,6 +418,8 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSourcesBulk"
   /knowledge-sources/file:
     $ref: "./paths/playbook.yaml#/knowledgeSourcesFile"
+  /knowledge-sources/document:
+    $ref: "./paths/playbook.yaml#/knowledgeSourcesDocument"
   /knowledge-sources/{sourceId}:
     $ref: "./paths/playbook.yaml#/knowledgeSource"
   /knowledge-sources/{sourceId}/reindex:
@@ -428,6 +430,8 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSourcePages"
   /knowledge-sources/{sourceId}/crawl:
     $ref: "./paths/playbook.yaml#/knowledgeSourceCrawl"
+  /knowledge-sources/{sourceId}/file:
+    $ref: "./paths/playbook.yaml#/knowledgeSourceFile"
   /knowledge-jobs/{jobId}:
     $ref: "./paths/playbook.yaml#/knowledgeJob"
   /knowledge-jobs/{jobId}/cancel:
@@ -700,6 +704,8 @@ paths:
     $ref: "./paths/uploads.yaml#/uploadPolicy"
   /uploads/{key}:
     $ref: "./paths/uploads.yaml#/uploadObject"
+  /knowledge-files/{key}:
+    $ref: "./paths/uploads.yaml#/knowledgeFile"
 
   /home:
     $ref: "./paths/home.yaml#/home"
@@ -5455,7 +5461,9 @@ components:
             `ready` — indexed; `empty` — indexed to nothing; `indexing` —
             text waiting to be indexed; `crawling` — a website's crawl job
             is under way (`job_id`); `partial` — the last crawl finished
-            with pages that failed (its pages list says which); `failed`.
+            with pages that failed (its pages list says which); `processing`
+            — a PDF or Word document's `document` job is reading it
+            (`job_id`); `failed`.
         source_url:
           { type: string, nullable: true, description: The crawled URL, for website sources. }
         crawl_scope:
@@ -5490,8 +5498,29 @@ components:
           type: integer
           minimum: 0
           description: |
-            Pages the last crawl left in the store (`ok` + `unchanged`);
-            0 for the other types.
+            Pages the last crawl left in the store (`ok` + `unchanged`); a
+            PDF or Word document's page count once read (0 until then); 0 for
+            the other types.
+        file_mime:
+          allOf: [{ $ref: "#/components/schemas/KnowledgeDocumentMimeType" }]
+          nullable: true
+          description: |
+            A PDF or Word document source's type, as read from its bytes
+            (tm 313 · AI-18); null for every other source — a text file
+            uploaded through `POST /knowledge-sources/file` keeps no
+            original. Its original is `GET /knowledge-sources/{sourceId}/file`.
+        file_size:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: The original's length in bytes; null when there is none.
+        file_sha256:
+          type: string
+          nullable: true
+          pattern: "^[0-9a-f]{64}$"
+          description: |
+            The original's sha256, hex; null when there is none. A workspace
+            holds one source per file (`knowledge_source_exists`).
         job_id:
           type: string
           format: uuid
@@ -5738,7 +5767,9 @@ components:
         error:
           type: string
           nullable: true
-          description: A snake_case code — why the job failed or stopped.
+          description: |
+            A snake_case code — why the job failed or stopped. A `document`
+            job's are `KnowledgeDocumentError`'s.
         available_at:
           type: string
           format: date-time
@@ -5746,6 +5777,56 @@ components:
         created_at: { type: string, format: date-time }
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
+
+    KnowledgeDocumentMimeType:
+      type: string
+      enum:
+        - application/pdf
+        - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      description: |
+        The types a knowledge document may be (tm 313 · AI-18,
+        `@siyahtus/types` `KNOWLEDGE_DOCUMENT_MIME_TYPES`): PDF and DOCX. A
+        `.docm` (a Word document with a macro project) is not one.
+
+    KnowledgeDocumentError:
+      type: string
+      enum:
+        - unsupported_type
+        - file_too_large
+        - virus_detected
+        - encrypted
+        - no_text_layer
+        - too_many_pages
+        - too_many_characters
+        - parse_timeout
+        - parse_failed
+      description: |
+        Why a PDF or Word document was refused (`KNOWLEDGE_DOCUMENT_ERRORS`).
+        `unsupported_type` (the bytes are not a PDF or a DOCX, or not the
+        type declared), `file_too_large` (past 20 MiB) and `virus_detected`
+        refuse the upload or the source with a 400 (`details.reason`),
+        nothing stored. The rest end its `document` job (`KnowledgeJob.error`)
+        with nothing written to the knowledge base: `encrypted` — a
+        password-protected PDF; `no_text_layer` — no text to read, most likely
+        a scanned document (there is no OCR); `too_many_pages` (past 300),
+        `too_many_characters` (past 1,000,000); `parse_timeout` — reading it
+        took longer than 30 seconds or more than 256 MB; `parse_failed` — the
+        file is damaged.
+
+    KnowledgeFileLink:
+      type: object
+      description: |
+        A short-lived link to a document source's original (tm 313 ·
+        AI-18-S2). `url` needs no session and stops working at `expires_at`.
+      required: [url, expires_at, filename, content_type, size_bytes]
+      properties:
+        url:
+          type: string
+          description: The signed `GET /knowledge-files/{key}` link, relative to the API's origin.
+        expires_at: { type: string, format: date-time }
+        filename: { type: string, description: The name the file is saved as. }
+        content_type: { $ref: "#/components/schemas/KnowledgeDocumentMimeType" }
+        size_bytes: { type: integer, minimum: 1 }
 
     KnowledgeBulkRowResult:
       type: object
@@ -7369,20 +7450,28 @@ components:
       type: object
       description: |
         Permission to store one file, issued by `POST /uploads` once the
-        licence's file-sharing rules have accepted the declared type and size.
-      required: [upload_url, file_url, expires_at]
+        licence's file-sharing rules have accepted the declared type and size
+        — or, for `purpose: knowledge_document`, once the document rules have
+        (tm 313 · AI-18).
+      required: [upload_url, upload_id, expires_at]
       properties:
         upload_url:
           type: string
           description: |
             Signed, single-use, and bound to the declared type and length. Send
             the bytes here with `PUT` before `expires_at`.
+        upload_id:
+          type: string
+          description: |
+            The key the file is stored under. What `POST
+            /knowledge-sources/document` takes for a `knowledge_document`.
         file_url:
           type: string
           description: |
             Where the file will be readable, and the value that belongs on an
             event's `attachment_url`. Does not expire — it is authorised by
-            session, and by the licence embedded in the key.
+            session, and by the licence embedded in the key. Absent for a
+            `knowledge_document`, which `GET /uploads/{key}` never serves.
         expires_at:
           type: string
           format: date-time
@@ -13187,6 +13276,7 @@ components:
         - impersonation_read_only
         - internal
         - knowledge_job_in_progress
+        - knowledge_source_exists
         - license_expired
         - limit_reached
         - maintenance

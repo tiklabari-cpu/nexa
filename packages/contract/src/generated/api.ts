@@ -4574,6 +4574,49 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/knowledge-sources/document': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an uploaded PDF or Word document as a knowledge source
+     * @description A PDF or DOCX knowledge source (tm 313 · AI-18). The file is uploaded
+     *     first — `POST /uploads` with `purpose: knowledge_document`, then the
+     *     bytes to its `upload_url` — and named here by the grant's `upload_id`.
+     *     Nothing is parsed in the request: a document is read by an isolated
+     *     worker process in a `document` knowledge job, so the answer is a 201
+     *     with `status: processing` and the job's id in `job_id` — follow it at
+     *     `GET /knowledge-jobs/{jobId}`. The source is a `file` source; the text
+     *     path (`POST /knowledge-sources/file`) is unchanged.
+     *
+     *     **The type is read from the stored bytes**, not from a filename: `%PDF-`
+     *     at the first byte, or a ZIP listing `word/document.xml` and no VBA
+     *     project (a `.docm` is refused). Anything else is a 400 with
+     *     `details.reason` `unsupported_type`; past 20 MiB, `file_too_large`.
+     *     An `upload_id` that is not a document uploaded to this workspace (an
+     *     attachment's key, another workspace's, one granted but never sent) is a
+     *     400 with `details.reason` `unknown_upload`.
+     *
+     *     **One source per file per workspace:** a file whose sha256 a source of
+     *     this workspace already holds is a 409 `knowledge_source_exists`, with
+     *     that source's id in `details.source_id`.
+     *
+     *     The original is kept (AI-18-S2) — `GET /knowledge-sources/{sourceId}/file`
+     *     hands out a short-lived link to it — and is never served from the
+     *     attachment URL `GET /uploads/{key}`.
+     */
+    post: operations['createKnowledgeDocumentSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/knowledge-sources/{sourceId}': {
     parameters: {
       query?: never;
@@ -4800,6 +4843,32 @@ export interface paths {
      *     `knowledge_source_not_website`.
      */
     post: operations['crawlKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-sources/{sourceId}/file': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * A short-lived link to a document source's original file
+     * @description The panel's "Download original" (tm 313 · AI-18-S2). Answers with a
+     *     signed link to `GET /knowledge-files/{key}` that works for five minutes
+     *     and needs no session — a browser following a link sends no bearer
+     *     token. Only a PDF or Word document source has an original: any other
+     *     source, and another workspace's, is a 404.
+     */
+    get: operations['getKnowledgeSourceFile'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -9104,6 +9173,17 @@ export interface paths {
      *     file of exactly the declared type and length, for `UPLOAD_URL_TTL`
      *     seconds. `file_url` is what belongs on the event as `attachment_url`; it
      *     does not expire and is authorised by session instead.
+     *
+     *     **`purpose: knowledge_document`** (tm 313 · AI-18) asks for a PDF or Word
+     *     document for the knowledge base instead. The conversation's file-sharing
+     *     rules do not apply to it — they govern what a chat may carry; this is
+     *     the knowledge editor's own upload, so it needs the
+     *     `agents-bot--all:rw` scope, and a customer or a member without that
+     *     scope is refused (403). Only `application/pdf` and the DOCX type are
+     *     granted (400, `details.reason` `unsupported_type`), up to 20 MiB (400,
+     *     `file_too_large`). The grant carries `upload_id` and no `file_url`: the
+     *     document is stored under a key `GET /uploads/{key}` never serves, and
+     *     `POST /knowledge-sources/document` is what takes `upload_id`.
      */
     post: operations['createUpload'];
     delete?: never;
@@ -9157,6 +9237,10 @@ export interface paths {
      *     Served as `content-disposition: attachment` with `nosniff`. An allowed
      *     `text/plain` rendered inline in our own origin would be stored XSS given
      *     away for free.
+     *
+     *     A knowledge document's key (`purpose: knowledge_document`) is not an
+     *     attachment and answers `404` here, for every caller: its original is
+     *     reached only through `GET /knowledge-sources/{sourceId}/file`.
      */
     get: operations['getUpload'];
     /**
@@ -9169,8 +9253,47 @@ export interface paths {
      *
      *     Every rejection answers the same way. Telling a caller which part of a
      *     forgery failed is how a forgery gets refined.
+     *
+     *     The bytes are virus-scanned before anything is stored; a scanner that
+     *     cannot be reached refuses the upload (503) rather than storing it
+     *     unscanned. A `knowledge_document`'s type is then read from its bytes —
+     *     `%PDF-` at the first byte, or a ZIP listing `word/document.xml` and no
+     *     VBA project — and must be the type the grant was for: anything else
+     *     (a renamed executable, a `.docm`) is a 400 with `details.reason`
+     *     `unsupported_type`, and nothing is stored.
      */
     put: operations['putUpload'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-files/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A knowledge document's key, from the link `GET /knowledge-sources/{sourceId}/file` issued. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Download a knowledge document's original through a signed link
+     * @description Follows a link `GET /knowledge-sources/{sourceId}/file` issued (tm 313 ·
+     *     AI-18-S2). Authorised by the signature, not a session — a browser
+     *     following a link sends no bearer token — and narrower than one: one
+     *     document, one filename, five minutes. Every refusal (a forged or changed
+     *     link, an expired one, a key that is not a knowledge document's) is the
+     *     same 403; an object that is no longer stored is a 404.
+     *
+     *     Served as `content-disposition: attachment` with `nosniff` and
+     *     `cache-control: no-store`, never inline.
+     */
+    get: operations['getKnowledgeFile'];
+    put?: never;
     post?: never;
     delete?: never;
     options?: never;
@@ -14368,7 +14491,9 @@ export interface components {
        * @description `ready` — indexed; `empty` — indexed to nothing; `indexing` —
        *     text waiting to be indexed; `crawling` — a website's crawl job
        *     is under way (`job_id`); `partial` — the last crawl finished
-       *     with pages that failed (its pages list says which); `failed`.
+       *     with pages that failed (its pages list says which); `processing`
+       *     — a PDF or Word document's `document` job is reading it
+       *     (`job_id`); `failed`.
        */
       status: string;
       /** @description The crawled URL */
@@ -14392,10 +14517,25 @@ export interface components {
        */
       last_crawled_at?: string | null;
       /**
-       * @description Pages the last crawl left in the store (`ok` + `unchanged`);
-       *     0 for the other types.
+       * @description Pages the last crawl left in the store (`ok` + `unchanged`); a
+       *     PDF or Word document's page count once read (0 until then); 0 for
+       *     the other types.
        */
       page_count?: number;
+      /**
+       * @description A PDF or Word document source's type, as read from its bytes
+       *     (tm 313 · AI-18); null for every other source — a text file
+       *     uploaded through `POST /knowledge-sources/file` keeps no
+       *     original. Its original is `GET /knowledge-sources/{sourceId}/file`.
+       */
+      file_mime?: components['schemas']['KnowledgeDocumentMimeType'] | null;
+      /** @description The original's length in bytes; null when there is none. */
+      file_size?: number | null;
+      /**
+       * @description The original's sha256, hex; null when there is none. A workspace
+       *     holds one source per file (`knowledge_source_exists`).
+       */
+      file_sha256?: string | null;
       /**
        * Format: uuid
        * @description The source's job under way (`queued`, `running` or
@@ -14617,7 +14757,10 @@ export interface components {
         failed: number;
         removed: number;
       };
-      /** @description A snake_case code — why the job failed or stopped. */
+      /**
+       * @description A snake_case code — why the job failed or stopped. A `document`
+       *     job's are `KnowledgeDocumentError`'s.
+       */
       error?: string | null;
       /**
        * Format: date-time
@@ -14630,6 +14773,52 @@ export interface components {
       started_at?: string | null;
       /** Format: date-time */
       finished_at?: string | null;
+    };
+    /**
+     * @description The types a knowledge document may be (tm 313 · AI-18,
+     *     `@siyahtus/types` `KNOWLEDGE_DOCUMENT_MIME_TYPES`): PDF and DOCX. A
+     *     `.docm` (a Word document with a macro project) is not one.
+     * @enum {string}
+     */
+    KnowledgeDocumentMimeType:
+      'application/pdf' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    /**
+     * @description Why a PDF or Word document was refused (`KNOWLEDGE_DOCUMENT_ERRORS`).
+     *     `unsupported_type` (the bytes are not a PDF or a DOCX, or not the
+     *     type declared), `file_too_large` (past 20 MiB) and `virus_detected`
+     *     refuse the upload or the source with a 400 (`details.reason`),
+     *     nothing stored. The rest end its `document` job (`KnowledgeJob.error`)
+     *     with nothing written to the knowledge base: `encrypted` — a
+     *     password-protected PDF; `no_text_layer` — no text to read, most likely
+     *     a scanned document (there is no OCR); `too_many_pages` (past 300),
+     *     `too_many_characters` (past 1,000,000); `parse_timeout` — reading it
+     *     took longer than 30 seconds or more than 256 MB; `parse_failed` — the
+     *     file is damaged.
+     * @enum {string}
+     */
+    KnowledgeDocumentError:
+      | 'unsupported_type'
+      | 'file_too_large'
+      | 'virus_detected'
+      | 'encrypted'
+      | 'no_text_layer'
+      | 'too_many_pages'
+      | 'too_many_characters'
+      | 'parse_timeout'
+      | 'parse_failed';
+    /**
+     * @description A short-lived link to a document source's original (tm 313 ·
+     *     AI-18-S2). `url` needs no session and stops working at `expires_at`.
+     */
+    KnowledgeFileLink: {
+      /** @description The signed `GET /knowledge-files/{key}` link, relative to the API's origin. */
+      url: string;
+      /** Format: date-time */
+      expires_at: string;
+      /** @description The name the file is saved as. */
+      filename: string;
+      content_type: components['schemas']['KnowledgeDocumentMimeType'];
+      size_bytes: number;
     };
     /**
      * @description One CSV data row's verdict. `line` is the row's 1-based position among
@@ -15888,7 +16077,9 @@ export interface components {
     };
     /**
      * @description Permission to store one file, issued by `POST /uploads` once the
-     *     licence's file-sharing rules have accepted the declared type and size.
+     *     licence's file-sharing rules have accepted the declared type and size
+     *     — or, for `purpose: knowledge_document`, once the document rules have
+     *     (tm 313 · AI-18).
      */
     UploadGrant: {
       /**
@@ -15897,11 +16088,17 @@ export interface components {
        */
       upload_url: string;
       /**
+       * @description The key the file is stored under. What `POST
+       *     /knowledge-sources/document` takes for a `knowledge_document`.
+       */
+      upload_id: string;
+      /**
        * @description Where the file will be readable, and the value that belongs on an
        *     event's `attachment_url`. Does not expire — it is authorised by
-       *     session, and by the licence embedded in the key.
+       *     session, and by the licence embedded in the key. Absent for a
+       *     `knowledge_document`, which `GET /uploads/{key}` never serves.
        */
-      file_url: string;
+      file_url?: string;
       /**
        * Format: date-time
        * @description When `upload_url` stops being accepted.
@@ -20350,6 +20547,7 @@ export interface components {
       | 'impersonation_read_only'
       | 'internal'
       | 'knowledge_job_in_progress'
+      | 'knowledge_source_exists'
       | 'license_expired'
       | 'limit_reached'
       | 'maintenance'
@@ -27788,6 +27986,100 @@ export interface operations {
       503: components['responses']['EmbeddingUnavailable'];
     };
   };
+  createKnowledgeDocumentSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: uuid
+           * @description The agent this source belongs to. Verified before anything is written.
+           */
+          ai_agent_id: string;
+          /** @description The `upload_id` of a `knowledge_document` upload grant whose bytes were sent. */
+          upload_id: string;
+          /** @description The source's title. Defaults to `filename` without its directory segments. */
+          name?: string;
+          /**
+           * @description The file's own name, used as the title when `name` is
+           *     omitted and as the original's download name — never as a
+           *     path. One of `name` and `filename` is required.
+           */
+          filename?: string;
+          /**
+           * Format: uuid
+           * @description The one brand the document is for — `brand_ids: [brand_id]`.
+           *     Naming a different set in `brand_ids` as well is a 400.
+           */
+          brand_id?: string;
+          /**
+           * Format: uuid
+           * @description As on `POST /knowledge-sources`.
+           */
+          owner_id?: string | null;
+          /** @description As on `POST /knowledge-sources`. */
+          language?: string | null;
+          /**
+           * @description As on `POST /knowledge-sources`.
+           * @default 90
+           */
+          review_interval_days?: number;
+          /** @description As on `POST /knowledge-sources`. */
+          audiences?: components['schemas']['KnowledgeAudience'][];
+          /** @description As on `POST /knowledge-sources`. */
+          ai_agent_ids?: string[];
+          /** @description As on `POST /knowledge-sources`. */
+          brand_ids?: string[];
+          /**
+           * Format: date-time
+           * @description As on `POST /knowledge-sources`.
+           */
+          valid_until?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Created and queued — `status` is `processing`, `job_id` the document job */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /**
+       * @description `knowledge_source_exists` — a source of this workspace already holds
+       *     this file (`details.source_id`).
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+      /** @description The object store could not be read; nothing was written. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
   deleteKnowledgeSource: {
     parameters: {
       query?: never;
@@ -28013,6 +28305,32 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getKnowledgeSourceFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The link */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeFileLink'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -34220,6 +34538,13 @@ export interface operations {
           content_type: string;
           /** @example 20480 */
           size_bytes: number;
+          /**
+           * @description `attachment` — a file in a conversation (the default);
+           *     `knowledge_document` — a PDF or DOCX for the knowledge base.
+           * @default attachment
+           * @enum {string}
+           */
+          purpose?: 'attachment' | 'knowledge_document';
         };
       };
     };
@@ -34235,7 +34560,9 @@ export interface operations {
       };
       /**
        * @description The type is not in `allowed_file_types`, or the size is above the
-       *     licence ceiling. `details` carries the rule that refused it.
+       *     licence ceiling. `details` carries the rule that refused it. For a
+       *     `knowledge_document`, `details.reason` is `unsupported_type` or
+       *     `file_too_large`.
        */
       400: {
         headers: {
@@ -34246,7 +34573,11 @@ export interface operations {
         };
       };
       401: components['responses']['Unauthorized'];
-      /** @description File sharing is switched off for this licence */
+      /**
+       * @description File sharing is switched off for this licence; or, for a
+       *     `knowledge_document`, the caller is not a member holding
+       *     `agents-bot--all:rw`.
+       */
       403: {
         headers: {
           [name: string]: unknown;
@@ -34336,13 +34667,28 @@ export interface operations {
         };
         content: {
           'application/json': {
-            file_url: string;
+            /** @description The stored key */
+            upload_id: string;
+            /** @description Where an attachment is readable; absent for a `knowledge_document`. */
+            file_url?: string;
             size_bytes: number;
             checksum_sha256: string;
           };
         };
       };
-      400: components['responses']['BadRequest'];
+      /**
+       * @description The virus scan refused the file (`details.reason` `virus_detected`),
+       *     or a `knowledge_document`'s bytes are not the document type granted
+       *     (`unsupported_type`). Nothing was stored.
+       */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       /** @description The URL is expired, forged, or does not match the bytes sent */
       403: {
         headers: {
@@ -34352,6 +34698,53 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      /** @description The virus scanner could not be reached; nothing was stored. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  getKnowledgeFile: {
+    parameters: {
+      query: {
+        filename: string;
+        expires_at: number;
+        signature: string;
+      };
+      header?: never;
+      path: {
+        /** @description A knowledge document's key, from the link `GET /knowledge-sources/{sourceId}/file` issued. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The original file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      /** @description The link is forged, changed or expired */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   getHomeDashboard: {

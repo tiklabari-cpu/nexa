@@ -58,6 +58,7 @@ import {
   knowledgeReviewDueAt,
   normaliseLanguage,
   normalizeKnowledgeAudiences,
+  normalizeKnowledgeDocumentMime,
   mergeHandoffMessages,
   mergeHandoffTriggers,
   readHandoffAfterHours,
@@ -145,6 +146,14 @@ import {
   serialiseKnowledgeJob,
 } from '../services/ai/crawler/jobs.js';
 import { settleCrawledSource } from '../services/ai/crawler/job-runner.js';
+import {
+  isDuplicateDocument,
+  knowledgeFileLink,
+  knowledgeSourceExists,
+  readUploadedDocument,
+} from '../services/ai/knowledge-document.js';
+import { createObjectStore } from '../services/storage/object-store.js';
+import { KnowledgeDownloadSigner } from '../services/storage/upload-url.js';
 import { ProcedureExamples, storeProcedureExamples } from '../services/ai/procedure-examples.js';
 import { computeNextRefreshAt } from '../services/ai/knowledge-refresh.js';
 import type { Env } from '../config/env.js';
@@ -347,6 +356,28 @@ function namedCrawlSetting(body: Partial<Record<(typeof CRAWL_SETTINGS)[number],
 }
 
 /**
+ * `brand_id` is a shorthand for `brand_ids: [brand_id]` (AI-17): naming a
+ * different set in `brand_ids` as well is a contradiction, refused rather than
+ * resolved by picking one.
+ */
+function refineBrandShorthand(
+  body: { brand_id?: string; brand_ids?: string[] },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    body.brand_id !== undefined &&
+    body.brand_ids !== undefined &&
+    (body.brand_ids.length !== 1 || body.brand_ids[0] !== body.brand_id.toLowerCase())
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['brand_id'],
+      message: 'brand_id and brand_ids name different brands',
+    });
+  }
+}
+
+/**
  * A website source is crawled from a URL; an `article` or a `faq` indexes the
  * text the admin pasted. So exactly one of `source_url` (website) or `content`
  * (the rest) is required — enforced here rather than left for the handler to
@@ -382,17 +413,7 @@ const createSourceBody = z
         message: 'only a website source is crawled',
       });
     }
-    if (
-      body.brand_id !== undefined &&
-      body.brand_ids !== undefined &&
-      (body.brand_ids.length !== 1 || body.brand_ids[0] !== body.brand_id.toLowerCase())
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['brand_id'],
-        message: 'brand_id and brand_ids name different brands',
-      });
-    }
+    refineBrandShorthand(body, ctx);
     if (body.type === 'file') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -452,6 +473,37 @@ const uploadSourceBody = z.object({
   ...sourceMetaFields,
   ...sourceScopeFields,
 });
+
+/**
+ * A PDF or Word document source (tm 313 · AI-18): the bytes are already in the
+ * object store (`POST /uploads` with `purpose: knowledge_document`), named by
+ * the grant's `upload_id`. The title is `name`, or `filename` without its
+ * directories — one of the two is required, since the stored key keeps no
+ * name. `brand_id` is the shorthand `POST /knowledge-sources` takes.
+ */
+const documentSourceBody = z
+  .object({
+    ai_agent_id: uuid,
+    upload_id: z.string().trim().min(1).max(255),
+    name: z.string().trim().min(1).max(200).optional(),
+    filename: z.string().trim().min(1).max(255).optional(),
+    brand_id: uuid.optional(),
+    ...sourceMetaFields,
+    ...sourceScopeFields,
+  })
+  .superRefine((body, ctx) => {
+    refineBrandShorthand(body, ctx);
+    if (body.name === undefined && body.filename === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['name'],
+        message: 'a document needs a name or its filename',
+      });
+    }
+  })
+  .transform(({ brand_id, ...body }) =>
+    brand_id === undefined ? body : { ...body, brand_ids: [brand_id.toLowerCase()] },
+  );
 
 /**
  * Editing an existing source (FR-MOD-06.3.3).
@@ -997,6 +1049,9 @@ export default async function playbookRoutes(
     access: new AccessInfoResolver({ fetcher: createAccessInfoFetcher(accessInfoHttp) }),
   });
   const procedureExamples = new ProcedureExamples();
+  /** Where an uploaded PDF or Word document is (tm 313 · AI-18), and who signs its download link. */
+  const documents = createObjectStore(env.STORAGE_PROVIDER, env.storage);
+  const downloads = new KnowledgeDownloadSigner(env.UPLOAD_SIGNING_KEY);
 
   /** After a procedure skill's save commits: its examples embedded and stored (`storeProcedureExamples`). */
   function storeExamples(
@@ -1948,6 +2003,108 @@ export default async function playbookRoutes(
   );
 
   /**
+   * A PDF or Word document as a knowledge source (tm 313 · AI-18).
+   *
+   * Nothing is parsed here: a document is read by an isolated worker in a
+   * `document` knowledge job, so the source is written `processing` together
+   * with that job — a source that says `processing` always has the job that
+   * will end it — and the answer is a 201 naming it. What this request does
+   * is decide whether there is anything to read: the upload is this
+   * workspace's document, stored, within the size, of the type its bytes say
+   * (`readUploadedDocument`), and not a file the workspace already holds.
+   *
+   * The agent, owner and scope are checked before the object is read, and
+   * again inside the write, as on the other creates.
+   */
+  app.post(
+    '/knowledge-sources/document',
+    { config: { scopes: WRITE, aiInference: true } },
+    async (request, reply) => {
+      const body = parse(documentSourceBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      const title = body.name ?? titleFromFilename(body.filename ?? '');
+      if (title === '') throw ApiError.validation('filename: a document needs a usable name.');
+      const meta = sourceMetaData(body);
+      const scoped = sourceScopeData(body);
+
+      await request.withTenant(async (tx) => {
+        await requireAiAgent(tx, body.ai_agent_id);
+        await requireMember(tx, body.owner_id);
+        await requireSourceScope(tx, body);
+      });
+
+      const document = await readUploadedDocument(documents, tenant.licenseId, body.upload_id);
+
+      const created = await request
+        .withTenant(async (tx) => {
+          const agent = await requireAiAgent(tx, body.ai_agent_id);
+          await requireMember(tx, body.owner_id);
+          await requireSourceScope(tx, body);
+
+          // One source per file per workspace. Looked for first so the answer
+          // names the source; the unique index holds it under a race.
+          const existing = await tx.knowledgeSource.findFirst({
+            where: { fileSha256: document.sha256 },
+            select: { id: true },
+          });
+          if (existing) throw knowledgeSourceExists(existing.id);
+
+          const addedBy = principal.kind === 'agent' ? principal.accountId : null;
+          const source = await createKnowledgeSourceDraft(tx, createScope(agent, body), {
+            licenseId: tenant.licenseId,
+            type: 'file',
+            name: title,
+            // A document's text is its chunks, written by its job.
+            content: null,
+            sourceUrl: null,
+            status: 'processing',
+            addedBy,
+            fileKey: document.key,
+            fileMime: document.mime,
+            fileSize: document.size,
+            fileSha256: document.sha256,
+            ...meta,
+            ...scoped,
+          });
+          const job = await enqueueKnowledgeJob(tx, {
+            context: tenant,
+            sourceId: source.id,
+            kind: 'document',
+            requestedBy: addedBy,
+          });
+          return {
+            source,
+            jobId: job.id,
+            names: await creatorNamesByIds(tx, [addedBy, source.ownerId]),
+          };
+        })
+        .catch(async (error: unknown) => {
+          if (!isDuplicateDocument(error)) throw error;
+          const holder = await request.withTenant((tx) =>
+            tx.knowledgeSource.findFirst({
+              where: { fileSha256: document.sha256 },
+              select: { id: true },
+            }),
+          );
+          throw knowledgeSourceExists(holder?.id ?? null);
+        });
+
+      app.knowledgeJobs.wake();
+      return reply
+        .status(201)
+        .send(
+          serialiseSource(
+            { ...created.source, jobs: [{ id: created.jobId }] },
+            { status: 'processing', chunks: 0 },
+            created.names,
+          ),
+        );
+    },
+  );
+
+  /**
    * Bulk import — the multi-row counterpart of the endpoint above.
    *
    * Three decisions carry it.
@@ -2513,6 +2670,7 @@ export default async function playbookRoutes(
             refreshAfterDays: true,
             sourceTable: true,
             sourceRowId: true,
+            fileKey: true,
           },
         }),
       );
@@ -2524,6 +2682,13 @@ export default async function playbookRoutes(
       // not trusted from creation: a refusal writes nothing.
       if (existing.type === 'website') {
         const queued = await queueCrawl(request, id, existing.sourceUrl);
+        return reply.send(serialiseStoredSource(queued.source, queued.names));
+      }
+      // A PDF or Word document is read again from its original by a
+      // `document` job (tm 313 · AI-18): its text is its chunks, not
+      // `content`, and embedding `content` again would empty it.
+      if (existing.fileKey !== null) {
+        const queued = await queueSourceJob(request, id, 'document');
         return reply.send(serialiseStoredSource(queued.source, queued.names));
       }
       const text = existing.content ?? '';
@@ -2583,17 +2748,38 @@ export default async function playbookRoutes(
   }> {
     if (!storedUrl) throw ApiError.validation('This website source has no URL to crawl.');
     assertPublicHttpUrl(storedUrl);
+    return queueSourceJob(request, id, 'crawl');
+  }
+
+  /**
+   * Queue a source's job — a website's crawl, a document's read (tm 313 ·
+   * AI-18) — or find the one already under way. A new job moves the source to
+   * the status that says one is running (`crawling`, `processing`).
+   */
+  async function queueSourceJob(
+    request: FastifyRequest,
+    id: string,
+    kind: 'crawl' | 'document',
+  ): Promise<{
+    source: Parameters<typeof serialiseStoredSource>[0];
+    names: ReadonlyMap<string, string>;
+    created: boolean;
+    jobId: string;
+  }> {
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
     const queued = await request.withTenant(async (tx) => {
       const job = await enqueueKnowledgeJob(tx, {
         context: tenant,
         sourceId: id,
-        kind: 'crawl',
+        kind,
         requestedBy: principal.kind === 'agent' ? principal.accountId : null,
       });
       if (job.created) {
-        await tx.knowledgeSource.updateMany({ where: { id }, data: { status: 'crawling' } });
+        await tx.knowledgeSource.updateMany({
+          where: { id },
+          data: { status: kind === 'crawl' ? 'crawling' : 'processing' },
+        });
       }
       const source = await tx.knowledgeSource.findFirstOrThrow({
         where: { id },
@@ -2646,6 +2832,41 @@ export default async function playbookRoutes(
           changed_at: page.changedAt ? page.changedAt.toISOString() : null,
         })),
       });
+    },
+  );
+
+  /**
+   * A short-lived link to a document source's original (tm 313 · AI-18-S2) —
+   * "Download original". The link needs no session (a browser following it
+   * sends no bearer token), so it is narrow instead: this source's object,
+   * this filename, five minutes (`GET /knowledge-files/:key`). A source with
+   * no original — every type but a PDF or Word document — is a 404, as is
+   * another workspace's (RLS), and the key is this workspace's by the row's
+   * own CHECK.
+   */
+  app.get<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId/file',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const source = await request.withTenant((tx) =>
+        tx.knowledgeSource.findFirst({
+          where: { id },
+          select: { name: true, fileKey: true, fileMime: true, fileSize: true },
+        }),
+      );
+      const mime = normalizeKnowledgeDocumentMime(source?.fileMime);
+      if (!source?.fileKey || mime === null || source.fileSize === null) {
+        throw ApiError.notFound('This knowledge source has no original file.');
+      }
+      return reply.send(
+        knowledgeFileLink(downloads, {
+          key: source.fileKey,
+          mime,
+          size: source.fileSize,
+          title: source.name,
+        }),
+      );
     },
   );
 
@@ -2851,6 +3072,9 @@ interface SourceRow {
   excludePaths: string[];
   lastCrawledAt: Date | null;
   pageCount: number;
+  fileMime: string | null;
+  fileSize: number | null;
+  fileSha256: string | null;
   /** The source's job under way, if any ({@link ACTIVE_JOB}). */
   jobs: ReadonlyArray<{ id: string }>;
 }
@@ -2923,6 +3147,10 @@ function serialiseSource(
     exclude_paths: source.excludePaths,
     last_crawled_at: source.lastCrawledAt ? source.lastCrawledAt.toISOString() : null,
     page_count: source.pageCount,
+    // A PDF or Word document's original (tm 313 · AI-18); null on the rest.
+    file_mime: source.fileMime,
+    file_size: source.fileSize,
+    file_sha256: source.fileSha256,
     job_id: source.jobs[0]?.id ?? null,
   };
 }

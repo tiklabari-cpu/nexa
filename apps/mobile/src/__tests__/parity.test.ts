@@ -1040,7 +1040,12 @@ describe('module parity matrix — what is still owed', () => {
       // crawl, its pages and its job (AI-17), read by the web panel's detail
       // drawer (tm 312.4). Knowledge is configured in the web console; the app
       // has no knowledge screen, and nothing here re-scopes.
-      contractEndpoints: 309,
+      // 309 -> 312 with `/knowledge-sources/document`,
+      // `/knowledge-sources/{sourceId}/file` and `/knowledge-files/{key}`
+      // (tm 313.1) — a PDF or Word document as a knowledge source and the
+      // signed link to its original (AI-18). Web console only, like the rest of
+      // knowledge; nothing here re-scopes.
+      contractEndpoints: 312,
       scopeBoundaries: 1,
     });
   });

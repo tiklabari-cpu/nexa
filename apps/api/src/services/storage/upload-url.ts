@@ -14,6 +14,7 @@
  * not theirs, and that comparison is one `===` the route cannot forget to make.
  */
 import { createHmac, randomUUID } from 'node:crypto';
+import { KNOWLEDGE_DOCUMENT_PDF, type KnowledgeDocumentMimeType } from '@siyahtus/types';
 import { constantTimeEqual } from '../../lib/crypto.js';
 
 /** What a signature commits to. Changing any of it invalidates the URL. */
@@ -78,12 +79,53 @@ export function licenseOfMailKey(key: string): bigint | null {
 }
 
 /**
- * The licence of anything the object store holds — an upload or an e-mailed
- * file — or null for a key in neither shape. What the stores lay their paths
- * out by; never what a route authorises by.
+ * `<licenseId>-k-<uuid>.pdf|.docx` — a PDF or Word document uploaded for the
+ * knowledge base (tm 313 · AI-18).
+ *
+ * Its own shape for the mail key's reason: `GET /uploads/{key}` answers any
+ * member of the licence, and serves what it holds back to the browser. A
+ * knowledge document is read by the document worker and handed to a person
+ * only through `GET /knowledge-sources/{id}/file`, a short-lived signed link.
+ * `licenseOfKey` refuses this shape, so that route, the composer's
+ * `attachment_keys` and a chat's `attachment_url` all refuse it with no line
+ * of their own; the stores keep it under `<licence>/knowledge/`
+ * ({@link storedObjectPath}). The extension is rebuilt from the type the
+ * grant vetted, never from a filename.
+ */
+export function buildKnowledgeKey(
+  licenseId: bigint,
+  contentType: KnowledgeDocumentMimeType,
+): string {
+  return `${licenseId}-k-${randomUUID()}${contentType === KNOWLEDGE_DOCUMENT_PDF ? '.pdf' : '.docx'}`;
+}
+
+const KNOWLEDGE_KEY = /^(\d{1,19})-k-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(pdf|docx)$/;
+
+/** The licence a knowledge document's key belongs to, or null if it is not one. */
+export function licenseOfKnowledgeKey(key: string): bigint | null {
+  return licenceIn(KNOWLEDGE_KEY, key);
+}
+
+/**
+ * The licence of anything the object store holds — an upload, an e-mailed
+ * file or a knowledge document — or null for a key in none of those shapes.
+ * What the stores lay their paths out by; never what a route authorises by.
  */
 export function licenseOfStoredKey(key: string): bigint | null {
-  return licenseOfKey(key) ?? licenseOfMailKey(key);
+  return licenseOfKey(key) ?? licenseOfMailKey(key) ?? licenseOfKnowledgeKey(key);
+}
+
+/**
+ * Where a key lives inside the store, or null for a key in none of our shapes:
+ * `<licence>/<key>`, and `<licence>/knowledge/<key>` for a knowledge document
+ * — a prefix of its own, so a bucket policy or lifecycle rule can treat the
+ * documents a workspace keeps apart from what its conversations carry. Both
+ * stores derive their paths here, so the two cannot disagree.
+ */
+export function storedObjectPath(key: string): string | null {
+  const license = licenseOfStoredKey(key);
+  if (license === null) return null;
+  return licenseOfKnowledgeKey(key) === null ? `${license}/${key}` : `${license}/knowledge/${key}`;
 }
 
 function licenceIn(pattern: RegExp, key: string): bigint | null {
@@ -158,7 +200,9 @@ export class UploadSigner {
       typeof sizeBytes !== 'number' ||
       typeof expiresAt !== 'number' ||
       !signature ||
-      licenseOfKey(key) === null
+      // An attachment or a knowledge document — the two shapes `POST /uploads`
+      // grants. Never a mail key: nothing uploads one.
+      (licenseOfKey(key) ?? licenseOfKnowledgeKey(key)) === null
     ) {
       return { ok: false, reason: 'malformed' };
     }
@@ -182,7 +226,78 @@ export class UploadSigner {
 function canonical(grant: UploadGrant): string {
   // Length-prefixed rather than delimiter-joined: a content type containing the
   // delimiter must not be able to shift a field boundary.
-  return [grant.key, grant.contentType.toLowerCase(), grant.sizeBytes, grant.expiresAt]
-    .map((part) => `${String(part).length}:${part}`)
-    .join('');
+  return lengthPrefixed([
+    grant.key,
+    grant.contentType.toLowerCase(),
+    grant.sizeBytes,
+    grant.expiresAt,
+  ]);
+}
+
+function lengthPrefixed(parts: ReadonlyArray<string | number>): string {
+  return parts.map((part) => `${String(part).length}:${part}`).join('');
+}
+
+/** How long a knowledge document's download link works (`GET /knowledge-sources/{id}/file`). */
+export const KNOWLEDGE_DOWNLOAD_TTL_SECONDS = 300;
+
+/** What a download link commits to. Changing any of it invalidates the link. */
+export interface KnowledgeDownloadGrant {
+  key: string;
+  /** The name the browser saves the file as. */
+  filename: string;
+  /** Seconds since epoch. */
+  expiresAt: number;
+}
+
+/**
+ * Short-lived links to a knowledge document's original (tm 313 · AI-18-S2).
+ *
+ * The link is the authorisation, like an upload URL — a browser following a
+ * link sends no bearer token — and narrower than a session: one object, one
+ * filename, five minutes. `GET /knowledge-sources/{id}/file` mints it for a
+ * member allowed to read the source; `GET /knowledge-files/{key}` honours it.
+ *
+ * The HMAC key is derived from `UPLOAD_SIGNING_KEY` under its own label, so
+ * no upload grant is ever a valid download signature, or the other way round,
+ * whatever the two canonical forms happen to share.
+ */
+export class KnowledgeDownloadSigner {
+  readonly #secret: Buffer;
+
+  constructor(uploadSigningKey: string) {
+    this.#secret = createHmac('sha256', uploadSigningKey)
+      .update('siyahtus/knowledge-download/v1')
+      .digest();
+  }
+
+  sign(grant: KnowledgeDownloadGrant): string {
+    return createHmac('sha256', this.#secret)
+      .update(lengthPrefixed([grant.key, grant.filename, grant.expiresAt]))
+      .digest('base64url');
+  }
+
+  /** The grant when the link is genuine, for a knowledge document, and not yet expired; else null. */
+  verify(
+    grant: Partial<KnowledgeDownloadGrant> & { signature?: string },
+    now = Math.floor(Date.now() / 1000),
+  ): KnowledgeDownloadGrant | null {
+    const { key, filename, expiresAt, signature } = grant;
+    if (
+      !key ||
+      typeof filename !== 'string' ||
+      typeof expiresAt !== 'number' ||
+      !Number.isSafeInteger(expiresAt) ||
+      !signature ||
+      licenseOfKnowledgeKey(key) === null
+    ) {
+      return null;
+    }
+    const full: KnowledgeDownloadGrant = { key, filename, expiresAt };
+    // Signature before expiry, as for uploads: a forged link learns nothing
+    // from the difference.
+    if (!constantTimeEqual(this.sign(full), signature)) return null;
+    if (expiresAt <= now) return null;
+    return full;
+  }
 }

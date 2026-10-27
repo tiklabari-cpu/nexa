@@ -57,7 +57,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { licenseOfStoredKey } from './upload-url.js';
+import { storedObjectPath } from './upload-url.js';
 
 /** Everything the `s3` provider needs. Assembled once, in `parseEnv`. */
 export interface S3StoreOptions {
@@ -268,16 +268,16 @@ export class S3Store implements ObjectStore {
    *
    * Objects are laid out `<licenceId>/<key>` — the fan-out `LocalStore` gets
    * from directories, kept here so a bucket policy or a lifecycle rule can be
-   * written per licence.
+   * written per licence — and a knowledge document under
+   * `<licenceId>/knowledge/<key>` ({@link storedObjectPath}).
    */
   #locate(key: string): { url: URL; canonicalPath: string } {
-    const license = licenseOfStoredKey(key);
-    if (license === null) {
+    const objectPath = storedObjectPath(key);
+    if (objectPath === null) {
       throw new Error('refusing to touch a key that is not in our own format');
     }
 
     const { endpoint, bucket, forcePathStyle } = this.#options;
-    const objectPath = `${license}/${key}`;
     const canonicalPath = forcePathStyle
       ? `/${uriEncodePath(bucket)}/${uriEncodePath(objectPath)}`
       : `/${uriEncodePath(objectPath)}`;

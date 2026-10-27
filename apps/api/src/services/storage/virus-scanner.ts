@@ -63,8 +63,10 @@ export function createVirusScanner(provider: 'mock' | 'unavailable'): VirusScann
  * Scan `bytes` and refuse anything that is not provably clean.
  *
  * Two refusals, kept distinct so a client can tell "your file is bad" from "try
- * again later": an infected file is a `validation` 400, an unreachable scanner
- * is a `service_unavailable` 503. Both stop the bytes before they are stored.
+ * again later": an infected file is a `validation` 400 with `details.reason`
+ * `virus_detected` (the code a knowledge document's panel words, tm 313.1), an
+ * unreachable scanner is a `service_unavailable` 503. Both stop the bytes
+ * before they are stored.
  */
 export async function assertClean(scanner: VirusScanner, bytes: Buffer): Promise<void> {
   let result: VirusScanResult;
@@ -78,6 +80,8 @@ export async function assertClean(scanner: VirusScanner, bytes: Buffer): Promise
     );
   }
   if (!result.clean) {
-    throw ApiError.validation('This file was rejected by the virus scan.');
+    throw ApiError.validation('This file was rejected by the virus scan.', {
+      reason: 'virus_detected',
+    });
   }
 }

@@ -1465,6 +1465,131 @@ knowledgeSourcesFile:
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
+knowledgeSourcesDocument:
+  post:
+    tags: [Playbook]
+    operationId: createKnowledgeDocumentSource
+    summary: Add an uploaded PDF or Word document as a knowledge source
+    description: |
+      A PDF or DOCX knowledge source (tm 313 · AI-18). The file is uploaded
+      first — `POST /uploads` with `purpose: knowledge_document`, then the
+      bytes to its `upload_url` — and named here by the grant's `upload_id`.
+      Nothing is parsed in the request: a document is read by an isolated
+      worker process in a `document` knowledge job, so the answer is a 201
+      with `status: processing` and the job's id in `job_id` — follow it at
+      `GET /knowledge-jobs/{jobId}`. The source is a `file` source; the text
+      path (`POST /knowledge-sources/file`) is unchanged.
+
+      **The type is read from the stored bytes**, not from a filename: `%PDF-`
+      at the first byte, or a ZIP listing `word/document.xml` and no VBA
+      project (a `.docm` is refused). Anything else is a 400 with
+      `details.reason` `unsupported_type`; past 20 MiB, `file_too_large`.
+      An `upload_id` that is not a document uploaded to this workspace (an
+      attachment's key, another workspace's, one granted but never sent) is a
+      400 with `details.reason` `unknown_upload`.
+
+      **One source per file per workspace:** a file whose sha256 a source of
+      this workspace already holds is a 409 `knowledge_source_exists`, with
+      that source's id in `details.source_id`.
+
+      The original is kept (AI-18-S2) — `GET /knowledge-sources/{sourceId}/file`
+      hands out a short-lived link to it — and is never served from the
+      attachment URL `GET /uploads/{key}`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ai_agent_id, upload_id]
+            properties:
+              ai_agent_id:
+                type: string
+                format: uuid
+                description: The agent this source belongs to. Verified before anything is written.
+              upload_id:
+                type: string
+                maxLength: 255
+                description: The `upload_id` of a `knowledge_document` upload grant whose bytes were sent.
+              name:
+                type: string
+                minLength: 1
+                maxLength: 200
+                description: The source's title. Defaults to `filename` without its directory segments.
+              filename:
+                type: string
+                minLength: 1
+                maxLength: 255
+                description: |
+                  The file's own name, used as the title when `name` is
+                  omitted and as the original's download name — never as a
+                  path. One of `name` and `filename` is required.
+              brand_id:
+                type: string
+                format: uuid
+                description: |
+                  The one brand the document is for — `brand_ids: [brand_id]`.
+                  Naming a different set in `brand_ids` as well is a 400.
+              owner_id:
+                type: string
+                format: uuid
+                nullable: true
+                description: As on `POST /knowledge-sources`.
+              language:
+                type: string
+                nullable: true
+                maxLength: 35
+                description: As on `POST /knowledge-sources`.
+              review_interval_days:
+                type: integer
+                minimum: 1
+                maximum: 365
+                default: 90
+                description: As on `POST /knowledge-sources`.
+              audiences:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeAudience" }
+                description: As on `POST /knowledge-sources`.
+              ai_agent_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: As on `POST /knowledge-sources`.
+              brand_ids:
+                type: array
+                maxItems: 100
+                items: { type: string, format: uuid }
+                description: As on `POST /knowledge-sources`.
+              valid_until:
+                type: string
+                format: date-time
+                nullable: true
+                description: As on `POST /knowledge-sources`.
+    responses:
+      "201":
+        description: Created and queued — `status` is `processing`, `job_id` the document job
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: |
+          `knowledge_source_exists` — a source of this workspace already holds
+          this file (`details.source_id`).
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503":
+        description: The object store could not be read; nothing was written.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
 knowledgeSource:
   parameters:
     - name: sourceId
@@ -1832,6 +1957,34 @@ knowledgeSourceCrawl:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeSourceFile:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getKnowledgeSourceFile
+    summary: A short-lived link to a document source's original file
+    description: |
+      The panel's "Download original" (tm 313 · AI-18-S2). Answers with a
+      signed link to `GET /knowledge-files/{key}` that works for five minutes
+      and needs no session — a browser following a link sends no bearer
+      token. Only a PDF or Word document source has an original: any other
+      source, and another workspace's, is a 404.
+    responses:
+      "200":
+        description: The link
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeFileLink" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 knowledgeJob:

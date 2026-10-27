@@ -62,7 +62,7 @@ import {
   type SearchResult,
 } from '@siyahtus/types';
 import { formatDateTime } from '../lib/format.js';
-import { NAV_DESTINATIONS, isNavVisible } from './navigation.js';
+import { AI_AGENT_LINK, NAV_DESTINATIONS, isNavVisible } from './navigation.js';
 import { ACTIONS, type ActionDeps, type PaletteResult } from './actions.js';
 import { archiveSearchReason } from '../features/inbox/archive-search.js';
 import { HighlightedSnippet, refusalText } from '../features/inbox/ArchiveSearch.js';
@@ -338,7 +338,7 @@ export function CommandPalette(): ReactElement | null {
       );
     }
 
-    for (const dest of NAV_DESTINATIONS) {
+    for (const dest of [...NAV_DESTINATIONS, AI_AGENT_LINK]) {
       // Same courtesy as the actions loop above: a destination that only 403s
       // for this caller is not offered as a result — nor one the public pilot
       // does not offer (tm 257.2), which the rail hides the same way.

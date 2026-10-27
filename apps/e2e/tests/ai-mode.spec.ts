@@ -37,7 +37,7 @@ test.describe('AI mode in the inbox (AI-11)', () => {
       `Tracking for a ${marker} order is emailed the moment it dispatches.`;
 
     // --- A knowledge source only this run's questions can match --------------
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
     await tabs.getByRole('tab', { name: 'Knowledge' }).click();
     await agentPage.getByLabel('Title').fill(`AI mode proof ${run}`);

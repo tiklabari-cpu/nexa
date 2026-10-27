@@ -150,6 +150,7 @@ export const shell: Messages = {
   'nav.customers': 'Müşteriler',
   'nav.team': 'Ekip',
   'nav.playbook': 'Senaryolar',
+  'nav.aiAgent': 'AI Ajanı',
   'nav.reports': 'Raporlar',
   'nav.billing': 'Faturalandırma',
   'nav.settings': 'Ayarlar',

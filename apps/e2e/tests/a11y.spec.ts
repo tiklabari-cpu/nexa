@@ -961,7 +961,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
 
       test('playbook has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/playbook');
+        await agentPage.goto('/app/playbook?view=skills');
         await scanPanel(agentPage, 'Playbook', theme, testInfo, async () => {
           await expect(
             agentPage.getByRole('heading', { name: 'AI Agent', level: 1 }),
@@ -985,7 +985,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/playbook');
+        await agentPage.goto('/app/playbook?view=skills');
         await scanPanel(agentPage, 'Knowledge upload', theme, testInfo, async () => {
           await agentPage
             .getByRole('tablist', { name: 'AI Agent' })
@@ -1010,7 +1010,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/playbook');
+        await agentPage.goto('/app/playbook?view=skills');
         await scanPanel(agentPage, 'AI test lab', theme, testInfo, async () => {
           await agentPage
             .getByRole('tablist', { name: 'AI Agent' })
@@ -1034,7 +1034,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/playbook');
+        await agentPage.goto('/app/playbook?view=skills');
         await scanPanel(agentPage, 'Unresolved questions', theme, testInfo, async () => {
           await agentPage
             .getByRole('tablist', { name: 'AI Agent' })
@@ -1060,7 +1060,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/playbook');
+        await agentPage.goto('/app/playbook?view=skills');
         const title = `A11y source ${theme} ${Date.now().toString().slice(-6)}`;
         await scanPanel(agentPage, 'Knowledge edit dialog', theme, testInfo, async () => {
           await agentPage
@@ -1109,7 +1109,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/playbook');
+        await agentPage.goto('/app/playbook?view=skills');
 
         let skillId = '';
         try {

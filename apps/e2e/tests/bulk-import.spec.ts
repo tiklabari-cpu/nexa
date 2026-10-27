@@ -77,7 +77,7 @@ test.describe('knowledge — bulk CSV import (FR-MOD-06.3.2)', () => {
 
     const fileName = `siyahtus-bulk-${run}.csv`;
 
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })

@@ -20,7 +20,7 @@ const MEMBER = { email: 'agent2@acme.localhost', password: DEMO.password } as co
 test.describe.configure({ mode: 'serial' });
 
 async function openTestTab(page: Page): Promise<void> {
-  await page.goto('/app/playbook');
+  await page.goto('/app/playbook?view=skills');
   await page.getByRole('tablist', { name: 'AI Agent' }).getByRole('tab', { name: 'Test' }).click();
   await expect(page.getByRole('region', { name: 'Test lab' })).toBeVisible();
 }
@@ -130,7 +130,7 @@ test.describe('AI test lab (AI-19)', () => {
     const member = await context.newPage();
     try {
       await signInAs(member, MEMBER.email, MEMBER.password);
-      await member.goto('/app/playbook');
+      await member.goto('/app/playbook?view=skills');
       await expect(member.getByRole('navigation').first()).toBeVisible();
       await expect(member.getByRole('tab', { name: 'Test' })).toHaveCount(0);
       await expect(member.getByRole('region', { name: 'Test lab' })).toHaveCount(0);

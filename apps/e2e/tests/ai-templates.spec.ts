@@ -59,7 +59,7 @@ test.describe('iGaming template gallery (AI-15)', () => {
     agentPage,
   }) => {
     await agentPage.setViewportSize({ width: 1280, height: 1400 });
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage.getByRole('button', { name: 'Browse templates' }).click();
     const gallery = agentPage.getByRole('dialog', { name: 'Browse templates' });
     await gallery.getByRole('tab', { name: 'iGaming' }).click();

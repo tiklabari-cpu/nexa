@@ -1,7 +1,7 @@
 /**
  * AI behaviour rules and persona style (tm 299.2 · AI-07).
  *
- * What the unit suites cannot prove: that a rule written in the Profile tab
+ * What the unit suites cannot prove: that a rule written in the Behaviour tab
  * round-trips through the real API and survives a reload, that the three style
  * settings persist, and that a rule telling the AI to ask for a password is
  * stopped by the conflict check instead of reaching the model.
@@ -12,9 +12,9 @@ test.describe('AI behaviour rules (AI-07)', () => {
   test('a rule is written, found after a reload, edited and deleted', async ({ agentPage }) => {
     const run = Date.now().toString().slice(-6);
     const title = `Ask the amount ${run}`;
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'Behaviour' }).click();
 
     await agentPage.getByRole('button', { name: 'New rule' }).click();
     await agentPage.getByLabel('Title').fill(title);
@@ -31,7 +31,7 @@ test.describe('AI behaviour rules (AI-07)', () => {
 
     // It is the server that holds it: reload and open the tab again.
     await agentPage.reload();
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'Behaviour' }).click();
     await expect(agentPage.getByRole('listitem').filter({ hasText: title })).toBeVisible();
 
     // Switch it off, then edit its priority.
@@ -60,10 +60,10 @@ test.describe('AI behaviour rules (AI-07)', () => {
     agentPage,
   }) => {
     const title = `Password ask ${Date.now().toString().slice(-6)}`;
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
-      .getByRole('tab', { name: 'Profile' })
+      .getByRole('tab', { name: 'Behaviour' })
       .click();
 
     await agentPage.getByRole('button', { name: 'New rule' }).click();
@@ -85,9 +85,9 @@ test.describe('AI behaviour rules (AI-07)', () => {
   test('the style settings — address form, emoji, questions per message — survive a reload', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'General settings' }).click();
 
     const save = agentPage.getByRole('button', { name: 'Save profile' });
     await agentPage.getByLabel('Address the player as').selectOption('sen');
@@ -97,7 +97,7 @@ test.describe('AI behaviour rules (AI-07)', () => {
     await expect(save).toBeDisabled();
 
     await agentPage.reload();
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'General settings' }).click();
     try {
       await expect(agentPage.getByLabel('Address the player as')).toHaveValue('sen');
       await expect(agentPage.getByLabel('Emoji')).toHaveValue('none');

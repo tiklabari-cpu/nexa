@@ -1,7 +1,7 @@
 /**
  * The AI agent's hand-over settings (tm 303.5 · AI-09, K9).
  *
- * What the unit suites cannot prove: that a rule written in Playbook › Profile
+ * What the unit suites cannot prove: that a rule written in Playbook › Behaviour
  * › Hand-over is held by the real API in the order it was dragged to and with
  * the switch it was given, that the thresholds, the messages and the default
  * "solved" criteria survive a reload, and that a locked platform rule is on the
@@ -11,10 +11,10 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
 
 async function openHandoff(page: Page): Promise<void> {
-  await page.goto('/app/playbook');
+  await page.goto('/app/playbook?view=skills');
   await page
     .getByRole('tablist', { name: 'AI Agent' })
-    .getByRole('tab', { name: 'Profile' })
+    .getByRole('tab', { name: 'Behaviour' })
     .click();
   await expect(page.getByRole('heading', { name: 'Hand-over rules' })).toBeVisible();
 }
@@ -92,7 +92,7 @@ test.describe('AI hand-over rules (AI-09)', () => {
     await agentPage.reload();
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
-      .getByRole('tab', { name: 'Profile' })
+      .getByRole('tab', { name: 'Behaviour' })
       .click();
     const kept = agentPage
       .getByRole('list', { name: 'Your hand-over rules' })
@@ -159,7 +159,7 @@ test.describe('AI hand-over rules (AI-09)', () => {
     await agentPage.reload();
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
-      .getByRole('tab', { name: 'Profile' })
+      .getByRole('tab', { name: 'Behaviour' })
       .click();
     await expect(
       agentPage
@@ -203,7 +203,7 @@ test.describe('AI hand-over rules (AI-09)', () => {
 });
 
 /**
- * Hand-over routes (tm 307.3 · AI-12): a route written in Playbook › Profile ›
+ * Hand-over routes (tm 307.3 · AI-12): a route written in Playbook › Behaviour ›
  * Hand-over is held by the real API — its team by id, its priority, its switch
  * — and an edit reaches it as the one field it changes.
  */
@@ -274,7 +274,7 @@ test.describe('AI hand-over routes (AI-12)', () => {
     await agentPage.reload();
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
-      .getByRole('tab', { name: 'Profile' })
+      .getByRole('tab', { name: 'Behaviour' })
       .click();
     const kept = agentPage
       .getByRole('list', { name: 'Hand-over routes' })

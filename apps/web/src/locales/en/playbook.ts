@@ -117,7 +117,38 @@ export const playbook: Messages = {
   'playbook.actions.browseTemplates': 'Browse templates',
   'playbook.actions.newSkill': 'New skill',
   'playbook.tabs.performance': 'Performance',
-  'playbook.tabs.profile': 'Profile',
+  'playbook.tabs.general': 'General settings',
+  'playbook.tabs.behaviour': 'Behaviour',
+  // "Add an AI agent" (CreateAiAgentCard.tsx, tm 390.2)
+  'playbook.create.title': 'Add an AI agent',
+  'playbook.create.description':
+    'Give the assistant a name and, if you like, a tone. It starts switched off — you choose when it goes live.',
+  'playbook.create.name': 'Name',
+  'playbook.create.namePlaceholder': 'Support assistant',
+  'playbook.create.nameRequired': 'Give the AI agent a name.',
+  'playbook.create.tone': 'Tone',
+  'playbook.create.tonePlaceholder': 'Friendly and concise',
+  'playbook.create.submit': 'Add AI agent',
+  'playbook.create.noAgentTitle': 'No AI agent yet',
+  'playbook.create.askAdmin': 'Ask an admin of this workspace to add the AI agent.',
+  // What is left before it can go live (SetupSteps.tsx)
+  'playbook.setup.title': 'Set-up steps',
+  'playbook.setup.knowledge': 'Add a knowledge source for it to answer from',
+  'playbook.setup.skill': 'Add an active skill with steps',
+  'playbook.setup.open': 'Open',
+  'playbook.setup.done': 'Done',
+  'playbook.setup.todo': 'Not done yet',
+  // The widget welcome message (WelcomeMessageCard.tsx)
+  'playbook.welcome.title': 'Welcome message',
+  'playbook.welcome.description':
+    'The first message a visitor sees from the assistant in the chat widget.',
+  'playbook.welcome.titleLabel': 'Title',
+  'playbook.welcome.textLabel': 'Message',
+  'playbook.welcome.save': 'Save welcome message',
+  'playbook.welcome.saved': 'Saved',
+  'playbook.welcome.perBrand': 'Each brand has its own welcome message.',
+  'playbook.welcome.readOnly': 'You can read the welcome message but not change it.',
+  'playbook.welcome.goToWidget': 'Go to widget settings',
   'playbook.tabs.skills': 'Skills',
   'playbook.tabs.knowledge': 'Knowledge',
   'playbook.tabs.kb': 'Public KB',
@@ -549,7 +580,7 @@ export const playbook: Messages = {
   'playbook.profile.noneYet': 'None yet',
   'playbook.profile.noAgentTitle': 'No AI agent',
   'playbook.profile.noAgentDescription':
-    'Once an AI agent exists on this workspace, its persona is edited here.',
+    'Add the AI agent on the General settings tab first; this tab is edited once it exists.',
 
   // AI performance (AiPerformance.tsx)
   'playbook.performance.noAccessTitle': 'No access to performance',

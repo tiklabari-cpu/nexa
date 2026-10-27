@@ -15,7 +15,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
 
 async function openGuardrails(page: Page): Promise<void> {
-  await page.goto('/app/playbook');
+  await page.goto('/app/playbook?view=skills');
   await page
     .getByRole('tablist', { name: 'AI Agent' })
     .getByRole('tab', { name: 'Guardrails' })

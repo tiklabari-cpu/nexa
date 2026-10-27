@@ -200,7 +200,7 @@ test('a published KB article is anonymously readable, SEO-ready and XSS-safe; dr
   // its whole content — down to Create/Publish — fits without depending on the
   // modal scrolling (a separate admin concern, not what PUBKB-i verifies).
   await agentPage.setViewportSize({ width: 1280, height: 1600 });
-  await agentPage.goto('/app/playbook');
+  await agentPage.goto('/app/playbook?view=skills');
   await agentPage.getByRole('tab', { name: 'Public KB' }).click();
   await agentPage.getByRole('button', { name: 'New article' }).click();
 

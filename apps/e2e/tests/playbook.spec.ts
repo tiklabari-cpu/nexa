@@ -21,7 +21,7 @@ import { ACME_OWNER, API_BASE, expect, ownerAccessTokenFor, test } from './fixtu
 
 test.describe('playbook — browse templates', () => {
   test('a template card opens a pre-filled skill editor', async ({ agentPage }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
 
     // The gallery is a primary header action, reachable and labelled.
     await agentPage.getByRole('button', { name: 'Browse templates' }).click();
@@ -68,7 +68,7 @@ test.describe('playbook — browse templates', () => {
   test('finds a template by search and creates a skill from it (05.6-tmpl31-d)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage.getByRole('button', { name: 'Browse templates' }).click();
 
     const gallery = agentPage.getByRole('dialog', { name: 'Browse templates' });
@@ -91,7 +91,7 @@ test.describe('playbook — browse templates', () => {
   test('"Try this" on a recommended card opens a pre-filled editor (FR-MOD-05.2)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
 
     // The recommended strip is inline on the page, not behind the gallery.
     const strip = agentPage.getByRole('region', { name: 'Recommended skills' });
@@ -160,7 +160,7 @@ test.describe('playbook — step authoring', () => {
   test('adds, orders and saves steps on a skill that had none (FR-MOD-06.2.4)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
 
     // "New skill" opens a blank form and stores nothing (O12): a click nobody
     // follows up must not leave a draft in the workspace.
@@ -269,7 +269,7 @@ test.describe('playbook — procedure authoring', () => {
   test('authors, saves and previews a procedure; the save refuses an undefined variable', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage.getByRole('button', { name: 'New skill', exact: true }).click();
     await expect(agentPage.getByRole('region', { name: 'New skill' })).toBeVisible();
 
@@ -418,7 +418,7 @@ test.describe('playbook — public KB categories', () => {
     expect(created.ok(), `create failed: ${created.status()} ${await created.text()}`).toBe(true);
     categoryId = ((await created.json()) as { id: string }).id;
 
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage.getByRole('tab', { name: 'Public KB' }).click();
     await agentPage.getByRole('button', { name: 'Manage categories' }).click();
 

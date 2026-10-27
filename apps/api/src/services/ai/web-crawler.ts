@@ -15,6 +15,11 @@
  * resolve through `resolvePublicHttpTarget` and connect through
  * `pinnedConnection` (`lib/ssrf.ts`), as the webhook sender does — a checked
  * name is not a checked address (tm 256.9).
+ *
+ * That real one is `crawler/http-fetcher.ts` (tm 312.2), with the multi-page
+ * crawl's frontier, robots.txt, sitemaps and structured extraction beside it.
+ * The request-path callers of `crawl` stay on this mock until the background
+ * job runner replaces them (tm 312.3).
  */
 
 export interface CrawlResult {

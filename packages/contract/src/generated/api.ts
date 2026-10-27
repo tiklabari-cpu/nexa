@@ -4413,6 +4413,19 @@ export interface paths {
      *     of which a pasted string has — so it is created through
      *     `POST /knowledge-sources/file` and nowhere else.
      *
+     *     **How far a website is crawled (tm 312 · AI-17)** is `crawl_scope`,
+     *     `page_limit`, `include_paths` and `exclude_paths`, refused with a 400
+     *     for every other type. A website source without them is a single page,
+     *     at most 200 pages, every path. Until the crawl job runner arrives
+     *     (tm 312.3) the URL given is fetched in this request whatever the scope;
+     *     from then on the reply is `status: crawling` with the job in
+     *     `job_id`, nothing fetched in the request, and the job is followed at
+     *     `GET /knowledge-jobs/{jobId}`. A client reads `status` and `job_id`
+     *     rather than assuming either.
+     *
+     *     `brand_id` is the one brand a website belongs to, a shorthand for
+     *     `brand_ids: [brand_id]`; naming both is a 400 unless they agree.
+     *
      *     A new source counts as reviewed when it is added (`reviewed_at`).
      *     `owner_id` must name a member of this workspace; anyone else is a 400.
      *
@@ -4617,6 +4630,12 @@ export interface paths {
      *     changing it) restarts the countdown from now; setting it to `null` turns
      *     automatic refresh back off. It never touches `content` or `chunk_count`
      *     by itself — only the freshness sweep or a real crawl does that.
+     *
+     *     **`crawl_scope`, `page_limit`, `include_paths` and `exclude_paths`
+     *     (tm 312 · AI-17)** say how far the next crawl of a `website` source
+     *     reaches — refused for every other type. Nothing is fetched or
+     *     re-indexed for them: the pages already in the store stay until the
+     *     next crawl, which leaves out what the new settings leave out.
      *
      *     **`owner_id`, `language` and `review_interval_days` (tm 309.1) belong to
      *     every type.** None of them is re-indexed or changes what the AI says.
@@ -14234,9 +14253,45 @@ export interface components {
       name: string;
       /** @enum {string} */
       type: 'website' | 'file' | 'article' | 'faq';
+      /**
+       * @description `ready` — indexed; `empty` — indexed to nothing; `indexing` —
+       *     text waiting to be indexed; `crawling` — a website's crawl job
+       *     is under way (`job_id`); `partial` — the last crawl finished
+       *     with pages that failed (its pages list says which); `failed`.
+       */
       status: string;
       /** @description The crawled URL */
       source_url?: string | null;
+      /**
+       * @description How far the website is crawled (tm 312 · AI-17); null for the
+       *     other types.
+       */
+      crawl_scope?: components['schemas']['CrawlScope'] | null;
+      /** @description The most pages one crawl keeps; null for the other types. */
+      page_limit?: number | null;
+      /** @description Path prefixes the crawl keeps to; empty — every path. */
+      include_paths?: string[];
+      /** @description Path prefixes the crawl leaves out. */
+      exclude_paths?: string[];
+      /**
+       * Format: date-time
+       * @description When the last crawl job finished, whatever came of it; null until
+       *     one has (a website crawled in the request before tm 312.3 has
+       *     none).
+       */
+      last_crawled_at?: string | null;
+      /**
+       * @description Pages the last crawl left in the store (`ok` + `unchanged`);
+       *     0 for the other types.
+       */
+      page_count?: number;
+      /**
+       * Format: uuid
+       * @description The source's job under way (`queued`, `running` or
+       *     `waiting_budget`) — follow it at `GET /knowledge-jobs/{jobId}`;
+       *     null when there is none.
+       */
+      job_id?: string | null;
       chunk_count: number;
       /** Format: date-time */
       updated_at?: string;
@@ -14351,6 +14406,119 @@ export interface components {
        *     other source.
        */
       kb_article_id?: string | null;
+    };
+    /**
+     * @description How far a website source's crawl reaches (tm 312 · AI-17,
+     *     `@siyahtus/types` `CRAWL_SCOPES`): `single` — the URL given and
+     *     nothing else; `all` — every page under it, from its sitemap or, with
+     *     none, by following links (depth 3); `sitemap` — the pages its sitemap
+     *     lists. Always the same host and below the URL's path, within
+     *     `include_paths`/`exclude_paths`, robots.txt and `page_limit`.
+     * @enum {string}
+     */
+    CrawlScope: 'single' | 'all' | 'sitemap';
+    /**
+     * @description What became of one crawled page (`KNOWLEDGE_PAGE_STATUSES`): `ok` —
+     *     fetched and indexed; `unchanged` — same text as the last crawl, not
+     *     embedded again; `skipped_scope` — outside the scope or path lists;
+     *     `robots_disallowed` — robots.txt forbids it, never fetched; `blocked`
+     *     — a bot wall; `needs_js` — its text is drawn by JavaScript, which the
+     *     crawler does not run; `error` — the fetch failed (`error` says why);
+     *     `removed` — gone (two 404/410 in a row) or out of scope since, its
+     *     chunks deleted. Only `ok` and `unchanged` pages answer.
+     * @enum {string}
+     */
+    KnowledgePageStatus:
+      | 'ok'
+      | 'unchanged'
+      | 'skipped_scope'
+      | 'robots_disallowed'
+      | 'blocked'
+      | 'needs_js'
+      | 'error'
+      | 'removed';
+    /** @description One page of a website source's crawl (tm 312 · AI-17). */
+    KnowledgePage: {
+      /** Format: uuid */
+      id: string;
+      /** @description The page's URL in its normalised spelling. */
+      url: string;
+      title?: string | null;
+      /** @description The page's `<html lang>`, as a primary subtag. */
+      lang?: string | null;
+      status: components['schemas']['KnowledgePageStatus'];
+      http_status?: number | null;
+      /**
+       * @description A snake_case code saying why the page is `error` or `blocked`
+       *     (`fetch_timeout`, `too_large`, `ssrf_refused`…) — the panel words it.
+       */
+      error?: string | null;
+      /** @description Links from the start URL. */
+      depth?: number;
+      chunk_count: number;
+      /** Format: date-time */
+      fetched_at?: string | null;
+      /**
+       * Format: date-time
+       * @description When the page's text last changed — the "review what changed" list.
+       */
+      changed_at?: string | null;
+    };
+    /**
+     * @description `crawl` — a website's first or a manual crawl; `refresh` — the
+     *     freshness sweep's re-crawl; `document` — a large document's parse and
+     *     index (AI-18).
+     * @enum {string}
+     */
+    KnowledgeJobKind: 'crawl' | 'refresh' | 'document';
+    /**
+     * @description `queued` → `running` → `done` | `failed`; `waiting_budget` — the
+     *     day's AI allowance ran out mid-job, it resumes after UTC midnight from
+     *     where it stopped, the pages indexed so far already answering;
+     *     `cancelled` by a person. A source has at most one job under way
+     *     (`queued`, `running`, `waiting_budget`).
+     * @enum {string}
+     */
+    KnowledgeJobStatus: 'queued' | 'running' | 'waiting_budget' | 'done' | 'failed' | 'cancelled';
+    /**
+     * @description A knowledge job (tm 312 · AI-17), worked through in the background —
+     *     the panel polls it for a crawl's progress.
+     */
+    KnowledgeJob: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      source_id: string;
+      kind: components['schemas']['KnowledgeJobKind'];
+      status: components['schemas']['KnowledgeJobStatus'];
+      /**
+       * @description Progress. `discovered` grows as the crawl finds pages;
+       *     `done` = `ok` + `unchanged` + `skipped` + `failed` + `removed`.
+       */
+      pages: {
+        discovered: number;
+        done: number;
+        ok: number;
+        unchanged: number;
+        /** @description `skipped_scope` and `robots_disallowed` pages. */
+        skipped: number;
+        /** @description `error`, `blocked` and `needs_js` pages. */
+        failed: number;
+        removed: number;
+      };
+      /** @description A snake_case code — why the job failed or stopped. */
+      error?: string | null;
+      /**
+       * Format: date-time
+       * @description A `waiting_budget` job resumes at this moment (UTC midnight).
+       */
+      available_at?: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      started_at?: string | null;
+      /** Format: date-time */
+      finished_at?: string | null;
     };
     /**
      * @description One CSV data row's verdict. `line` is the row's 1-based position among
@@ -27319,6 +27487,29 @@ export interface operations {
            */
           brand_ids?: string[];
           /**
+           * Format: uuid
+           * @description The one brand the source is for — `brand_ids: [brand_id]`.
+           *     With `brand_ids` as well, the two must agree.
+           */
+          brand_id?: string;
+          crawl_scope?: components['schemas']['CrawlScope'];
+          /**
+           * @description The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+           *     sources only. Omitted — 200.
+           */
+          page_limit?: number;
+          /**
+           * @description URL path prefixes the crawl keeps to; empty — every path. A prefix
+           *     matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+           *     `/bonuslar`). Repeats folded. Website sources only.
+           */
+          include_paths?: string[];
+          /**
+           * @description URL path prefixes the crawl leaves out; exclusion wins over
+           *     `include_paths`. Website sources only.
+           */
+          exclude_paths?: string[];
+          /**
            * Format: date-time
            * @description Past this moment the source answers nothing; null — no end.
            */
@@ -27327,7 +27518,10 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Indexed */
+      /**
+       * @description Created — indexed, or for a website with a crawl job under way
+       *     (`status: crawling`, `job_id`).
+       */
       201: {
         headers: {
           [name: string]: unknown;
@@ -27529,6 +27723,23 @@ export interface operations {
            *     automatic refresh off.
            */
           refresh_after_days?: number | null;
+          crawl_scope?: components['schemas']['CrawlScope'];
+          /**
+           * @description The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+           *     sources only.
+           */
+          page_limit?: number;
+          /**
+           * @description URL path prefixes the crawl keeps to; empty — every path. A prefix
+           *     matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+           *     `/bonuslar`). Repeats folded. Website sources only.
+           */
+          include_paths?: string[];
+          /**
+           * @description URL path prefixes the crawl leaves out; exclusion wins over
+           *     `include_paths`. Website sources only.
+           */
+          exclude_paths?: string[];
           /**
            * Format: uuid
            * @description A member of this workspace; null makes the source unowned.

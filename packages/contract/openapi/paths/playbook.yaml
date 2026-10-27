@@ -1088,6 +1088,19 @@ knowledgeSources:
       of which a pasted string has — so it is created through
       `POST /knowledge-sources/file` and nowhere else.
 
+      **How far a website is crawled (tm 312 · AI-17)** is `crawl_scope`,
+      `page_limit`, `include_paths` and `exclude_paths`, refused with a 400
+      for every other type. A website source without them is a single page,
+      at most 200 pages, every path. Until the crawl job runner arrives
+      (tm 312.3) the URL given is fetched in this request whatever the scope;
+      from then on the reply is `status: crawling` with the job in
+      `job_id`, nothing fetched in the request, and the job is followed at
+      `GET /knowledge-jobs/{jobId}`. A client reads `status` and `job_id`
+      rather than assuming either.
+
+      `brand_id` is the one brand a website belongs to, a shorthand for
+      `brand_ids: [brand_id]`; naming both is a 400 unless they agree.
+
       A new source counts as reviewed when it is added (`reviewed_at`).
       `owner_id` must name a member of this workspace; anyone else is a 400.
 
@@ -1162,6 +1175,36 @@ knowledgeSources:
                 description: |
                   Brands of this workspace whose conversations may use the
                   source; empty — every brand. Omitted — every brand.
+              brand_id:
+                type: string
+                format: uuid
+                description: |
+                  The one brand the source is for — `brand_ids: [brand_id]`.
+                  With `brand_ids` as well, the two must agree.
+              crawl_scope:
+                $ref: "../openapi.yaml#/components/schemas/CrawlScope"
+              page_limit:
+                type: integer
+                minimum: 1
+                maximum: 200
+                description: |
+                  The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+                  sources only. Omitted — 200.
+              include_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl keeps to; empty — every path. A prefix
+                  matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+                  `/bonuslar`). Repeats folded. Website sources only.
+              exclude_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl leaves out; exclusion wins over
+                  `include_paths`. Website sources only.
               valid_until:
                 type: string
                 format: date-time
@@ -1170,7 +1213,9 @@ knowledgeSources:
                   Past this moment the source answers nothing; null — no end.
     responses:
       "201":
-        description: Indexed
+        description: |
+          Created — indexed, or for a website with a crawl job under way
+          (`status: crawling`, `job_id`).
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
@@ -1464,6 +1509,12 @@ knowledgeSource:
       automatic refresh back off. It never touches `content` or `chunk_count`
       by itself — only the freshness sweep or a real crawl does that.
 
+      **`crawl_scope`, `page_limit`, `include_paths` and `exclude_paths`
+      (tm 312 · AI-17)** say how far the next crawl of a `website` source
+      reaches — refused for every other type. Nothing is fetched or
+      re-indexed for them: the pages already in the store stay until the
+      next crawl, which leaves out what the new settings leave out.
+
       **`owner_id`, `language` and `review_interval_days` (tm 309.1) belong to
       every type.** None of them is re-indexed or changes what the AI says.
       An edit is not a review: `reviewed_at` moves only through
@@ -1505,6 +1556,30 @@ knowledgeSource:
                 description: |
                   Only for website sources; refused for the rest. Null turns
                   automatic refresh off.
+              crawl_scope:
+                $ref: "../openapi.yaml#/components/schemas/CrawlScope"
+              page_limit:
+                type: integer
+                minimum: 1
+                maximum: 200
+                description: |
+                  The most pages one crawl keeps (`KNOWLEDGE_PAGE_LIMIT`). Website
+                  sources only.
+              include_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl keeps to; empty — every path. A prefix
+                  matches at a segment boundary (`/bonus` takes `/bonus/x`, not
+                  `/bonuslar`). Repeats folded. Website sources only.
+              exclude_paths:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 200, pattern: "^/[^\\s?#*]*$" }
+                description: |
+                  URL path prefixes the crawl leaves out; exclusion wins over
+                  `include_paths`. Website sources only.
               owner_id:
                 type: string
                 format: uuid
@@ -1672,4 +1747,141 @@ knowledgeSourceReview:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ---------------------------------------------------------------------------
+# NOT MOUNTED YET — tm 312.3 (CRAWL-JOB-RUNNER) mounts these four with the job
+# runner, adds them to `openapi.yaml` `paths`, bumps the mobile parity count
+# and lists them in `endpoint-ui.cjs` until tm 312.4 calls them. Written here
+# by tm 312.1 (the schema and contract half) because `contract-parity.test.ts`
+# fails any documented operation no route serves:
+#   /knowledge-sources/{sourceId}/pages  → knowledgeSourcePages
+#   /knowledge-sources/{sourceId}/crawl  → knowledgeSourceCrawl
+#   /knowledge-jobs/{jobId}              → knowledgeJob
+#   /knowledge-jobs/{jobId}/cancel       → knowledgeJobCancel
+# ---------------------------------------------------------------------------
+
+knowledgeSourcePages:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: listKnowledgeSourcePages
+    summary: The pages a website source's crawls found
+    description: |
+      Every page the source's crawls found (tm 312 · AI-17), whatever became
+      of it, URL order. Unpaged: a source keeps at most 200 pages, and the
+      ones it found but skipped are bounded by the same crawl. Any other type
+      has none — an empty list, not a 400.
+    parameters:
+      - name: status
+        in: query
+        description: Only the pages with this status.
+        schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgePageStatus" }
+    responses:
+      "200":
+        description: Pages
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/KnowledgePage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeSourceCrawl:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: crawlKnowledgeSource
+    summary: Queue a crawl of a website source
+    description: |
+      Queues a `crawl` job for a `website` source (tm 312 · AI-17) — the
+      panel's "Crawl again" — and answers with it; nothing is fetched in the
+      request. The source is `crawling` until the job ends. The stored URL
+      passes the SSRF guard again before anything is queued (NFR-S7).
+
+      A source has at most one job under way: a second request while one is
+      `queued`, `running` or `waiting_budget` is a 409 with that job's id in
+      `details.job_id`. Any other type is a 400 with `details.reason`
+      `knowledge_source_not_website`.
+    responses:
+      "202":
+        description: Queued
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeJob" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeJob:
+  parameters:
+    - name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getKnowledgeJob
+    summary: A knowledge job's progress
+    description: |
+      Where a crawl (or a document's processing) is (tm 312 · AI-17). The
+      panel polls it every 3 seconds while the job is under way.
+    responses:
+      "200":
+        description: The job
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeJob" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeJobCancel:
+  parameters:
+    - name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: cancelKnowledgeJob
+    summary: Stop a knowledge job
+    description: |
+      Stops a job under way (tm 312 · AI-17): it is `cancelled`, the runner
+      fetches nothing more for it, and the pages it already indexed stay —
+      they answer, and the source is `partial` or `ready` by what it has.
+      A job that has already ended is a 409.
+    responses:
+      "200":
+        description: Cancelled
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeJob" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

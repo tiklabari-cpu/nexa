@@ -40,6 +40,12 @@ import {
   HANDOFF_TRIGGER_BOUNDS,
   HANDOFF_TRIGGER_LOCKED_REASON,
   DEFAULT_KNOWLEDGE_LIST_AUDIENCE,
+  CRAWL_SCOPES,
+  DEFAULT_CRAWL_SCOPE,
+  KNOWLEDGE_CRAWL_PATHS,
+  KNOWLEDGE_JOB_ACTIVE_STATUSES,
+  KNOWLEDGE_PAGE_LIMIT,
+  normalizeCrawlPaths,
   KNOWLEDGE_AUDIENCES,
   KNOWLEDGE_LIST_AUDIENCES,
   KNOWLEDGE_REVIEW_INTERVAL_DAYS,
@@ -292,6 +298,48 @@ const sourceScopeFields = {
 };
 
 /**
+ * A list of URL path prefixes (tm 312 · AI-17) in the one spelling a source
+ * keeps (`normalizeCrawlPaths`); an entry that is not a path prefix is a 400.
+ */
+const crawlPaths = z
+  .array(z.string())
+  .max(KNOWLEDGE_CRAWL_PATHS.maxCount)
+  .transform((paths, ctx) => {
+    const kept = normalizeCrawlPaths(paths);
+    if (kept === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `expected path prefixes starting with "/", at most ${KNOWLEDGE_CRAWL_PATHS.maxLength} characters, with no query, fragment, wildcard or space`,
+      });
+      return z.NEVER;
+    }
+    return kept;
+  });
+
+/**
+ * How far a website source's crawl reaches (tm 312 · AI-17), on a create and
+ * an edit. Only a website is crawled, so each is refused — never dropped — for
+ * the other types ({@link refuseCrawlSettings}).
+ */
+const crawlSettingsFields = {
+  crawl_scope: z.enum(CRAWL_SCOPES).optional(),
+  page_limit: z
+    .number()
+    .int()
+    .min(KNOWLEDGE_PAGE_LIMIT.min)
+    .max(KNOWLEDGE_PAGE_LIMIT.max)
+    .optional(),
+  include_paths: crawlPaths.optional(),
+  exclude_paths: crawlPaths.optional(),
+};
+const CRAWL_SETTINGS = ['crawl_scope', 'page_limit', 'include_paths', 'exclude_paths'] as const;
+
+/** The crawl setting a body names, if it names one — the field to refuse for a source that is not a website. */
+function namedCrawlSetting(body: Partial<Record<(typeof CRAWL_SETTINGS)[number], unknown>>) {
+  return CRAWL_SETTINGS.find((field) => body[field] !== undefined);
+}
+
+/**
  * A website source is crawled from a URL; an `article` or a `faq` indexes the
  * text the admin pasted. So exactly one of `source_url` (website) or `content`
  * (the rest) is required — enforced here rather than left for the handler to
@@ -314,8 +362,30 @@ const createSourceBody = z
     type: z.enum(['website', 'file', 'article', 'faq']).default('article'),
     ...sourceMetaFields,
     ...sourceScopeFields,
+    ...crawlSettingsFields,
+    /** The one brand a website belongs to (AI-17): `brand_ids: [brand_id]`. */
+    brand_id: uuid.optional(),
   })
   .superRefine((body, ctx) => {
+    const crawlSetting = namedCrawlSetting(body);
+    if (crawlSetting !== undefined && body.type !== 'website') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [crawlSetting],
+        message: 'only a website source is crawled',
+      });
+    }
+    if (
+      body.brand_id !== undefined &&
+      body.brand_ids !== undefined &&
+      (body.brand_ids.length !== 1 || body.brand_ids[0] !== body.brand_id.toLowerCase())
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['brand_id'],
+        message: 'brand_id and brand_ids name different brands',
+      });
+    }
     if (body.type === 'file') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -337,7 +407,11 @@ const createSourceBody = z
         message: 'content is required',
       });
     }
-  });
+  })
+  // `brand_id` is a shorthand: from here on the source's brands are `brand_ids`.
+  .transform(({ brand_id, ...body }) =>
+    brand_id === undefined ? body : { ...body, brand_ids: [brand_id.toLowerCase()] },
+  );
 
 /**
  * The upload body (FR-MOD-06.3.2, "File").
@@ -408,6 +482,7 @@ const updateSourceBody = z
     refresh_after_days: z.number().int().min(1).max(365).nullable().optional(),
     ...sourceMetaFields,
     ...sourceScopeFields,
+    ...crawlSettingsFields,
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -1650,7 +1725,7 @@ export default async function playbookRoutes(
           ...(query.owner_id === undefined ? {} : { ownerId: query.owner_id }),
         },
         orderBy: { updatedAt: 'desc' },
-        include: { _count: { select: { chunks: true } } },
+        include: { _count: { select: { chunks: true } }, jobs: ACTIVE_JOB },
       });
       // Due a review is arithmetic on two columns, and the list is unpaged, so
       // it is decided here, with the same function the reply's
@@ -1727,6 +1802,7 @@ export default async function playbookRoutes(
           addedBy,
           ...meta,
           ...scoped,
+          ...(body.type === 'website' ? websiteCrawlSettings(body) : {}),
         });
 
         // Indexed in the same transaction: a source that exists but is not
@@ -1736,9 +1812,13 @@ export default async function playbookRoutes(
         return { source, chunks, names: await creatorNamesByIds(tx, [addedBy, source.ownerId]) };
       });
 
+      // Crawled in this request (until the job runner, tm 312.3): a source
+      // this new has no job.
       return reply
         .status(201)
-        .send(serialiseIndexedSource(created.source, created.chunks, created.names));
+        .send(
+          serialiseIndexedSource({ ...created.source, jobs: [] }, created.chunks, created.names),
+        );
     },
   );
 
@@ -1830,9 +1910,12 @@ export default async function playbookRoutes(
         return { source, chunks, names: await creatorNamesByIds(tx, [addedBy, source.ownerId]) };
       });
 
+      // A file is indexed in this request; it has no job.
       return reply
         .status(201)
-        .send(serialiseIndexedSource(created.source, created.chunks, created.names));
+        .send(
+          serialiseIndexedSource({ ...created.source, jobs: [] }, created.chunks, created.names),
+        );
     },
   );
 
@@ -2241,6 +2324,10 @@ export default async function playbookRoutes(
           'refresh_after_days: only a website source can be scheduled for automatic refresh.',
         );
       }
+      const crawlSetting = namedCrawlSetting(body);
+      if (crawlSetting !== undefined && !isWebsite) {
+        throw ApiError.validation(`${crawlSetting}: only a website source is crawled.`);
+      }
 
       // Crawled outside the transaction, and refused before it: a private or
       // non-http target never reaches the fetcher and never touches the row.
@@ -2289,6 +2376,11 @@ export default async function playbookRoutes(
             ...(recomputeSchedule
               ? { nextRefreshAt: computeNextRefreshAt(effectiveRefreshAfterDays, now) }
               : {}),
+            // Settings for the next crawl: nothing is fetched for them.
+            ...(body.crawl_scope === undefined ? {} : { crawlScope: body.crawl_scope }),
+            ...(body.page_limit === undefined ? {} : { pageLimit: body.page_limit }),
+            ...(body.include_paths === undefined ? {} : { includePaths: body.include_paths }),
+            ...(body.exclude_paths === undefined ? {} : { excludePaths: body.exclude_paths }),
             ...meta,
             ...scoped,
           },
@@ -2309,7 +2401,10 @@ export default async function playbookRoutes(
             ? await tx.knowledgeChunk.count({ where: { sourceId: id } })
             : await knowledge.index(tx, tenant, id, prepared);
 
-        const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
+        const source = await tx.knowledgeSource.findFirstOrThrow({
+          where: { id },
+          include: { jobs: ACTIVE_JOB },
+        });
         return {
           source,
           chunks,
@@ -2400,7 +2495,10 @@ export default async function playbookRoutes(
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
         const chunks = await knowledge.index(tx, tenant, id, prepared);
-        const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
+        const source = await tx.knowledgeSource.findFirstOrThrow({
+          where: { id },
+          include: { jobs: ACTIVE_JOB },
+        });
         return {
           source,
           chunks,
@@ -2441,7 +2539,7 @@ export default async function playbookRoutes(
         }
         const source = await tx.knowledgeSource.findFirstOrThrow({
           where: { id },
-          include: { _count: { select: { chunks: true } } },
+          include: { _count: { select: { chunks: true } }, jobs: ACTIVE_JOB },
         });
         return { source, names: await creatorNamesByIds(tx, [source.addedBy, source.ownerId]) };
       });
@@ -2539,6 +2637,42 @@ interface SourceRow {
   brandIds: string[];
   validUntil: Date | null;
   kbArticleId: string | null;
+  crawlScope: string | null;
+  pageLimit: number | null;
+  includePaths: string[];
+  excludePaths: string[];
+  lastCrawledAt: Date | null;
+  pageCount: number;
+  /** The source's job under way, if any ({@link ACTIVE_JOB}). */
+  jobs: ReadonlyArray<{ id: string }>;
+}
+
+/**
+ * A source's job under way (tm 312 · AI-17) — `job_id` on every source reply.
+ * At most one exists (`knowledge_jobs_one_active_per_source`).
+ */
+const ACTIVE_JOB = {
+  where: { status: { in: [...KNOWLEDGE_JOB_ACTIVE_STATUSES] } },
+  select: { id: true },
+  take: 1,
+} satisfies Prisma.KnowledgeSource$jobsArgs;
+
+/**
+ * A new website source's crawl settings, what the body left out filled in: a
+ * single page, at most `KNOWLEDGE_PAGE_LIMIT.default` pages, every path.
+ */
+function websiteCrawlSettings(body: {
+  crawl_scope?: (typeof CRAWL_SCOPES)[number];
+  page_limit?: number;
+  include_paths?: string[];
+  exclude_paths?: string[];
+}) {
+  return {
+    crawlScope: body.crawl_scope ?? DEFAULT_CRAWL_SCOPE,
+    pageLimit: body.page_limit ?? KNOWLEDGE_PAGE_LIMIT.default,
+    includePaths: body.include_paths ?? [],
+    excludePaths: body.exclude_paths ?? [],
+  };
 }
 
 function serialiseSource(
@@ -2572,6 +2706,16 @@ function serialiseSource(
     brand_ids: source.brandIds,
     valid_until: source.validUntil ? source.validUntil.toISOString() : null,
     kb_article_id: source.kbArticleId,
+    // A website source added before tm 312 has no settings stored: it was a
+    // single page, and the default limit is what it would be crawled under.
+    crawl_scope: source.type === 'website' ? (source.crawlScope ?? DEFAULT_CRAWL_SCOPE) : null,
+    page_limit:
+      source.type === 'website' ? (source.pageLimit ?? KNOWLEDGE_PAGE_LIMIT.default) : null,
+    include_paths: source.includePaths,
+    exclude_paths: source.excludePaths,
+    last_crawled_at: source.lastCrawledAt ? source.lastCrawledAt.toISOString() : null,
+    page_count: source.pageCount,
+    job_id: source.jobs[0]?.id ?? null,
   };
 }
 

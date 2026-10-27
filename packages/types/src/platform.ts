@@ -386,7 +386,7 @@ export const IMPERSONATION_ALLOWED_WRITES: readonly RegExp[] = [
   /^\/copilot\//,
   /^\/palette\//,
   /^\/mcp\/tools\/[^/]+$/,
-  /^\/ai-agents\//,
+  /^\/ai-agents(\/.*)?$/,
   /^\/ai-guardrails\//,
   /^\/ai-guidance(\/.*)?$/,
   /^\/ai-handoffs\//,

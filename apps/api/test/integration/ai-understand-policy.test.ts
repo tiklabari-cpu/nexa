@@ -47,7 +47,6 @@ describe('the decision order on the API and the live path (AI-05 · tm 297.2)', 
   let server: TestServer;
   let fx: Fixtures;
   let aiAgentId: string;
-  let otherAgentId: string;
   let headers: Record<string, string>;
 
   beforeAll(async () => {
@@ -88,7 +87,6 @@ describe('the decision order on the API and the live path (AI-05 · tm 297.2)', 
         select: { id: true },
       });
     aiAgentId = (await agent('Ada')).id;
-    otherAgentId = (await agent('Bora')).id;
     const token = await grantToken(owner, {
       licenseId: fx.a.licenseId,
       organizationId: fx.a.organizationId,
@@ -213,7 +211,7 @@ describe('the decision order on the API and the live path (AI-05 · tm 297.2)', 
       ...extra,
     });
 
-    it('a second fallback for the same agent is refused, naming the first; another agent may have its own', async () => {
+    it('a second fallback for the same agent is refused, naming the first; a skill filed under no agent is counted apart', async () => {
       const first = await server.post('/skills', single('Genel', { is_fallback: true }), headers);
       expect(first.statusCode).toBe(201);
       expect(first.json()).toMatchObject({ is_fallback: true });
@@ -232,11 +230,10 @@ describe('the decision order on the API and the live path (AI-05 · tm 297.2)', 
         },
       });
 
-      const elsewhere = await server.post(
-        '/skills',
-        { ...single('Bora genel', { is_fallback: true }), ai_agent_id: otherAgentId },
-        headers,
-      );
+      // The check is per agent. A workspace has one AI agent (tm 390.1), so the
+      // other owner here is "no agent" — `ai_agent_id` left out.
+      const { ai_agent_id: _mine, ...unfiled } = single('Genel (dosyasız)', { is_fallback: true });
+      const elsewhere = await server.post('/skills', unfiled, headers);
       expect(elsewhere.statusCode).toBe(201);
     });
 

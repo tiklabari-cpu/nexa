@@ -27,6 +27,7 @@ import {
   readPersonaStyle,
   fallbackTakenProblem,
   guardrailSetupProblem,
+  type GuardrailSetupProblem,
   readClarifyThresholds,
   DEFAULT_AI_STALL_TIMEOUT_SECONDS,
   DEFAULT_SKILL_MODE,
@@ -546,6 +547,19 @@ function echoCell(value: string | undefined): string | null {
   return trimmed.length > ECHO_MAX ? `${trimmed.slice(0, ECHO_MAX)}…` : trimmed;
 }
 
+// The empty state's form (tm 390.1): a name, and optionally the persona's
+// tone, face and languages. Strict, unlike the PATCH: a create that drops a
+// key it does not know (`active`, `instruction`) would answer 201 for a
+// request it did not carry out.
+const createAgentBody = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    tone: z.string().trim().max(40).nullable().optional(),
+    avatar_url: z.string().trim().max(2048).nullable().optional(),
+    languages: z.array(z.string().trim().min(1).max(20)).max(20).optional(),
+  })
+  .strict();
+
 const updateAgentBody = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
@@ -916,9 +930,64 @@ export default async function playbookRoutes(
     return reply.send({ items: agents.map(serialiseAgent) });
   });
 
+  // The workspace's customer-facing agent (tm 390.1) — the Playbook's empty
+  // state. One per workspace in v1, held by the partial unique index
+  // `ai_agents_one_per_license` rather than a read-then-write, so two tabs
+  // creating at once get one agent and one 409. Created switched off: going
+  // live is the PATCH below, behind the crisis-text gate.
+  app.post(
+    '/ai-agents',
+    { config: { scopes: WRITE, minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(createAgentBody, request.body);
+      const tenant = request.tenant();
+      try {
+        const created = await request.withTenant(async (tx) => {
+          const agent = await tx.aiAgent.create({
+            data: {
+              licenseId: tenant.licenseId,
+              kind: 'ai_agent',
+              name: body.name,
+              active: false,
+              ...(body.tone !== undefined ? { tone: body.tone } : {}),
+              ...(body.avatar_url !== undefined ? { avatarUrl: body.avatar_url } : {}),
+              ...(body.languages !== undefined ? { languages: body.languages } : {}),
+            },
+            include: { _count: { select: { skills: true } } },
+          });
+          return { ...serialiseAgent(agent), readiness: await agentReadiness(tx, agent) };
+        });
+        return reply.status(201).send(created);
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ApiError('ai_agent_exists', 'This workspace already has an AI agent.');
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.get<{ Params: { aiAgentId: string } }>(
+    '/ai-agents/:aiAgentId',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.aiAgentId);
+      const detail = await request.withTenant(async (tx) => {
+        const agent = await tx.aiAgent.findFirst({
+          where: { id },
+          include: { _count: { select: { skills: true } } },
+        });
+        if (!agent) throw ApiError.notFound('AI agent not found.');
+        return { ...serialiseAgent(agent), readiness: await agentReadiness(tx, agent) };
+      });
+      return reply.send(detail);
+    },
+  );
+
   app.patch<{ Params: { aiAgentId: string } }>(
     '/ai-agents/:aiAgentId',
-    { config: { scopes: WRITE } },
+    // An agent's broad PAT carries the scope; the role gate refuses it (tm 390.1).
+    { config: { scopes: WRITE, minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(uuid, request.params.aiAgentId);
       const body = parse(updateAgentBody, request.body);
@@ -2704,6 +2773,64 @@ function mergeNoAnswer(
   return {
     policy_by_category: policies,
     text: change.text === undefined ? current.text : change.text,
+  };
+}
+
+/**
+ * What the agent still needs (`GET /ai-agents/{id}`, tm 390.1). `ready` is the
+ * panel's rule (FR-MOD-06.1, PRD KK4 — `apps/web` `readiness.ts`, which reads
+ * the same two lists): an indexed source the agent may answer players from
+ * (`/knowledge-sources`' default list, narrowed to this agent) AND one of its
+ * skills active with steps — a procedure's in its definition. The crisis-text
+ * gate is reported apart: it refuses the switch, not the readiness.
+ */
+async function agentReadiness(
+  tx: TenantClient,
+  agent: { id: string; kind: string },
+): Promise<{
+  ready: boolean;
+  has_knowledge: boolean;
+  has_skill: boolean;
+  guardrail_problem: GuardrailSetupProblem | null;
+}> {
+  // One after another: the three reads share the request's transaction.
+  const source = await tx.knowledgeSource.findFirst({
+    where: {
+      type: { not: KNOWLEDGE_TABLE_SOURCE_TYPE },
+      audiences: { has: 'ai_agent' },
+      OR: [{ aiAgentIds: { isEmpty: true } }, { aiAgentIds: { has: agent.id } }],
+      chunks: { some: {} },
+    },
+    select: { id: true },
+  });
+  const skills = await tx.skill.findMany({
+    where: { aiAgentId: agent.id, kind: 'ai_agent', active: true },
+    select: { mode: true, steps: true, procedure: true },
+  });
+  // Copilot never talks to a player, so no crisis text gates it.
+  const guardrail =
+    agent.kind === 'ai_agent'
+      ? await tx.aiGuardrailSettings.findUnique({
+          where: { aiAgentId: agent.id },
+          select: { crisisText: true, approvedAt: true },
+        })
+      : undefined;
+  const hasSteps = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
+  const hasSkill = skills.some((skill) =>
+    skill.mode === 'procedure'
+      ? hasSteps(
+          skill.procedure && typeof skill.procedure === 'object' && !Array.isArray(skill.procedure)
+            ? (skill.procedure as Record<string, unknown>)['steps']
+            : undefined,
+        )
+      : hasSteps(skill.steps),
+  );
+  const hasKnowledge = source !== null;
+  return {
+    ready: hasKnowledge && hasSkill,
+    has_knowledge: hasKnowledge,
+    has_skill: hasSkill,
+    guardrail_problem: guardrail === undefined ? null : guardrailSetupProblem(guardrail),
   };
 }
 

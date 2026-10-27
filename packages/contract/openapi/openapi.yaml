@@ -1863,6 +1863,38 @@ components:
         active: { type: boolean }
         skills_count: { type: integer }
 
+    AiAgentDetail:
+      description: One agent (`GET /ai-agents/{aiAgentId}`, `POST /ai-agents`) — the list's fields plus `readiness`.
+      allOf:
+        - $ref: "#/components/schemas/AiAgent"
+        - type: object
+          required: [readiness]
+          properties:
+            readiness: { $ref: "#/components/schemas/AiAgentReadiness" }
+
+    AiAgentReadiness:
+      type: object
+      required: [ready, has_knowledge, has_skill, guardrail_problem]
+      description: |
+        What the agent still needs (tm 390.1). `ready` is the panel's rule
+        (FR-MOD-06.1, PRD KK4): indexed knowledge it may answer from AND an
+        active skill with steps. `guardrail_problem` is the separate gate on
+        switching a customer-facing agent on (AI-08-S1, `409
+        ai_guardrail_setup_incomplete`); null when the crisis text is
+        approved, and always null for Copilot.
+      properties:
+        ready: { type: boolean }
+        has_knowledge:
+          type: boolean
+          description: A knowledge source this agent may answer players from has at least one indexed chunk.
+        has_skill:
+          type: boolean
+          description: One of this agent's skills is active and has at least one step.
+        guardrail_problem:
+          type: string
+          nullable: true
+          enum: [crisis_text_missing, crisis_text_not_approved, null]
+
     AiGuidanceCategory:
       type: string
       enum: [communication, clarification, sensitive, prohibition, other]
@@ -12894,6 +12926,7 @@ components:
       type: string
       description: Machine-readable error category (v2-03 §1.8).
       enum:
+        - ai_agent_exists
         - ai_guardrail_setup_incomplete
         - ai_mode_transition_refused
         - ai_return_blocked

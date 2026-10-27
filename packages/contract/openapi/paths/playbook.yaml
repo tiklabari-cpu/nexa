@@ -27,12 +27,80 @@ aiAgents:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+  post:
+    tags: [Playbook]
+    operationId: createAiAgent
+    summary: Add the workspace's AI agent
+    description: |
+      Creates the workspace's customer-facing AI agent (tm 390.1) — what the
+      Playbook's empty state calls. v1 keeps one per workspace: a second is
+      409 `ai_agent_exists`, held by a partial unique index, so two tabs
+      creating at once get one agent and one 409. Copilot's record is not
+      made here; it is made on first use.
+
+      The agent starts switched off (`active: false`): going live is
+      `PATCH /ai-agents/{aiAgentId}` with `active: true`, behind the same
+      readiness and crisis-text gates as any agent. Owners and admins only.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            additionalProperties: false
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              tone: { type: string, maxLength: 40, nullable: true }
+              avatar_url: { type: string, maxLength: 2048, nullable: true }
+              languages:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 20 }
+    responses:
+      "201":
+        description: Created, switched off
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiAgentDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: The workspace already has an AI agent (`ai_agent_exists`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 aiAgent:
   parameters:
     - name: aiAgentId
       in: path
       required: true
       schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiAgent
+    summary: One AI agent, with what it still needs to go live
+    description: |
+      The agent as the list shows it, plus `readiness` (tm 390.1): whether it
+      has indexed knowledge and an active skill with steps (FR-MOD-06.1, PRD
+      KK4 — the rule the panel's banner states) and, for the customer-facing
+      agent, what its crisis text still needs before it may be switched on
+      (AI-08-S1). Another workspace's agent is 404.
+    responses:
+      "200":
+        description: The agent
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiAgentDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
   patch:
     tags: [Playbook]

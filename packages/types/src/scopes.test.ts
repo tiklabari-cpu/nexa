@@ -152,6 +152,8 @@ describe('error taxonomy', () => {
     // answering it, and giving the AI a connection a risk flag keeps from it.
     'ai_mode_transition_refused',
     'ai_return_blocked',
+    // The workspace's AI agent (tm 390.1): a second customer-facing agent.
+    'ai_agent_exists',
     // Compliance guardrails (AI-08 · tm 301.2): switching a customer-facing AI
     // agent on before the Founder approved its crisis text.
     'ai_guardrail_setup_incomplete',

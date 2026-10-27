@@ -2116,6 +2116,9 @@ model AiAgent {
   unresolvedItems   AiUnresolvedItem[]
   unresolvedGroups  AiUnresolvedCluster[]
 
+  // One `kind = 'ai_agent'` row per licence (tm 390.1): the partial unique
+  // index `ai_agents_one_per_license` lives in the migration — Prisma cannot
+  // express its WHERE. A second `POST /ai-agents` is 409 `ai_agent_exists`.
   @@index([licenseId, kind])
   @@map("ai_agents")
 }

@@ -90,11 +90,24 @@ test.describe('AI Agent (MOD-06)', () => {
     const title = `Crawled policy ${Date.now()}`;
     await agentPage.getByLabel('Title').fill(title);
     await agentPage.getByLabel('Website URL').fill(`https://help.example.com/policy-${Date.now()}`);
-    await agentPage.getByRole('button', { name: 'Add source' }).click();
+    // Crawling someone's site is the admin's say-so (tm 312.4 · AI-17): the
+    // button stays off until the box is ticked.
+    const add = agentPage.getByRole('button', { name: 'Add source' });
+    await expect(add).toBeDisabled();
+    await agentPage.getByLabel('I am authorised to crawl this site.').check();
+    await add.click();
 
     // It lands in the list, indexed, and filters under the Websites sub-tab.
     await agentPage.getByRole('tab', { name: /Websites/ }).click();
     await expect(agentPage.getByText(title)).toBeVisible();
+
+    // The crawl is a background job now: its drawer opens on the row.
+    await agentPage.getByRole('button', { name: `Crawl details for ${title}` }).click();
+    const drawer = agentPage.getByRole('dialog');
+    await expect(drawer.getByText(`Crawl of ${title}`)).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Crawl again' })).toBeVisible();
+    await drawer.getByRole('button', { name: 'Close' }).click();
+    await expect(drawer).toBeHidden();
 
     await agentPage.screenshot({ path: 'kanit/33-knowledge-website.png', fullPage: true });
   });

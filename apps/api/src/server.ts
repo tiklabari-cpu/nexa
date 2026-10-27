@@ -12,6 +12,9 @@ import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
 import aiBudget from './plugins/ai-budget.js';
 import aiJobs, { type AiJobDiscovery } from './plugins/ai-jobs.js';
+import knowledgeJobs from './plugins/knowledge-jobs.js';
+import type { CrawlFetcher } from './services/ai/crawler/fetcher.js';
+import { crawlerProviderWarning } from './services/ai/crawler/provider.js';
 import aiTesting from './plugins/ai-testing.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
@@ -233,6 +236,12 @@ export interface BuildServerOptions {
    * test reaches Cloudflare.
    */
   captchaFetch?: (input: string, init: RequestInit) => Promise<Response>;
+  /**
+   * Who fetches a website knowledge source's pages (tm 312.3 · AI-17).
+   * Omitted, `CRAWLER_PROVIDER`'s; a test passes a mock site
+   * (`createMockCrawlFetcher`) or the real fetcher with a stubbed resolver.
+   */
+  crawlFetcher?: CrawlFetcher;
 }
 
 export async function buildServer({
@@ -253,6 +262,7 @@ export async function buildServer({
   accessInfoHttp,
   aiDisclosure = true,
   aiJobDiscovery,
+  crawlFetcher,
   geo: injectedGeo,
   captchaFetch,
 }: BuildServerOptions): Promise<FastifyInstance> {
@@ -283,6 +293,10 @@ export async function buildServer({
     if (created.warning) app.log.warn({ event: 'geoip.disabled' }, created.warning);
     geo = created.locator;
   }
+  // A pilot crawling with the mock indexes an invented page for every site
+  // (tm 312.3 · AI-17): said at boot, never a refusal (owner, 2026-10-10).
+  const crawlerWarning = crawlerProviderWarning(env);
+  if (crawlerWarning) app.log.warn({ event: 'crawler.mock_in_pilot' }, crawlerWarning);
   app.decorate('geo', geo);
 
   // The provider is chosen by the setting that names it, not by `NODE_ENV`
@@ -527,6 +541,16 @@ export async function buildServer({
     llm: meteredLlm,
     knowledge,
     ...(accessInfoHttp ? { accessInfoHttp } : {}),
+    ...(aiJobDiscovery ? { discovery: aiJobDiscovery } : {}),
+  });
+  // The knowledge job runner (tm 312.3 · AI-17): the website crawls the
+  // routes and the freshness sweep queue, found the way the AI job worker
+  // finds its jobs. After `database`, for its drain on close.
+  await app.register(knowledgeJobs, {
+    env,
+    knowledge,
+    embeddingInference: () => aiProviders.inference().embedding,
+    ...(crawlFetcher ? { fetcher: crawlFetcher } : {}),
     ...(aiJobDiscovery ? { discovery: aiJobDiscovery } : {}),
   });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).

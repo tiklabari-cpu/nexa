@@ -44,6 +44,7 @@ import {
   DEFAULT_CRAWL_SCOPE,
   KNOWLEDGE_CRAWL_PATHS,
   KNOWLEDGE_JOB_ACTIVE_STATUSES,
+  KNOWLEDGE_PAGE_STATUSES,
   KNOWLEDGE_PAGE_LIMIT,
   normalizeCrawlPaths,
   KNOWLEDGE_AUDIENCES,
@@ -137,9 +138,15 @@ import {
   type BulkCrawlLimits,
   type BulkCrawlRefusal,
 } from '../services/ai/knowledge-bulk-crawl.js';
-import { crawl } from '../services/ai/web-crawler.js';
+import {
+  enqueueKnowledgeJob,
+  KNOWLEDGE_JOB_SELECT,
+  knowledgeJobInProgress,
+  serialiseKnowledgeJob,
+} from '../services/ai/crawler/jobs.js';
+import { settleCrawledSource } from '../services/ai/crawler/job-runner.js';
 import { ProcedureExamples, storeProcedureExamples } from '../services/ai/procedure-examples.js';
-import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
+import { computeNextRefreshAt } from '../services/ai/knowledge-refresh.js';
 import type { Env } from '../config/env.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
@@ -1766,23 +1773,22 @@ export default async function playbookRoutes(
         await requireSourceScope(tx, body);
       });
 
-      // A website is crawled *before* the transaction: the SSRF guard rejects a
-      // private/internal target with a 400 (`source_url` never reaches a fetcher),
-      // and the fetch+parse — even mocked — has no business holding a DB row open.
-      let content = body.content ?? '';
-      let sourceUrl: string | null = null;
-      if (body.type === 'website') {
-        const url = assertPublicHttpUrl(body.source_url ?? '');
-        const page = await crawl(url);
-        content = page.text;
-        sourceUrl = url.toString();
-      }
+      // A website is not fetched in the request (tm 312.3 · AI-17): the URL
+      // passes the SSRF guard here — a private/internal target is a 400 with
+      // nothing written — and its crawl is a job the runner works through after
+      // the 201 (`services/ai/crawler/job-runner.ts`), every fetch guarded again.
+      const content = body.type === 'website' ? '' : (body.content ?? '');
+      const sourceUrl =
+        body.type === 'website' ? assertPublicHttpUrl(body.source_url ?? '').toString() : null;
 
-      // Embedded before the transaction as well, for the crawl's reason: the
-      // provider is a network call with its own timeout (tm 255.7). A refusal
-      // is a 503 with nothing written; a call today's AI cap cannot take is a
-      // 429 `ai_daily_cap` with nothing written (tm 257.20).
-      const prepared = await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
+      // Embedded before the transaction: the provider is a network call with
+      // its own timeout (tm 255.7). A refusal is a 503 with nothing written; a
+      // call today's AI cap cannot take is a 429 `ai_daily_cap` with nothing
+      // written (tm 257.20). A website's pages are embedded by its job.
+      const prepared =
+        body.type === 'website'
+          ? null
+          : await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
 
       const created = await request.withTenant(async (tx) => {
         // Again inside the write: the agent may have been deleted meanwhile,
@@ -1798,22 +1804,44 @@ export default async function playbookRoutes(
           name: body.name,
           content,
           sourceUrl,
-          status: 'indexing',
+          status: prepared === null ? 'crawling' : 'indexing',
           addedBy,
           ...meta,
           ...scoped,
           ...(body.type === 'website' ? websiteCrawlSettings(body) : {}),
         });
+        const names = await creatorNamesByIds(tx, [addedBy, source.ownerId]);
+
+        // A website's crawl is queued in the same transaction as the source:
+        // a source that says `crawling` always has the job that will end it.
+        if (prepared === null) {
+          const job = await enqueueKnowledgeJob(tx, {
+            context: tenant,
+            sourceId: source.id,
+            kind: 'crawl',
+            requestedBy: addedBy,
+          });
+          return { source, chunks: 0, jobId: job.id, names };
+        }
 
         // Indexed in the same transaction: a source that exists but is not
         // searchable looks ready and answers nothing.
         const chunks = await knowledge.index(tx, tenant, source.id, prepared);
-
-        return { source, chunks, names: await creatorNamesByIds(tx, [addedBy, source.ownerId]) };
+        return { source, chunks, jobId: null, names };
       });
 
-      // Crawled in this request (until the job runner, tm 312.3): a source
-      // this new has no job.
+      if (created.jobId !== null) {
+        app.knowledgeJobs.wake();
+        return reply
+          .status(201)
+          .send(
+            serialiseSource(
+              { ...created.source, jobs: [{ id: created.jobId }] },
+              { status: 'crawling', chunks: 0 },
+              created.names,
+            ),
+          );
+      }
       return reply
         .status(201)
         .send(
@@ -2309,6 +2337,7 @@ export default async function playbookRoutes(
       if (!existing) throw ApiError.notFound('Knowledge source not found.');
 
       const isWebsite = existing.type === 'website';
+      const principal = request.requirePrincipal();
       if (body.content !== undefined && (isWebsite || existing.type === 'file')) {
         throw ApiError.validation(
           `content: a ${existing.type} source's text comes from ${
@@ -2329,15 +2358,13 @@ export default async function playbookRoutes(
         throw ApiError.validation(`${crawlSetting}: only a website source is crawled.`);
       }
 
-      // Crawled outside the transaction, and refused before it: a private or
-      // non-http target never reaches the fetcher and never touches the row.
-      let text: string | null = body.content ?? null;
-      let sourceUrl: string | null = null;
-      if (body.source_url !== undefined) {
-        const url = assertPublicHttpUrl(body.source_url);
-        text = (await crawl(url)).text;
-        sourceUrl = url.toString();
-      }
+      // A new URL is refused before the transaction when the SSRF guard says
+      // so — a private or non-http target never touches the row — and crawled
+      // by a job after the reply (tm 312.3): the pages in the store answer
+      // until then.
+      const text: string | null = body.content ?? null;
+      const sourceUrl =
+        body.source_url === undefined ? null : assertPublicHttpUrl(body.source_url).toString();
       const prepared =
         text === null ? null : await knowledge.prepare(text, tenant).catch(refuseUnembeddable);
 
@@ -2371,7 +2398,7 @@ export default async function playbookRoutes(
           {
             ...(body.name === undefined ? {} : { name: body.name }),
             ...(text === null ? {} : { content: text }),
-            ...(sourceUrl === null ? {} : { sourceUrl }),
+            ...(sourceUrl === null ? {} : { sourceUrl, status: 'crawling' }),
             ...(refreshAfterDaysChanged ? { refreshAfterDays: body.refresh_after_days } : {}),
             ...(recomputeSchedule
               ? { nextRefreshAt: computeNextRefreshAt(effectiveRefreshAfterDays, now) }
@@ -2391,6 +2418,18 @@ export default async function playbookRoutes(
         // between the two statements, which is the same answer as never having
         // existed.
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
+
+        // The new URL's crawl, queued with the edit; one already under way would
+        // crawl the old one, so the edit waits for it (the whole write rolls back).
+        if (sourceUrl !== null) {
+          const job = await enqueueKnowledgeJob(tx, {
+            context: tenant,
+            sourceId: id,
+            kind: 'crawl',
+            requestedBy: principal.kind === 'agent' ? principal.accountId : null,
+          });
+          if (!job.created) throw knowledgeJobInProgress(job.id);
+        }
 
         // The new chunks are written in the same transaction as the update, so
         // the source can never be readable as edited while still answering from
@@ -2412,7 +2451,18 @@ export default async function playbookRoutes(
         };
       });
 
-      return reply.send(serialiseIndexedSource(updated.source, updated.chunks, updated.names));
+      if (sourceUrl !== null) app.knowledgeJobs.wake();
+      // A website says what its crawls left (`crawling`, `partial`…), not
+      // what its chunk count suggests.
+      return reply.send(
+        isWebsite
+          ? serialiseSource(
+              updated.source,
+              { status: updated.source.status, chunks: updated.chunks },
+              updated.names,
+            )
+          : serialiseIndexedSource(updated.source, updated.chunks, updated.names),
+      );
     },
   );
 
@@ -2469,11 +2519,14 @@ export default async function playbookRoutes(
       if (!existing) throw ApiError.notFound('Knowledge source not found.');
       refuseTableRowOwned(existing);
 
-      // Re-checked, not trusted from creation — and outside the transaction,
-      // so a refusal costs no row lock and writes nothing. Same crawl path
-      // the freshness sweep uses (`knowledge-refresh.ts`), so there is one
-      // SSRF gate for "refresh this source", not two.
-      const text = await fetchRefreshedText(existing);
+      // A website's refresh is its crawl, queued (tm 312.3) — the one already
+      // under way when there is one — with the stored URL re-checked first,
+      // not trusted from creation: a refusal writes nothing.
+      if (existing.type === 'website') {
+        const queued = await queueCrawl(request, id, existing.sourceUrl);
+        return reply.send(serialiseStoredSource(queued.source, queued.names));
+      }
+      const text = existing.content ?? '';
       // And embedded before the transaction too; a refusal keeps the stale
       // answer, exactly as a refused crawl does (tm 255.7).
       const prepared = await knowledge.prepare(text, tenant).catch(refuseUnembeddable);
@@ -2509,6 +2562,161 @@ export default async function playbookRoutes(
       return reply.send(
         serialiseIndexedSource(refreshed.source, refreshed.chunks, refreshed.names),
       );
+    },
+  );
+
+  /**
+   * Queue a website source's crawl (tm 312.3 · AI-17), from the stored URL
+   * re-checked by the SSRF guard first (NFR-S7) — the row is not the request
+   * that created it. One under way is a 409 naming it; the panel follows the
+   * job instead.
+   */
+  async function queueCrawl(
+    request: FastifyRequest,
+    id: string,
+    storedUrl: string | null,
+  ): Promise<{
+    source: Parameters<typeof serialiseStoredSource>[0];
+    names: ReadonlyMap<string, string>;
+    created: boolean;
+    jobId: string;
+  }> {
+    if (!storedUrl) throw ApiError.validation('This website source has no URL to crawl.');
+    assertPublicHttpUrl(storedUrl);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
+    const queued = await request.withTenant(async (tx) => {
+      const job = await enqueueKnowledgeJob(tx, {
+        context: tenant,
+        sourceId: id,
+        kind: 'crawl',
+        requestedBy: principal.kind === 'agent' ? principal.accountId : null,
+      });
+      if (job.created) {
+        await tx.knowledgeSource.updateMany({ where: { id }, data: { status: 'crawling' } });
+      }
+      const source = await tx.knowledgeSource.findFirstOrThrow({
+        where: { id },
+        include: { _count: { select: { chunks: true } }, jobs: ACTIVE_JOB },
+      });
+      return {
+        source,
+        created: job.created,
+        jobId: job.id,
+        names: await creatorNamesByIds(tx, [source.addedBy, source.ownerId]),
+      };
+    });
+    if (queued.created) app.knowledgeJobs.wake();
+    return queued;
+  }
+
+  /**
+   * The pages a website source's crawls found (tm 312.3 · AI-17), whatever
+   * became of each — the detail drawer's table. Any other type has none.
+   */
+  app.get<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId/pages',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const query = parse(
+        z.object({ status: z.enum(KNOWLEDGE_PAGE_STATUSES).optional() }),
+        request.query ?? {},
+      );
+      const pages = await request.withTenant(async (tx) => {
+        const source = await tx.knowledgeSource.findFirst({ where: { id }, select: { id: true } });
+        if (!source) throw ApiError.notFound('Knowledge source not found.');
+        return tx.knowledgePage.findMany({
+          where: { sourceId: id, ...(query.status === undefined ? {} : { status: query.status }) },
+          orderBy: { url: 'asc' },
+        });
+      });
+      return reply.send({
+        items: pages.map((page) => ({
+          id: page.id,
+          url: page.url,
+          title: page.title,
+          lang: page.lang,
+          status: page.status,
+          http_status: page.httpStatus,
+          error: page.error,
+          depth: page.depth,
+          chunk_count: page.chunkCount,
+          fetched_at: page.fetchedAt ? page.fetchedAt.toISOString() : null,
+          changed_at: page.changedAt ? page.changedAt.toISOString() : null,
+        })),
+      });
+    },
+  );
+
+  /** "Crawl again" (tm 312.3 · AI-17): a website source's crawl, queued; 202 with the job. */
+  app.post<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId/crawl',
+    { config: { scopes: WRITE } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const existing = await request.withTenant((tx) =>
+        tx.knowledgeSource.findFirst({ where: { id }, select: { type: true, sourceUrl: true } }),
+      );
+      if (!existing) throw ApiError.notFound('Knowledge source not found.');
+      if (existing.type !== 'website') {
+        throw ApiError.validation('Only a website source is crawled.', {
+          reason: 'knowledge_source_not_website',
+        });
+      }
+      const queued = await queueCrawl(request, id, existing.sourceUrl);
+      if (!queued.created) throw knowledgeJobInProgress(queued.jobId);
+      const job = await request.withTenant((tx) =>
+        tx.knowledgeJob.findFirstOrThrow({
+          where: { id: queued.jobId },
+          select: KNOWLEDGE_JOB_SELECT,
+        }),
+      );
+      return reply.status(202).send(serialiseKnowledgeJob(job));
+    },
+  );
+
+  /** A knowledge job's progress (tm 312.3 · AI-17) — the drawer polls it every 3 s. */
+  app.get<{ Params: { jobId: string } }>(
+    '/knowledge-jobs/:jobId',
+    { config: { scopes: READ } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.jobId);
+      const job = await request.withTenant((tx) =>
+        tx.knowledgeJob.findFirst({ where: { id }, select: KNOWLEDGE_JOB_SELECT }),
+      );
+      if (!job) throw ApiError.notFound('Knowledge job not found.');
+      return reply.send(serialiseKnowledgeJob(job));
+    },
+  );
+
+  /**
+   * Stop a job under way (tm 312.3 · AI-17). The runner's next write is
+   * fenced out (its claim no longer holds a `running` job) and its fetch in
+   * flight is dropped; the pages already indexed stay, and the source says
+   * what it has. An ended job is answered as it is.
+   */
+  app.post<{ Params: { jobId: string } }>(
+    '/knowledge-jobs/:jobId/cancel',
+    { config: { scopes: WRITE } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.jobId);
+      const job = await request.withTenant(async (tx) => {
+        const found = await tx.knowledgeJob.findFirst({
+          where: { id },
+          select: { sourceId: true },
+        });
+        if (!found) throw ApiError.notFound('Knowledge job not found.');
+        const now = new Date();
+        const { count } = await tx.knowledgeJob.updateMany({
+          where: { id, status: { in: [...KNOWLEDGE_JOB_ACTIVE_STATUSES] } },
+          data: { status: 'cancelled', leaseUntil: null, finishedAt: now, frontier: [] },
+        });
+        if (count > 0) await settleCrawledSource(tx, found.sourceId, now);
+        return tx.knowledgeJob.findFirstOrThrow({ where: { id }, select: KNOWLEDGE_JOB_SELECT });
+      });
+      app.knowledgeJobs.abort(id);
+      return reply.send(serialiseKnowledgeJob(job));
     },
   );
 

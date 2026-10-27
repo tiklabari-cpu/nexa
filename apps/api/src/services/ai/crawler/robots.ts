@@ -39,7 +39,12 @@ export const ROBOTS_MAX_SITEMAPS = 50;
 export type RobotsPolicy =
   | { kind: 'rules'; rules: readonly RobotsRule[]; sitemaps: readonly string[] }
   | { kind: 'allow_all'; sitemaps: readonly string[] }
-  | { kind: 'unreachable'; sitemaps: readonly string[] };
+  | {
+      kind: 'unreachable';
+      sitemaps: readonly string[];
+      /** Why it could not be read — a fetch error code or `http_<status>` — for the pages it holds back. */
+      error?: string;
+    };
 
 export interface RobotsRule {
   allow: boolean;
@@ -292,6 +297,7 @@ export class RobotsCache {
     });
     if (result.kind === 'ok') return parseRobotsTxt(result.body.toString('utf8'), result.url);
     if (result.kind === 'failed' && result.error === 'cancelled') return null;
+    if (result.kind === 'failed') return { kind: 'unreachable', sitemaps: [], error: result.error };
     if (
       result.kind === 'http_error' &&
       result.status >= 400 &&
@@ -300,7 +306,11 @@ export class RobotsCache {
     ) {
       return ALLOW_ALL;
     }
-    return UNREACHABLE;
+    return {
+      kind: 'unreachable',
+      sitemaps: [],
+      error: result.kind === 'blocked' ? 'bot_wall' : `http_${result.status}`,
+    };
   }
 }
 

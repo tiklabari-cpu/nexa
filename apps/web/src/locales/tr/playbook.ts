@@ -270,6 +270,8 @@ export const playbook: Messages = {
   'playbook.knowledge.noneInTab': 'Henüz {type} kaynağı yok.',
   'playbook.knowledge.indexed': 'Dizinlendi',
   'playbook.knowledge.empty': 'Boş',
+  'playbook.knowledge.statusCrawling': 'Taranıyor…',
+  'playbook.knowledge.statusPartial': 'Kısmen tarandı',
   'playbook.knowledge.delete': 'Sil',
 
   // Satır aksiyonları — “…” menüsü ve arkasındaki iki diyalog

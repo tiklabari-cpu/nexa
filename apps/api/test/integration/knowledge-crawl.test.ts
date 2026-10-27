@@ -113,16 +113,30 @@ describe('knowledge website crawl', () => {
       },
       headers,
     );
+    // Queued in the request, crawled after it (tm 312.3 · AI-17).
     expect(response.statusCode).toBe(201);
-    const source = response.json() as SourceView;
+    const source = response.json() as SourceView & { job_id: string | null };
     expect(source.type).toBe('website');
-    expect(source.status).toBe('ready');
-    expect(source.chunk_count).toBeGreaterThan(0);
+    expect(source.status).toBe('crawling');
+    expect(source.chunk_count).toBe(0);
+    expect(source.job_id).toEqual(expect.any(String));
     expect(source.source_url).toBe('https://help.example.com/delivery');
 
-    // Actually indexed: chunks exist in the store for this license.
-    const chunks = await owner.knowledgeChunk.count({ where: { licenseId: fx.a.licenseId } });
-    expect(chunks).toBe(source.chunk_count);
+    // The job ran: the source answers from its one page, and the list says so.
+    const list = (
+      await server.get('/knowledge-sources', (await write('a', agentIdA)).headers)
+    ).json() as { items: Array<SourceView & { job_id: string | null; page_count: number }> };
+    const listed = list.items.find((item) => item.id === source.id)!;
+    expect(listed).toMatchObject({ status: 'ready', job_id: null, page_count: 1 });
+    expect(listed.chunk_count).toBeGreaterThan(0);
+
+    // Actually indexed: chunks exist in the store for this license, cut from the page.
+    const chunks = await owner.knowledgeChunk.findMany({
+      where: { licenseId: fx.a.licenseId },
+      select: { pageId: true },
+    });
+    expect(chunks).toHaveLength(listed.chunk_count);
+    expect(chunks.every((chunk) => chunk.pageId !== null)).toBe(true);
   });
 
   it('still accepts a pasted-content source of another type', async () => {

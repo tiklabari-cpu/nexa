@@ -263,7 +263,7 @@ describe('buildSchedulerJobs', () => {
       expect(outcome?.counts).toEqual({
         tenants: 0,
         checked: 0,
-        refreshed: 0,
+        queued: 0,
         failed: 0,
         kb_checked: 0,
         kb_synced: 0,

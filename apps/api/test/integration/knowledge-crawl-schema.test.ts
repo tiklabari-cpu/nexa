@@ -298,22 +298,23 @@ describe('website crawling — schema and contract (AI-17 · tm 312.1)', () => {
   describe('crawl settings through the API', () => {
     it('fills in a website left without settings: a single page, 200 pages, every path (FR-MOD-06.3.2)', async () => {
       const source = await addWebsite();
+      // Queued, not crawled in the request (tm 312.3): the reply names its job.
       expect(source).toMatchObject({
-        status: 'ready',
+        status: 'crawling',
         crawl_scope: 'single',
         page_limit: KNOWLEDGE_PAGE_LIMIT.default,
         include_paths: [],
         exclude_paths: [],
         last_crawled_at: null,
         page_count: 0,
-        job_id: null,
+        job_id: expect.any(String),
       });
       expect(
         await owner.knowledgeSource.findUniqueOrThrow({
           where: { id: source.id },
-          select: { crawlScope: true, pageLimit: true },
+          select: { crawlScope: true, pageLimit: true, pageCount: true },
         }),
-      ).toEqual({ crawlScope: 'single', pageLimit: 200 });
+      ).toEqual({ crawlScope: 'single', pageLimit: 200, pageCount: 1 });
     });
 
     it('keeps what a website names, path lists in one spelling, and lists it so (FR-MOD-06.3.2)', async () => {

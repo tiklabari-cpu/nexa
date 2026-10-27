@@ -107,6 +107,11 @@ export const ERROR_TYPES = [
   'impersonation_forbidden_path',
   'impersonation_read_only',
   'internal',
+  // SiyahTuş addition — website crawling (AI-17 · tm 312.3): a crawl asked for
+  // while the source's last one is still queued, running or waiting for the
+  // day's AI allowance. `details.job_id` names it, so the panel can follow it
+  // instead — kept narrow like `ai_test_run_in_progress`.
+  'knowledge_job_in_progress',
   'license_expired',
   'limit_reached',
   // SiyahTuş addition — maintenance mode (FR-ADMIN-15 · tm 389.13). The root
@@ -244,6 +249,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   impersonation_forbidden_path: 403,
   impersonation_read_only: 403,
   internal: 500,
+  knowledge_job_in_progress: 409,
   license_expired: 402,
   limit_reached: 429,
   maintenance: 503,

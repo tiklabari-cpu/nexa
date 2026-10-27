@@ -53,6 +53,8 @@ export const common: Messages = {
   'common.errors.impersonation_read_only':
     'This is a read-only support session — nothing can be changed from it.',
   'common.errors.internal': 'Something went wrong on our side — try again.',
+  'common.errors.knowledge_job_in_progress':
+    'This source is already being crawled — wait for it to finish or cancel it.',
   'common.errors.license_expired': 'Your subscription has ended — renew it to continue.',
   'common.errors.limit_reached': 'You have reached the limit for your plan.',
   'common.errors.maintenance': 'The service is down for maintenance. Please try again later.',

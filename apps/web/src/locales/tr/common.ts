@@ -38,6 +38,8 @@ export const common: Messages = {
   'common.errors.impersonation_read_only':
     'Bu salt okunur bir destek oturumu — buradan hiçbir şey değiştirilemez.',
   'common.errors.internal': 'Bizim tarafımızda bir şeyler ters gitti — yeniden deneyin.',
+  'common.errors.knowledge_job_in_progress':
+    'Bu kaynak zaten taranıyor — bitmesini bekleyin ya da taramayı durdurun.',
   'common.errors.license_expired': 'Aboneliğiniz sona erdi — devam etmek için yenileyin.',
   'common.errors.limit_reached': 'Paketinizin sınırına ulaştınız.',
   'common.errors.maintenance': 'Hizmet bakımda. Lütfen daha sonra yeniden deneyin.',

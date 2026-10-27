@@ -2,6 +2,7 @@ import { useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AccountsSection } from './features/accounts/AccountsSection.js';
+import { AdminsPage } from './features/admins/AdminsPage.js';
 import { LoadingPage } from './components/LoadingPage.js';
 import { NotFoundPage } from './components/NotFoundPage.js';
 import { RequirePermission } from './components/RequirePermission.js';
@@ -87,6 +88,8 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <WorkspacesSection />;
     case 'accounts':
       return <AccountsSection />;
+    case 'admins':
+      return <AdminsPage />;
     case 'settings':
       return <SettingsPage />;
     case 'operations':

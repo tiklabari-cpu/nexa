@@ -22,6 +22,7 @@ export type Messages = Readonly<Record<string, string>>;
 
 export const NAMESPACES = [
   'accounts',
+  'admins',
   'auth',
   'common',
   'dashboard',
@@ -38,6 +39,7 @@ export type Namespace = (typeof NAMESPACES)[number];
 /** Which key prefixes each namespace file owns. `shell` also holds the side menu (`nav.*`). */
 export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   accounts: ['accounts.'],
+  admins: ['admins.'],
   auth: ['auth.'],
   common: ['common.', 'ui.'],
   dashboard: ['dashboard.'],

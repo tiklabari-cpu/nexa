@@ -19,6 +19,7 @@ import {
   ownershipTransferredMail,
   passwordResetMail,
   permissionsChangedMail,
+  platformAlertMail,
   platformInvitationMail,
   scheduledReportMail,
   slaBreachMail,
@@ -162,6 +163,59 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       purgeAt: '9 November 2026',
       days: 14,
     }),
+    alertTrial: platformAlertMail(
+      ctx,
+      {
+        kind: 'trial_ending',
+        workspaceName: 'Acme',
+        workspaceId: '42',
+        endsAt: new Date('2026-11-05T10:00:00Z'),
+      },
+      `${APP}/workspaces/42`,
+    ),
+    alertPayment: platformAlertMail(
+      ctx,
+      {
+        kind: 'payment_request_waiting',
+        workspaceName: 'Acme',
+        workspaceId: '42',
+        requestedAt: new Date('2026-11-03T10:00:00Z'),
+        waitingHours: 26,
+      },
+      null,
+    ),
+    alertAiCap: platformAlertMail(
+      ctx,
+      {
+        kind: 'ai_cap_reached',
+        workspaceName: 'Acme',
+        workspaceId: '42',
+        meter: 'llm',
+        used: 995,
+        cap: 1000,
+      },
+      `${APP}/usage`,
+    ),
+    alertHealth: platformAlertMail(
+      ctx,
+      { kind: 'health_red', reason: 'degraded', ageSeconds: 12, detail: 'redis down' },
+      `${APP}/dashboard`,
+    ),
+    alertChain: platformAlertMail(
+      ctx,
+      { kind: 'audit_chain_broken', findings: 2, firstSeq: '7', checked: 120 },
+      `${APP}/audit`,
+    ),
+    alertPurge: platformAlertMail(
+      ctx,
+      {
+        kind: 'purge_tomorrow',
+        workspaceName: 'Acme',
+        workspaceId: '42',
+        purgeAt: new Date('2026-11-09T12:00:00Z'),
+      },
+      `${APP}/workspaces/42`,
+    ),
     ownershipTransferred: ownershipTransferredMail(ctx, {
       workspaceName: 'Acme',
       newOwner: 'ayse@acme.test',
@@ -173,9 +227,9 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all nineteen in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all twenty-five in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(19);
+      expect(Object.keys(mails)).toHaveLength(25);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();
@@ -230,6 +284,18 @@ describe('every message, in both languages (tm 265)', () => {
     expect(en['platformInvite']!.body).toContain('authenticator app');
     expect(everyMail('tr')['platformInvite']!.body).toContain('destek rolüyle');
     expect(everyMail('tr')['verify']!.body).toContain('Bağlantı 24 saat geçerlidir');
+  });
+
+  it('marks an operator alert [OPS], names the workspace and its id, and links only when given a page', () => {
+    const en = everyMail('en');
+    expect(en['alertTrial']!.subject).toBe('[OPS] Trial ending: Acme');
+    expect(en['alertTrial']!.body).toContain('Acme (#42)');
+    expect(en['alertTrial']!.body).toContain(`${APP}/workspaces/42`);
+    expect(en['alertPayment']!.body).toContain('waiting 26 hours');
+    expect(en['alertPayment']!.body).not.toMatch(/https?:\/\//);
+    expect(en['alertChain']!.body).toContain('2 findings');
+    expect(everyMail('tr')['alertPayment']!.body).toContain('26 saattir');
+    expect(everyMail('tr')['alertTrial']!.subject).toBe('[OPS] Deneme süresi bitiyor: Acme');
   });
 
   it('gives a visitor no link to the agent panel', () => {

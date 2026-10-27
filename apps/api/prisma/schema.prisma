@@ -5215,6 +5215,9 @@ model PlatformCredit {
 model PlatformAlertPrefs {
   adminId   String   @id @map("admin_id") @db.Uuid
   kinds     String[] @default([])
+  /// `en` or `tr` (tm 389.20); null reads as English. A CHECK keeps it to those two,
+  /// which Prisma cannot model.
+  locale    String?
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)

@@ -112,6 +112,8 @@ paths:
     $ref: "./paths/auth.yaml#/recoveryRegenerate"
   /auth/me:
     $ref: "./paths/auth.yaml#/me"
+  /auth/me/alert-prefs:
+    $ref: "./paths/auth.yaml#/alertPrefs"
   /auth/sessions:
     $ref: "./paths/auth.yaml#/sessions"
   /auth/logout:
@@ -565,6 +567,54 @@ components:
       properties:
         ended: { type: integer, description: How many sessions ended. }
 
+    PlatformAlertKind:
+      type: string
+      description: |
+        What the platform scan mails operators about (tm 389.20): a trial that ends
+        within three days, a payment request waiting over 24 hours, a workspace at
+        its daily AI cap, a red or stale health snapshot, a platform audit chain that
+        no longer verifies, a workspace deleted tomorrow.
+      enum:
+        - trial_ending
+        - payment_request_waiting
+        - ai_cap_reached
+        - health_red
+        - audit_chain_broken
+        - purge_tomorrow
+
+    PlatformAlertPrefs:
+      type: object
+      required: [kinds, locale, customized, available]
+      properties:
+        kinds:
+          type: array
+          description: |
+            The kinds this operator is mailed. Until they save a choice a superadmin
+            gets every kind and the other roles none (`customized` is false).
+          items: { $ref: "#/components/schemas/PlatformAlertKind" }
+        locale:
+          type: string
+          enum: [en, tr]
+          description: The language of the alert mail.
+        customized: { type: boolean }
+        available:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformAlertKind" }
+
+    PlatformAlertPrefsUpdate:
+      type: object
+      required: [kinds, locale]
+      additionalProperties: false
+      properties:
+        kinds:
+          type: array
+          maxItems: 6
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/PlatformAlertKind" }
+        locale:
+          type: string
+          enum: [en, tr]
+
     PlatformAdmin:
       type: object
       required:
@@ -648,6 +698,7 @@ components:
         - admin.totp_reverified
         - admin.recovery_codes_regenerated
         - admin.other_sessions_ended
+        - admin.alert_prefs_changed
         - admin.signed_out
         - admin.invited
         - admin.invite_revoked

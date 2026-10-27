@@ -35,10 +35,15 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { platformPermissionsFor } from '@siyahtus/types';
+import {
+  PLATFORM_ALERT_KINDS,
+  PLATFORM_ALERT_LOCALES,
+  platformPermissionsFor,
+} from '@siyahtus/types';
 import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
 import { RateLimiter, type RateLimitReservation } from '../../plugins/rate-limit.js';
+import { alertLocale, effectiveAlertKinds } from '../../services/platform/alerts.js';
 import {
   badPlatformCode,
   PLATFORM_PASSWORD_MAX,
@@ -65,6 +70,12 @@ const verifyBody = z.union([
   z.object({ code: codeSchema }).strict(),
   z.object({ recovery_code: codeSchema }).strict(),
 ]);
+const alertPrefsBody = z
+  .object({
+    kinds: z.array(z.enum(PLATFORM_ALERT_KINDS)).max(PLATFORM_ALERT_KINDS.length),
+    locale: z.enum(PLATFORM_ALERT_LOCALES),
+  })
+  .strict();
 const acceptBody = z.object({
   token: z.string().min(1).max(128),
   password: z.string().max(PLATFORM_PASSWORD_MAX * 4),
@@ -360,6 +371,44 @@ export default async function platformAuthRoutes(
       recovery_codes_remaining: await auth.countRecoveryCodes(session.adminId),
     };
   });
+
+  // --- Alert preferences (tm 389.20 · FR-ADMIN-24) ----------------------------
+
+  async function alertPrefsView(adminId: string, role: string) {
+    const prefs = await app.platformDb.platformAlertPrefs.findUnique({
+      where: { adminId },
+      select: { kinds: true, locale: true },
+    });
+    return {
+      kinds: effectiveAlertKinds(role, prefs),
+      locale: alertLocale(prefs?.locale),
+      customized: prefs !== null,
+      available: [...PLATFORM_ALERT_KINDS],
+    };
+  }
+
+  app.get('/auth/me/alert-prefs', { config: { platform: { self: true } } }, async (request) => {
+    const session = request.requirePlatformSession();
+    return alertPrefsView(session.adminId, session.role);
+  });
+
+  app.put(
+    '/auth/me/alert-prefs',
+    { config: { platform: { self: true, audit: audited('admin.alert_prefs_changed') } } },
+    async (request) => {
+      const body = parse(alertPrefsBody, request.body);
+      const session = request.requirePlatformSession();
+      const kinds = PLATFORM_ALERT_KINDS.filter((kind) => body.kinds.includes(kind));
+      await app.platformDb.platformAlertPrefs.upsert({
+        where: { adminId: session.adminId },
+        create: { adminId: session.adminId, kinds, locale: body.locale },
+        update: { kinds, locale: body.locale },
+      });
+      request.platformAudit!.targetId = session.adminId;
+      request.platformAudit!.payload = { kinds, locale: body.locale };
+      return alertPrefsView(session.adminId, session.role);
+    },
+  );
 
   app.get('/auth/sessions', { config: { platform: { self: true } } }, async (request) => {
     const session = request.requirePlatformSession();

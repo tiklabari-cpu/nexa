@@ -434,13 +434,14 @@ describe('the platform pair (tm 389.3)', () => {
     ]);
   });
 
-  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), the settings page (tm 389.13), the Operations page (tm 389.14), the Security page (tm 389.16), enter-as-customer and its open sessions (tm 389.15) called, and nothing else of the platform contract', () => {
+  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), the settings page (tm 389.13), the Operations page (tm 389.14), the Security page (tm 389.16), the alert preferences (tm 389.20), enter-as-customer and its open sessions (tm 389.15) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
       [
         'GET /meta',
         'GET /auth/me',
+        'GET /auth/me/alert-prefs',
         'POST /auth/login',
         'POST /auth/logout',
         'POST /auth/invite/accept',
@@ -502,6 +503,7 @@ describe('the platform pair (tm 389.3)', () => {
         'PUT /settings/maintenance',
         'GET /settings/effective-config',
         'GET /settings/ai',
+        'PUT /auth/me/alert-prefs',
         'PUT /settings/ai',
         'POST /settings/ai/test-connection',
         'POST /settings/ai/reembed',

@@ -438,3 +438,36 @@ export function impersonationWriteVerdict(path: string): ImpersonationWriteVerdi
 export const PLATFORM_BLOCKLIST_KINDS = ['email', 'domain', 'ip'] as const;
 
 export type PlatformBlocklistKind = (typeof PLATFORM_BLOCKLIST_KINDS)[number];
+
+// --- Operator alerts (tm 389.20) ---------------------------------------------
+
+/**
+ * What the platform scan mails operators about (FR-ADMIN-24) — a closed list:
+ * `platform_alert_prefs.kinds` stores these names and a stored name outside the
+ * list is ignored, not mailed.
+ */
+export const PLATFORM_ALERT_KINDS = [
+  'trial_ending',
+  'payment_request_waiting',
+  'ai_cap_reached',
+  'health_red',
+  'audit_chain_broken',
+  'purge_tomorrow',
+] as const;
+
+export type PlatformAlertKind = (typeof PLATFORM_ALERT_KINDS)[number];
+
+/** The kinds that repeat hourly while they hold; the others are mailed once a day per target. */
+export const PLATFORM_CRITICAL_ALERT_KINDS: readonly PlatformAlertKind[] = [
+  'health_red',
+  'audit_chain_broken',
+];
+
+/** The language of an operator's alert mail. */
+export const PLATFORM_ALERT_LOCALES = ['en', 'tr'] as const;
+
+export type PlatformAlertLocale = (typeof PLATFORM_ALERT_LOCALES)[number];
+
+export function isPlatformAlertKind(value: unknown): value is PlatformAlertKind {
+  return typeof value === 'string' && (PLATFORM_ALERT_KINDS as readonly string[]).includes(value);
+}

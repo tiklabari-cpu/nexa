@@ -66,6 +66,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/security/ImpersonationsSection.tsx',
   'src/features/security/SecurityPage.tsx',
   'src/features/security/ui.tsx',
+  'src/features/settings/AiSettingsSection.tsx',
   'src/features/settings/EffectiveConfigSection.tsx',
   'src/features/settings/MaintenanceSection.tsx',
   'src/features/settings/SettingsPage.tsx',

@@ -500,3 +500,31 @@ test('opens the Security page: blocks a domain with a reason, lifts it, every se
 
   await scanBothThemes(page, 'security', testInfo);
 });
+
+test('opens Settings › AI: both providers read from the environment, the stub answers the connection test, axe passes', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+
+  await page.goto(`${ADMIN}/settings`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  const ai = page.getByRole('region', { name: 'AI providers' });
+  await expect(ai.getByRole('heading', { name: 'AI providers', level: 2 })).toBeVisible();
+  // Nothing is stored on the e2e stack: the tenant API runs on its environment (the stub).
+  await expect(ai.getByText('From the environment', { exact: true })).toHaveCount(2);
+  await expect(ai.getByText('No re-embedding recorded.')).toBeVisible();
+
+  await ai.getByRole('button', { name: 'Test the model', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Reason').fill('End-to-end check of the connection test');
+  await dialog.getByRole('button', { name: 'Confirm' }).click();
+  await expect(
+    ai.getByText(/^Model: answered in \d+ ms \(mock, From the environment\)\.$/),
+  ).toBeVisible();
+
+  await scanBothThemes(page, 'settings-ai', testInfo);
+});

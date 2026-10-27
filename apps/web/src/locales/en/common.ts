@@ -65,6 +65,8 @@ export const common: Messages = {
   'common.errors.platform_account_state': 'The account is not in a state that allows this.',
   'common.errors.platform_last_superadmin':
     'This would leave the platform without an active superadmin.',
+  'common.errors.platform_operation_running':
+    'This operation is already running — try again once it has finished.',
   'common.errors.platform_reason_required':
     'Say why you are doing this (3 to 500 characters) — it goes into the audit log.',
   'common.errors.platform_recent_totp_required':

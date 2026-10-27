@@ -168,6 +168,28 @@ export const PLATFORM_OPS_CHANNEL = 'siyahtus:platform:ops';
 /** A deployment setting changed (tm 389.13): every tenant process drops its copy. */
 export const PLATFORM_SETTINGS_CHANGED = 'settings.changed';
 
+/**
+ * The AI provider settings changed (tm 389.17 · FR-ADMIN-18): every tenant
+ * process rebuilds its model and embedding providers from
+ * `platform_ai_settings()` — without a restart.
+ */
+export const PLATFORM_AI_SETTINGS_CHANGED = 'ai.settings_changed';
+
+/**
+ * Where the root panel's AI settings stand (tm 389.17): `db` — a row in
+ * `platform_settings` decides; `env` — none, the tenant API's environment does.
+ */
+export const AI_SETTINGS_SOURCES = ['db', 'env'] as const;
+export type AiSettingsSource = (typeof AI_SETTINGS_SOURCES)[number];
+
+/**
+ * The knowledge re-embedding the root panel started (tm 389.17): a Redis
+ * hash of its progress, and the lock that keeps a second run from starting
+ * beside it.
+ */
+export const OPS_AI_REEMBED_KEY = 'siyahtus:ops:ai-reembed';
+export const OPS_AI_REEMBED_LOCK_KEY = 'siyahtus:ops:ai-reembed:lock';
+
 export interface PlatformOpsMessage {
   type: string;
   /** The `platform_settings` keys that moved, where the sender says. */

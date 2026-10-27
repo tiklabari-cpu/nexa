@@ -88,8 +88,9 @@ until}`, `maintenance {enabled, mode read_only|full, message}`, `billing.swift_b
 `billing.providers {swift_manual, crypto_manual, stripe}`, `billing.issuer_profile`,
 `ai.llm {provider, base_url, model, model_fast, region, timeout_ms, max_output_tokens,
 api_key_ciphertext, api_key_last4}`, `ai.embedding {provider, base_url, model, dimensions:1536,
-api_key_ciphertext, api_key_last4}`, `ai.caps {global_daily_tokens, per_workspace_daily_tokens,
-per_workspace_daily_calls}`, `ai.prices {model: {input_per_1k, output_per_1k}}`,
+api_key_ciphertext, api_key_last4}`, `ai.caps {deployment: {llm|embedding: {workspace, global}}, plans: {…}}` (389.17 writes
+`deployment` — in place of the four `AI_DAILY_*`; `plans` is 389.12's), `ai.prices
+{llm_input_usd_per_mtok, llm_output_usd_per_mtok, embedding_usd_per_mtok}` (in place of `AI_PRICE_*`),
 `ai.crisis_text_drafts {TR: …, GB: …}`.
 
 Kiracı API'nin çağırdığı SECURITY DEFINER'lar (EXECUTE → `siyahtus_app`; hepsi `platform_*`

@@ -33,7 +33,12 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import type { AiDailyBudget } from '../services/ai/ai-daily-budget.js';
 import { AI_USAGE_ALERT_ROLES, isoDay } from '../services/ai/ai-usage-alerts.js';
 import { customerAiQuotaToday } from '../services/ai/customer-ai-quota.js';
-import { aiPrices, buildUsageReport, usageWindowDays } from '../services/ai/ai-usage-report.js';
+import {
+  aiPrices,
+  buildUsageReport,
+  usageWindowDays,
+  type AiPrices,
+} from '../services/ai/ai-usage-report.js';
 
 export interface AiUsageRoutesOptions {
   env: Pick<
@@ -46,6 +51,11 @@ export interface AiUsageRoutesOptions {
   budget: Pick<AiDailyBudget, 'capsFor'>;
   /** The clock "today" is read from. */
   now?: () => Date;
+  /**
+   * The unit prices in force (tm 389.17): the root panel's `ai.prices` when
+   * set, read per request. Omitted, the three `AI_PRICE_*` settings.
+   */
+  prices?: () => AiPrices;
 }
 
 /** Recipients a workspace may name — far more than an owner and their admins need. */
@@ -74,7 +84,8 @@ export default async function aiUsageRoutes(
   options: AiUsageRoutesOptions,
 ): Promise<void> {
   const now = options.now ?? (() => new Date());
-  const prices = aiPrices(options.env);
+  const envPrices = aiPrices(options.env);
+  const pricesNow = options.prices ?? (() => envPrices);
 
   app.get(
     '/ai/usage',
@@ -134,7 +145,7 @@ export default async function aiUsageRoutes(
           input: Number(row._sum.inputTokens ?? 0n),
           output: Number(row._sum.outputTokens ?? 0n),
         })),
-        prices,
+        prices: pricesNow(),
       });
 
       reply.header('cache-control', 'no-store');

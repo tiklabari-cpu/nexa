@@ -384,6 +384,22 @@ describe('the platform audit chain (tm 389.5)', () => {
       }),
     );
     ok(await request('POST', '/operations/unverified-signups/purge', { token, body: reason }));
+    // The AI settings' three (tm 389.17): a change (the stub — no key to keep out of the
+    // trail), a connection test and a re-embedding, waited for so the suite closes on it.
+    ok(
+      await request('PUT', '/settings/ai', {
+        token,
+        body: { llm: { provider: 'mock' }, ...reason },
+      }),
+    );
+    ok(
+      await request('POST', '/settings/ai/test-connection', {
+        token,
+        body: { target: 'llm', ...reason },
+      }),
+    );
+    ok(await request('POST', '/settings/ai/reembed', { token, body: reason }));
+    await platform.app.platformAiOperations.idle();
 
     // The Security page's two (tm 389.16): a block, then lifting it.
     const blocked = ok(

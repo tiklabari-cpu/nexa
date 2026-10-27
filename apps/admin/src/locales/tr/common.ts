@@ -58,6 +58,7 @@ export const common: Messages = {
   'common.errors.platform_account_state': 'Hesabın şu anki durumu buna izin vermiyor.',
   'common.errors.platform_last_superadmin':
     'Bu değişiklik platformu etkin bir süper yöneticisiz bırakır.',
+  'common.errors.platform_operation_running': 'Bu işlem zaten çalışıyor — bitince yeniden deneyin.',
   'common.errors.platform_reason_required':
     'Bu işlemin gerekçesini yazın (3–500 karakter) — denetim kaydına girer.',
   'common.errors.platform_recent_totp_required':

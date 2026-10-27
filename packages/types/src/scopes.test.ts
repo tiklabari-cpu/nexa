@@ -186,6 +186,8 @@ describe('error taxonomy', () => {
     'platform_workspace_state',
     // An account action its state refuses (tm 389.11).
     'platform_account_state',
+    // A panel operation still running — re-embedding (tm 389.17).
+    'platform_operation_running',
     // The root panel's maintenance mode (tm 389.13).
     'maintenance',
     // An operator signed in as a member (tm 389.15): a write in a read-only

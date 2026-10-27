@@ -19,6 +19,7 @@ import { formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import type { PlatformDeploymentSettings } from '../../lib/platform-types.js';
 import { FIELD_CLASS, Loading } from '../workspaces/ui.js';
+import { AiSettingsSection } from './AiSettingsSection.js';
 import { EffectiveConfigSection } from './EffectiveConfigSection.js';
 import { MaintenanceSection } from './MaintenanceSection.js';
 import { useDeploymentSettings, usePatchSettings } from './queries.js';
@@ -29,6 +30,7 @@ export function SettingsPage(): ReactElement {
   const t = useTranslate();
   const me = useAuth((s) => s.me);
   const canManage = hasPermission(me, 'settings.manage');
+  const canReadAi = hasPermission(me, 'ai.read');
   const query = useDeploymentSettings();
 
   return (
@@ -57,6 +59,7 @@ export function SettingsPage(): ReactElement {
           <MaintenanceSection settings={query.data} canManage={canManage} />
         </>
       )}
+      {canReadAi && <AiSettingsSection />}
       <EffectiveConfigSection />
     </Page>
   );

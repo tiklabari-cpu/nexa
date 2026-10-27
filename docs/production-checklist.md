@@ -491,7 +491,10 @@ changes. Why it is built this way: [ADR-16](adr/platform-admin-panel.md).
       for a database that already exists set the role's password by hand:
       `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "ALTER ROLE siyahtus_platform LOGIN PASSWORD '<the same value>'"`),
       `PLATFORM_SETTINGS_KEY` (`openssl rand -hex 32`; seals the operators' authenticator
-      secrets, and never changes after the first operator enrolls), `ADMIN_APP_URL`
+      secrets and the AI API keys pasted into Settings › AI — the tenant API reads it from the
+      same `.env` to open those — and never changes after the first operator enrolls: a new
+      value leaves the stored AI keys unopenable, the tenant API falls back to `LLM_*` /
+      `EMBEDDING_*` with a warning, and the keys have to be pasted again), `ADMIN_APP_URL`
       (`https://admin.<domain>`, one origin: platform-api refuses to start in production
       without it) and, strongly advised, `PLATFORM_IP_ALLOWLIST` (comma list of the addresses
       or CIDRs operators sign in from; empty is allowed but logs a warning at every start).

@@ -58,7 +58,13 @@ import { AbuseGuard } from './services/security/abuse-guard.js';
 import { resolveCaptcha } from './services/security/captcha.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
-import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
+import type { LlmProvider } from './services/ai/provider/llm-provider.js';
+import {
+  AiProviderRegistry,
+  listenForAiSettingsChanges,
+  readAiSettingsForTenant,
+} from './services/ai/provider/llm-registry.js';
+import { aiSettingsRootKey } from './services/ai/ai-settings.js';
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
 import { listenForAiCapsChanges } from './services/ai/ai-caps-events.js';
@@ -70,7 +76,6 @@ import { AiUsageAlerts } from './services/ai/ai-usage-alerts.js';
 import { RealtimePublisher } from './services/realtime/publisher.js';
 import { MeteredEmbeddings } from './services/ai/metered-embeddings.js';
 import { MeteredLlm } from './services/ai/metered-llm.js';
-import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
 import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import { RiskFlagAnnouncer } from './services/risk/risk-announce.js';
@@ -286,39 +291,6 @@ export async function buildServer({
       ...env.mail,
       logger: app.log.child({ component: 'mailer' }),
     });
-  // After the app for the mailer's reason: the `openai` adapter logs its
-  // retries, failures and circuit changes through this logger (tm 255.6).
-  const llm =
-    injectedLlm ??
-    createLlmProvider(env.LLM_PROVIDER, env.llm, {
-      logger: app.log.child({ component: 'llm' }),
-      ...(llmFetch ? { fetchImpl: llmFetch } : {}),
-    });
-  // Copilot's own instance of the same provider (tm 257.5 · ADR
-  // `pilot-public-readiness.md` K-h). The circuit breaker lives on the
-  // instance, so sharing one would let five failed summaries — long
-  // transcripts are the likeliest to time out — hand every visitor's next
-  // question to a human for thirty seconds. Same settings, same logger
-  // component; `surface` tells the two apart in the log. Embeddings are
-  // shared on purpose (below): a reply draft's question is one short query,
-  // and the knowledge it searches was indexed by that one provider.
-  const copilotLlm =
-    injectedCopilotLlm ??
-    injectedLlm ??
-    createLlmProvider(env.LLM_PROVIDER, env.llm, {
-      logger: app.log.child({ component: 'llm', surface: 'copilot' }),
-      ...(llmFetch ? { fetchImpl: llmFetch } : {}),
-    });
-  // One provider and one knowledge service for the whole process (tm 255.7):
-  // the customer path, the playbook and copilot routes and the freshness sweep
-  // all index and search through it, so they write and read one space and
-  // share one circuit breaker. Before, each built its own over the stub.
-  const embeddings =
-    injectedEmbeddings ??
-    createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding, {
-      logger: app.log.child({ component: 'embedding' }),
-      ...(embeddingFetch ? { fetchImpl: embeddingFetch } : {}),
-    });
 
   await app.register(errorHandler);
   // First, and with no dependencies of its own: `/health/ready` has to be able
@@ -373,9 +345,48 @@ export async function buildServer({
       app.log.warn({ err: error }, 'settings.changed not subscribed; settings refresh every 30 s');
     },
   );
+  // Who writes AI text and who embeds (tm 389.17 · FR-ADMIN-18): a registry
+  // that builds them from the root panel's AI settings, else the environment,
+  // and rebuilds them on `ai.settings_changed` without a restart. Everything
+  // below holds the registry's facades. Copilot keeps an instance of its own
+  // (tm 257.5 · ADR `pilot-public-readiness.md` K-h): the circuit breaker
+  // lives on the instance, so sharing one would let five failed summaries —
+  // long transcripts are the likeliest to time out — hand every visitor's
+  // next question to a human for thirty seconds. Embeddings are shared on
+  // purpose (tm 255.7): one space for every writer and reader. A test's
+  // injected instances are pinned and answer whatever the settings say.
+  const aiProviders = await AiProviderRegistry.create({
+    env,
+    rootKey: aiSettingsRootKey(env),
+    read: () => readAiSettingsForTenant(app.db),
+    logger: app.log.child({ component: 'ai-settings' }),
+    ...(llmFetch ? { llmFetch } : {}),
+    ...(embeddingFetch ? { embeddingFetch } : {}),
+    pinned: {
+      ...(injectedLlm ? { visitor: injectedLlm } : {}),
+      ...((injectedCopilotLlm ?? injectedLlm)
+        ? { copilot: injectedCopilotLlm ?? injectedLlm }
+        : {}),
+      ...(injectedEmbeddings ? { embeddings: injectedEmbeddings } : {}),
+    },
+  });
+  app.decorate('aiProviders', aiProviders);
+  aiProviders.start();
+  await listenForAiSettingsChanges(platformOps, () => void aiProviders.reload()).catch(
+    (error: unknown) => {
+      app.log.warn(
+        { err: error },
+        'ai.settings_changed not subscribed; AI settings refresh every minute',
+      );
+    },
+  );
   app.addHook('onClose', async () => {
+    await aiProviders.stop();
     await platformOps.quit().catch(() => platformOps.disconnect());
   });
+  const llm = aiProviders.llm('visitor');
+  const copilotLlm = aiProviders.llm('copilot');
+  const embeddings = aiProviders.embeddings();
   // The widget's human check (tm 339.2 · GV-01): a provider that cannot work
   // leaves it off and says so, the boot goes on (owner, 2026-10-10).
   const captcha = resolveCaptcha(env, captchaFetch);
@@ -397,6 +408,8 @@ export async function buildServer({
   // allowance. On `mock` nothing is counted.
   const aiDailyBudget = new AiDailyBudget(app.db, aiDailyCaps(env), {
     logger: app.log.child({ component: 'ai-budget' }),
+    // The root panel's deployment caps when set (tm 389.17), else these.
+    deploymentCaps: () => aiProviders.config().caps,
   });
   // A workspace's caps are its licence's override, its plan's and then the
   // deployment's (tm 283.2), cached for a minute; a change announced on
@@ -482,6 +495,7 @@ export async function buildServer({
     knowledge,
     publisher: new RealtimePublisher(app.redis, app.log),
     llm: meteredLlm,
+    inference: () => aiProviders.inference(),
     geo,
     captchaUsable: captcha.verifier !== null,
   });
@@ -537,7 +551,7 @@ export async function buildServer({
   await app.register(pendingAudit, { env });
   // After `audit`, which it writes through, and before the routes that declare
   // `aiInference` (NFR-C4 · C4-e).
-  await app.register(aiResidency, { env });
+  await app.register(aiResidency, { env, inference: () => aiProviders.inference() });
   await app.register(licenseGate, { pilotMode: env.PILOT_MODE });
   // After the licence gate, so an expired trial is told it is read-only rather
   // than told what its plan does not include — the first is the reason it
@@ -553,8 +567,8 @@ export async function buildServer({
   // handler that would call a model.
   await app.register(aiBudget, {
     budget: aiDailyBudget,
-    metered: meteredLlm.metered || meteredCopilotLlm.metered,
-    minimum: env.LLM_MAX_OUTPUT_TOKENS,
+    metered: () => meteredLlm.metered || meteredCopilotLlm.metered,
+    minimum: () => aiProviders.config().llm.maxOutputTokens,
   });
   // The public pilot's refusals (tm 257.13). Registered after the three gates
   // above but it answers before all of them: it hooks `onRequest`, which runs
@@ -675,7 +689,11 @@ export async function buildServer({
         ...(appsEndpoints ? { appsEndpoints } : {}),
       });
       await api.register(auditLogRoutes, { env });
-      await api.register(aiUsageRoutes, { env, budget: aiDailyBudget });
+      await api.register(aiUsageRoutes, {
+        env,
+        budget: aiDailyBudget,
+        prices: () => aiProviders.config().prices,
+      });
     },
     { prefix: API_PREFIX },
   );

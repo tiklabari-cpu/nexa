@@ -79,6 +79,15 @@ const ALLOWED: Readonly<Record<string, Allowance>> = {
     why: 'the unresolved questions’ clustering (tm 317.2) embeds the items with no vector through the MeteredEmbeddings it is given, the workspace as payer, on the `cluster` surface; its titles go through completeStructured over MeteredLlm.forTenant(...)',
     holds: /readonly embeddings: MeteredEmbeddings;/,
   },
+  'services/ai/provider/llm-registry.ts': {
+    calls: 2,
+    why: 'the hot-swap registry’s facades (tm 389.17) hand complete() and embed() to the instance of the moment; the server wraps both facades in MeteredLlm / MeteredEmbeddings over its one budget (checked below)',
+  },
+  'services/platform/ai-operations.ts': {
+    calls: 1,
+    why: 'the root panel’s connection test (tm 389.17): one completion reserved on the deployment’s row first (reserveDeployment) and settled after; its embedding goes through MeteredEmbeddings.embedForDeployment',
+    holds: /budget\.reserveDeployment\(\s*'llm'/,
+  },
   'routes/onboarding.ts': {
     calls: 1,
     why: 'onboarding.complete(): the setup checklist, not a model',
@@ -193,6 +202,7 @@ describe('every model and embedding call goes through the daily AI caps (tm 257.
         'server.ts: new KnowledgeService',
         'services/ai/knowledge-refresh-run.ts: new KnowledgeService',
         'services/ai/knowledge-reembed-run.ts: new KnowledgeReembedder',
+        'services/platform/ai-operations.ts: new KnowledgeReembedder',
         'services/scheduler/jobs.ts: new KnowledgeService',
       ].sort(),
     );
@@ -214,10 +224,17 @@ describe('every model and embedding call goes through the daily AI caps (tm 257.
         'services/ai/provider/create-embedding-provider.ts',
         // `createMeteredEmbeddings`, which hands it straight to a MeteredEmbeddings.
         'services/ai/metered-embeddings.ts',
-        // Wrapped in `new MeteredEmbeddings(embeddings, aiDailyBudget)` (above).
-        'server.ts',
+        // The registry's instances, behind the facade the server wraps in
+        // `new MeteredEmbeddings(embeddings, aiDailyBudget)` (above) — tm 389.17.
+        'services/ai/provider/llm-registry.ts',
+        // The root panel's connection test and re-embedding, each wrapped in a
+        // MeteredEmbeddings on the deployment's row (tm 389.17).
+        'services/platform/ai-operations.ts',
       ].sort(),
     );
+    expect(byPath.get('server.ts')).toMatch(/const embeddings = aiProviders\.embeddings\(\);/);
+    expect(byPath.get('server.ts')).toMatch(/new MeteredLlm\(llm, aiDailyBudget\)/);
+    expect(byPath.get('server.ts')).toMatch(/new MeteredLlm\(copilotLlm, aiDailyBudget\)/);
     expect(byPath.get('services/ai/metered-embeddings.ts')).toMatch(
       /return new MeteredEmbeddings\(\s*createEmbeddingProvider\(/,
     );

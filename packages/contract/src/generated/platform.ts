@@ -1877,12 +1877,111 @@ export interface paths {
      *     its value comes from: this panel's database (`db`), the environment
      *     (`env`) or the built-in default (`default`). Shown here, set elsewhere:
      *     `APPS_LIVE_PROVIDERS`, the Turnstile keys, `TICKET_MAIL_OUTBOUND`,
-     *     `PILOT_MODE`, `LLM_PROVIDER`. `stale: true` with no entries is no
-     *     publication at all — the route still answers 200.
+     *     `PILOT_MODE`, `LLM_PROVIDER`. The `LLM_*` / `EMBEDDING_*` / `AI_DAILY_*` /
+     *     `AI_PRICE_*` entries are the environment's; whether the tenant API uses
+     *     them or this panel's AI settings is `GET /settings/ai`'s `source`.
+     *     `stale: true` with no entries is no publication at all — the route
+     *     still answers 200.
      */
     get: operations['getPlatformEffectiveConfig'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ai': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The AI provider settings the root panel holds
+     * @description `llm` / `embedding` `null` is "not set here": the tenant API builds
+     *     that provider from its environment (`LLM_*`, `EMBEDDING_*`), and
+     *     `source` says so. A stored API key is never returned — only its last
+     *     four characters (`api_key_last4`). `reembed` is the state of the last
+     *     re-embedding this panel started.
+     */
+    get: operations['getPlatformAiSettings'];
+    /**
+     * Change the model, the embedding model, the daily caps or the prices
+     * @description Only the keys present change; `null` removes the stored value and hands
+     *     that part back to the environment. Inside `llm` / `embedding`, an
+     *     absent `api_key` keeps the stored one, a string replaces it (sealed
+     *     with AES-256-GCM under a key derived from `PLATFORM_SETTINGS_KEY`) and
+     *     `null` removes it — the tenant API then uses `LLM_API_KEY` /
+     *     `EMBEDDING_API_KEY` if it has one. Refused with `400 validation`: a
+     *     remote provider without base URL, model or region; in production a
+     *     base URL that is not the OpenAI regional host of the declared region
+     *     (`api.openai.com` never), `mock` under `PILOT_MODE=true`, or a region
+     *     other than `SIYAHTUS_REGION` under `PILOT_MODE=true`; any embedding
+     *     width but 1536. Every tenant process rebuilds its providers on
+     *     `ai.settings_changed` within seconds, without a restart. A new
+     *     embedding provider or model answers `warning: reembed_required` — the
+     *     stored knowledge lives in the old space until it is re-embedded.
+     *     Superadmin and a code younger than five minutes; the audit entry names
+     *     the fields that changed (`changed`), never a key.
+     */
+    put: operations['updatePlatformAiSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ai/test-connection': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send one small request to the model or the embedding provider
+     * @description Builds the provider the tenant API would build — the stored settings,
+     *     else this process's environment (`source`) — and sends one tiny
+     *     completion (or one embedding). The cost is counted on the deployment's
+     *     daily AI allowance, never a workspace's. `mock` answers at once and
+     *     succeeds. A failure is still a 200 with `ok: false` and the failure's
+     *     kind (`timeout`, `auth`, `rate_limited`, `network`…); the provider's
+     *     own message is not passed on. Three per minute per operator.
+     */
+    post: operations['testPlatformAiConnection'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ai/reembed': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Re-embed every workspace's knowledge into the current embedding space
+     * @description Starts `knowledge:reembed` in this process and answers at once: every
+     *     source still in another space is embedded again with the embedding
+     *     provider the tenant API uses, one source at a time, while questions
+     *     keep being answered from whatever has already moved. The cost is
+     *     counted on the deployment's daily allowance; when that is spent the run
+     *     stops with `capped: true` and can be started again after 00:00 UTC.
+     *     Progress is in `GET /settings/ai` (`reembed`). `409
+     *     platform_operation_running` while one is running. Superadmin.
+     */
+    post: operations['startPlatformAiReembed'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3588,6 +3687,165 @@ export interface components {
       /** @description Alphabetical by key. */
       entries: components['schemas']['PlatformEffectiveConfigEntry'][];
     };
+    /**
+     * @description The model settings as stored. `null` in a field is "not set here" —
+     *     for `timeout_ms` and `max_output_tokens` the environment's value
+     *     (`LLM_TIMEOUT_MS`, `LLM_MAX_OUTPUT_TOKENS`) applies. The key itself is
+     *     never returned.
+     */
+    PlatformAiLlmSettings: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url: string | null;
+      model: string | null;
+      /** @description The model a `fast` call uses (classifying, summarising); `null` — `model`. */
+      model_fast: string | null;
+      /** @enum {string|null} */
+      region: 'eu' | 'us' | null;
+      timeout_ms: number | null;
+      max_output_tokens: number | null;
+      /** @description The stored key's last four characters; `null` — no key stored here. */
+      api_key_last4: string | null;
+    };
+    /** @description The embedding provider as stored; `PlatformAiLlmSettings`' rules. */
+    PlatformAiEmbeddingSettings: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url: string | null;
+      model: string | null;
+      /** @enum {string|null} */
+      region: 'eu' | 'us' | null;
+      /**
+       * @description Fixed — `knowledge_chunks.embedding` is `vector(1536)`.
+       * @enum {integer}
+       */
+      dimensions: 1536;
+      api_key_last4: string | null;
+    };
+    PlatformAiDailyCap: {
+      /** @description Tokens a day for a workspace with no plan figure or override of its own. */
+      workspace: number;
+      /** @description Tokens a day for the whole deployment. */
+      global: number;
+    };
+    /**
+     * @description The deployment's daily caps per meter, in place of the four
+     *     `AI_DAILY_*` settings. Stored under `ai.caps` beside the plans'
+     *     defaults (`plans`, tm 389.12), which this does not touch.
+     */
+    PlatformAiDeploymentCaps: {
+      llm: components['schemas']['PlatformAiDailyCap'];
+      embedding: components['schemas']['PlatformAiDailyCap'];
+    };
+    /**
+     * @description What the provider charges, in US dollars per million tokens — the AI
+     *     usage report's cost estimate, in place of the three `AI_PRICE_*`
+     *     settings. `null` — no estimate for that meter.
+     */
+    PlatformAiPrices: {
+      llm_input_usd_per_mtok: number | null;
+      llm_output_usd_per_mtok: number | null;
+      embedding_usd_per_mtok: number | null;
+    };
+    /**
+     * @description The last re-embedding this panel started. `idle` — none since Redis
+     *     last lost the record.
+     */
+    PlatformAiReembedStatus: {
+      /** @enum {string} */
+      state: 'idle' | 'running' | 'finished' | 'failed';
+      /** Format: date-time */
+      started_at: string | null;
+      /** Format: date-time */
+      finished_at: string | null;
+      /** @description The embedding space moved into (`<provider>:<model>`). */
+      target: string | null;
+      /** @description Sources moved so far. */
+      sources: number;
+      chunks: number;
+      failed: number;
+      /** @description Workspaces the residency rule kept out. */
+      refused: number;
+      /** @description The deployment's daily embedding allowance ran out; start again after 00:00 UTC. */
+      capped: boolean;
+    };
+    PlatformAiSettingsSource: {
+      /** @enum {string} */
+      llm: 'db' | 'env';
+      /** @enum {string} */
+      embedding: 'db' | 'env';
+    };
+    PlatformAiSettings: {
+      llm: components['schemas']['PlatformAiLlmSettings'] | null;
+      embedding: components['schemas']['PlatformAiEmbeddingSettings'] | null;
+      caps: components['schemas']['PlatformAiDeploymentCaps'] | null;
+      prices: components['schemas']['PlatformAiPrices'] | null;
+      source: components['schemas']['PlatformAiSettingsSource'];
+      reembed: components['schemas']['PlatformAiReembedStatus'];
+      /** Format: date-time */
+      updated_at: string | null;
+      /**
+       * @description `PUT` only — the embedding provider or model changed, so the stored
+       *     knowledge has to be re-embedded (`POST /settings/ai/reembed`).
+       * @enum {string}
+       */
+      warning?: 'reembed_required';
+    };
+    PlatformAiLlmInput: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url?: string | null;
+      model?: string | null;
+      model_fast?: string | null;
+      /** @enum {string|null} */
+      region?: 'eu' | 'us' | null;
+      timeout_ms?: number | null;
+      max_output_tokens?: number | null;
+      /** @description Absent — keep the stored key; a string — replace it; `null` — remove it. */
+      api_key?: string | null;
+    };
+    PlatformAiEmbeddingInput: {
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      base_url?: string | null;
+      model?: string | null;
+      /** @enum {string|null} */
+      region?: 'eu' | 'us' | null;
+      /** @enum {integer} */
+      dimensions?: 1536;
+      api_key?: string | null;
+    };
+    /** @description At least one key besides `reason`; `null` removes the stored value. */
+    PlatformAiSettingsRequest: {
+      reason: string;
+      llm?: components['schemas']['PlatformAiLlmInput'] | null;
+      embedding?: components['schemas']['PlatformAiEmbeddingInput'] | null;
+      caps?: components['schemas']['PlatformAiDeploymentCaps'] | null;
+      prices?: components['schemas']['PlatformAiPrices'] | null;
+    };
+    PlatformAiConnectionTestRequest: {
+      reason: string;
+      /** @enum {string} */
+      target: 'llm' | 'embedding';
+    };
+    PlatformAiConnectionTest: {
+      /** @enum {string} */
+      target: 'llm' | 'embedding';
+      /** @enum {string} */
+      provider: 'mock' | 'openai';
+      /** @enum {string} */
+      source: 'db' | 'env';
+      model: string | null;
+      ok: boolean;
+      latency_ms: number;
+      /**
+       * @description The failure's kind (`timeout`, `auth`, `rate_limited`, `network`,
+       *     `bad_request`, `bad_response`, `provider_error`, `circuit_open`,
+       *     `no_answer`, `ai_daily_cap`, `misconfigured`) — never the
+       *     provider's message.
+       */
+      error: string | null;
+    };
   };
   responses: {
     /**
@@ -3644,8 +3902,9 @@ export interface components {
     /**
      * @description `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
      *     `platform_workspace_state` (`details.reason`, tm 389.10) or
-     *     `platform_account_state` (`details.reason`, tm 389.11) — the request was
-     *     fine, the state refused it.
+     *     `platform_account_state` (`details.reason`, tm 389.11) or
+     *     `platform_operation_running` (tm 389.17) — the request was fine, the
+     *     state refused it.
      */
     Conflict: {
       headers: {
@@ -6180,6 +6439,111 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformAiSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stored values */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  updatePlatformAiSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformAiSettingsRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored values after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  testPlatformAiConnection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformAiConnectionTestRequest'];
+      };
+    };
+    responses: {
+      /** @description What the provider answered, and how fast */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiConnectionTest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  startPlatformAiReembed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Started; the state as it begins */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAiReembedStatus'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
     };
   };
   getPlatformOperationsScheduler: {

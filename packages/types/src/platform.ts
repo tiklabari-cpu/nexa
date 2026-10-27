@@ -381,7 +381,7 @@ export const IMPERSONATION_ALLOWED_WRITES: readonly RegExp[] = [
   /^\/goals(\/.*)?$/,
   /^\/handoff-routes(\/.*)?$/,
   /^\/kb-(articles|categories|settings)(\/.*)?$/,
-  /^\/knowledge-(sources|tables)(\/.*)?$/,
+  /^\/knowledge-(sources|tables|jobs)(\/.*)?$/,
   /^\/skills(\/.*)?$/,
   /^\/copilot\//,
   /^\/palette\//,

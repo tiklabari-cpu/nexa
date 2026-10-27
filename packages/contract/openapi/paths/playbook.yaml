@@ -1078,10 +1078,10 @@ knowledgeSources:
       so a source that exists is a source that can answer; when the embedding
       provider cannot index it the answer is a 503 and nothing is created.
 
-      A `website` source is crawled from `source_url` (the fetch is guarded
-      against private/internal targets — SSRF, NFR-S7); an `article` or a `faq`
-      indexes the `content` supplied. Exactly one of the two is required, per
-      `type`.
+      A `website` source is crawled from `source_url` (guarded against
+      private/internal targets — SSRF, NFR-S7 — here and on every fetch); an
+      `article` or a `faq` indexes the `content` supplied. Exactly one of
+      the two is required, per `type`.
 
       `type: file` is refused here with a 400. A file source carries bytes to
       check, a type to check them against and a budget to measure them by, none
@@ -1091,12 +1091,12 @@ knowledgeSources:
       **How far a website is crawled (tm 312 · AI-17)** is `crawl_scope`,
       `page_limit`, `include_paths` and `exclude_paths`, refused with a 400
       for every other type. A website source without them is a single page,
-      at most 200 pages, every path. Until the crawl job runner arrives
-      (tm 312.3) the URL given is fetched in this request whatever the scope;
-      from then on the reply is `status: crawling` with the job in
-      `job_id`, nothing fetched in the request, and the job is followed at
-      `GET /knowledge-jobs/{jobId}`. A client reads `status` and `job_id`
-      rather than assuming either.
+      at most 200 pages, every path. **Nothing is fetched in the request**
+      (tm 312.3): the reply is `status: crawling` with the crawl's job in
+      `job_id` and no chunks yet, and the job is followed at
+      `GET /knowledge-jobs/{jobId}`; its pages are
+      `GET /knowledge-sources/{sourceId}/pages`. A client reads `status` and
+      `job_id` rather than assuming either.
 
       `brand_id` is the one brand a website belongs to, a shorthand for
       `brand_ids: [brand_id]`; naming both is a 400 unless they agree.
@@ -1498,9 +1498,13 @@ knowledgeSource:
       transaction opens; when the embedding provider cannot index it the edit
       is refused whole with a 503 and the source keeps its old text and chunks.
 
-      A new `source_url` is crawled through the same SSRF guard `POST
-      /knowledge-sources` uses (NFR-S7), before the transaction opens — a
-      refused URL leaves the source exactly as it was.
+      A new `source_url` passes the same SSRF guard `POST
+      /knowledge-sources` uses (NFR-S7) — a refused URL leaves the source
+      exactly as it was — and queues a crawl of it (tm 312.3): the reply is
+      `status: crawling` with the job in `job_id`, and the pages already in
+      the store answer until the crawl replaces them. A new URL while the
+      source's last crawl is still under way is a 409
+      `knowledge_job_in_progress` with that job in `details.job_id`.
 
       **`refresh_after_days` (FR-MOD-06.3.3, tm 198.4) schedules automatic
       re-crawls of a `website` source** — refused, like `source_url`, for
@@ -1633,6 +1637,7 @@ knowledgeSource:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
@@ -1679,10 +1684,14 @@ knowledgeSourceReindex:
       PUT/PATCH because it is an action with an outbound effect, not the
       assignment of a state a caller could have named.
 
-      For a `website` the stored URL is crawled again. For every other type the
-      text already held is chunked and embedded again — which is what makes a
-      source that indexed to nothing (an empty crawl, a chunker change)
-      recoverable without retyping it.
+      For a `website` a crawl of the stored URL is queued (tm 312.3), as
+      `POST /knowledge-sources/{sourceId}/crawl` queues it: the reply is the
+      source, `status: crawling` with the job in `job_id` — the one already
+      under way, when there is one — and nothing is fetched in the request.
+      Only the pages whose text changed are embedded again. For every other
+      type the text already held is chunked and embedded again — which is what
+      makes a source that indexed to nothing (a chunker change) recoverable
+      without retyping it.
 
       **The SSRF guard runs again on the stored URL** (NFR-S7). "It was checked
       when it was added" is exactly the assumption to refuse: the row is not the
@@ -1691,17 +1700,15 @@ knowledgeSourceReindex:
       fetch. A refused reindex is a 400 that leaves the source, its text and its
       chunks untouched — the stale answer is kept rather than replaced by
       nothing. (The DNS half of the guard — a public *name* that resolves to a
-      private address — belongs with a real fetcher and lives in
-      `assertPublicHttpUrlResolved`, where the webhook sender uses it; the crawl
-      in this build is a deterministic in-process stub that opens no socket, so
-      there is no resolved address to pin.)
+      private address — is the crawler's: `CRAWLER_PROVIDER=http` resolves
+      every hop through it and connects to the address it checked.)
 
       A successful reindex also restarts `next_refresh_at`'s countdown from
-      now, using whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
-      tm 198.4) — the freshness sweep and this endpoint are the same refresh,
-      whichever triggered it. A refresh the embedding provider cannot index is
-      a 503 that likewise leaves the source, its text and its chunks as they
-      were.
+      now — for a website, once its crawl ends — using whatever
+      `refresh_after_days` the source already has (FR-MOD-06.3.3, tm 198.4) —
+      the freshness sweep and this endpoint are the same refresh, whichever
+      triggered it. A refresh the embedding provider cannot index is a 503
+      that likewise leaves the source, its text and its chunks as they were.
     responses:
       "200":
         description: Re-fetched and re-indexed
@@ -1750,15 +1757,8 @@ knowledgeSourceReview:
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 # ---------------------------------------------------------------------------
-# NOT MOUNTED YET — tm 312.3 (CRAWL-JOB-RUNNER) mounts these four with the job
-# runner, adds them to `openapi.yaml` `paths`, bumps the mobile parity count
-# and lists them in `endpoint-ui.cjs` until tm 312.4 calls them. Written here
-# by tm 312.1 (the schema and contract half) because `contract-parity.test.ts`
-# fails any documented operation no route serves:
-#   /knowledge-sources/{sourceId}/pages  → knowledgeSourcePages
-#   /knowledge-sources/{sourceId}/crawl  → knowledgeSourceCrawl
-#   /knowledge-jobs/{jobId}              → knowledgeJob
-#   /knowledge-jobs/{jobId}/cancel       → knowledgeJobCancel
+# Website crawling (tm 312 · AI-17): written by tm 312.1, mounted with the job
+# runner by tm 312.3; the panel's detail drawer (tm 312.4) calls them.
 # ---------------------------------------------------------------------------
 
 knowledgeSourcePages:
@@ -1817,8 +1817,9 @@ knowledgeSourceCrawl:
       passes the SSRF guard again before anything is queued (NFR-S7).
 
       A source has at most one job under way: a second request while one is
-      `queued`, `running` or `waiting_budget` is a 409 with that job's id in
-      `details.job_id`. Any other type is a 400 with `details.reason`
+      `queued`, `running` or `waiting_budget` is a 409
+      `knowledge_job_in_progress` with that job's id in `details.job_id`.
+      Any other type is a 400 with `details.reason`
       `knowledge_source_not_website`.
     responses:
       "202":
@@ -1873,15 +1874,15 @@ knowledgeJobCancel:
       Stops a job under way (tm 312 · AI-17): it is `cancelled`, the runner
       fetches nothing more for it, and the pages it already indexed stay —
       they answer, and the source is `partial` or `ready` by what it has.
-      A job that has already ended is a 409.
+      A job that has already ended is answered as it is: cancelling twice, or
+      a crawl that finished as the button was pressed, is not an error.
     responses:
       "200":
-        description: Cancelled
+        description: Cancelled, or already ended
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeJob" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
-      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

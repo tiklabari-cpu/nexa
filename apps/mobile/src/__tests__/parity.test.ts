@@ -1034,7 +1034,13 @@ describe('module parity matrix — what is still owed', () => {
       // 304 -> 305 with `/customer/chat/request-human` (tm 308) — the widget's
       // "Talk to an agent" while the AI answers a visitor (AI-29). A visitor's
       // surface; the app is an agent's, and nothing here re-scopes.
-      contractEndpoints: 305,
+      // 305 -> 309 with `/knowledge-sources/{sourceId}/pages`,
+      // `/knowledge-sources/{sourceId}/crawl`, `/knowledge-jobs/{jobId}` and
+      // `/knowledge-jobs/{jobId}/cancel` (tm 312.3) — a website source's
+      // crawl, its pages and its job (AI-17), read by the web panel's detail
+      // drawer (tm 312.4). Knowledge is configured in the web console; the app
+      // has no knowledge screen, and nothing here re-scopes.
+      contractEndpoints: 309,
       scopeBoundaries: 1,
     });
   });

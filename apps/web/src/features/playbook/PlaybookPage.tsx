@@ -139,6 +139,28 @@ const OWNER_LABEL_KEYS: Record<string, string> = {
  * and the command palette link to `/app/playbook?view=general`, and a click on a
  * tab writes it back); rendered bare, as most tests do, it reads the address once.
  */
+/** How often the knowledge list looks again while a website is being crawled. */
+const CRAWL_POLL_MS = 3_000;
+
+/**
+ * A source's badge: a website being crawled says so (tm 312.3 · AI-17), one
+ * whose last crawl kept some pages and lost others says that; the rest are
+ * indexed or empty by their chunks.
+ */
+function knowledgeStatusDot(
+  source: Pick<KnowledgeSource, 'status' | 'chunk_count'>,
+  t: ReturnType<typeof useTranslate>,
+): { tone: 'success' | 'warning' | 'info'; label: string } {
+  if (source.status === 'crawling')
+    return { tone: 'info', label: t('playbook.knowledge.statusCrawling') };
+  if (source.status === 'partial') {
+    return { tone: 'warning', label: t('playbook.knowledge.statusPartial') };
+  }
+  return source.chunk_count > 0
+    ? { tone: 'success', label: t('playbook.knowledge.indexed') }
+    : { tone: 'warning', label: t('playbook.knowledge.empty') };
+}
+
 export function PlaybookPage(): ReactElement {
   return useInRouterContext() ? <RoutedPlaybookPage /> : <PlaybookPageBody />;
 }
@@ -1060,6 +1082,12 @@ function KnowledgePanel({
   const sources = useQuery({
     queryKey: ['playbook', 'knowledge-store'],
     queryFn: () => api.get<{ items: KnowledgeSource[] }>('/knowledge-sources?audience=all'),
+    // A website is crawled after it is added (tm 312.3 · AI-17): the list
+    // looks again every few seconds while a crawl is under way.
+    refetchInterval: (query) =>
+      query.state.data?.items.some((source) => source.status === 'crawling')
+        ? CRAWL_POLL_MS
+        : false,
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['playbook'] });
@@ -1430,14 +1458,7 @@ function KnowledgePanel({
                     </p>
                   )}
                 </div>
-                <StatusDot
-                  tone={source.chunk_count > 0 ? 'success' : 'warning'}
-                  label={
-                    source.chunk_count > 0
-                      ? t('playbook.knowledge.indexed')
-                      : t('playbook.knowledge.empty')
-                  }
-                />
+                <StatusDot {...knowledgeStatusDot(source, t)} />
                 {canEdit && <KnowledgeSourceActions source={source} onChanged={invalidate} />}
               </li>
             ))}

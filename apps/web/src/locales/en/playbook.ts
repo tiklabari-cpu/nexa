@@ -273,6 +273,8 @@ export const playbook: Messages = {
   'playbook.knowledge.noneInTab': 'No {type} sources yet.',
   'playbook.knowledge.indexed': 'Indexed',
   'playbook.knowledge.empty': 'Empty',
+  'playbook.knowledge.statusCrawling': 'Crawling…',
+  'playbook.knowledge.statusPartial': 'Partly crawled',
   'playbook.knowledge.delete': 'Delete',
 
   // Row actions — the “…” menu, and the two dialogs behind it

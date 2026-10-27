@@ -4403,10 +4403,10 @@ export interface paths {
      *     so a source that exists is a source that can answer; when the embedding
      *     provider cannot index it the answer is a 503 and nothing is created.
      *
-     *     A `website` source is crawled from `source_url` (the fetch is guarded
-     *     against private/internal targets — SSRF, NFR-S7); an `article` or a `faq`
-     *     indexes the `content` supplied. Exactly one of the two is required, per
-     *     `type`.
+     *     A `website` source is crawled from `source_url` (guarded against
+     *     private/internal targets — SSRF, NFR-S7 — here and on every fetch); an
+     *     `article` or a `faq` indexes the `content` supplied. Exactly one of
+     *     the two is required, per `type`.
      *
      *     `type: file` is refused here with a 400. A file source carries bytes to
      *     check, a type to check them against and a budget to measure them by, none
@@ -4416,12 +4416,12 @@ export interface paths {
      *     **How far a website is crawled (tm 312 · AI-17)** is `crawl_scope`,
      *     `page_limit`, `include_paths` and `exclude_paths`, refused with a 400
      *     for every other type. A website source without them is a single page,
-     *     at most 200 pages, every path. Until the crawl job runner arrives
-     *     (tm 312.3) the URL given is fetched in this request whatever the scope;
-     *     from then on the reply is `status: crawling` with the job in
-     *     `job_id`, nothing fetched in the request, and the job is followed at
-     *     `GET /knowledge-jobs/{jobId}`. A client reads `status` and `job_id`
-     *     rather than assuming either.
+     *     at most 200 pages, every path. **Nothing is fetched in the request**
+     *     (tm 312.3): the reply is `status: crawling` with the crawl's job in
+     *     `job_id` and no chunks yet, and the job is followed at
+     *     `GET /knowledge-jobs/{jobId}`; its pages are
+     *     `GET /knowledge-sources/{sourceId}/pages`. A client reads `status` and
+     *     `job_id` rather than assuming either.
      *
      *     `brand_id` is the one brand a website belongs to, a shorthand for
      *     `brand_ids: [brand_id]`; naming both is a 400 unless they agree.
@@ -4620,9 +4620,13 @@ export interface paths {
      *     transaction opens; when the embedding provider cannot index it the edit
      *     is refused whole with a 503 and the source keeps its old text and chunks.
      *
-     *     A new `source_url` is crawled through the same SSRF guard `POST
-     *     /knowledge-sources` uses (NFR-S7), before the transaction opens — a
-     *     refused URL leaves the source exactly as it was.
+     *     A new `source_url` passes the same SSRF guard `POST
+     *     /knowledge-sources` uses (NFR-S7) — a refused URL leaves the source
+     *     exactly as it was — and queues a crawl of it (tm 312.3): the reply is
+     *     `status: crawling` with the job in `job_id`, and the pages already in
+     *     the store answer until the crawl replaces them. A new URL while the
+     *     source's last crawl is still under way is a 409
+     *     `knowledge_job_in_progress` with that job in `details.job_id`.
      *
      *     **`refresh_after_days` (FR-MOD-06.3.3, tm 198.4) schedules automatic
      *     re-crawls of a `website` source** — refused, like `source_url`, for
@@ -4681,10 +4685,14 @@ export interface paths {
      *     PUT/PATCH because it is an action with an outbound effect, not the
      *     assignment of a state a caller could have named.
      *
-     *     For a `website` the stored URL is crawled again. For every other type the
-     *     text already held is chunked and embedded again — which is what makes a
-     *     source that indexed to nothing (an empty crawl, a chunker change)
-     *     recoverable without retyping it.
+     *     For a `website` a crawl of the stored URL is queued (tm 312.3), as
+     *     `POST /knowledge-sources/{sourceId}/crawl` queues it: the reply is the
+     *     source, `status: crawling` with the job in `job_id` — the one already
+     *     under way, when there is one — and nothing is fetched in the request.
+     *     Only the pages whose text changed are embedded again. For every other
+     *     type the text already held is chunked and embedded again — which is what
+     *     makes a source that indexed to nothing (a chunker change) recoverable
+     *     without retyping it.
      *
      *     **The SSRF guard runs again on the stored URL** (NFR-S7). "It was checked
      *     when it was added" is exactly the assumption to refuse: the row is not the
@@ -4693,17 +4701,15 @@ export interface paths {
      *     fetch. A refused reindex is a 400 that leaves the source, its text and its
      *     chunks untouched — the stale answer is kept rather than replaced by
      *     nothing. (The DNS half of the guard — a public *name* that resolves to a
-     *     private address — belongs with a real fetcher and lives in
-     *     `assertPublicHttpUrlResolved`, where the webhook sender uses it; the crawl
-     *     in this build is a deterministic in-process stub that opens no socket, so
-     *     there is no resolved address to pin.)
+     *     private address — is the crawler's: `CRAWLER_PROVIDER=http` resolves
+     *     every hop through it and connects to the address it checked.)
      *
      *     A successful reindex also restarts `next_refresh_at`'s countdown from
-     *     now, using whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
-     *     tm 198.4) — the freshness sweep and this endpoint are the same refresh,
-     *     whichever triggered it. A refresh the embedding provider cannot index is
-     *     a 503 that likewise leaves the source, its text and its chunks as they
-     *     were.
+     *     now — for a website, once its crawl ends — using whatever
+     *     `refresh_after_days` the source already has (FR-MOD-06.3.3, tm 198.4) —
+     *     the freshness sweep and this endpoint are the same refresh, whichever
+     *     triggered it. A refresh the embedding provider cannot index is a 503
+     *     that likewise leaves the source, its text and its chunks as they were.
      */
     post: operations['reindexKnowledgeSource'];
     delete?: never;
@@ -4738,6 +4744,111 @@ export interface paths {
      *     leaves `reviewed_at` where it was.
      */
     post: operations['reviewKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-sources/{sourceId}/pages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * The pages a website source's crawls found
+     * @description Every page the source's crawls found (tm 312 · AI-17), whatever became
+     *     of it, URL order. Unpaged: a source keeps at most 200 pages, and the
+     *     ones it found but skipped are bounded by the same crawl. Any other type
+     *     has none — an empty list, not a 400.
+     */
+    get: operations['listKnowledgeSourcePages'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-sources/{sourceId}/crawl': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Queue a crawl of a website source
+     * @description Queues a `crawl` job for a `website` source (tm 312 · AI-17) — the
+     *     panel's "Crawl again" — and answers with it; nothing is fetched in the
+     *     request. The source is `crawling` until the job ends. The stored URL
+     *     passes the SSRF guard again before anything is queued (NFR-S7).
+     *
+     *     A source has at most one job under way: a second request while one is
+     *     `queued`, `running` or `waiting_budget` is a 409
+     *     `knowledge_job_in_progress` with that job's id in `details.job_id`.
+     *     Any other type is a 400 with `details.reason`
+     *     `knowledge_source_not_website`.
+     */
+    post: operations['crawlKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-jobs/{jobId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * A knowledge job's progress
+     * @description Where a crawl (or a document's processing) is (tm 312 · AI-17). The
+     *     panel polls it every 3 seconds while the job is under way.
+     */
+    get: operations['getKnowledgeJob'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-jobs/{jobId}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop a knowledge job
+     * @description Stops a job under way (tm 312 · AI-17): it is `cancelled`, the runner
+     *     fetches nothing more for it, and the pages it already indexed stay —
+     *     they answer, and the source is `partial` or `ready` by what it has.
+     *     A job that has already ended is answered as it is: cancelling twice, or
+     *     a crawl that finished as the button was pressed, is not an error.
+     */
+    post: operations['cancelKnowledgeJob'];
     delete?: never;
     options?: never;
     head?: never;
@@ -20238,6 +20349,7 @@ export interface components {
       | 'impersonation_forbidden_path'
       | 'impersonation_read_only'
       | 'internal'
+      | 'knowledge_job_in_progress'
       | 'license_expired'
       | 'limit_reached'
       | 'maintenance'
@@ -27786,6 +27898,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
     };
@@ -27836,6 +27949,117 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listKnowledgeSourcePages: {
+    parameters: {
+      query?: {
+        /** @description Only the pages with this status. */
+        status?: components['schemas']['KnowledgePageStatus'];
+      };
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Pages */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['KnowledgePage'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  crawlKnowledgeSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Queued */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeJob'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getKnowledgeJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeJob'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  cancelKnowledgeJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Cancelled, or already ended */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeJob'];
         };
       };
       401: components['responses']['Unauthorized'];

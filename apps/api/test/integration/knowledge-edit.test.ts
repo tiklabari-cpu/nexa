@@ -470,10 +470,15 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
     it('crawls the stored URL again and replaces what the source says', async () => {
       const source = await createWebsite();
       // Stand in for a site that changed under a source nobody touched: the row
-      // holds text the URL no longer serves.
+      // holds text the URL no longer serves, and its page a hash the text no
+      // longer has — what a re-crawl compares (tm 312.3).
       await owner.knowledgeSource.update({
         where: { id: source.id },
         data: { content: 'Stale text nobody wrote at this address.' },
+      });
+      await owner.knowledgePage.updateMany({
+        where: { sourceId: source.id },
+        data: { contentHash: '0'.repeat(64) },
       });
 
       const response = await server.post(
@@ -482,10 +487,20 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
         await auth('a'),
       );
 
+      // Queued, not fetched in the request; the helper waits for the crawl.
       expect(response.statusCode).toBe(200);
-      const refreshed = response.json() as SourceView;
-      expect(refreshed.chunk_count).toBeGreaterThan(0);
-      expect(refreshed.status).toBe('ready');
+      const queued = response.json() as SourceView & { job_id: string | null };
+      expect(queued.status).toBe('crawling');
+      expect(queued.job_id).toEqual(expect.any(String));
+      expect(
+        await owner.knowledgeSource.findUniqueOrThrow({
+          where: { id: source.id },
+          select: { status: true },
+        }),
+      ).toEqual({ status: 'ready' });
+      expect(await owner.knowledgeChunk.count({ where: { sourceId: source.id } })).toBeGreaterThan(
+        0,
+      );
 
       const text = (await stored(source.id)).content ?? '';
       expect(text).toContain('refunds');
@@ -533,10 +548,14 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
       );
 
       expect(response.statusCode).toBe(200);
-      const refreshed = response.json() as SourceView;
-      expect(refreshed.refresh_after_days).toBe(30);
-      expect(refreshed.last_refresh_error).toBeNull();
-      expect(new Date(refreshed.next_refresh_at ?? '').getTime()).toBeGreaterThan(Date.now());
+      expect((response.json() as SourceView).refresh_after_days).toBe(30);
+      // Restarted when the crawl the reindex queued ends (tm 312.3).
+      const after = await owner.knowledgeSource.findUniqueOrThrow({
+        where: { id: source.id },
+        select: { lastRefreshError: true, nextRefreshAt: true },
+      });
+      expect(after.lastRefreshError).toBeNull();
+      expect(after.nextRefreshAt?.getTime()).toBeGreaterThan(Date.now());
     });
   });
 

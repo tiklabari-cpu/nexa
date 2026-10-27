@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   });
   try {
     const embeddingInference = resolveEmbeddingInferenceProvider(env);
-    const report = await new KnowledgeRefreshSweeper(db, { knowledge, embeddingInference }).run();
+    const report = await new KnowledgeRefreshSweeper(db, { embeddingInference }).run();
     // The published KB articles whose knowledge source is behind (tm 309.2),
     // as the scheduled job runs them after the refresh.
     const articles = await new KbArticleKnowledgeSweeper(db, {
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
       `${JSON.stringify({ ...report, kbArticles: articles, tableRows: rows }, null, 2)}\n`,
     );
     process.stderr.write(
-      `knowledge-refresh: refreshed ${report.totals.refreshed}, failed ${report.totals.failed} ` +
+      `knowledge-refresh: queued ${report.totals.queued} crawl(s), refused ${report.totals.failed} ` +
         `of ${report.totals.checked} due source(s) across ${report.totals.tenants} tenant(s); ` +
         `KB articles synced ${articles.totals.synced}, deferred ${articles.totals.deferred} ` +
         `of ${articles.totals.checked}; table rows synced ${rows.totals.synced}, ` +

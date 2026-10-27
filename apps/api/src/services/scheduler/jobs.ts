@@ -353,10 +353,7 @@ export function buildSchedulerJobs({
       intervalMs: intervals.knowledge_refresh,
       async run() {
         const embeddingInference = inference().embedding;
-        const report = await new KnowledgeRefreshSweeper(db, {
-          knowledge,
-          embeddingInference,
-        }).run();
+        const report = await new KnowledgeRefreshSweeper(db, { embeddingInference }).run();
         const articles = await new KbArticleKnowledgeSweeper(db, {
           knowledge,
           embeddingInference,
@@ -370,7 +367,7 @@ export function buildSchedulerJobs({
           counts: {
             tenants: report.totals.tenants,
             checked: report.totals.checked,
-            refreshed: report.totals.refreshed,
+            queued: report.totals.queued,
             failed: report.totals.failed,
             kb_checked: articles.totals.checked,
             kb_synced: articles.totals.synced,

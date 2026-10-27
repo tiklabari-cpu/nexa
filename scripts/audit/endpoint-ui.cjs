@@ -376,6 +376,32 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  {
+    op: 'GET /knowledge-sources/{sourceId}/pages',
+    owner: 'tm 312.4',
+    reason:
+      "a website source's crawled pages and what became of each (tm 312.3 · AI-17) — the " +
+      "knowledge source detail drawer's page table, which CRAWL-WEB (tm 312.4) draws.",
+  },
+  {
+    op: 'POST /knowledge-sources/{sourceId}/crawl',
+    owner: 'tm 312.4',
+    reason:
+      '"Crawl again" on a website source (tm 312.3 · AI-17) — a button of the detail drawer ' +
+      "(tm 312.4); the list's reindex queues the same crawl meanwhile.",
+  },
+  {
+    op: 'GET /knowledge-jobs/{jobId}',
+    owner: 'tm 312.4',
+    reason:
+      "a crawl's progress (tm 312.3 · AI-17), polled every 3 s by the detail drawer (tm 312.4).",
+  },
+  {
+    op: 'POST /knowledge-jobs/{jobId}/cancel',
+    owner: 'tm 312.4',
+    reason:
+      "stopping a crawl under way (tm 312.3 · AI-17) — the detail drawer's Cancel (tm 312.4).",
+  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

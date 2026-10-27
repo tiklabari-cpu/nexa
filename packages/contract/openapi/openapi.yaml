@@ -424,6 +424,14 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSourceReindex"
   /knowledge-sources/{sourceId}/review:
     $ref: "./paths/playbook.yaml#/knowledgeSourceReview"
+  /knowledge-sources/{sourceId}/pages:
+    $ref: "./paths/playbook.yaml#/knowledgeSourcePages"
+  /knowledge-sources/{sourceId}/crawl:
+    $ref: "./paths/playbook.yaml#/knowledgeSourceCrawl"
+  /knowledge-jobs/{jobId}:
+    $ref: "./paths/playbook.yaml#/knowledgeJob"
+  /knowledge-jobs/{jobId}/cancel:
+    $ref: "./paths/playbook.yaml#/knowledgeJobCancel"
   /knowledge-tables/{table}:
     $ref: "./paths/knowledge-tables.yaml#/knowledgeTableRows"
   /knowledge-tables/{table}/import:
@@ -13178,6 +13186,7 @@ components:
         - impersonation_forbidden_path
         - impersonation_read_only
         - internal
+        - knowledge_job_in_progress
         - license_expired
         - limit_reached
         - maintenance
